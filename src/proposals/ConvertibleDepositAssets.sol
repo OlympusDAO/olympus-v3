@@ -58,7 +58,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
     // ========== PROPOSAL ========== //
 
     function id() public pure override returns (uint256) {
-        return 8;
+        return 13;
     }
 
     function name() public pure override returns (string memory) {
@@ -90,7 +90,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
                 "\n",
                 "## Pre-requisites\n",
                 "\n",
-                "- First Convertible Deposit proposal has been executed\n",
+                "- First Convertible Deposit proposal (proposal 12) has been executed\n",
                 "- All required policies have been activated in the kernel\n",
                 "- DEPOS module has been installed in the kernel\n",
                 "- Heart is enabled and running periodic tasks\n",
@@ -105,12 +105,11 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
                 "6. Enable USDS-2m in ConvertibleDepositAuctioneer\n",
                 "7. Add USDS-3m to DepositManager\n",
                 "8. Enable USDS-3m in ConvertibleDepositAuctioneer\n",
-                "9. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
-                "10. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
-                "11. Enable ConvertibleDepositAuctioneer (with disabled auction)\n",
-                "12. Grant the `cd_emissionmanager` role to EmissionManager\n",
-                "13. Add EmissionManager to periodic tasks\n",
-                "14. Enable EmissionManager\n",
+                "9. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
+                "10. Enable ConvertibleDepositAuctioneer (with disabled auction)\n",
+                "11. Grant the `cd_emissionmanager` role to EmissionManager\n",
+                "12. Add EmissionManager to periodic tasks\n",
+                "13. Enable EmissionManager\n",
                 "\n",
                 "## Result\n",
                 "\n",
@@ -147,10 +146,15 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
         address sUsds = addresses.getAddress("external-tokens-sUSDS");
 
         // Pre-requisites:
-        // - First Convertible Deposit proposal has been executed
+        // - First Convertible Deposit proposal (proposal 12) has been executed
         // - All required policies have been activated in the kernel
         // - DEPOS module has been installed in the kernel
         // - Heart is enabled and running periodic tasks
+
+        // Validate that DepositManager is enabled (indicates proposal 12 was executed)
+        if (!IEnabler(depositManager).isEnabled()) {
+            revert("DepositManager not enabled - proposal 12 may not have been executed");
+        }
 
         // 1. Grant "manager" role to DAO MS
         _pushAction(
@@ -241,18 +245,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
             "Enable USDS-3m in ConvertibleDepositAuctioneer"
         );
 
-        // 9. Grant "deposit_operator" role to ConvertibleDepositFacility
-        _pushAction(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("deposit_operator"),
-                cdFacility
-            ),
-            "Grant deposit_operator role to ConvertibleDepositFacility"
-        );
-
-        // 10. Grant "cd_auctioneer" role to ConvertibleDepositAuctioneer
+        // 9. Grant "cd_auctioneer" role to ConvertibleDepositAuctioneer
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -263,7 +256,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
             "Grant cd_auctioneer role to ConvertibleDepositAuctioneer"
         );
 
-        // 11. Enable ConvertibleDepositAuctioneer (with disabled auction)
+        // 10. Enable ConvertibleDepositAuctioneer (with disabled auction)
         _pushAction(
             cdAuctioneer,
             abi.encodeWithSelector(
@@ -281,7 +274,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
             "Enable ConvertibleDepositAuctioneer (with disabled auction)"
         );
 
-        // 12. Grant "cd_emissionmanager" role to EmissionManager
+        // 11. Grant "cd_emissionmanager" role to EmissionManager
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -292,14 +285,14 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
             "Grant cd_emissionmanager role to EmissionManager"
         );
 
-        // 13. Add EmissionManager to periodic tasks
+        // 12. Add EmissionManager to periodic tasks
         _pushAction(
             heart,
             abi.encodeWithSelector(IPeriodicTaskManager.addPeriodicTask.selector, emissionManager),
             "Add EmissionManager to periodic tasks"
         );
 
-        // 14. Enable EmissionManager
+        // 13. Enable EmissionManager
         _pushAction(
             emissionManager,
             abi.encodeWithSelector(
@@ -350,6 +343,12 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
         address sUsds = addresses.getAddress("external-tokens-sUSDS");
 
         // solhint-disable custom-errors
+
+        // Validate that DepositManager is enabled (indicates proposal 12 was executed)
+        require(
+            IEnabler(depositManager).isEnabled() == true,
+            "DepositManager is not enabled - proposal 12 may not have been executed"
+        );
 
         // 1. Validate that the DAO MS has the "manager" role
         require(
@@ -430,28 +429,22 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
             "USDS-3m period is not enabled in ConvertibleDepositAuctioneer"
         );
 
-        // 9. Validate that ConvertibleDepositFacility has "deposit_operator" role
-        require(
-            roles.hasRole(cdFacility, bytes32("deposit_operator")) == true,
-            "ConvertibleDepositFacility does not have the deposit_operator role"
-        );
-
-        // 10. Validate that the CDAuctioneer has the "cd_auctioneer" role
+        // 9. Validate that the CDAuctioneer has the "cd_auctioneer" role
         require(
             roles.hasRole(cdAuctioneer, bytes32("cd_auctioneer")) == true,
             "CDAuctioneer policy does not have the cd_auctioneer role"
         );
 
-        // 11. Validate that the ConvertibleDepositAuctioneer is enabled
+        // 10. Validate that the ConvertibleDepositAuctioneer is enabled
         require(IEnabler(cdAuctioneer).isEnabled() == true, "CDAuctioneer policy is not enabled");
 
-        // 12. Validate that the EmissionManager has the "cd_emissionmanager" role
+        // 11. Validate that the EmissionManager has the "cd_emissionmanager" role
         require(
             roles.hasRole(emissionManager, bytes32("cd_emissionmanager")) == true,
             "EmissionManager policy does not have the cd_emissionmanager role"
         );
 
-        // 13. Validate EmissionManager is added to periodic tasks
+        // 12. Validate EmissionManager is added to periodic tasks
         // Check that Heart has EmissionManager in its periodic tasks
         (address[] memory periodicTasks, ) = IPeriodicTaskManager(heart).getPeriodicTasks();
         bool emissionManagerFound = false;
@@ -463,7 +456,7 @@ contract ConvertibleDepositAssets is GovernorBravoProposal {
         }
         require(emissionManagerFound, "EmissionManager is not in Heart's periodic tasks");
 
-        // 14. Validate that the EmissionManager is enabled
+        // 13. Validate that the EmissionManager is enabled
         require(
             IEnabler(emissionManager).isEnabled() == true,
             "EmissionManager policy is not enabled"

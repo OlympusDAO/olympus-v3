@@ -105,7 +105,7 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
                 "\n",
                 "## Subsequent Steps\n",
                 "\n",
-                "A second OCG proposal will configure assets and initialize the auction parameters for the ConvertibleDeposit system.\n"
+                "A second OCG proposal (proposal 13) will configure assets and initialize the auction parameters for the ConvertibleDeposit system.\n"
             );
     }
 
@@ -270,7 +270,8 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
             "Enable Heart contract"
         );
 
-        // If the second proposal isn't executed in time, the Heart will be able to perform a heartbeat.
+        // Note: The ConvertibleDeposit system will not be fully operational until
+        // the second proposal (proposal 13) is executed to configure assets and enable the auction.
     }
 
     // Executes the proposal actions.
