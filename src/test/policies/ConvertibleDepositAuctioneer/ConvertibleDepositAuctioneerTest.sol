@@ -58,6 +58,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
     uint8 public constant PERIOD_MONTHS = 6;
+    uint8 public constant PERIOD_MONTHS_TWO = 12;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
     // Events
@@ -157,6 +158,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max);
 
         depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(facility), 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS_TWO, address(facility), 90e2);
 
         receiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,

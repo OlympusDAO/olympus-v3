@@ -118,16 +118,15 @@ contract ConvertibleDepositAuctioneerDisableDepositPeriodTest is ConvertibleDepo
         public
         givenEnabled
         givenDepositPeriodEnabled(PERIOD_MONTHS)
-        givenDepositPeriodEnabled(12)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenDepositPeriodEnabled(18)
     {
         uint8 periodA = PERIOD_MONTHS;
-        uint8 periodB = 12;
+        uint8 periodB = PERIOD_MONTHS_TWO;
         uint8 periodC = 18;
         // Enable the other periods with the DepositManager
         {
             vm.startPrank(admin);
-            depositManager.addAssetPeriod(iReserveToken, periodB, address(facility), 90e2);
             depositManager.addAssetPeriod(iReserveToken, periodC, address(facility), 90e2);
             vm.stopPrank();
         }

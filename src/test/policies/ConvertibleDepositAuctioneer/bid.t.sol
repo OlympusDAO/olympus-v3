@@ -1026,6 +1026,145 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    //  given there is another deposit period enabled
+    //   [X] it captures the current tick for the other deposit period
+
+    function test_convertedAmountGreaterThanTickCapacity_reachesDayTarget_multipleDepositPeriods(
+        uint256 bidAmount_
+    )
+        public
+        givenEnabled
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+    {
+        // We want the converted amount to be greater than the day target, 20e9, but within tick three
+        // Tick one: 10e9, price is 15e18, max bid amount is 150e18
+        // Tick two: 10e9, price is 165e17, max bid amount is 165e18
+        // Tick three: 5e9, price is 1815e16, max bid amount is 9075e16
+        // Total bid amount = 150e18 + 165e18 + 9075e16 = 40575e16
+        uint256 bidOneAmount = 150e18;
+        uint256 bidTwoAmount = 165e18;
+        uint256 bidThreeMaxAmount = 9075e16;
+        uint256 reserveTokenBalance = bidOneAmount + bidTwoAmount + bidThreeMaxAmount;
+        uint256 bidAmount = bound(bidAmount_, bidOneAmount + bidTwoAmount, reserveTokenBalance - 1);
+        uint256 tickThreePrice = 1815e16;
+
+        uint256 expectedConvertedAmount;
+        uint256 expectedDepositIn;
+        {
+            uint256 tickThreeBidAmount = bidAmount - bidOneAmount - bidTwoAmount;
+            uint256 tickOneConvertedAmount = (bidOneAmount * 1e9) / 15e18;
+            uint256 tickTwoConvertedAmount = (bidTwoAmount * 1e9) / 165e17;
+            uint256 tickThreeConvertedAmount = (tickThreeBidAmount * 1e9) / tickThreePrice;
+
+            expectedConvertedAmount =
+                tickOneConvertedAmount +
+                tickTwoConvertedAmount +
+                tickThreeConvertedAmount;
+
+            // Recalculate the bid amount, in case tickThreeConvertedAmount is 0
+            expectedDepositIn =
+                bidOneAmount +
+                bidTwoAmount +
+                (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
+        }
+
+        // Place a bid for the second deposit period
+        _mintAndApprove(recipient, 1e18);
+        vm.prank(recipient);
+        (uint256 bidOneConvertedAmount, , , ) = auctioneer.bid(
+            PERIOD_MONTHS_TWO,
+            1e18,
+            1,
+            false,
+            false
+        );
+
+        // Warp forward to that the ticks change
+        vm.warp(block.timestamp + 1 hours);
+
+        IConvertibleDepositAuctioneer.Tick memory periodTwoTickBefore = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+
+        _mintAndApprove(recipient, 40575e16);
+
+        {
+            // Check preview
+            uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+            // Assert that the preview is as expected
+            assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+        }
+
+        // Get receipt token balance before bid
+        uint256 balanceBefore = depositManager.balanceOf(recipient, receiptTokenId);
+
+        // Expect event
+        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 1);
+
+        // Call function
+        vm.prank(recipient);
+        (
+            uint256 ohmOut,
+            uint256 positionId,
+            uint256 receiptTokenId,
+            uint256 actualAmount
+        ) = auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            expectedDepositIn,
+            expectedConvertedAmount,
+            reserveTokenBalance - expectedDepositIn,
+            balanceBefore,
+            1,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert actual amount matches receipt tokens received
+        _assertActualAmount(actualAmount, balanceBefore);
+
+        // Assert the day state
+        assertEq(
+            auctioneer.getDayState().convertible,
+            expectedConvertedAmount + bidOneConvertedAmount,
+            "day convertible"
+        );
+
+        // Assert the state
+        _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        // Assert the tick
+        _assertPreviousTick(
+            10e9 + 10e9 + 5e9 - expectedConvertedAmount,
+            tickThreePrice,
+            5e9, // The tick size is halved as the target is met or exceeded
+            uint48(block.timestamp)
+        );
+
+        // Assert the tick for the second deposit period
+        {
+            IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
+                PERIOD_MONTHS_TWO
+            );
+
+            assertEq(
+                tick.capacity,
+                periodTwoTickBefore.capacity,
+                "period two previous tick capacity"
+            );
+            assertEq(tick.price, periodTwoTickBefore.price, "period two previous tick price");
+            assertEq(
+                tick.lastUpdate,
+                uint48(block.timestamp),
+                "period two previous tick lastUpdate"
+            );
+        }
+    }
+
     //  when the convertible amount of OHM will exceed multiples of the day target
     //   [X] the next tick size is set to half of the previous tick size
 
