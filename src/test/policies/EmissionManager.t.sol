@@ -663,7 +663,7 @@ contract EmissionManagerTest is Test {
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
 
             assertEq(emission, 0, "target should be zero");
-            assertEq(cdAuctioneer.tickSize(), 1, "tick size should be 1");
+            assertEq(cdAuctioneer.tickSize(), 0, "tick size should be zero");
         }
 
         // Confirm that the token balances are still 0
@@ -3164,7 +3164,7 @@ contract EmissionManagerTest is Test {
     // getSizeFor tests
 
     function test_getSizeFor_zero() public view {
-        assertEq(emissionManager.getSizeFor(0), 1, "getSizeFor");
+        assertEq(emissionManager.getSizeFor(0), 0, "getSizeFor should return 0 when target is 0");
     }
 
     function test_getSizeFor(uint256 target_) public view {
@@ -3173,5 +3173,52 @@ contract EmissionManagerTest is Test {
         uint256 expectedSize = (target_ * tickSizeScalar) / 1e18;
 
         assertEq(emissionManager.getSizeFor(target_), expectedSize, "getSizeFor");
+    }
+
+    function test_execute_whenCalculatedTickSizeIsZero_setsTargetToZero()
+        public
+        givenNextBeatIsZero
+        givenPremiumAboveMinimum
+    {
+        // Set tick size scalar very low so that calculated tick size will be 0
+        vm.prank(guardian);
+        emissionManager.setTickSizeScalar(1); // 1 wei out of 1e18 = effectively 0
+
+        // Get the expected emission (should be > 0 due to premium above minimum)
+        (, , uint256 originalEmission) = emissionManager.getNextEmission();
+        assertGt(originalEmission, 0, "Original emission should be > 0");
+
+        // Verify that calculated tick size would be 0
+        uint256 calculatedTickSize = emissionManager.getSizeFor(originalEmission);
+        assertEq(calculatedTickSize, 0, "Calculated tick size should be 0");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify that both target and tick size were set to 0 in the auctioneer
+        assertEq(cdAuctioneer.target(), 0, "Target should be set to 0 when tick size is 0");
+        assertEq(cdAuctioneer.tickSize(), 0, "Tick size should be 0");
+        assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
+    }
+
+    function test_disable_disablesAuction() public {
+        // First enable the emission manager with some auction parameters
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Disable the emission manager
+        vm.prank(guardian);
+        emissionManager.disable("");
+
+        // Verify that the auction is disabled (target = 0, tickSize = 0)
+        assertEq(cdAuctioneer.target(), 0, "Target should be 0 when EmissionManager is disabled");
+        assertEq(
+            cdAuctioneer.tickSize(),
+            0,
+            "Tick size should be 0 when EmissionManager is disabled"
+        );
+        assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
+        assertFalse(emissionManager.isEnabled(), "EmissionManager should be disabled");
     }
 }

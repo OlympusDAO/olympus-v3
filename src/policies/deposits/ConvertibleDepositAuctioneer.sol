@@ -213,6 +213,11 @@ contract ConvertibleDepositAuctioneer is
     /// @notice Internal function to submit an auction bid on the given deposit asset and period
     /// @dev    This function expects the calling function to have already validated the contract state and deposit asset and period
     function _bid(BidParams memory params) internal returns (uint256, uint256, uint256, uint256) {
+        // If target is 0, auction is disabled - reject all bids
+        if (_auctionParameters.target == 0) {
+            revert ConvertibleDepositAuctioneer_ConvertedAmountZero();
+        }
+
         uint256 ohmOut;
         uint256 depositIn;
         {
@@ -297,6 +302,7 @@ contract ConvertibleDepositAuctioneer is
     ///         - If the current tick does not have enough capacity, the remaining capacity will be used. The current tick will then shift to the next tick, resulting in the capacity being filled to the tick size, and the price being multiplied by the tick step.
     ///
     ///         Notes:
+    ///         - This function assumes that the auction is active (i.e. the target is non-zero) and the tick size is non-zero
     ///         - The function returns the updated tick capacity and price after the bid
     ///         - If the capacity of a tick is depleted (but does not cross into the next tick), the current tick will be shifted to the next one. This ensures that `getCurrentTick()` will not return a tick that has been depleted.
     ///
@@ -369,6 +375,11 @@ contract ConvertibleDepositAuctioneer is
         onlyDepositPeriodEnabled(depositPeriod_)
         returns (uint256 ohmOut)
     {
+        // If target is 0, auction is disabled - return 0
+        if (_auctionParameters.target == 0) {
+            return 0;
+        }
+
         // Get the updated tick based on the current state
         Tick memory currentTick = _getCurrentTick(depositPeriod_);
 
@@ -418,7 +429,7 @@ contract ConvertibleDepositAuctioneer is
         uint256 ohmOut_,
         AuctionParameters memory auctionParams_
     ) internal pure returns (uint256 newTickSize) {
-        // If the day target is zero, the tick size is always standard
+        // If the day target is zero, the tick size is always the configured size (which should be 0 to disable auction)
         if (auctionParams_.target == 0) {
             return auctionParams_.tickSize;
         }
@@ -442,10 +453,16 @@ contract ConvertibleDepositAuctioneer is
     }
 
     function _getCurrentTick(uint8 depositPeriod_) internal view returns (Tick memory tick) {
+        Tick memory previousTick = _depositPeriodPreviousTicks[depositPeriod_];
+
+        // If the target is 0, auction is disabled - return previous tick without decay
+        if (_auctionParameters.target == 0) {
+            return previousTick;
+        }
+
         // Find amount of time passed and new capacity to add
         uint256 newCapacity;
         {
-            Tick memory previousTick = _depositPeriodPreviousTicks[depositPeriod_];
             uint256 timePassed = block.timestamp - previousTick.lastUpdate;
             // The capacity to add is the day target multiplied by the proportion of time passed in a day
             // It is also adjusted by the number of deposit periods that are enabled, otherwise each auction would have too much capacity added
@@ -522,6 +539,11 @@ contract ConvertibleDepositAuctioneer is
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getAuctionParameters() external view override returns (AuctionParameters memory) {
         return _auctionParameters;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function isAuctionActive() external view override returns (bool) {
+        return _auctionParameters.target > 0;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -774,13 +796,16 @@ contract ConvertibleDepositAuctioneer is
     // ========== ADMIN FUNCTIONS ========== //
 
     function _setAuctionParameters(uint256 target_, uint256 tickSize_, uint256 minPrice_) internal {
-        // The target can be zero
+        // The target can be zero (disables auction)
+        // When target is zero, tick size and min price are irrelevant since auction is disabled
 
-        // Tick size must be non-zero
-        if (tickSize_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
+        // Tick size must be non-zero when target is non-zero
+        if (target_ > 0 && tickSize_ == 0)
+            revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
 
-        // Min price must be non-zero
-        if (minPrice_ == 0) revert ConvertibleDepositAuctioneer_InvalidParams("min price");
+        // Min price must be non-zero when target is non-zero (can be zero when auction is disabled)
+        if (target_ > 0 && minPrice_ == 0)
+            revert ConvertibleDepositAuctioneer_InvalidParams("min price");
 
         // If the target is non-zero, the tick size must be <= target
         if (target_ > 0 && tickSize_ > target_)

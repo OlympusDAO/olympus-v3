@@ -224,6 +224,12 @@ interface IConvertibleDepositAuctioneer {
         view
         returns (AuctionParameters memory auctionParameters);
 
+    /// @notice Check if the auction is currently active
+    /// @dev    The auction is considered active when target > 0
+    ///
+    /// @return isActive True if the auction is active, false if disabled
+    function isAuctionActive() external view returns (bool isActive);
+
     /// @notice Get the auction state for the current day
     ///
     /// @return day Day info
