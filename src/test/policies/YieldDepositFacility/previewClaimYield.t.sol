@@ -5,7 +5,6 @@ import {YieldDepositFacilityTest} from "./YieldDepositFacilityTest.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
 
 contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
     uint256 public DEPOSIT_AMOUNT = 9e18;
@@ -59,34 +58,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         uint256[] memory positionIds = new uint256[](1);
         positionIds[0] = POSITION_ID;
         yieldDepositFacility.previewClaimYield(recipient, positionIds);
-    }
-
-    // when timestamp hints are provided
-    //  when the number of hints is not the same as the number of positions
-    //   [X] it reverts
-
-    function test_withTimestampHints_incorrectLength_reverts()
-        public
-        givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
-    {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_InvalidArgs.selector,
-                "array length mismatch"
-            )
-        );
-
-        // Prepare inputs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = POSITION_ID;
-        uint48[] memory positionTimestampHints = new uint48[](2);
-        positionTimestampHints[0] = 1;
-        positionTimestampHints[1] = 2;
-
-        // Attempt to preview harvest
-        yieldDepositFacility.previewClaimYield(recipient, positionIds, positionTimestampHints);
     }
 
     // given the position is convertible
@@ -177,6 +148,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -191,8 +163,10 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
         // Yield = current shares value - receipt tokens
         // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
+        // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
         uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 44999999999999999;
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -222,6 +196,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(1000)
+        givenWarpForward(1) // Requires gap between snapshots
         givenHarvest(recipient, POSITION_ID)
         givenWarpForward(1 days)
         givenVaultAccruesYield(iVault, 1e18)
@@ -231,15 +206,18 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         positionIds[0] = POSITION_ID;
 
         // Calculate expected yield and fee
-        // last conversion rate = 1155000000000000000 + 1
-        // current conversion rate = 1211204379562043795
-        // deposit amount = 9000000000000000000
-        // deposit shares = 7792207792207792201 (at the time of last claim)
-        // Yield/share = 1211204379562043795 - 1155000000000000001 = 56204379562043794 (in terms of assets per share)
-        // Actual yield = yield/share * shares
-        // Actual yield = 56204379562043794 * 7792207792207792201 / 1e18 = 437956204379562030
+        // Last conversion rate = 1155000000000000000 + 1
+        // Deposit amount = 9000000000000000000
+        // Last shares = 9000000000000000000 * 1e18 / 1155000000000000001 = 7792207792207792201
+        // End conversion rate = 1211204379562043795
+        // Current shares value = last shares * end rate / 1e18
+        // = 7792207792207792201 * 1211204379562043795 / 1e18 = 9437956204379562030
+        // Yield = current shares value - receipt tokens
+        // = 9437956204379562030 - 9000000000000000000 = 437956204379562030
+        // Yield fee = 437956204379562030 * 1000 / 10000 = 43795620437956203
+        // Claimed yield = 437956204379562030 - 43795620437956203 = 394160583941605827
         uint256 expectedYield = 437956204379562030;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
+        uint256 expectedFee = 43795620437956203;
 
         // Preview harvest yield
         (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
@@ -265,220 +243,6 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
     //    given the timestamp hint is not before the expiry
     //     [X] it reverts
 
-    function test_withTimestampHints_whenExpired_timestampHintAfterExpiry_reverts(
-        uint48 timestampHint_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
-        givenYieldFee(1000)
-    {
-        uint48 harvestTimestamp = YIELD_EXPIRY + 1 days;
-
-        // Timestamp hint after expiry
-        timestampHint_ = uint48(bound(timestampHint_, YIELD_EXPIRY + 1, harvestTimestamp));
-
-        // Warp to beyond expiry
-        vm.warp(harvestTimestamp);
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = POSITION_ID;
-
-        uint48[] memory positionTimestampHints = new uint48[](1);
-        positionTimestampHints[0] = timestampHint_;
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IYieldDepositFacility.YDF_InvalidArgs.selector, "timestamp hint")
-        );
-
-        // Preview harvest yield
-        yieldDepositFacility.previewClaimYield(recipient, positionIds, positionTimestampHints);
-    }
-
-    //    given the rounded timestamp hint does not have a rate snapshot
-    //     [X] it reverts
-
-    function test_withTimestampHints_whenExpired_noRateSnapshot_reverts(
-        uint48 before_,
-        uint48 timestampHint_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
-        givenYieldFee(1000)
-    {
-        uint48 harvestTimestamp = YIELD_EXPIRY + 1 days;
-
-        // Last snapshot up to 2 days before expiry
-        before_ = uint48(bound(before_, 8 hours, 2 days));
-        uint48 snapshotTimestampRounded = _getRoundedTimestamp(YIELD_EXPIRY - before_);
-
-        // Timestamp hint does not overlap with the rounded snapshot timestamp
-        timestampHint_ = uint48(
-            bound(timestampHint_, snapshotTimestampRounded + 8 hours, YIELD_EXPIRY)
-        );
-
-        // Move to before the end of the deposit period
-        vm.warp(YIELD_EXPIRY - before_);
-
-        // Take a rate snapshot
-        _takeRateSnapshot();
-
-        // Accrue yield (which would change the rate snapshot)
-        _accrueYield(iVault, 1e18);
-
-        // Warp to beyond expiry
-        vm.warp(harvestTimestamp);
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = POSITION_ID;
-
-        uint48[] memory positionTimestampHints = new uint48[](1);
-        positionTimestampHints[0] = timestampHint_;
-
-        uint48 timestampHintRounded = _getRoundedTimestamp(timestampHint_);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_NoSnapshotAvailable.selector,
-                address(iVault),
-                timestampHintRounded
-            )
-        );
-
-        // Preview harvest yield
-        yieldDepositFacility.previewClaimYield(recipient, positionIds, positionTimestampHints);
-    }
-
-    //    [X] it returns the yield for the conversion rate at the rounded timestamp hint
-
-    function test_withTimestampHints_whenExpired_givenRateSnapshotBeforeExpiry(
-        uint48 before_,
-        uint48 elapsed_,
-        uint48 timestampHint_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
-        givenYieldFee(1000)
-    {
-        // Last snapshot up to 2 days before expiry
-        // Needs to be at least 8 hours to avoid issues with the timestamp hint > expiry
-        before_ = uint48(bound(before_, 8 hours, 2 days));
-        uint48 beforeRounded = _getRoundedTimestamp(YIELD_EXPIRY - before_);
-        // Time of harvest up to 1 day after expiry
-        elapsed_ = uint48(bound(elapsed_, 1, 1 days));
-        // Timestamp hint from rounded before timestamp until just before the next rounded timestamp
-        timestampHint_ = uint48(bound(timestampHint_, beforeRounded, beforeRounded + 8 hours - 1));
-
-        // Move to before the end of the deposit period
-        vm.warp(YIELD_EXPIRY - before_);
-
-        // Take a rate snapshot
-        _takeRateSnapshot();
-
-        // Accrue yield (which would change the rate snapshot)
-        _accrueYield(iVault, 1e18);
-
-        // Warp to beyond expiry
-        vm.warp(YIELD_EXPIRY + elapsed_);
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = POSITION_ID;
-
-        uint48[] memory positionTimestampHints = new uint48[](1);
-        positionTimestampHints[0] = timestampHint_;
-
-        // Calculate expected yield and fee
-        // Last conversion rate = 1100000000000000000 + 1
-        // Deposit amount = 9000000000000000000
-        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
-        // End conversion rate = 1155000000000000000
-        // Current shares value = last shares * end rate / 1e18
-        // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
-        // Yield = current shares value - receipt tokens
-        // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
-        uint256 expectedYield = 449999999999999990;
-        uint256 expectedFee = (expectedYield * 1000) / 10000;
-
-        // Preview claim yield
-        (uint256 previewedYield, IERC20 previewedAsset) = yieldDepositFacility.previewClaimYield(
-            recipient,
-            positionIds,
-            positionTimestampHints
-        );
-
-        // Assert preview matches expected
-        assertEq(
-            previewedYield,
-            expectedYield - expectedFee,
-            "Previewed yield does not match expected"
-        );
-        assertEq(
-            address(previewedAsset),
-            address(reserveToken),
-            "Previewed asset does not match expected"
-        );
-    }
-
-    //   [X] it reverts
-
-    function test_withTimestampHints_whenExpired_noTimestampHint_reverts(
-        uint48 before_
-    )
-        public
-        givenLocallyActive
-        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
-        givenVaultAccruesYield(iVault, 1e18)
-        givenYieldFee(1000)
-    {
-        uint48 harvestTimestamp = YIELD_EXPIRY + 1 days;
-
-        // Last snapshot up to 2 days before expiry
-        before_ = uint48(bound(before_, 8 hours, 2 days));
-
-        // Move to before the end of the deposit period
-        vm.warp(YIELD_EXPIRY - before_);
-
-        // Take a rate snapshot
-        _takeRateSnapshot();
-
-        // Accrue yield (which would change the rate snapshot)
-        _accrueYield(iVault, 1e18);
-
-        // Warp to beyond expiry
-        vm.warp(harvestTimestamp);
-
-        // Prepare position IDs
-        uint256[] memory positionIds = new uint256[](1);
-        positionIds[0] = POSITION_ID;
-
-        uint48[] memory positionTimestampHints = new uint48[](1);
-        positionTimestampHints[0] = 0;
-
-        uint48 roundedExpiry = _getRoundedTimestamp(YIELD_EXPIRY);
-
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldDepositFacility.YDF_NoSnapshotAvailable.selector,
-                address(iVault),
-                roundedExpiry
-            )
-        );
-
-        // Harvest yield
-        yieldDepositFacility.previewClaimYield(recipient, positionIds, positionTimestampHints);
-    }
-
     // given the yield fee is 0
     //  [X] it returns the yield without any fee deduction
 
@@ -488,6 +252,7 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
         givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
         givenVaultAccruesYield(iVault, 1e18)
         givenYieldFee(0)
+        givenWarpForward(1) // Requires gap between snapshots
     {
         // Prepare position IDs
         uint256[] memory positionIds = new uint256[](1);
@@ -521,6 +286,37 @@ contract YieldDepositFacilityPreviewClaimYieldTest is YieldDepositFacilityTest {
             address(previewedAsset),
             address(reserveToken),
             "Previewed asset does not match expected"
+        );
+    }
+
+    // given yield is claimed multiple times in the same block
+    //  [X] the second claim should return 0 yield
+
+    function test_whenClaimedMultipleTimesInSameBlock()
+        public
+        givenLocallyActive
+        givenAddressHasYieldDepositPosition(recipient, DEPOSIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000) // 10%
+        givenWarpForward(1) // Requires gap between snapshots
+    {
+        // Prepare position IDs
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = POSITION_ID;
+
+        // Actually claim the yield to update state
+        vm.prank(recipient);
+        yieldDepositFacility.claimYield(positionIds);
+
+        // Second preview in the same block should return 0 yield
+        (uint256 secondPreviewedYield, IERC20 secondPreviewedAsset) = yieldDepositFacility
+            .previewClaimYield(recipient, positionIds);
+
+        assertEq(secondPreviewedYield, 0, "Second previewed yield should be 0");
+        assertEq(
+            address(secondPreviewedAsset),
+            address(reserveToken),
+            "Second previewed asset does not match expected"
         );
     }
 }

@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {TimestampLinkedList} from "src/libraries/TimestampLinkedList.sol";
 
 // Interfaces
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
@@ -23,6 +24,7 @@ import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol
 
 /// @title YieldDepositFacility
 contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPeriodicTask {
+    using TimestampLinkedList for TimestampLinkedList.List;
     // ========== STATE VARIABLES ========== //
 
     /// @notice The DEPOS module.
@@ -31,16 +33,17 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
-    /// @notice Mapping between a position id and the last conversion rate between a vault and underlying asset
+    /// @notice Mapping between a position id and the timestamp of the last yield claim
     /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
-    mapping(uint256 => uint256) public positionLastYieldConversionRate;
+    mapping(uint256 => uint48) public positionLastYieldClaimTimestamp;
 
     /// @notice Mapping between vault address and timestamp to snapshot data
     /// @dev    This is used to store periodic snapshots of conversion rates for each vault
     mapping(IERC4626 => mapping(uint48 => uint256)) public vaultRateSnapshots;
 
-    /// @notice The interval between snapshots in seconds
-    uint48 private constant SNAPSHOT_INTERVAL = 8 hours;
+    /// @notice Mapping between vault address and linked list of snapshot timestamps
+    /// @dev    This is used to efficiently find the most recent snapshot before a given timestamp
+    mapping(IERC4626 => TimestampLinkedList.List) public vaultSnapshotTimestamps;
 
     // ========== SETUP ========== //
 
@@ -135,13 +138,12 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             })
         );
 
-        // Set the initial yield conversion rate
-        // We add 1 to account for ERC4626 rounding errors, otherwise the DepositManager will be left insolvent
-        positionLastYieldConversionRate[positionId] =
-            _getConversionRate(
-                IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(params_.asset).vault)
-            ) +
-            1;
+        // Take a snapshot at position creation to establish the starting rate
+        uint48 snapshotTimestamp = uint48(block.timestamp);
+        _takeSnapshot(params_.asset, snapshotTimestamp);
+
+        // Set the initial yield claim timestamp to the snapshot timestamp
+        positionLastYieldClaimTimestamp[positionId] = snapshotTimestamp;
 
         // Emit an event
         emit CreatedDeposit(
@@ -189,9 +191,8 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         address account_,
         uint256 positionId_,
         address previousAsset_,
-        uint8 previousPeriodMonths_,
-        uint48 timestampHint_
-    ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, uint256 endRate) {
+        uint8 previousPeriodMonths_
+    ) internal view returns (uint256 yieldMinusFee, uint256 yieldFee, uint48 newClaimTimestamp) {
         // Validate that the position is valid
         // This will revert if the position is not valid
         DEPOSv1.Position memory position = DEPOS.getPosition(positionId_);
@@ -217,39 +218,52 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         );
         if (address(assetVault) == address(0)) revert YDF_Unsupported(positionId_);
 
-        // Get the last snapshot rate
-        uint256 lastSnapshotRate = positionLastYieldConversionRate[positionId_];
+        // Get the last snapshot rate directly (guaranteed to exist since we take snapshots on position creation)
+        uint48 lastClaimTimestamp = positionLastYieldClaimTimestamp[positionId_];
+        uint256 lastSnapshotRate = vaultRateSnapshots[assetVault][lastClaimTimestamp];
+
+        // Invariant: lastSnapshotRate should be set
+        if (lastSnapshotRate == 0)
+            revert YDF_NoRateSnapshot(address(assetVault), lastClaimTimestamp);
 
         // Calculate the end rate (either current rate or rate at expiry)
+        uint256 endRate;
         if (block.timestamp <= position.expiry) {
             // Deposit period hasn't finished, use current rate
             endRate = _getConversionRate(assetVault);
+            newClaimTimestamp = uint48(block.timestamp);
+
+            // Ensure we're not claiming from before our last claim
+            if (newClaimTimestamp <= lastClaimTimestamp) {
+                // No yield available - end snapshot is same or earlier than start
+                return (0, 0, lastClaimTimestamp);
+            }
         } else {
-            // Deposit period has finished, find the rate at expiry
-            // Validate timestamp hint if provided
-            uint48 snapshotTimestamp = position.expiry;
-            if (timestampHint_ > 0) {
-                if (timestampHint_ > position.expiry) {
-                    revert YDF_InvalidArgs("timestamp hint");
-                }
-                snapshotTimestamp = timestampHint_;
-            }
-            uint48 snapshotKey = _getSnapshotKey(snapshotTimestamp);
-
-            // Get the rate at the snapshot key
-            uint256 expiryRate = vaultRateSnapshots[assetVault][snapshotKey];
-            if (expiryRate == 0) {
-                revert YDF_NoSnapshotAvailable(address(assetVault), snapshotKey);
+            // Deposit period has finished, find the most recent rate at or before expiry
+            uint48 endSnapshotTimestamp = _findLastSnapshotBefore(assetVault, position.expiry);
+            if (endSnapshotTimestamp == 0) {
+                // No end snapshot available, return 0 yield
+                return (0, 0, lastClaimTimestamp);
             }
 
-            endRate = expiryRate;
+            // Ensure we're not claiming from before our last claim
+            if (endSnapshotTimestamp <= lastClaimTimestamp) {
+                // No yield available - end snapshot is same or earlier than start
+                return (0, 0, lastClaimTimestamp);
+            }
+
+            endRate = vaultRateSnapshots[assetVault][endSnapshotTimestamp];
+            newClaimTimestamp = endSnapshotTimestamp;
+
+            // Invariant: endRate should be set
+            if (endRate == 0) revert YDF_NoRateSnapshot(address(assetVault), endSnapshotTimestamp);
         }
 
         // Calculate the number of shares for the position at the last snapshot rate
         uint256 lastShares = FullMath.mulDiv(
             position.remainingDeposit, // assets
             10 ** assetVault.decimals(), // decimals
-            lastSnapshotRate // assets per share
+            lastSnapshotRate + 1 // assets per share, increased by 1 wei to account for rounding errors and prevent insolvency
         );
 
         // Calculate what the position would be worth at the current rate
@@ -268,25 +282,32 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         yieldFee = FullMath.mulDiv(yield, _yieldFee, ONE_HUNDRED_PERCENT);
         yieldMinusFee = yield - yieldFee;
 
-        return (yieldMinusFee, yieldFee, endRate);
+        return (yieldMinusFee, yieldFee, newClaimTimestamp);
     }
 
     /// @inheritdoc IYieldDepositFacility
+    /// @dev        Yield is calculated in the following manner:
+    /// @dev        - If before or at expiry: it will get the current vault rate
+    /// @dev        - If after expiry: it will get the last vault rate before or equal to the expiry timestamp
+    /// @dev        - The current value is calculated as: share quantity at previous claim * vault rate
+    /// @dev        - The yield is calculated as: current value - original deposit
+    /// @dev
+    /// @dev        Notes:
+    /// @dev        - For asset vaults that are not monotonically increasing in value, the yield received by different depositors may differ based on the time of claim.
+    /// @dev        - Claiming yield multiple times during a deposit period will likely result in a lower yield than claiming once at/after expiry.
+    /// @dev
+    /// @dev        This function will revert if:
+    /// @dev        - The contract is not enabled
+    /// @dev        - The asset in the positions is not supported
+    /// @dev        - `account_` is not the owner of all of the positions
+    /// @dev        - Any of the positions have a different asset and deposit period combination
+    /// @dev        - The position was not created by this contract
+    /// @dev        - The asset does not have a vault configured
+    /// @dev        - There is no snapshot for the asset at the last yield claim timestamp
     function previewClaimYield(
         address account_,
         uint256[] memory positionIds_
     ) external view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
-        return previewClaimYield(account_, positionIds_, new uint48[](positionIds_.length));
-    }
-
-    /// @inheritdoc IYieldDepositFacility
-    function previewClaimYield(
-        address account_,
-        uint256[] memory positionIds_,
-        uint48[] memory timestampHints_
-    ) public view onlyEnabled returns (uint256 yieldMinusFee, IERC20 asset) {
-        if (positionIds_.length != timestampHints_.length)
-            revert YDF_InvalidArgs("array length mismatch");
         if (positionIds_.length == 0) revert YDF_InvalidArgs("no positions");
 
         // Get the asset and period months
@@ -308,8 +329,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
                 account_,
                 positionId,
                 address(asset),
-                periodMonths,
-                timestampHints_[i]
+                periodMonths
             );
             yieldMinusFee += previewYieldMinusFee;
         }
@@ -318,17 +338,10 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     }
 
     /// @inheritdoc IYieldDepositFacility
-    function claimYield(uint256[] memory positionIds_) external returns (uint256 yieldMinusFee) {
-        return claimYield(positionIds_, new uint48[](positionIds_.length));
-    }
-
-    /// @inheritdoc IYieldDepositFacility
+    /// @dev        See also {previewClaimYield} for more details on the yield calculation.
     function claimYield(
-        uint256[] memory positionIds_,
-        uint48[] memory timestampHints_
-    ) public onlyEnabled returns (uint256 yieldMinusFee) {
-        if (positionIds_.length != timestampHints_.length)
-            revert YDF_InvalidArgs("array length mismatch");
+        uint256[] memory positionIds_
+    ) external onlyEnabled returns (uint256 yieldMinusFee) {
         if (positionIds_.length == 0) revert YDF_InvalidArgs("no positions");
 
         // Get the asset and period months
@@ -351,22 +364,18 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             (
                 uint256 previewYieldMinusFee,
                 uint256 previewYieldFee,
-                uint256 endRate
-            ) = _previewClaimYield(
-                    msg.sender,
-                    positionId,
-                    address(asset),
-                    periodMonths,
-                    timestampHints_[i]
-                );
+                uint48 newClaimTimestamp
+            ) = _previewClaimYield(msg.sender, positionId, address(asset), periodMonths);
 
             yieldMinusFee += previewYieldMinusFee;
             yieldFee += previewYieldFee;
 
-            // If there is yield, update the last yield conversion rate
-            // We add 1 to account for ERC4626 rounding errors, otherwise the DepositManager will be left insolvent
+            // If there is yield, update the last yield claim timestamp
             if (previewYieldMinusFee > 0) {
-                positionLastYieldConversionRate[positionId] = endRate + 1;
+                positionLastYieldClaimTimestamp[positionId] = newClaimTimestamp;
+
+                // Ensure there is a snapshot for the new claim timestamp
+                _takeSnapshot(asset, newClaimTimestamp);
             }
         }
 
@@ -412,46 +421,61 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
 
     // ========== HELPER FUNCTIONS ========== //
 
-    /// @notice Get the snapshot key for a given timestamp
-    /// @dev    Rounds down to the nearest 8-hour interval
-    function _getSnapshotKey(uint48 timestamp_) internal pure returns (uint48) {
-        return (timestamp_ / SNAPSHOT_INTERVAL) * SNAPSHOT_INTERVAL;
-    }
-
     /// @notice Get the conversion rate between a vault and underlying asset
     function _getConversionRate(IERC4626 vault_) internal view returns (uint256) {
         return vault_.convertToAssets(10 ** vault_.decimals());
     }
 
+    /// @notice Find the most recent snapshot timestamp at or before the target timestamp
+    /// @param vault_ The vault to search snapshots for
+    /// @param target_ The target timestamp
+    /// @return The most recent snapshot timestamp <= target_, or 0 if none found
+    function _findLastSnapshotBefore(
+        IERC4626 vault_,
+        uint48 target_
+    ) internal view returns (uint48) {
+        return vaultSnapshotTimestamps[vault_].findLastBefore(target_);
+    }
+
+    /// @notice Take a snapshot of the vault conversion rate for an asset
+    /// @param asset_ The asset to take a snapshot for
+    /// @param timestamp_ The timestamp for the snapshot
+    /// @return The conversion rate that was stored, or 0 if no vault configured
+    function _takeSnapshot(IERC20 asset_, uint48 timestamp_) internal returns (uint256) {
+        IERC4626 vault = IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(asset_).vault);
+
+        // Skip if the vault is not set
+        if (address(vault) == address(0)) return 0;
+
+        // Even if the snapshot already exists, we still take a new one
+        // This is to ensure that the yield calculation is always accurate, regardless of the order in the block
+        uint256 rate = _getConversionRate(vault);
+        vaultRateSnapshots[vault][timestamp_] = rate;
+        vaultSnapshotTimestamps[vault].add(timestamp_);
+        emit RateSnapshotTaken(address(vault), timestamp_, rate);
+
+        return rate;
+    }
+
     // ========== PERIODIC TASK ========== //
 
     /// @notice Stores periodic snapshots of the conversion rate for all supported vaults
-    /// @dev    This function is called by the Heart contract every 8 hours
-    /// @dev    The timestamp is rounded down to the nearest 8-hour interval
+    /// @dev    This function is called by the Heart contract periodically
+    /// @dev    Uses the current block timestamp for the snapshot
     /// @dev    No cleanup is performed as snapshots are needed for active deposits
     function execute() external override onlyRole(HEART_ROLE) {
         // If the contract is disabled, do not take any snapshots
         if (!isEnabled) return;
 
-        // Get the rounded timestamp
-        uint48 snapshotKey = _getSnapshotKey(uint48(block.timestamp));
+        // Use current block timestamp
+        uint48 snapshotTimestamp = uint48(block.timestamp);
 
         // Get all supported assets
         IERC20[] memory assets = DEPOSIT_MANAGER.getConfiguredAssets();
 
-        // Store snapshots for each vault
+        // Store snapshots for each asset
         for (uint256 i; i < assets.length; ++i) {
-            IERC4626 vault = IERC4626(DEPOSIT_MANAGER.getAssetConfiguration(assets[i]).vault);
-
-            // Skip if the vault is not set
-            if (address(vault) == address(0)) continue;
-
-            // Only store if we haven't stored for this interval
-            if (vaultRateSnapshots[vault][snapshotKey] == 0) {
-                uint256 rate = _getConversionRate(vault);
-                vaultRateSnapshots[vault][snapshotKey] = rate;
-                emit RateSnapshotTaken(address(vault), snapshotKey, rate);
-            }
+            _takeSnapshot(assets[i], snapshotTimestamp);
         }
     }
 

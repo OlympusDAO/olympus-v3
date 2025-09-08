@@ -20,7 +20,7 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
 
         // Expect no snapshot to be taken
         assertEq(
-            yieldDepositFacility.vaultRateSnapshots(iVault, _getRoundedTimestamp()),
+            yieldDepositFacility.vaultRateSnapshots(iVault, uint48(block.timestamp)),
             0,
             "Snapshot should not be taken"
         );
@@ -38,8 +38,9 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
         yieldDepositFacility.execute();
     }
 
-    // given a snapshot has already been taken for the current rounded timestamp
-    //  [X] it does nothing
+    // given a snapshot has already been taken for the current timestamp
+    //  [X] it stores a new snapshot
+    //  [X] it emits a SnapshotTaken event
 
     function test_givenSnapshotAlreadyTaken(uint48 timestamp) public givenLocallyActive {
         // Set the timestamp to be a multiple of 8 hours
@@ -62,8 +63,12 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
             "Vault conversion rate is not different"
         );
 
-        // Warp forward in time, but before the next snapshot is due
-        vm.warp(timestamp + 1 hours);
+        // Get the new vault conversion rate
+        uint256 newRate = vault.convertToAssets(1e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit RateSnapshotTaken(address(vault), timestamp, newRate);
 
         // Force another snapshot to be taken
         vm.prank(heart);
@@ -71,46 +76,9 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
 
         // The snapshot remains unchanged
         assertEq(
-            yieldDepositFacility.vaultRateSnapshots(iVault, _getRoundedTimestamp()),
-            currentRate,
-            "Snapshot should not change"
-        );
-    }
-
-    // given the current timestamp is not a multiple of 8 hours
-    //  [X] the snapshot timestamp is rounded down to the nearest 8-hour interval
-
-    function test_givenTimestampNotMultipleOf8Hours_roundsDown(
-        uint48 timestamp
-    ) public givenLocallyActive {
-        // Set the timestamp to be anything but a multiple of 8 hours
-        timestamp = uint48(bound(timestamp, INITIAL_BLOCK, INITIAL_BLOCK + 10 days));
-        vm.assume(timestamp % 8 hours != 0);
-        vm.warp(timestamp);
-
-        // Get the current vault conversion rate
-        uint256 currentRate = vault.convertToAssets(1e18);
-
-        // Expect event to be emitted
-        uint48 roundedTimestamp = _getRoundedTimestamp();
-        vm.expectEmit(true, true, true, true);
-        emit RateSnapshotTaken(address(vault), roundedTimestamp, currentRate);
-
-        // Call the function
-        vm.prank(heart);
-        yieldDepositFacility.execute();
-
-        // Expect the rounded timestamp to not equal the current timestamp
-        assertFalse(
-            roundedTimestamp == timestamp,
-            "Rounded timestamp should not equal the current timestamp"
-        );
-
-        // Expect the snapshot to be taken at the rounded timestamp
-        assertEq(
-            yieldDepositFacility.vaultRateSnapshots(iVault, roundedTimestamp),
-            currentRate,
-            "Snapshot should be taken at the rounded timestamp"
+            yieldDepositFacility.vaultRateSnapshots(iVault, timestamp),
+            newRate,
+            "Snapshot should change"
         );
     }
 
@@ -131,73 +99,57 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
 
         // Get the current vault conversion rate
         uint256 currentRate = vault.convertToAssets(1e18);
+        uint256 currentRateTwo = vaultTwo.convertToAssets(1e18);
 
         // Expect event to be emitted
-        uint48 roundedTimestamp = _getRoundedTimestamp();
         vm.expectEmit(true, true, true, true);
-        emit RateSnapshotTaken(address(vault), roundedTimestamp, currentRate);
+        emit RateSnapshotTaken(address(vault), timestamp, currentRate);
+        vm.expectEmit(true, true, true, true);
+        emit RateSnapshotTaken(address(vaultTwo), timestamp, currentRateTwo);
 
         // Call the function
         vm.prank(heart);
         yieldDepositFacility.execute();
 
-        // Expect the rounded timestamp to equal the current timestamp
+        // Expect the snapshot to be taken at the timestamp
         assertEq(
-            roundedTimestamp,
-            timestamp,
-            "Rounded timestamp should equal the current timestamp"
-        );
-
-        // Expect the snapshot to be taken at the rounded timestamp
-        assertEq(
-            yieldDepositFacility.vaultRateSnapshots(iVault, roundedTimestamp),
+            yieldDepositFacility.vaultRateSnapshots(iVault, timestamp),
             currentRate,
-            "Snapshot should be taken at the rounded timestamp"
+            "Snapshot should be taken at the timestamp"
         );
 
         // Ensure there was no snapshot taken for the zero address
         assertEq(
-            yieldDepositFacility.vaultRateSnapshots(IERC4626(address(0)), roundedTimestamp),
+            yieldDepositFacility.vaultRateSnapshots(IERC4626(address(0)), timestamp),
             0,
             "Snapshot should not be taken for the zero address"
         );
     }
 
-    // [X] the snapshot timestamp is rounded down to the nearest 8-hour interval
+    // [X] the snapshot timestamp is the current timestamp
     // [X] it stores the rate snapshot for each vault
     // [X] it emits a SnapshotTaken event
 
-    function test_givenTimestampMultipleOf8Hours(uint48 timestamp) public givenLocallyActive {
-        // Set the timestamp to be anything but a multiple of 8 hours
+    function test_success(uint48 timestamp) public givenLocallyActive {
         timestamp = uint48(bound(timestamp, INITIAL_BLOCK, INITIAL_BLOCK + 16 hours));
-        timestamp = (timestamp / 8 hours) * 8 hours;
-        assertEq(timestamp % 8 hours, 0, "Timestamp is not a multiple of 8 hours");
         vm.warp(timestamp);
 
         // Get the current vault conversion rate
         uint256 currentRate = vault.convertToAssets(1e18);
 
         // Expect event to be emitted
-        uint48 roundedTimestamp = _getRoundedTimestamp();
         vm.expectEmit(true, true, true, true);
-        emit RateSnapshotTaken(address(vault), roundedTimestamp, currentRate);
+        emit RateSnapshotTaken(address(vault), timestamp, currentRate);
 
         // Call the function
         vm.prank(heart);
         yieldDepositFacility.execute();
 
-        // Expect the rounded timestamp to equal the current timestamp
+        // Expect the snapshot to be taken at the timestamp
         assertEq(
-            roundedTimestamp,
-            timestamp,
-            "Rounded timestamp should equal the current timestamp"
-        );
-
-        // Expect the snapshot to be taken at the rounded timestamp
-        assertEq(
-            yieldDepositFacility.vaultRateSnapshots(iVault, roundedTimestamp),
+            yieldDepositFacility.vaultRateSnapshots(iVault, timestamp),
             currentRate,
-            "Snapshot should be taken at the rounded timestamp"
+            "Snapshot should be taken at the timestamp"
         );
     }
 }
