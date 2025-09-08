@@ -330,18 +330,18 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         // Calculate expected yield and fee
         // This will take the current rate as the end rate
         // Last conversion rate = 1100000000000000000 + 1
-        // Deposit amount = 9000000000000000000
-        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // Deposit amount = 8999999999999999999
+        // Last shares = 8999999999999999999 * 1e18 / 1100000000000000001 = 8181818181818181809
         // End conversion rate = 1210000000000000000
         // Current shares value = last shares * end rate / 1e18
-        // = 8181818181818181810 * 1210000000000000000 / 1e18 = 9899999999999999990
+        // = 8181818181818181809 * 1210000000000000000 / 1e18 = 9899999999999999988
         // Yield = current shares value - receipt tokens
-        // = 9899999999999999990 - 9000000000000000000 = 899999999999999990
-        // Yield fee = 899999999999999990 * 1000 / 10000 = 89999999999999999
-        // Claimed yield = 899999999999999990 - 89999999999999999 = 809999999999999991
+        // = 9899999999999999988 - 8999999999999999999 = 899999999999999989
+        // Yield fee = 899999999999999989 * 1000 / 10000 = 89999999999999998
+        // Claimed yield = 899999999999999989 - 89999999999999998 = 809999999999999991
         uint256 currentConversionRate = 1210000000000000000;
-        uint256 expectedYield = 899999999999999990;
-        uint256 expectedFee = 89999999999999999;
+        uint256 expectedYield = 899999999999999989;
+        uint256 expectedFee = 89999999999999998;
         uint256 expectedYieldShares = vault.previewWithdraw(expectedYield);
 
         // Expect event
@@ -376,6 +376,12 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
         givenRateSnapshotTaken
         givenVaultAccruesYield(iVault, 1e18)
     {
+        assertEq(
+            _previousDepositActualAmount,
+            8999999999999999999,
+            "Previous deposit amount mismatch"
+        );
+
         // Move beyond the end of the deposit period
         vm.warp(YIELD_EXPIRY + 1);
 
@@ -385,13 +391,13 @@ contract YieldDepositFacilityClaimYieldTest is YieldDepositFacilityTest {
 
         // Calculate expected yield and fee
         // Last conversion rate = 1100000000000000000 + 1
-        // Deposit amount = 9000000000000000000
-        // Last shares = 9000000000000000000 * 1e18 / 1100000000000000001 = 8181818181818181810
+        // Deposit amount = 8999999999999999999
+        // Last shares = 8999999999999999999 * 1e18 / 1100000000000000001 = 8181818181818181809
         // End conversion rate = 1155000000000000000
         // Current shares value = last shares * end rate / 1e18
-        // = 8181818181818181810 * 1155000000000000000 / 1e18 = 9449999999999999990
+        // = 8181818181818181809 * 1155000000000000000 / 1e18 = 9449999999999999989
         // Yield = current shares value - receipt tokens
-        // = 9449999999999999990 - 9000000000000000000 = 449999999999999990
+        // = 9449999999999999989 - 8999999999999999999 = 449999999999999990
         // Yield fee = 449999999999999990 * 1000 / 10000 = 44999999999999999
         // Claimed yield = 449999999999999990 - 44999999999999999 = 404999999999999991
         uint256 rateSnapshotConversionRate = 1155000000000000000;
