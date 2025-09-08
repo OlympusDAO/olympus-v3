@@ -76,13 +76,12 @@ contract ConvertibleDepositFacility is
         Keycode mintrKeycode = toKeycode("MINTR");
         Keycode deposKeycode = toKeycode("DEPOS");
 
-        permissions = new Permissions[](6);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(mintrKeycode, MINTR.decreaseMintApproval.selector);
-        permissions[3] = Permissions(deposKeycode, DEPOS.mint.selector);
-        permissions[4] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
-        permissions[5] = Permissions(deposKeycode, DEPOS.split.selector);
+        permissions[2] = Permissions(deposKeycode, DEPOS.mint.selector);
+        permissions[3] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
+        permissions[4] = Permissions(deposKeycode, DEPOS.split.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -281,6 +280,7 @@ contract ConvertibleDepositFacility is
     /// @inheritdoc IConvertibleDepositFacility
     /// @dev        This function reverts if:
     ///             - The contract is not enabled
+    ///             - No positions are provided
     ///             - The length of the positionIds_ array does not match the length of the amounts_ array
     ///             - The caller is not the owner of all of the positions
     ///             - Any position is not valid
@@ -300,6 +300,8 @@ contract ConvertibleDepositFacility is
         onlyEnabled
         returns (uint256 receiptTokenIn, uint256 convertedTokenOut)
     {
+        if (positionIds_.length == 0) revert CDF_InvalidArgs("no positions");
+
         // Make sure the lengths of the arrays are the same
         if (positionIds_.length != amounts_.length) revert CDF_InvalidArgs("array length");
 
@@ -358,6 +360,7 @@ contract ConvertibleDepositFacility is
     // ========== YIELD ========== //
 
     /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This returns the value from DepositManager.maxClaimYield(), which is a theoretical value.
     function previewClaimYield(IERC20 asset_) public view returns (uint256 yieldAssets) {
         yieldAssets = DEPOSIT_MANAGER.maxClaimYield(asset_, address(this));
         return yieldAssets;
@@ -365,18 +368,24 @@ contract ConvertibleDepositFacility is
 
     /// @inheritdoc IConvertibleDepositFacility
     function claimYield(IERC20 asset_) public returns (uint256) {
-        // If disabled, don't do anything
-        if (!isEnabled) return 0;
-
         // Determine the yield
         uint256 previewedYield = previewClaimYield(asset_);
 
+        return claimYield(asset_, previewedYield);
+    }
+
+    /// @inheritdoc IConvertibleDepositFacility
+    /// @dev        This function mainly serves as a backup for claiming protocol yield, in case the max yield cannot be claimed.
+    function claimYield(IERC20 asset_, uint256 amount_) public returns (uint256) {
+        // If disabled, don't do anything
+        if (!isEnabled) return 0;
+
         // Skip if there is no yield to claim
-        if (previewedYield == 0) return 0;
+        if (amount_ == 0) return 0;
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
-        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), previewedYield);
+        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), amount_);
 
         // Emit the event
         emit ClaimedYield(address(asset_), actualYield);

@@ -177,8 +177,9 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    ///
     /// @dev        The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///
+    ///             Note that the returned value is a theoretical maximum. The theoretical value may not be accurate or possible due to rounding and other behaviours in an ERC4626 vault.
     function maxClaimYield(IERC20 asset_, address operator_) external view returns (uint256) {
         (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
         bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, operator_);

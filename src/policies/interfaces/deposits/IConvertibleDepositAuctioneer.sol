@@ -163,13 +163,16 @@ interface IConvertibleDepositAuctioneer {
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
     /// @return positionId      The ID of the position created by the DEPOS module to represent the convertible deposit terms
     /// @return receiptTokenId  The ID of the receipt token created by the DepositManager to represent the deposit
+    /// @return actualAmount    The actual amount of deposit assets that were deposited (receipt tokens minted)
     function bid(
         uint8 depositPeriod_,
         uint256 depositAmount_,
         uint256 minOhmOut_,
         bool wrapPosition_,
         bool wrapReceipt_
-    ) external returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId);
+    )
+        external
+        returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
 
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///

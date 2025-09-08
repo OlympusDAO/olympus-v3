@@ -188,7 +188,7 @@ contract ConvertibleDepositAuctioneer is
         nonReentrant
         onlyEnabled
         onlyDepositPeriodEnabled(depositPeriod_)
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256)
     {
         return
             _bid(
@@ -204,7 +204,7 @@ contract ConvertibleDepositAuctioneer is
 
     /// @notice Internal function to submit an auction bid on the given deposit asset and period
     /// @dev    This function expects the calling function to have already validated the contract state and deposit asset and period
-    function _bid(BidParams memory params) internal returns (uint256, uint256, uint256) {
+    function _bid(BidParams memory params) internal returns (uint256, uint256, uint256, uint256) {
         uint256 ohmOut;
         uint256 depositIn;
         {
@@ -248,17 +248,18 @@ contract ConvertibleDepositAuctioneer is
         // We round up to be conservative
 
         // Create the receipt tokens and position
-        (uint256 positionId, uint256 receiptTokenId, ) = CD_FACILITY.createPosition(
-            IConvertibleDepositFacility.CreatePositionParams({
-                asset: _DEPOSIT_ASSET,
-                periodMonths: params.depositPeriod,
-                depositor: msg.sender,
-                amount: depositIn,
-                conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut), // Assets per OHM, deposit token scale
-                wrapPosition: params.wrapPosition,
-                wrapReceipt: params.wrapReceipt
-            })
-        );
+        (uint256 positionId, uint256 receiptTokenId, uint256 actualAmount) = CD_FACILITY
+            .createPosition(
+                IConvertibleDepositFacility.CreatePositionParams({
+                    asset: _DEPOSIT_ASSET,
+                    periodMonths: params.depositPeriod,
+                    depositor: msg.sender,
+                    amount: depositIn,
+                    conversionPrice: depositIn.mulDivUp(_ohmScale, ohmOut), // Assets per OHM, deposit token scale
+                    wrapPosition: params.wrapPosition,
+                    wrapReceipt: params.wrapReceipt
+                })
+            );
 
         // Emit event
         emit Bid(
@@ -270,7 +271,7 @@ contract ConvertibleDepositAuctioneer is
             positionId
         );
 
-        return (ohmOut, positionId, receiptTokenId);
+        return (ohmOut, positionId, receiptTokenId, actualAmount);
     }
 
     /// @notice Internal function to preview the quantity of OHM tokens that can be purchased for a given deposit amount
@@ -294,6 +295,10 @@ contract ConvertibleDepositAuctioneer is
         output.tickPrice = tick_.price;
         output.tickSize = _currentTickSize;
 
+        // Load, as this will be used within the loop
+        AuctionParameters memory auctionParams = _auctionParameters;
+        Day memory dayState = _dayState;
+
         // Cycle through the ticks until the deposit is fully converted
         while (remainingDeposit > 0) {
             uint256 depositAmount = remainingDeposit;
@@ -306,12 +311,14 @@ contract ConvertibleDepositAuctioneer is
             if (output.tickCapacity <= convertibleAmount) {
                 convertibleAmount = output.tickCapacity;
                 // Convertible = deposit * OHM scale / price, so this is the inverse
-                depositAmount = convertibleAmount.mulDiv(output.tickPrice, _ohmScale);
+                // Round in favour of the protocol
+                depositAmount = convertibleAmount.mulDivUp(output.tickPrice, _ohmScale);
 
                 // The tick has also been depleted, so update the price
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
                 output.tickSize = _getNewTickSize(
-                    _dayState.convertible + convertibleAmount + output.ohmOut
+                    dayState.convertible + convertibleAmount + output.ohmOut,
+                    auctionParams
                 );
                 output.tickCapacity = output.tickSize;
             }
@@ -321,7 +328,11 @@ contract ConvertibleDepositAuctioneer is
             }
 
             // Record updates to the deposit and OHM
-            remainingDeposit -= depositAmount;
+            if (depositAmount <= remainingDeposit) {
+                remainingDeposit -= depositAmount;
+            } else {
+                remainingDeposit = 0;
+            }
             output.ohmOut += convertibleAmount;
         }
 
@@ -387,23 +398,26 @@ contract ConvertibleDepositAuctioneer is
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
-    function _getNewTickSize(uint256 ohmOut_) internal view returns (uint256 newTickSize) {
+    function _getNewTickSize(
+        uint256 ohmOut_,
+        AuctionParameters memory auctionParams_
+    ) internal pure returns (uint256 newTickSize) {
         // If the day target is zero, the tick size is always standard
-        if (_auctionParameters.target == 0) {
-            return _auctionParameters.tickSize;
+        if (auctionParams_.target == 0) {
+            return auctionParams_.tickSize;
         }
 
         // Calculate the multiplier
-        uint256 multiplier = ohmOut_ / _auctionParameters.target;
+        uint256 multiplier = ohmOut_ / auctionParams_.target;
 
         // If the day target has not been met, the tick size remains the standard
         if (multiplier == 0) {
-            newTickSize = _auctionParameters.tickSize;
+            newTickSize = auctionParams_.tickSize;
             return newTickSize;
         }
 
         // Otherwise the tick size is halved as many times as the multiplier
-        newTickSize = _auctionParameters.tickSize / (multiplier * 2);
+        newTickSize = auctionParams_.tickSize / (multiplier * 2);
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
