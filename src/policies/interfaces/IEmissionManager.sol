@@ -41,14 +41,11 @@ interface IEmissionManager {
     /// @notice Emitted when the CD auctionner contract is set
     event ConvertibleDepositAuctioneerSet(address auctioneer);
 
-    /// @notice Emitted when the tick size scalar is changed
-    event TickSizeScalarChanged(uint256 newTickSizeScalar);
+    /// @notice Emitted when the tick size is changed
+    event TickSizeChanged(uint256 newTickSize);
 
     /// @notice Emitted when the minimum price scalar is changed
     event MinPriceScalarChanged(uint256 newMinPriceScalar);
-
-    /// @notice Emitted when the minimum tick size is changed
-    event MinTickSizeChanged(uint256 newMinTickSize);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -63,17 +60,15 @@ interface IEmissionManager {
     /// @param baseEmissionsRate    percent of OHM supply to issue per day at the minimum premium, in OHM scale, i.e. 1e9 = 100%
     /// @param minimumPremium       minimum premium at which to issue OHM, a percentage where 1e18 is 100%
     /// @param backing              backing price of OHM in reserve token, in reserve scale
-    /// @param tickSizeScalar       scalar for tick size
+    /// @param tickSize             fixed tick size in OHM decimals (9)
     /// @param minPriceScalar       scalar for min price
-    /// @param minTickSize          minimum tick size in OHM decimals (9)
     /// @param restartTimeframe     time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     struct EnableParams {
         uint256 baseEmissionsRate;
         uint256 minimumPremium;
         uint256 backing;
-        uint256 tickSizeScalar;
+        uint256 tickSize;
         uint256 minPriceScalar;
-        uint256 minTickSize;
         uint48 restartTimeframe;
     }
 }
