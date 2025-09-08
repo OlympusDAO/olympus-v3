@@ -212,16 +212,8 @@ contract DepositManager is
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
-        // Post-withdrawal, there should be at least as many underlying asset tokens as there are receipt tokens, otherwise the receipt token is not redeemable
-        (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, msg.sender);
-        bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, msg.sender);
-        uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
-        if (_assetLiabilities[assetLiabilitiesKey] > depositedSharesInAssets + borrowedAmount) {
-            revert DepositManager_Insolvent(
-                address(asset_),
-                _assetLiabilities[assetLiabilitiesKey]
-            );
-        }
+        // Validate operator solvency after withdrawal
+        _validateOperatorSolvency(asset_, msg.sender);
 
         // Emit an event
         emit OperatorYieldClaimed(address(asset_), recipient_, msg.sender, actualAmount);
@@ -255,6 +247,9 @@ contract DepositManager is
         // This will revert if the asset is not configured
         (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
+        // Validate operator solvency after state updates
+        _validateOperatorSolvency(params_.asset, msg.sender);
+
         return actualAmount;
     }
 
@@ -273,6 +268,22 @@ contract DepositManager is
         address operator_
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(address(asset_), operator_));
+    }
+
+    /// @notice Validates that an operator remains solvent after a withdrawal
+    /// @dev    This function ensures that operator assets + borrowed amount >= operator liabilities
+    ///         This is the core solvency constraint for the DepositManager
+    /// @param asset_ The asset to validate solvency for
+    /// @param operator_ The operator to validate solvency for
+    function _validateOperatorSolvency(IERC20 asset_, address operator_) internal view {
+        (, uint256 depositedSharesInAssets) = getOperatorAssets(asset_, operator_);
+        bytes32 assetLiabilitiesKey = _getAssetLiabilitiesKey(asset_, operator_);
+        uint256 operatorLiabilities = _assetLiabilities[assetLiabilitiesKey];
+        uint256 borrowedAmount = _borrowedAmounts[assetLiabilitiesKey];
+
+        if (operatorLiabilities > depositedSharesInAssets + borrowedAmount) {
+            revert DepositManager_Insolvent(address(asset_), operatorLiabilities);
+        }
     }
 
     // ========== OPERATOR NAMES ========== //
@@ -574,6 +585,9 @@ contract DepositManager is
         // This is done after the withdraw, as the actual amount is not known ahead of time
         _borrowedAmounts[_getAssetLiabilitiesKey(params_.asset, msg.sender)] += actualAmount;
 
+        // Validate operator solvency after state updates
+        _validateOperatorSolvency(params_.asset, msg.sender);
+
         // Emit event
         emit BorrowingWithdrawal(
             address(params_.asset),
@@ -615,6 +629,9 @@ contract DepositManager is
 
         // Update borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
+
+        // Validate operator solvency after borrowed amount change
+        _validateOperatorSolvency(params_.asset, msg.sender);
 
         // Emit event
         emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
@@ -658,6 +675,9 @@ contract DepositManager is
 
         // Update the borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
+
+        // Validate operator solvency after borrowed amount change
+        _validateOperatorSolvency(params_.asset, msg.sender);
 
         // No need to update the operator shares, as the balance has already been adjusted upon withdraw/repay
 

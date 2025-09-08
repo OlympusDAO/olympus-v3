@@ -210,6 +210,17 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Calculate amount
         uint256 oneShareInAssets = vault.previewMint(1);
         amount_ = bound(amount_, oneShareInAssets, previousRecipientBorrowActualAmount);
+
+        uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
+
+        // Make another deposit
+        // This reduces rounding issues with conversion between shares and assets
+        {
+            asset.mint(DEPOSITOR, MINT_AMOUNT);
+            _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
+            _deposit(MINT_AMOUNT, false);
+        }
+
         _takeSnapshot(amount_);
 
         // Expect event
@@ -238,7 +249,10 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         );
         assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
-            previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount + amount_,
+            firstDepositActualAmount +
+                previousDepositorDepositActualAmount -
+                previousRecipientBorrowActualAmount +
+                amount_,
             "borrowing capacity"
         );
 
