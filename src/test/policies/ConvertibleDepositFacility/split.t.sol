@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
     uint256 internal constant DEPOSIT_AMOUNT = 9e18;
@@ -63,6 +64,104 @@ contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
 
         vm.prank(caller_);
         facility.split(POSITION_ID, 1e18, recipientTwo, false);
+    }
+
+    // given there is a minimum deposit
+    //  when the new position would be below the minimum deposit
+    //   [X] it reverts
+    //  when the remaining deposit would be below the minimum deposit
+    //   [X] it reverts
+    //  [X] it succeeds
+
+    function test_givenMinimumDeposit_newPositionBelowMinimumDeposit(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, DEPOSIT_AMOUNT)
+        givenMinimumDeposit(1e18)
+    {
+        // New position < minimum deposit
+        amount_ = bound(amount_, 1, 1e18 - 1);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositNotMet.selector,
+                address(iReserveToken),
+                amount_,
+                1e18
+            )
+        );
+
+        // Call function
+        _split(amount_);
+    }
+
+    function test_givenMinimumDeposit_oldPositionBelowMinimumDeposit(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, DEPOSIT_AMOUNT)
+        givenMinimumDeposit(1e18)
+    {
+        // Old position < minimum deposit
+        amount_ = bound(amount_, previousDepositActual - 1e18 + 1, previousDepositActual);
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositNotMet.selector,
+                address(iReserveToken),
+                previousDepositActual - amount_,
+                1e18
+            )
+        );
+
+        // Call function
+        _split(amount_);
+    }
+
+    function test_givenMinimumDeposit(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, DEPOSIT_AMOUNT)
+        givenMinimumDeposit(1e18)
+    {
+        // New position >= minimum deposit
+        // Old position >= minimum deposit
+        amount_ = bound(amount_, 1e18, previousDepositActual - 1e18);
+
+        // Call function
+        uint256 newPositionId = _split(amount_);
+
+        // Check the new position was created
+        assertEq(
+            convertibleDepositPositions.getPosition(newPositionId).remainingDeposit,
+            amount_,
+            "New position amount mismatch"
+        );
+        assertEq(
+            convertibleDepositPositions.getPosition(newPositionId).owner,
+            recipientTwo,
+            "New position owner mismatch"
+        );
+
+        // Check the original position was updated
+        assertEq(
+            convertibleDepositPositions.getPosition(POSITION_ID).remainingDeposit,
+            previousDepositActual - amount_,
+            "Original position amount mismatch"
+        );
     }
 
     // [X] it creates a new position with the specified amount

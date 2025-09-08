@@ -550,6 +550,12 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenMinimumDeposit(uint256 minimumDeposit_) {
+        vm.prank(admin);
+        depositManager.setAssetMinimumDeposit(iReserveToken, minimumDeposit_);
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
