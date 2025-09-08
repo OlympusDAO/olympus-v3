@@ -6,6 +6,7 @@ import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Libraries
 import {ERC721} from "@solmate-6.2.0/tokens/ERC721.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Bophades
 import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
@@ -17,6 +18,8 @@ import {IPositionTokenRenderer} from "src/modules/DEPOS/IPositionTokenRenderer.s
 /// @notice Implementation of the {DEPOSv1} interface
 ///         This contract is used to create, manage, and wrap/unwrap deposit positions. Positions are optionally convertible.
 contract OlympusDepositPositionManager is DEPOSv1 {
+    using EnumerableSet for EnumerableSet.UintSet;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The address of the token renderer contract
@@ -118,7 +121,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         });
 
         // Add the position ID to the user's list of positions
-        _userPositions[params_.owner].push(positionId);
+        _userPositions[params_.owner].add(positionId);
 
         // If specified, wrap the position
         if (params_.wrapPosition) _safeMint(params_.owner, positionId);
@@ -328,19 +331,10 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         position.owner = to_;
 
         // Add to user positions on the destination address
-        _userPositions[to_].push(tokenId_);
+        _userPositions[to_].add(tokenId_);
 
-        // Remove from user terms on the source address
-        bool found = false;
-        for (uint256 i = 0; i < _userPositions[from_].length; i++) {
-            if (_userPositions[from_][i] == tokenId_) {
-                _userPositions[from_][i] = _userPositions[from_][_userPositions[from_].length - 1];
-                _userPositions[from_].pop();
-                found = true;
-                break;
-            }
-        }
-        if (!found) revert DEPOS_InvalidPositionId(tokenId_);
+        // Remove from user positions on the source address
+        if (!_userPositions[from_].remove(tokenId_)) revert DEPOS_InvalidPositionId(tokenId_);
 
         // Call `transferFrom` on the parent contract
         super.transferFrom(from_, to_, tokenId_);
@@ -365,7 +359,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
     function getUserPositionIds(
         address user_
     ) external view virtual override returns (uint256[] memory) {
-        return _userPositions[user_];
+        return _userPositions[user_].values();
     }
 
     /// @inheritdoc IDepositPositionManager
