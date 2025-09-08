@@ -353,10 +353,16 @@ interface IDepositManager is IAssetManager {
     ///         - Configuring the asset
     ///         - Emitting an event
     ///
-    /// @param  asset_      The address of the underlying asset
-    /// @param  vault_      The address of the ERC4626 vault to deposit the asset into (or the zero address)
-    /// @param  depositCap_ The deposit cap of the asset
-    function addAsset(IERC20 asset_, IERC4626 vault_, uint256 depositCap_) external;
+    /// @param  asset_          The address of the underlying asset
+    /// @param  vault_          The address of the ERC4626 vault to deposit the asset into (or the zero address)
+    /// @param  depositCap_     The deposit cap of the asset
+    /// @param  minimumDeposit_ The minimum deposit amount for the asset
+    function addAsset(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) external;
 
     /// @notice Sets the deposit cap for an asset
     /// @dev    The implementing contract is expected to handle the following:
@@ -367,6 +373,16 @@ interface IDepositManager is IAssetManager {
     /// @param  asset_          The address of the underlying asset
     /// @param  depositCap_     The deposit cap to set for the asset
     function setAssetDepositCap(IERC20 asset_, uint256 depositCap_) external;
+
+    /// @notice Sets the minimum deposit for an asset
+    /// @dev    The implementing contract is expected to handle the following:
+    ///         - Validating that the caller has the correct role
+    ///         - Setting the minimum deposit for the asset
+    ///         - Emitting an event
+    ///
+    /// @param  asset_           The address of the underlying asset
+    /// @param  minimumDeposit_  The minimum deposit to set for the asset
+    function setAssetMinimumDeposit(IERC20 asset_, uint256 minimumDeposit_) external;
 
     /// @notice Adds a new asset period
     /// @dev    The implementing contract is expected to handle the following:

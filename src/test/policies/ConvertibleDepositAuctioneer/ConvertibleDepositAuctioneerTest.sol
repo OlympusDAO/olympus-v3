@@ -155,7 +155,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Set the facility name
         depositManager.setOperatorName(address(facility), "cdf");
 
-        depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max);
+        depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max, 0);
 
         depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(facility), 90e2);
         depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS_TWO, address(facility), 90e2);

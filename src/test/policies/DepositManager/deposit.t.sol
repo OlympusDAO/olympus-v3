@@ -179,6 +179,45 @@ contract DepositManagerDepositTest is DepositManagerTest {
         );
     }
 
+    // when the deposit amount is below the minimum deposit
+    //  [X] it reverts
+
+    function test_whenDepositAmountIsBelowMinimum_reverts(
+        uint256 minimumDeposit_,
+        uint256 depositAmount_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
+        minimumDeposit_ = bound(minimumDeposit_, 2, type(uint128).max);
+        depositAmount_ = bound(depositAmount_, 1, minimumDeposit_ - 1);
+
+        // Add asset with minimum deposit requirement
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, minimumDeposit_);
+
+        // Add asset period
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositNotMet.selector,
+                address(iAsset),
+                depositAmount_,
+                minimumDeposit_
+            )
+        );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: depositAmount_,
+                shouldWrap: false
+            })
+        );
+    }
+
     // given the depositor has not approved the contract to spend the asset
     //  [X] it reverts
 
@@ -248,7 +287,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Configure the asset vault
         vm.prank(ADMIN);
-        depositManager.addAsset(IERC20(address(asset)), IERC4626(address(0)), type(uint256).max);
+        depositManager.addAsset(IERC20(address(asset)), IERC4626(address(0)), type(uint256).max, 0);
 
         // Configure deposit
         vm.prank(ADMIN);

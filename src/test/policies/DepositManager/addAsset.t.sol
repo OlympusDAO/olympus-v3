@@ -15,7 +15,7 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 contract DepositManagerAddAssetTest is DepositManagerTest {
     // ========== EVENTS ========== //
 
-    event AssetConfigured(address indexed asset, address indexed vault, uint256 depositCap);
+    event AssetConfigured(address indexed asset, address indexed vault);
 
     // ========== ASSERTIONS ========== //
 
@@ -23,6 +23,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         IERC20 asset_,
         IERC4626 vault_,
         uint256 depositCap_,
+        uint256 minimumDeposit_,
         bool isConfigured_
     ) internal view {
         // AssetConfiguration
@@ -39,6 +40,11 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
             "AssetConfiguration: vault mismatch"
         );
         assertEq(configuration.depositCap, depositCap_, "AssetConfiguration: depositCap mismatch");
+        assertEq(
+            configuration.minimumDeposit,
+            minimumDeposit_,
+            "AssetConfiguration: minimumDeposit mismatch"
+        );
 
         // getConfiguredAssets
         IERC20[] memory assets = depositManager.getConfiguredAssets();
@@ -65,7 +71,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
 
         vm.prank(caller_);
-        depositManager.addAsset(iAsset, iVault, type(uint256).max);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, 0);
     }
 
     // given the contract is disabled
@@ -75,7 +81,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, iVault, type(uint256).max);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, 0);
     }
 
     // when the asset is the zero address
@@ -87,14 +93,14 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
 
         vm.prank(ADMIN);
-        depositManager.addAsset(IERC20(address(0)), IERC4626(address(0)), type(uint256).max);
+        depositManager.addAsset(IERC20(address(0)), IERC4626(address(0)), type(uint256).max, 0);
     }
 
     function test_whenAssetIsZeroAddress_reverts() public givenIsEnabled {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
 
         vm.prank(ADMIN);
-        depositManager.addAsset(IERC20(address(0)), iVault, type(uint256).max);
+        depositManager.addAsset(IERC20(address(0)), iVault, type(uint256).max, 0);
     }
 
     // given the asset is already configured
@@ -112,7 +118,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max, 0);
     }
 
     function test_givenAssetIsAlreadyConfigured_reverts() public givenIsEnabled givenAssetIsAdded {
@@ -121,7 +127,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, iVault, type(uint256).max);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, 0);
     }
 
     // when the vault is the zero address
@@ -132,12 +138,12 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
 
     function test_whenVaultIsZeroAddress() public givenIsEnabled {
         vm.expectEmit(true, true, true, true);
-        emit AssetConfigured(address(asset), address(0), type(uint256).max);
+        emit AssetConfigured(address(asset), address(0));
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max, 0);
 
-        _assertAssetConfiguration(iAsset, IERC4626(address(0)), type(uint256).max, true);
+        _assertAssetConfiguration(iAsset, IERC4626(address(0)), type(uint256).max, 0, true);
     }
 
     // given the vault asset does not match the asset
@@ -153,7 +159,7 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, IERC4626(address(newVault)), type(uint256).max);
+        depositManager.addAsset(iAsset, IERC4626(address(newVault)), type(uint256).max, 0);
     }
 
     // [X] the asset configuration has the vault set to the vault address
@@ -161,13 +167,60 @@ contract DepositManagerAddAssetTest is DepositManagerTest {
     // [X] the configured assets array contains the asset
     // [X] it emits an event
 
-    function test_setsAssetVault(uint256 depositCap_) public givenIsEnabled {
+    function test_setsAssetVault(
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) public givenIsEnabled {
+        // Bound values to ensure minimumDeposit_ <= depositCap_
+        depositCap_ = bound(depositCap_, 0, type(uint128).max);
+        minimumDeposit_ = bound(minimumDeposit_, 0, depositCap_);
+
         vm.expectEmit(true, true, true, true);
-        emit AssetConfigured(address(asset), address(vault), depositCap_);
+        emit AssetConfigured(address(asset), address(vault));
 
         vm.prank(ADMIN);
-        depositManager.addAsset(iAsset, iVault, depositCap_);
+        depositManager.addAsset(iAsset, iVault, depositCap_, minimumDeposit_);
 
-        _assertAssetConfiguration(iAsset, iVault, depositCap_, true);
+        _assertAssetConfiguration(iAsset, iVault, depositCap_, minimumDeposit_, true);
+    }
+
+    // when minimum deposit exceeds deposit cap
+    //  [X] it reverts
+
+    function test_whenMinimumDepositExceedsDepositCap_reverts(
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) public givenIsEnabled {
+        depositCap_ = bound(depositCap_, 0, type(uint128).max - 1);
+        minimumDeposit_ = bound(minimumDeposit_, depositCap_ + 1, type(uint128).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositExceedsDepositCap.selector,
+                address(iAsset),
+                minimumDeposit_,
+                depositCap_
+            )
+        );
+
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, depositCap_, minimumDeposit_);
+    }
+
+    // when deposit cap equals minimum deposit
+    //  [X] it succeeds
+
+    function test_whenDepositCapEqualsMinimumDeposit_succeeds(
+        uint256 amount_
+    ) public givenIsEnabled {
+        amount_ = bound(amount_, 1, type(uint128).max);
+
+        vm.expectEmit(true, true, true, true);
+        emit AssetConfigured(address(asset), address(vault));
+
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, amount_, amount_);
+
+        _assertAssetConfiguration(iAsset, iVault, amount_, amount_, true);
     }
 }
