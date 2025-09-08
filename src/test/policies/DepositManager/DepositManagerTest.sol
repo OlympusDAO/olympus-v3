@@ -5,6 +5,7 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -35,6 +36,7 @@ contract DepositManagerTest is Test {
 
     Kernel public kernel;
     OlympusRoles public roles;
+    OlympusTreasury public trsry;
     RolesAdmin public rolesAdmin;
     DepositManager public depositManager;
     ReceiptTokenManager public receiptTokenManager;
@@ -57,7 +59,7 @@ contract DepositManagerTest is Test {
     uint256 public constant MINT_AMOUNT = 100e18;
     uint16 public constant RECLAIM_RATE = 90e2;
 
-    function setUp() public {
+    function setUp() public virtual {
         ADMIN = makeAddr("ADMIN");
         MANAGER = makeAddr("MANAGER");
         DEPOSIT_OPERATOR = makeAddr("DEPOSIT_OPERATOR");
@@ -70,6 +72,7 @@ contract DepositManagerTest is Test {
 
         // Create modules and policies
         roles = new OlympusRoles(kernel);
+        trsry = new OlympusTreasury(kernel);
         rolesAdmin = new RolesAdmin(kernel);
         receiptTokenManager = new ReceiptTokenManager();
         depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
@@ -78,6 +81,7 @@ contract DepositManagerTest is Test {
         // Install modules and policies
         vm.startPrank(ADMIN);
         kernel.executeAction(Actions.InstallModule, address(roles));
+        kernel.executeAction(Actions.InstallModule, address(trsry));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
         vm.stopPrank();

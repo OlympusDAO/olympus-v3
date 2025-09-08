@@ -949,4 +949,37 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             BaseAssetManager.supportsInterface(interfaceId) ||
             PolicyEnabler.supportsInterface(interfaceId);
     }
+
+    // ========== ADMIN FUNCTIONS ==========
+
+    /// @notice Rescue any ERC20 token sent to this contract and send it to the TRSRY
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
+    ///         - token_ is a managed asset or vault
+    ///         - token_ is the zero address
+    ///
+    /// @param  token_ The address of the ERC20 token to rescue
+    function rescue(address token_) external onlyEnabled onlyAdminRole {
+        // Validate that the token is not a managed asset or vault token
+        uint256 configuredAssetsLength = _configuredAssets.length;
+        for (uint256 i = 0; i < configuredAssetsLength; ) {
+            IERC20 asset = _configuredAssets[i];
+            // Prevent rescue of a configured asset or vault
+            if (token_ == address(asset) || token_ == _assetConfigurations[asset].vault)
+                revert DepositManager_CannotRescueAsset(token_);
+
+            unchecked {
+                i++;
+            }
+        }
+
+        // Transfer the token balance to TRSRY
+        // This will revert if the token is not a valid ERC20 or the zero address
+        uint256 balance = ERC20(token_).balanceOf(address(this));
+        address treasury = getModuleAddress(toKeycode("TRSRY"));
+        if (balance > 0 && treasury != address(0)) {
+            ERC20(token_).safeTransfer(treasury, balance);
+            emit TokenRescued(token_, balance);
+        }
+    }
 }
