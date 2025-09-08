@@ -82,7 +82,8 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
     {
         uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(facility)
         );
 
         // Call function
@@ -129,7 +130,8 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
     {
         uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(facility)
         );
 
         // Start gas snapshot

@@ -22,6 +22,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         uint16 redemptionId_,
         IERC20 depositToken_,
         uint8 depositPeriod_,
+        address facility_,
         uint256 amount_,
         uint256 otherUserCommitmentAmount_,
         uint256 alreadyRedeemedAmount_,
@@ -37,7 +38,11 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         assertEq(redemption.amount, 0, "amount should be 0 after redemption");
 
         // Assert receipt token balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            depositToken_,
+            depositPeriod_,
+            facility_
+        );
         assertEq(
             depositManager.balanceOf(user_, receiptTokenId),
             cancelledAmount_,
@@ -215,6 +220,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             index_,
             iReserveToken,
             PERIOD_MONTHS,
+            cdFacilityAddress,
             _previousDepositActualAmount,
             _previousDepositActualAmount,
             0,
@@ -265,6 +271,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
+            cdFacilityAddress,
             _previousDepositActualAmount,
             _previousDepositActualAmount,
             0,
@@ -380,7 +387,17 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         redemptionVault.finishRedemption(0);
 
         // Assertions
-        _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            cdFacilityAddress,
+            COMMITMENT_AMOUNT,
+            0,
+            0,
+            0
+        );
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
@@ -450,6 +467,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
+            cdFacilityAddress,
             remainingRedemptionAmount,
             0,
             depositTokenBalanceBefore,
@@ -502,6 +520,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
+            cdFacilityAddress,
             remainingAmount,
             0,
             0,
@@ -563,6 +582,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             0,
             iReserveToken,
             PERIOD_MONTHS,
+            address(ydFacility),
             RESERVE_TOKEN_AMOUNT, // Includes the redemption
             0,
             yieldClaimed,
@@ -611,7 +631,17 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         console2.log("Gas used", gasUsed);
 
         // Assertions
-        _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            cdFacilityAddress,
+            COMMITMENT_AMOUNT,
+            0,
+            0,
+            0
+        );
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);
@@ -644,7 +674,17 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         redemptionVault.finishRedemption(0);
 
         // Assertions
-        _assertRedeemed(recipient, 0, iReserveToken, PERIOD_MONTHS, COMMITMENT_AMOUNT, 0, 0, 0);
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            cdFacilityAddress,
+            COMMITMENT_AMOUNT,
+            0,
+            0,
+            0
+        );
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(0);

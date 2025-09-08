@@ -318,7 +318,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths).isConfigured)
+            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths, address(this)).isConfigured)
                 revert YDF_Unsupported(positionIds_[0]);
         }
 
@@ -353,7 +353,7 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
             periodMonths = position.periodMonths;
 
             // Validate that the asset is supported
-            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths).isConfigured)
+            if (!DEPOSIT_MANAGER.isAssetPeriod(asset, periodMonths, address(this)).isConfigured)
                 revert YDF_Unsupported(positionIds_[0]);
         }
 

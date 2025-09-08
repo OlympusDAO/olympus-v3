@@ -20,7 +20,6 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
@@ -67,8 +66,8 @@ contract ConvertibleDepositFacilityTest is Test {
     uint8 public constant PERIOD_MONTHS = 6;
     uint48 public constant CONVERSION_EXPIRY = INITIAL_BLOCK + (30 days) * PERIOD_MONTHS;
 
-    uint256 previousDepositActual;
-    uint256 previousBorrowActual;
+    uint256 public previousDepositActual;
+    uint256 public previousBorrowActual;
 
     function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);
@@ -148,11 +147,30 @@ contract ConvertibleDepositFacilityTest is Test {
             type(uint256).max
         );
 
-        depositManager.addAssetPeriod(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        // Set the facility names
+        depositManager.setOperatorName(address(facility), "cdf");
+        depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
+
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            address(facility),
+            90e2
+        );
+
+        // Enable the token/period/facility combo for the yield deposit facility
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            address(yieldDepositFacility),
+            90e2
+        );
 
         receiptTokenId = depositManager.getReceiptTokenId(
             IERC20(address(reserveToken)),
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(facility)
         );
         vm.stopPrank();
 
@@ -164,11 +182,26 @@ contract ConvertibleDepositFacilityTest is Test {
             type(uint256).max
         );
 
-        depositManager.addAssetPeriod(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
+            address(facility),
+            90e2
+        );
+
+        // Enable the token/period/facility combo for the yield deposit facility
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
+            address(yieldDepositFacility),
+            90e2
+        );
 
         receiptTokenIdTwo = depositManager.getReceiptTokenId(
             IERC20(address(reserveTokenTwo)),
-            PERIOD_MONTHS
+            PERIOD_MONTHS,
+            address(facility)
         );
         vm.stopPrank();
 
@@ -272,6 +305,17 @@ contract ConvertibleDepositFacilityTest is Test {
     modifier mintConvertibleDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
         (, previousDepositActual) = facility.deposit(iReserveToken, PERIOD_MONTHS, amount_, false);
+        _;
+    }
+
+    modifier mintYieldDepositToken(address account_, uint256 amount_) {
+        vm.prank(account_);
+        (, previousDepositActual) = yieldDepositFacility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            false
+        );
         _;
     }
 
@@ -423,7 +467,7 @@ contract ConvertibleDepositFacilityTest is Test {
         return
             IERC20(
                 depositManager.getWrappedToken(
-                    depositManager.getReceiptTokenId(asset_, depositPeriod_)
+                    depositManager.getReceiptTokenId(asset_, depositPeriod_, address(facility))
                 )
             );
     }
@@ -583,7 +627,8 @@ contract ConvertibleDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
-                depositPeriod_
+                depositPeriod_,
+                address(facility)
             )
         );
     }
@@ -599,7 +644,7 @@ contract ConvertibleDepositFacilityTest is Test {
                 spender_,
                 currentAllowance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             )
         );
     }
@@ -618,7 +663,7 @@ contract ConvertibleDepositFacilityTest is Test {
                 recipient,
                 currentBalance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             )
         );
     }

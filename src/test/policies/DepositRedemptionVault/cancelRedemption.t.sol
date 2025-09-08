@@ -35,7 +35,11 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         assertEq(redemption.amount, previousUserCommitmentAmount_ - amount_, "Amount mismatch");
 
         // Assert receipt token balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(depositToken_, depositPeriod_);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            depositToken_,
+            depositPeriod_,
+            address(cdFacility)
+        );
         assertEq(
             depositManager.balanceOf(user_, receiptTokenId),
             depositTokenBalanceBefore_ + amount_,
@@ -180,7 +184,11 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         );
 
         // Assert receipt token balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(cdFacility)
+        );
         assertEq(
             depositManager.balanceOf(recipient, receiptTokenId),
             firstAmount_ + secondAmount_,
@@ -224,7 +232,11 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         assertEq(redemption.amount, 0, "redemption amount should be 0");
 
         // Assert receipt token balances
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(cdFacility)
+        );
         assertEq(
             depositManager.balanceOf(recipient, receiptTokenId),
             COMMITMENT_AMOUNT,

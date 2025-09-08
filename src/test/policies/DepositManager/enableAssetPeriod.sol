@@ -10,6 +10,7 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     event AssetPeriodEnabled(
         uint256 indexed receiptTokenId,
         address indexed asset,
+        address indexed facility,
         uint8 depositPeriod
     );
 
@@ -22,29 +23,35 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // when the caller is not the manager or admin
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
+    function test_givenCallerIsNotManagerOrAdmin_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         _expectRevertNotManagerOrAdmin();
 
         vm.prank(caller_);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given there is no asset period
     //  [X] it reverts
 
-    function test_givenThereIsNoAssetPeriod_reverts() public givenIsEnabled {
+    function test_givenThereIsNoAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the asset period is already enabled
@@ -53,13 +60,14 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     function test_givenAssetPeriodIsAlreadyEnabled_reverts()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
     {
         _expectRevertConfigurationEnabled(iAsset, DEPOSIT_PERIOD);
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // [X] the asset period is enabled
@@ -68,33 +76,37 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
     function test_setsAssetPeriodToEnabled()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
     {
         // Disable the asset period
         vm.prank(ADMIN);
-        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         vm.expectEmit(true, true, true, true);
         emit AssetPeriodEnabled(
-            depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD),
+            depositManager.getReceiptTokenId(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR),
             address(asset),
+            DEPOSIT_OPERATOR,
             DEPOSIT_PERIOD
         );
 
         vm.prank(ADMIN);
-        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         // Assert the asset period is enabled
         IDepositManager.AssetPeriod memory configuration = depositManager.getAssetPeriod(
             iAsset,
-            DEPOSIT_PERIOD
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
         );
         assertEq(configuration.isEnabled, true, "AssetPeriod: isEnabled mismatch");
 
         IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
             iAsset,
-            DEPOSIT_PERIOD
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
         );
         assertEq(status.isConfigured, true, "isAssetPeriod: isConfigured mismatch");
         assertEq(status.isEnabled, true, "isAssetPeriod: isEnabled mismatch");

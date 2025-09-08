@@ -127,7 +127,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
         assertEq(
             depositManager.balanceOf(
                 recipient,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             ),
             _recipientBalanceBefore - amount_,
             "recipient balance"

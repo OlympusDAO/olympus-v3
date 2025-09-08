@@ -45,7 +45,9 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     // given the caller is not the deposit operator
     //  [X] it reverts
 
-    function test_givenCallerIsNotDepositOperator_reverts(address caller_) public givenIsEnabled {
+    function test_givenCallerIsNotDepositOperator_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != DEPOSIT_OPERATOR);
 
         _expectRevertNotDepositOperator();
@@ -57,7 +59,11 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     // given the deposit asset is not configured
     //  [X] it reverts
 
-    function test_givenDepositAssetIsNotConfigured_reverts() public givenIsEnabled {
+    function test_givenDepositAssetIsNotConfigured_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         _expectRevertNotConfiguredAsset();
 
         vm.prank(DEPOSIT_OPERATOR);
@@ -72,6 +78,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -101,6 +108,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -163,6 +171,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     function test_claimYield_givenVaultAddressIsZeroAddress()
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAddedWithZeroAddress
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -185,6 +194,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
@@ -255,6 +265,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     )
         public
         givenIsEnabled
+        givenFacilityNameIsSetDefault
         givenAssetIsAdded
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)

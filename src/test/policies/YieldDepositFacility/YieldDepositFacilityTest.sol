@@ -165,20 +165,51 @@ contract YieldDepositFacilityTest is Test {
 
         // Create a receipt token
         vm.startPrank(admin);
+
+        // Set the facility names
+        depositManager.setOperatorName(address(cdFacility), "cdf");
+        depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
+
         depositManager.addAsset(iReserveToken, iVault, type(uint256).max);
 
-        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(yieldDepositFacility),
+            90e2
+        );
 
-        _receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        // Enable the token/period/facility combo for the ConvertibleDepositFacility
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(cdFacility), 90e2);
+
+        _receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(yieldDepositFacility)
+        );
         vm.stopPrank();
 
         // Create a second receipt token
         vm.startPrank(admin);
         depositManager.addAsset(iReserveTokenTwo, iVaultTwo, type(uint256).max);
 
-        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, 90e2);
+        // Enable the token/period/facility combo
+        depositManager.addAssetPeriod(
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            address(yieldDepositFacility),
+            90e2
+        );
 
-        _receiptTokenIdTwo = depositManager.getReceiptTokenId(iReserveTokenTwo, PERIOD_MONTHS);
+        // Enable the token/period/facility combo for the ConvertibleDepositFacility
+        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, address(cdFacility), 90e2);
+
+        _receiptTokenIdTwo = depositManager.getReceiptTokenId(
+            iReserveTokenTwo,
+            PERIOD_MONTHS,
+            address(yieldDepositFacility)
+        );
         vm.stopPrank();
 
         // Disable the facility
@@ -434,7 +465,7 @@ contract YieldDepositFacilityTest is Test {
         uint256 expectedFee_,
         uint256 expectedTreasuryBalance_,
         uint256 expectedVaultSharesReduction_,
-        uint256 expectedConversionRate_,
+        uint256,
         uint48 lastClaimTimestamp_
     ) internal view {
         // Assert caller received yield minus fee
@@ -527,7 +558,11 @@ contract YieldDepositFacilityTest is Test {
                 spender_,
                 currentAllowance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(
+                    iReserveToken,
+                    PERIOD_MONTHS,
+                    address(yieldDepositFacility)
+                )
             )
         );
     }
@@ -542,7 +577,11 @@ contract YieldDepositFacilityTest is Test {
                 recipient,
                 currentBalance_,
                 amount_,
-                depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS)
+                depositManager.getReceiptTokenId(
+                    iReserveToken,
+                    PERIOD_MONTHS,
+                    address(yieldDepositFacility)
+                )
             )
         );
     }
@@ -555,7 +594,8 @@ contract YieldDepositFacilityTest is Test {
             abi.encodeWithSelector(
                 IDepositManager.DepositManager_InvalidAssetPeriod.selector,
                 address(asset_),
-                periodMonths_
+                periodMonths_,
+                address(yieldDepositFacility)
             )
         );
     }

@@ -150,11 +150,19 @@ contract ConvertibleDepositAuctioneerTest is Test {
         // Create a receipt token
         // Required at the time of activation of the auctioneer policy
         vm.startPrank(admin);
+
+        // Set the facility name
+        depositManager.setOperatorName(address(facility), "cdf");
+
         depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max);
 
-        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(facility), 90e2);
 
-        receiptTokenId = depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS);
+        receiptTokenId = depositManager.getReceiptTokenId(
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(facility)
+        );
         vm.stopPrank();
 
         // Activate the auctioneer policy

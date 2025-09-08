@@ -210,7 +210,7 @@ contract ConvertibleDepositFacility is
             // Validate that the asset is supported
             if (
                 !DEPOSIT_MANAGER
-                    .isAssetPeriod(IERC20(currentAsset), currentPeriodMonths)
+                    .isAssetPeriod(IERC20(currentAsset), currentPeriodMonths, address(this))
                     .isConfigured
             ) revert CDF_InvalidToken(positionId_, currentAsset, currentPeriodMonths);
         } else if (previousAsset_ != currentAsset || previousPeriodMonths_ != currentPeriodMonths) {

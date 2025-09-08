@@ -22,7 +22,9 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     // given the caller is not the admin or manager
     //  [X] it reverts
 
-    function test_givenCallerIsNotAdminOrManager_reverts(address caller_) public givenIsEnabled {
+    function test_givenCallerIsNotAdminOrManager_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
         vm.assume(caller_ != ADMIN && caller_ != MANAGER);
 
         // Expect revert
@@ -36,7 +38,11 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     // given the asset is not configured
     //  [X] it reverts
 
-    function test_givenAssetIsNotConfigured_reverts() public givenIsEnabled {
+    function test_givenAssetIsNotConfigured_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
         // Expect revert
         _expectRevertNotConfiguredAsset();
 
@@ -48,7 +54,9 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     // [X] it sets the deposit cap
     // [X] it emits an event
 
-    function test_setDepositCap(uint256 depositCap_) public givenIsEnabled givenAssetIsAdded {
+    function test_setDepositCap(
+        uint256 depositCap_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault givenAssetIsAdded {
         // Expect emit
         vm.expectEmit(true, true, true, true);
         emit AssetDepositCapSet(address(iAsset), depositCap_);
