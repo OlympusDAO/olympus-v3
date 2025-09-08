@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity >=0.8.20;
 
 // OCG Proposal Simulator
@@ -13,8 +14,6 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
@@ -30,7 +29,7 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
 
     // ========== CONSTANTS ========== //
 
-    string constant CDF_NAME = "cdf";
+    string internal constant CDF_NAME = "cdf";
 
     // ========== PROPOSAL ========== //
 
@@ -121,7 +120,6 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
-        address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         // Get old Heart policy address
         address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
@@ -290,7 +288,6 @@ contract ConvertibleDepositEnable is GovernorBravoProposal {
     function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
         address heart = addresses.getAddress("olympus-policy-heart-1_7");
