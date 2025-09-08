@@ -38,7 +38,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     bytes32 public constant ROLE_HEART = "heart";
 
     /// @notice The length of the `EnableParams` struct in bytes
-    uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 224;
 
     // ========== STATE VARIABLES ========== //
 
@@ -81,6 +81,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
     uint256 public minPriceScalar;
+
+    /// @notice The minimum tick size for CD auctions, in OHM scale (9 decimals)
+    uint256 public minTickSize;
 
     uint8 internal _oracleDecimals;
     // solhint-disable immutable-vars-naming
@@ -198,6 +201,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///             - If the auction tracking period has finished and there is a deficit of OHM sold, attempts to create a bond market
     ///             - If market creation fails (external dependency), emits BondMarketCreationFailed and continues execution
     ///
+    ///             Note that if the CD auction is not running (e.g. the auctioneer contract is disabled), this function will consider OHM to have been under-sold across the auction tracking period. This will result in a bond market being created at the end of the auction tracking period in an attempt to sell the remaining OHM.
+    ///
     ///             Notes:
     ///             - If there are delays in the heartbeat (which calls this function), auction result tracking will be affected.
     function execute() external onlyRole(ROLE_HEART) {
@@ -303,12 +308,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         restartTimeframe = params.restartTimeframe;
         tickSizeScalar = params.tickSizeScalar;
         minPriceScalar = params.minPriceScalar;
+        minTickSize = params.minTickSize;
 
         emit MinimumPremiumChanged(params.minimumPremium);
         emit BackingChanged(params.backing);
         emit RestartTimeframeChanged(params.restartTimeframe);
         emit TickSizeScalarChanged(params.tickSizeScalar);
         emit MinPriceScalarChanged(params.minPriceScalar);
+        emit MinTickSizeChanged(params.minTickSize);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -572,6 +579,15 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit MinPriceScalarChanged(newScalar);
     }
 
+    /// @notice allow governance to set the minimum tick size for CD auctions
+    ///
+    /// @param minTickSize_ minimum tick size in OHM decimals (9)
+    function setMinTickSize(uint256 minTickSize_) external onlyAdminRole {
+        minTickSize = minTickSize_;
+
+        emit MinTickSizeChanged(minTickSize_);
+    }
+
     // =========- VIEW FUNCTIONS ========== //
 
     /// @notice return reserves, measured as clearinghouse receivables and sReserve balances, in reserve denomination
@@ -618,12 +634,18 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice get CD auction tick size for a given target
     /// @dev    Returns the calculated tick size, which can be 0 if target is 0 or rounding causes it to be 0
+    ///         If the calculated tick size is less than the minTickSize, it will return 0
     ///
     /// @param  target size of day's CD auction
     /// @return size of tick
-    function getSizeFor(uint256 target) public view returns (uint256) {
+    function getSizeFor(uint256 target) public view returns (uint256 size) {
         // Return the calculated tick size, allowing 0 when target is 0 or rounding causes it to be 0
-        return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+        size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
+
+        // If the calculated tick size is less than the minTickSize, return 0
+        if (size < minTickSize) return 0;
+
+        return size;
     }
 
     /// @notice Get CD auction minimum price for a given price input

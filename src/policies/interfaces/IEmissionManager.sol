@@ -47,6 +47,9 @@ interface IEmissionManager {
     /// @notice Emitted when the minimum price scalar is changed
     event MinPriceScalarChanged(uint256 newMinPriceScalar);
 
+    /// @notice Emitted when the minimum tick size is changed
+    event MinTickSizeChanged(uint256 newMinTickSize);
+
     // ========== DATA STRUCTURES ========== //
 
     struct BaseRateChange {
@@ -62,6 +65,7 @@ interface IEmissionManager {
     /// @param backing              backing price of OHM in reserve token, in reserve scale
     /// @param tickSizeScalar       scalar for tick size
     /// @param minPriceScalar       scalar for min price
+    /// @param minTickSize          minimum tick size in OHM decimals (9)
     /// @param restartTimeframe     time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     struct EnableParams {
         uint256 baseEmissionsRate;
@@ -69,6 +73,7 @@ interface IEmissionManager {
         uint256 backing;
         uint256 tickSizeScalar;
         uint256 minPriceScalar;
+        uint256 minTickSize;
         uint48 restartTimeframe;
     }
 }
