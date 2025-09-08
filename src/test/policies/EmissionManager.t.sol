@@ -77,6 +77,8 @@ contract EmissionManagerTest is Test {
 
     uint256 internal expectedMinPrice;
 
+    event BondMarketCreationFailed(uint256 saleAmount);
+
     // test cases
     //
     // core functionality
@@ -670,6 +672,9 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumBelowMinimum_whenNoAdjustment_surplus()
@@ -723,6 +728,9 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumBelowMinimum_whenNoAdjustment_noSurplus()
@@ -776,6 +784,9 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_givenDifferentReserveDecimals() public givenPremiumBelowMinimum {
@@ -865,6 +876,9 @@ contract EmissionManagerTest is Test {
 
             assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment()
@@ -976,6 +990,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment_surplus()
@@ -1031,6 +1048,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment_noSurplus()
@@ -1086,6 +1106,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment()
@@ -1197,6 +1220,65 @@ contract EmissionManagerTest is Test {
                 "Mint approval should be the capacity"
             );
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
+    }
+
+    function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment_bondMarketsDisabled()
+        public
+        givenNextBeatIsZero
+        givenPremiumAboveMinimum
+        givenCDAuctioneerHasDeficit
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Disable new bond markets
+        vm.prank(guardian);
+        bondAuctioneer.setAllowNewMarkets(false);
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit BondMarketCreationFailed(DEFICIT);
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was NOT created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should NOT increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
+        }
+
+        // The pending capacity should be set
+        assertEq(emissionManager.bondMarketPendingCapacity(), DEFICIT, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment_surplus()
@@ -1252,6 +1334,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_givenPremiumAboveMinimum_whenNoAdjustment_noSurplus()
@@ -1307,6 +1392,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPositiveRateAdjustment()
@@ -1421,6 +1509,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPositiveRateAdjustment_surplus()
@@ -1549,6 +1640,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenPositiveRateAdjustment_noSurplus()
@@ -1677,6 +1771,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenNegativeRateAdjustment()
@@ -1791,6 +1888,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenNegativeRateAdjustment_surplus()
@@ -1919,6 +2019,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     function test_execute_whenNextBeatIsZero_whenNegativeRateAdjustment_noSurplus()
@@ -2047,6 +2150,9 @@ contract EmissionManagerTest is Test {
             // Min price == getMinPriceFor(emission)
             assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
+
+        // The pending capacity should be 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "pending capacity");
     }
 
     // callback test cases

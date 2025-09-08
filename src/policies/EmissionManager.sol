@@ -40,6 +40,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @notice The length of the `EnableParams` struct in bytes
     uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
 
+    uint256 internal constant _TICK_SIZE_MINIMUM = 1;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice active base emissions rate change information
@@ -93,6 +95,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     uint48 public shutdownTimestamp;
     /// @notice time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     uint48 public restartTimeframe;
+
+    /// @notice In situations where a bond market cannot be created, this variable is used to record the OHM capacity for the bond market that needs to be created
+    uint256 public bondMarketPendingCapacity;
 
     // ========== SETUP ========== //
 
@@ -188,6 +193,15 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     // ========== PERIODIC TASK ========== //
 
     /// @inheritdoc IPeriodicTask
+    /// @dev        This function performs the following:
+    ///             - Adjusts the beat counter
+    ///             - Exits if the beat counter is not 0
+    ///             - Sets the parameters for the auction
+    ///             - If the auction tracking period has finished and there is a deficit of OHM sold, attempts to create a bond market
+    ///             - If market creation fails (external dependency), emits BondMarketCreationFailed and continues execution
+    ///
+    ///             Notes:
+    ///             - If there are delays in the heartbeat (which calls this function), auction result tracking will be affected.
     function execute() external onlyRole(ROLE_HEART) {
         // Don't do anything if disabled
         if (!isEnabled) return;
@@ -225,8 +239,27 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             // If there was under-selling, create a market to sell the remaining OHM
             if (difference < 0) {
                 uint256 remainder = uint256(-difference);
-                MINTR.increaseMintApproval(address(this), remainder);
-                _createMarket(remainder);
+
+                // Set the pending capacity (used by the createPendingBondMarket() function)
+                bondMarketPendingCapacity = remainder;
+
+                // Attempt to create the bond market
+                try this.createPendingBondMarket() {
+                    // Do nothing if successful
+                    // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
+                } catch {
+                    // We don't want the periodic task to fail, so catch the error
+                    // But trigger an event that can be monitored
+                    // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
+                    emit BondMarketCreationFailed(remainder);
+                }
+            }
+            // Otherwise, make sure we reset the pending capacity
+            // If there is an issue with creating the bond market, this gives the role-holder the auction tracking period to fix the underlying issue and trigger the creation of the market
+            else {
+                if (bondMarketPendingCapacity > 0) {
+                    bondMarketPendingCapacity = 0;
+                }
             }
         }
     }
@@ -583,7 +616,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // CDAuctioneer will not accept a tick size of 0, so return the minimum accepted amount. This will effectively disable auctions, as the price would go vertical.
         // This also handles the situation where rounding causes the calculated size to be 0
         uint256 size = (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
-        if (size == 0) return 1;
+        if (size == 0) return _TICK_SIZE_MINIMUM;
 
         return size;
     }
@@ -606,6 +639,32 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
         // Change the decimal scale to be the reserve asset's
         return currentPrice.mulDiv(10 ** _reserveDecimals, 10 ** _oracleDecimals);
+    }
+
+    // ========== BOND MARKET CREATION ========== //
+
+    /// @notice Creates a bond market
+    /// @dev    Notes:
+    ///         - If there is no pending capacity, no bond market will be created
+    ///
+    ///         This function will revert if:
+    ///         - The caller is not this contract, or an address with the admin/manager role
+    ///         - The bond market cannot be created
+    function createPendingBondMarket() external {
+        // Validate that the caller is this contract or an admin/manager
+        if (msg.sender != address(this) && !_isManager(msg.sender) && !_isAdmin(msg.sender))
+            revert NotAuthorised();
+
+        // If there is no pending capacity, skip
+        if (bondMarketPendingCapacity == 0) return;
+
+        // Create the market
+        MINTR.increaseMintApproval(address(this), bondMarketPendingCapacity);
+        _createMarket(bondMarketPendingCapacity);
+
+        // Set the pending capacity to 0
+        // This prevents the bond market from being created again
+        bondMarketPendingCapacity = 0;
     }
 
     // ========== ERC165 ========== //
