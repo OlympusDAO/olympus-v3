@@ -4,6 +4,22 @@ pragma solidity >=0.8.0;
 /// @title IERC6909Wrappable
 /// @notice Declares interface for an ERC6909 implementation that allows for wrapping and unwrapping ERC6909 tokens to and from ERC20 tokens
 interface IERC6909Wrappable {
+    // ========== EVENTS ========== //
+
+    event Wrapped(
+        uint256 indexed tokenId,
+        address indexed wrappedToken,
+        address indexed account,
+        uint256 amount
+    );
+
+    event Unwrapped(
+        uint256 indexed tokenId,
+        address indexed wrappedToken,
+        address indexed account,
+        uint256 amount
+    );
+
     // ========== ERRORS ========== //
 
     error ERC6909Wrappable_TokenIdAlreadyExists(uint256 tokenId);
@@ -15,22 +31,16 @@ interface IERC6909Wrappable {
 
     /// @notice Wraps an ERC6909 token to an ERC20 token
     ///
-    /// @param onBehalfOf_   The address to wrap the token on behalf of
     /// @param tokenId_      The ID of the ERC6909 token
     /// @param amount_       The amount of tokens to wrap
     /// @return wrappedToken The address of the wrapped ERC20 token
-    function wrap(
-        address onBehalfOf_,
-        uint256 tokenId_,
-        uint256 amount_
-    ) external returns (address wrappedToken);
+    function wrap(uint256 tokenId_, uint256 amount_) external returns (address wrappedToken);
 
     /// @notice Unwraps an ERC20 token to an ERC6909 token
     ///
-    /// @param onBehalfOf_   The address to unwrap the token on behalf of
     /// @param tokenId_      The ID of the ERC6909 token
     /// @param amount_       The amount of tokens to unwrap
-    function unwrap(address onBehalfOf_, uint256 tokenId_, uint256 amount_) external;
+    function unwrap(uint256 tokenId_, uint256 amount_) external;
 
     /// @notice Returns the address of the wrapped ERC20 token for a given token ID
     ///

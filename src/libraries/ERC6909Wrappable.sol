@@ -164,27 +164,44 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     }
 
     /// @inheritdoc IERC6909Wrappable
-    function wrap(
-        address onBehalfOf_,
-        uint256 tokenId_,
-        uint256 amount_
-    ) public returns (address wrappedToken) {
+    /// @dev        This function will burn the ERC6909 token from the caller and mint the wrapped ERC20 token to the same address.
+    ///
+    ///             This function reverts if:
+    ///             - The token ID does not exist
+    ///             - The amount is zero
+    ///             - The caller has not approved this contract to spend the token
+    ///             - The caller has an insufficient balance of the token
+    function wrap(uint256 tokenId_, uint256 amount_) public returns (address wrappedToken) {
         // Burn the ERC6909 token
-        _burn(onBehalfOf_, tokenId_, amount_, false);
+        _burn(msg.sender, tokenId_, amount_, false);
 
         // Mint the wrapped ERC20 token to the recipient
         IERC20BurnableMintable wrappedToken_ = _getWrappedToken(tokenId_);
-        wrappedToken_.mintFor(onBehalfOf_, amount_);
+        wrappedToken_.mintFor(msg.sender, amount_);
+
+        // Emit the Wrapped event
+        emit Wrapped(tokenId_, address(wrappedToken_), msg.sender, amount_);
+
         return address(wrappedToken_);
     }
 
     /// @inheritdoc IERC6909Wrappable
-    function unwrap(address onBehalfOf_, uint256 tokenId_, uint256 amount_) public {
+    /// @dev        This function will burn the wrapped ERC20 token from the caller and mint the ERC6909 token to the same address.
+    ///
+    ///             This function reverts if:
+    ///             - The token ID does not exist
+    ///             - The amount is zero
+    ///             - The caller has not approved this contract to spend the wrapped token
+    ///             - The caller has an insufficient balance of the wrapped token
+    function unwrap(uint256 tokenId_, uint256 amount_) public {
         // Burn the wrapped ERC20 token
-        _burn(onBehalfOf_, tokenId_, amount_, true);
+        _burn(msg.sender, tokenId_, amount_, true);
 
         // Mint the ERC6909 token
-        _mint(onBehalfOf_, tokenId_, amount_);
+        _mint(msg.sender, tokenId_, amount_);
+
+        // Emit the Unwrapped event
+        emit Unwrapped(tokenId_, _wrappedTokens[tokenId_], msg.sender, amount_);
     }
 
     // ========== TOKEN FUNCTIONS ========== //
