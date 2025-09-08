@@ -222,6 +222,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             principalAmount_,
             "redemption amount mismatch"
         );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            principalAmount_,
+            "committed deposits"
+        );
     }
 
     // given there is no retained collateral
@@ -285,6 +299,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             0,
             "redemption amount mismatch"
         );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
+        );
     }
 
     // given the keeper reward percentage is 0
@@ -345,6 +373,20 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             redemptionVault.getUserRedemption(recipient, 0).amount,
             0,
             "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
         );
     }
 
@@ -408,6 +450,116 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             redemptionVault.getUserRedemption(recipient, 0).amount,
             0,
             "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
+        );
+    }
+
+    function test_givenCommitmentAmountFuzz(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipientTwo,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+        givenClaimDefaultRewardPercentage(100) // 1%
+    {
+        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loanBefore = redemptionVault.getRedemptionLoan(
+            recipient,
+            0
+        );
+        uint256 expectedCollateral = commitmentAmount_ - loanBefore.principal;
+        uint256 expectedKeeperReward = (expectedCollateral * 100) / 100e2;
+
+        // Expire the loan
+        vm.warp(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Call function
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(recipient, 0);
+
+        // Assert that the loan is cleared
+        _assertLoan(recipient, 0, loanBefore.principal, 0, 0, true, loanBefore.dueDate);
+
+        // Assert deposit token balances
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            loanBefore.principal, // No change
+            "deposit token: user balance mismatch"
+        );
+        assertApproxEqAbs(
+            reserveToken.balanceOf(address(treasury)),
+            expectedCollateral - expectedKeeperReward,
+            5, // Actual amount can be unpredictable
+            "deposit token: treasury balance mismatch"
+        ); // Remaining collateral that was not lent out, minus keeper reward
+        assertApproxEqAbs(
+            reserveToken.balanceOf(address(defaultRewardClaimer)),
+            expectedKeeperReward, // Keeper reward
+            1, // Affected by the collateral returned
+            "deposit token: claimer balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(redemptionVault)),
+            0,
+            "deposit token: redemption vault balance mismatch"
+        );
+        assertEq(
+            reserveToken.balanceOf(address(cdFacility)),
+            0,
+            "deposit token: cd facility balance mismatch"
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, _previousDepositActualAmount - commitmentAmount_, 0);
+
+        // Assert the redemption amount
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, 0).amount,
+            0,
+            "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
         );
     }
 }

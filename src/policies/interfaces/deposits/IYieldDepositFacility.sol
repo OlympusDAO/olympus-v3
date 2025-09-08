@@ -16,7 +16,7 @@ interface IYieldDepositFacility {
         uint256 depositAmount
     );
 
-    event YieldClaimed(address indexed asset, address indexed depositor, uint256 yield);
+    event ClaimedYield(address indexed asset, address indexed depositor, uint256 yield);
 
     event YieldFeeSet(uint16 yieldFee);
 

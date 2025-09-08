@@ -199,9 +199,15 @@ contract DepositManager is
         IERC20 asset_,
         address recipient_,
         uint256 amount_
-    ) external onlyEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) onlyConfiguredAsset(asset_) {
+    )
+        external
+        onlyEnabled
+        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyConfiguredAsset(asset_)
+        returns (uint256 actualAmount)
+    {
         // Withdraw the funds from the vault
-        (, uint256 actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
+        (, actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
 
@@ -217,7 +223,9 @@ contract DepositManager is
         }
 
         // Emit an event
-        emit ClaimedYield(address(asset_), recipient_, msg.sender, actualAmount);
+        emit OperatorYieldClaimed(address(asset_), recipient_, msg.sender, actualAmount);
+
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositManager

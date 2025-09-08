@@ -34,6 +34,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @notice The number representing 100%
     uint16 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice The number of months in a year
+    uint8 internal constant _MONTHS_IN_YEAR = 12;
+
+    /// @notice Constant for one month
+    uint48 internal constant _ONE_MONTH = 30 days;
+
     // ========== CONFIGURABLE PARAMETERS ========== //
 
     /// @notice Per-asset max borrow percentage (in 100e2, e.g. 8500 = 85%)
@@ -228,7 +234,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
             depositToken: address(depositToken_),
             depositPeriod: depositPeriod_,
-            redeemableAt: uint48(block.timestamp + uint48(depositPeriod_) * 30 days),
+            redeemableAt: uint48(block.timestamp) + uint48(depositPeriod_) * _ONE_MONTH,
             amount: amount_,
             facility: facility_
         });
@@ -365,6 +371,19 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== BORROWING FUNCTIONS ========== //
 
+    function _calculateInterest(
+        uint256 principal_,
+        uint256 interestRate_,
+        uint256 depositPeriod_
+    ) internal pure returns (uint256) {
+        // Rounded up, in favour of the protocol
+        return
+            principal_.mulDivUp(
+                interestRate_ * depositPeriod_,
+                uint256(_MONTHS_IN_YEAR) * uint256(ONE_HUNDRED_PERCENT)
+            );
+    }
+
     function _previewBorrowAgainstRedemption(
         address user_,
         uint16 redemptionId_
@@ -384,19 +403,21 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
 
         // Interest: annualized, prorated for period
-        uint256 interest = principal.mulDivUp(
-            uint256(_assetAnnualInterestRates[redemption.depositToken]) *
-                uint256(redemption.depositPeriod),
-            uint256(12 * 100e2)
+        uint256 interest = _calculateInterest(
+            principal,
+            _assetAnnualInterestRates[redemption.depositToken],
+            redemption.depositPeriod
         );
 
         // Due date: now + deposit period
-        uint48 dueDate = uint48(block.timestamp) + uint48(redemption.depositPeriod) * 30 days;
+        uint48 dueDate = uint48(block.timestamp) + uint48(redemption.depositPeriod) * _ONE_MONTH;
 
         return (principal, interest, dueDate);
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        Notes:
+    ///             - The calculated amount may differ from the actual amount borrowed (using `borrowAgainstRedemption()`) by a few wei, due to rounding behaviour in ERC4626 vaults.
     function previewBorrowAgainstRedemption(
         address user_,
         uint16 redemptionId_
@@ -413,7 +434,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - The interest rate is not set
     function borrowAgainstRedemption(
         uint16 redemptionId_
-    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        returns (uint256)
+    {
         // Get the redemption
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
@@ -425,7 +452,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (_redemptionLoan[redemptionKey].dueDate != 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
-        (uint256 principal, uint256 interest, uint48 dueDate) = _previewBorrowAgainstRedemption(
+        (uint256 principal, , uint48 dueDate) = _previewBorrowAgainstRedemption(
             msg.sender,
             redemptionId_
         );
@@ -433,30 +460,40 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (principal == 0)
             revert RedemptionVault_MaxBorrowPercentageNotSet(redemption.depositToken);
 
-        if (interest == 0) revert RedemptionVault_InterestRateNotSet(redemption.depositToken);
-
-        // Create loan
-        Loan memory newLoan = Loan({
-            initialPrincipal: principal,
-            principal: principal,
-            interest: interest,
-            dueDate: dueDate,
-            isDefaulted: false
-        });
-
-        // Add loan to the redemption
-        _redemptionLoan[redemptionKey] = newLoan;
+        // Ensure a non-zero interest rate is configured
+        uint16 interestRate = _assetAnnualInterestRates[redemption.depositToken];
+        if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(redemption.depositToken);
 
         // Delegate to the facility for borrowing
-        IDepositFacility(redemption.facility).handleBorrow(
+        uint256 principalActual = IDepositFacility(redemption.facility).handleBorrow(
             IERC20(redemption.depositToken),
             redemption.depositPeriod,
             principal,
             msg.sender
         );
 
+        // Compute interest on the actual amount
+        uint256 interestActual = _calculateInterest(
+            principalActual,
+            interestRate,
+            redemption.depositPeriod
+        );
+
+        // Create loan
+        // Values are actuals, which prevents future issues with repayment
+        Loan memory newLoan = Loan({
+            initialPrincipal: principalActual,
+            principal: principalActual,
+            interest: interestActual,
+            dueDate: dueDate,
+            isDefaulted: false
+        });
+        _redemptionLoan[redemptionKey] = newLoan;
+
         // Emit event
-        emit LoanCreated(msg.sender, redemptionId_, principal, redemption.facility);
+        emit LoanCreated(msg.sender, redemptionId_, principalActual, redemption.facility);
+
+        return principalActual;
     }
 
     /// @inheritdoc IDepositRedemptionVault
@@ -552,12 +589,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         uint16 interestRate = _assetAnnualInterestRates[asset_];
         if (interestRate == 0) revert RedemptionVault_InterestRateNotSet(asset_);
 
-        uint256 interestPayable = principal_.mulDivUp(
-            uint256(interestRate) * uint256(extensionMonths_),
-            uint256(12) * uint256(ONE_HUNDRED_PERCENT)
-        );
+        uint256 interestPayable = _calculateInterest(principal_, interestRate, extensionMonths_);
 
-        uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * uint48(30 days);
+        uint48 newDueDate = dueDate_ + uint48(extensionMonths_) * _ONE_MONTH;
 
         return (newDueDate, interestPayable);
     }
@@ -714,8 +748,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             );
         }
         // Withdraw deposit for retained collateral
+        uint256 retainedCollateralActual;
         if (retainedCollateral > 0) {
-            IDepositFacility(redemption.facility).handleCommitWithdraw(
+            retainedCollateralActual = IDepositFacility(redemption.facility).handleCommitWithdraw(
                 IERC20(redemption.depositToken),
                 redemption.depositPeriod,
                 retainedCollateral,
@@ -724,14 +759,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         }
 
         // Reduce redemption amount by the burned and retained collateral
+        // Use the calculated amount (retainedCollateral + previousPrincipal) to adjust redemption.
+        // This leaves redemption.amount equal to (initialPrincipal - previousPrincipal), i.e.,
+        // any principal already repaid remains redeemable by the borrower. Using calculated amounts
+        // avoids inconsistencies from ERC4626 rounding in actual transfers.
         redemption.amount -= retainedCollateral + previousPrincipal;
 
         // Distribute residual value (keeper reward + treasury)
-        uint256 keeperReward = retainedCollateral.mulDiv(
+        uint256 keeperReward = retainedCollateralActual.mulDiv(
             _claimDefaultRewardPercentage,
             ONE_HUNDRED_PERCENT
         );
-        uint256 treasuryAmount = retainedCollateral - keeperReward;
+        uint256 treasuryAmount = retainedCollateralActual - keeperReward;
 
         if (keeperReward > 0) {
             ERC20(redemption.depositToken).safeTransfer(msg.sender, keeperReward);
@@ -746,14 +785,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionId_,
             previousPrincipal,
             previousInterest,
-            retainedCollateral + previousPrincipal
+            retainedCollateral + previousPrincipal // Calculated amount
         );
         emit RedemptionCancelled(
             user_,
             redemptionId_,
             address(redemption.depositToken),
             redemption.depositPeriod,
-            retainedCollateral + previousPrincipal,
+            retainedCollateral + previousPrincipal, // Calculated amount
             redemption.amount
         );
     }
@@ -775,7 +814,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IERC20 asset_,
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+        if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
         _assetMaxBorrowPercentages[address(asset_)] = percent_;
 
@@ -792,7 +831,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         IERC20 asset_,
         uint16 rate_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (rate_ > 100e2) revert RedemptionVault_OutOfBounds(rate_);
+        if (rate_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(rate_);
 
         _assetAnnualInterestRates[address(asset_)] = rate_;
 
@@ -808,7 +847,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     function setClaimDefaultRewardPercentage(
         uint16 percent_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        if (percent_ > 100e2) revert RedemptionVault_OutOfBounds(percent_);
+        if (percent_ > ONE_HUNDRED_PERCENT) revert RedemptionVault_OutOfBounds(percent_);
 
         _claimDefaultRewardPercentage = percent_;
 

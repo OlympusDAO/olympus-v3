@@ -14,7 +14,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             iAsset,
             DEPOSIT_OPERATOR
         );
-        return vaultAssets + vaultBorrowed - operatorLiabilities - 1;
+        return vaultAssets + vaultBorrowed - operatorLiabilities;
     }
 
     uint256 internal _operatorSharesBefore;
@@ -162,7 +162,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     // given the vault address is the zero address
@@ -252,7 +252,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
     }
 
     // [X] the asset is transferred to the recipient
@@ -322,6 +322,79 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         _assertReceiptToken(0, 0, false, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
-        _assertDepositAssetBalance(recipient, amount_);
+        _assertDepositAssetBalance(recipient, amount_, 5);
+    }
+
+    function test_claimYield_fuzz(
+        uint256 depositAmount_,
+        uint256 yieldAmount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(type(uint256).max)
+    {
+        depositAmount_ = bound(depositAmount_, 1e18, 100e18);
+        yieldAmount_ = bound(yieldAmount_, 1e18, 200e18);
+
+        uint256 balanceBefore = asset.balanceOf(DEPOSITOR);
+
+        // Mint, deposit
+        asset.mint(DEPOSITOR, depositAmount_);
+        _deposit(depositAmount_, false);
+
+        // Simulate yield being accrued to the vault
+        asset.mint(address(vault), yieldAmount_);
+
+        _takeSnapshot();
+
+        // Determine the maximum yield that can be claimed
+        address recipient = makeAddr("recipient");
+        uint256 maxYield = _getExpectedMaxYield();
+        uint256 expectedShares = vault.previewWithdraw(maxYield);
+
+        // Claim the yield
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.claimYield(iAsset, recipient, maxYield);
+
+        // Operator shares
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        assertApproxEqAbs(
+            operatorSharesAfter,
+            _operatorSharesBefore - expectedShares,
+            10,
+            "Operator shares mismatch"
+        );
+
+        // Assert solvency
+        // Assets + borrowed >= liabilities
+        assertGe(
+            operatorSharesInAssetsAfter +
+                depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "insolvent"
+        );
+
+        // Vault balance
+        assertApproxEqAbs(
+            vault.balanceOf(address(depositManager)),
+            _operatorSharesBefore - expectedShares,
+            3,
+            "Vault balance mismatch"
+        );
+
+        // Asset liabilities
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "Asset liabilities mismatch"
+        );
+
+        _assertReceiptToken(0, 0, false, false); // Unaffected
+        _assertDepositAssetBalance(DEPOSITOR, balanceBefore);
+        _assertDepositAssetBalance(recipient, maxYield, 5);
     }
 }

@@ -202,7 +202,8 @@ interface IDepositRedemptionVault {
     /// @notice Borrow the maximum amount against an active redemption
     ///
     /// @param redemptionId_    The ID of the redemption to borrow against
-    function borrowAgainstRedemption(uint16 redemptionId_) external;
+    /// @return actualAmount    The quantity of underlying assets transferred to the recipient
+    function borrowAgainstRedemption(uint16 redemptionId_) external returns (uint256 actualAmount);
 
     /// @notice Preview the maximum amount that can be borrowed against an active redemption
     ///

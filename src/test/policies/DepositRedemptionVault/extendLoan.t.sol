@@ -383,5 +383,19 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loan.initialPrincipal,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been reduced
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - loan.initialPrincipal,
+            "committed deposits"
+        );
     }
 }

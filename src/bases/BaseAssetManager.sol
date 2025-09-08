@@ -124,16 +124,18 @@ abstract contract BaseAssetManager is IAssetManager {
         }
         // Otherwise, withdraw the assets from the vault
         else {
-            shares = IERC4626(assetConfiguration.vault).withdraw(
-                amount_,
-                depositor_,
-                address(this)
-            );
-            assetAmount = amount_;
-        }
+            IERC4626 vault = IERC4626(assetConfiguration.vault);
 
-        // Amount of shares must be non-zero
-        if (shares == 0) revert AssetManager_ZeroAmount();
+            // Use convertToShares(), which rounds down, to determine the number of shares to redeem from the vault
+            // This may result in the depositor receiving a few less wei,
+            // but ensures that the vault remains solvent
+            shares = vault.convertToShares(amount_);
+
+            // Amount of shares must be non-zero
+            if (shares == 0) revert AssetManager_ZeroAmount();
+
+            assetAmount = vault.redeem(shares, depositor_, address(this));
+        }
 
         // Update the shares deposited by the caller (operator)
         _operatorShares[_getOperatorKey(asset_, msg.sender)] -= shares;

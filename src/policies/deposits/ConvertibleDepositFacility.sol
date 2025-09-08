@@ -322,6 +322,11 @@ contract ConvertibleDepositFacility is
         }
 
         // Withdraw the underlying asset and deposit into the treasury
+        // The actual amount withdrawn may differ from `receiptTokenIn` by a few wei,
+        // but will not materially affect the amount of OHM that is minted when converting.
+        // Additionally, given that the amount is composed of multiple positions
+        // (each with potentially different conversion prices), it is not trivial to
+        // re-calculate `convertedTokenOut` with the actual amount.
         DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
                 asset: IERC20(asset),
@@ -353,24 +358,24 @@ contract ConvertibleDepositFacility is
     }
 
     /// @inheritdoc IConvertibleDepositFacility
-    function claimYield(IERC20 asset_) public returns (uint256 yieldAssets) {
+    function claimYield(IERC20 asset_) public returns (uint256) {
         // If disabled, don't do anything
         if (!isEnabled) return 0;
 
         // Determine the yield
-        yieldAssets = previewClaimYield(asset_);
+        uint256 previewedYield = previewClaimYield(asset_);
 
         // Skip if there is no yield to claim
-        if (yieldAssets == 0) return 0;
+        if (previewedYield == 0) return 0;
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
-        DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), yieldAssets);
+        uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), previewedYield);
 
         // Emit the event
-        emit ClaimedYield(address(asset_), yieldAssets);
+        emit ClaimedYield(address(asset_), actualYield);
 
-        return yieldAssets;
+        return actualYield;
     }
 
     /// @inheritdoc IConvertibleDepositFacility

@@ -248,6 +248,20 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loan.initialPrincipal,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been increased
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - loan.initialPrincipal,
+            "committed deposits"
+        );
     }
 
     // when the amount is greater than the interest owed
@@ -297,5 +311,96 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Assert receipt token balances
         _assertReceiptTokenBalances(recipient, 0, COMMITMENT_AMOUNT);
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loan.initialPrincipal - principalAmount_,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been increased
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - (loan.initialPrincipal - principalAmount_),
+            "committed deposits"
+        );
+    }
+
+    function test_givenCommitmentAmountFuzz_repayInFull(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipientTwo,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 repaymentAmount = loan.principal + loan.interest;
+
+        // Mint and approve
+        reserveToken.mint(recipient, repaymentAmount);
+        vm.prank(recipient);
+        reserveToken.approve(address(redemptionVault), repaymentAmount);
+
+        // Call function
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, repaymentAmount);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // repaymentAmount is minted and used
+            loan.interest,
+            0
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_,
+            "committed deposits"
+        );
     }
 }

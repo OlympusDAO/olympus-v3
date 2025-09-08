@@ -170,7 +170,7 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
+    function _deposit(uint256 amount_, bool shouldWrap_) public {
         vm.prank(DEPOSIT_OPERATOR);
         (, previousDepositorDepositActualAmount) = depositManager.deposit(
             IDepositManager.DepositParams({
@@ -198,13 +198,14 @@ contract DepositManagerTest is Test {
         previousDepositManagerAssetBalance = asset.balanceOf(address(depositManager));
         previousDepositManagerSharesBalance = vault.balanceOf(address(depositManager));
 
-        (uint256 shares, uint256 sharesInAssets) = depositManager.getOperatorAssets(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
+        (uint256 shares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
         previousDepositManagerOperatorSharesBalance = shares;
 
         previousAssetLiabilities = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+    }
+
+    modifier givenDeposit(uint256 amount_, bool shouldWrap_) {
+        _deposit(amount_, shouldWrap_);
         _;
     }
 
@@ -459,8 +460,29 @@ contract DepositManagerTest is Test {
         uint256 actualAssetAmount_,
         bool isDeposit_
     ) internal view {
+        _assertAssetBalance(
+            expectedSharesAmount_,
+            expectedAssetAmount_,
+            actualAssetAmount_,
+            isDeposit_,
+            0
+        );
+    }
+
+    function _assertAssetBalance(
+        uint256 expectedSharesAmount_,
+        uint256 expectedAssetAmount_,
+        uint256 actualAssetAmount_,
+        bool isDeposit_,
+        uint256 delta_
+    ) internal view {
         // Asset amount
-        assertEq(actualAssetAmount_, expectedAssetAmount_, "Asset amount mismatch");
+        assertApproxEqAbs(
+            actualAssetAmount_,
+            expectedAssetAmount_,
+            delta_,
+            "Asset amount mismatch"
+        );
 
         DepositManager.AssetConfiguration memory assetConfiguration = depositManager
             .getAssetConfiguration(iAsset);
@@ -540,15 +562,17 @@ contract DepositManagerTest is Test {
 
             if (isDeposit_) {
                 // The vault shares should be in the deposit manager
-                assertEq(
+                assertApproxEqAbs(
                     vault.balanceOf(address(depositManager)),
                     previousDepositManagerSharesBalance + expectedSharesAmount_,
+                    delta_,
                     "Vault: DepositManager vault shares balance mismatch"
                 );
             } else {
-                assertEq(
+                assertApproxEqAbs(
                     vault.balanceOf(address(depositManager)),
                     previousDepositManagerSharesBalance - expectedSharesAmount_,
+                    delta_,
                     "Vault: DepositManager vault shares balance mismatch"
                 );
             }
@@ -566,21 +590,24 @@ contract DepositManagerTest is Test {
                 DEPOSIT_OPERATOR
             );
 
-            assertEq(
+            assertApproxEqAbs(
                 sharesInAssets,
                 vault.previewRedeem(shares),
+                delta_,
                 "Vault: Operator shares in assets balance mismatch"
             );
             if (isDeposit_) {
-                assertEq(
+                assertApproxEqAbs(
                     shares,
                     previousDepositManagerOperatorSharesBalance + expectedSharesAmount_,
+                    delta_,
                     "Vault: Operator shares balance mismatch"
                 );
             } else {
-                assertEq(
+                assertApproxEqAbs(
                     shares,
                     previousDepositManagerOperatorSharesBalance - expectedSharesAmount_,
+                    delta_,
                     "Vault: Operator shares balance mismatch"
                 );
             }
@@ -588,15 +615,17 @@ contract DepositManagerTest is Test {
 
         // Liabilities is the deposit amount
         if (isDeposit_) {
-            assertEq(
+            assertApproxEqAbs(
                 depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
                 previousAssetLiabilities + actualAssetAmount_,
+                delta_,
                 "Liabilities mismatch"
             );
         } else {
-            assertEq(
+            assertApproxEqAbs(
                 depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
                 previousAssetLiabilities - actualAssetAmount_,
+                delta_,
                 "Liabilities mismatch"
             );
         }
@@ -667,11 +696,19 @@ contract DepositManagerTest is Test {
         address account_,
         uint256 depositAssetBalance_
     ) internal view {
+        _assertDepositAssetBalance(account_, depositAssetBalance_, 1);
+    }
+
+    function _assertDepositAssetBalance(
+        address account_,
+        uint256 depositAssetBalance_,
+        uint256 delta_
+    ) internal view {
         // Use approx here as the returned asset amount can be 1 wei off
         assertApproxEqAbs(
             asset.balanceOf(account_),
             depositAssetBalance_,
-            1,
+            delta_,
             "Asset balance mismatch"
         );
     }
