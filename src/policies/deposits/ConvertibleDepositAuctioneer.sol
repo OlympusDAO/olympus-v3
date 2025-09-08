@@ -558,6 +558,10 @@ contract ConvertibleDepositAuctioneer is
             );
         }
 
+        // Update the tick data for all enabled deposit periods
+        // This is necessary, otherwise tick capacity and price will be calculated incorrectly
+        _updateCurrentTicks();
+
         // Enable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = true;
 
@@ -589,6 +593,10 @@ contract ConvertibleDepositAuctioneer is
                 depositPeriod_
             );
         }
+
+        // Update the tick data for all enabled deposit periods
+        // This is necessary, otherwise tick capacity and price will be calculated incorrectly
+        _updateCurrentTicks();
 
         // Disable the deposit period
         _depositPeriodsEnabled[depositPeriod_] = false;
@@ -664,7 +672,14 @@ contract ConvertibleDepositAuctioneer is
         _dayState = Day(uint48(block.timestamp), 0);
     }
 
-    function _updateTicks(
+    /// @notice Sets tick parameters for all enabled deposit periods
+    ///
+    /// @param  tickSize_           If the new tick size is less than a tick's capacity (or `enforceCapacity_` is true), the tick capacity will be set to this
+    /// @param  minPrice_           If the new minimum price is greater than a tick's price (or `enforceMinPrice_` is true), the tick price will be set to this
+    /// @param  enforceCapacity_    If true, will set the capacity of each enabled deposit period to the value of `tickSize_`
+    /// @param  enforceMinPrice_    If true, will set the price of each enabled deposit period to the value of `minPrice_`
+    /// @param  setLastUpdate_      If true, will set the tick's last update to the current timestamp
+    function _setNewTickParameters(
         uint256 tickSize_,
         uint256 minPrice_,
         bool enforceCapacity_,
@@ -701,9 +716,28 @@ contract ConvertibleDepositAuctioneer is
         }
 
         // Set the tick size
-        // This has the affect of resetting the tick size to the default
+        // This has the effect of resetting the tick size to the default
         // The tick size may have been adjusted for the previous day if the target was met
         _currentTickSize = tickSize_;
+    }
+
+    /// @notice     Takes a snapshot of the current tick values for enabled deposit periods
+    function _updateCurrentTicks() internal {
+        // Iterate over periods
+        uint256 periodLength = _depositPeriods.length();
+        for (uint256 i; i < periodLength; i++) {
+            uint8 period = uint8(_depositPeriods.at(i));
+
+            // Skip if the deposit period is not enabled
+            if (!_depositPeriodsEnabled[period]) continue;
+
+            // Get the current tick for the deposit asset and period
+            Tick memory updatedTick = _getCurrentTick(period);
+            updatedTick.lastUpdate = uint48(block.timestamp);
+
+            // Update the current tick for the deposit period
+            _depositPeriodPreviousTicks[period] = updatedTick;
+        }
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -733,7 +767,7 @@ contract ConvertibleDepositAuctioneer is
         // The following can be done even if the contract is not active nor initialized, since activating/initializing will set the tick capacity and price
 
         // Ensure all ticks are updated with the new parameters
-        _updateTicks(tickSize_, minPrice_, false, false, false);
+        _setNewTickParameters(tickSize_, minPrice_, false, false, false);
 
         // Store the auction results, if necessary
         _storeAuctionResults(previousTarget);
@@ -805,7 +839,7 @@ contract ConvertibleDepositAuctioneer is
         // Ensure all ticks have the current parameters
         // Also set the lastUpdate to the current block timestamp
         // Otherwise, getCurrentTick() will calculate a long period of time having passed
-        _updateTicks(params.tickSize, params.minPrice, true, true, true);
+        _setNewTickParameters(params.tickSize, params.minPrice, true, true, true);
 
         // Reset the day state
         _dayState = Day(uint48(block.timestamp), 0);
