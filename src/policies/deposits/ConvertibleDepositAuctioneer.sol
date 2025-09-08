@@ -420,9 +420,12 @@ contract ConvertibleDepositAuctioneer is
 
         // Iterate over the ticks until the capacity is within the tick size
         // This is the opposite of what happens in the bid function
-        while (newCapacity > _currentTickSize) {
+        // It uses the standard tick size (unaffected by the achievement of the day target),
+        // otherwise the tick price would decay quickly
+        uint256 tickSize = _auctionParameters.tickSize;
+        while (newCapacity > tickSize) {
             // Reduce the capacity by the tick size
-            newCapacity -= _currentTickSize;
+            newCapacity -= tickSize;
 
             // Adjust the tick price by the tick step, in the opposite direction to the bid function
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
@@ -431,13 +434,14 @@ contract ConvertibleDepositAuctioneer is
             // Tick capacity is full if the min price is exceeded
             if (tick.price < _auctionParameters.minPrice) {
                 tick.price = _auctionParameters.minPrice;
-                newCapacity = _currentTickSize;
+                newCapacity = tickSize;
                 break;
             }
         }
 
-        // Set the capacity
-        tick.capacity = newCapacity;
+        // Set the capacity, but ensure it doesn't exceed the current tick size
+        // (which may have been reduced if the day target was met)
+        tick.capacity = newCapacity > _currentTickSize ? _currentTickSize : newCapacity;
 
         return tick;
     }
@@ -447,8 +451,8 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             It uses the following approach:
     ///             - Calculate the added capacity based on the time passed since the last bid, and add it to the current capacity to get the new capacity
-    ///             - Until the new capacity is <= to the tick size, reduce the capacity by the tick size and reduce the price by the tick step
-    ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the tick size
+    ///             - Until the new capacity is <= to the standard tick size, reduce the capacity by the standard tick size and reduce the price by the tick step
+    ///             - If the calculated price is ever lower than the minimum price, the new price is set to the minimum price and the capacity is set to the standard tick size
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
