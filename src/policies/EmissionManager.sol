@@ -66,13 +66,20 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     IConvertibleDepositAuctioneer public cdAuctioneer;
 
     // Manager variables
+
+    /// @notice The base emission rate, in OHM scale.
+    /// @dev    e.g. 2e5 = 0.02%
     uint256 public baseEmissionRate;
     uint256 public minimumPremium;
     uint48 public vestingPeriod; // initialized at 0
     uint256 public backing;
     uint8 public beatCounter;
     uint256 public activeMarketId;
+
+    /// @notice The multiplier applied to the tick size, in terms of ONE_HUNDRED_PERCENT
     uint256 public tickSizeScalar;
+
+    /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
     uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
@@ -106,6 +113,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (sReserve_ == address(0)) revert InvalidParam("sDAI address cannot be 0");
         if (bondAuctioneer_ == address(0))
             revert InvalidParam("Bond Auctioneer address cannot be 0");
+        if (teller_ == address(0)) revert InvalidParam("Bond Teller address cannot be 0");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
 
         ohm = ERC20(ohm_);
@@ -126,6 +134,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         // Validate that the CDAuctioneer is configured for the reserve asset
         if (address(cdAuctioneer.getDepositAsset()) != address(reserve_))
             revert InvalidParam("CD Auctioneer not configured for reserve");
+
+        // Emit events
+        emit BondContractsSet(bondAuctioneer_, teller_);
+        emit ConvertibleDepositAuctioneerSet(cdAuctioneer_);
 
         // PolicyEnabler disables the policy by default
     }
@@ -196,7 +208,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         cdAuctioneer.setAuctionParameters(
             emission,
             getSizeFor(emission),
-            getMinPriceFor(PRICE.getCurrentPrice())
+            getMinPriceFor(_getCurrentPrice())
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
@@ -483,9 +495,16 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @param cdAuctioneer_ address of the cd auctioneer contract
     function setCDAuctionContract(address cdAuctioneer_) external onlyAdminRole {
         // Auction contract cannot be set to the zero address
-        if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
+        if (cdAuctioneer_ == address(0)) revert InvalidParam("zero address");
+        // Validate that the CDAuctioneer is configured for the reserve asset
+        if (
+            address(IConvertibleDepositAuctioneer(cdAuctioneer_).getDepositAsset()) !=
+            address(reserve)
+        ) revert InvalidParam("different asset");
 
         cdAuctioneer = IConvertibleDepositAuctioneer(cdAuctioneer_);
+
+        emit ConvertibleDepositAuctioneerSet(cdAuctioneer_);
     }
 
     /// @notice allow governance to set the CD tick size scalar
@@ -559,11 +578,24 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         return (target * tickSizeScalar) / ONE_HUNDRED_PERCENT;
     }
 
-    /// @notice get CD auction minimum price for given current price
-    /// @param  price of OHM on market according to PRICE module
-    /// @return minPrice for CD auction
+    /// @notice Get CD auction minimum price for a given price input
+    /// @dev    Expects `price` to already be expressed in the reserve asset's decimal scale.
+    ///         This function does not adjust/convert decimal scales.
+    ///
+    /// @param  price Price of OHM in reserve token terms, scaled to the reserve asset's decimals
     function getMinPriceFor(uint256 price) public view returns (uint256) {
         return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+    }
+
+    /// @notice Returns the current price from the PRICE module
+    ///
+    /// @return currentPrice with decimal scale of the reserve asset
+    function _getCurrentPrice() internal view returns (uint256) {
+        // Get from PRICE
+        uint256 currentPrice = PRICE.getCurrentPrice();
+
+        // Change the decimal scale to be the reserve asset's
+        return currentPrice.mulDiv(10 ** _reserveDecimals, 10 ** _oracleDecimals);
     }
 
     // ========== ERC165 ========== //

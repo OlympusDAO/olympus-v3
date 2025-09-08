@@ -70,10 +70,12 @@ contract EmissionManagerTest is Test {
     uint256 internal changeBy = 1e5; // 0.01% change per execution
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSizeScalar = 1e18; // 100%
-    uint256 internal minPriceScalar = 1e18; // 100%
+    uint256 internal minPriceScalar = 9e17; // 90%
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
+
+    uint256 internal expectedMinPrice;
 
     // test cases
     //
@@ -221,15 +223,25 @@ contract EmissionManagerTest is Test {
     //       [X] it sets the restart timeframe
     //
     // [X] setBondContracts
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new bondAuctioneer address is the zero address
     //          [X] it reverts
     //       [X] when the new teller address is the zero address
     //          [X] it reverts
     //       [X] it sets the bondAuctioneer address
     //       [X] it sets the teller address
+    //
+    // [X] setCDAuctionContract
+    //    [X] when the caller doesn't have the admin role
+    //       [X] it reverts
+    //    [X] when the caller has the admin role
+    //       [X] when the new CDAuctioneer address is the zero address
+    //          [X] it reverts
+    //       [X] when the new CDAuctioneer has a different deposit asset
+    //          [X] it reverts
+    //       [X] it sets the cdAuctioneer address
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -380,6 +392,14 @@ contract EmissionManagerTest is Test {
         // is 0.1% * 10,000,000 OHM = 10,000 OHM
         // For the case where the premium is 50%, then the capacity is:
         // 10,000 OHM * (1 + 0.5) / (1 + 0.25) = 12,000 OHM
+
+        // Set the current price
+        // Always returned in 18 decimal scale
+        // 22377897966596497241 = 22.37 reserve/OHM
+        PRICE.setCurrentPrice(22377897966596497241);
+
+        // 20140108169936847516
+        expectedMinPrice = (uint256(22377897966596497241) * 9e17) / 1e18;
     }
 
     // internal helper functions
@@ -673,11 +693,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Confirm that the token balances are still 0
@@ -730,11 +746,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Confirm that the token balances are still 0
@@ -743,6 +755,95 @@ contract EmissionManagerTest is Test {
 
         // Confirm that the beat counter is now 0
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+    }
+
+    function test_execute_givenDifferentReserveDecimals() public givenPremiumBelowMinimum {
+        // Create a reserve asset with different decimal scale
+        reserve = new MockERC20("newReserve", "NR", 6);
+        sReserve = new MockERC4626(reserve, "sNewReserve", "sNR");
+
+        // Set up a new CDAuctioneer
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+
+        // Set up an EmissionManager with a different deposit asset
+        emissionManager = new EmissionManager(
+            kernel,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            address(sReserve),
+            address(bondAuctioneer),
+            address(cdAuctioneer),
+            address(teller)
+        );
+
+        // Initialise system
+        {
+            kernel.executeAction(Actions.ActivatePolicy, address(emissionManager));
+            kernel.executeAction(Actions.ActivatePolicy, address(cdAuctioneer));
+        }
+
+        // Configure price
+        {
+            // 22377897966596497241 = 22.37 reserve/OHM
+            PRICE.setCurrentPrice(22377897966596497241);
+        }
+
+        // Enable the emissions manager
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                baseEmissionRate,
+                minimumPremium,
+                backing,
+                tickSizeScalar,
+                minPriceScalar,
+                restartTimeframe
+            )
+        );
+
+        // Beat counter is 2
+        {
+            // Execute twice to get beat counter to 2
+            vm.startPrank(heart);
+            emissionManager.execute();
+            emissionManager.execute();
+            vm.stopPrank();
+
+            // Warp to the next day
+            vm.warp(block.timestamp + 86400);
+        }
+
+        // Check that the beat counter is 2
+        assertEq(emissionManager.beatCounter(), 2, "Beat counter should be 2");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Verify the auctioneer parameters
+        {
+            // Target == getNextEmission().emission
+            (, , uint256 emission) = emissionManager.getNextEmission();
+
+            assertEq(cdAuctioneer.target(), emission, "Target should be the emission");
+
+            // Tick size == getSizeFor(emission)
+            assertEq(
+                cdAuctioneer.tickSize(),
+                emissionManager.getSizeFor(emission),
+                "Tick size should be the emission"
+            );
+
+            // Min price == getMinPriceFor(emission)
+            // Adjusted to the decimals of the deposit/reserve asset
+            // price = 22377897966596497241 (18 dp)
+            // price (adjusted) = 22377897 (6 dp)
+            // minPrice = price * 9e17/1e18
+            // minPrice = 20140107
+
+            assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
+        }
     }
 
     function test_execute_whenNextBeatIsZero_whenPremiumEqualMinimum_whenNoAdjustment()
@@ -852,11 +953,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -911,11 +1008,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -970,11 +1063,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1029,11 +1118,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Verify the bond market parameters
@@ -1144,11 +1229,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1203,11 +1284,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1262,11 +1339,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Calculate the expected base rate after the next adjustment
@@ -1297,11 +1370,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -1329,11 +1398,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1388,11 +1453,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Calculate the expected base rate after the next adjustment
@@ -1430,11 +1491,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -1469,11 +1526,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1528,11 +1581,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Calculate the expected base rate after the next adjustment
@@ -1570,11 +1619,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -1609,11 +1654,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1661,11 +1702,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Confirm that the capacity of the bond market uses the new base rate
@@ -1703,11 +1740,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -1735,11 +1768,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1794,11 +1823,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Calculate the expected base rate after the next adjustment
@@ -1836,11 +1861,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -1875,11 +1896,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -1934,11 +1951,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Calculate the expected base rate after the next adjustment
@@ -1976,11 +1989,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
 
         // Trigger a full cycle again. There should be no adjustment this time since it uses a duration of 2
@@ -2015,11 +2024,7 @@ contract EmissionManagerTest is Test {
             );
 
             // Min price == getMinPriceFor(emission)
-            assertEq(
-                cdAuctioneer.minPrice(),
-                emissionManager.getMinPriceFor(PRICE.getCurrentPrice()),
-                "Min price"
-            );
+            assertEq(cdAuctioneer.minPrice(), expectedMinPrice, "Min price");
         }
     }
 
@@ -2807,6 +2812,53 @@ contract EmissionManagerTest is Test {
             "BondAuctioneer should be updated"
         );
         assertEq(emissionManager.teller(), address(1), "Bond teller should be updated");
+    }
+
+    // setCDAuctionContract tests
+
+    function test_setCDAuctionContract_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+        vm.assume(rando_ != guardian);
+
+        // Call the setCDAuctionContract function with the wrong caller
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
+        vm.expectRevert(err);
+        vm.prank(rando_);
+        emissionManager.setCDAuctionContract(address(1));
+    }
+
+    function test_setCDAuctionContract_whenZero_reverts() public {
+        // Try to set cdAuctioneer to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "zero address");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(0));
+    }
+
+    function test_setCDAuctionContract_differentAsset_reverts() public {
+        MockConvertibleDepositAuctioneer newCDAuctioneer = new MockConvertibleDepositAuctioneer(
+            kernel,
+            address(sReserve)
+        );
+
+        // Try to set cdAuctioneer to 0, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "different asset");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(newCDAuctioneer));
+    }
+
+    function test_setCDAuctionContract_success() public {
+        // Set new CD Auctioneer contract
+        vm.prank(guardian);
+        emissionManager.setCDAuctionContract(address(cdAuctioneer));
+
+        // Confirm new contract
+        assertEq(
+            address(emissionManager.cdAuctioneer()),
+            address(cdAuctioneer),
+            "CDuctioneer should be updated"
+        );
     }
 
     // getSupply tests
