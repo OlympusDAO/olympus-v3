@@ -466,6 +466,12 @@ contract ConvertibleDepositFacilityTest is Test {
         _;
     }
 
+    modifier givenReceiptTokenSpendingIsApprovedByRecipient(uint256 amount_) {
+        vm.prank(recipient);
+        receiptTokenManager.approve(address(depositManager), receiptTokenId, amount_);
+        _;
+    }
+
     modifier givenLocallyActive() {
         vm.prank(admin);
         facility.enable("");
@@ -553,6 +559,18 @@ contract ConvertibleDepositFacilityTest is Test {
     modifier givenMinimumDeposit(uint256 minimumDeposit_) {
         vm.prank(admin);
         depositManager.setAssetMinimumDeposit(iReserveToken, minimumDeposit_);
+        _;
+    }
+
+    modifier givenVaultHasDeposit(uint256 amount_) {
+        // Mint the amount
+        reserveToken.mint(address(this), amount_);
+
+        // Approve spending
+        reserveToken.approve(address(iVault), amount_);
+
+        // Deposit into the vault
+        iVault.deposit(amount_, address(this));
         _;
     }
 

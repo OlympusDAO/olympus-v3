@@ -89,12 +89,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
 
         // Determine an amount that will result in the shares being less than the liabilities
         amount_ = bound(amount_, _getExpectedMaxYield() + 1, previousDepositorDepositActualAmount);
-        uint256 operatorLiabilities = depositManager.getOperatorLiabilities(
-            iAsset,
-            DEPOSIT_OPERATOR
-        );
-
-        _expectRevertInsolvent(operatorLiabilities);
+        _expectRevertInsolvent();
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.claimYield(iAsset, ADMIN, amount_);
@@ -177,7 +172,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
     {
-        _expectRevertInsolvent(MINT_AMOUNT);
+        _expectRevertInsolvent();
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.claimYield(iAsset, ADMIN, 1);

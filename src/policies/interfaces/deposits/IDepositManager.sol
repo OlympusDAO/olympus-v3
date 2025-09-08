@@ -80,7 +80,18 @@ interface IDepositManager is IAssetManager {
 
     error DepositManager_InvalidParams(string reason);
 
-    error DepositManager_Insolvent(address asset, uint256 requiredAssets);
+    /// @notice Error if the action would leave the contract insolvent (liabilities > assets + borrowed)
+    ///
+    /// @param asset                    The address of the underlying asset
+    /// @param requiredAssets           The quantity of asset liabilities
+    /// @param depositedSharesInAssets  The quantity of assets that the deposited shares represent
+    /// @param borrowedAmount           The quantity of assets that are currently borrowed
+    error DepositManager_Insolvent(
+        address asset,
+        uint256 requiredAssets,
+        uint256 depositedSharesInAssets,
+        uint256 borrowedAmount
+    );
 
     error DepositManager_ZeroAddress();
 

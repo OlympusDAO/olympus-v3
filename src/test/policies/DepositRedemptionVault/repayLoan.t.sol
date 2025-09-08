@@ -332,6 +332,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     )
         public
         givenLocallyActive
+        givenVaultHasDeposit(1000e18)
         givenAddressHasConvertibleDepositToken(
             recipientTwo,
             iReserveToken,
@@ -349,6 +350,87 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Borrow
         vm.prank(recipient);
         redemptionVault.borrowAgainstRedemption(0);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 repaymentAmount = loan.principal + loan.interest;
+
+        // Mint and approve
+        reserveToken.mint(recipient, repaymentAmount);
+        vm.prank(recipient);
+        reserveToken.approve(address(redemptionVault), repaymentAmount);
+
+        // Call function
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, repaymentAmount);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // repaymentAmount is minted and used
+            loan.interest,
+            0
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_,
+            "committed deposits"
+        );
+    }
+
+    function test_givenCommitmentAmountFuzz_givenYieldFuzz_repayInFull(
+        uint256 depositAmount_,
+        uint256 commitmentAmount_,
+        uint256 yieldAmount_,
+        uint256 yieldAmountTwo_
+    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
+        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
+        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        // Accrue more yield
+        _accrueYield(iVault, yieldAmountTwo_);
 
         uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
 

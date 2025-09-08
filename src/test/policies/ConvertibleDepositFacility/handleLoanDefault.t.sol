@@ -4,18 +4,26 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepositFacility/ConvertibleDepositFacilityTest.sol";
 
 contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFacilityTest {
-    uint256 internal _recipientBalanceBefore;
+    uint256 internal _recipientReserveTokenBalanceBefore;
+    uint256 internal _recipientReceiptTokenBalanceBefore;
     uint256 internal _operatorSharesInAssetsBefore;
+    uint256 internal _availableDepositsBefore;
     uint256 internal _committedDepositsBefore;
     uint256 internal _committedDepositsOperatorBefore;
     uint256 internal _committedDepositsOperatorTwoBefore;
+    uint256 public constant BORROW_AMOUNT = 1e18;
 
     function _takeSnapshot() internal {
-        _recipientBalanceBefore = iReserveToken.balanceOf(recipient);
+        _recipientReserveTokenBalanceBefore = iReserveToken.balanceOf(recipient);
+        _recipientReceiptTokenBalanceBefore = receiptTokenManager.balanceOf(
+            recipient,
+            depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
+        );
         (, _operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
             iReserveToken,
             address(facility)
         );
+        _availableDepositsBefore = facility.getAvailableDeposits(iReserveToken);
         _committedDepositsBefore = facility.getCommittedDeposits(iReserveToken);
         _committedDepositsOperatorBefore = facility.getCommittedDeposits(iReserveToken, OPERATOR);
         _committedDepositsOperatorTwoBefore = facility.getCommittedDeposits(
@@ -35,7 +43,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
     }
 
     // given the caller is not authorized
@@ -51,7 +59,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
 
         // Call function
         vm.prank(caller_);
-        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
     }
 
     // when the amount is greater than the borrowed amount
@@ -70,9 +78,9 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
             RESERVE_TOKEN_AMOUNT
         )
         givenCommitted(OPERATOR, previousDepositActual)
-        givenBorrowed(OPERATOR, previousDepositActual, recipient)
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
     {
-        amount_ = bound(amount_, previousBorrowActual + 1, type(uint256).max);
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, type(uint256).max);
 
         // Expect revert
         _expectRevertExceedsBorrowed(amount_, previousBorrowActual);
@@ -96,14 +104,14 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
             RESERVE_TOKEN_AMOUNT
         )
         givenCommitted(OPERATOR, previousDepositActual)
-        givenBorrowed(OPERATOR, previousDepositActual, recipient)
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
     {
         // Expect revert
-        _expectRevertReceiptTokenInsufficientAllowance(address(depositManager), 0, 1e18);
+        _expectRevertReceiptTokenInsufficientAllowance(address(depositManager), 0, BORROW_AMOUNT);
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleLoanDefault(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
     }
 
     // [X] it burns the receipt tokens from the payer for the default amount
@@ -112,21 +120,23 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
     // [X] the committed deposits for the operator remain the same
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
-        givenBorrowed(OPERATOR, previousDepositActual, recipient)
-        givenReceiptTokenSpendingIsApproved(
-            recipient,
-            address(depositManager),
-            previousBorrowActual
-        )
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
+        givenReceiptTokenSpendingIsApprovedByRecipient(BORROW_AMOUNT)
     {
-        amount_ = bound(amount_, 1, previousBorrowActual);
+        amount_ = bound(amount_, 1, BORROW_AMOUNT);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
 
         _takeSnapshot();
 
@@ -140,7 +150,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
                 recipient,
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             ),
-            _recipientBalanceBefore - amount_,
+            _recipientReceiptTokenBalanceBefore - amount_,
             "recipient balance"
         );
 
@@ -158,7 +168,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
         // Assert that the available deposits have not changed
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
-            operatorSharesInAssetsAfter - (previousDepositActual - previousBorrowActual),
+            _availableDepositsBefore,
             "available deposits"
         );
 
@@ -193,14 +203,14 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
         givenOperatorAuthorized(OPERATOR)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
-        givenBorrowed(OPERATOR, previousDepositActual, recipient)
-        givenReceiptTokenSpendingIsApproved(
-            recipient,
-            address(depositManager),
-            previousBorrowActual
-        )
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
+        givenReceiptTokenSpendingIsApproved(recipient, address(depositManager), BORROW_AMOUNT)
     {
-        amount_ = bound(amount_, 1, previousBorrowActual);
+        amount_ = bound(
+            amount_,
+            5, // 1 risks a ZERO_SHARES error
+            BORROW_AMOUNT
+        );
 
         // Perform actions for the second operator
         // Doing it here to avoid stack too deep
@@ -215,7 +225,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
             _mintReceiptToken(OPERATOR_TWO, RESERVE_TOKEN_AMOUNT);
 
             // Commit
-            _commitReceiptToken(OPERATOR_TWO, 1e18);
+            _commitReceiptToken(OPERATOR_TWO, BORROW_AMOUNT);
         }
 
         _takeSnapshot();
@@ -230,7 +240,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
                 recipient,
                 depositManager.getReceiptTokenId(iReserveToken, PERIOD_MONTHS, address(facility))
             ),
-            _recipientBalanceBefore - amount_,
+            _recipientReceiptTokenBalanceBefore - amount_,
             "recipient balance"
         );
 
@@ -248,7 +258,7 @@ contract ConvertibleDepositFacilityHandleLoanDefaultTest is ConvertibleDepositFa
         // Assert that the available deposits have not changed
         assertEq(
             facility.getAvailableDeposits(iReserveToken),
-            operatorSharesInAssetsAfter - (previousDepositActual - previousBorrowActual) - 1e18,
+            _availableDepositsBefore,
             "available deposits"
         );
 

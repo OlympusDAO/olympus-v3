@@ -468,8 +468,15 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         if (_redemptionLoan[redemptionKey].dueDate != 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
+        // Ensure a non-zero interest rate is configured
+        if (
+            _assetFacilityAnnualInterestRates[
+                _getAssetFacilityKey(redemption.depositToken, redemption.facility)
+            ] == 0
+        ) revert RedemptionVault_InterestRateNotSet(redemption.depositToken, redemption.facility);
+
         // This will also validate the facility
-        (uint256 principal, , uint48 dueDate) = _previewBorrowAgainstRedemption(
+        (uint256 principal, uint256 interest, uint48 dueDate) = _previewBorrowAgainstRedemption(
             msg.sender,
             redemptionId_
         );
@@ -480,12 +487,16 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 redemption.facility
             );
 
-        // Ensure a non-zero interest rate is configured
-        uint16 interestRate = _assetFacilityAnnualInterestRates[
-            _getAssetFacilityKey(redemption.depositToken, redemption.facility)
-        ];
-        if (interestRate == 0)
-            revert RedemptionVault_InterestRateNotSet(redemption.depositToken, redemption.facility);
+        // Create loan
+        // Use the calculated amount, independent of any off-by-one rounding errors
+        Loan memory newLoan = Loan({
+            initialPrincipal: principal,
+            principal: principal,
+            interest: interest,
+            dueDate: dueDate,
+            isDefaulted: false
+        });
+        _redemptionLoan[redemptionKey] = newLoan;
 
         // Delegate to the facility for borrowing
         uint256 principalActual = IDepositFacility(redemption.facility).handleBorrow(
@@ -494,24 +505,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             principal,
             msg.sender
         );
-
-        // Compute interest on the actual amount
-        uint256 interestActual = _calculateInterest(
-            principalActual,
-            interestRate,
-            redemption.depositPeriod
-        );
-
-        // Create loan
-        // Values are actuals, which prevents future issues with repayment
-        Loan memory newLoan = Loan({
-            initialPrincipal: principalActual,
-            principal: principalActual,
-            interest: interestActual,
-            dueDate: dueDate,
-            isDefaulted: false
-        });
-        _redemptionLoan[redemptionKey] = newLoan;
 
         // Emit event
         emit LoanCreated(msg.sender, redemptionId_, principalActual, redemption.facility);

@@ -18,6 +18,8 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     uint256 public _operatorSharesBefore;
     uint256 public _operatorSharesInAssetsBefore;
 
+    uint256 public constant BORROW_AMOUNT = 1e18;
+
     function _takeSnapshot(uint256 amount_) internal {
         _expectedWithdrawnShares = vault.previewWithdraw(amount_);
 
@@ -44,7 +46,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: RECIPIENT,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -66,7 +68,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: RECIPIENT,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -88,7 +90,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: address(0),
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -110,7 +112,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: RECIPIENT,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -126,7 +128,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
     {
         // Expect revert
-        _expectRevertBorrowingLimitExceeded(1e18, 0);
+        _expectRevertBorrowingLimitExceeded(BORROW_AMOUNT, 0);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -134,7 +136,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: RECIPIENT,
-                amount: 1e18
+                amount: BORROW_AMOUNT
             })
         );
     }
@@ -223,19 +225,17 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
         // Assert tokens
         assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
-        assertApproxEqAbs(iAsset.balanceOf(RECIPIENT), amount_, 5, "withdrawn amount");
+        assertEq(iAsset.balanceOf(RECIPIENT), actualAmount, "withdrawn amount");
 
         // Borrowed amounts
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             amount_,
-            5,
             "borrowed amount"
         );
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             firstDepositActualAmount + previousDepositorDepositActualAmount - amount_,
-            5,
             "borrowing capacity"
         );
 
@@ -280,18 +280,18 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
         amount_ = bound(
             amount_,
-            previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount + 1,
+            previousDepositorDepositActualAmount - BORROW_AMOUNT + 1,
             type(uint256).max
         );
 
         // Expect revert
         _expectRevertBorrowingLimitExceeded(
             amount_,
-            previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount
+            previousDepositorDepositActualAmount - BORROW_AMOUNT
         );
 
         // Call function
@@ -318,9 +318,27 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
-        // Determine an amount that would be less than one share
+        // Accrue some yield to so that 1 share > 1 asset
+        _accrueYield(1000e18);
+
+        // Determine an amount that is less than one share
+        uint256 oneShareInAssets = vault.previewRedeem(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: amount_
+            })
+        );
     }
 
     // [X] it transfers the assets to the recipient
@@ -331,7 +349,8 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     // [X] it reduces the operator shares by the actual amount (in terms of shares) withdrawn
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenIsEnabled
@@ -340,13 +359,14 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
         amount_ = bound(
             amount_,
             5, // 1 risks a ZERO_SHARES error
             previousDepositorDepositActualAmount - previousRecipientBorrowActualAmount
         );
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
 
@@ -358,6 +378,10 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             _deposit(MINT_AMOUNT, false);
         }
 
+        // Accrue yield
+        _accrueYield(yieldAmount_);
+
+        // Snapshot
         _takeSnapshot(amount_);
 
         // Expect event
@@ -377,27 +401,24 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
         // Assert tokens
         assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
-        assertApproxEqAbs(
+        assertEq(
             iAsset.balanceOf(RECIPIENT),
-            previousRecipientBorrowActualAmount + amount_,
-            5,
+            previousRecipientBorrowActualAmount + actualAmount,
             "recipient balance"
         );
 
         // Borrowed amounts
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
-            previousRecipientBorrowActualAmount + amount_,
-            5,
+            BORROW_AMOUNT + amount_,
             "borrowed amount"
         );
-        assertApproxEqAbs(
+        assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             firstDepositActualAmount +
                 previousDepositorDepositActualAmount -
-                previousRecipientBorrowActualAmount -
+                BORROW_AMOUNT -
                 amount_,
-            5,
             "borrowing capacity"
         );
 

@@ -717,6 +717,18 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
+    modifier givenVaultHasDeposit(uint256 amount_) {
+        // Mint the amount
+        reserveToken.mint(address(this), amount_);
+
+        // Approve spending
+        reserveToken.approve(address(iVault), amount_);
+
+        // Deposit into the vault
+        iVault.deposit(amount_, address(this));
+        _;
+    }
+
     // ========== ASSERTIONS ========== //
 
     function _assertMintApproval(uint256 expected_) internal view {
@@ -791,10 +803,9 @@ contract DepositRedemptionVaultTest is Test {
     }
 
     function _assertAvailableDeposits(uint256 expected_) internal view {
-        assertApproxEqAbs(
+        assertEq(
             cdFacility.getAvailableDeposits(iReserveToken),
             expected_,
-            5,
             "cdFacility.getAvailableDeposits(iReserveToken)"
         );
     }

@@ -18,6 +18,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     uint256 public _operatorSharesBefore;
     uint256 public _operatorSharesInAssetsBefore;
 
+    uint256 public constant BORROW_AMOUNT = 1e18;
+
     function _takeSnapshot(uint256 amount_) internal {
         _expectedDepositedShares = vault.previewDeposit(amount_);
 
@@ -41,7 +43,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: 1e18})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -59,7 +65,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(caller_);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: 1e18})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -77,7 +87,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: 1e18})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -94,12 +108,16 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
     {
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(1e18, 0);
+        _expectRevertBorrowedAmountExceeded(BORROW_AMOUNT, 0);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: 1e18})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -116,12 +134,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
-        amount_ = bound(amount_, previousRecipientBorrowActualAmount + 1, type(uint256).max);
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, type(uint256).max);
 
         // Expect revert
-        _expectRevertBorrowedAmountExceeded(amount_, previousRecipientBorrowActualAmount);
+        _expectRevertBorrowedAmountExceeded(amount_, BORROW_AMOUNT);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -141,7 +159,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
     {
         // Expect revert
         _expectRevertERC20InsufficientAllowance();
@@ -170,7 +188,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
         givenRecipientHasApprovedSpendingAsset(previousRecipientBorrowActualAmount)
     {
         // Calculate amount
@@ -195,7 +213,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     // [X] it increases the operator shares by the actual amount (in terms of shares) repaid
 
     function test_success(
-        uint256 amount_
+        uint256 amount_,
+        uint256 yieldAmount_
     )
         public
         givenIsEnabled
@@ -204,12 +223,13 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
-        givenBorrow(1e18)
+        givenBorrow(BORROW_AMOUNT)
         givenRecipientHasApprovedSpendingAsset(previousRecipientBorrowActualAmount)
     {
         // Calculate amount
         uint256 oneShareInAssets = vault.previewMint(1);
         amount_ = bound(amount_, oneShareInAssets, previousRecipientBorrowActualAmount);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         uint256 firstDepositActualAmount = previousDepositorDepositActualAmount;
 
@@ -220,6 +240,9 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
             _deposit(MINT_AMOUNT, false);
         }
+
+        // Accrue yield
+        _accrueYield(yieldAmount_);
 
         _takeSnapshot(amount_);
 
@@ -244,14 +267,14 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Borrowed amounts
         assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
-            previousRecipientBorrowActualAmount - amount_,
+            BORROW_AMOUNT - amount_,
             "borrowed amount"
         );
         assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
             firstDepositActualAmount +
                 previousDepositorDepositActualAmount -
-                previousRecipientBorrowActualAmount +
+                BORROW_AMOUNT +
                 amount_,
             "borrowing capacity"
         );

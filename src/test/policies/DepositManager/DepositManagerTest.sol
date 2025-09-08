@@ -286,6 +286,10 @@ contract DepositManagerTest is Test {
         _;
     }
 
+    function _accrueYield(uint256 yieldAmount_) internal {
+        asset.mint(address(vault), yieldAmount_);
+    }
+
     // ========== REVERT HELPERS ========== //
 
     function _expectRevertNotEnabled() internal {
@@ -409,14 +413,9 @@ contract DepositManagerTest is Test {
         );
     }
 
-    function _expectRevertInsolvent(uint256 liabilities_) internal {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositManager.DepositManager_Insolvent.selector,
-                address(iAsset),
-                liabilities_
-            )
-        );
+    function _expectRevertInsolvent() internal {
+        // Use expectPartialRevert as the exact arguments cannot always be determined
+        vm.expectPartialRevert(IDepositManager.DepositManager_Insolvent.selector);
     }
 
     function _expectRevertDepositCapExceeded(uint256 balance_, uint256 depositCap_) internal {
