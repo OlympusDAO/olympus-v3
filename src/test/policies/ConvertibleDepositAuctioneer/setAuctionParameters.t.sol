@@ -295,7 +295,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Bid
         uint256 dayTwoDeposit = 2e18;
-        (uint256 dayTwoConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
+        uint256 dayTwoConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
         _mintAndBid(recipient, dayTwoDeposit);
 
         // Assert day state
@@ -328,7 +328,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayTwoDeposit = 2e18;
             uint256 dayTwoTarget = TARGET + 1;
             _setAuctionParameters(dayTwoTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayTwoConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
+            uint256 dayTwoConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
             _mintAndBid(recipient, dayTwoDeposit);
 
             expectedAuctionResults[1] = int256(dayTwoConvertible) - int256(dayTwoTarget);
@@ -340,7 +340,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayThreeDeposit = 3e18;
             uint256 dayThreeTarget = TARGET + 2;
             _setAuctionParameters(dayThreeTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayThreeConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayThreeDeposit);
+            uint256 dayThreeConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayThreeDeposit);
             _mintAndBid(recipient, dayThreeDeposit);
 
             expectedAuctionResults[2] = int256(dayThreeConvertible) - int256(dayThreeTarget);
@@ -352,7 +352,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFourDeposit = 4e18;
             uint256 dayFourTarget = TARGET + 3;
             _setAuctionParameters(dayFourTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayFourConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayFourDeposit);
+            uint256 dayFourConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayFourDeposit);
             _mintAndBid(recipient, dayFourDeposit);
 
             expectedAuctionResults[3] = int256(dayFourConvertible) - int256(dayFourTarget);
@@ -364,7 +364,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFiveDeposit = 5e18;
             uint256 dayFiveTarget = TARGET + 4;
             _setAuctionParameters(dayFiveTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 dayFiveConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayFiveDeposit);
+            uint256 dayFiveConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayFiveDeposit);
             _mintAndBid(recipient, dayFiveDeposit);
 
             expectedAuctionResults[4] = int256(dayFiveConvertible) - int256(dayFiveTarget);
@@ -376,7 +376,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 daySixDeposit = 6e18;
             uint256 daySixTarget = TARGET + 5;
             _setAuctionParameters(daySixTarget, TICK_SIZE, MIN_PRICE);
-            (uint256 daySixConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, daySixDeposit);
+            uint256 daySixConvertible = auctioneer.previewBid(PERIOD_MONTHS, daySixDeposit);
             _mintAndBid(recipient, daySixDeposit);
 
             expectedAuctionResults[5] = int256(daySixConvertible) - int256(daySixTarget);
@@ -389,7 +389,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         {
             uint256 daySevenDeposit = 7e18;
             _setAuctionParameters(daySevenTarget, TICK_SIZE, MIN_PRICE);
-            (daySevenConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, daySevenDeposit);
+            daySevenConvertible = auctioneer.previewBid(PERIOD_MONTHS, daySevenDeposit);
             _mintAndBid(recipient, daySevenDeposit);
 
             expectedAuctionResults[6] = int256(daySevenConvertible) - int256(daySevenTarget);
@@ -409,7 +409,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Bid
         uint256 dayEightDeposit = 8e18;
-        (uint256 dayEightConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
+        uint256 dayEightConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
         _mintAndBid(recipient, dayEightDeposit);
 
         // Assert day state
@@ -481,7 +481,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         uint256 dayEightDeposit = 8e18;
         uint256 dayEightTarget = TARGET + 7;
         _setAuctionParameters(dayEightTarget, TICK_SIZE, MIN_PRICE);
-        (uint256 dayEightConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
+        uint256 dayEightConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayEightDeposit);
         _mintAndBid(recipient, dayEightDeposit);
 
         // Warp to day nine
@@ -498,7 +498,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         auctioneer.setAuctionParameters(dayNineTarget, TICK_SIZE, MIN_PRICE);
 
         // Bid
-        (uint256 dayNineConvertible, ) = auctioneer.previewBid(PERIOD_MONTHS, dayNineDeposit);
+        uint256 dayNineConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayNineDeposit);
         _mintAndBid(recipient, dayNineDeposit);
 
         // Assert day state

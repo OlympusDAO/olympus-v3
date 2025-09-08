@@ -66,6 +66,7 @@ contract ConvertibleDepositAuctioneer is
     struct BidParams {
         uint8 depositPeriod;
         uint256 depositAmount;
+        uint256 minOhmOut;
         bool wrapPosition;
         bool wrapReceipt;
     }
@@ -167,10 +168,15 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function reverts if:
     ///             - The contract is not active
-    ///             - The calculated converted amount is 0
+    ///             - Deposits are not enabled for the asset/period/operator
+    ///             - The depositor has not approved the DepositManager to spend the deposit asset
+    ///             - The depositor has an insufficient balance of the deposit asset
+    ///             - The calculated amount of OHM out is 0
+    ///             - The calculated amount of OHM out is < minOhmOut_
     function bid(
         uint8 depositPeriod_,
         uint256 depositAmount_,
+        uint256 minOhmOut_,
         bool wrapPosition_,
         bool wrapReceipt_
     )
@@ -186,6 +192,7 @@ contract ConvertibleDepositAuctioneer is
                 BidParams({
                     depositPeriod: depositPeriod_,
                     depositAmount: depositAmount_,
+                    minOhmOut: minOhmOut_,
                     wrapPosition: wrapPosition_,
                     wrapReceipt: wrapReceipt_
                 })
@@ -205,8 +212,14 @@ contract ConvertibleDepositAuctioneer is
             BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
             // Reject if the OHM out is 0
-            if (output.ohmOut == 0)
-                revert ConvertibleDepositAuctioneer_InvalidParams("converted amount");
+            if (output.ohmOut == 0) revert ConvertibleDepositAuctioneer_ConvertedAmountZero();
+
+            // Reject if the OHM out is below the minimum OHM out
+            if (output.ohmOut < params.minOhmOut)
+                revert ConvertibleDepositAuctioneer_ConvertedAmountSlippage(
+                    output.ohmOut,
+                    params.minOhmOut
+                );
 
             // Update state
             _dayState.convertible += output.ohmOut;
@@ -324,7 +337,7 @@ contract ConvertibleDepositAuctioneer is
         override
         onlyEnabled
         onlyDepositPeriodEnabled(depositPeriod_)
-        returns (uint256 ohmOut, address depositSpender)
+        returns (uint256 ohmOut)
     {
         // Get the updated tick based on the current state
         Tick memory currentTick = _getCurrentTick(depositPeriod_);
@@ -333,7 +346,7 @@ contract ConvertibleDepositAuctioneer is
         BidOutput memory output = _previewBid(bidAmount_, currentTick);
         ohmOut = output.ohmOut;
 
-        return (ohmOut, address(CD_FACILITY.DEPOSIT_MANAGER()));
+        return ohmOut;
     }
 
     // ========== VIEW FUNCTIONS ========== //

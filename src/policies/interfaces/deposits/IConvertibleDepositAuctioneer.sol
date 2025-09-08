@@ -81,6 +81,15 @@ interface IConvertibleDepositAuctioneer {
     /// @param  reason          Reason for invalid parameters
     error ConvertibleDepositAuctioneer_InvalidParams(string reason);
 
+    /// @notice Emitted when the OHM output (the amount of OHM the deposit can be converted to) is zero
+    error ConvertibleDepositAuctioneer_ConvertedAmountZero();
+
+    /// @notice Emitted when the OHM output (the amount of OHM the deposit can be converted to) is less than the minimum specified
+    ///
+    /// @param  ohmOut         The amount of OHM tokens that the deposit can be converted to
+    /// @param  minOhmOut      The minimum amount of OHM that the deposit should convert to, in order to succeed
+    error ConvertibleDepositAuctioneer_ConvertedAmountSlippage(uint256 ohmOut, uint256 minOhmOut);
+
     /// @notice Emitted when the deposit period is already enabled for this asset
     error ConvertibleDepositAuctioneer_DepositPeriodAlreadyEnabled(
         address depositAsset,
@@ -148,6 +157,7 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  depositPeriod_  The deposit period
     /// @param  depositAmount_  Amount of deposit asset to deposit
+    /// @param  minOhmOut_      The minimum amount of OHM tokens that the deposit should convert to, in order to succeed. This acts as slippage protection.
     /// @param  wrapPosition_   Whether to wrap the position as an ERC721
     /// @param  wrapReceipt_    Whether to wrap the receipt as an ERC20
     /// @return ohmOut          Amount of OHM tokens that the deposit can be converted to
@@ -156,6 +166,7 @@ interface IConvertibleDepositAuctioneer {
     function bid(
         uint8 depositPeriod_,
         uint256 depositAmount_,
+        uint256 minOhmOut_,
         bool wrapPosition_,
         bool wrapReceipt_
     ) external returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId);
@@ -163,13 +174,12 @@ interface IConvertibleDepositAuctioneer {
     /// @notice Get the amount of OHM tokens that could be converted for a bid
     ///
     /// @param  depositPeriod_  The deposit period
-    /// @param  deposit_        Amount of deposit asset to deposit
+    /// @param  depositAmount_  Amount of deposit asset to deposit
     /// @return ohmOut          Amount of OHM tokens that the deposit could be converted to
-    /// @return depositSpender  The address of the contract that would spend the deposit asset
     function previewBid(
         uint8 depositPeriod_,
-        uint256 deposit_
-    ) external view returns (uint256 ohmOut, address depositSpender);
+        uint256 depositAmount_
+    ) external view returns (uint256 ohmOut);
 
     // ========== STATE VARIABLES ========== //
 

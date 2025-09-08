@@ -418,8 +418,9 @@ contract ConvertibleDepositAuctioneerTest is Test {
     }
 
     function _bid(address owner_, uint256 deposit_) internal {
+        // minOhmOut is 1, so that the bid is always accepted
         vm.prank(owner_);
-        auctioneer.bid(PERIOD_MONTHS, deposit_, false, false);
+        auctioneer.bid(PERIOD_MONTHS, deposit_, 1, false, false);
     }
 
     function _mintAndBid(address owner_, uint256 deposit_) internal {
