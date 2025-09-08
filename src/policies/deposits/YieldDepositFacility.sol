@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 import {TimestampLinkedList} from "src/libraries/TimestampLinkedList.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // Interfaces
 import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
@@ -25,6 +27,8 @@ import {BaseDepositFacility} from "src/policies/deposits/BaseDepositFacility.sol
 /// @title YieldDepositFacility
 contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPeriodicTask {
     using TimestampLinkedList for TimestampLinkedList.List;
+    using TransferHelper for ERC20;
+
     // ========== STATE VARIABLES ========== //
 
     /// @notice The yield fee
@@ -390,11 +394,11 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
                 yieldMinusFee + yieldFee
             );
             // Transfer the yield fee to the treasury
-            if (yieldFee > 0) IERC20(asset).transfer(address(TRSRY), yieldFee);
+            if (yieldFee > 0) ERC20(address(asset)).safeTransfer(address(TRSRY), yieldFee);
             // Transfer the yield (minus fee) to the caller
             // This uses the actual amount, since that may differ from what was calculated earlier
             actualYieldMinusFee = actualAmount - yieldFee;
-            IERC20(asset).transfer(msg.sender, actualYieldMinusFee);
+            ERC20(address(asset)).safeTransfer(msg.sender, actualYieldMinusFee);
         }
 
         // Emit event
