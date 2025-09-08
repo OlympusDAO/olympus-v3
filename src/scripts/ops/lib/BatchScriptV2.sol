@@ -72,7 +72,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         // Check if the owner is a Safe Multisig
         // It is assumed to be if it is a contract
-        if (_owner.code.length > 0) {
+        // Skip this check if FORK environment variable is true
+        // This allows pranking when using a local anvil fork
+        bool skipCodeCheck = vm.envOr("FORK", false);
+        if (!skipCodeCheck && _owner.code.length > 0) {
             console2.log("  Owner address is a multi-sig");
             _isMultiSig = true;
             _multiSig.initialize(_owner);
