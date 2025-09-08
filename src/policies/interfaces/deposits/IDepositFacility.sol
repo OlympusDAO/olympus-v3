@@ -167,21 +167,6 @@ interface IDepositFacility {
     ///
     /// @param  depositToken_   The address of the deposit token
     /// @param  depositPeriod_  The period of the deposit in months
-    /// @param  recipient_      The address to reclaim the deposit token to
-    /// @param  amount_         The amount of deposit tokens to reclaim
-    /// @return reclaimed       The amount of deposit token returned to the recipient
-    function reclaimFor(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        address recipient_,
-        uint256 amount_
-    ) external returns (uint256 reclaimed);
-
-    /// @notice Reclaims deposit tokens, after applying a discount
-    /// @dev    This variant reclaims the underlying asset to the caller
-    ///
-    /// @param  depositToken_   The address of the deposit token
-    /// @param  depositPeriod_  The period of the deposit in months
     /// @param  amount_         The amount of deposit tokens to reclaim
     /// @return reclaimed       The amount of deposit token returned to the caller
     function reclaim(

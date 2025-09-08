@@ -220,6 +220,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function expects receipt tokens to be unwrapped (i.e. native ERC6909 tokens)
     function startRedemption(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -426,7 +427,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    /// @dev        This function will revert if:
+    /// @dev        Borrows the maximum possible amount against an existing redemption.
+    ///             The loan will be for a fixed-term. The interest is calculated on the
+    ///             basis of that term, and the full amount will be payable in order to
+    ///             close the loan.
+    ///
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The redemption ID is invalid
     ///             - The facility is not authorized
@@ -497,7 +503,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
-    /// @dev        This function will revert if:
+    /// @dev        This function will repay the outstanding loan amount.
+    ///             Interest is paid back first, followed by principal.
+    ///
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The redemption ID is invalid
     ///             - The redemption has no loan
@@ -527,7 +536,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - defaulted
         // - fully repaid
-        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
         // Pull in the deposit tokens from the caller
@@ -655,7 +664,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - defaulted
         // - fully repaid
-        if (block.timestamp >= loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(msg.sender, redemptionId_);
 
         (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
@@ -711,7 +720,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // - expired
         // - not defaulted
         // - not fully repaid
-        if (block.timestamp < loan.dueDate || loan.isDefaulted == true || loan.principal == 0)
+        if (block.timestamp < loan.dueDate || loan.isDefaulted || loan.principal == 0)
             revert RedemptionVault_LoanIncorrectState(user_, redemptionId_);
 
         // Determine how much collateral to confiscate

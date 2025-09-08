@@ -400,12 +400,16 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
-    function reclaimFor(
+    /// @dev        This function reverts if:
+    ///             - The contract is not active
+    ///             - Deposits are not enabled for the asset/period
+    ///             - The depositor has not approved the DepositManager to spend the receipt token
+    ///             - The depositor has an insufficient balance of the receipt token
+    function reclaim(
         IERC20 depositToken_,
         uint8 depositPeriod_,
-        address recipient_,
         uint256 amount_
-    ) public nonReentrant onlyEnabled returns (uint256 reclaimed) {
+    ) external nonReentrant onlyEnabled returns (uint256 reclaimed) {
         // Calculate the quantity of deposit token to withdraw and return
         // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
         uint256 discountedAssetsOut = previewReclaim(depositToken_, depositPeriod_, amount_);
@@ -423,7 +427,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         );
 
         // Transfer discounted amount of the deposit token to the recipient
-        ERC20(address(depositToken_)).safeTransfer(recipient_, discountedAssetsOut);
+        ERC20(address(depositToken_)).safeTransfer(msg.sender, discountedAssetsOut);
 
         // Transfer the remaining deposit tokens to the TRSRY
         ERC20(address(depositToken_)).safeTransfer(
@@ -433,7 +437,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
         // Emit event
         emit Reclaimed(
-            recipient_,
+            msg.sender,
             address(depositToken_),
             depositPeriod_,
             discountedAssetsOut,
@@ -441,15 +445,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         );
 
         return discountedAssetsOut;
-    }
-
-    /// @inheritdoc IDepositFacility
-    function reclaim(
-        IERC20 depositToken_,
-        uint8 depositPeriod_,
-        uint256 amount_
-    ) external returns (uint256 reclaimed) {
-        reclaimed = reclaimFor(depositToken_, depositPeriod_, msg.sender, amount_);
     }
 
     // ========== POSITION MANAGEMENT ========== //
