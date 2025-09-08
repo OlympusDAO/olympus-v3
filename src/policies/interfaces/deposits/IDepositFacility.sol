@@ -3,7 +3,6 @@ pragma solidity >=0.8.0;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 
 /// @title  IDepositFacility
 /// @notice Interface for deposit facilities to coordinate with generic operators (e.g., redemption vaults)
@@ -190,6 +189,22 @@ interface IDepositFacility {
         uint8 depositPeriod_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
+
+    // ========== POSITION MANAGEMENT ========== //
+
+    /// @notice Splits the specified amount of the position into a new position
+    ///
+    /// @param  positionId_     The ID of the position to split
+    /// @param  amount_         The amount to split from the position
+    /// @param  to_             The address to receive the new position
+    /// @param  wrap_           Whether to wrap the new position
+    /// @return newPositionId   The ID of the newly created position
+    function split(
+        uint256 positionId_,
+        uint256 amount_,
+        address to_,
+        bool wrap_
+    ) external returns (uint256 newPositionId);
 
     // ========== BALANCE QUERIES ========== //
 

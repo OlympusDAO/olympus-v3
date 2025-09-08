@@ -96,6 +96,9 @@ interface IDepositPositionManager {
     /// @notice Error thrown when the caller is not the owner of the position
     error DEPOS_NotOwner(uint256 positionId_);
 
+    /// @notice Error thrown when the caller is not the operator of the position
+    error DEPOS_NotOperator(uint256 positionId_);
+
     /// @notice Error thrown when an invalid position ID is provided
     error DEPOS_InvalidPositionId(uint256 id_);
 
@@ -190,13 +193,13 @@ interface IDepositPositionManager {
     /// @param  amount_         The amount of the position to split
     /// @param  to_             The address to split the position to
     /// @param  wrap_           Whether the new position should be wrapped
-    /// @return _newPositionId  The ID of the new position
+    /// @return newPositionId   The ID of the new position
     function split(
         uint256 positionId_,
         uint256 amount_,
         address to_,
         bool wrap_
-    ) external returns (uint256 _newPositionId);
+    ) external returns (uint256 newPositionId);
 
     // ========== POSITION INFORMATION ========== //
 

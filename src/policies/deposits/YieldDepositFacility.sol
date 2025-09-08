@@ -27,15 +27,13 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     using TimestampLinkedList for TimestampLinkedList.List;
     // ========== STATE VARIABLES ========== //
 
-    /// @notice The DEPOS module.
-    DEPOSv1 public DEPOS;
-
     /// @notice The yield fee
     uint16 internal _yieldFee;
 
     /// @notice Mapping between a position id and the timestamp of the last yield claim
     /// @dev    This is used to calculate the yield since the last claim. The initial value should be set at the time of minting.
-    mapping(uint256 => uint48) public positionLastYieldClaimTimestamp;
+    mapping(uint256 positionId => uint48 lastYieldClaimTimestamp)
+        public positionLastYieldClaimTimestamp;
 
     /// @notice Mapping between vault address and timestamp to snapshot data
     /// @dev    This is used to store periodic snapshots of conversion rates for each vault
@@ -73,10 +71,11 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode cdposKeycode = toKeycode("DEPOS");
+        Keycode deposKeycode = toKeycode("DEPOS");
 
-        permissions = new Permissions[](1);
-        permissions[0] = Permissions(cdposKeycode, DEPOS.mint.selector);
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(deposKeycode, DEPOS.mint.selector);
+        permissions[1] = Permissions(deposKeycode, DEPOS.split.selector);
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -417,6 +416,20 @@ contract YieldDepositFacility is BaseDepositFacility, IYieldDepositFacility, IPe
     /// @inheritdoc IYieldDepositFacility
     function getYieldFee() external view returns (uint16) {
         return _yieldFee;
+    }
+
+    // ========== POSITION MANAGEMENT ========== //
+
+    function _split(
+        uint256 oldPositionId_,
+        uint256 newPositionId_,
+        uint256
+    ) internal virtual override {
+        // Copy the last yield claim timestamp from the original position to the new one
+        // This prevents the new position from claiming yield from before it was created
+        positionLastYieldClaimTimestamp[newPositionId_] = positionLastYieldClaimTimestamp[
+            oldPositionId_
+        ];
     }
 
     // ========== HELPER FUNCTIONS ========== //
