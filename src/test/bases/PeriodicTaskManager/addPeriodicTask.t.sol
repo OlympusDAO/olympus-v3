@@ -38,6 +38,16 @@ contract PeriodicTaskManagerAddPeriodicTaskTest is PeriodicTaskManagerTest {
         periodicTaskManager.addPeriodicTask(address(periodicTaskA));
     }
 
+    // given the task address does not have any contract code
+    //  [X] it reverts
+
+    function test_givenNotContract_reverts() public {
+        _expectRevertNotPeriodicTask(address(0xDDDD));
+
+        vm.prank(ADMIN);
+        periodicTaskManager.addPeriodicTask(address(0xDDDD));
+    }
+
     // given the task does not implement the IPeriodicTask interface
     //  [X] it reverts
 

@@ -66,6 +66,20 @@ contract PeriodicTaskManagerAddPeriodicTaskAtIndexTest is PeriodicTaskManagerTes
         );
     }
 
+    //  given there is no contract at the address
+    //   [X] it reverts
+
+    function test_customSelectorNotZero_givenNoContractCode_reverts() public {
+        _expectRevertNotPeriodicTask(address(0xDDDD));
+
+        vm.prank(ADMIN);
+        periodicTaskManager.addPeriodicTaskAtIndex(
+            address(0xDDDD),
+            MockCustomPeriodicTask.customExecute.selector,
+            0
+        );
+    }
+
     //  given there are no tasks
     //   [X] it inserts the task at the first index
     //   [X] the array length is incremented
