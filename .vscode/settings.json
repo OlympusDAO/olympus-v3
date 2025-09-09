@@ -3,7 +3,7 @@
         "editor.defaultFormatter": "NomicFoundation.hardhat-solidity"
     },
     "solidity-metrics.file.exclusions.glob": "{**/node_modules,**/mock*,**/test*,**/migrations,**/Migrations.sol,lib,**/external,**/libraries,**/interfaces}",
-    "solidity.compileUsingRemoteVersion": "v0.8.24+commit.e11b9ed9",
+    "solidity.compileUsingRemoteVersion": "v0.8.30+commit.73712a01",
     "solidity.defaultCompiler": "remote",
     "solidity.formatter": "prettier",
     "solidity.monoRepoSupport": false
