@@ -19,21 +19,17 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
-import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
-import {IOperator} from "src/policies/interfaces/IOperator.sol";
-import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
-import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 /// @notice Combined proposal that enables and configures the Convertible Deposit system
 contract ConvertibleDepositProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // ========== CONSTANTS ========== //
-
-    address public constant ACTIVATOR = 0x0000000000000000000000000000000000000000;
 
     string internal constant CDF_NAME = "cdf";
 
@@ -284,24 +280,26 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // ========== PHASE 3: EXECUTE ACTIVATOR CONTRACT ========== //
 
+        address activator = addresses.getAddress("olympus-periphery-convertible-deposit-activator");
+
         // 7. Grant "admin" role (temporarily) to Activator contract
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), ACTIVATOR),
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator),
             "Grant admin role to temporary activator contract"
         );
 
         // 8. Run activator
         _pushAction(
-            ACTIVATOR,
-            abi.encodeWithSignature("activate()"),
+            activator,
+            abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector),
             "Call temporary activator contract"
         );
 
         // 9. Revoke "admin" role from Activator contract
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), ACTIVATOR),
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator),
             "Revoke admin role from temporary activator contract"
         );
     }
@@ -609,6 +607,25 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             require(
                 Policy(emissionManager).isActive() == true,
                 "EmissionManager policy is not active"
+            );
+        }
+
+        // ========== ACTIVATOR CLEANUP ========== //
+        {
+            address activator = addresses.getAddress(
+                "olympus-periphery-convertible-deposit-activator"
+            );
+
+            // Validate that the activator is marked as activated (and hence disabled)
+            require(
+                ConvertibleDepositActivator(activator).isActivated() == true,
+                "Activator is not marked as activated"
+            );
+
+            // Validate that the activator does not have the "admin" role
+            require(
+                roles.hasRole(activator, bytes32("admin")) == false,
+                "Activator should not have the admin role"
             );
         }
     }
