@@ -71,108 +71,137 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     }
 
     function description() public pure override returns (string memory) {
-        // Split into sections to avoid stack too deep
-        string memory header = string.concat(
-            "# Convertible Deposits - Complete Activation\n",
-            "\n",
-            "This proposal combines the enabling of Convertible Deposit contracts with asset configuration into a single atomic operation.\n",
-            "\n",
-            "## Summary\n",
-            "\n",
-            "This proposal has four main components:\n",
-            "- Enable base Convertible Deposit system contracts and perform initial configuration\n",
-            "- Configure USDS assets with different deposit periods (1m, 2m, 3m)\n",
-            "- Enable the ReserveWrapper contract for periodic USDS wrapping to sUSDS\n",
-            "- Configure the new Heart contract (1.7) with all necessary periodic tasks\n",
-            "- Enable the EmissionManager and ConvertibleDepositAuctioneer for full system operation\n"
-        );
+        return
+            string.concat(
+                _getHeaderSection(),
+                _getContractsSection(),
+                _getResourcesAndPrerequisitesSection(),
+                _getProposalStepsSection(),
+                _getConclusionSection()
+            );
+    }
 
-        string memory contracts = string.concat(
-            "\n",
-            "## Affected Contracts\n",
-            "\n",
-            "- Heart policy (new - 1.7)\n",
-            "- Heart policy (existing - 1.6)\n",
-            "- DepositManager policy (new - 1.0)\n",
-            "- ConvertibleDepositFacility policy (new - 1.0)\n",
-            "- ConvertibleDepositAuctioneer policy (new - 1.0)\n",
-            "- DepositRedemptionVault policy (new - 1.0)\n",
-            "- ReserveWrapper policy (new - 1.0)\n",
-            "- EmissionManager policy (existing - 1.2)\n",
-            "- ReserveMigrator policy (existing)\n",
-            "- Operator policy (existing - 1.5)\n",
-            "- YieldRepurchaseFacility policy (existing - 1.3)\n"
-        );
+    /// @dev Returns the header and summary section of the proposal description
+    function _getHeaderSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "# Convertible Deposits - Complete Activation\n\n",
+                "This proposal combines the enabling of Convertible Deposit contracts with asset configuration into a single atomic operation.\n\n",
+                "## Summary\n\n",
+                "This proposal has four main components:\n",
+                "- Enable base Convertible Deposit system contracts and perform initial configuration\n",
+                "- Configure USDS assets with different deposit periods (1m, 2m, 3m)\n",
+                "- Enable the ReserveWrapper contract for periodic USDS wrapping to sUSDS\n",
+                "- Configure the new Heart contract (1.7) with all necessary periodic tasks\n",
+                "- Enable the EmissionManager and ConvertibleDepositAuctioneer for full system operation\n\n"
+            );
+    }
 
-        string memory prereqs = string.concat(
-            "\n",
-            "## Resources\n",
-            "\n",
-            "- [View the audit report](TODO)\n", // TODO: Add audit report
-            "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n",
-            "\n",
-            "## Pre-requisites\n",
-            "\n",
-            "- Old Heart policy has been deactivated in the kernel\n",
-            "- Old EmissionManager policy has been deactivated in the kernel\n",
-            "- DEPOS module has been installed in the kernel\n",
-            "- All new deposit-related policies have been activated in the kernel\n",
-            "- New Heart policy has been activated in the kernel\n",
-            "- New EmissionManager policy has been activated in the kernel\n"
-        );
+    /// @dev Returns the affected contracts section of the proposal description
+    function _getContractsSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Affected Contracts\n\n",
+                "- Heart policy (new - 1.7)\n",
+                "- Heart policy (existing - 1.6)\n",
+                "- DepositManager policy (new - 1.0)\n",
+                "- ConvertibleDepositFacility policy (new - 1.0)\n",
+                "- ConvertibleDepositAuctioneer policy (new - 1.0)\n",
+                "- DepositRedemptionVault policy (new - 1.0)\n",
+                "- ReserveWrapper policy (new - 1.0)\n",
+                "- EmissionManager policy (existing - 1.2)\n",
+                "- ReserveMigrator policy (existing)\n",
+                "- Operator policy (existing - 1.5)\n",
+                "- YieldRepurchaseFacility policy (existing - 1.3)\n\n"
+            );
+    }
 
-        string memory steps1 = string.concat(
-            "\n",
-            "## Proposal Steps\n",
-            "\n",
-            "### Phase 1: Cleanup Previous Policies\n",
-            "1. Revoke the `heart` role from the old Heart policy\n",
-            "\n",
-            "### Phase 2: Grant Roles to New Policies\n",
-            "2. Grant the `manager` role to the DAO MS\n",
-            "3. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
-            "4. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
-            "5. Grant the `cd_emissionmanager` role to EmissionManager\n",
-            "6. Grant the `heart` role to Heart contract\n",
-            "\n",
-            "### Phase 3: Execute Activator Contract\n",
-            "7. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
-        );
+    /// @dev Returns the resources and prerequisites section of the proposal description
+    function _getResourcesAndPrerequisitesSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Resources\n\n",
+                "- [View the audit report](TODO)\n", // TODO: Add audit report
+                "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n\n",
+                "## Pre-requisites\n\n",
+                "- Old Heart policy has been deactivated in the kernel\n",
+                "- Old EmissionManager policy has been deactivated in the kernel\n",
+                "- DEPOS module has been installed in the kernel\n",
+                "- All new deposit-related policies have been activated in the kernel\n",
+                "- New Heart policy has been activated in the kernel\n",
+                "- New EmissionManager policy has been activated in the kernel\n\n"
+            );
+    }
 
-        string memory steps2 = string.concat(
-            "8. Execute ConvertibleDepositActivator.activate() which performs:\n",
-            "   - Enable DepositManager contract\n",
-            "   - Set operator name on DepositManager for ConvertibleDepositFacility\n",
-            "   - Enable ConvertibleDepositFacility contract\n",
-            "   - Authorize ConvertibleDepositFacility in DepositRedemptionVault\n",
-            "   - Authorize DepositRedemptionVault in ConvertibleDepositFacility\n",
-            "   - Enable DepositRedemptionVault contract\n",
-            "   - Configure USDS in DepositManager (1M USDS capacity, 1 USDS minimum)\n",
-            "   - Add USDS deposit periods: 1m, 2m, 3m (90% reclaim rate each)\n"
-        );
+    /// @dev Returns the proposal steps section of the proposal description
+    function _getProposalStepsSection() private pure returns (string memory) {
+        return
+            string.concat(
+                _getProposalStepsPhase1and2(),
+                _getProposalStepsPhase3Part1(),
+                _getProposalStepsPhase3Part2()
+            );
+    }
 
-        string memory steps3 = string.concat(
-            "   - Enable deposit periods in ConvertibleDepositAuctioneer\n",
-            "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
-            "   - Enable EmissionManager with production parameters\n",
-            "   - Enable ReserveWrapper contract\n",
-            "   - Add ReserveMigrator.migrate() as first periodic task\n",
-            "   - Add ReserveWrapper as second periodic task\n",
-            "   - Add Operator.operate() as third periodic task\n",
-            "   - Add YieldRepurchaseFacility.endEpoch() as fourth periodic task\n",
-            "   - Add EmissionManager as fifth periodic task\n",
-            "   - Enable Heart contract\n"
-        );
+    /// @dev Returns Phase 1 and 2 of the proposal steps
+    function _getProposalStepsPhase1and2() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Proposal Steps\n\n",
+                "### Phase 1: Cleanup Previous Policies\n",
+                "1. Revoke the `heart` role from the old Heart policy\n\n",
+                "### Phase 2: Grant Roles to New Policies\n",
+                "2. Grant the `manager` role to the DAO MS\n",
+                "3. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
+                "4. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
+                "5. Grant the `cd_emissionmanager` role to EmissionManager\n",
+                "6. Grant the `heart` role to Heart contract\n\n",
+                "### Phase 3: Execute Activator Contract\n",
+                "7. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
+            );
+    }
 
-        string memory conclusion = string.concat(
-            "9. Revoke `admin` role from ConvertibleDepositActivator contract\n",
-            "\n",
-            "## Result\n",
-            "\n",
-            "After execution, the Convertible Deposit system will be fully operational with USDS assets configured for 1, 2, and 3 month deposit periods.\n"
-        );
+    /// @dev Returns the first part of Phase 3 steps
+    function _getProposalStepsPhase3Part1() private pure returns (string memory) {
+        return
+            string.concat(
+                "8. Execute ConvertibleDepositActivator.activate() which performs:\n",
+                "   - Enable DepositManager contract\n",
+                "   - Set operator name on DepositManager for ConvertibleDepositFacility\n",
+                "   - Enable ConvertibleDepositFacility contract\n",
+                "   - Authorize ConvertibleDepositFacility in DepositRedemptionVault\n",
+                "   - Authorize DepositRedemptionVault in ConvertibleDepositFacility\n",
+                "   - Enable DepositRedemptionVault contract\n",
+                "   - Configure USDS in DepositManager (1M USDS capacity, 1 USDS minimum)\n",
+                "   - Add USDS deposit periods: 1m, 2m, 3m (90% reclaim rate each)\n"
+            );
+    }
 
-        return string.concat(header, contracts, prereqs, steps1, steps2, steps3, conclusion);
+    /// @dev Returns the second part of Phase 3 steps
+    function _getProposalStepsPhase3Part2() private pure returns (string memory) {
+        return
+            string.concat(
+                "   - Enable deposit periods in ConvertibleDepositAuctioneer\n",
+                "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
+                "   - Enable EmissionManager with production parameters\n",
+                "   - Enable ReserveWrapper contract\n",
+                "   - Add ReserveMigrator.migrate() as first periodic task\n",
+                "   - Add ReserveWrapper as second periodic task\n",
+                "   - Add Operator.operate() as third periodic task\n",
+                "   - Add YieldRepurchaseFacility.endEpoch() as fourth periodic task\n",
+                "   - Add EmissionManager as fifth periodic task\n",
+                "   - Enable Heart contract\n"
+            );
+    }
+
+    /// @dev Returns the conclusion section of the proposal description
+    function _getConclusionSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "9. Revoke `admin` role from ConvertibleDepositActivator contract\n\n",
+                "## Result\n\n",
+                "After execution, the Convertible Deposit system will be fully operational with USDS assets configured for 1, 2, and 3 month deposit periods.\n"
+            );
     }
 
     // No deploy actions needed
