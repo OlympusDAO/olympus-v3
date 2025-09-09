@@ -857,6 +857,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
+    function getReceiptTokenIds() external view override returns (uint256[] memory) {
+        return _ownedTokenIds.values();
+    }
+
+    /// @inheritdoc IDepositManager
     function getReceiptToken(
         IERC20 asset_,
         uint8 depositPeriod_,

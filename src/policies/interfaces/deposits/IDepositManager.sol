@@ -501,4 +501,9 @@ interface IDepositManager is IAssetManager {
     ///
     /// @return manager The receipt token manager contract
     function getReceiptTokenManager() external view returns (IReceiptTokenManager manager);
+
+    /// @notice Gets all receipt token IDs owned by this contract
+    ///
+    /// @return tokenIds Array of receipt token IDs
+    function getReceiptTokenIds() external view returns (uint256[] memory tokenIds);
 }
