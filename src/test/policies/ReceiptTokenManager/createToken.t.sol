@@ -6,6 +6,7 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {String} from "src/libraries/String.sol";
 import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 /**
  * @title CreateTokenTest
@@ -496,6 +497,63 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
             receiptTokenManager.getTokenOwner(tokenId),
             OWNER,
             "Token owner should be set correctly"
+        );
+    }
+
+    // given asset with 0 decimals
+    //  [X] token is created successfully
+    //  [X] token can be minted (ERC6909 and wrapped)
+    //  [X] token has correct decimals (0)
+    //  [X] wrapped token has correct decimals (0)
+    function test_createTokenZeroDecimals_succeeds() public {
+        // Create an asset with 0 decimals
+        MockERC20 zeroDecimalsAsset = new MockERC20("ZeroToken", "ZERO", 0);
+
+        vm.prank(OWNER);
+        uint256 tokenId = receiptTokenManager.createToken(
+            IERC20(address(zeroDecimalsAsset)),
+            DEPOSIT_PERIOD,
+            OPERATOR,
+            OPERATOR_NAME
+        );
+
+        // Verify token was created successfully
+        assertTrue(
+            receiptTokenManager.isValidTokenId(tokenId),
+            "Token with 0 decimals should be created successfully"
+        );
+
+        // Verify token has correct decimals
+        assertEq(receiptTokenManager.getTokenDecimals(tokenId), 0, "Token should have 0 decimals");
+
+        // Verify wrapped token has correct decimals
+        address wrappedToken = receiptTokenManager.getWrappedToken(tokenId);
+        assertNotEq(wrappedToken, address(0), "Wrapped token should exist");
+        assertEq(
+            IDepositReceiptToken(wrappedToken).decimals(),
+            0,
+            "Wrapped token should have 0 decimals"
+        );
+
+        // Test minting ERC6909 tokens
+        uint256 mintAmount = 100; // No decimals, so just use whole number
+        vm.prank(OWNER);
+        receiptTokenManager.mint(OWNER, tokenId, mintAmount, false);
+
+        assertEq(
+            receiptTokenManager.balanceOf(OWNER, tokenId),
+            mintAmount,
+            "ERC6909 balance should match minted amount"
+        );
+
+        // Test minting wrapped tokens
+        vm.prank(OWNER);
+        receiptTokenManager.mint(OWNER, tokenId, mintAmount, true);
+
+        assertEq(
+            IDepositReceiptToken(wrappedToken).balanceOf(OWNER),
+            mintAmount,
+            "Wrapped token balance should match minted amount"
         );
     }
 }

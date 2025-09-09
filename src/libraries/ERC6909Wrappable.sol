@@ -167,15 +167,15 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     function _getWrappedToken(
         uint256 tokenId_
     ) internal returns (IERC20BurnableMintable wrappedToken) {
-        // Validate that the token id exists
-        if (decimals(tokenId_) == 0) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
-
         // If the wrapped token exists, return it
         if (_wrappedTokens[tokenId_] != address(0))
             return IERC20BurnableMintable(_wrappedTokens[tokenId_]);
 
-        // Otherwise, create a new wrapped token
+        // Validate that the token id exists
         bytes memory tokenData = _getTokenData(tokenId_);
+        if (tokenData.length == 0) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
+
+        // Otherwise, create a new wrapped token
         wrappedToken = IERC20BurnableMintable(_ERC20_IMPLEMENTATION.clone(tokenData));
         _wrappedTokens[tokenId_] = address(wrappedToken);
         return wrappedToken;
@@ -230,7 +230,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
 
     /// @inheritdoc IERC6909Wrappable
     function isValidTokenId(uint256 tokenId_) public view returns (bool) {
-        return decimals(tokenId_) > 0;
+        return _wrappableTokenIds.contains(tokenId_);
     }
 
     modifier onlyValidTokenId(uint256 tokenId_) {
