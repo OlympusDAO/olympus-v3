@@ -42,6 +42,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @notice Constant for one month
     uint48 internal constant _ONE_MONTH = 30 days;
 
+    /// @notice Used to denote no position ID
+    uint256 internal constant _NO_POSITION = type(uint256).max;
+
     // ========== CONFIGURABLE PARAMETERS ========== //
 
     /// @notice Per-asset-facility max borrow percentage (in 100e2, e.g. 8500 = 85%)
@@ -269,7 +272,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redeemableAt: uint48(block.timestamp) + uint48(depositPeriod_) * _ONE_MONTH,
             amount: amount_,
             facility: facility_,
-            positionId: type(uint256).max // No position
+            positionId: _NO_POSITION
         });
 
         // Mark the funds as committed
@@ -434,7 +437,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         redemption.amount = 0;
 
         // Handle position update if this is a position-based redemption
-        if (redemption.positionId != type(uint256).max) {
+        if (redemption.positionId != _NO_POSITION) {
             IDepositFacility(redemption.facility).handlePositionRedemption(
                 redemption.positionId,
                 redemptionAmount

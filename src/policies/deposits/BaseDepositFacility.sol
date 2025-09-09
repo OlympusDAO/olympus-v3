@@ -338,7 +338,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     function handlePositionRedemption(
         uint256 positionId_,
         uint256 amount_
-    ) external onlyAuthorizedOperator {
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
         // Get position to validate it exists and get current remainingDeposit
         IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
 
