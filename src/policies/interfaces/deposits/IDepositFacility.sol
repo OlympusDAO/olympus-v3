@@ -27,6 +27,8 @@ interface IDepositFacility {
         uint256 forfeitedAmount
     );
 
+    event AssetPeriodReclaimRateSet(address indexed asset, uint8 depositPeriod, uint16 reclaimRate);
+
     // ========== ERRORS ========== //
 
     error DepositFacility_ZeroAmount();
@@ -180,6 +182,27 @@ interface IDepositFacility {
         uint8 depositPeriod_,
         uint256 amount_
     ) external returns (uint256 reclaimed);
+
+    /// @notice Sets the reclaim rate for an asset period
+    ///
+    /// @param asset_         The address of the underlying asset
+    /// @param depositPeriod_ The deposit period, in months
+    /// @param reclaimRate_   The reclaim rate to set (in basis points, where 100e2 = 100%)
+    function setAssetPeriodReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint16 reclaimRate_
+    ) external;
+
+    /// @notice Returns the reclaim rate for an asset period
+    ///
+    /// @param asset_         The address of the underlying asset
+    /// @param depositPeriod_ The deposit period, in months
+    /// @return reclaimRate   The reclaim rate for the asset period
+    function getAssetPeriodReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external view returns (uint16 reclaimRate);
 
     // ========== POSITION MANAGEMENT ========== //
 

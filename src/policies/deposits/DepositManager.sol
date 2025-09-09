@@ -486,13 +486,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The deposit period is 0
     ///             - The asset/deposit period/operator combination is already configured
     ///             - The operator name has not been set
-    ///             - The reclaim rate exceeds 100%
     ///             - Receipt token creation fails (invalid parameters in ReceiptTokenManager)
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address operator_,
-        uint16 reclaimRate_
+        address operator_
     )
         external
         onlyEnabled
@@ -513,9 +511,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Configure the ERC6909 receipt token and asset period atomically
         receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, operator_);
-
-        // Set the reclaim rate (which does validation and emits an event)
-        _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
 
         // Emit event
         emit AssetPeriodConfigured(receiptTokenId, address(asset_), operator_, depositPeriod_);
@@ -615,67 +610,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         address operator_
     ) public view override returns (AssetPeriod memory) {
         return _assetPeriods[getReceiptTokenId(asset_, depositPeriod_, operator_)];
-    }
-
-    // ========== DEPOSIT RECLAIM RATE ========== //
-
-    /// @dev Assumes that the token ID is valid
-    function _setAssetPeriodReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address operator_,
-        uint16 reclaimRate_
-    ) internal {
-        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositManager_OutOfBounds();
-
-        _assetPeriods[
-            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-                address(this),
-                asset_,
-                depositPeriod_,
-                operator_
-            )
-        ].reclaimRate = reclaimRate_;
-        emit AssetPeriodReclaimRateSet(address(asset_), operator_, depositPeriod_, reclaimRate_);
-    }
-
-    /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the manager or admin role
-    ///
-    ///             This function reverts if:
-    ///             - The contract is not enabled
-    ///             - The caller does not have the manager or admin role
-    ///             - The asset/deposit period/operator combination does not exist
-    ///             - The reclaim rate exceeds 100%
-    function setAssetPeriodReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address operator_,
-        uint16 reclaimRate_
-    )
-        external
-        onlyEnabled
-        onlyManagerOrAdminRole
-        onlyAssetPeriodExists(asset_, depositPeriod_, operator_)
-    {
-        _setAssetPeriodReclaimRate(asset_, depositPeriod_, operator_, reclaimRate_);
-    }
-
-    /// @inheritdoc IDepositManager
-    function getAssetPeriodReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address operator_
-    ) external view returns (uint16) {
-        return
-            _assetPeriods[
-                _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-                    address(this),
-                    asset_,
-                    depositPeriod_,
-                    operator_
-                )
-            ].reclaimRate;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -895,7 +829,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         _assetPeriods[tokenId] = AssetPeriod({
             isEnabled: true,
             depositPeriod: depositPeriod_,
-            reclaimRate: 0, // Start with 0, set separately later
             asset: address(asset_),
             operator: operator_
         });

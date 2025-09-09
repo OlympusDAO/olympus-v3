@@ -195,7 +195,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Add asset period
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -291,12 +291,7 @@ contract DepositManagerDepositTest is DepositManagerTest {
 
         // Configure deposit
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(
-            IERC20(address(asset)),
-            DEPOSIT_PERIOD,
-            DEPOSIT_OPERATOR,
-            RECLAIM_RATE
-        );
+        depositManager.addAssetPeriod(IERC20(address(asset)), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         // Mint the asset to the depositor
         vm.prank(ADMIN);

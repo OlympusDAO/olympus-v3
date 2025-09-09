@@ -160,8 +160,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
 
         depositManager.addAsset(iReserveToken, IERC4626(address(vault)), type(uint256).max, 0);
 
-        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(facility), 90e2);
-        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS_TWO, address(facility), 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(facility));
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS_TWO, address(facility));
 
         receiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,

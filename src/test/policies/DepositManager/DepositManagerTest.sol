@@ -150,7 +150,7 @@ contract DepositManagerTest is Test {
 
     modifier givenAssetPeriodIsAdded() {
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
         _;
     }
 

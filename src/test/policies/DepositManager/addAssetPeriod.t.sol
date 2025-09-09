@@ -76,8 +76,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     function assertAssetConfigured(
         address asset_,
         uint8 depositPeriod_,
-        address facility_,
-        uint256 reclaimRate_
+        address facility_
     ) internal view {
         // Check if asset is configured
         IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
@@ -153,11 +152,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
                     facility_,
                     "getAssetPeriods: facility mismatch"
                 );
-                assertEq(
-                    depositAssets[i].reclaimRate,
-                    reclaimRate_,
-                    "getAssetPeriods: reclaim rate mismatch"
-                );
+                // Note: reclaimRate is no longer part of AssetPeriod struct
                 assertEq(depositAssets[i].asset, asset_, "getAssetPeriods: asset mismatch");
                 break;
             }
@@ -173,7 +168,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         _expectRevertNotEnabled();
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // when the caller is not the manager or admin
@@ -184,7 +179,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         _expectRevertNotManagerOrAdmin();
 
         vm.prank(caller_);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the asset vault has not been configured
@@ -198,7 +193,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_NotConfigured.selector));
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the facility name has not been set
@@ -212,7 +207,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the asset is already configured with the same deposit period
@@ -234,7 +229,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // when the asset address is the zero address
@@ -247,12 +242,7 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_NotConfigured.selector));
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(
-            IERC20(address(0)),
-            DEPOSIT_PERIOD,
-            DEPOSIT_OPERATOR,
-            RECLAIM_RATE
-        );
+        depositManager.addAssetPeriod(IERC20(address(0)), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // when the deposit period is 0
@@ -268,24 +258,10 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
 
         vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, 0, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        depositManager.addAssetPeriod(iAsset, 0, DEPOSIT_OPERATOR);
     }
 
-    // when the reclaim rate is greater than 100%
-    //  [X] it reverts
-    function test_whenReclaimRateIsGreaterThan100Percent_reverts()
-        public
-        givenIsEnabled
-        givenFacilityNameIsSetDefault
-        givenAssetIsAdded
-    {
-        vm.expectRevert(
-            abi.encodeWithSelector(IDepositManager.DepositManager_OutOfBounds.selector)
-        );
-
-        vm.prank(ADMIN);
-        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR, 100e2 + 1);
-    }
+    // Note: Reclaim rate validation is now handled by BaseDepositFacility, not DepositManager
 
     // given the asset is already configured with a different deposit period
     //  [X] the asset period is recorded with the derived receipt token ID
@@ -314,12 +290,11 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         uint256 receiptTokenId = depositManager.addAssetPeriod(
             iAsset,
             newDepositPeriod,
-            DEPOSIT_OPERATOR,
-            RECLAIM_RATE
+            DEPOSIT_OPERATOR
         );
 
         // Check asset configuration
-        assertAssetConfigured(address(asset), newDepositPeriod, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        assertAssetConfigured(address(asset), newDepositPeriod, DEPOSIT_OPERATOR);
 
         // Check receipt token configuration
         assertReceiptTokenConfigured(
@@ -360,15 +335,10 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
 
         // Add the asset period with the new facility
         vm.prank(ADMIN);
-        uint256 receiptTokenId = depositManager.addAssetPeriod(
-            iAsset,
-            DEPOSIT_PERIOD,
-            newFacility,
-            RECLAIM_RATE
-        );
+        uint256 receiptTokenId = depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, newFacility);
 
         // Check asset configuration
-        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, newFacility, RECLAIM_RATE);
+        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, newFacility);
 
         // Check receipt token configuration
         assertReceiptTokenConfigured(receiptTokenId, iAsset, DEPOSIT_PERIOD, newFacility, "new");
@@ -397,12 +367,11 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         uint256 receiptTokenId = depositManager.addAssetPeriod(
             iAsset,
             DEPOSIT_PERIOD,
-            DEPOSIT_OPERATOR,
-            RECLAIM_RATE
+            DEPOSIT_OPERATOR
         );
 
         // Check asset configuration
-        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, DEPOSIT_OPERATOR, RECLAIM_RATE);
+        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
         // Check receipt token configuration
         assertReceiptTokenConfigured(

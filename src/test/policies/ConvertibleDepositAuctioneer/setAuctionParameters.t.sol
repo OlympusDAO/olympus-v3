@@ -882,7 +882,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Enable the other periods with the DepositManager
         {
             vm.startPrank(admin);
-            depositManager.addAssetPeriod(iReserveToken, periodC, address(facility), 90e2);
+            depositManager.addAssetPeriod(iReserveToken, periodC, address(facility));
             vm.stopPrank();
         }
 
@@ -1025,7 +1025,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Enable the other periods with the DepositManager
         {
             vm.startPrank(admin);
-            depositManager.addAssetPeriod(iReserveToken, periodC, address(facility), 90e2);
+            depositManager.addAssetPeriod(iReserveToken, periodC, address(facility));
             vm.stopPrank();
         }
 

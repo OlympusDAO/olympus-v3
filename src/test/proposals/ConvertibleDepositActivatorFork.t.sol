@@ -399,17 +399,24 @@ contract ConvertibleDepositActivatorForkTest is Test {
         IDepositManager.AssetPeriod memory period1M = IDepositManager(address(depositManager))
             .getAssetPeriod(IERC20(USDS), PERIOD_1M, address(cdFacility));
         assertEq(period1M.operator, address(cdFacility));
-        assertEq(period1M.reclaimRate, RECLAIM_RATE);
 
         IDepositManager.AssetPeriod memory period2M = IDepositManager(address(depositManager))
             .getAssetPeriod(IERC20(USDS), PERIOD_2M, address(cdFacility));
         assertEq(period2M.operator, address(cdFacility));
-        assertEq(period2M.reclaimRate, RECLAIM_RATE);
 
         IDepositManager.AssetPeriod memory period3M = IDepositManager(address(depositManager))
             .getAssetPeriod(IERC20(USDS), PERIOD_3M, address(cdFacility));
         assertEq(period3M.operator, address(cdFacility));
-        assertEq(period3M.reclaimRate, RECLAIM_RATE);
+
+        // Verify reclaim rate
+        uint16 reclaimRate1M = cdFacility.getAssetPeriodReclaimRate(IERC20(USDS), PERIOD_1M);
+        assertEq(reclaimRate1M, RECLAIM_RATE);
+
+        uint16 reclaimRate2M = cdFacility.getAssetPeriodReclaimRate(IERC20(USDS), PERIOD_2M);
+        assertEq(reclaimRate2M, RECLAIM_RATE);
+
+        uint16 reclaimRate3M = cdFacility.getAssetPeriodReclaimRate(IERC20(USDS), PERIOD_3M);
+        assertEq(reclaimRate3M, RECLAIM_RATE);
     }
 
     function test_activate_configuresAuction() public {
