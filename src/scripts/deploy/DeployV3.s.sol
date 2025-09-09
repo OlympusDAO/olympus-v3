@@ -36,6 +36,9 @@ import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
 import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
+// OCG Activator contracts
+import {ConvertibleDepositActivator} from "src/scripts/ops/batches/ConvertibleDepositActivator.sol";
+
 // solhint-disable gas-custom-errors
 
 /// @notice V3 of the deployment script
@@ -719,5 +722,48 @@ contract DeployV3 is WithEnvironment {
         priceFeed.setDescription("OHMv2 / ETH");
 
         return (address(priceFeed), "external.chainlink");
+    }
+
+    // ===== OCG ACTIVATOR CONTRACTS ===== //
+
+    function deployConvertibleDepositActivator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address timelock = _getAddressNotZero("olympus.governance.Timelock");
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+        address cdFacility = _getAddressNotZero("olympus.policies.ConvertibleDepositFacility");
+        address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
+        address depositRedemptionVault = _getAddressNotZero(
+            "olympus.policies.DepositRedemptionVault"
+        );
+        address emissionManager = _getAddressNotZero("olympus.policies.EmissionManager");
+        address heart = _getAddressNotZero("olympus.policies.OlympusHeart");
+        address reserveWrapper = _getAddressNotZero("olympus.policies.ReserveWrapper");
+
+        // Log parameters
+        console2.log("ConvertibleDepositActivator parameters:");
+        console2.log("  owner", timelock);
+        console2.log("  depositManager", depositManager);
+        console2.log("  cdFacility", cdFacility);
+        console2.log("  cdAuctioneer", cdAuctioneer);
+        console2.log("  depositRedemptionVault", depositRedemptionVault);
+        console2.log("  emissionManager", emissionManager);
+        console2.log("  heart", heart);
+        console2.log("  reserveWrapper", reserveWrapper);
+
+        // Deploy
+        vm.broadcast();
+        ConvertibleDepositActivator activator = new ConvertibleDepositActivator(
+            timelock,
+            depositManager,
+            cdFacility,
+            cdAuctioneer,
+            depositRedemptionVault,
+            emissionManager,
+            heart,
+            reserveWrapper
+        );
+
+        return (address(activator), "olympus.periphery");
     }
 }
