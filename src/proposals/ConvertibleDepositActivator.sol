@@ -72,6 +72,7 @@ contract ConvertibleDepositActivator is Owned {
 
     event Activated(address caller);
     error AlreadyActivated();
+    error InvalidParams(string reason);
 
     constructor(
         address owner_,
@@ -83,6 +84,15 @@ contract ConvertibleDepositActivator is Owned {
         address heart_,
         address reserveWrapper_
     ) Owned(owner_) {
+        if (owner_ == address(0)) revert InvalidParams("owner");
+        if (depositManager_ == address(0)) revert InvalidParams("depositManager");
+        if (cdFacility_ == address(0)) revert InvalidParams("cdFacility");
+        if (cdAuctioneer_ == address(0)) revert InvalidParams("cdAuctioneer");
+        if (redemptionVault_ == address(0)) revert InvalidParams("redemptionVault");
+        if (emissionManager_ == address(0)) revert InvalidParams("emissionManager");
+        if (heart_ == address(0)) revert InvalidParams("heart");
+        if (reserveWrapper_ == address(0)) revert InvalidParams("reserveWrapper");
+
         DEPOSIT_MANAGER = depositManager_;
         CD_FACILITY = cdFacility_;
         CD_AUCTIONEER = cdAuctioneer_;
