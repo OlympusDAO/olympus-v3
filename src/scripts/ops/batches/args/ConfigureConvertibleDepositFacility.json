@@ -1,0 +1,10 @@
+{
+    "functions": [
+        {
+            "args": {
+                "facilityName": "cd1"
+            },
+            "name": "ConfigureConvertibleDepositFacility"
+        }
+    ]
+}

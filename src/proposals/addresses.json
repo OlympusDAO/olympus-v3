@@ -130,6 +130,11 @@
         "name": "olympus-policy-yieldrepurchasefacility"
     },
     {
+        "addr": "0x271e35a8555a62F6bA76508E85dfD76D580B0692",
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility-1_2"
+    },
+    {
         "addr": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
         "chainId": 1,
         "name": "olympus-policy-emissionmanager"
@@ -177,12 +182,12 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-convertible-deposit-auctioneer"
+        "name": "olympus-policy-convertible-deposit-auctioneer-1_0"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-convertible-deposit-facility"
+        "name": "olympus-policy-convertible-deposit-facility-1_0"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
@@ -193,5 +198,40 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-heart-1_7"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-deposit-manager-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-deposit-redemption-vault-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-reserve-wrapper-1_0"
+    },
+    {
+        "addr": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
+        "chainId": 1,
+        "name": "olympus-policy-reserve-migrator-1_0"
+    },
+    {
+        "addr": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+        "chainId": 1,
+        "name": "external-tokens-USDS"
+    },
+    {
+        "addr": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+        "chainId": 1,
+        "name": "external-tokens-sUSDS"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-periphery-convertible-deposit-activator"
     }
 ]

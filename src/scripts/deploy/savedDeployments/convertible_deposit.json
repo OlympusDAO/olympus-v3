@@ -1,11 +1,23 @@
 {
     "sequence": [
         {
-            "name": "OlympusConvertibleDepository",
+            "name": "PositionTokenRenderer",
             "args": {}
         },
         {
             "name": "OlympusDepositPositionManager",
+            "args": {}
+        },
+        {
+            "name": "ReceiptTokenManager",
+            "args": {}
+        },
+        {
+            "name": "DepositManager",
+            "args": {}
+        },
+        {
+            "name": "DepositRedemptionVault",
             "args": {}
         },
         {
@@ -26,6 +38,10 @@
                 "auctionDuration": 1200,
                 "maxReward": 40000000000
             }
+        },
+        {
+            "name": "ConvertibleDepositActivator",
+            "args": {}
         }
     ]
 }

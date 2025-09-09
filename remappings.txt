@@ -38,8 +38,8 @@ openzeppelin/=dependencies/openzeppelin-4.8.0/contracts/
 
 @openzeppelin-5.3.0/=dependencies/openzeppelin-new-5.3.0/contracts/
 
-proposal-sim/=dependencies/forge-proposal-simulator-1.0.0/
-dependencies/forge-proposal-simulator-1.0.0/:@addresses/=dependencies/forge-proposal-simulator-1.0.0/addresses/
-dependencies/forge-proposal-simulator-1.0.0/:@utils/=dependencies/forge-proposal-simulator-1.0.0/utils/
-dependencies/forge-proposal-simulator-1.0.0/:@proposals/=dependencies/forge-proposal-simulator-1.0.0/proposals/
-dependencies/forge-proposal-simulator-1.0.0/:Governors/=dependencies/forge-proposal-simulator-1.0.0/Governors/
+proposal-sim/=dependencies/forge-proposal-simulator-1.0.1/
+dependencies/forge-proposal-simulator-1.0.1/:@addresses/=dependencies/forge-proposal-simulator-1.0.1/addresses/
+dependencies/forge-proposal-simulator-1.0.1/:@utils/=dependencies/forge-proposal-simulator-1.0.1/utils/
+dependencies/forge-proposal-simulator-1.0.1/:@proposals/=dependencies/forge-proposal-simulator-1.0.1/proposals/
+dependencies/forge-proposal-simulator-1.0.1/:Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/

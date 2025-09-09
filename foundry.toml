@@ -70,4 +70,4 @@ layer-zero-endpoint-v1 = { version = "0.0.6", git = "https://github.com/LayerZer
 solmate = { version = "6.2.0", git = "https://github.com/transmissions11/solmate.git", rev = "fadb2e2778adbf01c80275bfb99e5c14969d964b" }
 openzeppelin = { version = "4.8.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "49c0e4370d0cc50ea6090709e3835a3091e33ee2" }
 openzeppelin-new = { version = "5.3.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "e4f70216d759d8e6a64144a9e1f7bbeed78e7079" }
-forge-proposal-simulator = { version = "1.0.0", git = "https://github.com/OlympusDAO/forge-proposal-simulator.git", rev = "864b357b650f9dc7b2fb1ae23562454815d51def" }
+forge-proposal-simulator = { version = "1.0.1", git = "https://github.com/OlympusDAO/forge-proposal-simulator.git", rev = "76374f3bf3b032dfb5c685c5a969ca20d0776384" }

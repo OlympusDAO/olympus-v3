@@ -19,3 +19,4 @@ src/policies/deposits/ReceiptTokenManager.sol
 src/policies/EmissionManager.sol
 src/policies/Heart.sol
 src/policies/ReserveWrapper.sol
+src/proposals/ConvertibleDepositActivator.sol

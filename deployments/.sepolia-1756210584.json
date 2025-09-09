@@ -1,0 +1,4 @@
+{
+    "external.chainlink.daiEthPriceFeed": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
+    "external.chainlink.ohmEthPriceFeed": "0x2b85C659B427e5D948EADAec219DA37D619fede1"
+}

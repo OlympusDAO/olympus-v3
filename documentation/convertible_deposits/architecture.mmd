@@ -1,0 +1,64 @@
+graph TB
+      %% External Users and Systems
+      User((User))
+      Heart
+      Treasury[(Treasury<br/>TRSRY Module)]
+
+      %% Core Deposit Infrastructure
+      subgraph "Core Deposit Infrastructure"
+          DM[DepositManager<br/>• Manages deposits & withdrawals<br/>• Handles operator isolation<br/>•
+  Borrowing functionality<br/>• Asset/period configuration]
+          RTM[ReceiptTokenManager<br/>• Creates ERC6909 receipt tokens<br/>• Manages token ownership<br/>•
+  ERC20 wrapper functionality]
+      end
+
+      %% Deposit Facilities
+      subgraph "Deposit Facilities"
+          CDF[ConvertibleDepositFacility<br/>• Creates convertible positions<br/>• Handles conversions to
+  OHM<br/>• Manages position lifecycle<br/>• Integrates with auctioneer]
+          DRV[DepositRedemptionVault<br/>• Manages redemption process<br/>• Provides borrowing against
+  deposits<br/>• Handles loan lifecycle<br/>• Facility authorization]
+      end
+
+      %% Auction & Emission Systems
+      subgraph "Auction & Emission Systems"
+          CDA[ConvertibleDepositAuctioneer<br/>• Runs infinite duration auctions<br/>• Dynamic pricing
+  mechanism<br/>• Manages bid processing<br/>• Controls deposit periods]
+          EM[EmissionManager<br/>• Coordinates OHM emissions<br/>• Manages base emission rates<br/>• Handles
+  bond market integration<br/>• Controls auction parameters]
+      end
+
+      %% User Interactions
+      User -->|Place Bids| CDA
+      User -->|Start Redemption| DRV
+      User -->|Borrow Against Deposits| DRV
+      User -->|Reclaim Deposit| CDF
+
+      %% Core Infrastructure Relationships
+      CDF -->|Deposits Assets| DM
+      CDF -->|Mint Receipt Tokens| RTM
+      DM -->|Uses| RTM
+      DRV -->|Burns Receipt Tokens| RTM
+
+      %% Auction System Relationships
+      CDA -->|Creates Position| CDF
+      EM -->|Updates Auction Parameters| CDA
+      Heart -->|Periodic Task| EM
+
+      %% Treasury Integration
+      DM -->|Asset Management| Treasury
+      CDF -->|Asset Transfers| Treasury
+      DRV -->|Asset Transfers| Treasury
+
+      %% Styling
+      classDef userClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+      classDef coreClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+      classDef facilityClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+      classDef auctionClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+      classDef treasuryClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+      class User userClass
+      class DM,RTM coreClass
+      class CDF,DRV facilityClass
+      class CDA,EM auctionClass
+      class Treasury,Heart treasuryClass

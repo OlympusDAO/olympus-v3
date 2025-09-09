@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "daiEthPriceFeed",
+            "args": {}
+        },
+        {
+            "name": "ohmEthPriceFeed",
+            "args": {}
+        }
+    ]
+}

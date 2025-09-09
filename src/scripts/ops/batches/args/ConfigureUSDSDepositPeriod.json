@@ -1,0 +1,11 @@
+{
+    "functions": [
+        {
+            "args": {
+                "depositPeriod": 6,
+                "reclaimRate": 9000
+            },
+            "name": "ConfigureUSDSDepositPeriod"
+        }
+    ]
+}

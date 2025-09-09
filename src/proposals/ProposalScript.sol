@@ -39,6 +39,10 @@ abstract contract ProposalScript is ScriptSuite {
         bytes memory proposalReturnData = address(payable(governor)).functionCall(proposalCalldata);
         vm.stopBroadcast();
         uint256 proposalId = abi.decode(proposalReturnData, (uint256));
+
+        // The value returned by the GovernorBravoDelegate is actually 1 more than the actual ID, so adjust for that.
+        proposalId -= 1;
+
         console2.log("Proposal ID:", proposalId);
     }
 

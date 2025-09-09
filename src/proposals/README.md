@@ -138,3 +138,14 @@ To create a new simulatable proposal, follow these steps:
 5. **Submit a Pull Request**
     - Do a PR to the [Olympus V3](https://github.com/OlympusDAO/olympus-v3) repository.
     - Name the PR `OIP-XXX: proposal simulation`.
+
+## Local Fork Testing
+
+OCG proposals should be tested before submission on mainnet. To do so, perform the following:
+
+1. Launch an Anvil fork: `anvil --fork-url $FORK_TEST_RPC_URL --port 8545 --auto-impersonate`
+    - This requires `FORK_TEST_RPC_URL` to be set as an environment variable beforehand.
+2. Deploy the required contracts as normal, but provide `--rpc-url http://localhost:8545` as an argument.
+3. Perform any DAO MS batches as normal, but provide `--rpc-url http://localhost:8545` as an argument.
+4. Submit the proposal using the following command, e.g. `forge script src/proposals/ConvertibleDepositProposal.sol:ConvertibleDepositProposalScript --rpc-url http://localhost:8545 --account <castAccount> -vvv --slow`
+    - This will run the proposal as a part of simulating submission. If there are any issues, it will revert.
