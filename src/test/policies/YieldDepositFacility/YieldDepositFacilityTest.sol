@@ -175,20 +175,23 @@ contract YieldDepositFacilityTest is Test {
         depositManager.addAsset(iReserveToken, iVault, type(uint256).max, 0);
 
         // Enable the token/period/facility combo
-        depositManager.addAssetPeriod(
-            iReserveToken,
-            PERIOD_MONTHS,
-            address(yieldDepositFacility),
-            90e2
-        );
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(yieldDepositFacility));
 
         // Enable the token/period/facility combo for the ConvertibleDepositFacility
-        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(cdFacility), 90e2);
+        depositManager.addAssetPeriod(iReserveToken, PERIOD_MONTHS, address(cdFacility));
 
         _receiptTokenId = depositManager.getReceiptTokenId(
             iReserveToken,
             PERIOD_MONTHS,
             address(yieldDepositFacility)
+        );
+
+        // Set the reclaim rate
+        cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        yieldDepositFacility.setAssetPeriodReclaimRate(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            90e2
         );
         vm.stopPrank();
 
@@ -200,17 +203,24 @@ contract YieldDepositFacilityTest is Test {
         depositManager.addAssetPeriod(
             iReserveTokenTwo,
             PERIOD_MONTHS,
-            address(yieldDepositFacility),
-            90e2
+            address(yieldDepositFacility)
         );
 
         // Enable the token/period/facility combo for the ConvertibleDepositFacility
-        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, address(cdFacility), 90e2);
+        depositManager.addAssetPeriod(iReserveTokenTwo, PERIOD_MONTHS, address(cdFacility));
 
         _receiptTokenIdTwo = depositManager.getReceiptTokenId(
             iReserveTokenTwo,
             PERIOD_MONTHS,
             address(yieldDepositFacility)
+        );
+
+        // Set the reclaim rate
+        cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
+        yieldDepositFacility.setAssetPeriodReclaimRate(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
+            90e2
         );
         vm.stopPrank();
 

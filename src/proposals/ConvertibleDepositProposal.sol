@@ -493,7 +493,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "USDS-1m period facility is not set correctly"
             );
             require(
-                assetPeriod1M.reclaimRate == RECLAIM_RATE,
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_1M) ==
+                    RECLAIM_RATE,
                 "USDS-1m period reclaim rate is not set correctly"
             );
 
@@ -504,7 +505,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "USDS-2m period facility is not set correctly"
             );
             require(
-                assetPeriod2M.reclaimRate == RECLAIM_RATE,
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_2M) ==
+                    RECLAIM_RATE,
                 "USDS-2m period reclaim rate is not set correctly"
             );
 
@@ -515,7 +517,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "USDS-3m period facility is not set correctly"
             );
             require(
-                assetPeriod3M.reclaimRate == RECLAIM_RATE,
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_3M) ==
+                    RECLAIM_RATE,
                 "USDS-3m period reclaim rate is not set correctly"
             );
         }

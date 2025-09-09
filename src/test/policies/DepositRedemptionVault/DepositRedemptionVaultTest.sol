@@ -192,16 +192,14 @@ contract DepositRedemptionVaultTest is Test {
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(cdFacility),
-            90e2
+            address(cdFacility)
         );
 
         // Enable the token/period/facility combo for the YieldDepositFacility
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(ydFacility),
-            90e2
+            address(ydFacility)
         );
 
         receiptTokenId = depositManager.getReceiptTokenId(
@@ -209,6 +207,10 @@ contract DepositRedemptionVaultTest is Test {
             PERIOD_MONTHS,
             address(cdFacility)
         );
+
+        // Set the reclaim rate
+        cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        ydFacility.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Create a second receipt token
@@ -224,16 +226,14 @@ contract DepositRedemptionVaultTest is Test {
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(cdFacility),
-            90e2
+            address(cdFacility)
         );
 
         // Enable the token/period/facility combo for the YieldDepositFacility
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(ydFacility),
-            90e2
+            address(ydFacility)
         );
 
         receiptTokenIdTwo = depositManager.getReceiptTokenId(
@@ -241,6 +241,10 @@ contract DepositRedemptionVaultTest is Test {
             PERIOD_MONTHS,
             address(cdFacility)
         );
+
+        // Set the reclaim rate
+        cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
+        ydFacility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Authorize the redemption vault to interact with CD Facility

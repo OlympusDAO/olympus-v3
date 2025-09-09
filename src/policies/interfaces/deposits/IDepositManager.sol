@@ -49,13 +49,6 @@ interface IDepositManager is IAssetManager {
 
     event TokenRescued(address indexed token, uint256 amount);
 
-    event AssetPeriodReclaimRateSet(
-        address indexed asset,
-        address indexed operator,
-        uint8 depositPeriod,
-        uint16 reclaimRate
-    );
-
     // Borrowing Events
     event BorrowingWithdrawal(
         address indexed asset,
@@ -171,13 +164,11 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param isEnabled       Whether the asset period is enabled for new deposits
     /// @param depositPeriod   The deposit period, in months
-    /// @param reclaimRate     The reclaim rate for the asset period (see the implementation contract for scale)
     /// @param asset           The underlying ERC20 asset
     /// @param operator        The operator that can issue this receipt token
     struct AssetPeriod {
         bool isEnabled;
         uint8 depositPeriod;
-        uint16 reclaimRate;
         address asset;
         address operator;
     }
@@ -411,13 +402,11 @@ interface IDepositManager is IAssetManager {
     /// @param  asset_          The address of the underlying asset
     /// @param  depositPeriod_  The deposit period, in months
     /// @param  operator_       The address of the operator
-    /// @param  reclaimRate_    The reclaim rate to set for the deposit
     /// @return receiptTokenId  The ID of the new receipt token
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
-        address operator_,
-        uint16 reclaimRate_
+        address operator_
     ) external returns (uint256 receiptTokenId);
 
     /// @notice Disables an asset period, which prevents new deposits
@@ -479,36 +468,6 @@ interface IDepositManager is IAssetManager {
     ///
     /// @return assetPeriods    Array of configured asset periods
     function getAssetPeriods() external view returns (AssetPeriod[] memory assetPeriods);
-
-    // ========== RECLAIM RATE ========== //
-
-    /// @notice Sets the reclaim rate for an asset period
-    /// @dev    The implementing contract is expected to handle the following:
-    ///         - Validating that the caller has the correct role
-    ///         - Setting the reclaim rate for the asset period
-    ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  depositPeriod_  The deposit period, in months
-    /// @param  operator_       The address of the operator
-    /// @param  reclaimRate_    The reclaim rate to set
-    function setAssetPeriodReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address operator_,
-        uint16 reclaimRate_
-    ) external;
-
-    /// @notice Returns the reclaim rate for an asset period
-    ///
-    /// @param  asset_          The address of the underlying asset
-    /// @param  depositPeriod_  The deposit period, in months
-    /// @param  operator_       The address of the operator
-    /// @return reclaimRate     The reclaim rate for the asset period
-    function getAssetPeriodReclaimRate(
-        IERC20 asset_,
-        uint8 depositPeriod_,
-        address operator_
-    ) external view returns (uint16 reclaimRate);
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 

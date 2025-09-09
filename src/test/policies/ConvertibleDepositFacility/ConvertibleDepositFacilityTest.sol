@@ -58,6 +58,7 @@ contract ConvertibleDepositFacilityTest is Test {
     address public recipientTwo;
     address public emergency;
     address public admin;
+    address public manager;
     address public HEART;
     address public OPERATOR;
     address public OPERATOR_TWO;
@@ -80,6 +81,7 @@ contract ConvertibleDepositFacilityTest is Test {
         recipientTwo = makeAddr("RECIPIENT_TWO");
         emergency = makeAddr("EMERGENCY");
         admin = makeAddr("ADMIN");
+        manager = makeAddr("MANAGER");
         HEART = makeAddr("HEART");
         OPERATOR = makeAddr("OPERATOR");
         OPERATOR_TWO = makeAddr("OPERATOR_TWO");
@@ -132,6 +134,7 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
+        rolesAdmin.grantRole(bytes32("manager"), manager);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(yieldDepositFacility));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
@@ -143,6 +146,10 @@ contract ConvertibleDepositFacilityTest is Test {
         // Enable the facility
         vm.prank(admin);
         facility.enable("");
+
+        // Enable the yield deposit facility
+        vm.prank(admin);
+        yieldDepositFacility.enable("");
 
         // Create a receipt token
         vm.startPrank(admin);
@@ -161,15 +168,25 @@ contract ConvertibleDepositFacilityTest is Test {
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(facility),
-            RECLAIM_RATE
+            address(facility)
         );
 
         // Enable the token/period/facility combo for the yield deposit facility
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(yieldDepositFacility),
+            address(yieldDepositFacility)
+        );
+
+        // Set reclaim rates on facilities
+        facility.setAssetPeriodReclaimRate(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            RECLAIM_RATE
+        );
+        yieldDepositFacility.setAssetPeriodReclaimRate(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
             RECLAIM_RATE
         );
 
@@ -193,15 +210,21 @@ contract ConvertibleDepositFacilityTest is Test {
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(facility),
-            90e2
+            address(facility)
         );
 
         // Enable the token/period/facility combo for the yield deposit facility
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(yieldDepositFacility),
+            address(yieldDepositFacility)
+        );
+
+        // Set reclaim rates on facilities
+        facility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
+        yieldDepositFacility.setAssetPeriodReclaimRate(
+            IERC20(address(reserveTokenTwo)),
+            PERIOD_MONTHS,
             90e2
         );
 
@@ -215,10 +238,6 @@ contract ConvertibleDepositFacilityTest is Test {
         // Disable the facility
         vm.prank(emergency);
         facility.disable("");
-
-        // Enable the yield deposit facility
-        vm.prank(admin);
-        yieldDepositFacility.enable("");
     }
 
     // ========== MODIFIERS ========== //

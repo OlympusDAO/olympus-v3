@@ -130,9 +130,14 @@ contract ConvertibleDepositActivator is Owned {
         depositManager.addAsset(usds, IERC4626(SUSDS), USDS_MAX_CAPACITY, USDS_MIN_DEPOSIT);
 
         // 2. Add USDS-1m/2m/3m to DepositManager
-        depositManager.addAssetPeriod(usds, PERIOD_1M, CD_FACILITY, RECLAIM_RATE);
-        depositManager.addAssetPeriod(usds, PERIOD_2M, CD_FACILITY, RECLAIM_RATE);
-        depositManager.addAssetPeriod(usds, PERIOD_3M, CD_FACILITY, RECLAIM_RATE);
+        depositManager.addAssetPeriod(usds, PERIOD_1M, CD_FACILITY);
+        depositManager.addAssetPeriod(usds, PERIOD_2M, CD_FACILITY);
+        depositManager.addAssetPeriod(usds, PERIOD_3M, CD_FACILITY);
+
+        // 3. Set reclaim rates on ConvertibleDepositFacility
+        IDepositFacility(CD_FACILITY).setAssetPeriodReclaimRate(usds, PERIOD_1M, RECLAIM_RATE);
+        IDepositFacility(CD_FACILITY).setAssetPeriodReclaimRate(usds, PERIOD_2M, RECLAIM_RATE);
+        IDepositFacility(CD_FACILITY).setAssetPeriodReclaimRate(usds, PERIOD_3M, RECLAIM_RATE);
     }
 
     function _configureAuction() internal {

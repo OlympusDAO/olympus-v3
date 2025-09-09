@@ -56,6 +56,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @dev    Must be populated by the inheriting contract in `configureDependencies()`
     DEPOSv1 public DEPOS;
 
+    /// @notice Maps asset-period key to reclaim rate
+    /// @dev    The key is the keccak256 of the asset address and the deposit period
+    mapping(bytes32 key => uint16 reclaimRate) private _assetPeriodReclaimRates;
+
     // ========== MODIFIERS ========== //
 
     /// @notice Reverts if the caller is not an authorized operator
@@ -111,6 +115,17 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         address operator_
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(address(depositToken_), operator_));
+    }
+
+    /// @notice Helper function to generate the key for asset period reclaim rates
+    /// @param asset_ The asset address
+    /// @param depositPeriod_ The deposit period in months
+    /// @return The keccak256 hash of the asset and deposit period
+    function _getAssetPeriodKey(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(address(asset_), depositPeriod_));
     }
 
     /// @inheritdoc IDepositFacility
@@ -411,7 +426,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         // This is rounded down to keep assets in the vault, otherwise the contract may end up
         // in a state where there are not enough of the assets in the vault to redeem/reclaim
         reclaimed = amount_.mulDiv(
-            DEPOSIT_MANAGER.getAssetPeriodReclaimRate(depositToken_, depositPeriod_, address(this)),
+            _assetPeriodReclaimRates[_getAssetPeriodKey(depositToken_, depositPeriod_)],
             ONE_HUNDRED_PERCENT
         );
 
@@ -559,6 +574,52 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         uint256 newPositionId_,
         uint256 amount_
     ) internal virtual {}
+
+    // ========== RECLAIM RATE MANAGEMENT ========== //
+
+    /// @notice Sets the reclaim rate for an asset period
+    /// @dev    This function reverts if:
+    ///         - The contract is not enabled
+    ///         - The caller does not have the manager or admin role
+    ///         - The reclaim rate exceeds 100%
+    ///
+    /// @param asset_         The address of the underlying asset
+    /// @param depositPeriod_ The deposit period, in months
+    /// @param reclaimRate_   The reclaim rate to set (in basis points, where 100e2 = 100%)
+    function setAssetPeriodReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        uint16 reclaimRate_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        // Validate that the asset period exists in DepositManager
+        if (!DEPOSIT_MANAGER.isAssetPeriod(asset_, depositPeriod_, address(this)).isConfigured)
+            revert IDepositManager.DepositManager_InvalidAssetPeriod(
+                address(asset_),
+                depositPeriod_,
+                address(this)
+            );
+
+        // Validate that the reclaim rate does not exceed 100%
+        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositFacility_InvalidAddress(address(0));
+
+        // Set the reclaim rate
+        _assetPeriodReclaimRates[_getAssetPeriodKey(asset_, depositPeriod_)] = reclaimRate_;
+
+        // Emit event (we'll add this to IDepositFacility interface next)
+        emit AssetPeriodReclaimRateSet(address(asset_), depositPeriod_, reclaimRate_);
+    }
+
+    /// @notice Returns the reclaim rate for an asset period
+    ///
+    /// @param asset_         The address of the underlying asset
+    /// @param depositPeriod_ The deposit period, in months
+    /// @return reclaimRate   The reclaim rate for the asset period
+    function getAssetPeriodReclaimRate(
+        IERC20 asset_,
+        uint8 depositPeriod_
+    ) external view returns (uint16 reclaimRate) {
+        return _assetPeriodReclaimRates[_getAssetPeriodKey(asset_, depositPeriod_)];
+    }
 
     // ========== ERC165 ========== //
 

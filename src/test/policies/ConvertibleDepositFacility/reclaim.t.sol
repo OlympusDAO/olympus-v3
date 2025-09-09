@@ -201,12 +201,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
             RESERVE_TOKEN_AMOUNT
         )
     {
-        uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT *
-            depositManager.getAssetPeriodReclaimRate(
-                iReserveToken,
-                PERIOD_MONTHS,
-                address(facility)
-            )) / 100e2;
+        uint256 expectedReclaimedAmount = (RESERVE_TOKEN_AMOUNT * uint256(RECLAIM_RATE)) / 100e2;
         uint256 expectedForfeitedAmount = RESERVE_TOKEN_AMOUNT - expectedReclaimedAmount;
 
         // Expect event
@@ -256,12 +251,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
 
         // Set the reclaim rate
         vm.prank(admin);
-        depositManager.setAssetPeriodReclaimRate(
-            iReserveToken,
-            PERIOD_MONTHS,
-            address(facility),
-            reclaimRate_
-        );
+        facility.setAssetPeriodReclaimRate(iReserveToken, PERIOD_MONTHS, reclaimRate_);
 
         // Do a normal, sizeable deposit
         _mintReserveToken(recipientTwo, RESERVE_TOKEN_AMOUNT);
@@ -279,12 +269,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
 
-        uint256 expectedReclaimedAmount = (depositAmount_ *
-            depositManager.getAssetPeriodReclaimRate(
-                iReserveToken,
-                PERIOD_MONTHS,
-                address(facility)
-            )) / 100e2;
+        uint256 expectedReclaimedAmount = (depositAmount_ * uint256(reclaimRate_)) / 100e2;
         uint256 expectedForfeitedAmount = depositAmount_ - expectedReclaimedAmount;
 
         // Expect event
