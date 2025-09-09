@@ -130,6 +130,11 @@
         "name": "olympus-policy-yieldrepurchasefacility"
     },
     {
+        "addr": "0x271e35a8555a62F6bA76508E85dfD76D580B0692",
+        "chainId": 1,
+        "name": "olympus-policy-yieldrepurchasefacility-1_2"
+    },
+    {
         "addr": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
         "chainId": 1,
         "name": "olympus-policy-emissionmanager"

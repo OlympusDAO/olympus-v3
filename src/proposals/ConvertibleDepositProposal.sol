@@ -537,7 +537,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             address reserveWrapper = addresses.getAddress("olympus-policy-reserve-wrapper-1_0");
             address reserveMigrator = addresses.getAddress("olympus-policy-reserve-migrator-1_0");
             address operator = addresses.getAddress("olympus-policy-operator-1_5");
-            address yieldRepo = addresses.getAddress("olympus-policy-yieldrepurchasefacility");
+            address yieldRepo = addresses.getAddress("olympus-policy-yieldrepurchasefacility-1_2");
             address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
 
             require(IEnabler(reserveWrapper).isEnabled() == true, "ReserveWrapper is not enabled");
