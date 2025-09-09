@@ -37,7 +37,7 @@ import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // OCG Activator contracts
-import {ConvertibleDepositActivator} from "src/scripts/ops/batches/ConvertibleDepositActivator.sol";
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // solhint-disable gas-custom-errors
 
