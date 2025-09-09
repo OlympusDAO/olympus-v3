@@ -7,6 +7,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
@@ -18,6 +19,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Bophades
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -59,6 +61,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @notice The TRSRY module.
     TRSRYv1 public TRSRY;
 
+    /// @notice The DEPOS module.
+    DEPOSv1 public DEPOS;
+
     /// @notice The number of redemptions per user
     mapping(address => uint16) internal _userRedemptionCount;
 
@@ -90,12 +95,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("DEPOS");
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        DEPOS = DEPOSv1(getModuleAddress(dependencies[2]));
     }
 
     /// @inheritdoc Policy
@@ -261,7 +268,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             depositPeriod: depositPeriod_,
             redeemableAt: uint48(block.timestamp) + uint48(depositPeriod_) * _ONE_MONTH,
             amount: amount_,
-            facility: facility_
+            facility: facility_,
+            positionId: type(uint256).max // No position
         });
 
         // Mark the funds as committed
@@ -278,6 +286,64 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             depositPeriod_,
             amount_,
             facility_
+        );
+
+        return redemptionId;
+    }
+
+    /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function expects receipt tokens to be unwrapped (i.e. native ERC6909 tokens)
+    function startRedemption(
+        uint256 positionId_,
+        uint256 amount_
+    ) external nonReentrant onlyEnabled returns (uint16 redemptionId) {
+        // Validate that the amount is not 0
+        if (amount_ == 0) revert RedemptionVault_ZeroAmount();
+
+        // Get the position details from DEPOS module
+        IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
+
+        // Validate that the caller owns the position
+        if (position.owner != msg.sender)
+            revert IDepositPositionManager.DEPOS_NotOwner(positionId_);
+
+        // Validate that the amount is not greater than the remaining deposit
+        if (amount_ > position.remainingDeposit)
+            revert IDepositPositionManager.DEPOS_InvalidParams("amount");
+
+        // Extract position data
+        IERC20 depositToken = IERC20(position.asset);
+        uint8 depositPeriod = position.periodMonths;
+        address facility = position.operator; // The facility is the operator of the position
+
+        // Validate that the facility is authorized
+        _validateFacility(facility);
+
+        // Create a User Redemption
+        redemptionId = _userRedemptionCount[msg.sender]++;
+        _userRedemptions[_getUserRedemptionKey(msg.sender, redemptionId)] = UserRedemption({
+            depositToken: address(depositToken),
+            depositPeriod: depositPeriod,
+            redeemableAt: position.expiry, // Use conversion expiry instead of calculated time
+            amount: amount_,
+            facility: facility,
+            positionId: positionId_ // Store the position ID for later use
+        });
+
+        // Mark the funds as committed
+        IDepositFacility(facility).handleCommit(depositToken, depositPeriod, amount_);
+
+        // Pull the receipt tokens from the caller
+        _pullReceiptToken(depositToken, depositPeriod, facility, amount_);
+
+        // Emit events
+        emit RedemptionStarted(
+            msg.sender,
+            redemptionId,
+            address(depositToken),
+            depositPeriod,
+            amount_,
+            facility
         );
 
         return redemptionId;
@@ -366,6 +432,14 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Update the redemption
         uint256 redemptionAmount = redemption.amount;
         redemption.amount = 0;
+
+        // Handle position update if this is a position-based redemption
+        if (redemption.positionId != type(uint256).max) {
+            IDepositFacility(redemption.facility).handlePositionRedemption(
+                redemption.positionId,
+                redemptionAmount
+            );
+        }
 
         // Handle the withdrawal
         // Redemptions are only accessible to the owner, so msg.sender is safe here

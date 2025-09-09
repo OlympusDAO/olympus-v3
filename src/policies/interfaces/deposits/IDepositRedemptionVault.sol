@@ -108,12 +108,14 @@ interface IDepositRedemptionVault {
     /// @param  redeemableAt    The timestamp at which the redemption can be finished
     /// @param  amount          The amount of deposit tokens to redeem
     /// @param  facility        The facility that handles this redemption
+    /// @param  positionId      The position ID for position-based redemptions (type(uint256).max without a position)
     struct UserRedemption {
         address depositToken;
         uint8 depositPeriod;
         uint48 redeemableAt;
         uint256 amount;
         address facility;
+        uint256 positionId;
     }
 
     /// @notice Data structure for a loan against a redemption
@@ -190,6 +192,16 @@ interface IDepositRedemptionVault {
         uint8 depositPeriod_,
         uint256 amount_,
         address facility_
+    ) external returns (uint16 redemptionId);
+
+    /// @notice Starts a redemption based on a position ID, using the position's conversion expiry
+    ///
+    /// @param  positionId_     The ID of the position to redeem from
+    /// @param  amount_         The amount of deposit tokens to redeem
+    /// @return redemptionId    The ID of the user redemption
+    function startRedemption(
+        uint256 positionId_,
+        uint256 amount_
     ) external returns (uint16 redemptionId);
 
     /// @notice Cancels a redemption of a quantity of deposit tokens

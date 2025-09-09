@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest {
@@ -551,6 +552,276 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             0,
             0,
             cdFacilityAddress
+        );
+
+        // Assert user redemptions
+        _assertOneUserRedemption(recipient, address(iReserveToken), amount_);
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(COMMITMENT_AMOUNT - amount_);
+
+        // Assert committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            amount_,
+            "committed deposits"
+        );
+    }
+
+    // ========== Position-based startRedemption tests ========== //
+
+    function _assertCommitmentWithPositionExpiry(
+        address user_,
+        uint16 redemptionId_,
+        IERC20 depositToken_,
+        uint8 depositPeriod_,
+        uint256 receiptTokenBalanceBefore_,
+        uint256 amount_,
+        uint256 previousUserCommitmentAmount_,
+        uint256 previousOtherUserCommitmentAmount_,
+        address facility_,
+        uint48 expectedExpiry_
+    ) internal view {
+        // Get redemption
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(user_, redemptionId_);
+
+        // Assert redemption values
+        assertEq(redemption.depositToken, address(depositToken_), "deposit token mismatch");
+        assertEq(redemption.depositPeriod, depositPeriod_, "deposit period mismatch");
+        assertEq(redemption.amount, amount_, "amount mismatch");
+        assertEq(
+            redemption.redeemableAt,
+            expectedExpiry_,
+            "redeemableAt mismatch - should use position expiry"
+        );
+        assertEq(redemption.facility, facility_, "facility mismatch");
+
+        // Assert redemption count
+        assertEq(
+            redemptionVault.getUserRedemptionCount(user_),
+            redemptionId_ + 1,
+            "redemption count mismatch"
+        );
+
+        // Assert receipt token balances
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            depositToken_,
+            depositPeriod_,
+            facility_
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(user_, receiptTokenId),
+            receiptTokenBalanceBefore_ - amount_ - previousUserCommitmentAmount_,
+            "user: receipt token balance mismatch"
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(address(redemptionVault), receiptTokenId),
+            amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
+            "redemptionVault: receipt token balance mismatch"
+        );
+
+        // Assert committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(depositToken_, address(redemptionVault)),
+            amount_ + previousUserCommitmentAmount_ + previousOtherUserCommitmentAmount_,
+            "committed deposits mismatch"
+        );
+    }
+
+    // given position ID does not exist
+    //  [X] it reverts
+
+    function test_positionBased_invalidPositionId_reverts() public givenLocallyActive {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("DEPOS_InvalidPositionId(uint256)", 999));
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.startRedemption(999, COMMITMENT_AMOUNT);
+    }
+
+    // given caller does not own the position
+    //  [X] it reverts
+
+    function test_positionBased_notOwner_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("DEPOS_NotOwner(uint256)", positionId));
+
+        // Call function with different user
+        vm.prank(recipientTwo);
+        redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+    }
+
+    // given amount is 0
+    //  [X] it reverts
+
+    function test_positionBased_amountIsZero_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Expect revert
+        _expectRevertRedemptionVaultZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.startRedemption(positionId, 0);
+    }
+
+    // given amount is greater than position's remaining deposit
+    //  [X] it reverts
+
+    function test_positionBased_amountGreaterThanRemainingDeposit_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Get position details to check remaining deposit
+        IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
+            positionId
+        );
+        uint256 excessAmount = position.remainingDeposit + 1;
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSignature("DEPOS_InvalidParams(string)", "amount"));
+
+        // Call function with amount greater than remaining deposit
+        vm.prank(recipient);
+        redemptionVault.startRedemption(positionId, excessAmount);
+    }
+
+    // given position has expired
+    //  [X] it does not revert and works normally
+
+    function test_positionBased_expiredPosition_succeeds()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Get position details to check expiry
+        IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
+            positionId
+        );
+        uint48 originalExpiry = position.expiry;
+
+        // Move time forward past expiry
+        vm.warp(position.expiry + 1 days);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionStarted(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            cdFacilityAddress
+        );
+
+        // Call function - should succeed even with expired position
+        vm.prank(recipient);
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Assertions
+        assertEq(redemptionId, 0, "Redemption ID mismatch");
+
+        // Use the specific expiry assertion function
+        _assertCommitmentWithPositionExpiry(
+            recipient,
+            redemptionId,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            COMMITMENT_AMOUNT,
+            0,
+            0,
+            cdFacilityAddress,
+            originalExpiry // Should use position's original expiry
+        );
+    }
+
+    // given valid position and all conditions are met
+    //  [X] it creates redemption with position expiry
+
+    function test_positionBased_validPosition_succeeds(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Get position details to check expiry
+        IDepositPositionManager.Position memory position = convertibleDepositPositions.getPosition(
+            positionId
+        );
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionStarted(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            amount_,
+            cdFacilityAddress
+        );
+
+        // Call function
+        vm.prank(recipient);
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, amount_);
+
+        // Assertions
+        assertEq(redemptionId, 0, "Redemption ID mismatch");
+
+        // Use the specific expiry assertion function
+        _assertCommitmentWithPositionExpiry(
+            recipient,
+            redemptionId,
+            iReserveToken,
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            amount_,
+            0,
+            0,
+            cdFacilityAddress,
+            position.expiry // Should use position's expiry, not calculated time
         );
 
         // Assert user redemptions

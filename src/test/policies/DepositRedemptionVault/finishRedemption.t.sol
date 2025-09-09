@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
@@ -769,6 +770,157 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
             0,
             "committed deposits should be 0"
+        );
+    }
+
+    // given the redemption was started with a position ID
+    //  [X] it reduces the position's remainingDeposit by the redemption amount
+    //  [X] it completes the redemption successfully
+
+    function test_positionBased_reducesRemainingDeposit(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Get the initial remaining deposit
+        uint256 initialRemainingDeposit = convertibleDepositPositions
+            .getPosition(positionId)
+            .remainingDeposit;
+
+        // Start position-based redemption
+        vm.prank(recipient);
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, amount_);
+
+        // Warp to after redeemable timestamp (which should be the position's expiry)
+        uint48 redeemableAt = redemptionVault
+            .getUserRedemption(recipient, redemptionId)
+            .redeemableAt;
+        vm.warp(redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            redemptionId,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            amount_
+        );
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(redemptionId);
+
+        // Assert that the position's remaining deposit was reduced
+        uint256 finalRemainingDeposit = convertibleDepositPositions
+            .getPosition(positionId)
+            .remainingDeposit;
+        assertEq(
+            finalRemainingDeposit,
+            initialRemainingDeposit - amount_,
+            "Position remaining deposit should be reduced by redemption amount"
+        );
+
+        // Verify the redemption was completed (amount should be 0)
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(recipient, redemptionId);
+        assertEq(redemption.amount, 0, "Redemption amount should be 0 after completion");
+        assertEq(redemption.positionId, positionId, "Position ID should match");
+
+        // Assert that the user received the deposit tokens
+        // User started with RESERVE_TOKEN_AMOUNT, used COMMITMENT_AMOUNT to create position,
+        // so final balance should be (RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_)
+        assertApproxEqAbs(
+            iReserveToken.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_,
+            5, // Allow for some minor rounding issues
+            "User should have initial balance minus position amount plus redemption amount"
+        );
+    }
+
+    // given the redemption was started on or after position expiry
+    //  [X] it can be finished immediately without waiting
+    //  [X] it uses the position's original expiry as redeemableAt
+
+    function test_positionBased_startRedemptionOnOrAfterExpiry_canFinishImmediately(
+        uint256 amount_,
+        uint48 timeOffset_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, COMMITMENT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(recipient, address(redemptionVault), COMMITMENT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        // Get position expiry
+        uint48 positionExpiry = convertibleDepositPositions.getPosition(positionId).expiry;
+
+        // Bound timeOffset to be between 0 and 365 days (to avoid timestamp overflow)
+        // This represents starting the redemption at expiry + timeOffset seconds
+        timeOffset_ = uint48(bound(timeOffset_, 0, 365 days));
+
+        // Warp to the redemption start time (at or after expiry)
+        vm.warp(positionExpiry + timeOffset_);
+
+        // Start position-based redemption at or after expiry
+        vm.prank(recipient);
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, amount_);
+
+        // Verify that redeemableAt is set to the position's original expiry, not current time
+        uint48 redeemableAt = redemptionVault
+            .getUserRedemption(recipient, redemptionId)
+            .redeemableAt;
+        assertEq(redeemableAt, positionExpiry, "RedeemableAt should be position's original expiry");
+
+        // Since current time >= redeemableAt, we should be able to finish immediately
+        assertTrue(
+            block.timestamp >= redeemableAt,
+            "Should be able to finish redemption immediately"
+        );
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            redemptionId,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            amount_
+        );
+
+        // Finish redemption immediately without additional time warp
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(redemptionId);
+
+        // Verify the redemption was completed
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, redemptionId).amount,
+            0,
+            "Redemption amount should be 0 after completion"
+        );
+
+        // Assert that the user received the deposit tokens
+        assertApproxEqAbs(
+            iReserveToken.balanceOf(recipient),
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_,
+            5, // Allow for some minor rounding issues
+            "User should have initial balance minus position amount plus redemption amount"
         );
     }
 }

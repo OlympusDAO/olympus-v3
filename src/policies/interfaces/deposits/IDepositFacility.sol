@@ -141,6 +141,12 @@ interface IDepositFacility {
         address payer_
     ) external;
 
+    /// @notice Allows an operator to handle position-based redemptions by updating the position's remainingDeposit
+    ///
+    /// @param positionId_ The position ID to update
+    /// @param amount_ The amount being redeemed from the position
+    function handlePositionRedemption(uint256 positionId_, uint256 amount_) external;
+
     // ========== RECLAIM ========== //
 
     /// @notice Preview the amount of deposit token that would be reclaimed
