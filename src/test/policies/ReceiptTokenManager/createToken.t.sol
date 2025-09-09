@@ -508,7 +508,7 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
     function test_createTokenZeroDecimals_succeeds() public {
         // Create an asset with 0 decimals
         MockERC20 zeroDecimalsAsset = new MockERC20("ZeroToken", "ZERO", 0);
-        
+
         vm.prank(OWNER);
         uint256 tokenId = receiptTokenManager.createToken(
             IERC20(address(zeroDecimalsAsset)),
@@ -522,14 +522,10 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
             receiptTokenManager.isValidTokenId(tokenId),
             "Token with 0 decimals should be created successfully"
         );
-        
+
         // Verify token has correct decimals
-        assertEq(
-            receiptTokenManager.getTokenDecimals(tokenId),
-            0,
-            "Token should have 0 decimals"
-        );
-        
+        assertEq(receiptTokenManager.getTokenDecimals(tokenId), 0, "Token should have 0 decimals");
+
         // Verify wrapped token has correct decimals
         address wrappedToken = receiptTokenManager.getWrappedToken(tokenId);
         assertNotEq(wrappedToken, address(0), "Wrapped token should exist");
@@ -538,22 +534,22 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
             0,
             "Wrapped token should have 0 decimals"
         );
-        
+
         // Test minting ERC6909 tokens
         uint256 mintAmount = 100; // No decimals, so just use whole number
         vm.prank(OWNER);
         receiptTokenManager.mint(OWNER, tokenId, mintAmount, false);
-        
+
         assertEq(
             receiptTokenManager.balanceOf(OWNER, tokenId),
             mintAmount,
             "ERC6909 balance should match minted amount"
         );
-        
+
         // Test minting wrapped tokens
         vm.prank(OWNER);
         receiptTokenManager.mint(OWNER, tokenId, mintAmount, true);
-        
+
         assertEq(
             IDepositReceiptToken(wrappedToken).balanceOf(OWNER),
             mintAmount,
