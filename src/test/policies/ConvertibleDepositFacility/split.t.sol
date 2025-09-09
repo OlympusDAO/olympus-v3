@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
     uint256 internal constant DEPOSIT_AMOUNT = 9e18;
@@ -15,6 +17,29 @@ contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
     }
 
     // ===== TESTS ===== //
+
+    // given the position was created by the YieldDepositFacility
+    //  [X] it reverts when splitting via ConvertibleDepositFacility
+    function test_whenPositionFromYDF_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+    {
+        // Create YDF position for the recipient
+        uint256 ydfPositionId = _createYieldDepositPosition(recipient, 1e18);
+
+        // Expect revert when attempting to split via CDF
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositPositionManager.DEPOS_NotOperator.selector,
+                ydfPositionId
+            )
+        );
+
+        vm.prank(recipient);
+        facility.split(ydfPositionId, 5e17, recipientTwo, false);
+    }
 
     // given the contract is disabled
     //  [X] it reverts

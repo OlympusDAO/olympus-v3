@@ -2,7 +2,6 @@
 pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
-import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest {

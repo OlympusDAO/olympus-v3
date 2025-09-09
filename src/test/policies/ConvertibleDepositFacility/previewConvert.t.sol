@@ -450,4 +450,31 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
             "converted"
         );
     }
+
+    // given the position was created by the YieldDepositFacility
+    //  [X] it reverts when previewing convert via ConvertibleDepositFacility
+    function test_whenPositionFromYDF_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+    {
+        // Create YDF position for the recipient
+        uint256 ydfPositionId = _createYieldDepositPosition(recipient, 1e18);
+
+        uint256[] memory positionIds = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        positionIds[0] = ydfPositionId;
+        amounts[0] = 5e17;
+
+        // Expect revert when attempting to preview convert via CDF
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_Unsupported.selector,
+                ydfPositionId
+            )
+        );
+
+        facility.previewConvert(recipient, positionIds, amounts);
+    }
 }

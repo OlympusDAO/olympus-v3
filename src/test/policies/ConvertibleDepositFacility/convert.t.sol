@@ -6,6 +6,9 @@ import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/ICon
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {Actions} from "src/Kernel.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -724,5 +727,71 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
 
         _assertAssetBalance(expectedAssets, 0);
         _assertVaultBalance();
+    }
+
+    // given the position was created by a different ConvertibleDepositFacility
+    //  [X] it reverts when converting via this ConvertibleDepositFacility
+    function test_whenPositionFromDifferentCDF_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+    {
+        // Create a second ConvertibleDepositFacility
+        ConvertibleDepositFacility facility2 = new ConvertibleDepositFacility(
+            address(kernel),
+            address(depositManager)
+        );
+
+        // Activate the second facility
+        kernel.executeAction(Actions.ActivatePolicy, address(facility2));
+
+        // Grant roles to the second facility
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility2));
+
+        // Enable the second facility
+        vm.prank(admin);
+        facility2.enable("");
+
+        // Set facility name and add asset period
+        vm.startPrank(admin);
+        depositManager.setOperatorName(address(facility2), "cda");
+        depositManager.addAssetPeriod(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
+            address(facility2),
+            RECLAIM_RATE
+        );
+        vm.stopPrank();
+
+        // Create position via the second facility
+        vm.prank(auctioneer);
+        (uint256 otherCdfPositionId, , ) = facility2.createPosition(
+            IConvertibleDepositFacility.CreatePositionParams({
+                asset: IERC20(address(reserveToken)),
+                periodMonths: PERIOD_MONTHS,
+                depositor: recipient,
+                amount: 1e18,
+                conversionPrice: CONVERSION_PRICE,
+                wrapPosition: false,
+                wrapReceipt: false
+            })
+        );
+
+        uint256[] memory positionIds = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        positionIds[0] = otherCdfPositionId;
+        amounts[0] = 5e17;
+
+        // Expect revert when attempting to convert via the first facility
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositFacility.CDF_Unsupported.selector,
+                otherCdfPositionId
+            )
+        );
+
+        vm.prank(recipient);
+        facility.convert(positionIds, amounts, false);
     }
 }
