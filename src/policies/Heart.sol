@@ -11,7 +11,6 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 // Interfaces
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {IHeart} from "src/policies/interfaces/IHeart.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Modules
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";

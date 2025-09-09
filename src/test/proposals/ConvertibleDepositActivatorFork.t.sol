@@ -5,7 +5,6 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {Kernel, Actions, toKeycode, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
