@@ -16,6 +16,29 @@ contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
 
     // ===== TESTS ===== //
 
+    // given the position was created by the YieldDepositFacility
+    //  [X] it reverts when splitting via ConvertibleDepositFacility
+    function test_whenPositionFromYDF_reverts()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+    {
+        // Create YDF position for the recipient
+        uint256 ydfPositionId = _createYieldDepositPosition(recipient, 1e18);
+
+        // Expect revert when attempting to split via CDF
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositPositionManager.DEPOS_NotOperator.selector,
+                ydfPositionId
+            )
+        );
+
+        vm.prank(recipient);
+        facility.split(ydfPositionId, 5e17, recipientTwo, false);
+    }
+
     // given the contract is disabled
     //  [X] it reverts
 

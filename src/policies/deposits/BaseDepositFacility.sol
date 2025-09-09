@@ -472,6 +472,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @inheritdoc IDepositFacility
     /// @dev        This function reverts if:
     ///             - The position does not exist
+    ///             - The position was not created by this facility
     ///             - The caller is not the owner of the position
     function split(
         uint256 positionId_,
@@ -481,6 +482,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ) external nonReentrant onlyEnabled returns (uint256) {
         // Get the position. This will revert if the position does not exist.
         IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
+
+        // Validate that the position was created by this facility
+        if (position.operator != address(this))
+            revert IDepositPositionManager.DEPOS_NotOperator(positionId_);
 
         // Validate that the caller is the owner of the position
         if (position.owner != msg.sender)
