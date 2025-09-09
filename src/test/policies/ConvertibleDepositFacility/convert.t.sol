@@ -759,7 +759,11 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(facility2),
+            address(facility2)
+        );
+        facility2.setAssetPeriodReclaimRate(
+            IERC20(address(reserveToken)),
+            PERIOD_MONTHS,
             RECLAIM_RATE
         );
         vm.stopPrank();
