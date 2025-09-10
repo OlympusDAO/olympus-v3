@@ -336,6 +336,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Mark the funds as committed
         IDepositFacility(facility).handleCommit(depositToken, depositPeriod, amount_);
 
+        // Immediately update position's remainingDeposit to prevent split/transfer issues
+        // This change will be reverted if cancelRedemption is called
+        IDepositFacility(facility).handlePositionRedemption(positionId_, amount_);
+
         // Pull the receipt tokens from the caller
         _pullReceiptToken(depositToken, depositPeriod, facility, amount_);
 
@@ -384,6 +388,18 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemption.depositPeriod,
             amount_
         );
+
+        // Handle position-based redemption
+        if (redemption.positionId != _NO_POSITION) {
+            // Only increase position.remainingDeposit if the position owner is the same
+            // The redemption ID has been validated against the caller earlier, so we know that msg.sender is the creator of the original redemption
+            if (DEPOS.getPosition(redemption.positionId).owner == msg.sender) {
+                IDepositFacility(redemption.facility).handlePositionCancelRedemption(
+                    redemption.positionId,
+                    amount_
+                );
+            }
+        }
 
         // Transfer the quantity of receipt tokens to the caller
         // Redemptions are only accessible to the owner, so msg.sender is safe here
@@ -435,14 +451,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Update the redemption
         uint256 redemptionAmount = redemption.amount;
         redemption.amount = 0;
-
-        // Handle position update if this is a position-based redemption
-        if (redemption.positionId != _NO_POSITION) {
-            IDepositFacility(redemption.facility).handlePositionRedemption(
-                redemption.positionId,
-                redemptionAmount
-            );
-        }
 
         // Handle the withdrawal
         // Redemptions are only accessible to the owner, so msg.sender is safe here
