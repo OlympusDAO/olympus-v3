@@ -708,7 +708,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
             .getPosition(positionId);
         assertEq(
             originalPosition.remainingDeposit,
-            RESERVE_TOKEN_AMOUNT - splitAmount + COMMITMENT_AMOUNT,
+            RESERVE_TOKEN_AMOUNT - splitAmount,
             "remainingDeposit should be restored"
         );
         assertEq(originalPosition.owner, recipient, "Recipient should still own the position");

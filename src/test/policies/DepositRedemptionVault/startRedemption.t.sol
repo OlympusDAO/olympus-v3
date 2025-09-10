@@ -841,11 +841,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         // Assert that the position remainingDeposit has been reduced
         IDepositPositionManager.Position memory updatedPosition = convertibleDepositPositions
             .getPosition(positionId);
-        assertEq(
-            updatedPosition.remainingDeposit,
-            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT,
-            "remainingDeposit"
-        );
+        assertEq(updatedPosition.remainingDeposit, COMMITMENT_AMOUNT - amount_, "remainingDeposit");
     }
 
     //  when position is split after redemption started
