@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
@@ -526,5 +527,223 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
 
         // Assert that the available deposits are correct
         _assertAvailableDeposits(_previousDepositActualAmount + amount_);
+    }
+
+    // given the redemption was started with a position ID
+    //  [X] it increases the position's remaining deposit by the cancelled amount
+
+    function test_positionBased_succeeds(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        amount_ = bound(amount_, 1, COMMITMENT_AMOUNT);
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Cancel redemption
+        redemptionVault.cancelRedemption(redemptionId, amount_);
+        vm.stopPrank();
+
+        // Assertions
+        _assertRedemptionCancelled(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT,
+            amount_,
+            COMMITMENT_AMOUNT
+        );
+
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_);
+
+        // Assert committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            COMMITMENT_AMOUNT - amount_,
+            "committed deposits"
+        );
+
+        // Assert that the position remainingDeposit is increased
+        IDepositPositionManager.Position memory updatedPosition = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            updatedPosition.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_,
+            "remainingDeposit"
+        );
+    }
+
+    //  given the depositor has transferred their position
+    //   [X] the redemption is cancelled
+    //   [X] the position's remainingDeposit is not updated
+
+    function test_positionBased_givenPositionTransferred()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption using position - should immediately update position
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Wrap the position
+        convertibleDepositPositions.wrap(positionId);
+
+        // Transfer wrapped position to recipientTwo
+        convertibleDepositPositions.transferFrom(recipient, recipientTwo, positionId);
+
+        // Record receipt token balance before cancellation
+        uint256 recipientReceiptBalanceBefore = receiptTokenManager.balanceOf(
+            recipient,
+            receiptTokenId
+        );
+        uint256 recipientTwoReceiptBalanceBefore = receiptTokenManager.balanceOf(
+            recipientTwo,
+            receiptTokenId
+        );
+
+        // Recipient cancels redemption - should only return receipt tokens, not modify position (FIX)
+        redemptionVault.cancelRedemption(redemptionId, COMMITMENT_AMOUNT);
+        vm.stopPrank();
+
+        // Verify position was NOT modified
+        IDepositPositionManager.Position memory positionAfter = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            positionAfter.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT,
+            "remainingDeposit should not be restored after transfer"
+        );
+        assertEq(positionAfter.owner, recipientTwo, "RecipientTwo should still own the position");
+
+        // Verify recipient got receipt tokens back (FIX: cash-only cancellation)
+        assertEq(
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
+            recipientReceiptBalanceBefore + COMMITMENT_AMOUNT,
+            "Recipient should receive receipt tokens back"
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(recipientTwo, receiptTokenId),
+            recipientTwoReceiptBalanceBefore,
+            "RecipientTwo should have the same balance as before"
+        );
+
+        // Verify redemption was cancelled
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(recipient, redemptionId);
+        assertEq(redemption.amount, 0, "Redemption should be cancelled");
+    }
+
+    //  given the depositor has split their position
+    //   [X] the redemption is cancelled
+    //   [X] it increases the position's remaining deposit by the cancelled amount
+
+    function test_positionBased_givenPositionSplit()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        uint256 splitAmount = 3e18;
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption using position - should immediately update position
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Split position to recipientTwo
+        uint256 splitPositionId = cdFacility.split(positionId, splitAmount, recipientTwo, false);
+
+        // Record receipt token balance before cancellation
+        uint256 recipientReceiptBalanceBefore = receiptTokenManager.balanceOf(
+            recipient,
+            receiptTokenId
+        );
+        uint256 recipientTwoReceiptBalanceBefore = receiptTokenManager.balanceOf(
+            recipientTwo,
+            receiptTokenId
+        );
+
+        // Recipient cancels redemption
+        redemptionVault.cancelRedemption(redemptionId, COMMITMENT_AMOUNT);
+        vm.stopPrank();
+
+        // Verify original position was modified
+        IDepositPositionManager.Position memory originalPosition = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            originalPosition.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - splitAmount + COMMITMENT_AMOUNT,
+            "remainingDeposit should be restored"
+        );
+        assertEq(originalPosition.owner, recipient, "Recipient should still own the position");
+
+        // Verify split position was NOT modified
+        IDepositPositionManager.Position memory splitPosition = convertibleDepositPositions
+            .getPosition(splitPositionId);
+        assertEq(
+            splitPosition.remainingDeposit,
+            splitAmount,
+            "splitPosition.remainingDeposit should not be modified"
+        );
+        assertEq(
+            splitPosition.owner,
+            recipientTwo,
+            "splitPosition owner should remain recipientTwo"
+        );
+
+        // Verify recipient got receipt tokens back
+        assertEq(
+            receiptTokenManager.balanceOf(recipient, receiptTokenId),
+            recipientReceiptBalanceBefore + COMMITMENT_AMOUNT,
+            "Recipient should receive receipt tokens back"
+        );
+
+        // Verify recipientTwo got nothing
+        assertEq(
+            receiptTokenManager.balanceOf(recipientTwo, receiptTokenId),
+            recipientTwoReceiptBalanceBefore,
+            "RecipientTwo should NOT receive receipt tokens back"
+        );
+
+        // Verify redemption was cancelled
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(recipient, redemptionId);
+        assertEq(redemption.amount, 0, "Redemption should be cancelled");
     }
 }

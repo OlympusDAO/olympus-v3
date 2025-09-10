@@ -774,10 +774,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
     }
 
     // given the redemption was started with a position ID
-    //  [X] it reduces the position's remainingDeposit by the redemption amount
     //  [X] it completes the redemption successfully
 
-    function test_positionBased_reducesRemainingDeposit(
+    function test_positionBased(
         uint256 amount_
     )
         public
@@ -848,9 +847,9 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         );
     }
 
-    // given the redemption was started on or after position expiry
-    //  [X] it can be finished immediately without waiting
-    //  [X] it uses the position's original expiry as redeemableAt
+    //  given the redemption was started on or after position expiry
+    //   [X] it can be finished immediately without waiting
+    //   [X] it uses the position's original expiry as redeemableAt
 
     function test_positionBased_startRedemptionOnOrAfterExpiry_canFinishImmediately(
         uint256 amount_,
@@ -921,6 +920,122 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT + amount_,
             5, // Allow for some minor rounding issues
             "User should have initial balance minus position amount plus redemption amount"
+        );
+    }
+
+    //  when position is split after redemption started
+    //   [X] it finishes redemption without underflow
+
+    function test_positionBased_split()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        uint256 splitAmount = 2e18;
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption using position - should immediately reduce remainingDeposit
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Split position - should work with the reduced remaining deposit
+        cdFacility.split(positionId, splitAmount, recipientTwo, false);
+        vm.stopPrank();
+
+        // Fast forward to redemption time
+        vm.warp(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Finish redemption should succeed (FIX: no handlePositionRedemption call since already updated)
+        vm.startPrank(recipient);
+        redemptionVault.finishRedemption(redemptionId);
+        vm.stopPrank();
+
+        // Verify redemption completed successfully
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(recipient, redemptionId);
+        assertEq(redemption.amount, 0, "Redemption should be completed");
+
+        // Assert that the user received the deposit tokens
+        assertApproxEqAbs(
+            iReserveToken.balanceOf(recipient),
+            COMMITMENT_AMOUNT,
+            5, // Allow for some minor rounding issues
+            "User should have redemption amount"
+        );
+    }
+
+    // given position with active redemption is transferred
+    //  when original redeemer finishes redemption
+    //   [X] it completes without modifying transferred position further
+
+    function test_positionBased_transferred()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption using position - should immediately update position
+        uint16 redemptionId = redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Wrap position to enable transfer
+        convertibleDepositPositions.wrap(positionId);
+
+        // Transfer wrapped position to recipientTwo
+        convertibleDepositPositions.transferFrom(recipient, recipientTwo, positionId);
+        vm.stopPrank();
+
+        // Fast forward to redemption time
+        vm.warp(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // recipientTwo cannot finish the redemption (only recipient can) - this behavior is expected
+        vm.startPrank(recipientTwo);
+        _expectRevertInvalidRedemptionId(recipientTwo, redemptionId);
+        redemptionVault.finishRedemption(redemptionId);
+        vm.stopPrank();
+
+        // recipient can finish redemption and receives tokens - this is the expected behavior
+        // (With position already updated, no double-deduction occurs)
+        vm.startPrank(recipient);
+        redemptionVault.finishRedemption(redemptionId);
+        vm.stopPrank();
+
+        // Verify recipient received the tokens and redemption completed
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            COMMITMENT_AMOUNT,
+            "recipient should have received redemption tokens"
+        );
+
+        IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
+            .getUserRedemption(recipient, redemptionId);
+        assertEq(redemption.amount, 0, "Redemption should be completed");
+
+        // recipientTwo's position should remain unchanged (no additional deduction)
+        IDepositPositionManager.Position memory finalPosition = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            finalPosition.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT,
+            "recipientTwo's position should not be further reduced"
         );
     }
 }

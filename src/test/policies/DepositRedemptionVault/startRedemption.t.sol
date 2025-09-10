@@ -629,8 +629,9 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         );
     }
 
-    // given position ID does not exist
-    //  [X] it reverts
+    // when the redemption is using a position ID
+    //  given position ID does not exist
+    //   [X] it reverts
 
     function test_positionBased_invalidPositionId_reverts() public givenLocallyActive {
         // Expect revert
@@ -641,8 +642,8 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         redemptionVault.startRedemption(999, COMMITMENT_AMOUNT);
     }
 
-    // given caller does not own the position
-    //  [X] it reverts
+    //  given caller does not own the position
+    //   [X] it reverts
 
     function test_positionBased_notOwner_reverts()
         public
@@ -663,8 +664,8 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
     }
 
-    // given amount is 0
-    //  [X] it reverts
+    //  given amount is 0
+    //   [X] it reverts
 
     function test_positionBased_amountIsZero_reverts()
         public
@@ -685,8 +686,8 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         redemptionVault.startRedemption(positionId, 0);
     }
 
-    // given amount is greater than position's remaining deposit
-    //  [X] it reverts
+    //  given amount is greater than position's remaining deposit
+    //   [X] it reverts
 
     function test_positionBased_amountGreaterThanRemainingDeposit_reverts()
         public
@@ -713,8 +714,8 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         redemptionVault.startRedemption(positionId, excessAmount);
     }
 
-    // given position has expired
-    //  [X] it does not revert and works normally
+    //  given position has expired
+    //   [X] it does not revert and works normally
 
     function test_positionBased_expiredPosition_succeeds()
         public
@@ -769,10 +770,10 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         );
     }
 
-    // given valid position and all conditions are met
-    //  [X] it creates redemption with position expiry
+    //  given valid position and all conditions are met
+    //   [X] it creates redemption with position expiry
 
-    function test_positionBased_validPosition_succeeds(
+    function test_positionBased_succeeds(
         uint256 amount_
     )
         public
@@ -836,5 +837,57 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
             amount_,
             "committed deposits"
         );
+
+        // Assert that the position remainingDeposit has been reduced
+        IDepositPositionManager.Position memory updatedPosition = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            updatedPosition.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT,
+            "remainingDeposit"
+        );
+    }
+
+    //  when position is split after redemption started
+    //   [X] it allows split with correct remaining amounts
+
+    function test_positionBased_split()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasPositionNoWrap(recipient, RESERVE_TOKEN_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(
+            recipient,
+            address(redemptionVault),
+            RESERVE_TOKEN_AMOUNT
+        )
+    {
+        uint256 splitAmount = 2e18;
+
+        // Get the position ID from the last created position
+        uint256 positionId = convertibleDepositPositions.getPositionCount() - 1;
+
+        vm.startPrank(recipient);
+        // Start redemption
+        redemptionVault.startRedemption(positionId, COMMITMENT_AMOUNT);
+
+        // Split should work with remaining amount
+        uint256 newPositionId = cdFacility.split(positionId, splitAmount, recipientTwo, false);
+        vm.stopPrank();
+
+        // Verify position states after split
+        IDepositPositionManager.Position memory originalPosition = convertibleDepositPositions
+            .getPosition(positionId);
+        assertEq(
+            originalPosition.remainingDeposit,
+            RESERVE_TOKEN_AMOUNT - COMMITMENT_AMOUNT - splitAmount
+        );
+        assertEq(originalPosition.owner, recipient);
+
+        IDepositPositionManager.Position memory newPosition = convertibleDepositPositions
+            .getPosition(newPositionId);
+        assertEq(newPosition.remainingDeposit, splitAmount);
+        assertEq(newPosition.owner, recipientTwo);
     }
 }
