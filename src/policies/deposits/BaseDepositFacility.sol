@@ -373,6 +373,25 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     }
 
     /// @inheritdoc IDepositFacility
+    function handlePositionCancelRedemption(
+        uint256 positionId_,
+        uint256 amount_
+    ) external nonReentrant onlyEnabled onlyAuthorizedOperator {
+        // Validate that the amount is not zero
+        if (amount_ == 0) revert DepositFacility_ZeroAmount();
+
+        // Get position to validate it exists and get current remainingDeposit
+        IDepositPositionManager.Position memory position = DEPOS.getPosition(positionId_);
+
+        // Validate that this facility is the operator of the position
+        if (position.operator != address(this))
+            revert IDepositPositionManager.DEPOS_InvalidParams("operator");
+
+        // Update the position's remaining deposit
+        DEPOS.setRemainingDeposit(positionId_, position.remainingDeposit + amount_);
+    }
+
+    /// @inheritdoc IDepositFacility
     function getAvailableDeposits(IERC20 depositToken_) public view returns (uint256) {
         // Asset liabilities are used as the excess (sharesInAssets - liabilities) is not accessible anyway
         uint256 assetLiabilities = DEPOSIT_MANAGER.getOperatorLiabilities(

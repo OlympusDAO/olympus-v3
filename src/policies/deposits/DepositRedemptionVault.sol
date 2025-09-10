@@ -255,6 +255,11 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function expects receipt tokens to be unwrapped (i.e. native ERC6909 tokens)
+    ///
+    ///             This function reverts if:
+    ///             - The contract is disabled
+    ///             - The amount is 0
+    ///             - The provided facility is not authorized
     function startRedemption(
         IERC20 depositToken_,
         uint8 depositPeriod_,
@@ -296,6 +301,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function expects receipt tokens to be unwrapped (i.e. native ERC6909 tokens)
+    ///
+    ///             This function reverts if:
+    ///             - The contract is disabled
+    ///             - The amount is 0
+    ///             - The caller is not the owner of the position
+    ///             - The amount is greater than the remainingDeposit of the position
+    ///             - The facility that created the position is not authorized
     function startRedemption(
         uint256 positionId_,
         uint256 amount_
@@ -336,6 +348,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Mark the funds as committed
         IDepositFacility(facility).handleCommit(depositToken, depositPeriod, amount_);
 
+        // Immediately update position's remainingDeposit to prevent split/transfer issues
+        // This change will be reverted if cancelRedemption is called
+        IDepositFacility(facility).handlePositionRedemption(positionId_, amount_);
+
         // Pull the receipt tokens from the caller
         _pullReceiptToken(depositToken, depositPeriod, facility, amount_);
 
@@ -353,6 +369,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function reverts if:
+    ///             - The contract is disabled
+    ///             - The caller is not the owner of the redemption ID
+    ///             - The facility in the redemption record is not authorized
+    ///             - The amount is 0
+    ///             - The amount is greater than the redemption amount
+    ///             - There is an unpaid loan
     function cancelRedemption(
         uint16 redemptionId_,
         uint256 amount_
@@ -385,6 +408,20 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             amount_
         );
 
+        // Handle position-based redemption
+        if (redemption.positionId != _NO_POSITION) {
+            // Only increase position.remainingDeposit if the position owner is the same
+            // The redemption ID has been validated against the caller earlier, so we know that msg.sender is the creator of the original redemption
+            if (DEPOS.getPosition(redemption.positionId).owner == msg.sender) {
+                IDepositFacility(redemption.facility).handlePositionCancelRedemption(
+                    redemption.positionId,
+                    amount_
+                );
+            }
+            // If the position ownership has changed, the original (and redemption) owner will receive the receipt tokens,
+            // but the position will not be modified
+        }
+
         // Transfer the quantity of receipt tokens to the caller
         // Redemptions are only accessible to the owner, so msg.sender is safe here
         IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
@@ -410,6 +447,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function reverts if:
+    ///             - The contract is disabled
+    ///             - The caller is not the owner of the redemption ID
+    ///             - The facility in the redemption record is not authorized
+    ///             - The redemption amount is 0
+    ///             - It is too early for redemption
+    ///             - There is an unpaid loan
     function finishRedemption(
         uint16 redemptionId_
     ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
@@ -435,14 +479,6 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // Update the redemption
         uint256 redemptionAmount = redemption.amount;
         redemption.amount = 0;
-
-        // Handle position update if this is a position-based redemption
-        if (redemption.positionId != _NO_POSITION) {
-            IDepositFacility(redemption.facility).handlePositionRedemption(
-                redemption.positionId,
-                redemptionAmount
-            );
-        }
 
         // Handle the withdrawal
         // Redemptions are only accessible to the owner, so msg.sender is safe here

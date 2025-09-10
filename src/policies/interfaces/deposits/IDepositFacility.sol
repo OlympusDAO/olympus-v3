@@ -102,6 +102,20 @@ interface IDepositFacility {
         address recipient_
     ) external returns (uint256 actualAmount);
 
+    /// @notice Allows an operator to handle position-based redemptions by updating the position's remainingDeposit
+    ///
+    /// @param positionId_  The position ID to update
+    /// @param amount_      The amount being redeemed from the position
+    function handlePositionRedemption(uint256 positionId_, uint256 amount_) external;
+
+    /// @notice Allows an operator to handle the cancellation of position-based redemptions by updating the position's remainingDeposit
+    ///
+    /// @param positionId_  The position ID to update
+    /// @param amount_      The redemption amount to be cancelled
+    function handlePositionCancelRedemption(uint256 positionId_, uint256 amount_) external;
+
+    // ========== BORROW HANDLING ========== //
+
     /// @notice Allows an operator to borrow against this facility's committed funds.
     ///
     /// @param depositToken_    The deposit token to borrow against
@@ -142,12 +156,6 @@ interface IDepositFacility {
         uint256 amount_,
         address payer_
     ) external;
-
-    /// @notice Allows an operator to handle position-based redemptions by updating the position's remainingDeposit
-    ///
-    /// @param positionId_ The position ID to update
-    /// @param amount_ The amount being redeemed from the position
-    function handlePositionRedemption(uint256 positionId_, uint256 amount_) external;
 
     // ========== RECLAIM ========== //
 
