@@ -418,6 +418,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                     amount_
                 );
             }
+            // If the position ownership has changed, the original (and redemption) owner will receive the receipt tokens,
+            // but the position will not be modified
         }
 
         // Transfer the quantity of receipt tokens to the caller
