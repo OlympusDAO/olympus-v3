@@ -56,7 +56,7 @@ set_account_address $account
 # Deploy using script
 echo ""
 echo "Running forge script"
-forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
+FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV2.sol:OlympusDeploy \
     --sig "deploy(string,string)()" $CHAIN $sequence \
     --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
