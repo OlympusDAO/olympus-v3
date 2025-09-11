@@ -16,6 +16,19 @@ contract KernelScript is WithEnvironment {
         console2.log("Policy activated");
     }
 
+    function deactivatePolicy(string calldata chain_, address policy_) external {
+        _loadEnv(chain_);
+
+        console2.log("Deactivating policy", policy_);
+        vm.startBroadcast();
+        Kernel(_envAddressNotZero("olympus.Kernel")).executeAction(
+            Actions.DeactivatePolicy,
+            policy_
+        );
+        vm.stopBroadcast();
+        console2.log("Policy deactivated");
+    }
+
     function installModule(string calldata chain_, address module_) external {
         _loadEnv(chain_);
         console2.log("Installing module", module_);
