@@ -70,3 +70,7 @@ jobs:
             #       coverage-files: lcov.info
             #       github-token: ${{ secrets.GITHUB_TOKEN }}
             #       update-comment: true
+
+            # Build will fail if a contract is over the size limit
+            - name: Contract Size
+              run: pnpm run size
