@@ -40,15 +40,12 @@ jobs:
             - name: Run fork tests
               run: pnpm run test:fork
               env:
-                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
               env:
-                  ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
-                  POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
-                  ETH_TESTNET_RPC_URL: ${{ secrets.ETH_TESTNET_RPC_URL }}
-                  POLYGON_TESTNET_RPC_URL: ${{ secrets.POLYGON_TESTNET_RPC_URL }}
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
             # FYI: currently version 1.14
             - name: Setup lcov

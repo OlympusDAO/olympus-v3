@@ -20,7 +20,7 @@ abstract contract ProposalTest is Test {
     // If true, the framework will check that calldatas match.
     bool public hasBeenSubmitted;
 
-    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
+    string internal constant _RPC_ALIAS = "mainnet";
 
     /// @notice This function simulates a proposal suite which has already been setup via `_setupSuite()` or `_setupSuites()`.
     /// @dev    This function assumes the following:

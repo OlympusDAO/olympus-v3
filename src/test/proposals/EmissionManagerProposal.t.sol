@@ -10,7 +10,7 @@ contract EmissionManagerProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail) - 21224026
-        vm.createSelectFork(RPC_URL, 21224026 - 1);
+        vm.createSelectFork(_RPC_ALIAS, 21224026 - 1);
 
         /// @dev Deploy your proposal
         EmissionManagerProposal proposal = new EmissionManagerProposal();

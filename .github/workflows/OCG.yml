@@ -34,4 +34,4 @@ jobs:
             - name: Run proposal simulation tests
               run: pnpm run test:proposal
               env:
-                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}

@@ -17,7 +17,7 @@ contract ContractRegistryProposalTest is ProposalTest {
         // Mainnet Fork at a fixed block
         // Prior to the proposal deployment (otherwise it will fail)
         // 21371770 is the deployment block for ContractRegistryAdmin
-        vm.createSelectFork(RPC_URL, 21371770);
+        vm.createSelectFork(_RPC_ALIAS, 21371770);
 
         /// @dev Deploy your proposal
         ContractRegistryProposal proposal = new ContractRegistryProposal();

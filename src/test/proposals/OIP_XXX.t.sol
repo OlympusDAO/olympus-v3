@@ -21,7 +21,7 @@ contract OIPXXXTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail) and Clearinghouse v2 - 21216656
-        vm.createSelectFork(RPC_URL, 21216656 - 1);
+        vm.createSelectFork(_RPC_ALIAS, 21216656 - 1);
 
         /// @dev Deploy your proposal
         OIP_XXX proposal = new OIP_XXX();
