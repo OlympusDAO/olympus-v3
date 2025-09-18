@@ -12,7 +12,7 @@ contract CCIPBridgeSolanaProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail)
-        vm.createSelectFork(RPC_URL, BLOCK);
+        vm.createSelectFork(_RPC_ALIAS, BLOCK);
 
         /// @dev Deploy your proposal
         SolanaCCIPBridgeProposal proposal = new SolanaCCIPBridgeProposal();
