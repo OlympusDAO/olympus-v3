@@ -28,6 +28,9 @@ jobs:
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
 
+            - name: Install Foundry dependencies
+              run: pnpm run build
+
             # Build will fail if a contract is over the size limit
             - name: Contract Size
               run: pnpm run size
