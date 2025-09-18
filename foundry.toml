@@ -4,11 +4,11 @@ ast = true
 legacy_assertions = true
 assertions_revert = false
 fs_permissions = [
-    {access = "write", path = "./src/test/sim/out/"},
-    {access = "read-write", path = "./deployments/"},
-    {access = "read", path = "./src/scripts/"},
-    {access = "read", path = "./src/proposals/addresses.json"},
-    {access = "read-write", path = "./src/scripts/env.json"},
+    { access = "write", path = "./src/test/sim/out/" },
+    { access = "read-write", path = "./deployments/" },
+    { access = "read", path = "./src/scripts/" },
+    { access = "read", path = "./src/proposals/addresses.json" },
+    { access = "read-write", path = "./src/scripts/env.json" },
 ]
 
 # The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
@@ -40,18 +40,18 @@ runs = 256
 
 [rpc_endpoints]
 # Place ALCHEMY_API_KEY in the environment or .env file
-mainnet = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-base = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-base-sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-arbitrum = "https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-arbitrum-sepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-optimism = "https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-optimism-sepolia = "https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-polygon = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-polygon-amoy = "https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-berachain = "https://berachain-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
-berachain-bepolia = "https://berachain-bepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+mainnet = { endpoint = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+sepolia = { endpoint = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+base = { endpoint = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+base-sepolia = { endpoint = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+arbitrum = { endpoint = "https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+arbitrum-sepolia = { endpoint = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+optimism = { endpoint = "https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+optimism-sepolia = { endpoint = "https://opt-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+polygon = { endpoint = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+polygon-amoy = { endpoint = "https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+berachain = { endpoint = "https://berachain-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+berachain-bepolia = { endpoint = "https://berachain-bepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
 
 [soldeer]
 remappings_generate = false
