@@ -45,7 +45,6 @@ contract ConvertibleDepositActivatorForkTest is Test {
     uint16 internal constant RECLAIM_RATE = 90e2; // 90%
 
     // Fork configuration - using a pinned block before CD deployment
-    string public RPC_URL = vm.envString("FORK_TEST_RPC_URL");
     uint256 internal constant FORK_BLOCK = 23324427; // Pinned block before CD deployment
 
     // Mainnet system contracts
@@ -97,7 +96,7 @@ contract ConvertibleDepositActivatorForkTest is Test {
 
     function setUp() public {
         // Fork mainnet at specific block
-        vm.createSelectFork(RPC_URL, FORK_BLOCK);
+        vm.createSelectFork("mainnet", FORK_BLOCK);
 
         // Setup test accounts
         user = makeAddr("user");
