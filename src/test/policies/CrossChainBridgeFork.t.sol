@@ -46,9 +46,6 @@ contract CrossChainBridgeForkTest is Test {
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
-    string RPC_ETH_MAINNET = vm.envString("ETH_MAINNET_RPC_URL");
-    string RPC_POLYGON_MAINNET = vm.envString("POLYGON_MAINNET_RPC_URL");
-
     // Mainnet contracts
     Kernel internal kernel;
     OlympusMinter internal MINTR;
@@ -66,7 +63,7 @@ contract CrossChainBridgeForkTest is Test {
     function setUp() public {
         // Setup mainnet system
         {
-            L1_FORK_ID = vm.createSelectFork(RPC_ETH_MAINNET);
+            L1_FORK_ID = vm.createSelectFork("mainnet");
             lzHelper = new LayerZeroHelper();
 
             address[] memory users1 = (new UserFactory()).create(2);
@@ -99,7 +96,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Setup L2 system
         {
-            L2_FORK_ID = vm.createSelectFork(RPC_POLYGON_MAINNET);
+            L2_FORK_ID = vm.createSelectFork("polygon");
 
             address[] memory users2 = (new UserFactory()).create(2);
             user2 = users2[0];
