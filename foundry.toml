@@ -4,11 +4,11 @@ ast = true
 legacy_assertions = true
 assertions_revert = false
 fs_permissions = [
-    {access = "write", path = "./src/test/sim/out/"},
-    {access = "read-write", path = "./deployments/"},
-    {access = "read", path = "./src/scripts/"},
-    {access = "read", path = "./src/proposals/addresses.json"},
-    {access = "read-write", path = "./src/scripts/env.json"},
+    { access = "write", path = "./src/test/sim/out/" },
+    { access = "read-write", path = "./deployments/" },
+    { access = "read", path = "./src/scripts/" },
+    { access = "read", path = "./src/proposals/addresses.json" },
+    { access = "read-write", path = "./src/scripts/env.json" },
 ]
 
 # The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
