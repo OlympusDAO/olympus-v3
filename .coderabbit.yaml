@@ -1,4 +1,4 @@
 reviews:
-  auto_review:
-    # Review all branches, not just PRs against the base branch
-    base_branches: [".*"]
+    auto_review:
+        # Review all branches, not just PRs against the base branch
+        base_branches: [".*"]

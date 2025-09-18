@@ -12,7 +12,7 @@ contract OIP166Test is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail) - 20872023
-        vm.createSelectFork(RPC_URL, 20872023 - 1);
+        vm.createSelectFork(_RPC_ALIAS, 20872023 - 1);
 
         /// @dev Deploy your proposal
         OIP_166 proposal = new OIP_166();
