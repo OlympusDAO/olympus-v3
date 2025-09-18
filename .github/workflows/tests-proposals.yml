@@ -1,4 +1,4 @@
-name: OCG Proposals
+name: Tests - OCG Proposals
 on:
     push:
         branches:
