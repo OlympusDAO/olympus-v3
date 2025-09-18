@@ -30,6 +30,7 @@ abstract contract ProposalTest is Test {
     function _simulateProposal() internal virtual {
         /// @notice This section is used to simulate the proposal on the mainnet fork.
         if (address(suite) == address(0)) {
+            // solhint-disable gas-custom-errors
             revert("_setupSuites() should be called prior to simulating");
         }
 
