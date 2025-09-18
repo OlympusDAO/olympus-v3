@@ -6,33 +6,55 @@ This document describes the roles that are used in the Olympus protocol.
 
 | Role | Policy | Actions |
 |------|----------|-------------|
+| admin | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods, enable/disable contract |
+| admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
+| admin | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate, enable/disable contract |
+| admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
+| admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
+| admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
+| admin | ReserveWrapper | Enable/disable contract |
+| admin | YieldDepositFacility | Set yield fee, enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
+| cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
+| cd_emissionmanager | ConvertibleDepositAuctioneer | Calls the setAuctionParameters() function |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
+| deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
+| emergency | ConvertibleDepositAuctioneer | Disable the contract |
+| emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
+| emergency | ConvertibleDepositFacility | Disable the contract |
 | emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
 | emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
+| emergency | DepositManager | Disable contract |
+| emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
+| emergency | EmissionManager | Disable the contract |
+| emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
+| emergency | ReserveWrapper | Disable contract |
+| emergency | YieldDepositFacility | Disable the contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
-| emergency_restart | EmissionManager | Reactivates the EmissionManager |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
-| emergency_shutdown | EmissionManager | Deactivates the EmissionManager |
-| emissions_admin | EmissionManager | Set configuration parameters |
+| heart | ConvertibleDepositFacility | Calls the execute() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
+| heart | YieldDepositFacility | Calls the execute() function |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
-| heart_admin | Heart | Allows configuring heart parameters and activation/deactivation |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
-| loop_daddy | YieldRepurchaseFacility | Activate/deactivate the functionality |
+| manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
+| manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
+| manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
+| manager | Heart | Reset the heartbeat |
+| manager | YieldDepositFacility | Set yield fee |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |

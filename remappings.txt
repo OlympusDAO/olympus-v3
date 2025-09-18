@@ -6,6 +6,8 @@ test/=src/test/
 test/mocks=src/test/mocks
 test/lib=src/test/lib
 
+@base64-1.1.0/=dependencies/base64-1.1.0/
+
 @surl-1.0.0/=dependencies/surl-1.0.0/src/
 
 @chainlink-ccip-1.6.0/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/
@@ -21,8 +23,8 @@ forge-std/=dependencies/forge-std-1.9.6/src/
 
 @base58-solidity-1.0.3/=dependencies/base58-solidity-1.0.3/contracts/
 
-@clones-with-immutable-args-1.0.0/=dependencies/clones-with-immutable-args-1.0.0/src/
-clones/=dependencies/clones-with-immutable-args-1.0.0/src/
+@clones-with-immutable-args-1.1.2/=dependencies/clones-with-immutable-args-1.1.2/src/
+clones/=dependencies/clones-with-immutable-args-1.1.2/src/
 
 @layer-zero-endpoint-v1-0.0.6/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
 layer-zero/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
@@ -30,12 +32,14 @@ layer-zero/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
 @solmate-6.2.0/=dependencies/solmate-6.2.0/src/
 solmate/=dependencies/solmate-6.2.0/src/
 
-@openzeppelin-4.8.0/=dependencies/@openzeppelin-contracts-4.8.0/
-@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-4.8.0/
-openzeppelin/=dependencies/@openzeppelin-contracts-4.8.0/
+@openzeppelin-4.8.0/=dependencies/openzeppelin-4.8.0/contracts/
+@openzeppelin/contracts/=dependencies/openzeppelin-4.8.0/contracts/
+openzeppelin/=dependencies/openzeppelin-4.8.0/contracts/
 
-proposal-sim/=dependencies/forge-proposal-simulator-1.0.0/
-dependencies/forge-proposal-simulator-1.0.0/:@addresses/=dependencies/forge-proposal-simulator-1.0.0/addresses/
-dependencies/forge-proposal-simulator-1.0.0/:@utils/=dependencies/forge-proposal-simulator-1.0.0/utils/
-dependencies/forge-proposal-simulator-1.0.0/:@proposals/=dependencies/forge-proposal-simulator-1.0.0/proposals/
-dependencies/forge-proposal-simulator-1.0.0/:Governors/=dependencies/forge-proposal-simulator-1.0.0/Governors/
+@openzeppelin-5.3.0/=dependencies/openzeppelin-new-5.3.0/contracts/
+
+proposal-sim/=dependencies/forge-proposal-simulator-1.0.1/
+dependencies/forge-proposal-simulator-1.0.1/:@addresses/=dependencies/forge-proposal-simulator-1.0.1/addresses/
+dependencies/forge-proposal-simulator-1.0.1/:@utils/=dependencies/forge-proposal-simulator-1.0.1/utils/
+dependencies/forge-proposal-simulator-1.0.1/:@proposals/=dependencies/forge-proposal-simulator-1.0.1/proposals/
+dependencies/forge-proposal-simulator-1.0.1/:Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/

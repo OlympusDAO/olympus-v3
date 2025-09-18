@@ -2,6 +2,24 @@
 pragma solidity ^0.8.0;
 
 interface IYieldRepo {
+    // =========  EVENTS  ========= //
+
+    event RepoMarket(uint256 marketId, uint256 bidAmount);
+    event NextYieldSet(uint256 nextYield);
+
+    // =========  ERRORS  ========= //
+
+    error TooMuchIncrease();
+    error InvalidParam(string param);
+
+    // =========  STRUCTS  ========= //
+
+    struct EnableParams {
+        uint256 initialReserveBalance;
+        uint256 initialConversionRate;
+        uint256 initialYield;
+    }
+
     // =========  CORE FUNCTIONS ========= //
 
     /// @notice Triggers the yield repurchase facility functionality
@@ -17,9 +35,6 @@ interface IYieldRepo {
 
     /// @notice Returns the current epoch
     function epoch() external view returns (uint48);
-
-    /// @notice Returns whether the contract is shutdown
-    function isShutdown() external view returns (bool);
 
     /// @notice Returns the current balance of yield generating reserves in the treasury and clearinghouse
     function getReserveBalance() external view returns (uint256);

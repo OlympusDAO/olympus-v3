@@ -87,3 +87,35 @@ set_account_address_ledger() {
     ACCOUNT_ADDRESS=$(cast wallet address --ledger --mnemonic-index $1)
     echo "  Wallet address: $ACCOUNT_ADDRESS"
 }
+
+# @description Validates account parameters and sets account flags
+# @param {string} $1 The cast wallet account (optional)
+# @param {string} $2 The ledger mnemonic index (optional)
+# @sideEffects Sets ACCOUNT_FLAG, LEDGER_FLAGS, and ACCOUNT_ADDRESS global variables
+validate_and_set_account() {
+    local account="$1"
+    local ledger="$2"
+    
+    # Validate that either account or ledger is specified (but not both)
+    if [ -n "$account" ] && [ -n "$ledger" ]; then
+        display_error "Cannot specify both --account and --ledger. Choose one."
+        exit 1
+    elif [ -z "$account" ] && [ -z "$ledger" ]; then
+        display_error "Must specify either --account or --ledger."
+        exit 1
+    fi
+    
+    if [ -n "$account" ]; then
+        # Using cast wallet account
+        set_account_address "$account"
+        ACCOUNT_FLAG="--account $account"
+        LEDGER_FLAGS=""
+        echo "  Using account: $account"
+    else
+        # Using Ledger
+        set_account_address_ledger "$ledger"
+        ACCOUNT_FLAG=""
+        LEDGER_FLAGS="--ledger --mnemonic-indexes $ledger"
+        echo "  Using Ledger with mnemonic index: $ledger"
+    fi
+}

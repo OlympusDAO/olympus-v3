@@ -47,6 +47,11 @@ import {MockEmissionManager} from "src/test/mocks/MockEmissionManager.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
+import {IReserveMigrator} from "src/policies/interfaces/IReserveMigrator.sol";
+import {IOperator} from "src/policies/interfaces/IOperator.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
+import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
+
 library SimIO {
     Vm internal constant vm = Vm(address(bytes20(uint160(uint256(keccak256("hevm cheat code"))))));
 
@@ -423,11 +428,7 @@ abstract contract RangeSim is Test {
             // Deploy Heart
             heart = new OlympusHeart(
                 kernel,
-                operator,
                 distributor,
-                yieldRepo,
-                reserveMigrator,
-                emissionManager,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
@@ -479,10 +480,18 @@ abstract contract RangeSim is Test {
             rolesAdmin.grantRole("loop_daddy", guardian);
         }
 
+        // Add periodic tasks
+        {
+            heart.addPeriodicTaskAtIndex(address(reserveMigrator), IReserveMigrator.migrate.selector, 0);
+            heart.addPeriodicTaskAtIndex(address(operator), IOperator.operate.selector, 1);
+            heart.addPeriodicTaskAtIndex(address(yieldRepo), IYieldRepo.endEpoch.selector, 2);
+            heart.addPeriodicTaskAtIndex(address(emissionManager), bytes4(0), 3);
+        }
+
         {
             // Shutdown the yieldRepo
             vm.prank(guardian);
-            yieldRepo.shutdown(new ERC20[](0));
+            yieldRepo.disable(abi.encode(new address[](0)));
 
             // Set initial supply and liquidity balances
             uint256 initialSupply = vm.envUint("SUPPLY");

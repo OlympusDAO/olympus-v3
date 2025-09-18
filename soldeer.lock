@@ -1,15 +1,14 @@
 [[dependencies]]
-name = "@openzeppelin-contracts"
-version = "4.8.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/4_8_0_22-01-2024_13:13:40_contracts.zip"
-checksum = "932598a6426b76e315bb9fac536011eb21a76984015efe9e8167c4fc9d7e32a3"
-integrity = "954367e8adec93f80c6e795012955706347cdb0359360e7c835e4dd29e5a9c2f"
-
-[[dependencies]]
 name = "base58-solidity"
 version = "1.0.3"
 git = "https://github.com/storyicon/base58-solidity.git"
 rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f"
+
+[[dependencies]]
+name = "base64"
+version = "1.1.0"
+git = "https://github.com/Brechtpd/base64.git"
+rev = "4d85607b18d981acff392d2e99ba654305552a97"
 
 [[dependencies]]
 name = "chainlink-ccip"
@@ -25,15 +24,15 @@ rev = "b429481536095867f9cd2c6480066c472b9594de"
 
 [[dependencies]]
 name = "clones-with-immutable-args"
-version = "1.0.0"
+version = "1.1.2"
 git = "https://github.com/wighawag/clones-with-immutable-args.git"
-rev = "5950723ffcfa047f13262e5dbd7218b54360c42e"
+rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce"
 
 [[dependencies]]
 name = "forge-proposal-simulator"
-version = "1.0.0"
+version = "1.0.1"
 git = "https://github.com/OlympusDAO/forge-proposal-simulator.git"
-rev = "864b357b650f9dc7b2fb1ae23562454815d51def"
+rev = "76374f3bf3b032dfb5c685c5a969ca20d0776384"
 
 [[dependencies]]
 name = "forge-std"
@@ -47,6 +46,18 @@ name = "layer-zero-endpoint-v1"
 version = "0.0.6"
 git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
 rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+
+[[dependencies]]
+name = "openzeppelin"
+version = "4.8.0"
+git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git"
+rev = "49c0e4370d0cc50ea6090709e3835a3091e33ee2"
+
+[[dependencies]]
+name = "openzeppelin-new"
+version = "5.3.0"
+git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git"
+rev = "e4f70216d759d8e6a64144a9e1f7bbeed78e7079"
 
 [[dependencies]]
 name = "safe-utils"

@@ -55,7 +55,7 @@ contract RolesAdminTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](2);
         Keycode ROLES_KEYCODE = toKeycode("ROLES");
         expectedPerms[0] = Permissions(ROLES_KEYCODE, ROLES.saveRole.selector);

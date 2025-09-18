@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+// External libraries
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
+// Internal libraries
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
-import {IDistributor} from "policies/interfaces/IDistributor.sol";
-import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
-import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IStaking} from "interfaces/IStaking.sol";
-import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
-import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+// Interfaces
+import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
+import {IHeart} from "src/policies/interfaces/IHeart.sol";
 
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+// Modules
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
-import "src/Kernel.sol";
+// Base Contracts
+import {BasePeriodicTaskManager} from "src/bases/BasePeriodicTaskManager.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+
+// Kernel
+import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
@@ -27,7 +31,7 @@ import "src/Kernel.sol";
 ///         market operations use up to date information.
 ///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
 ///         Rewards are issued in OHM.
-contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePeriodicTaskManager {
     using TransferHelper for ERC20;
 
     // =========  STATE ========= //
@@ -41,19 +45,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Max reward for beating the Heart (in reward token decimals)
     uint256 public maxReward;
 
-    /// @notice Status of the Heart, false = stopped, true = beating
-    bool public active;
-
     // Modules
     PRICEv1 internal PRICE;
     MINTRv1 internal MINTR;
 
     // Policies
-    IOperator public operator;
     IDistributor public distributor;
-    IYieldRepo public yieldRepo;
-    IReserveMigrator public reserveMigrator;
-    IEmissionManager public emissionManager;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -63,25 +60,18 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     ///      Therefore, manually ensure that the value is valid when deploying the contract.
     constructor(
         Kernel kernel_,
-        IOperator operator_,
         IDistributor distributor_,
-        IYieldRepo yieldRepo_,
-        IReserveMigrator reserveMigrator_,
-        IEmissionManager emissionManager_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
-        operator = operator_;
         distributor = distributor_;
-        yieldRepo = yieldRepo_;
-        reserveMigrator = reserveMigrator_;
-        emissionManager = emissionManager_;
 
-        active = true;
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
+
+        // Disabled by default by PolicyEnabler
     }
 
     /// @inheritdoc Policy
@@ -131,7 +121,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @return major The major version of the policy.
     /// @return minor The minor version of the policy.
     function VERSION() external pure returns (uint8 major, uint8 minor) {
-        return (1, 6);
+        return (1, 7);
     }
 
     //============================================================================================//
@@ -140,27 +130,19 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
-        if (!active) revert Heart_BeatStopped();
+        if (!isEnabled) revert Heart_BeatStopped();
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Update the moving average on the Price module
+        // This cannot be a periodic task, because it requires a policy with permission to call the updateMovingAverage function
         PRICE.updateMovingAverage();
 
-        // Migrate reserves, if necessary
-        reserveMigrator.migrate();
-
-        // Trigger price range update and market operations
-        operator.operate();
-
-        // Trigger protocol loop
-        yieldRepo.endEpoch();
-
-        // Trigger rebase
+        // Trigger the rebase
         distributor.triggerRebase();
 
-        // Trigger emission manager
-        emissionManager.execute();
+        // Execute periodic tasks
+        _executePeriodicTasks();
 
         // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
@@ -194,45 +176,21 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN or MANAGER roles
+    function resetBeat() external onlyManagerOrAdminRole {
+        _resetBeat();
+    }
+
+    /// @inheritdoc PolicyEnabler
+    function _enable(bytes calldata) internal override {
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function activate() external onlyRole("heart_admin") {
-        active = true;
-        _resetBeat();
-    }
-
-    /// @inheritdoc IHeart
-    function deactivate() external onlyRole("heart_admin") {
-        active = false;
-    }
-
-    /// @inheritdoc IHeart
-    function setOperator(address operator_) external onlyRole("heart_admin") {
-        operator = IOperator(operator_);
-    }
-
-    /// @inheritdoc IHeart
-    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+    /// @dev        This function is gated to the ADMIN role
+    function setDistributor(address distributor_) external onlyAdminRole {
         distributor = IDistributor(distributor_);
         _syncBeatWithDistributor();
-    }
-
-    /// @inheritdoc IHeart
-    function setYieldRepo(address yieldRepo_) external onlyRole("heart_admin") {
-        yieldRepo = IYieldRepo(yieldRepo_);
-    }
-
-    /// @inheritdoc IHeart
-    function setReserveMigrator(address reserveMigrator_) external onlyRole("heart_admin") {
-        reserveMigrator = IReserveMigrator(reserveMigrator_);
-    }
-
-    /// @inheritdoc IHeart
-    function setEmissionManager(address emissionManager_) external onlyRole("heart_admin") {
-        emissionManager = IEmissionManager(emissionManager_);
     }
 
     modifier notWhileBeatAvailable() {
@@ -242,10 +200,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
+    /// @dev        This function is gated to the ADMIN role
     function setRewardAuctionParams(
         uint256 maxReward_,
         uint48 auctionDuration_
-    ) external onlyRole("heart_admin") notWhileBeatAvailable {
+    ) external onlyAdminRole notWhileBeatAvailable {
         // auction duration should be less than or equal to frequency, otherwise frequency will be used
         if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
 

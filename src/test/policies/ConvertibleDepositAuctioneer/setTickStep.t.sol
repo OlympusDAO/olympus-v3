@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: Unlicensed
+pragma solidity >=0.8.20;
+
+import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+
+contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctioneerTest {
+    // when the caller does not have the "admin" role
+    //  [X] it reverts
+
+    function test_callerDoesNotHaveAdminOrManagerRole_reverts(address caller_) public {
+        // Ensure caller is not admin or manager
+        vm.assume(caller_ != admin && caller_ != manager);
+
+        // Expect revert
+        _expectRevertNotAuthorised();
+
+        // Call function
+        vm.prank(caller_);
+        auctioneer.setTickStep(100e2);
+    }
+
+    // given the contract is not initialized
+    //  [X] it sets the tick step
+
+    function test_contractNotInitialized() public {
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(100e2);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), 100e2, "tick step");
+    }
+
+    // when the value is < 100e2
+    //  [X] it reverts
+
+    function test_valueIsOutOfBounds_reverts(uint24 tickStep_) public {
+        uint24 tickStep = uint24(bound(tickStep_, 0, 100e2 - 1));
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_InvalidParams.selector,
+                "tick step"
+            )
+        );
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep);
+    }
+
+    // when the contract is deactivated
+    //  [X] it sets the tick step
+
+    function test_contractInactive(uint24 tickStep_) public {
+        uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
+
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit TickStepUpdated(address(iReserveToken), tickStep);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), tickStep, "tick step");
+    }
+
+    // [X] it sets the tick step
+    // [X] it emits an event
+
+    function test_contractActive(uint24 tickStep_) public givenEnabled {
+        uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
+
+        uint48 lastUpdate = uint48(block.timestamp);
+
+        // Warp to change the block timestamp
+        vm.warp(lastUpdate + 1);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit TickStepUpdated(address(iReserveToken), tickStep);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), tickStep, "tick step");
+    }
+}

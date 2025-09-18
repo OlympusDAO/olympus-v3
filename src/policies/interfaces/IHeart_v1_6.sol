@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity >=0.8.0;
+
+/// @dev Interface for the Heart policy as of v1.6
+interface IHeart {
+    // =========  EVENTS ========= //
+
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
+
+    // =========  ERRORS ========= //
+
+    error Heart_OutOfCycle();
+    error Heart_BeatStopped();
+    error Heart_InvalidParams();
+    error Heart_BeatAvailable();
+    error Heart_InvalidFrequency();
+
+    // =========  CORE FUNCTIONS ========= //
+
+    /// @notice Beats the heart
+    /// @notice Only callable when enough time has passed since last beat (determined by frequency variable)
+    /// @notice This function is incentivized with a token reward (see rewardToken and reward variables).
+    /// @dev    Triggers price oracle update and market operations
+    function beat() external;
+
+    // =========  ADMIN FUNCTIONS ========= //
+
+    /// @notice Unlocks the cycle if stuck on one side, eject function
+    /// @notice Access restricted
+    function resetBeat() external;
+
+    /// @notice Turns the heart on and resets the beat
+    /// @notice Access restricted
+    /// @dev    This function is used to restart the heart after a pause
+    function activate() external;
+
+    /// @notice Turns the heart off
+    /// @notice Access restricted
+    /// @dev    Emergency stop function for the heart
+    function deactivate() external;
+
+    /// @notice Updates the Operator contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  operator_ The address of the new Operator contract
+    function setOperator(address operator_) external;
+
+    /// @notice Updates the Distributor contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  distributor_ The address of the new Distributor contract
+    function setDistributor(address distributor_) external;
+
+    /// @notice Updates the YieldRepo contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  yieldRepo_ The address of the new YieldRepo contract
+    function setYieldRepo(address yieldRepo_) external;
+
+    /// @notice Updates the ReserveMigrator contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  reserveMigrator_ The address of the new ReserveMigrator contract
+    function setReserveMigrator(address reserveMigrator_) external;
+
+    /// @notice Updates the EmissionManager contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  emissionManager_ The address of the new EmissionManager contract
+    function setEmissionManager(address emissionManager_) external;
+
+    /// @notice Sets the max reward amount, and auction duration for the beat function
+    /// @notice Access restricted
+    /// @param  maxReward_ - New max reward amount, in units of the reward token
+    /// @param  auctionDuration_ - New auction duration, in seconds
+    function setRewardAuctionParams(uint256 maxReward_, uint48 auctionDuration_) external;
+
+    // =========  VIEW FUNCTIONS ========= //
+
+    /// @notice Heart beat frequency, in seconds
+    function frequency() external view returns (uint48);
+
+    /// @notice Current reward amount based on linear auction
+    function currentReward() external view returns (uint256);
+}

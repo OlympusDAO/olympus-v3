@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {Permissions, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
@@ -180,21 +180,21 @@ contract CoolerTreasuryBorrowerTestBase is Test {
 
     function test_disabled_borrow() public givenDisabled {
         vm.startPrank(TB_COOLER);
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         treasuryBorrower.borrow(123, RECEIVER);
         vm.stopPrank();
     }
 
     function test_disabled_repay() public givenDisabled {
         vm.startPrank(TB_COOLER);
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         treasuryBorrower.repay();
         vm.stopPrank();
     }
 
     function test_disabled_setDebt() public givenDisabled {
         vm.startPrank(TB_ADMIN);
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         treasuryBorrower.setDebt(123);
         vm.stopPrank();
     }

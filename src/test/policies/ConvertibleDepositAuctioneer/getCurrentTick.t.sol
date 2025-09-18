@@ -1,0 +1,920 @@
+// SPDX-License-Identifier: Unlicensed
+pragma solidity >=0.8.20;
+
+import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+
+import {console2} from "forge-std/console2.sol";
+
+contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctioneerTest {
+    // given the contract is disabled
+    //  [X] it does not revert
+
+    function test_contractDisabled_doesNotRevert()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenDisabled
+    {
+        // Call function
+        auctioneer.getCurrentTick(PERIOD_MONTHS);
+    }
+
+    // given the deposit asset and period are not enabled
+    //  [X] it reverts
+
+    function test_givenDepositAssetAndPeriodNotEnabled_reverts() public givenEnabled {
+        // Expect revert
+        _expectDepositAssetAndPeriodNotEnabledRevert(iReserveToken, PERIOD_MONTHS);
+
+        // Call function
+        auctioneer.getCurrentTick(PERIOD_MONTHS);
+    }
+
+    // given a bid has never been received and the tick price is at the minimum price
+    //  given no time has passed
+    //   [X] the tick price remains at the min price
+    //   [X] the tick capacity remains at the standard tick size
+
+    function test_fullCapacity_sameTime(
+        uint48 secondsPassed_
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 0, 86400 - 1));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        uint256 expectedTickPrice = 15e18;
+        uint256 expectedTickCapacity = 10e9;
+
+        // Assert current tick
+        assertEq(tick.capacity, expectedTickCapacity, "capacity");
+        assertEq(tick.price, expectedTickPrice, "price");
+    }
+
+    //  given the target is zero
+    //   [X] the tick price remains at the min price
+    //   [X] the tick capacity remains at the standard tick size
+
+    function test_fullCapacity_targetZero(
+        uint48 secondsPassed_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(0, TICK_SIZE, MIN_PRICE)
+    {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert current tick
+        // As the day target is zero, no new capacity is added, hence the values stay the same
+        assertEq(tick.capacity, TICK_SIZE, "capacity");
+        assertEq(tick.price, MIN_PRICE, "price");
+        assertEq(auctioneer.getCurrentTickSize(), TICK_SIZE, "tick size");
+    }
+
+    //  [X] the tick price remains at the min price
+    //  [X] the tick capacity remains at the standard tick size
+
+    function test_fullCapacity(
+        uint48 secondsPassed_
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Expected values
+        // Tick size = 10e9
+        // Tick step = 110e2
+        // Current tick capacity = tick size = 10e9
+        // Current tick price = min price = 15e18
+        // New capacity added = target * days passed = 20e9 * 2 = 40e9
+        // New capacity = 10e9 + 40e9 = 50e9
+        // Iteration 1:
+        //   New capacity = 50e9 - 10e9 = 40e9
+        //   Tick price = 15e18 * 100e2 / 110e2 = 13636363636363636364
+        //
+        // Updated tick price is < min price, so it is set to the min price
+        uint256 expectedTickPrice = 15e18;
+        uint256 expectedTickCapacity = 10e9;
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert current tick
+        assertEq(tick.capacity, expectedTickCapacity, "capacity");
+        assertEq(tick.price, expectedTickPrice, "price");
+    }
+
+    // when the new capacity (current tick capacity + added capacity) is equal to the current tick size
+    //  given the current tick size is 5e9
+    //   given the current timestamp is on a different day to the last bid
+    //    [X] the tick capacity is set to the standard tick size
+    //    [X] the tick size is set to the standard tick size
+
+    function test_newCapacityEqualToTickSize_dayTargetMet_nextDay()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(378861111101700000000)
+    {
+        // 150e18 + 165e18 + 63861111101700000000 = 378861111101700000000
+        // Bid size of 378861111101700000000 results in:
+        // 1. 378861111101700000000 * 1e9 / 15e18 = 24,025,000,000. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (378861111101700000000 - 150e18) * 1e9 / 165e17 = 12,750,000,000. Greater than the tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16. Day target met, so tick size becomes 5e9.
+        // 3. (378861111101700000000 - 150e18 - 165e18) * 1e9 / 1815e16 = 3518518518. Less than the tick size of 5e9.
+        // Remaining capacity is 5e9 - 3518518518 = 1481481482
+
+        // 20e9*36800/(24*60*60) = 8518518518 added capacity
+        // New capacity will be 1481481482 + 8518518518 = 10e9
+
+        // Calculate the expected tick price
+        // As it is the next day, the tick size will reset to 10e9
+
+        // Warp forward to the next day
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 36800);
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Call setAuctionParameters, which resets the day and updates lastUpdate
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        assertEq(tick.capacity, previousTick.capacity, "new tick capacity");
+        assertEq(tick.price, previousTick.price, "new tick price");
+    }
+
+    //   [X] the tick price is unchanged
+    //   [X] the tick capacity is set to the current tick size
+    //   [X] the tick size does not change
+
+    function test_newCapacityEqualToTickSize_dayTargetMet()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(360375e15)
+    {
+        // Bid size of 360375e15 results in:
+        // 1. 360375e15 * 1e9 / 15e18 = 24,025,000,000. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (360375e15 - 150e18) * 1e9 / 165e17 = 12,750,000,000. Greater than the tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16. Day target met, so tick size becomes 5e9.
+        // 3. (360375e15 - 150e18 - 165e18) * 1e9 / 1815e16 = 25e8. Less than the tick size of 5e9.
+
+        // Remaining capacity is 25e8
+        // Added capacity will be 25e8
+        // New capacity will be 25e8 + 25e8 = 5e9
+
+        // Calculate the expected tick price
+        // Tick price remains at 1815e16
+
+        // Warp forward
+        uint48 timePassed = 10800;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 5e9, "new tick capacity");
+        assertEq(tick.price, 1815e16, "new tick price");
+    }
+
+    //  [X] the tick price is unchanged
+    //  [X] the tick capacity is set to the standard tick size
+
+    function test_newCapacityEqualToTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(75e18)
+    {
+        // Min price is 15e18
+        // We need a bid and time to pass so that remaining capacity + new capacity = tick size
+        // Given a tick size of 10e9
+        // We want to get to a remaining capacity of 5e9
+        // 5e9 = bid size * 1e9 / 15e18
+        // Bid size = 5e9 * 15e18 / 1e9 = 75e18
+        // If there is capacity of 5e9, we need new capacity of 5e9
+        // new capacity = 20e9 * time passed / 1 days
+        // time passed = 5e9 * 1 days / 20e9 = 21600 seconds
+
+        // Assert that the convertible amount is correct
+        uint256[] memory positionIds = convertibleDepositPositions.getUserPositionIds(recipient);
+        assertEq(
+            convertibleDepositPositions.previewConvert(positionIds[0], 75e18),
+            5e9,
+            "convertible amount"
+        );
+
+        // Assert tick capacity
+        assertEq(auctioneer.getCurrentTick(PERIOD_MONTHS).capacity, 5e9, "previous tick capacity");
+
+        // Assert that the time passed will result in the correct capacity
+        uint48 timePassed = 21600;
+        assertEq(
+            (auctioneer.getAuctionParameters().target * timePassed) / 1 days,
+            5e9,
+            "expected new capacity"
+        );
+
+        // Warp forward
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    // when the new capacity is less than the current tick size
+    //  [X] the tick price is unchanged
+    //  [X] the tick capacity is set to the new capacity
+
+    function test_newCapacityLessThanTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(90e18)
+    {
+        // Bid size of 90e18 results in convertible amount of 6e9
+        // Remaining capacity is 4e9
+
+        // Added capacity will be 5e9
+        // New capacity will be 4e9 + 5e9 = 9e9
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 9e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    // when the new capacity is greater than the current tick size
+    //  given the tick step is = 100e2
+    //   [X] the tick price is unchanged
+    //   [X] the tick capacity is set to the new capacity
+
+    function test_tickStepSame_newCapacityGreaterThanTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenTickStep(100e2)
+        givenRecipientHasBid(45e18)
+    {
+        // Bid size of 45e18 results in convertible amount of 3e9
+        // Remaining capacity is 7e9
+
+        // Added capacity will be 5e9
+        // New capacity will be 7e9 + 5e9 = 12e9
+        // Excess capacity = 12e9 - 10e9 = 2e9
+        // Tick price = 15e18 * 100e2 / 100e2 = 15e18
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 2e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    //  given the tick step is > 100e2
+    //   when the new price is lower than the minimum price
+    //    given the current tick size is 5e9
+    //     given the current timestamp is on a different day to the last bid
+    //      [X] the tick capacity is set to the standard tick size
+    //      [X] the tick size is set to the standard tick size
+
+    function test_tickPriceAboveMinimum_newPriceBelowMinimum_dayTargetMet_nextDay()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(330e18)
+    {
+        // Bid size of 330e18 results in:
+        // 1. 330e18 * 1e9 / 15e18 = 22e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (330e18 - 150e18) * 1e9 / 165e17 = 10,909,090,909. Greater than tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16
+        // 3. (330e18 - 150e18 - 165e18) * 1e9 / 1815e16 = 826,446,280
+        // Remaining capacity is 5e9 - 826,446,280 = 4,173,553,720
+
+        // Added capacity will be 30e9
+        // New capacity will be 4,173,553,720 + 30e9 = 34,173,553,720
+
+        // Calculate the expected tick price
+        // As it is the next day, the tick size will reset to 10e9
+        // 1. Excess capacity = 34,173,553,720 - 10e9 = 24,173,553,720
+        //    Tick price = 165e17
+        // 2. Excess capacity = 24,173,553,720 - 10e9 = 14,173,553,720
+        //    Tick price = 165e17 * 100e2 / 110e2 = 15e18
+        // 3. Excess capacity = 14,173,553,720 - 10e9 = 4,173,553,720
+        //    Tick price = 15e18 * 100e2 / 110e2 = 13636363636363636364
+        //    Tick price is below the minimum price, so it is set to the minimum price
+        //    New capacity = current tick size = 10e9
+
+        // Warp forward
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 6 * 21600);
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Call setAuctionParameters, which resets the day and updates lastUpdate
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert previously-stored tick was updated with the values before the new parameters were set
+        assertEq(tick.capacity, previousTick.capacity, "new tick capacity");
+        assertEq(tick.price, previousTick.price, "new tick price");
+    }
+
+    //     [ ] the tick price is set to the minimum price
+    //     [ ] the tick capacity is set to the current tick size
+    //     [ ] the tick size does not change
+
+    //    [X] the tick price is set to the minimum price
+    //    [X] the capacity is set to the standard tick size
+
+    function test_tickPriceAboveMinimum_newPriceBelowMinimum()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (270e18 - 150e18) * 1e9 / 165e17 = 7,272,727,273. Less than tick size of 10e9.
+        // Remaining capacity is 10e9 - 7,272,727,273 = 2,727,272,727
+
+        // Added capacity will be 30e9
+        // New capacity will be 2,727,272,727 + 30e9 = 32,727,272,727
+
+        // Calculate the expected tick price
+        // 1. Excess capacity = 32,727,272,727 - 10e9 = 22,727,272,727
+        //    Tick price = 165e17
+        // 2. Excess capacity = 22,727,272,727 - 10e9 = 12,727,272,727
+        //    Tick price = 165e17 * 100e2 / 110e2 = 15e18
+        // 3. Excess capacity = 12,727,272,727 - 10e9 = 2,727,272,727
+        //    Tick price = 15e18 * 100e2 / 110e2 = 13636363636363636364
+        //    Tick price is below the minimum price, so it is set to the minimum price
+        //    New capacity = tick size = 10e9
+
+        // Warp forward
+        uint48 timePassed = 6 * 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    //   given the current tick size is 5e9
+    //    given the current timestamp is on a different day to the last bid
+    //     [X] the tick capacity is set to the standard tick size
+    //     [X] the tick size is set to the standard tick size
+
+    function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet_nextDay()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(330e18)
+    {
+        // Bid size of 330e18 results in:
+        // 1. 330e18 * 1e9 / 15e18 = 22e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (330e18 - 150e18) * 1e9 / 165e17 = 10,909,090,909. Greater than tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16
+        // 3. (330e18 - 150e18 - 165e18) * 1e9 / 1815e16 = 826,446,280
+        // Remaining capacity is 5e9 - 826,446,280 = 4173553720
+
+        // 20e9*36800/(24*60*60) = 8518518518 added capacity
+        // New capacity will be 8518518518 + 4173553720 = 12692072238
+
+        // Calculate the expected tick price
+        // As it is the next day, the tick size will reset to 10e9
+        // Excess capacity = 12692072238 - 10e9 = 2692072238
+        // Tick price = 165e17
+
+        // Warp forward
+        // Otherwise the time passed will not be correct
+        vm.warp(block.timestamp + 36800);
+
+        // Call setAuctionParameters, which resets the day
+        vm.prank(emissionManager);
+        auctioneer.setAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 2692072238, "new tick capacity");
+        assertEq(tick.price, 165e17, "new tick price");
+    }
+
+    //    [X] it reduces the price by the tick step until the total capacity is less than the current tick size
+    //    [X] the tick capacity is set to the remainder
+    //    [X] the tick size does not change
+
+    function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize_dayTargetMet()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(330e18)
+    {
+        // Bid size of 330e18 results in:
+        // 1. 330e18 * 1e9 / 15e18 = 22e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (330e18 - 150e18) * 1e9 / 165e17 = 10,909,090,909. Greater than tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16
+        // 3. (330e18 - 150e18 - 165e18) * 1e9 / 1815e16 = 826,446,280
+        // Remaining capacity is 5e9 - 826,446,280 = 4,173,553,720
+
+        // Increase time to 12 hours to get more capacity that exceeds initial tick size
+        // Added capacity will be 10e9
+        // New capacity will be 4,173,553,720 + 10e9 = 14,173,553,720
+
+        // Calculate the expected tick price with the fix (using initial tick size 10e9)
+        // Total capacity = 14,173,553,720
+        // Since 14,173,553,720 > 10e9, one decay iteration occurs:
+        // - Subtract 10e9: 14,173,553,720 - 10e9 = 4,173,553,720
+        // - Apply price decay: 1815e16 * 100e2 / 110e2 = 16500000000000000000 (165e17)
+        // - Check: 4,173,553,720 < 10e9, so no more decay
+        // Final capacity capped at current tick size (5e9)
+
+        // Warp forward
+        uint48 timePassed = 43200; // 12 hours
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity - should be 4,173,553,720 (remainder after decay)
+        assertEq(tick.capacity, 4173553720, "new tick capacity");
+        assertEq(tick.price, 165e17, "new tick price");
+    }
+
+    //   [X] it reduces the price by the tick step until the total capacity is less than the standard tick size
+    //   [X] the tick capacity is set to the remainder
+
+    function test_tickPriceAboveMinimum_newCapacityGreaterThanTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (270e18 - 150e18) * 1e9 / 165e17 = 7272727272. Less than the tick size of 10e9, so the tick price remains unchanged.
+        // Remaining capacity is 10e9 - 7272727272 = 2727272728
+
+        // 20e9*32400/86400 = 7,500,000,000
+        // Added capacity will be 7,500,000,000
+        // New capacity will be 2727272728 + 7,500,000,000 = 10227272728
+
+        // Calculate the expected tick price
+        // Excess capacity = 10227272728 - 10e9 = 227272728
+        // Tick price = 165e17 * 100e2 / 110e2 = 15e18
+
+        // Warp forward
+        uint48 timePassed = 32400;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 227272728, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    function test_newCapacityGreaterThanTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenRecipientHasBid(45e18)
+    {
+        // Bid size of 45e18 results in convertible amount of 3e9
+        // Remaining capacity is 7e9
+
+        // Added capacity will be 5e9
+        // New capacity will be 7e9 + 5e9 = 12e9
+        // Excess capacity = 12e9 - 10e9 = 2e9
+        // Tick price = 15e18 * 100e2 / 110e2 = 13636363636363636364
+        // Because the tick price is below the minimum price, capacity is set to the tick size
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    function test_tickStepSame_newCapacityLessThanTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenTickStep(100e2)
+        givenRecipientHasBid(75e18)
+    {
+        // Bid size of 75e18 results in convertible amount of 5e9
+        // Remaining capacity is 5e9
+
+        // Added capacity will be 2.5e9
+        // New capacity will be 5e9 + 2.5e9 = 7.5e9
+        // Not greater than tick size, so price remains unchanged
+
+        // Warp forward
+        uint48 timePassed = 10800;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 75e8, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    function test_tickStepSame_newCapacityEqualToTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenTickStep(100e2)
+        givenRecipientHasBid(75e18)
+    {
+        // Bid size of 75e18 results in convertible amount of 5e9
+        // Remaining capacity is 5e9
+
+        // Added capacity will be 5e9
+        // New capacity will be 5e9 + 5e9 = 10e9
+        // Not greater than tick size, so price remains unchanged
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick capacity
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, 15e18, "new tick price");
+    }
+
+    // given there is another deposit asset and period enabled
+    //  given the tick capacity for the other deposit asset and period has been depleted
+    //   [X] the tick price for the current deposit asset and period is the minimum price and not affected by the other deposit asset and period
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_otherTickCapacityDepleted()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // This is for the other deposit asset and period
+        // The current deposit asset and period has 10e9 capacity and is at the minimum price
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+
+        // Assert tick
+        assertEq(tick.capacity, 10e9, "new tick capacity");
+        assertEq(tick.price, MIN_PRICE, "new tick price");
+    }
+
+    //  given the tick capacity for the current deposit asset and period has been depleted
+    //   [X] the added capacity is based on half of the target and the time passed since the last bid
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_tickCapacityDepleted()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenRecipientHasBid(270e18)
+    {
+        // Bid size of 270e18 results in:
+        // 1. 270e18 * 1e9 / 15e18 = 18e9. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (270e18 - 150e18) * 1e9 / 165e17 = 7272727272. Less than the tick size of 10e9, so the tick price remains unchanged.
+        // Remaining capacity is 10e9 - 7272727272 = 2727272728
+
+        // Day target is 20e9
+        // Number of active deposit assets and periods is 2
+        // Day target allocation is 20e9 / 2 = 10e9
+
+        // 10e9*32400/86400 = 3750000000
+        // Added capacity will be 3750000000
+        // New capacity will be 2727272728 + 3750000000 = 6477272728
+        // < 10e9, so the tick price remains unchanged
+
+        // Warp forward
+        uint48 timePassed = 32400;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert tick
+        assertEq(tick.capacity, 6477272728, "new tick capacity");
+        assertEq(tick.price, 165e17, "new tick price");
+    }
+
+    //  given the day target has been met by the other deposit asset and period
+    //   [X] the tick size for the current deposit asset and period is half of the standard tick size
+
+    function test_givenOtherDepositAssetAndPeriodEnabled_otherDepositAssetAndPeriodDayTargetMet()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenRecipientHasBid(360375e15)
+    {
+        // Bid size of 360375e15 results in:
+        // 1. 360375e15 * 1e9 / 15e18 = 24,025,000,000. Greater than tick size of 10e9. Bid amount becomes 150e18. New price is 15e18 * 110e2 / 100e2 = 165e17
+        // 2. (360375e15 - 150e18) * 1e9 / 165e17 = 12,750,000,000. Greater than the tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16. Day target met, so tick size becomes 5e9.
+        // 3. (360375e15 - 150e18 - 165e18) * 1e9 / 1815e16 = 25e8. Less than the tick size of 5e9.
+
+        // Warp forward
+        uint48 timePassed = 21600;
+        vm.warp(block.timestamp + timePassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+
+        // Assert tick
+        assertEq(tick.capacity, 5e9, "new tick capacity");
+        assertEq(tick.price, MIN_PRICE, "new tick price");
+    }
+
+    /// @notice Test that price decay uses initial tick size (10e9), not reduced current tick size (5e9)
+    /// @dev This test demonstrates the accelerated price decay bug with deterministic values
+    function test_priceDecayUsesInitialTickSize_noDecay()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+    {
+        _mintReserveToken(recipient, 100000e18);
+        _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
+
+        // Make large purchase to reduce tick size from 10e9 to 5e9
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 30000e18, 1, false, false);
+
+        // Get state after purchase (deterministic based on bid logic)
+        IConvertibleDepositAuctioneer.Tick memory tickAfterPurchase = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Let exactly 6 hours pass
+        vm.warp(block.timestamp + 6 hours);
+
+        /**
+         * MATHEMATICAL PROOF (using actual test values):
+         *
+         * Constants:
+         * - TARGET = 20e9
+         * - TICK_SIZE (initial) = 10e9
+         * - Current tick size (after large purchase) = 1e9
+         * - TICK_STEP = 110e2
+         * - Time passed = 6 hours = 21600 seconds
+         * - 1 day = 86400 seconds
+         *
+         * Capacity to add over 6 hours:
+         * capacityToAdd = (20e9 * 21600) / 86400 / 1 = 5e9
+         *
+         * After purchase (actual values from test):
+         * - tickAfterPurchase.capacity = 689818756 (~0.69e9)
+         * - Total capacity = 689818756 + 5e9 = 5689818756 (~5.69e9)
+         *
+         * CORRECT BEHAVIOR (using initial TICK_SIZE = 10e9):
+         * - Since 5.69e9 < 10e9, no decay iterations needed
+         * - Expected capacity = 5.69e9 (but capped at current tick size 1e9)
+         * - Expected price = unchanged from after purchase
+         *
+         * BUGGY BEHAVIOR (using reduced tick size = 1e9):
+         * - Check: 5.69e9 > 1e9? Yes, enter while loop
+         * - Multiple iterations subtracting 1e9 each time, causing excessive price decay
+         * - Result: unintended accelerated price decay
+         */
+
+        // Get actual result
+        IConvertibleDepositAuctioneer.Tick memory actualTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Expected values based on actual test scenario
+        uint256 capacityToAdd = 5e9; // (20e9 * 21600) / 86400 / 1
+        // uint256 totalCapacity = 689818756 + capacityToAdd; // 5689818756
+
+        // With initial tick size (10e9): 5689818756 < 10e9, so no decay iterations
+        // Final capacity is capped at current tick size (1e9) since day target was met
+        uint256 expectedCapacity = 1e9; // Capped at current tick size
+        uint256 expectedPrice = 2578079215517428693605; // No price change expected
+
+        console2.log("Capacity after purchase:", tickAfterPurchase.capacity);
+        console2.log("Capacity to add (6 hours):", capacityToAdd);
+        console2.log("Expected total capacity:", expectedCapacity);
+        console2.log("Expected price (no decay):", expectedPrice);
+        console2.log("Actual capacity:", actualTick.capacity);
+        console2.log("Actual price:", actualTick.price);
+        console2.log("Current tick size (reduced):", auctioneer.getCurrentTickSize());
+
+        // These should pass when the fix is implemented (use initial tick size in decay loop)
+        assertEq(
+            actualTick.capacity,
+            expectedCapacity,
+            "Should use initial tick size for decay calculation"
+        );
+        assertEq(
+            actualTick.price,
+            expectedPrice,
+            "Price should not decay when using initial tick size"
+        );
+    }
+
+    /// @notice Test that price decay correctly performs one iteration using initial tick size (10e9)
+    /// @dev This test demonstrates that decay calculations use the initial tick size, not the reduced current tick size
+    function test_priceDecayUsesInitialTickSize_oneDecayIteration()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+    {
+        _mintReserveToken(recipient, 100000e18);
+        _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
+
+        // Make large purchase to reduce tick size from 10e9 to 1e9
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 30000e18, 1, false, false);
+
+        // Get state after purchase
+        IConvertibleDepositAuctioneer.Tick memory tickAfterPurchase = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Let exactly 12 hours pass to get more capacity
+        vm.warp(block.timestamp + 12 hours);
+
+        /**
+         * MATHEMATICAL PROOF (using actual test values):
+         *
+         * Constants:
+         * - TARGET = 20e9
+         * - TICK_SIZE (initial) = 10e9
+         * - Current tick size (after large purchase) = 1e9
+         * - TICK_STEP = 110e2 (110%)
+         * - Time passed = 12 hours = 43200 seconds
+         * - 1 day = 86400 seconds
+         *
+         * Capacity to add over 12 hours:
+         * capacityToAdd = (20e9 * 43200) / 86400 / 1 = 10e9
+         *
+         * After purchase (from previous test):
+         * - tickAfterPurchase.capacity = 689818756 (~0.69e9)
+         * - Total capacity = 689818756 + 10e9 = 10689818756 (~10.69e9)
+         *
+         * CORRECT BEHAVIOR (using initial TICK_SIZE = 10e9):
+         * - Check: 10.69e9 > 10e9? Yes, enter while loop
+         * - Subtract: 10.69e9 - 10e9 = 0.69e9, apply price decay once
+         * - Check: 0.69e9 > 10e9? No, exit loop
+         * - Expected price = tickAfterPurchase.price * 100e2 / 110e2 (decay by tick step)
+         * - Expected capacity = 0.69e9 (but capped at current tick size 1e9)
+         *
+         * BUGGY BEHAVIOR (using reduced tick size = 1e9):
+         * - Check: 10.69e9 > 1e9? Yes, enter while loop
+         * - Multiple iterations (10+ times) subtracting 1e9 each time
+         * - Result: excessive price decay, much lower than expected
+         */
+
+        // Get actual result
+        IConvertibleDepositAuctioneer.Tick memory actualTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Expected values based on one decay iteration using initial tick size (10e9)
+        uint256 capacityToAdd = 10e9; // (20e9 * 43200) / 86400 / 1
+        uint256 totalCapacity = 689818756 + capacityToAdd; // 10689818756
+
+        // One decay iteration: totalCapacity - initialTickSize = remainingCapacity
+        uint256 remainingCapacity = totalCapacity - 10e9; // 689818756
+
+        // Price decay: tickAfterPurchase.price * 100e2 / 110e2 (using mulDivUp for exact calculation)
+        uint256 expectedPrice = 2343708377743116994187; // Actual calculated value
+
+        // Final capacity capped at current tick size (1e9)
+        uint256 expectedCapacity = remainingCapacity > 1e9 ? 1e9 : remainingCapacity;
+
+        console2.log("Capacity after purchase:", tickAfterPurchase.capacity);
+        console2.log("Capacity to add (12 hours):", capacityToAdd);
+        console2.log("Total capacity before decay:", totalCapacity);
+        console2.log("Expected remaining capacity after 1 decay:", remainingCapacity);
+        console2.log("Expected price after 1 decay:", expectedPrice);
+        console2.log("Expected final capacity (capped):", expectedCapacity);
+        console2.log("Actual capacity:", actualTick.capacity);
+        console2.log("Actual price:", actualTick.price);
+        console2.log("Current tick size (reduced):", auctioneer.getCurrentTickSize());
+
+        // These should pass when the fix is implemented (use initial tick size in decay loop)
+        assertEq(
+            actualTick.capacity,
+            expectedCapacity,
+            "Should use initial tick size for decay calculation"
+        );
+        assertEq(
+            actualTick.price,
+            expectedPrice,
+            "Price should decay exactly once using initial tick size"
+        );
+    }
+
+    // given the day target is zero
+    //  given the tick price is above the minimum
+    //   [X] the tick price does not decay
+    //   [X] the tick size does not decay
+
+    function test_givenTickPriceAboveMinimum_targetZero(
+        uint48 secondsPassed_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled // Start with standard parameters
+        givenRecipientHasBid(1000e18) // Make a bid to move the tick
+    {
+        uint48 secondsPassed = uint48(bound(secondsPassed_, 1, 7 days));
+
+        // Disable the auction by setting target to 0
+        _setAuctionParameters(0, TICK_SIZE, MIN_PRICE);
+
+        IConvertibleDepositAuctioneer.Tick memory previousTick = auctioneer.getPreviousTick(
+            PERIOD_MONTHS
+        );
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + secondsPassed);
+
+        // Call function
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+
+        // Assert current tick
+        // As the day target is zero, no new capacity is added and no decay occurs, hence the values stay the same
+        assertEq(
+            tick.capacity,
+            previousTick.capacity,
+            "capacity should not change when target is 0"
+        );
+        assertEq(tick.price, previousTick.price, "price should not decay when target is 0");
+        assertEq(
+            tick.lastUpdate,
+            previousTick.lastUpdate,
+            "lastUpdate should not change when target is 0"
+        );
+
+        // Assert auction is not active
+        assertEq(
+            auctioneer.isAuctionActive(),
+            false,
+            "auction should be inactive when target is 0"
+        );
+    }
+}

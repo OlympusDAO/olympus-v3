@@ -14,6 +14,9 @@ echo "*** Setting up submodules"
 git submodule init
 git submodule update
 
+echo "*** Forge Version"
+forge --version
+
 echo "*** Running forge install"
 forge install
 
@@ -21,6 +24,7 @@ echo "*** Restoring submodule commits"
 # Lock the submodules to specific commits
 
 echo "*** Running forge soldeer update"
+rm -rf dependencies/
 forge soldeer update
 
 echo "*** Installing safe-utils dependencies"
