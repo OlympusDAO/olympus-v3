@@ -1,4 +1,4 @@
-name: CI
+name: Test Code Coverage
 on:
     push:
         branches:
@@ -23,29 +23,13 @@ jobs:
                   version: 9
 
             - name: Install Node dependencies
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
 
             - name: Install Foundry dependencies
               run: pnpm run build
-
-            - name: Run lint check
-              run: pnpm run lint:check
-
-            - name: Run unit tests
-              run: pnpm run test:unit
-
-            - name: Run fork tests
-              run: pnpm run test:fork
-              env:
-                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
-
-            - name: Run cross-chain fork tests
-              run: pnpm run test:crosschainfork
-              env:
-                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
 
             # FYI: currently version 1.14
             - name: Setup lcov
@@ -67,7 +51,3 @@ jobs:
             #       coverage-files: lcov.info
             #       github-token: ${{ secrets.GITHUB_TOKEN }}
             #       update-comment: true
-
-            # Build will fail if a contract is over the size limit
-            - name: Contract Size
-              run: pnpm run size

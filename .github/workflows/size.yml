@@ -1,4 +1,4 @@
-name: OCG Proposals
+name: Build Size
 on:
     push:
         branches:
@@ -28,10 +28,6 @@ jobs:
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
 
-            - name: Install Foundry dependencies
-              run: pnpm run build
-
-            - name: Run proposal simulation tests
-              run: pnpm run test:proposal
-              env:
-                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+            # Build will fail if a contract is over the size limit
+            - name: Contract Size
+              run: pnpm run size

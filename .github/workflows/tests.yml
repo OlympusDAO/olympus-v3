@@ -1,4 +1,4 @@
-name: OCG Proposals
+name: Tests
 on:
     push:
         branches:
@@ -31,7 +31,18 @@ jobs:
             - name: Install Foundry dependencies
               run: pnpm run build
 
-            - name: Run proposal simulation tests
-              run: pnpm run test:proposal
+            - name: Run lint check
+              run: pnpm run lint:check
+
+            - name: Run unit tests
+              run: pnpm run test:unit
+
+            - name: Run fork tests
+              run: pnpm run test:fork
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+            - name: Run cross-chain fork tests
+              run: pnpm run test:crosschainfork
               env:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
