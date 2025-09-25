@@ -9,6 +9,8 @@ import {Kernel} from "src/Kernel.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
 
+import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
+
 // OIP_170 upgrades the Governor Bravo delegate with minor audit remediations.
 contract OIP_170 is GovernorBravoProposal {
     Kernel internal _kernel;
@@ -115,8 +117,6 @@ contract OIP_170 is GovernorBravoProposal {
         require(governor.implementation() == newDelegate, "Implementation not updated");
     }
 }
-
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // @dev Use this script to simulates or run a single proposal
 // Use this as a template to create your own script
