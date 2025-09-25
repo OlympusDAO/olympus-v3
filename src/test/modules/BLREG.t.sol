@@ -4,8 +4,8 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
-import "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
-import "src/Kernel.sol";
+import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
+import {Actions, fromKeycode, Kernel, Module} from "src/Kernel.sol";
 
 contract BLREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusBoostedLiquidityRegistry;

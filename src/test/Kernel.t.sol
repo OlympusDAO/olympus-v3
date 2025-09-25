@@ -4,9 +4,8 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import "./mocks/KernelTestMocks.sol";
-
-import "src/Kernel.sol";
+import {MockModule, MockPolicy, InvalidMockModule, UpgradedMockModule, UpgradedMockModuleNewMajor, MockPolicyUpgradedModule} from "./mocks/KernelTestMocks.sol";
+import {Actions, Kernel, Keycode, Module, Permissions, Policy, ensureContract, ensureValidKeycode} from "src/Kernel.sol";
 
 contract KernelTest is Test {
     Kernel internal kernel;

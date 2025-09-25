@@ -8,7 +8,7 @@ import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerato
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel} from "src/Kernel.sol";
 
 contract ROLESTest is Test {
     using ModuleTestFixtureGenerator for OlympusRoles;

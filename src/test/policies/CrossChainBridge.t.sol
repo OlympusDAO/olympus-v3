@@ -3,21 +3,18 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2} from "forge-std/console2.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 //import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
-import {CrossChainBridge, ILayerZeroEndpoint} from "policies/CrossChainBridge.sol";
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {LZEndpointMock} from "layer-zero/mocks/LZEndpointMock.sol";
 
