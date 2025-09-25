@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 /// @title  Olympus Clearinghouse Registry

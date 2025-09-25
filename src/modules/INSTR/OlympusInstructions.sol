@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {INSTRv1} from "src/modules/INSTR/INSTR.v1.sol";
-import "src/Kernel.sol";
+import {Actions, Instruction, Kernel, Module, Keycode, toKeycode, ensureContract, ensureValidKeycode} from "src/Kernel.sol";
 
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
 contract OlympusInstructions is INSTRv1 {

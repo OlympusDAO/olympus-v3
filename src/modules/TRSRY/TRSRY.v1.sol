@@ -2,7 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import "src/Kernel.sol";
+import {Module} from "src/Kernel.sol";
 
 /// @notice Treasury holds all other assets under the control of the protocol.
 abstract contract TRSRYv1 is Module {

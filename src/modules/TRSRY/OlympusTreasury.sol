@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Treasury holds all other assets under the control of the protocol.
 contract OlympusTreasury is TRSRYv1, ReentrancyGuard {

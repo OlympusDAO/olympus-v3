@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {BLREGv1} from "src/modules/BLREG/BLREG.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @title  Olympus Boosted Liquidity Vault Registry
 /// @notice Olympus Boosted Liquidity Vault Registry (Module) Contract

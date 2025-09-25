@@ -4,7 +4,7 @@ pragma solidity >=0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Price oracle data storage contract.
 contract OlympusPrice is PRICEv1 {
@@ -83,7 +83,7 @@ contract OlympusPrice is PRICEv1 {
         // Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
 
-        // Cache numbe of observations to save gas.
+        // Cache number of observations to save gas.
         uint32 numObs = numObservations;
 
         // Get earliest observation in window

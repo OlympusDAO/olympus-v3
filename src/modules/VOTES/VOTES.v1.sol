@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import "src/Kernel.sol";
+import {Module} from "src/Kernel.sol";
 
 abstract contract VOTESv1 is Module, ERC4626 {
     // =========  STATE ========= //
