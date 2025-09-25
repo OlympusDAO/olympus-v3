@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity >=0.6.2 <0.9.0;
 
 // 💬 ABOUT
@@ -431,3 +432,4 @@ abstract contract BatchScript is Script {
         return headers;
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

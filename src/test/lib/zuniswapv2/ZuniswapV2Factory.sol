@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity ^0.8.10;
 
 import {ZuniswapV2Pair} from "./ZuniswapV2Pair.sol";
@@ -38,3 +39,4 @@ contract ZuniswapV2Factory {
         emit PairCreated(token0, token1, pair, allPairs.length);
     }
 }
+/// forge-lint: disable-end(asm-keccak256)
