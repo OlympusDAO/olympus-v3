@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";

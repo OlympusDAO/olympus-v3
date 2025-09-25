@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(screaming-snake-case-immutable, erc20-unchecked-transfer)
+// solhint-disable immutable-vars-naming
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";

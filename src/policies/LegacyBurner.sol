@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";

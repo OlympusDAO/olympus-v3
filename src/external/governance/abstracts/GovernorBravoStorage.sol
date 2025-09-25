@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
 import {IgOHM} from "src/interfaces/IgOHM.sol";

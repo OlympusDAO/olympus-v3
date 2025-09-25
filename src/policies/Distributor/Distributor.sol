@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity 0.8.15;
 
 /// Import External Dependencies

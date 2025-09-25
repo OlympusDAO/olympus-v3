@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity >=0.8.0;
 
 import {CoolerFactory} from "./CoolerFactory.sol";

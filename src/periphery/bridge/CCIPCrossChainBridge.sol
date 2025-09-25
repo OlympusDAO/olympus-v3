@@ -521,7 +521,7 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     function _onlyOwner() internal view override {
         // Validate that the caller is the owner
         // String literal to keep it consistent with the solmate onlyOwner modifier
-        // solhint-disable-next-line gas-custom-errors
+        // solhint-disable-next-line custom-errors
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }
 }
