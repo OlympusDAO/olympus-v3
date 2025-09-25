@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
-import {Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
+import {Permissions, Keycode, fromKeycode, toKeycode} from "src/Kernel.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {Module, Policy, Actions} from "src/Kernel.sol";

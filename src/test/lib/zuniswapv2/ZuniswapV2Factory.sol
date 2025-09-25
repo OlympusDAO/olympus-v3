@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.10;
 
-import "./ZuniswapV2Pair.sol";
-import "./interfaces/IZuniswapV2Pair.sol";
+import {ZuniswapV2Pair} from "./ZuniswapV2Pair.sol";
+import {IZuniswapV2Pair} from "./interfaces/IZuniswapV2Pair.sol";
 
 contract ZuniswapV2Factory {
     error IdenticalAddresses();

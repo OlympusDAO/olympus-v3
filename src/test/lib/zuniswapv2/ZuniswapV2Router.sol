@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.10;
 
-import "./interfaces/IZuniswapV2Factory.sol";
-import "./interfaces/IZuniswapV2Pair.sol";
-import "./ZuniswapV2Library.sol";
+import {IZuniswapV2Factory} from "./interfaces/IZuniswapV2Factory.sol";
+import {IZuniswapV2Pair} from "./interfaces/IZuniswapV2Pair.sol";
+import {ZuniswapV2Library} from "./ZuniswapV2Library.sol";
 
 contract ZuniswapV2Router {
     error ExcessiveInputAmount();

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {console2 as console} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -10,13 +9,17 @@ import {MockStaking} from "src/test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-import {RolesAdmin, Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusMinter, MINTRv1} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusTreasury, TRSRYv1} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusClearinghouseRegistry, CHREGv1} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "src/Kernel.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
-import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Clearinghouse.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
+import {Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
+import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 // Tests for Clearinghouse
 //

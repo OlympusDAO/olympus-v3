@@ -3,14 +3,12 @@ pragma solidity 0.8.15;
 
 /// External Dependencies
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 /// Import Distributor
 import {Distributor} from "policies/Distributor/Distributor.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
 
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -21,7 +19,6 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm, MockStaking} from "../mocks/OlympusMocks.sol";
 import {MockUniV2Pair} from "../mocks/MockUniV2Pair.sol";
-import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 
 contract DistributorTest is Test {
     /// Bophades Systems

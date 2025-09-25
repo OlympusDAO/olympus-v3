@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {Quabi} from "./quabi/Quabi.sol";
-import "src/Kernel.sol";
+import {Kernel, Keycode, Module, Permissions, Policy} from "src/Kernel.sol";
 
 /// @notice Mock policy to allow testing gated module functions
 contract ModuleTestFixture is Policy {

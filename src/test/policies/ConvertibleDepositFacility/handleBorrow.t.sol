@@ -3,8 +3,6 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepositFacility/ConvertibleDepositFacilityTest.sol";
 
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-
 contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMIT_AMOUNT = 1e18;
     uint256 public constant BORROW_AMOUNT = 1e18;

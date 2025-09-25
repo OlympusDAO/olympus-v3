@@ -4,7 +4,6 @@ pragma solidity >=0.8.20;
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //
