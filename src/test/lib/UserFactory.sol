@@ -8,7 +8,7 @@ contract UserFactory {
     address internal constant HEVM_ADDRESS =
         address(bytes20(uint160(uint256(keccak256("hevm cheat code")))));
 
-    Vm internal immutable vm = Vm(HEVM_ADDRESS);
+    Vm internal immutable _VM = Vm(HEVM_ADDRESS);
 
     bytes32 internal nextUser = keccak256(abi.encodePacked("users"));
 
@@ -24,7 +24,7 @@ contract UserFactory {
         address[] memory usrs = new address[](userNum);
         for (uint256 i = 0; i < userNum; i++) {
             address user = next();
-            vm.deal(user, 100 ether);
+            _VM.deal(user, 100 ether);
             usrs[i] = user;
         }
         return usrs;

@@ -66,16 +66,16 @@ contract ReentrancyExploit {
     }
 
     function attack() external {
-        bytes memory data = address(governorBravoDelegator).functionCall(
+        address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", attackProposalId)
         );
         console2.log("Activated", attackProposalId);
     }
 
-    function configureDependencies() external returns (Keycode[] memory dependencies) {
+    function configureDependencies() external returns (Keycode[] memory) {
         console2.log("reentrancy");
 
-        bytes memory data = address(governorBravoDelegator).functionCall(
+        address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", attackProposalId)
         );
         console2.log("Activated", attackProposalId);
@@ -802,7 +802,6 @@ contract GovernorBravoDelegateTest is Test {
         uint256[] memory values = new uint256[](1);
         string[] memory signatures = new string[](1);
         bytes[] memory calldatas = new bytes[](1);
-        string memory description = "Test Proposal";
 
         // Burn all gOHM
         gohm.burn(address(0), gohm.balanceOf(address(0)));

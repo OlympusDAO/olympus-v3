@@ -25,7 +25,7 @@ error TransferFailed();
 contract ZuniswapV2Pair is ERC20, Math {
     using UQ112x112 for uint224;
 
-    uint256 constant MINIMUM_LIQUIDITY = 1000;
+    uint256 public constant MINIMUM_LIQUIDITY = 1000;
 
     address public token0;
     address public token1;

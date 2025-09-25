@@ -22,18 +22,18 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
     /// @notice Olympus V3 Treasury Module
     TRSRYv1 public TRSRY;
 
-    ERC20 public immutable _debtToken;
+    ERC20 public immutable _DEBT_TOKEN;
 
-    uint256 private immutable _conversionScalar;
+    uint256 private immutable _CONVERSION_SCALAR;
 
     bytes32 public constant COOLER_ROLE = bytes32("treasuryborrower_cooler");
 
     constructor(address kernel_, address debtToken_) Policy(Kernel(kernel_)) {
-        _debtToken = ERC20(debtToken_);
+        _DEBT_TOKEN = ERC20(debtToken_);
 
-        uint8 tokenDecimals = _debtToken.decimals();
+        uint8 tokenDecimals = _DEBT_TOKEN.decimals();
         if (tokenDecimals > DECIMALS) revert InvalidParam();
-        _conversionScalar = 10 ** (DECIMALS - tokenDecimals);
+        _CONVERSION_SCALAR = 10 ** (DECIMALS - tokenDecimals);
     }
 
     /// @inheritdoc Policy
@@ -74,23 +74,23 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
         // Convert into the debtToken scale rounding UP
         uint256 debtTokenAmount = _convertToDebtTokenAmount(amountInWei);
 
-        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(_DEBT_TOKEN, address(this));
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: _debtToken,
+            token_: _DEBT_TOKEN,
             amount_: outstandingDebt + debtTokenAmount
         });
 
-        TRSRY.increaseWithdrawApproval(address(this), _debtToken, debtTokenAmount);
-        TRSRY.withdrawReserves(recipient, _debtToken, debtTokenAmount);
+        TRSRY.increaseWithdrawApproval(address(this), _DEBT_TOKEN, debtTokenAmount);
+        TRSRY.withdrawReserves(recipient, _DEBT_TOKEN, debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function repay() external override onlyEnabled onlyRole(COOLER_ROLE) {
-        uint256 debtTokenAmount = _debtToken.balanceOf(address(this));
+        uint256 debtTokenAmount = _DEBT_TOKEN.balanceOf(address(this));
         _reduceDebtToTreasury(debtTokenAmount);
 
-        _debtToken.safeTransfer(address(TRSRY), debtTokenAmount);
+        _DEBT_TOKEN.safeTransfer(address(TRSRY), debtTokenAmount);
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
@@ -102,24 +102,24 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function setDebt(uint256 debtTokenAmount) external override onlyEnabled onlyAdminRole {
-        TRSRY.setDebt({debtor_: address(this), token_: _debtToken, amount_: debtTokenAmount});
+        TRSRY.setDebt({debtor_: address(this), token_: _DEBT_TOKEN, amount_: debtTokenAmount});
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function debtToken() external view override returns (IERC20) {
-        return IERC20(address(_debtToken));
+        return IERC20(address(_DEBT_TOKEN));
     }
 
     /// @inheritdoc ICoolerTreasuryBorrower
     function convertToDebtTokenAmount(
         uint256 amountInWei
     ) external view override returns (IERC20 dToken, uint256 dTokenAmount) {
-        dToken = IERC20(address(_debtToken));
+        dToken = IERC20(address(_DEBT_TOKEN));
         dTokenAmount = _convertToDebtTokenAmount(amountInWei);
     }
 
     function _convertToDebtTokenAmount(uint256 amountInWei) private view returns (uint256) {
-        return FixedPointMathLib.mulDivUp(amountInWei, 1, _conversionScalar);
+        return FixedPointMathLib.mulDivUp(amountInWei, 1, _CONVERSION_SCALAR);
     }
 
     /// @dev Decrease the debt to TRSRY, floored at zero
@@ -128,13 +128,13 @@ contract MockCoolerTreasuryBorrower is ICoolerTreasuryBorrower, Policy, PolicyEn
 
         // This policy is allowed to overpay TRSRY, in which case it's debt is set to zero
         // and any future repayments are just deposited. There are no 'credits' for overpaying
-        uint256 outstandingDebt = TRSRY.reserveDebt(_debtToken, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(_DEBT_TOKEN, address(this));
         uint256 delta;
         if (outstandingDebt > debtTokenAmount) {
             unchecked {
                 delta = outstandingDebt - debtTokenAmount;
             }
         }
-        TRSRY.setDebt({debtor_: address(this), token_: _debtToken, amount_: delta});
+        TRSRY.setDebt({debtor_: address(this), token_: _DEBT_TOKEN, amount_: delta});
     }
 }

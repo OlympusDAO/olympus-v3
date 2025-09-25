@@ -16,11 +16,11 @@ contract MockAggregator {
 
     // ========= VIEW FUNCTIONS ========= //
 
-    function getAuctioneer(uint256 id_) external view returns (IBondAuctioneer) {
+    function getAuctioneer(uint256) external view returns (IBondAuctioneer) {
         return auctioneer;
     }
 
-    function getTeller(uint256 id_) external view returns (IBondTeller) {
+    function getTeller(uint256) external view returns (IBondTeller) {
         return teller;
     }
 }

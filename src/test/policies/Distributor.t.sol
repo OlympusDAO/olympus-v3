@@ -124,7 +124,7 @@ contract DistributorTest is Test {
     }
 
     /// Basic post-setup functionality tests
-    function test_defaultState() public {
+    function test_defaultState() public view {
         assertEq(distributor.rewardRate(), 1000000);
         assertEq(distributor.bounty(), 0);
 
@@ -147,7 +147,7 @@ contract DistributorTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -204,7 +204,7 @@ contract DistributorTest is Test {
 
     /// [X] nextRewardFor()
     ///     [X]  Next reward for the staking contract matches the expected calculation
-    function testCorrectness_nextRewardFor() public {
+    function testCorrectness_nextRewardFor() public view {
         uint256 stakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
         uint256 denominator = 1e9;

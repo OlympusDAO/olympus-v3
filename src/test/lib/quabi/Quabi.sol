@@ -4,7 +4,7 @@ pragma solidity >=0.8.15;
 import {Vm} from "forge-std/Vm.sol";
 
 library Quabi {
-    Vm internal constant vm = Vm(address(bytes20(uint160(uint256(keccak256("hevm cheat code"))))));
+    Vm internal constant VM = Vm(address(bytes20(uint160(uint256(keccak256("hevm cheat code"))))));
 
     function jq(string memory query, string memory path)
         internal
@@ -14,7 +14,7 @@ library Quabi {
         inputs[0] = "sh";
         inputs[1] = "-c";
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/jq.sh ", bytes(query), " ", bytes(path), ""));
-        bytes memory res = vm.ffi(inputs);
+        bytes memory res = VM.ffi(inputs);
 
         response = abi.decode(res, (bytes[]));
     }
@@ -25,7 +25,7 @@ library Quabi {
         inputs[0] = "sh";
         inputs[1] = "-c";
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".json", ""));
-        bytes memory res = vm.ffi(inputs);
+        bytes memory res = VM.ffi(inputs);
 
         if (res.length > 0) {
             path = abi.decode(res, (string));
@@ -34,7 +34,7 @@ library Quabi {
 
         // Check if the "default" path exists
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".default.json", ""));
-        res = vm.ffi(inputs);
+        res = VM.ffi(inputs);
 
         if (res.length > 0) {
             path = abi.decode(res, (string));
@@ -43,7 +43,7 @@ library Quabi {
 
         // Check if the 0.8.15 path exists
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".0.8.15.json", ""));
-        res = vm.ffi(inputs);
+        res = VM.ffi(inputs);
 
         if (res.length > 0) {
             path = abi.decode(res, (string));
@@ -52,7 +52,7 @@ library Quabi {
 
         // Check if the 0.8.24 path exists
         inputs[2] = string(bytes.concat("./src/test/lib/quabi/path.sh ", bytes(contractName), ".0.8.24.json", ""));
-        res = vm.ffi(inputs);
+        res = VM.ffi(inputs);
 
         if (res.length > 0) {
             path = abi.decode(res, (string));

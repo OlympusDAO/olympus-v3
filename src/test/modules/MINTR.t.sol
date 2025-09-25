@@ -47,7 +47,7 @@ contract MINTRTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, dummy);
     }
 
-    function test_KEYCODE() public {
+    function test_KEYCODE() public view {
         assertEq("MINTR", fromKeycode(MINTR.KEYCODE()));
     }
 

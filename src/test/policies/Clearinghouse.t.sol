@@ -141,7 +141,7 @@ contract ClearinghouseTest is Test {
         rolesAdmin.grantRole("emergency_shutdown", overseer);
 
         // Setup clearinghouse initial conditions
-        uint mintAmount = 200_000_000e18; // Init treasury with 200 million
+        uint256 mintAmount = 200_000_000e18; // Init treasury with 200 million
         dai.mint(address(TRSRY), mintAmount);
         // Deposit all reserves into the DSR
         vm.startPrank(address(TRSRY));
@@ -600,7 +600,7 @@ contract ClearinghouseTest is Test {
     function test_rebalance_pastDue() public {
         // Already skipped 1 week ahead in setup. Do once more and call rebalance twice.
         skip(2 weeks);
-        for (uint i; i < 3; i++) {
+        for (uint256 i; i < 3; i++) {
             clearinghouse.rebalance();
         }
     }

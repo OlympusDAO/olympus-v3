@@ -57,9 +57,9 @@ contract CoolerTest is Test {
     MockGohm internal collateral;
     MockERC20 internal debt;
 
-    address owner;
-    address lender;
-    address others;
+    address internal owner;
+    address internal lender;
+    address internal others;
 
     CoolerFactory internal coolerFactory;
     Cooler internal cooler;
