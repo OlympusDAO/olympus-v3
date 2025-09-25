@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
@@ -35,3 +36,4 @@ contract ZeroDistributor is IDistributor {
         return 0;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

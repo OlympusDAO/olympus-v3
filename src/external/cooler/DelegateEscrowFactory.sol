@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable)
 pragma solidity ^0.8.15;
 
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
@@ -81,3 +82,4 @@ contract DelegateEscrowFactory {
         _;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

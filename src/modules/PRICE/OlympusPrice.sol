@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
@@ -272,3 +273,4 @@ contract OlympusPrice is PRICEv1 {
         return movingAverage > minimumTargetPrice ? movingAverage : minimumTargetPrice;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

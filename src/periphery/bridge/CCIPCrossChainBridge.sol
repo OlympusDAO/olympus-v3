@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -524,3 +525,4 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

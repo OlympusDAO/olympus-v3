@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(screaming-snake-case-const)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -146,3 +147,4 @@ contract CCIPBurnMintTokenPool is
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-const)

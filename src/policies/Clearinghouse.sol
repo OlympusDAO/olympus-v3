@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable, erc20-unchecked-transfer)
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -492,3 +493,4 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         return principalReceivables + interestReceivables;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable, erc20-unchecked-transfer)

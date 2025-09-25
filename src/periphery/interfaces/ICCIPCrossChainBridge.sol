@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(pascal-case-struct)
 pragma solidity >=0.8.0;
 
 import {ICCIPClient} from "src/external/bridge/ICCIPClient.sol";
@@ -221,3 +222,4 @@ interface ICCIPCrossChainBridge {
     /// @return ccipRouter_ The CCIP router address
     function getCCIPRouter() external view returns (address);
 }
+/// forge-lint: disable-end(pascal-case-struct)

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable)
 pragma solidity >=0.8.0;
 
 import {CoolerFactory} from "./CoolerFactory.sol";
@@ -59,3 +60,4 @@ abstract contract CoolerCallback {
         uint256 collateral
     ) internal virtual;
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)
