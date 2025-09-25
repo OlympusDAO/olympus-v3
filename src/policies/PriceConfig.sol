@@ -5,7 +5,7 @@ import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
     // ========= STATE ========= //

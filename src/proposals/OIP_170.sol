@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
-import {console2} from "forge-std/console2.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 // Olympus Kernel, Modules, and Policies
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
 

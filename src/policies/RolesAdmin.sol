@@ -2,7 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.
 contract RolesAdmin is Policy {
