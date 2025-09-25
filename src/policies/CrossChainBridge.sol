@@ -12,7 +12,7 @@ import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 /// @notice Message bridge for cross-chain OHM transfers.
 /// @dev Uses LayerZero as communication protocol.

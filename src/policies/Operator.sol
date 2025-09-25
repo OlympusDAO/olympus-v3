@@ -19,7 +19,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 /// @title  Olympus Range Operator
 /// @notice Olympus Range Operator (Policy) Contract

@@ -6,7 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
 // Import internal dependencies
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";

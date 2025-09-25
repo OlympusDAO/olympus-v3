@@ -7,7 +7,7 @@ import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield

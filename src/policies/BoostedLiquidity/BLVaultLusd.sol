@@ -8,7 +8,7 @@ import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.s
 
 // Import external dependencies
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";

@@ -10,7 +10,7 @@ import {IGovernorBravoEventsAndErrors} from "./interfaces/IGovernorBravoEvents.s
 
 import {GovernorBravoDelegateStorageV2} from "./abstracts/GovernorBravoStorage.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Module, Policy, toKeycode} from "src/Kernel.sol";
 
 contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravoEventsAndErrors {
     // --- CONSTANTS ---------------------------------------------------------------

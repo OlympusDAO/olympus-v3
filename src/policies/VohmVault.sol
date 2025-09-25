@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {VOTESv1} from "../modules/VOTES/VOTES.v1.sol";
-import "../Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 error VohmVault_NotVested();
 

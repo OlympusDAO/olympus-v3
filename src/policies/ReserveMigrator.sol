@@ -5,7 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {IReserveMigrator} from "policies/interfaces/IReserveMigrator.sol";
