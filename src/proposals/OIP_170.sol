@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
+// solhint-disable contract-name-camelcase
 pragma solidity ^0.8.15;
 
 // OCG Proposal Simulator
