@@ -236,7 +236,7 @@ contract OperatorTest is Test {
         assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](13);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");

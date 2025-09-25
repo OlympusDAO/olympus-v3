@@ -681,7 +681,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getRewardTokens
     ///     [X]  returns correct reward token array
 
-    function testCorrectness_getRewardTokens() public {
+    function testCorrectness_getRewardTokens() public view {
         address[] memory tokens = vaultManager.getRewardTokens();
 
         assertEq(tokens.length, 2);
@@ -692,7 +692,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
 
-    function testCorrectness_getRewardRate() public {
+    function testCorrectness_getRewardRate() public view {
         uint256 balRate = vaultManager.getRewardRate(address(bal));
         uint256 auraRate = vaultManager.getRewardRate(address(aura));
 
@@ -723,7 +723,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getOhmTknPrice
     ///     [X]  returns correct OHM per LUSD (100)
 
-    function testCorrectness_getOhmTknPrice() public {
+    function testCorrectness_getOhmTknPrice() public view {
         uint256 price = vaultManager.getOhmTknPrice();
 
         assertTrue(price > 0);
@@ -732,7 +732,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getTknOhmPrice
     ///     [X]  returns correct LUSD per OHM (0.01)
 
-    function testCorrectness_getTknOhmPrice() public {
+    function testCorrectness_getTknOhmPrice() public view {
         uint256 price = vaultManager.getTknOhmPrice();
 
         assertTrue(price > 0);

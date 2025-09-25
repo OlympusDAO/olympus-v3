@@ -575,7 +575,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256 lenderBalance,
         uint256 collectorBalance,
         uint256 collateralBalance
-    ) internal {
+    ) internal view {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(dai.balanceOf(walletA), walletABalance, "dai: walletA");
         assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
@@ -615,7 +615,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256 lenderBalance,
         uint256 collectorBalance,
         uint256 collateralBalance
-    ) internal {
+    ) internal view {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(
             dai.balanceOf(walletA),
@@ -672,11 +672,11 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(gohm.balanceOf(address(TRSRY)), trsryGOhmBalance, "gohm: collector");
     }
 
-    function _assertApprovals() internal {
+    function _assertApprovals() internal view {
         _assertApprovals(address(coolerA), address(coolerA));
     }
 
-    function _assertApprovals(address coolerFrom_, address coolerTo_) internal {
+    function _assertApprovals(address coolerFrom_, address coolerTo_) internal view {
         assertEq(
             dai.allowance(address(utils), address(coolerFrom_)),
             0,

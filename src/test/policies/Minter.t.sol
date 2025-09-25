@@ -114,7 +114,7 @@ contract MinterTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](2);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -250,7 +250,7 @@ contract MinterTest is Test {
 
     // [X] Get Categories
 
-    function test_getCategories() public {
+    function test_getCategories() public view {
         bytes32[] memory categories = minter.getCategories();
 
         assertEq(categories.length, 3);

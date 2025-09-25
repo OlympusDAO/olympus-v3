@@ -21,11 +21,11 @@ import {Timelock} from "src/external/governance/Timelock.sol";
 contract ReentrancyExploit {
     using Address for address;
 
-    GovernorBravoDelegator governorBravoDelegator;
-    Kernel kernel;
+    GovernorBravoDelegator public governorBravoDelegator;
+    Kernel public kernel;
 
-    uint256 depth = 0;
-    uint256 attackProposalId;
+    uint256 public depth = 0;
+    uint256 public attackProposalId;
 
     function createProposal(
         GovernorBravoDelegator _governorBravoDelegator,
@@ -71,13 +71,15 @@ contract ReentrancyExploit {
         console2.log("Activated", attackProposalId);
     }
 
-    function configureDependencies() external returns (Keycode[] memory) {
+    function configureDependencies() external returns (Keycode[] memory dependencies) {
         console2.log("reentrancy");
 
         address(governorBravoDelegator).functionCall(
             abi.encodeWithSignature("activate(uint256)", attackProposalId)
         );
         console2.log("Activated", attackProposalId);
+
+        return dependencies;
     }
 }
 
@@ -2786,7 +2788,7 @@ contract GovernorBravoDelegateTest is Test {
     //      [X]  Updates proposal receipt
     //      [X]  Emits event with empty reason string
 
-    function _getSigningHash(uint256 proposalId_, uint8 support_) internal returns (bytes32) {
+    function _getSigningHash(uint256 proposalId_, uint8 support_) internal view returns (bytes32) {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 governorBravo.DOMAIN_TYPEHASH(),

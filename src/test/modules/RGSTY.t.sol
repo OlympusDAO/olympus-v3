@@ -845,7 +845,7 @@ contract ContractRegistryTest is Test {
     // given names are registered
     //  [X] it returns the names array
 
-    function test_getImmutableContractNames_whenNoNamesAreRegistered() public {
+    function test_getImmutableContractNames_whenNoNamesAreRegistered() public view {
         assertEq(RGSTY.getImmutableContractNames().length, 0, "Immutable names array is not empty");
     }
 
@@ -866,7 +866,7 @@ contract ContractRegistryTest is Test {
     // given names are registered
     //  [X] it returns the names array
 
-    function test_getContractNames_whenNoNamesAreRegistered() public {
+    function test_getContractNames_whenNoNamesAreRegistered() public view {
         assertEq(RGSTY.getContractNames().length, 0, "Names array is not empty");
     }
 
@@ -897,14 +897,14 @@ contract ContractRegistryTest is Test {
     // KEYCODE
     // [X] it returns the correct keycode
 
-    function test_KEYCODE() public {
+    function test_KEYCODE() public view {
         assertEq(fromKeycode(RGSTY.KEYCODE()), bytes5("RGSTY"));
     }
 
     // VERSION
     // [X] it returns the correct version
 
-    function test_VERSION() public {
+    function test_VERSION() public view {
         (uint8 major, uint8 minor) = RGSTY.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);

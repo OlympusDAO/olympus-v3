@@ -28,12 +28,12 @@ contract MockEasyAuction {
         uint256 lastCancellation,
         uint256 auctionEnd,
         uint96 auctionAmount,
-        uint96 minimumTotalPurchased,
+        uint96,
         uint256 minimumPurchaseAmount,
         uint256 minFundingThreshold,
         bool isAtomicClosureAllowed,
-        address accessManager,
-        bytes calldata accessManagerData
+        address,
+        bytes calldata
     ) external returns (uint256) {
         ++auctionCounter;
 
@@ -52,7 +52,7 @@ contract MockEasyAuction {
         return auctionCounter;
     }
 
-    function settleAuction(uint256 auctionId) external returns (bytes32) {
+    function settleAuction(uint256) external pure returns (bytes32) {
         return bytes32(0);
     }
 }

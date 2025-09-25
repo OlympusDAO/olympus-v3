@@ -132,7 +132,7 @@ contract BurnerTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
@@ -420,7 +420,7 @@ contract BurnerTest is Test {
 
     // [X] Get Categories
 
-    function test_getCategories() public {
+    function test_getCategories() public view {
         bytes32[] memory categories = burner.getCategories();
 
         assertEq(categories.length, 3);

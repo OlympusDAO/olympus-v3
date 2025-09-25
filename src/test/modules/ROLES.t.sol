@@ -36,7 +36,7 @@ contract ROLESTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
-    function testCorrectness_KEYCODE() public {
+    function testCorrectness_KEYCODE() public view {
         assertEq32("ROLES", fromKeycode(ROLES.KEYCODE()));
     }
 

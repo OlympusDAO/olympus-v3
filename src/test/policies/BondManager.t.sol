@@ -175,7 +175,7 @@ contract BondManagerTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](4);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -506,7 +506,7 @@ contract BondManagerTest is Test {
 
         // Verify end state
         (
-            ERC20 auctioningToken,
+            ,
             ERC20 biddingToken,
             uint256 orderCancellationEndDate,
             uint256 auctionEndDate,
@@ -739,7 +739,7 @@ contract BondManagerTest is Test {
         assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market
         bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
@@ -770,7 +770,7 @@ contract BondManagerTest is Test {
         MockERC20 bondToken = fixedExpiryTeller.bondToken();
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market 2
         bondManager.createBatchAuction(10_000_000_000_000, 2 weeks);

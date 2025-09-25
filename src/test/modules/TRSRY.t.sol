@@ -42,7 +42,7 @@ contract TRSRYTest is Test {
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
     }
 
-    function testCorrectness_KEYCODE() public {
+    function testCorrectness_KEYCODE() public view {
         assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
@@ -63,7 +63,7 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
 
-    function testCorrectness_GetReserveBalance() public {
+    function testCorrectness_GetReserveBalance() public view {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
     }
 

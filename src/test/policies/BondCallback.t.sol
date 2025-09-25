@@ -359,7 +359,7 @@ contract BondCallbackTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");

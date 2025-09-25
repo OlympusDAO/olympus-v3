@@ -66,7 +66,7 @@ contract VohmVaultTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         expectedPerms[0] = Permissions(toKeycode("VOTES"), VOTES.deposit.selector);
         expectedPerms[1] = Permissions(toKeycode("VOTES"), VOTES.mint.selector);

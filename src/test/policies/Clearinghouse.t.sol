@@ -221,7 +221,7 @@ contract ClearinghouseTest is Test {
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
@@ -914,7 +914,7 @@ contract ClearinghouseTest is Test {
         clearinghouse.claimDefaulted(coolers, ids);
     }
 
-    function testFuzz_equivalentAuxiliarFunctions_fromPrincipal(uint256 principal_) public {
+    function testFuzz_equivalentAuxiliarFunctions_fromPrincipal(uint256 principal_) public view {
         principal_ = bound(principal_, 0, type(uint256).max / 1e18);
 
         uint256 collateral = clearinghouse.getCollateralForLoan(principal_);
@@ -923,7 +923,7 @@ contract ClearinghouseTest is Test {
         assertApproxEqAbs(principal_, principal, 1e4, "small principal");
     }
 
-    function testFuzz_equivalentAuxiliarFunctions_fromCollateral(uint256 collateral_) public {
+    function testFuzz_equivalentAuxiliarFunctions_fromCollateral(uint256 collateral_) public view {
         collateral_ = bound(collateral_, 0, type(uint256).max / clearinghouse.LOAN_TO_COLLATERAL());
 
         (uint256 principal, ) = clearinghouse.getLoanForCollateral(collateral_);

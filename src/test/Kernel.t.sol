@@ -86,7 +86,7 @@ contract KernelTest is Test {
         ensureValidKeycode(Keycode.wrap(bytes5("")));
     }
 
-    function testCorrectness_InitializeModule() public {
+    function testCorrectness_InitializeModule() public view {
         assertEq(Keycode.unwrap(MOCKY.KEYCODE()), "MOCKY");
         assertEq(MOCKY.publicState(), 0);
         assertEq(MOCKY.permissionedState(), 0);

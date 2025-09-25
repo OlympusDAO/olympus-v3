@@ -239,7 +239,7 @@ contract PriceTest is Test {
     /// [X] getTargetPrice
     /// [X] cannot get prices before initialization
 
-    function testCorrectness_KEYCODE() public {
+    function testCorrectness_KEYCODE() public view {
         assertEq("PRICE", Keycode.unwrap(price.KEYCODE()));
     }
 
@@ -432,7 +432,7 @@ contract PriceTest is Test {
         price.initialize(observations, uint48(block.timestamp));
     }
 
-    function testCorrectness_noObservationsBeforeInitialized() public {
+    function testCorrectness_noObservationsBeforeInitialized() public view {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(price.numObservations());
         uint256 zero = uint256(0);

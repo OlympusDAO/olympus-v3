@@ -109,11 +109,11 @@ contract CHREGTest is Test {
         chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
     }
 
-    function test_KEYCODE() public {
+    function test_KEYCODE() public view {
         assertEq("CHREG", fromKeycode(chreg.KEYCODE()));
     }
 
-    function test_VERSION() public {
+    function test_VERSION() public view {
         (uint8 major, uint8 minor) = chreg.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);

@@ -126,7 +126,7 @@ contract PriceConfigTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
         expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
@@ -212,7 +212,7 @@ contract PriceConfigTest is Test {
         assertEq(PRICE.lastObservationTime(), block.timestamp);
     }
 
-    function testCorrectness_noObservationsBeforeInitialized() public {
+    function testCorrectness_noObservationsBeforeInitialized() public view {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(PRICE.numObservations());
         uint256 zero = uint256(0);

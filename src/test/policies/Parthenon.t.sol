@@ -129,7 +129,7 @@ contract ParthenonTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](4);
         expectedPerms[0] = Permissions(toKeycode("INSTR"), INSTR.store.selector);
         expectedPerms[1] = Permissions(toKeycode("VOTES"), VOTES.resetActionTimestamp.selector);
@@ -493,7 +493,6 @@ contract ParthenonTest is Test {
     }
 
     function testCorrectness_reclaimCollateral() public {
-        uint256 submissionTimestamp = block.timestamp;
         uint256 collateralAmt = _calculateCollateral();
         uint256 proposalId = _submitAndExecuteProposal();
 

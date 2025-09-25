@@ -38,11 +38,11 @@ contract BLREGTest is Test {
     ///     [X]  KEYCODE returns correctly
     ///     [X]  VERSION returns correctly
 
-    function test_KEYCODE() public {
+    function test_KEYCODE() public view {
         assertEq("BLREG", fromKeycode(blreg.KEYCODE()));
     }
 
-    function test_VERSION() public {
+    function test_VERSION() public view {
         (uint8 major, uint8 minor) = blreg.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);
