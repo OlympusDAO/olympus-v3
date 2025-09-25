@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.0;
 
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
@@ -164,3 +165,4 @@ contract MockAuraVirtualRewardPool is IRewards {
         return 1e18;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

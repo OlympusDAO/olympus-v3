@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity ^0.8.0;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -28,3 +29,4 @@ contract MockClearinghouse {
         wrappedReserve.transfer(msg.sender, _amount);
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

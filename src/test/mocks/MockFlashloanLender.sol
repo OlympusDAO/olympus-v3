@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity ^0.8.15;
 
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
@@ -64,3 +65,4 @@ contract MockFlashloanLender is IERC3156FlashLender {
         return true;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

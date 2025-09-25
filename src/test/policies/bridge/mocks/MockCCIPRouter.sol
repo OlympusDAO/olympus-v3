@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.24;
 
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
@@ -82,3 +83,4 @@ contract MockCCIPRouter {
         return messageTokenAmounts;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

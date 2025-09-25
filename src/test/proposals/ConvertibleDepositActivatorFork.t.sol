@@ -249,6 +249,7 @@ contract ConvertibleDepositActivatorForkTest is Test {
 
         // Transfer USDS to treasury to simulate premium
         vm.prank(premiumProvider);
+        /// forge-lint: disable-next-line(erc20-unchecked-transfer)
         IERC20(USDS).transfer(address(treasury), 10_000_000e18);
     }
 

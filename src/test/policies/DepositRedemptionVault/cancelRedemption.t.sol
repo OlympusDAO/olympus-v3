@@ -617,6 +617,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         convertibleDepositPositions.wrap(positionId);
 
         // Transfer wrapped position to recipientTwo
+        /// forge-lint: disable-next-line(erc20-unchecked-transfer)
         convertibleDepositPositions.transferFrom(recipient, recipientTwo, positionId);
 
         // Record receipt token balance before cancellation
