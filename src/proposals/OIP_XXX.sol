@@ -133,7 +133,7 @@ contract OIP_XXX is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Get relevant olympus contracts
         address TRSRY = address(_kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
         address CHREG = address(_kernel.getModuleForKeycode(toKeycode(bytes5("CHREG"))));

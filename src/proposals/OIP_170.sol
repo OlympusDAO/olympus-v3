@@ -19,7 +19,7 @@ contract OIP_170 is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
+    function id() public pure override returns (uint256) {
         return 3;
     }
 
@@ -109,7 +109,7 @@ contract OIP_170 is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         GovernorBravoDelegate governor = GovernorBravoDelegate(
             addresses.getAddress("olympus-governor")
