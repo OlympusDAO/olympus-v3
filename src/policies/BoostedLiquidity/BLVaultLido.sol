@@ -157,11 +157,11 @@ contract BLVaultLido is IBLVaultLido, Clone {
         uint256 minLpAmount_
     ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
         // Cache variables into memory
-        IBLVaultManagerLido manager = manager();
-        OlympusERC20Token ohm = ohm();
-        ERC20 wsteth = wsteth();
-        IBasePool liquidityPool = liquidityPool();
-        IAuraBooster auraBooster = auraBooster();
+        IBLVaultManagerLido managerContract = manager();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 wstethContract = wsteth();
+        IBasePool liquidityPoolContract = liquidityPool();
+        IAuraBooster auraBoosterContract = auraBooster();
 
         uint256 ohmMintAmount;
 
@@ -172,8 +172,8 @@ contract BLVaultLido is IBLVaultLido, Clone {
         // Calculate OHM amount to mint
         {
             // getOhmTknPrice returns the amount of OHM per 1 wstETH
-            uint256 ohmWstethOraclePrice = manager.getOhmTknPrice();
-            uint256 ohmWstethPoolPrice = manager.getOhmTknPoolPrice();
+            uint256 ohmWstethOraclePrice = managerContract.getOhmTknPrice();
+            uint256 ohmWstethPoolPrice = managerContract.getOhmTknPoolPrice();
 
             // If the expected oracle price mint amount is less than the expected pool price mint amount, use the oracle price
             // otherwise use the pool price
@@ -187,38 +187,38 @@ contract BLVaultLido is IBLVaultLido, Clone {
         // Get tokens and deposit to Balancer and Aura
         {
             // Cache OHM-wstETH BPT before
-            uint256 bptBefore = liquidityPool.balanceOf(address(this));
+            uint256 bptBefore = liquidityPoolContract.balanceOf(address(this));
 
             // Transfer in wstETH
-            wsteth.safeTransferFrom(msg.sender, address(this), amount_);
+            wstethContract.safeTransferFrom(msg.sender, address(this), amount_);
 
             // Mint OHM
-            manager.mintOhmToVault(ohmMintAmount);
+            managerContract.mintOhmToVault(ohmMintAmount);
 
             // Join Balancer pool
             _joinBalancerPool(ohmMintAmount, amount_, minLpAmount_);
 
             // OHM-PAIR BPT after
-            lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
-            manager.increaseTotalLp(lpAmountOut);
+            lpAmountOut = liquidityPoolContract.balanceOf(address(this)) - bptBefore;
+            managerContract.increaseTotalLp(lpAmountOut);
 
             // Stake into Aura
-            liquidityPool.approve(address(auraBooster), lpAmountOut);
-            bool depositSuccess = auraBooster.deposit(pid(), lpAmountOut, true);
+            liquidityPoolContract.approve(address(auraBoosterContract), lpAmountOut);
+            bool depositSuccess = auraBoosterContract.deposit(pid(), lpAmountOut, true);
             if (!depositSuccess) revert BLVaultLido_AuraDepositFailed();
         }
 
         // Return unused tokens
-        uint256 unusedOhm = ohm.balanceOf(address(this));
-        uint256 unusedWsteth = wsteth.balanceOf(address(this));
+        uint256 unusedOhm = ohmContract.balanceOf(address(this));
+        uint256 unusedWsteth = wstethContract.balanceOf(address(this));
 
         if (unusedOhm > 0) {
-            ohm.increaseAllowance(MINTR(), unusedOhm);
-            manager.burnOhmFromVault(unusedOhm);
+            ohmContract.increaseAllowance(MINTR(), unusedOhm);
+            managerContract.burnOhmFromVault(unusedOhm);
         }
 
         if (unusedWsteth > 0) {
-            wsteth.safeTransfer(msg.sender, unusedWsteth);
+            wstethContract.safeTransfer(msg.sender, unusedWsteth);
         }
 
         // Emit event
@@ -235,20 +235,20 @@ contract BLVaultLido is IBLVaultLido, Clone {
         bool claim_
     ) external override onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 wsteth = wsteth();
-        IBLVaultManagerLido manager = manager();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 wstethContract = wsteth();
+        IBLVaultManagerLido managerContract = manager();
 
         // Check if enough time has passed since the latest deposit
-        if (block.timestamp - lastDeposit < manager.minWithdrawalDelay())
+        if (block.timestamp - lastDeposit < managerContract.minWithdrawalDelay())
             revert BLVaultLido_WithdrawalDelay();
 
         // Cache OHM and wstETH balances before
-        uint256 ohmBefore = ohm.balanceOf(address(this));
-        uint256 wstethBefore = wsteth.balanceOf(address(this));
+        uint256 ohmBefore = ohmContract.balanceOf(address(this));
+        uint256 wstethBefore = wstethContract.balanceOf(address(this));
 
         // Decrease total LP
-        manager.decreaseTotalLp(lpAmount_);
+        managerContract.decreaseTotalLp(lpAmount_);
 
         // Unstake from Aura
         bool withdrawalSuccess = auraRewardPool().withdrawAndUnwrap(lpAmount_, claim_);
@@ -258,12 +258,12 @@ contract BLVaultLido is IBLVaultLido, Clone {
         _exitBalancerPool(lpAmount_, minTokenAmountsBalancer_);
 
         // Calculate OHM and wstETH amounts received
-        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
-        uint256 wstethAmountOut = wsteth.balanceOf(address(this)) - wstethBefore;
+        uint256 ohmAmountOut = ohmContract.balanceOf(address(this)) - ohmBefore;
+        uint256 wstethAmountOut = wstethContract.balanceOf(address(this)) - wstethBefore;
 
         // Calculate oracle expected wstETH received amount
         // getTknOhmPrice returns the amount of wstETH per 1 OHM based on the oracle price
-        uint256 wstethOhmPrice = manager.getTknOhmPrice();
+        uint256 wstethOhmPrice = managerContract.getTknOhmPrice();
         uint256 expectedWstethAmountOut = (ohmAmountOut * wstethOhmPrice) / _OHM_DECIMALS;
 
         // Take any arbs relative to the oracle price for the Treasury and return the rest to the owner
@@ -273,14 +273,14 @@ contract BLVaultLido is IBLVaultLido, Clone {
 
         if (wstethToReturn < minTokenAmountUser_) revert BLVaultLido_WithdrawFailedPriceImbalance();
         if (wstethAmountOut > wstethToReturn)
-            wsteth.safeTransfer(TRSRY(), wstethAmountOut - wstethToReturn);
+            wstethContract.safeTransfer(TRSRY(), wstethAmountOut - wstethToReturn);
 
         // Burn OHM
-        ohm.increaseAllowance(MINTR(), ohmAmountOut);
-        manager.burnOhmFromVault(ohmAmountOut);
+        ohmContract.increaseAllowance(MINTR(), ohmAmountOut);
+        managerContract.burnOhmFromVault(ohmAmountOut);
 
         // Return wstETH to owner
-        wsteth.safeTransfer(msg.sender, wstethToReturn);
+        wstethContract.safeTransfer(msg.sender, wstethToReturn);
 
         // Return rewards to owner
         if (claim_) _sendRewards();
@@ -297,12 +297,12 @@ contract BLVaultLido is IBLVaultLido, Clone {
         uint256[] calldata minTokenAmounts_
     ) external override onlyWhileInactive onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 wsteth = wsteth();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 wstethContract = wsteth();
 
         // Cache OHM and wstETH balances before
-        uint256 ohmBefore = ohm.balanceOf(address(this));
-        uint256 wstethBefore = wsteth.balanceOf(address(this));
+        uint256 ohmBefore = ohmContract.balanceOf(address(this));
+        uint256 wstethBefore = wstethContract.balanceOf(address(this));
 
         // Unstake from Aura
         auraRewardPool().withdrawAndUnwrap(lpAmount_, false);
@@ -311,14 +311,14 @@ contract BLVaultLido is IBLVaultLido, Clone {
         _exitBalancerPool(lpAmount_, minTokenAmounts_);
 
         // Calculate OHM and wstETH amounts received
-        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
-        uint256 wstethAmountOut = wsteth.balanceOf(address(this)) - wstethBefore;
+        uint256 ohmAmountOut = ohmContract.balanceOf(address(this)) - ohmBefore;
+        uint256 wstethAmountOut = wstethContract.balanceOf(address(this)) - wstethBefore;
 
         // Transfer wstETH to owner
-        wsteth.safeTransfer(msg.sender, wstethAmountOut);
+        wstethContract.safeTransfer(msg.sender, wstethAmountOut);
 
         // Transfer OHM to manager
-        ohm.transfer(address(manager()), ohmAmountOut);
+        ohmContract.transfer(address(manager()), ohmAmountOut);
 
         return (ohmAmountOut, wstethAmountOut);
     }
@@ -416,14 +416,14 @@ contract BLVaultLido is IBLVaultLido, Clone {
         uint256 minLpAmount_
     ) internal {
         // Cache variables to memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 wsteth = wsteth();
-        IVault vault = vault();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 wstethContract = wsteth();
+        IVault vaultContract = vault();
 
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(wsteth);
+        assets[0] = address(ohmContract);
+        assets[1] = address(wstethContract);
 
         uint256[] memory maxAmountsIn = new uint256[](2);
         maxAmountsIn[0] = ohmAmount_;
@@ -437,22 +437,27 @@ contract BLVaultLido is IBLVaultLido, Clone {
         });
 
         // Join pool
-        ohm.increaseAllowance(address(vault), ohmAmount_);
-        wsteth.approve(address(vault), wstethAmount_);
-        vault.joinPool(liquidityPool().getPoolId(), address(this), address(this), joinPoolRequest);
+        ohmContract.increaseAllowance(address(vaultContract), ohmAmount_);
+        wstethContract.approve(address(vaultContract), wstethAmount_);
+        vaultContract.joinPool(
+            liquidityPool().getPoolId(),
+            address(this),
+            address(this),
+            joinPoolRequest
+        );
     }
 
     function _exitBalancerPool(uint256 lpAmount_, uint256[] calldata minTokenAmounts_) internal {
         // Cache variables to memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 wsteth = wsteth();
-        IBasePool liquidityPool = liquidityPool();
-        IVault vault = vault();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 wstethContract = wsteth();
+        IBasePool liquidityPoolContract = liquidityPool();
+        IVault vaultContract = vault();
 
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(wsteth);
+        assets[0] = address(ohmContract);
+        assets[1] = address(wstethContract);
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -462,9 +467,9 @@ contract BLVaultLido is IBLVaultLido, Clone {
         });
 
         // Exit Balancer pool
-        liquidityPool.approve(address(vault), lpAmount_);
-        vault.exitPool(
-            liquidityPool.getPoolId(),
+        liquidityPoolContract.approve(address(vaultContract), lpAmount_);
+        vaultContract.exitPool(
+            liquidityPoolContract.getPoolId(),
             address(this),
             payable(address(this)),
             exitPoolRequest

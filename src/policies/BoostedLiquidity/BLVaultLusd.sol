@@ -160,11 +160,11 @@ contract BLVaultLusd is IBLVault, Clone {
         uint256 minLpAmount_
     ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
         // Cache variables into memory
-        IBLVaultManager manager = manager();
-        OlympusERC20Token ohm = ohm();
-        ERC20 lusd = lusd();
-        IBasePool liquidityPool = liquidityPool();
-        IAuraBooster auraBooster = auraBooster();
+        IBLVaultManager managerContract = manager();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 lusdContract = lusd();
+        IBasePool liquidityPoolContract = liquidityPool();
+        IAuraBooster auraBoosterContract = auraBooster();
 
         uint256 ohmMintAmount;
 
@@ -175,8 +175,8 @@ contract BLVaultLusd is IBLVault, Clone {
         // Calculate OHM amount to mint
         {
             // getOhmTknPrice returns the amount of OHM per 1 LUSD
-            uint256 ohmLusdOraclePrice = manager.getOhmTknPrice();
-            uint256 ohmLusdPoolPrice = manager.getOhmTknPoolPrice();
+            uint256 ohmLusdOraclePrice = managerContract.getOhmTknPrice();
+            uint256 ohmLusdPoolPrice = managerContract.getOhmTknPoolPrice();
 
             // If the expected oracle price mint amount is less than the expected pool price mint amount, use the oracle price
             // otherwise use the pool price
@@ -190,38 +190,38 @@ contract BLVaultLusd is IBLVault, Clone {
         // Get tokens and deposit to Balancer and Aura
         {
             // Cache OHM-LUSD BPT before
-            uint256 bptBefore = liquidityPool.balanceOf(address(this));
+            uint256 bptBefore = liquidityPoolContract.balanceOf(address(this));
 
             // Transfer in LUSD
-            lusd.safeTransferFrom(msg.sender, address(this), amount_);
+            lusdContract.safeTransferFrom(msg.sender, address(this), amount_);
 
             // Mint OHM
-            manager.mintOhmToVault(ohmMintAmount);
+            managerContract.mintOhmToVault(ohmMintAmount);
 
             // Join Balancer pool
             _joinBalancerPool(ohmMintAmount, amount_, minLpAmount_);
 
             // OHM-PAIR BPT after
-            lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
-            manager.increaseTotalLp(lpAmountOut);
+            lpAmountOut = liquidityPoolContract.balanceOf(address(this)) - bptBefore;
+            managerContract.increaseTotalLp(lpAmountOut);
 
             // Stake into Aura
-            liquidityPool.approve(address(auraBooster), lpAmountOut);
-            bool depositSuccess = auraBooster.deposit(pid(), lpAmountOut, true);
+            liquidityPoolContract.approve(address(auraBoosterContract), lpAmountOut);
+            bool depositSuccess = auraBoosterContract.deposit(pid(), lpAmountOut, true);
             if (!depositSuccess) revert BLVaultLusd_AuraDepositFailed();
         }
 
         // Return unused tokens
-        uint256 unusedOhm = ohm.balanceOf(address(this));
-        uint256 unusedLusd = lusd.balanceOf(address(this));
+        uint256 unusedOhm = ohmContract.balanceOf(address(this));
+        uint256 unusedLusd = lusdContract.balanceOf(address(this));
 
         if (unusedOhm > 0) {
-            ohm.increaseAllowance(MINTR(), unusedOhm);
-            manager.burnOhmFromVault(unusedOhm);
+            ohmContract.increaseAllowance(MINTR(), unusedOhm);
+            managerContract.burnOhmFromVault(unusedOhm);
         }
 
         if (unusedLusd > 0) {
-            lusd.safeTransfer(msg.sender, unusedLusd);
+            lusdContract.safeTransfer(msg.sender, unusedLusd);
         }
 
         // Emit event
@@ -238,20 +238,20 @@ contract BLVaultLusd is IBLVault, Clone {
         bool claim_
     ) external override onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 lusd = lusd();
-        IBLVaultManager manager = manager();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 lusdContract = lusd();
+        IBLVaultManager managerContract = manager();
 
         // Check if enough time has passed since the latest deposit
-        if (block.timestamp - lastDeposit < manager.minWithdrawalDelay())
+        if (block.timestamp - lastDeposit < managerContract.minWithdrawalDelay())
             revert BLVaultLusd_WithdrawalDelay();
 
         // Cache OHM and LUSD balances before
-        uint256 ohmBefore = ohm.balanceOf(address(this));
-        uint256 lusdBefore = lusd.balanceOf(address(this));
+        uint256 ohmBefore = ohmContract.balanceOf(address(this));
+        uint256 lusdBefore = lusdContract.balanceOf(address(this));
 
         // Decrease total LP
-        manager.decreaseTotalLp(lpAmount_);
+        managerContract.decreaseTotalLp(lpAmount_);
 
         // Unstake from Aura
         bool withdrawalSuccess = auraRewardPool().withdrawAndUnwrap(lpAmount_, claim_);
@@ -261,12 +261,12 @@ contract BLVaultLusd is IBLVault, Clone {
         _exitBalancerPool(lpAmount_, minTokenAmountsBalancer_);
 
         // Calculate OHM and LUSD amounts received
-        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
-        uint256 lusdAmountOut = lusd.balanceOf(address(this)) - lusdBefore;
+        uint256 ohmAmountOut = ohmContract.balanceOf(address(this)) - ohmBefore;
+        uint256 lusdAmountOut = lusdContract.balanceOf(address(this)) - lusdBefore;
 
         // Calculate oracle expected LUSD received amount
         // getTknOhmPrice returns the amount of LUSD per 1 OHM based on the oracle price
-        uint256 lusdOhmPrice = manager.getTknOhmPrice();
+        uint256 lusdOhmPrice = managerContract.getTknOhmPrice();
         uint256 expectedLusdAmountOut = (ohmAmountOut * lusdOhmPrice) / _OHM_DECIMALS;
 
         // Take any arbs relative to the oracle price for the Treasury and return the rest to the owner
@@ -275,14 +275,15 @@ contract BLVaultLusd is IBLVault, Clone {
             : lusdAmountOut;
 
         if (lusdToReturn < minTokenAmountUser_) revert BLVaultLusd_WithdrawFailedPriceImbalance();
-        if (lusdAmountOut > lusdToReturn) lusd.safeTransfer(TRSRY(), lusdAmountOut - lusdToReturn);
+        if (lusdAmountOut > lusdToReturn)
+            lusdContract.safeTransfer(TRSRY(), lusdAmountOut - lusdToReturn);
 
         // Burn OHM
-        ohm.increaseAllowance(MINTR(), ohmAmountOut);
-        manager.burnOhmFromVault(ohmAmountOut);
+        ohmContract.increaseAllowance(MINTR(), ohmAmountOut);
+        managerContract.burnOhmFromVault(ohmAmountOut);
 
         // Return LUSD to owner
-        lusd.safeTransfer(msg.sender, lusdToReturn);
+        lusdContract.safeTransfer(msg.sender, lusdToReturn);
 
         // Return rewards to owner
         if (claim_) _sendRewards();
@@ -299,12 +300,12 @@ contract BLVaultLusd is IBLVault, Clone {
         uint256[] calldata minTokenAmounts_
     ) external override onlyWhileInactive onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 lusd = lusd();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 lusdContract = lusd();
 
         // Cache OHM and LUSD balances before
-        uint256 ohmBefore = ohm.balanceOf(address(this));
-        uint256 lusdBefore = lusd.balanceOf(address(this));
+        uint256 ohmBefore = ohmContract.balanceOf(address(this));
+        uint256 lusdBefore = lusdContract.balanceOf(address(this));
 
         // Unstake from Aura
         auraRewardPool().withdrawAndUnwrap(lpAmount_, false);
@@ -313,14 +314,14 @@ contract BLVaultLusd is IBLVault, Clone {
         _exitBalancerPool(lpAmount_, minTokenAmounts_);
 
         // Calculate OHM and LUSD amounts received
-        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
-        uint256 lusdAmountOut = lusd.balanceOf(address(this)) - lusdBefore;
+        uint256 ohmAmountOut = ohmContract.balanceOf(address(this)) - ohmBefore;
+        uint256 lusdAmountOut = lusdContract.balanceOf(address(this)) - lusdBefore;
 
         // Transfer LUSD to owner
-        lusd.safeTransfer(msg.sender, lusdAmountOut);
+        lusdContract.safeTransfer(msg.sender, lusdAmountOut);
 
         // Transfer OHM to manager
-        ohm.transfer(address(manager()), ohmAmountOut);
+        ohmContract.transfer(address(manager()), ohmAmountOut);
 
         return (ohmAmountOut, lusdAmountOut);
     }
@@ -419,14 +420,14 @@ contract BLVaultLusd is IBLVault, Clone {
         uint256 minLpAmount_
     ) internal {
         // Cache variables to memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 lusd = lusd();
-        IVault vault = vault();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 lusdContract = lusd();
+        IVault vaultContract = vault();
 
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[_ohmIndex] = address(ohm);
-        assets[_lusdIndex] = address(lusd);
+        assets[_ohmIndex] = address(ohmContract);
+        assets[_lusdIndex] = address(lusdContract);
 
         uint256[] memory maxAmountsIn = new uint256[](2);
         maxAmountsIn[_ohmIndex] = ohmAmount_;
@@ -440,22 +441,27 @@ contract BLVaultLusd is IBLVault, Clone {
         });
 
         // Join pool
-        ohm.increaseAllowance(address(vault), ohmAmount_);
-        lusd.approve(address(vault), lusdAmount_);
-        vault.joinPool(liquidityPool().getPoolId(), address(this), address(this), joinPoolRequest);
+        ohmContract.increaseAllowance(address(vaultContract), ohmAmount_);
+        lusdContract.approve(address(vaultContract), lusdAmount_);
+        vaultContract.joinPool(
+            liquidityPool().getPoolId(),
+            address(this),
+            address(this),
+            joinPoolRequest
+        );
     }
 
     function _exitBalancerPool(uint256 lpAmount_, uint256[] calldata minTokenAmounts_) internal {
         // Cache variables to memory
-        OlympusERC20Token ohm = ohm();
-        ERC20 lusd = lusd();
-        IBasePool liquidityPool = liquidityPool();
-        IVault vault = vault();
+        OlympusERC20Token ohmContract = ohm();
+        ERC20 lusdContract = lusd();
+        IBasePool liquidityPoolContract = liquidityPool();
+        IVault vaultContract = vault();
 
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[_ohmIndex] = address(ohm);
-        assets[_lusdIndex] = address(lusd);
+        assets[_ohmIndex] = address(ohmContract);
+        assets[_lusdIndex] = address(lusdContract);
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -465,9 +471,9 @@ contract BLVaultLusd is IBLVault, Clone {
         });
 
         // Exit Balancer pool
-        liquidityPool.approve(address(vault), lpAmount_);
-        vault.exitPool(
-            liquidityPool.getPoolId(),
+        liquidityPoolContract.approve(address(vaultContract), lpAmount_);
+        vaultContract.exitPool(
+            liquidityPoolContract.getPoolId(),
             address(this),
             payable(address(this)),
             exitPoolRequest

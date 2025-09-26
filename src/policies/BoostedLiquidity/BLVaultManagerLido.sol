@@ -533,7 +533,7 @@ contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
         // in the past (poolOhmShare + circulatingOhmBurned - deployedOhm). Here we just return
         // the data components to calculate these data points.
 
-        uint256 poolOhmShare = getPoolOhmShare();
+        poolOhmShare = getPoolOhmShare();
         mintedOhm = deployedOhm;
         netBurnedOhm = circulatingOhmBurned;
     }
