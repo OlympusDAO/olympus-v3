@@ -7,7 +7,6 @@ import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockCoolerTreasuryBorrower} from "./MockCoolerTreasuryBorrower.m.sol";
 import {Actions} from "src/Kernel.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract MonoCoolerChangeDebtToken18dpTest is MonoCoolerBaseTest {

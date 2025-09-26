@@ -29,7 +29,7 @@ contract DLGTETestBase is Test {
     address public policy;
     address public policy2;
 
-    DelegateEscrowFactory escrowFactory;
+    DelegateEscrowFactory public escrowFactory;
 
     event DelegateEscrowCreated(
         address indexed caller,

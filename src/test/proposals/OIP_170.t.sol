@@ -3,13 +3,10 @@
 pragma solidity ^0.8.0;
 
 // Proposal test-suite imports
-import "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {TestSuite} from "proposal-sim/test/TestSuite.t.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
-import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
-import {Timelock} from "src/external/governance/Timelock.sol";
 
 import {OIP_170} from "src/proposals/OIP_170.sol";
 
@@ -65,8 +62,8 @@ contract OIP_170_OCGProposalTest is Test {
                     assertTrue(matches[i]);
                 }
             } else {
-                console.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
-                console.log("Proposal has NOT been submitted on-chain yet.\n");
+                console2.log("\n\n------- Calldata check (simulation vs mainnet) -------\n");
+                console2.log("Proposal has NOT been submitted on-chain yet.\n");
             }
         }
     }

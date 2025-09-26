@@ -12,7 +12,7 @@ interface IDistributor {
 }
 
 contract MockGohm is MockERC20 {
-    uint256 index;
+    uint256 public index;
 
     mapping(address => uint256) public votes;
 

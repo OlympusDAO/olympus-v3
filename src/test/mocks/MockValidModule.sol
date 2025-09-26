@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 contract MockValidModule is Module {
     uint256 public counter; // counts the number of times permissionedCall() has been called

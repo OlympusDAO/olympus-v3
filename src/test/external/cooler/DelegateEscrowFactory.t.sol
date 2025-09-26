@@ -15,7 +15,7 @@ contract DelegateEscrowFactoryTestBase is Test {
     address public immutable CHARLIE = makeAddr("CHARLIE");
 
     MockGohm internal gohm;
-    DelegateEscrowFactory escrowFactory;
+    DelegateEscrowFactory internal escrowFactory;
 
     event DelegateEscrowCreated(
         address indexed caller,

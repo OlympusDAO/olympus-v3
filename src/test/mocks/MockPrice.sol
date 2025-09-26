@@ -2,8 +2,7 @@
 // solhint-disable custom-errors
 pragma solidity 0.8.15;
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /**
  * @notice Mock implementation of Price to use for testing

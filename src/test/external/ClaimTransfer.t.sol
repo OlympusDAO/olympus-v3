@@ -4,20 +4,18 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
-import "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 
-import {IPOLY} from "policies/interfaces/IPOLY.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Mock gOHM

@@ -22,8 +22,8 @@ contract CoolerFactoryTest is Test {
     MockERC20 internal debt;
     MockERC20 internal otherDebt;
 
-    address alice;
-    address bob;
+    address public alice;
+    address public bob;
 
     CoolerFactory internal coolerFactory;
 

@@ -3,7 +3,6 @@
 pragma solidity >=0.8.0;
 
 import {Test, Vm} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {UserFactory} from "src/test/lib/UserFactory.sol";
@@ -12,16 +11,14 @@ import {FullMath} from "libraries/FullMath.sol";
 //import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
-import {CrossChainBridge, ILayerZeroEndpoint} from "policies/CrossChainBridge.sol";
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
 
-import "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 
 contract CrossChainBridgeForkTest is Test {
     using FullMath for uint256;
@@ -34,13 +31,13 @@ contract CrossChainBridgeForkTest is Test {
     MockOhm internal ohm1;
     MockOhm internal ohm2;
 
-    LayerZeroHelper lzHelper;
-    uint256 L1_FORK_ID;
-    uint256 L2_FORK_ID;
-    uint16 constant L1_ID = 101;
-    uint16 constant L2_ID = 109;
-    address constant L1_lzEndpoint = 0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675;
-    address constant L2_lzEndpoint = 0x3c2269811836af69497E5F486A85D7316753cf62;
+    LayerZeroHelper public lzHelper;
+    uint256 public L1_FORK_ID;
+    uint256 public L2_FORK_ID;
+    uint16 public constant L1_ID = 101;
+    uint16 public constant L2_ID = 109;
+    address public constant L1_lzEndpoint = 0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675;
+    address public constant L2_lzEndpoint = 0x3c2269811836af69497E5F486A85D7316753cf62;
 
     uint16 internal constant MAINNET_CHAIN_ID = 1;
     uint16 internal constant L2_CHAIN_ID = 137;

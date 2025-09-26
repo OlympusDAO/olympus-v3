@@ -2,7 +2,7 @@
 // solhint-disable custom-errors
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Policy, Module, Keycode, Permissions} from "src/Kernel.sol";
 
 /**
  * @notice Mock policy to allow testing gated module functions

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 contract MockInvalidModule is Module {
     constructor(Kernel kernel_) Module(kernel_) {}
