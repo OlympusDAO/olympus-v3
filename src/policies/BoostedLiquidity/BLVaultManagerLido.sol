@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// solhint-disable max-states-count
 pragma solidity 0.8.15;
 
 // Import system dependencies

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// solhint-disable custom-errors
+// solhint-disable no-complex-fallback
 pragma solidity 0.8.15;
 
 import {IGovernorBravoEventsAndErrors} from "./interfaces/IGovernorBravoEvents.sol";
