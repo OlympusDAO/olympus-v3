@@ -3,7 +3,6 @@
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
@@ -11,10 +10,10 @@ import {Kernel, Actions} from "src/Kernel.sol";
 
 /// @notice     Installs the RGSTY module and the ContractRegistryAdmin policy
 contract ContractRegistryInstall is OlyBatch {
-    address kernel;
-    address rolesAdmin;
-    address rgsty;
-    address contractRegistryAdmin;
+    address public kernel;
+    address public rolesAdmin;
+    address public rgsty;
+    address public contractRegistryAdmin;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file

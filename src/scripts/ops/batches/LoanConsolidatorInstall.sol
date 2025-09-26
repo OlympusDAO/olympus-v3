@@ -3,7 +3,6 @@
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
@@ -11,9 +10,9 @@ import {Kernel, Actions} from "src/Kernel.sol";
 
 /// @notice     Installs the LoanConsolidator policy
 contract LoanConsolidatorInstall is OlyBatch {
-    address kernel;
-    address rolesAdmin;
-    address loanConsolidator;
+    address public kernel;
+    address public rolesAdmin;
+    address public loanConsolidator;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file

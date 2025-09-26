@@ -7,15 +7,14 @@ import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
 /// @notice     Pulls the admin role from the deployer to the DAO multisig
 contract PullRolesAdmin is OlyBatch {
     using stdJson for string;
 
-    address kernel;
-    address rolesAdmin;
+    address public kernel;
+    address public rolesAdmin;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file

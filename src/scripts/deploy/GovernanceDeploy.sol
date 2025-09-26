@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
