@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(asm-keccak256)
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity >=0.7.5;
 
 /// @notice Olympus OHM token
@@ -892,3 +897,5 @@ contract OlympusERC20Token is ERC20Permit, IOHM, OlympusAccessControlled {
         _burn(account_, amount_);
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)
+/// forge-lint: disable-end(asm-keccak256)

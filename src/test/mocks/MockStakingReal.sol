@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable custom-errors
 pragma solidity ^0.8.0;
 
 import {IgOHM} from "src/interfaces/IgOHM.sol";
@@ -9,11 +10,11 @@ contract MockStakingReal {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable OHM;
-    IgOHM public immutable gOHM;
+    IgOHM public immutable GOHM;
 
     constructor(address ohm_, address gohm_) {
         OHM = IERC20(ohm_);
-        gOHM = IgOHM(gohm_);
+        GOHM = IgOHM(gohm_);
     }
 
     /**
@@ -33,8 +34,8 @@ contract MockStakingReal {
         require(!_trigger && !_rebasing, "MockStaking can't handle trigger or rebasing");
 
         amount_ = _amount;
-        gOHM.burn(msg.sender, _amount); // amount was given in gOHM terms
-        amount_ = gOHM.balanceFrom(amount_); // convert amount to OHM terms
+        GOHM.burn(msg.sender, _amount); // amount was given in GOHM terms
+        amount_ = GOHM.balanceFrom(amount_); // convert amount to OHM terms
 
         require(amount_ <= OHM.balanceOf(address(this)), "Insufficient OHM balance in contract");
         OHM.safeTransfer(_to, amount_);

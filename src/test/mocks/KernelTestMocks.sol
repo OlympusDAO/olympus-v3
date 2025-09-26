@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 contract MockPolicy is Policy {
     MockModule public MOCKY;

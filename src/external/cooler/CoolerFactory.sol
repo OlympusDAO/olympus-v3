@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -136,3 +138,4 @@ contract CoolerFactory {
         return coolerFor[user_][ERC20(collateral_)][ERC20(debt_)];
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

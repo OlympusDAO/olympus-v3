@@ -14,7 +14,7 @@ contract MockFixedExpiryTeller {
 
     function create(
         MockERC20 underlying_,
-        uint48 expiry_,
+        uint48,
         uint256 amount_
     ) external returns (MockERC20, uint256) {
         underlying_.transferFrom(msg.sender, address(this), amount_);
@@ -24,13 +24,13 @@ contract MockFixedExpiryTeller {
 
     // ========= TOKENIZATION ========= //
 
-    function deploy(MockERC20 underlying_, uint48 expiry_) external returns (MockERC20) {
+    function deploy(MockERC20, uint48) external view returns (MockERC20) {
         return bondToken;
     }
 
     // ========= VIEW ========= //
 
-    function getBondTokenForMarket(uint256 id_) external view returns (MockERC20) {
+    function getBondTokenForMarket(uint256) external view returns (MockERC20) {
         return bondToken;
     }
 }

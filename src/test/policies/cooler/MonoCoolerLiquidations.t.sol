@@ -7,7 +7,7 @@ import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
 import {IDLGTEv1} from "modules/DLGTE/IDLGTE.v1.sol";
 import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol";
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
-import {Actions} from "policies/RolesAdmin.sol";
+import {Actions} from "src/Kernel.sol";
 import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
 
 import {console2} from "forge-std/console2.sol";

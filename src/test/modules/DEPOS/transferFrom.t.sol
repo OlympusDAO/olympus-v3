@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.20;
 
 import {DEPOSTest} from "./DEPOSTest.sol";
@@ -154,3 +155,4 @@ contract TransferFromDEPOSTest is DEPOSTest {
         _assertUserPosition(address(this), 0, initialUserPositions.length);
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

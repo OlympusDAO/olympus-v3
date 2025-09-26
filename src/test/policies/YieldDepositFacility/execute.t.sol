@@ -45,6 +45,8 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
     function test_givenSnapshotAlreadyTaken(uint48 timestamp) public givenLocallyActive {
         // Set the timestamp to be a multiple of 8 hours
         timestamp = uint48(bound(timestamp, INITIAL_BLOCK, INITIAL_BLOCK + 10 days));
+        // This ordering is deliberate
+        /// forge-lint: disable-next-line(divide-before-multiply)
         timestamp = (timestamp / 8 hours) * 8 hours;
         assertEq(timestamp % 8 hours, 0, "Timestamp is not a multiple of 8 hours");
         vm.warp(timestamp);
@@ -98,6 +100,8 @@ contract YieldDepositFacilityExecuteTest is YieldDepositFacilityTest {
 
         // Set the timestamp to be anything but a multiple of 8 hours
         timestamp = uint48(bound(timestamp, INITIAL_BLOCK, INITIAL_BLOCK + 16 hours));
+        // This ordering is deliberate
+        /// forge-lint: disable-next-line(divide-before-multiply)
         timestamp = (timestamp / 8 hours) * 8 hours;
         assertEq(timestamp % 8 hours, 0, "Timestamp is not a multiple of 8 hours");
         vm.warp(timestamp);

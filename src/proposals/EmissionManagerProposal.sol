@@ -1,23 +1,16 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity ^0.8.15;
 import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
-// Interfaces
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 // Olympus Kernel, Modules, and Policies
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
-import {BondCallback} from "src/policies/BondCallback.sol";
-import {Operator} from "src/policies/Operator.sol";
-import {Clearinghouse} from "src/policies/Clearinghouse.sol";
-import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
-import {EmissionManager} from "src/policies/EmissionManager.sol";
 
 // NOTE:
 // Any new version of the EmissionManager policy needs to be authorised

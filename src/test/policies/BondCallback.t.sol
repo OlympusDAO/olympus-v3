@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -12,7 +13,7 @@ import {IBondSDA as LibIBondSDA} from "src/test/lib/bonds/interfaces/IBondSDA.so
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -22,14 +23,14 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 contract MockOhm is ERC20 {
     constructor(
@@ -359,7 +360,7 @@ contract BondCallbackTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");

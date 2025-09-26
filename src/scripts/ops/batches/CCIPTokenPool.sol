@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable custom-errors
 pragma solidity >=0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";

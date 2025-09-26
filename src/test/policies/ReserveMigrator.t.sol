@@ -4,12 +4,12 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
 import {MockDaiUsds} from "src/test/mocks/MockDaiUsds.sol";
 
-import "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -153,7 +153,7 @@ contract ReserveMigratorTest is Test {
 
     // Scaffolding for the tests
 
-    function _validateStartBalances() internal {
+    function _validateStartBalances() internal view {
         assertEq(from.balanceOf(address(TRSRY)), fromBalance);
         assertEq(sFrom.balanceOf(address(TRSRY)), sFromBalance);
         assertEq(from.balanceOf(address(reserveMigrator)), fromMigratorBalance);
@@ -164,7 +164,7 @@ contract ReserveMigratorTest is Test {
         assertEq(sTo.balanceOf(address(reserveMigrator)), sToMigratorBalance);
     }
 
-    function _validateEndBalances() internal {
+    function _validateEndBalances() internal view {
         uint256 sToIncrease = sFromBalance +
             sFromMigratorBalance +
             sTo.previewDeposit(fromBalance + fromMigratorBalance);

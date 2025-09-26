@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
@@ -8,7 +9,6 @@ import {MockDaiUsds} from "src/test/mocks/MockDaiUsds.sol";
 import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 import {console2} from "forge-std/console2.sol";
 
-//solhint-disable gas-custom-errors
 contract DeployUsdsMocks is WithEnvironment {
     function deploy(string calldata chain_) public {
         _loadEnv(chain_);

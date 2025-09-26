@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable custom-errors
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -19,7 +20,6 @@ import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.s
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";

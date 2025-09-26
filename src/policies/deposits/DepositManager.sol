@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -921,3 +922,4 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

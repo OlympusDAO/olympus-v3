@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";

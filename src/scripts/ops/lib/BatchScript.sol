@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.6.2 <0.9.0;
+/// forge-lint: disable-start(asm-keccak256)
+// solhint-disable custom-errors
+// solhint-disable quotes
+pragma solidity >=0.7.0 <0.9.0;
 
 // 💬 ABOUT
 // Gnosis Safe transaction batching script
 
 // 🧩 MODULES
-import {Script, console2, StdChains, stdJson, stdMath, StdStorage, stdStorageSafe, VmSafe} from "forge-std/Script.sol";
+import {Script, console2, stdJson} from "forge-std/Script.sol";
 
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
@@ -431,3 +434,4 @@ abstract contract BatchScript is Script {
         return headers;
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

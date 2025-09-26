@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// solhint-disable max-states-count
 pragma solidity 0.8.15;
 
 // Import system dependencies
@@ -6,7 +7,7 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {BLREGv1} from "src/modules/BLREG/BLREG.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";

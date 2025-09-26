@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable max-states-count
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {console2 as console} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -10,13 +10,17 @@ import {MockStaking} from "src/test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-import {RolesAdmin, Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "policies/RolesAdmin.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusMinter, MINTRv1} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusTreasury, TRSRYv1} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusClearinghouseRegistry, CHREGv1} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "src/Kernel.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
-import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Clearinghouse.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
+import {Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
+import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 // Tests for Clearinghouse
 //
@@ -138,7 +142,7 @@ contract ClearinghouseTest is Test {
         rolesAdmin.grantRole("emergency_shutdown", overseer);
 
         // Setup clearinghouse initial conditions
-        uint mintAmount = 200_000_000e18; // Init treasury with 200 million
+        uint256 mintAmount = 200_000_000e18; // Init treasury with 200 million
         dai.mint(address(TRSRY), mintAmount);
         // Deposit all reserves into the DSR
         vm.startPrank(address(TRSRY));
@@ -218,7 +222,7 @@ contract ClearinghouseTest is Test {
         assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
@@ -597,7 +601,7 @@ contract ClearinghouseTest is Test {
     function test_rebalance_pastDue() public {
         // Already skipped 1 week ahead in setup. Do once more and call rebalance twice.
         skip(2 weeks);
-        for (uint i; i < 3; i++) {
+        for (uint256 i; i < 3; i++) {
             clearinghouse.rebalance();
         }
     }
@@ -911,7 +915,7 @@ contract ClearinghouseTest is Test {
         clearinghouse.claimDefaulted(coolers, ids);
     }
 
-    function testFuzz_equivalentAuxiliarFunctions_fromPrincipal(uint256 principal_) public {
+    function testFuzz_equivalentAuxiliarFunctions_fromPrincipal(uint256 principal_) public view {
         principal_ = bound(principal_, 0, type(uint256).max / 1e18);
 
         uint256 collateral = clearinghouse.getCollateralForLoan(principal_);
@@ -920,7 +924,7 @@ contract ClearinghouseTest is Test {
         assertApproxEqAbs(principal_, principal, 1e4, "small principal");
     }
 
-    function testFuzz_equivalentAuxiliarFunctions_fromCollateral(uint256 collateral_) public {
+    function testFuzz_equivalentAuxiliarFunctions_fromCollateral(uint256 collateral_) public view {
         collateral_ = bound(collateral_, 0, type(uint256).max / clearinghouse.LOAN_TO_COLLATERAL());
 
         (uint256 principal, ) = clearinghouse.getLoanForCollateral(collateral_);

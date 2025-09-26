@@ -7,9 +7,9 @@ contract MockUniV2Pair {
     address public token0;
     address public token1;
 
-    uint112 reserve0;
-    uint112 reserve1;
-    uint32 blockTimestampLast;
+    uint112 public reserve0;
+    uint112 public reserve1;
+    uint32 public blockTimestampLast;
 
     constructor(address token0_, address token1_) {
         token0 = token0_;

@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {RANGEv2} from "src/modules/RANGE/RANGE.v2.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Olympus Range data storage module
 /// @dev    The Olympus Range contract stores information about the Olympus Range market operations status.

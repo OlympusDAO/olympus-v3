@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.10;
 
-import "./interfaces/IZuniswapV2Factory.sol";
-import "./interfaces/IZuniswapV2Pair.sol";
-import "./ZuniswapV2Library.sol";
+import {IZuniswapV2Factory} from "./interfaces/IZuniswapV2Factory.sol";
+import {IZuniswapV2Pair} from "./interfaces/IZuniswapV2Pair.sol";
+import {ZuniswapV2Library} from "./ZuniswapV2Library.sol";
 
 contract ZuniswapV2Router {
     error ExcessiveInputAmount();
@@ -12,7 +12,7 @@ contract ZuniswapV2Router {
     error InsufficientOutputAmount();
     error SafeTransferFailed();
 
-    IZuniswapV2Factory factory;
+    IZuniswapV2Factory public factory;
 
     constructor(address factoryAddress) {
         factory = IZuniswapV2Factory(factoryAddress);
@@ -54,6 +54,7 @@ contract ZuniswapV2Router {
         address to
     ) public returns (uint256 amountA, uint256 amountB) {
         address pair = ZuniswapV2Library.pairFor(address(factory), tokenA, tokenB);
+        /// forge-lint: disable-next-line(erc20-unchecked-transfer)
         IZuniswapV2Pair(pair).transferFrom(msg.sender, pair, liquidity);
         (amountA, amountB) = IZuniswapV2Pair(pair).burn(to);
         if (amountA < amountAMin) revert InsufficientAAmount();

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -648,3 +649,4 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

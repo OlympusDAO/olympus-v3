@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity ^0.8.15;
 
 import {IVotes} from "openzeppelin/governance/utils/IVotes.sol";
@@ -96,3 +98,4 @@ contract DelegateEscrow is Clone {
         _;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

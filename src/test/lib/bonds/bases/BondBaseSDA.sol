@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable immutable-vars-naming
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {IBondSDA, IBondAuctioneer} from "../interfaces/IBondSDA.sol";
 import {IBondTeller} from "../interfaces/IBondTeller.sol";
-import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";

@@ -18,6 +18,7 @@ function uint2str(uint256 _i) pure returns (string memory) {
     uint256 k = len;
     while (_i != 0) {
         k = k - 1;
+        /// forge-lint: disable-next-line(divide-before-multiply)
         uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
         bytes1 b1 = bytes1(temp);
         bstr[k] = b1;

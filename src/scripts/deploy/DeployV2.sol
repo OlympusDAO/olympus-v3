@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable max-states-count
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 // Forge
@@ -83,11 +85,6 @@ import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.s
 import {CoolerComposites} from "src/periphery/CoolerComposites.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 
-import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "src/test/mocks/BalancerMocks.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Faucet} from "src/test/mocks/Faucet.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -95,8 +92,6 @@ import {SafeCast} from "libraries/SafeCast.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
-// solhint-disable max-states-count
-// solhint-disable gas-custom-errors
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable, erc20-unchecked-transfer)
+// solhint-disable immutable-vars-naming
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
-import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {Cooler} from "src/external/cooler/CoolerFactory.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
@@ -492,3 +494,4 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         return principalReceivables + interestReceivables;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable, erc20-unchecked-transfer)

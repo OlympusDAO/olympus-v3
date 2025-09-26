@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {VOTESv1} from "src/modules/VOTES/VOTES.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
 contract OlympusVotes is VOTESv1 {

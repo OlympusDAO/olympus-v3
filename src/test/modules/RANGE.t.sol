@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
@@ -11,7 +10,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {OlympusRange, RANGEv2} from "modules/RANGE/OlympusRange.sol";
-import "src/Kernel.sol";
+import {Actions, Kernel, Module} from "src/Kernel.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;
@@ -471,7 +470,7 @@ contract RangeTest is Test {
     ///     [X] handles high and low
     /// [X] market
 
-    function testCorrectness_viewRange() public {
+    function testCorrectness_viewRange() public view {
         /// Get range data
         OlympusRange.Range memory _range = range.range();
 
@@ -499,7 +498,7 @@ contract RangeTest is Test {
         assertEq(_range.high.wall.spread, 2000);
     }
 
-    function testCorrectness_viewCapacity() public {
+    function testCorrectness_viewCapacity() public view {
         /// Load the sides directly from the range
         OlympusRange.Range memory _range = range.range();
 
@@ -508,7 +507,7 @@ contract RangeTest is Test {
         assertEq(range.capacity(true), _range.high.capacity);
     }
 
-    function testCorrectness_viewActive() public {
+    function testCorrectness_viewActive() public view {
         /// Load the sides directly from the range
         OlympusRange.Range memory _range = range.range();
 
@@ -517,7 +516,7 @@ contract RangeTest is Test {
         assertTrue(range.active(true) == _range.high.active);
     }
 
-    function testCorrectness_viewPrice() public {
+    function testCorrectness_viewPrice() public view {
         /// Load the bands directly from the range
         OlympusRange.Range memory _range = range.range();
 
@@ -528,7 +527,7 @@ contract RangeTest is Test {
         assertEq(range.price(true, true), _range.high.wall.price);
     }
 
-    function testCorrectness_viewSpread() public {
+    function testCorrectness_viewSpread() public view {
         /// Load the bands directly from the range
         OlympusRange.Range memory _range = range.range();
 
@@ -539,7 +538,7 @@ contract RangeTest is Test {
         assertEq(range.spread(true, true), _range.high.wall.spread);
     }
 
-    function testCorrectness_viewMarket() public {
+    function testCorrectness_viewMarket() public view {
         /// Load the sides directly from the range
         OlympusRange.Range memory _range = range.range();
 
@@ -548,7 +547,7 @@ contract RangeTest is Test {
         assertEq(range.market(true), _range.high.market);
     }
 
-    function testCorrectness_viewLastActive() public {
+    function testCorrectness_viewLastActive() public view {
         /// Load the sides directly from the range
         OlympusRange.Range memory _range = range.range();
 

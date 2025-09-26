@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// solhint-disable custom-errors
 pragma solidity >=0.8.0;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";

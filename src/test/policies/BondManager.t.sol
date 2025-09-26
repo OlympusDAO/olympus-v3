@@ -4,15 +4,13 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 
-import "src/Kernel.sol";
-
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -177,7 +175,7 @@ contract BondManagerTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](4);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -508,7 +506,7 @@ contract BondManagerTest is Test {
 
         // Verify end state
         (
-            ERC20 auctioningToken,
+            ,
             ERC20 biddingToken,
             uint256 orderCancellationEndDate,
             uint256 auctionEndDate,
@@ -741,7 +739,7 @@ contract BondManagerTest is Test {
         assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market
         bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
@@ -772,7 +770,7 @@ contract BondManagerTest is Test {
         MockERC20 bondToken = fixedExpiryTeller.bondToken();
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market 2
         bondManager.createBatchAuction(10_000_000_000_000, 2 weeks);

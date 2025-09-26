@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.0;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -43,3 +44,4 @@ contract MockERC20FeeOnTransfer is MockERC20 {
         return true;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

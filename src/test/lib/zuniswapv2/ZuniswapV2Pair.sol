@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity ^0.8.10;
 
-import "solmate/tokens/ERC20.sol";
-import "./libraries/Math.sol";
-import "./libraries/UQ112x112.sol";
-import "./interfaces/IZuniswapV2Callee.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {Math} from "./libraries/Math.sol";
+import {UQ112x112} from "./libraries/UQ112x112.sol";
+import {IZuniswapV2Callee} from "./interfaces/IZuniswapV2Callee.sol";
 
 interface IERC20 {
     function balanceOf(address) external returns (uint256);
@@ -25,7 +27,7 @@ error TransferFailed();
 contract ZuniswapV2Pair is ERC20, Math {
     using UQ112x112 for uint224;
 
-    uint256 constant MINIMUM_LIQUIDITY = 1000;
+    uint256 public constant MINIMUM_LIQUIDITY = 1000;
 
     address public token0;
     address public token1;

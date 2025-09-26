@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable custom-errors
 pragma solidity ^0.8.0;
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {IDaiUsds} from "policies/ReserveMigrator.sol";
 
 /// @dev This is a mock converter contract that trades one ERC20 token for another at a fixed 1:1 ratio

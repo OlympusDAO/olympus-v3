@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
@@ -8,16 +9,15 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 import {WithLayerZeroConstants} from "src/scripts/WithLayerZeroConstants.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 
 /// @notice     Sets the Berachain Bridge as trusted
 contract TrustBerachainBridge is OlyBatch, WithLayerZeroConstants {
     using stdJson for string;
 
-    address kernel;
-    address mainnetBridge;
-    address berachainBridge;
+    address public kernel;
+    address public mainnetBridge;
+    address public berachainBridge;
 
     function _envAddressWithChain(
         string memory chain_,

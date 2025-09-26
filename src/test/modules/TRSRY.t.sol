@@ -2,18 +2,13 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-//import {MockPolicy} from "src/test/mocks/KernelTestMocks.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-import "src/Kernel.sol";
+import {Actions, Kernel, Keycode, Module} from "src/Kernel.sol";
 
 contract TRSRYTest is Test {
     using ModuleTestFixtureGenerator for OlympusTreasury;
@@ -47,7 +42,7 @@ contract TRSRYTest is Test {
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
     }
 
-    function testCorrectness_KEYCODE() public {
+    function testCorrectness_KEYCODE() public view {
         assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
@@ -68,7 +63,7 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
 
-    function testCorrectness_GetReserveBalance() public {
+    function testCorrectness_GetReserveBalance() public view {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
     }
 

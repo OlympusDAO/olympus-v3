@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -10,7 +12,7 @@ interface IDistributor {
 }
 
 contract MockGohm is MockERC20 {
-    uint256 index;
+    uint256 public index;
 
     mapping(address => uint256) public votes;
 

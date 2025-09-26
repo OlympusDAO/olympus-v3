@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Instruction, Module} from "src/Kernel.sol";
 
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
 abstract contract INSTRv1 is Module {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -490,3 +491,4 @@ contract OlympusDepositPositionManager is DEPOSv1 {
         _;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

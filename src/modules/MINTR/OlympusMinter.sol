@@ -2,7 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {MINTRv1, OHM} from "src/modules/MINTR/MINTR.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of OHM token.
 contract OlympusMinter is MINTRv1 {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.0;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -10,7 +11,7 @@ interface IDelegate {
 }
 
 contract MockGohm is MockERC20, IDelegate {
-    uint256 public constant index = 10000 * 1e9;
+    uint256 public constant INDEX = 10000 * 1e9;
 
     mapping(address => address) public override delegates;
 
@@ -25,10 +26,14 @@ contract MockGohm is MockERC20, IDelegate {
     }
 
     function balanceFrom(uint256 amount_) public view returns (uint256) {
-        return (amount_ * index) / 10 ** decimals;
+        return (amount_ * INDEX) / 10 ** decimals;
     }
 
     function balanceTo(uint256 amount_) public view returns (uint256) {
-        return (amount_ * 10 ** decimals) / index;
+        return (amount_ * 10 ** decimals) / INDEX;
+    }
+
+    function index() external pure returns (uint256) {
+        return INDEX;
     }
 }

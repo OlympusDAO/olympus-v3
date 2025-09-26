@@ -2,11 +2,11 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
-import "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import "src/Kernel.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {Actions, fromKeycode, Kernel, Module} from "src/Kernel.sol";
 
 /// Clearinghouse Registry Tests:
 ///
@@ -109,11 +109,11 @@ contract CHREGTest is Test {
         chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
     }
 
-    function test_KEYCODE() public {
+    function test_KEYCODE() public view {
         assertEq("CHREG", fromKeycode(chreg.KEYCODE()));
     }
 
-    function test_VERSION() public {
+    function test_VERSION() public view {
         (uint8 major, uint8 minor) = chreg.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);

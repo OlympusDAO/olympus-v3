@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.0;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -32,3 +34,4 @@ contract MockLegacyInverseBondDepo {
         authority = IAuthority(authority_);
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

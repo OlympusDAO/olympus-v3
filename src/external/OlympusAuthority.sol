@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity >=0.7.5;
 
 /// @notice OlympusAuthority

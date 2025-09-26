@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity ^0.8.15;
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
-// Interfaces
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 // Olympus Kernel, Modules, and Policies
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 // Script

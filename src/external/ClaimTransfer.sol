@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity 0.8.15;
 
 // Import dependencies
@@ -169,3 +170,4 @@ contract ClaimTransfer {
         fractionalizedTerms[to_].max += maxToTransfer;
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

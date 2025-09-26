@@ -2,8 +2,6 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Parthenon} from "policies/Parthenon.sol";
@@ -11,9 +9,9 @@ import {MockModuleWriter} from "src/test/mocks/MockModuleWriter.sol";
 import {MockInvalidModule} from "src/test/mocks/MockInvalidModule.sol";
 import {MockValidModule} from "src/test/mocks/MockValidModule.sol";
 import {MockValidUpgradedModule} from "src/test/mocks/MockValidUpgradedModule.sol";
-
-import "modules/INSTR/OlympusInstructions.sol";
-import "src/Kernel.sol";
+import {INSTRv1} from "modules/INSTR/INSTR.v1.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {Actions, Instruction, Kernel, Permissions, Policy, Module, TargetNotAContract, InvalidKeycode} from "src/Kernel.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;

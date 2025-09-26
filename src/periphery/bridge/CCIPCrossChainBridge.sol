@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -520,7 +521,8 @@ contract CCIPCrossChainBridge is CCIPReceiver, PeripheryEnabler, Owned, ICCIPCro
     function _onlyOwner() internal view override {
         // Validate that the caller is the owner
         // String literal to keep it consistent with the solmate onlyOwner modifier
-        // solhint-disable-next-line gas-custom-errors
+        // solhint-disable-next-line custom-errors
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer)

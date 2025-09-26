@@ -4,14 +4,12 @@ pragma solidity ^0.8.15;
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
 import {Parthenon} from "src/policies/Parthenon.sol";
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Instruction, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 contract ParthenonTest is Test {
     using ModuleTestFixtureGenerator for OlympusVotes;
@@ -131,7 +129,7 @@ contract ParthenonTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](4);
         expectedPerms[0] = Permissions(toKeycode("INSTR"), INSTR.store.selector);
         expectedPerms[1] = Permissions(toKeycode("VOTES"), VOTES.resetActionTimestamp.selector);
@@ -495,7 +493,6 @@ contract ParthenonTest is Test {
     }
 
     function testCorrectness_reclaimCollateral() public {
-        uint256 submissionTimestamp = block.timestamp;
         uint256 collateralAmt = _calculateCollateral();
         uint256 proposalId = _submitAndExecuteProposal();
 

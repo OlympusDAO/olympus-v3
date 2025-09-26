@@ -2,16 +2,13 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Minter} from "policies/Minter.sol";
 
@@ -117,7 +114,7 @@ contract MinterTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](2);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -253,7 +250,7 @@ contract MinterTest is Test {
 
     // [X] Get Categories
 
-    function test_getCategories() public {
+    function test_getCategories() public view {
         bytes32[] memory categories = minter.getCategories();
 
         assertEq(categories.length, 3);

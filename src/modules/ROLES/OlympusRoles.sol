@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.15;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Abstract contract to have the `onlyRole` modifier
 /// @dev    Inheriting this automatically makes ROLES module a dependency

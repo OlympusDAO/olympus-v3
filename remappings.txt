@@ -13,8 +13,8 @@ test/lib=src/test/lib
 @chainlink-ccip-1.6.0/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/
 
 @chainlink-local-0.2.5/=dependencies/chainlink-local-0.2.5/src/
-dependencies/chainlink-local-0.2.5/:@chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
-dependencies/chainlink-local-0.2.5/:@chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
+@chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
+@chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
 
 @forge-std-1.9.6/=dependencies/forge-std-1.9.6/src/
 forge-std/=dependencies/forge-std-1.9.6/src/
@@ -42,4 +42,4 @@ proposal-sim/=dependencies/forge-proposal-simulator-1.0.1/
 dependencies/forge-proposal-simulator-1.0.1/:@addresses/=dependencies/forge-proposal-simulator-1.0.1/addresses/
 dependencies/forge-proposal-simulator-1.0.1/:@utils/=dependencies/forge-proposal-simulator-1.0.1/utils/
 dependencies/forge-proposal-simulator-1.0.1/:@proposals/=dependencies/forge-proposal-simulator-1.0.1/proposals/
-dependencies/forge-proposal-simulator-1.0.1/:Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
+Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/

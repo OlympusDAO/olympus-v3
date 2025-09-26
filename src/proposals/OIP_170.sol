@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
+// solhint-disable contract-name-camelcase
 pragma solidity ^0.8.15;
-import {console2} from "forge-std/console2.sol";
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 // Olympus Kernel, Modules, and Policies
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
+
+import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // OIP_170 upgrades the Governor Bravo delegate with minor audit remediations.
 contract OIP_170 is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // Returns the id of the proposal.
-    function id() public view override returns (uint256) {
+    function id() public pure override returns (uint256) {
         return 3;
     }
 
@@ -105,7 +109,7 @@ contract OIP_170 is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Load the contract addresses
         GovernorBravoDelegate governor = GovernorBravoDelegate(
             addresses.getAddress("olympus-governor")
@@ -116,8 +120,6 @@ contract OIP_170 is GovernorBravoProposal {
         require(governor.implementation() == newDelegate, "Implementation not updated");
     }
 }
-
-import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";
 
 // @dev Use this script to simulates or run a single proposal
 // Use this as a template to create your own script

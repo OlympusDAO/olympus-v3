@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
@@ -20,7 +21,6 @@ import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
 
 /// @notice Script to deploy the Bridge to a separate testnet
-// solhint-disable gas-custom-errors
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     function _getLzEndpoint() internal view returns (address) {
         return _envAddressNotZero("external.layerzero.endpoint");

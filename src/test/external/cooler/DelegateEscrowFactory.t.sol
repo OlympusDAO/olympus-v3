@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MAGPL-3.0-only
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
@@ -14,7 +15,7 @@ contract DelegateEscrowFactoryTestBase is Test {
     address public immutable CHARLIE = makeAddr("CHARLIE");
 
     MockGohm internal gohm;
-    DelegateEscrowFactory escrowFactory;
+    DelegateEscrowFactory internal escrowFactory;
 
     event DelegateEscrowCreated(
         address indexed caller,

@@ -3,8 +3,6 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionVaultTest {

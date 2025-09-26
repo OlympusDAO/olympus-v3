@@ -3,9 +3,8 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
@@ -15,7 +14,7 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 
 contract PriceConfigTest is Test {
     using FullMath for uint256;
@@ -127,7 +126,7 @@ contract PriceConfigTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
         expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
@@ -213,7 +212,7 @@ contract PriceConfigTest is Test {
         assertEq(PRICE.lastObservationTime(), block.timestamp);
     }
 
-    function testCorrectness_noObservationsBeforeInitialized() public {
+    function testCorrectness_noObservationsBeforeInitialized() public view {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(PRICE.numObservations());
         uint256 zero = uint256(0);

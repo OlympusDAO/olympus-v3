@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GLP-3.0
+// solhint-disable max-states-count
 pragma solidity ^0.8.15;
 
 import {Test, console2} from "forge-std/Test.sol";
@@ -7,7 +8,6 @@ import {MockFlashloanLender} from "src/test/mocks/MockFlashloanLender.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 
-import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
@@ -576,7 +576,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256 lenderBalance,
         uint256 collectorBalance,
         uint256 collateralBalance
-    ) internal {
+    ) internal view {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(dai.balanceOf(walletA), walletABalance, "dai: walletA");
         assertEq(dai.balanceOf(address(coolerA)), 0, "dai: coolerA");
@@ -616,7 +616,7 @@ contract LoanConsolidatorForkTest is Test {
         uint256 lenderBalance,
         uint256 collectorBalance,
         uint256 collateralBalance
-    ) internal {
+    ) internal view {
         assertEq(dai.balanceOf(address(utils)), 0, "dai: utils");
         assertEq(
             dai.balanceOf(walletA),
@@ -673,11 +673,11 @@ contract LoanConsolidatorForkTest is Test {
         assertEq(gohm.balanceOf(address(TRSRY)), trsryGOhmBalance, "gohm: collector");
     }
 
-    function _assertApprovals() internal {
+    function _assertApprovals() internal view {
         _assertApprovals(address(coolerA), address(coolerA));
     }
 
-    function _assertApprovals(address coolerFrom_, address coolerTo_) internal {
+    function _assertApprovals(address coolerFrom_, address coolerTo_) internal view {
         assertEq(
             dai.allowance(address(utils), address(coolerFrom_)),
             0,

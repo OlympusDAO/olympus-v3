@@ -33,6 +33,9 @@ compilation_restrictions = [
 ]
 libs = ["dependencies"]
 
+[lint]
+exclude_lints = ["mixed-case-variable", "mixed-case-function"]
+
 [profile.deploy]
 script_execution_protection = false
 

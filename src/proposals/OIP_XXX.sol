@@ -11,7 +11,6 @@ import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 // Olympus Kernel, Modules, and Policies
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 /// @notice OIP_XXX proposal performs all the necessary steps to upgrade the Clearinghouse.
@@ -134,7 +133,7 @@ contract OIP_XXX is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
-    function _validate(Addresses addresses, address) internal override {
+    function _validate(Addresses addresses, address) internal view override {
         // Get relevant olympus contracts
         address TRSRY = address(_kernel.getModuleForKeycode(toKeycode(bytes5("TRSRY"))));
         address CHREG = address(_kernel.getModuleForKeycode(toKeycode(bytes5("CHREG"))));

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+// solhint-disable contract-name-camelcase
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
@@ -9,10 +11,11 @@ import {MockGenesisClaim} from "src/test/mocks/MockGenesisClaim.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {pOLY} from "policies/pOLY.sol";
-import "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 
 import {IgOHM} from "interfaces/IgOHM.sol";
 

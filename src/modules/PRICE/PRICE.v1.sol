@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(screaming-snake-case-const)
 pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import "src/Kernel.sol";
+import {Module} from "src/Kernel.sol";
 
 /// @notice Price oracle data storage
 /// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
@@ -133,3 +134,4 @@ abstract contract PRICEv1 is Module {
     /// @dev    Returns the maximum of the moving average and the minimum target price
     function getTargetPrice() external view virtual returns (uint256);
 }
+/// forge-lint: disable-end(screaming-snake-case-const)

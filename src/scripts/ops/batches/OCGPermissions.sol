@@ -4,15 +4,13 @@ pragma solidity 0.8.15;
 import {console2} from "forge-std/console2.sol";
 
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Timelock} from "src/external/governance/Timelock.sol";
 
 contract OCGPermissions is OlyBatch {
-    address ROLES;
-    address rolesAdmin;
-    address timelock;
-    address governor; // This must be the delegator contract
+    address public ROLES;
+    address public rolesAdmin;
+    address public timelock;
+    address public governor; // This must be the delegator contract
 
     function loadEnv() internal override {
         // Load addresses from env

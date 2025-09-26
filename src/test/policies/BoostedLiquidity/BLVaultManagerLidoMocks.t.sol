@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
 
@@ -14,21 +15,19 @@ import {MockVault, MockBalancerPool} from "src/test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "src/test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 
 import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
 
-import "src/Kernel.sol";
-
-import {console2} from "forge-std/console2.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 
 contract MockWsteth is ERC20 {
     constructor(

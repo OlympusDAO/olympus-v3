@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
-import {console2} from "forge-std/console2.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
@@ -11,13 +10,13 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// @notice     Installs missing modules and policies on an existing L2 installation
 contract L2TreasuryEmergencyInstall is OlyBatch {
-    address kernel;
-    address rolesAdmin;
-    address trsry;
-    address emergency;
-    address treasuryCustodian;
-    address daoMultisig;
-    address emergencyMultisig;
+    address public kernel;
+    address public rolesAdmin;
+    address public trsry;
+    address public emergency;
+    address public treasuryCustodian;
+    address public daoMultisig;
+    address public emergencyMultisig;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";

@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {larping} from "src/test/lib/larping.sol";
+import {Test} from "forge-std/Test.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
-import {ERC20, MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -24,9 +22,7 @@ import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultMana
 import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
 import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
-import "src/Kernel.sol";
-
-import {console2} from "forge-std/console2.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 
 // solhint-disable-next-line max-states-count
 contract BLVaultManagerLusdTestFork is Test {
@@ -685,7 +681,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getRewardTokens
     ///     [X]  returns correct reward token array
 
-    function testCorrectness_getRewardTokens() public {
+    function testCorrectness_getRewardTokens() public view {
         address[] memory tokens = vaultManager.getRewardTokens();
 
         assertEq(tokens.length, 2);
@@ -696,7 +692,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
 
-    function testCorrectness_getRewardRate() public {
+    function testCorrectness_getRewardRate() public view {
         uint256 balRate = vaultManager.getRewardRate(address(bal));
         uint256 auraRate = vaultManager.getRewardRate(address(aura));
 
@@ -727,7 +723,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getOhmTknPrice
     ///     [X]  returns correct OHM per LUSD (100)
 
-    function testCorrectness_getOhmTknPrice() public {
+    function testCorrectness_getOhmTknPrice() public view {
         uint256 price = vaultManager.getOhmTknPrice();
 
         assertTrue(price > 0);
@@ -736,7 +732,7 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getTknOhmPrice
     ///     [X]  returns correct LUSD per OHM (0.01)
 
-    function testCorrectness_getTknOhmPrice() public {
+    function testCorrectness_getTknOhmPrice() public view {
         uint256 price = vaultManager.getTknOhmPrice();
 
         assertTrue(price > 0);

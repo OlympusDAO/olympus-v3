@@ -2,12 +2,10 @@
 pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {MockGohm} from "src/test/mocks/MockGohm.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockLender} from "src/test/mocks/MockCallbackLender.sol";
 
 import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
@@ -59,9 +57,9 @@ contract CoolerTest is Test {
     MockGohm internal collateral;
     MockERC20 internal debt;
 
-    address owner;
-    address lender;
-    address others;
+    address internal owner;
+    address internal lender;
+    address internal others;
 
     CoolerFactory internal coolerFactory;
     Cooler internal cooler;

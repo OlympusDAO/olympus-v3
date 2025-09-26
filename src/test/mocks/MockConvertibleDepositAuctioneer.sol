@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
@@ -11,14 +12,14 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint48 internal _initTimestamp;
     int256[] internal _auctionResults;
 
-    IERC20 internal immutable _depositAsset;
+    IERC20 internal immutable _DEPOSIT_ASSET;
 
     uint256 public target;
     uint256 public tickSize;
     uint256 public minPrice;
 
     constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
-        _depositAsset = IERC20(depositAsset_);
+        _DEPOSIT_ASSET = IERC20(depositAsset_);
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -120,7 +121,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     function disableDepositPeriod(uint8 depositPeriod_) external override {}
 
     function getDepositAsset() external view override returns (IERC20) {
-        return _depositAsset;
+        return _DEPOSIT_ASSET;
     }
 
     function getDepositPeriods() external view override returns (uint8[] memory) {}

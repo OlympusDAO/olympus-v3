@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 import {TransferHelper} from "libraries/TransferHelper.sol";

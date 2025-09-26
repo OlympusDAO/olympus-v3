@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GLP-3.0
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity ^0.8.15;
 
 // Interfaces
@@ -569,3 +570,4 @@ contract CoolerV2Migrator is
         emit Disabled();
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

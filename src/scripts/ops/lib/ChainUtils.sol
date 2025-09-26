@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {ArrayUtils} from "./ArrayUtils.sol";

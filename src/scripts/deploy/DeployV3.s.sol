@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 // Scripting
@@ -38,8 +39,6 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
-
-// solhint-disable gas-custom-errors
 
 /// @notice V3 of the deployment script
 /// @dev    Changes from DeployV2.s.sol:
