@@ -1,8 +1,0 @@
-src/test/**/*.sol
-src/scripts/**/*.sol
-
-# Ignore linting issues with contracts already deployed (and unlikely to be deployed again)
-src/external/governance/GovernorBravoDelegator.sol
-src/policies/BoostedLiquidity/BLVaultManagerLido.sol
-src/policies/BoostedLiquidity/BLVaultManagerLusd.sol
-src/policies/pOLY.sol
