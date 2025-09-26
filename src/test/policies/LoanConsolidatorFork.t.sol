@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GLP-3.0
+// solhint-disable max-states-count
 pragma solidity ^0.8.15;
 
 import {Test, console2} from "forge-std/Test.sol";

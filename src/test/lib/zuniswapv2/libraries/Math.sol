@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.10;
 
 contract Math {

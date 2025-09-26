@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 pragma solidity ^0.8.10;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";

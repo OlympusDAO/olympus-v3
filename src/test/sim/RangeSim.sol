@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
+// solhint-disable max-states-count
+// solhint-disable quotes
 pragma solidity >=0.8.0;
 
 import {Vm} from "forge-std/Vm.sol";

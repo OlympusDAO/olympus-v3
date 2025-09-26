@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";

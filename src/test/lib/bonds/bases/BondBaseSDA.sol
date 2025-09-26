@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable immutable-vars-naming
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";

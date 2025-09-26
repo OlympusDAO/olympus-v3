@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable one-contract-per-file
+// solhint-disable reentrancy
 /// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.0;
 

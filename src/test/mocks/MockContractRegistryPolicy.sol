@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";

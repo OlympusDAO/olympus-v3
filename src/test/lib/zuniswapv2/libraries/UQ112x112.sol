@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable custom-errors
 pragma solidity ^0.8.10;
 
 library UQ112x112 {

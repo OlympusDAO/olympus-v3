@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";

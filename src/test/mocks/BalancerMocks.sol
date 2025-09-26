@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable one-contract-per-file
 /// forge-lint: disable-start(erc20-unchecked-transfer)
 pragma solidity >=0.8.0;
 

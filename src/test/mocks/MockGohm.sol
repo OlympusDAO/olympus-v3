@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.0;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";

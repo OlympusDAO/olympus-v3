@@ -1,5 +1,7 @@
 // https://github.com/ensdomains/buffer
 /// forge-lint: disable-start(pascal-case-struct)
+// solhint-disable custom-errors
+// solhint-disable contract-name-camelcase
 pragma solidity >=0.7.0;
 
 /**

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+// solhint-disable contract-name-camelcase
 pragma solidity ^0.8.0;
 
 // Proposal test-suite imports

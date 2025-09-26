@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable contract-name-camelcase
 pragma solidity >=0.8.0;
 
 /// DEPS

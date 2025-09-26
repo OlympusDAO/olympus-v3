@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable max-states-count
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MAGPL-3.0-only
+// solhint-disable one-contract-per-file
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
