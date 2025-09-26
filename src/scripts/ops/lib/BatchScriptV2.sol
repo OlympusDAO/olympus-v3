@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";

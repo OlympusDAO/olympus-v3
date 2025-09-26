@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(asm-keccak256)
-pragma solidity >=0.6.2 <0.9.0;
+// solhint-disable custom-errors
+// solhint-disable quotes
+pragma solidity >=0.7.0 <0.9.0;
 
 // 💬 ABOUT
 // Gnosis Safe transaction batching script

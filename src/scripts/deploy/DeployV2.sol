@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// solhint-disable max-states-count
+// solhint-disable custom-errors
 pragma solidity 0.8.15;
 
 // Forge
@@ -95,8 +97,6 @@ import {SafeCast} from "libraries/SafeCast.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
-// solhint-disable max-states-count
-// solhint-disable gas-custom-errors
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
