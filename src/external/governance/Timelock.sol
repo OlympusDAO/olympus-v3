@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+/// forge-lint: disable-start(asm-keccak256)
 pragma solidity 0.8.15;
 
 import {ContractUtils} from "src/external/governance/lib/ContractUtils.sol";
@@ -183,3 +184,4 @@ contract Timelock is ITimelock {
         return returnData;
     }
 }
+/// forge-lint: disable-end(asm-keccak256)

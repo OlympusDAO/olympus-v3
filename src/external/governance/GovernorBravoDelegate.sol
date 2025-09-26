@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+/// forge-lint: disable-start(screaming-snake-case-const,asm-keccak256)
 pragma solidity 0.8.15;
 
 import {ContractUtils} from "src/external/governance/lib/ContractUtils.sol";
@@ -1006,3 +1007,4 @@ contract GovernorBravoDelegate is GovernorBravoDelegateStorageV2, IGovernorBravo
         }
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-const,asm-keccak256)
