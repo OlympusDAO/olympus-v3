@@ -14,13 +14,8 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
-
 /// @notice Copy of the Clearinghouse policy with a lower LTC
 contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
-    using TransferHelper for ERC20;
-    using TransferHelper for ERC4626;
-
     // --- ERRORS ----------------------------------------------------
 
     error BadEscrow();
@@ -39,16 +34,16 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     event Deactivate();
     /// @notice Logs whenever the treasury is defunded.
     event Defund(address token, uint256 amount);
-    /// @notice Logs the balance change (in RESERVE terms) whenever a rebalance occurs.
+    /// @notice Logs the balance change (in reserve terms) whenever a rebalance occurs.
     event Rebalance(bool defund, uint256 reserveAmount);
 
     // --- RELEVANT CONTRACTS ----------------------------------------
 
-    ERC20 public immutable RESERVE; // Debt token
-    ERC4626 public immutable SRESERVE; // Idle RESERVE will be wrapped into SRESERVE
-    ERC20 public immutable GOHM; // Collateral token
-    ERC20 public immutable OHM; // Unwrapped gOHM
-    IStaking public immutable STAKING; // Necessary to unstake (and burn) OHM from defaults
+    ERC20 public immutable reserve; // Debt token
+    ERC4626 public immutable sReserve; // Idle reserve will be wrapped into sReserve
+    ERC20 public immutable gohm; // Collateral token
+    ERC20 public immutable ohm; // Unwrapped gOHM
+    IStaking public immutable staking; // Necessary to unstake (and burn) OHM from defaults
 
     // --- MODULES ---------------------------------------------------
 
@@ -90,11 +85,11 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         address kernel_
     ) Policy(Kernel(kernel_)) CoolerCallback(coolerFactory_) {
         // Store the relevant contracts.
-        OHM = ERC20(ohm_);
-        GOHM = ERC20(gohm_);
-        STAKING = IStaking(staking_);
-        SRESERVE = ERC4626(sReserve_);
-        RESERVE = ERC20(SRESERVE.asset());
+        ohm = ERC20(ohm_);
+        gohm = ERC20(gohm_);
+        staking = IStaking(staking_);
+        sReserve = ERC4626(sReserve_);
+        reserve = ERC20(sReserve.asset());
     }
 
     /// @notice Default framework setup. Configure dependencies for olympus-v3 modules.
@@ -124,7 +119,7 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
             revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        OHM.approve(address(MINTR), type(uint256).max);
+        ohm.approve(address(MINTR), type(uint256).max);
     }
 
     /// @notice Default framework setup. Request permissions for interacting with olympus-v3 modules.
@@ -158,7 +153,7 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     /// @dev    To simplify the UX and easily ensure that all holders get the same terms,
     ///         this function requests a new loan and clears it in the same transaction.
     /// @param  cooler_ to lend to.
-    /// @param  amount_ of RESERVE to lend.
+    /// @param  amount_ of reserve to lend.
     /// @return the id of the granted loan.
     function lendToCooler(Cooler cooler_, uint256 amount_) external returns (uint256) {
         // Attempt a Clearinghouse <> Treasury rebalance.
@@ -168,11 +163,11 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         if (!factory.created(address(cooler_))) revert OnlyFromFactory();
 
         // Validate cooler collateral and debt tokens.
-        if (cooler_.collateral() != GOHM || cooler_.debt() != RESERVE) revert BadEscrow();
+        if (cooler_.collateral() != gohm || cooler_.debt() != reserve) revert BadEscrow();
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, LOAN_TO_COLLATERAL);
-        GOHM.safeTransferFrom(msg.sender, address(this), collateral);
+        gohm.transferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -180,12 +175,12 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         principalReceivables += amount_;
 
         // Create a new loan request.
-        GOHM.approve(address(cooler_), collateral);
+        gohm.approve(address(cooler_), collateral);
         uint256 reqID = cooler_.requestLoan(amount_, INTEREST_RATE, LOAN_TO_COLLATERAL, DURATION);
 
-        // Clear the created loan request by providing enough RESERVE.
-        SRESERVE.withdraw(amount_, address(this), address(this));
-        RESERVE.approve(address(cooler_), amount_);
+        // Clear the created loan request by providing enough reserve.
+        sReserve.withdraw(amount_, address(this), address(this));
+        reserve.approve(address(cooler_), amount_);
         uint256 loanID = cooler_.clearRequest(reqID, address(this), true);
 
         return loanID;
@@ -207,11 +202,11 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
 
         // Transfer in extension interest from the caller.
-        RESERVE.safeTransferFrom(msg.sender, address(this), interestBase * times_);
+        reserve.transferFrom(msg.sender, address(this), interestBase * times_);
         if (active) {
             _sweepIntoSavingsVault(interestBase * times_);
         } else {
-            _defund(RESERVE, interestBase * times_);
+            _defund(reserve, interestBase * times_);
         }
 
         // Signal to cooler that loan should be extended.
@@ -271,17 +266,17 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
             : 0;
 
         // Update outstanding debt owed to the Treasury upon default.
-        uint256 outstandingDebt = TRSRY.reserveDebt(RESERVE, address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
 
         // debt owed to TRSRY = user debt - user interest
         TRSRY.setDebt({
             debtor_: address(this),
-            token_: RESERVE,
+            token_: reserve,
             amount_: (outstandingDebt > totalPrincipal) ? outstandingDebt - totalPrincipal : 0
         });
 
         // Reward keeper.
-        GOHM.safeTransfer(msg.sender, keeperRewards);
+        gohm.transfer(msg.sender, keeperRewards);
         // Burn the outstanding collateral of defaulted loans.
         burn();
     }
@@ -290,13 +285,13 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
 
     /// @notice Overridden callback to decrement loan receivables.
     /// @param *unused loadID_ of the load.
-    /// @param  principalPaid_ in RESERVE.
-    /// @param  interestPaid_ in RESERVE.
+    /// @param  principalPaid_ in reserve.
+    /// @param  interestPaid_ in reserve.
     function _onRepay(uint256, uint256 principalPaid_, uint256 interestPaid_) internal override {
         if (active) {
             _sweepIntoSavingsVault(principalPaid_ + interestPaid_);
         } else {
-            _defund(RESERVE, principalPaid_ + interestPaid_);
+            _defund(reserve, principalPaid_ + interestPaid_);
         }
 
         // Decrement loan receivables.
@@ -328,45 +323,45 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         if (fundTime > block.timestamp) return false;
         fundTime += FUND_CADENCE;
 
-        // Sweep RESERVE into DSR if necessary.
-        uint256 idle = RESERVE.balanceOf(address(this));
+        // Sweep reserve into DSR if necessary.
+        uint256 idle = reserve.balanceOf(address(this));
         if (idle != 0) _sweepIntoSavingsVault(idle);
 
-        uint256 reserveBalance = SRESERVE.maxWithdraw(address(this));
-        uint256 outstandingDebt = TRSRY.reserveDebt(RESERVE, address(this));
+        uint256 reserveBalance = sReserve.maxWithdraw(address(this));
+        uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
         // Rebalance funds on hand with treasury's reserves.
         if (reserveBalance < maxFundAmount) {
-            // Since users loans are denominated in RESERVE, the clearinghouse
-            // debt is set in RESERVE terms. It must be adjusted when funding.
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when funding.
             uint256 fundAmount = maxFundAmount - reserveBalance;
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: RESERVE,
+                token_: reserve,
                 amount_: outstandingDebt + fundAmount
             });
 
-            // Since TRSRY holds SRESERVE, a conversion must be done before
+            // Since TRSRY holds sReserve, a conversion must be done before
             // funding the clearinghouse.
-            uint256 sReserveAmount = SRESERVE.previewWithdraw(fundAmount);
-            TRSRY.increaseWithdrawApproval(address(this), SRESERVE, sReserveAmount);
-            TRSRY.withdrawReserves(address(this), SRESERVE, sReserveAmount);
+            uint256 sReserveAmount = sReserve.previewWithdraw(fundAmount);
+            TRSRY.increaseWithdrawApproval(address(this), sReserve, sReserveAmount);
+            TRSRY.withdrawReserves(address(this), sReserve, sReserveAmount);
 
             // Log the event.
             emit Rebalance(false, fundAmount);
         } else if (reserveBalance > maxFundAmount) {
-            // Since users loans are denominated in RESERVE, the clearinghouse
-            // debt is set in RESERVE terms. It must be adjusted when defunding.
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when defunding.
             uint256 defundAmount = reserveBalance - maxFundAmount;
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: RESERVE,
+                token_: reserve,
                 amount_: (outstandingDebt > defundAmount) ? outstandingDebt - defundAmount : 0
             });
 
-            // Since TRSRY holds SRESERVE, a conversion must be done before
-            // sending SRESERVE back.
-            uint256 sReserveAmount = SRESERVE.previewWithdraw(defundAmount);
-            SRESERVE.safeTransfer(address(TRSRY), sReserveAmount);
+            // Since TRSRY holds sReserve, a conversion must be done before
+            // sending sReserve back.
+            uint256 sReserveAmount = sReserve.previewWithdraw(defundAmount);
+            sReserve.transfer(address(TRSRY), sReserveAmount);
 
             // Log the event.
             emit Rebalance(true, defundAmount);
@@ -375,25 +370,25 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
         return true;
     }
 
-    /// @notice Sweep excess RESERVE into savings vault.
+    /// @notice Sweep excess reserve into savings vault.
     function sweepIntoSavingsVault() public {
-        uint256 reserveBalance = RESERVE.balanceOf(address(this));
+        uint256 reserveBalance = reserve.balanceOf(address(this));
         _sweepIntoSavingsVault(reserveBalance);
     }
 
-    /// @notice Sweep excess RESERVE into vault.
+    /// @notice Sweep excess reserve into vault.
     function _sweepIntoSavingsVault(uint256 amount_) internal {
-        RESERVE.approve(address(SRESERVE), amount_);
-        SRESERVE.deposit(amount_, address(this));
+        reserve.approve(address(sReserve), amount_);
+        sReserve.deposit(amount_, address(this));
     }
 
     /// @notice Public function to burn gOHM.
     /// @dev    Can be used to burn any gOHM defaulted using the Cooler instead of the Clearinghouse.
     function burn() public {
-        uint256 gohmBalance = GOHM.balanceOf(address(this));
+        uint256 gohmBalance = gohm.balanceOf(address(this));
         // Unstake and burn gOHM holdings.
-        GOHM.approve(address(STAKING), gohmBalance);
-        MINTR.burnOhm(address(this), STAKING.unstake(address(this), gohmBalance, false, false));
+        gohm.approve(address(staking), gohmBalance);
+        MINTR.burnOhm(address(this), staking.unstake(address(this), gohmBalance, false, false));
     }
 
     // --- ADMIN ---------------------------------------------------
@@ -413,13 +408,13 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     function emergencyShutdown() external onlyRole("emergency_shutdown") {
         active = false;
 
-        // If necessary, defund SRESERVE.
-        uint256 sReserveBalance = SRESERVE.balanceOf(address(this));
-        if (sReserveBalance != 0) _defund(SRESERVE, sReserveBalance);
+        // If necessary, defund sReserve.
+        uint256 sReserveBalance = sReserve.balanceOf(address(this));
+        if (sReserveBalance != 0) _defund(sReserve, sReserveBalance);
 
-        // If necessary, defund RESERVE.
-        uint256 reserveBalance = RESERVE.balanceOf(address(this));
-        if (reserveBalance != 0) _defund(RESERVE, reserveBalance);
+        // If necessary, defund reserve.
+        uint256 reserveBalance = reserve.balanceOf(address(this));
+        if (reserveBalance != 0) _defund(reserve, reserveBalance);
 
         // Signal to CHREG that the contract has been deactivated.
         CHREG.deactivateClearinghouse(address(this));
@@ -431,7 +426,7 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     /// @param  token_ to transfer.
     /// @param  amount_ to transfer.
     function defund(ERC20 token_, uint256 amount_) external onlyRole("cooler_overseer") {
-        if (token_ == GOHM) revert OnlyBurnable();
+        if (token_ == gohm) revert OnlyBurnable();
         _defund(token_, amount_);
     }
 
@@ -439,23 +434,23 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     /// @param  token_ to transfer.
     /// @param  amount_ to transfer.
     function _defund(ERC20 token_, uint256 amount_) internal {
-        if (token_ == SRESERVE || token_ == RESERVE) {
-            // Since users loans are denominated in RESERVE, the clearinghouse
-            // debt is set in RESERVE terms. It must be adjusted when defunding.
-            uint256 outstandingDebt = TRSRY.reserveDebt(RESERVE, address(this));
-            uint256 reserveAmount = (token_ == SRESERVE)
-                ? SRESERVE.previewRedeem(amount_)
+        if (token_ == sReserve || token_ == reserve) {
+            // Since users loans are denominated in reserve, the clearinghouse
+            // debt is set in reserve terms. It must be adjusted when defunding.
+            uint256 outstandingDebt = TRSRY.reserveDebt(reserve, address(this));
+            uint256 reserveAmount = (token_ == sReserve)
+                ? sReserve.previewRedeem(amount_)
                 : amount_;
 
             TRSRY.setDebt({
                 debtor_: address(this),
-                token_: RESERVE,
+                token_: reserve,
                 amount_: (outstandingDebt > reserveAmount) ? outstandingDebt - reserveAmount : 0
             });
         }
 
         // Defund and log the event
-        token_.safeTransfer(address(TRSRY), amount_);
+        token_.transfer(address(TRSRY), amount_);
         emit Defund(address(token_), amount_);
     }
 
@@ -476,14 +471,14 @@ contract ClearinghouseLowerLTC is Policy, RolesConsumer, CoolerCallback {
     }
 
     /// @notice view function to compute the interest for given principal amount.
-    /// @param principal_ amount of RESERVE being lent.
+    /// @param principal_ amount of reserve being lent.
     /// @param duration_ elapsed time in seconds.
     function interestForLoan(uint256 principal_, uint256 duration_) public pure returns (uint256) {
         uint256 interestPercent = (INTEREST_RATE * duration_) / 365 days;
         return (principal_ * interestPercent) / 1e18;
     }
 
-    /// @notice Get total receivable RESERVE for the treasury.
+    /// @notice Get total receivable reserve for the treasury.
     ///         Includes both principal and interest.
     function getTotalReceivables() external view returns (uint256) {
         return principalReceivables + interestReceivables;
