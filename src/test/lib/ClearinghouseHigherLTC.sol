@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable immutable-vars-naming
 pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
-import {Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {Cooler} from "src/external/cooler/Cooler.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
 
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -14,8 +16,13 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+
 /// @notice Copy of the Clearinghouse policy with a higher LTC
 contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
+    using TransferHelper for ERC20;
+    using TransferHelper for ERC4626;
+
     // --- ERRORS ----------------------------------------------------
 
     error BadEscrow();
@@ -167,7 +174,7 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
 
         // Transfer in collateral owed
         uint256 collateral = cooler_.collateralFor(amount_, LOAN_TO_COLLATERAL);
-        gohm.transferFrom(msg.sender, address(this), collateral);
+        gohm.safeTransferFrom(msg.sender, address(this), collateral);
 
         // Increment interest to be expected
         (, uint256 interest) = getLoanForCollateral(collateral);
@@ -202,7 +209,7 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
         uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
 
         // Transfer in extension interest from the caller.
-        reserve.transferFrom(msg.sender, address(this), interestBase * times_);
+        reserve.safeTransferFrom(msg.sender, address(this), interestBase * times_);
         if (active) {
             _sweepIntoSavingsVault(interestBase * times_);
         } else {
@@ -276,7 +283,7 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
         });
 
         // Reward keeper.
-        gohm.transfer(msg.sender, keeperRewards);
+        gohm.safeTransfer(msg.sender, keeperRewards);
         // Burn the outstanding collateral of defaulted loans.
         burn();
     }
@@ -361,7 +368,7 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
             // Since TRSRY holds sReserve, a conversion must be done before
             // sending sReserve back.
             uint256 sReserveAmount = sReserve.previewWithdraw(defundAmount);
-            sReserve.transfer(address(TRSRY), sReserveAmount);
+            sReserve.safeTransfer(address(TRSRY), sReserveAmount);
 
             // Log the event.
             emit Rebalance(true, defundAmount);
@@ -450,7 +457,7 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
         }
 
         // Defund and log the event
-        token_.transfer(address(TRSRY), amount_);
+        token_.safeTransfer(address(TRSRY), amount_);
         emit Defund(address(token_), amount_);
     }
 
@@ -484,3 +491,4 @@ contract ClearinghouseHigherLTC is Policy, RolesConsumer, CoolerCallback {
         return principalReceivables + interestReceivables;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)
