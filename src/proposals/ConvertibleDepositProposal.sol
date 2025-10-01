@@ -85,15 +85,15 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     function _getHeaderSection() private pure returns (string memory) {
         return
             string.concat(
-                "# Convertible Deposits - Complete Activation\n\n",
-                "This proposal combines the enabling of Convertible Deposit contracts with asset configuration into a single atomic operation.\n\n",
+                "# Convertible Deposits\n\n",
+                "This proposal activates and configures the Convertible Deposit system.\n\n",
                 "## Summary\n\n",
                 "This proposal has four main components:\n",
-                "- Enable base Convertible Deposit system contracts and perform initial configuration\n",
-                "- Configure USDS assets with different deposit periods (1m, 2m, 3m)\n",
-                "- Enable the ReserveWrapper contract for periodic USDS wrapping to sUSDS\n",
-                "- Configure the new Heart contract (1.7) with all necessary periodic tasks\n",
-                "- Enable the EmissionManager and ConvertibleDepositAuctioneer for full system operation\n\n"
+                "- Grant appropriate roles to contracts\n",
+                "- Activate Convertible Deposit system contracts\n",
+                "- Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
+                "- Configure the auction and emissions parameters\n",
+                "- Configure periodic tasks\n\n"
             );
     }
 
@@ -102,17 +102,18 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Affected Contracts\n\n",
-                "- Heart policy (new - 1.7)\n",
                 "- Heart policy (existing - 1.6)\n",
+                "- EmissionManager policy (existing - 1.1)\n",
+                "- ReserveMigrator policy (existing)\n",
+                "- Operator policy (existing - 1.5)\n",
+                "- YieldRepurchaseFacility policy (existing - 1.2)\n",
+                "- Heart policy (new - 1.7)\n",
                 "- DepositManager policy (new - 1.0)\n",
                 "- ConvertibleDepositFacility policy (new - 1.0)\n",
                 "- ConvertibleDepositAuctioneer policy (new - 1.0)\n",
                 "- DepositRedemptionVault policy (new - 1.0)\n",
                 "- ReserveWrapper policy (new - 1.0)\n",
-                "- EmissionManager policy (existing - 1.2)\n",
-                "- ReserveMigrator policy (existing)\n",
-                "- Operator policy (existing - 1.5)\n",
-                "- YieldRepurchaseFacility policy (existing - 1.3)\n\n"
+                "- EmissionManager policy (new - 1.2)\n\n"
             );
     }
 
@@ -121,15 +122,14 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Resources\n\n",
-                "- [View the audit report](TODO)\n", // TODO: Add audit report
+                "- [View audit report 1](TODO)\n", // TODO: Add audit report
+                "- [View audit report 2](TODO)\n", // TODO: Add audit report
                 "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n\n",
                 "## Pre-requisites\n\n",
                 "- Old Heart policy has been deactivated in the kernel\n",
                 "- Old EmissionManager policy has been deactivated in the kernel\n",
                 "- DEPOS module has been installed in the kernel\n",
-                "- All new deposit-related policies have been activated in the kernel\n",
-                "- New Heart policy has been activated in the kernel\n",
-                "- New EmissionManager policy has been activated in the kernel\n\n"
+                "- All new policies have been activated in the kernel\n"
             );
     }
 
@@ -183,7 +183,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             string.concat(
                 "   - Enable deposit periods in ConvertibleDepositAuctioneer\n",
                 "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
-                "   - Enable EmissionManager with production parameters\n",
+                "   - Enable EmissionManager with initial parameters\n",
                 "   - Enable ReserveWrapper contract\n",
                 "   - Add ReserveMigrator.migrate() as first periodic task\n",
                 "   - Add ReserveWrapper as second periodic task\n",
