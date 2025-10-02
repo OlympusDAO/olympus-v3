@@ -43,3 +43,8 @@ dependencies/forge-proposal-simulator-1.0.1/:@addresses/=dependencies/forge-prop
 dependencies/forge-proposal-simulator-1.0.1/:@utils/=dependencies/forge-proposal-simulator-1.0.1/utils/
 dependencies/forge-proposal-simulator-1.0.1/:@proposals/=dependencies/forge-proposal-simulator-1.0.1/proposals/
 dependencies/forge-proposal-simulator-1.0.1/:Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
+Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
+
+safe-smart-account/=dependencies/safe-smart-account-1.4.1/contracts/
+
+solidity-http/=dependencies/solidity-http-0.0.6/src/
