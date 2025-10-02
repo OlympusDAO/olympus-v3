@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -671,3 +672,4 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         proposeBatch();
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
