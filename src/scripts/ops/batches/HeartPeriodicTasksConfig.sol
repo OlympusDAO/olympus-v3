@@ -20,8 +20,11 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
     ///         Run this after ConvertibleDepositInstall.install()
     function configurePeriodicTasks(
         bool useDaoMS_,
-        string calldata argsFile_
-    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Load contract addresses
