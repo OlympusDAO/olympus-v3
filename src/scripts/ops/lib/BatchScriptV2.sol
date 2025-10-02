@@ -20,11 +20,22 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    This could be a Safe Multisig or an EOA
     address internal _owner;
 
+    /// @notice Whether the owner is a Safe Multisig
     bool internal _isMultiSig;
+
+    /// @notice safe-utils client
     Safe.Client internal _multiSig;
+
+    /// @notice Array of the target addresses for the batch
+    /// @dev    Loaded by {_runBatch()}
     address[] internal _batchTargets;
+
+    /// @notice Array of the calldata for the batch
+    /// @dev    Loaded by {_runBatch()}
     bytes[] internal _batchData;
 
+    /// @notice Contents of the arguments file
+    /// @dev    Loaded by {_loadArgs}
     string internal _argsFile;
 
     // TODOs
