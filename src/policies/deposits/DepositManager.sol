@@ -320,6 +320,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @notice Validates that an operator remains solvent after a withdrawal
     /// @dev    This function ensures that operator assets + borrowed amount >= operator liabilities
     ///         This is the core solvency constraint for the DepositManager
+    ///
+    ///         Notes:
+    ///         - The solvency checks assume that the value of each vault share is increasing, and will not reduce.
+    ///         - In a situation where the assets per share reduces below 1 (at the appropriate decimal scale), the solvency check will fail.
+    ///
     /// @param asset_ The asset to validate solvency for
     /// @param operator_ The operator to validate solvency for
     function _validateOperatorSolvency(IERC20 asset_, address operator_) internal view {
@@ -440,6 +445,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The caller does not have the admin or manager role
     ///             - asset_ is the zero address
     ///             - minimumDeposit_ > depositCap_
+    ///
+    ///             Notes:
+    ///             - A limitation of the current implementation is that the vault is assumed to be monotonically-increasing in value.
     function addAsset(
         IERC20 asset_,
         IERC4626 vault_,
