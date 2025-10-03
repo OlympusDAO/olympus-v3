@@ -448,6 +448,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///
     ///             Notes:
     ///             - A limitation of the current implementation is that the vault is assumed to be monotonically-increasing in value.
+    ///             - The pairing of the asset and vault is immutable, to prevent a governance attack on user deposits.
     function addAsset(
         IERC20 asset_,
         IERC4626 vault_,
