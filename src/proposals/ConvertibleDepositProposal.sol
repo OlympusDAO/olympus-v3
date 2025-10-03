@@ -185,11 +185,12 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
                 "   - Enable EmissionManager with initial parameters\n",
                 "   - Enable ReserveWrapper contract\n",
-                "   - Add ReserveMigrator.migrate() as first periodic task\n",
-                "   - Add ReserveWrapper as second periodic task\n",
-                "   - Add Operator.operate() as third periodic task\n",
-                "   - Add YieldRepurchaseFacility.endEpoch() as fourth periodic task\n",
-                "   - Add EmissionManager as fifth periodic task\n",
+                "   - Add ConvertibleDepositFacility as the first periodic task\n",
+                "   - Add ReserveMigrator.migrate() as second periodic task\n",
+                "   - Add ReserveWrapper as third periodic task\n",
+                "   - Add Operator.operate() as fourth periodic task\n",
+                "   - Add YieldRepurchaseFacility.endEpoch() as fifth periodic task\n",
+                "   - Add EmissionManager as six periodic task\n",
                 "   - Enable Heart contract\n"
             );
     }
@@ -563,6 +564,9 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // Validate periodic tasks
         {
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
             address heart = addresses.getAddress("olympus-policy-heart-1_7");
             address reserveWrapper = addresses.getAddress("olympus-policy-reserve-wrapper-1_0");
             address reserveMigrator = addresses.getAddress("olympus-policy-reserve-migrator-1_0");
@@ -573,27 +577,31 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             require(IEnabler(reserveWrapper).isEnabled() == true, "ReserveWrapper is not enabled");
 
             require(
-                IPeriodicTaskManager(heart).getPeriodicTaskCount() == 5,
+                IPeriodicTaskManager(heart).getPeriodicTaskCount() == 6,
                 "Heart does not have the expected number of periodic tasks"
             );
 
             (address[] memory periodicTasks, ) = IPeriodicTaskManager(heart).getPeriodicTasks();
             require(
-                periodicTasks[0] == reserveMigrator,
-                "ReserveMigrator is not the first periodic task"
+                periodicTasks[0] == cdFacility,
+                "ConvertibleDepositFacility is not the first periodic task"
             );
             require(
-                periodicTasks[1] == reserveWrapper,
-                "ReserveWrapper is not the second periodic task"
-            );
-            require(periodicTasks[2] == operator, "Operator is not the third periodic task");
-            require(
-                periodicTasks[3] == yieldRepo,
-                "YieldRepurchaseFacility is not the fourth periodic task"
+                periodicTasks[1] == reserveMigrator,
+                "ReserveMigrator is not the second periodic task"
             );
             require(
-                periodicTasks[4] == emissionManager,
-                "EmissionManager is not the fifth periodic task"
+                periodicTasks[2] == reserveWrapper,
+                "ReserveWrapper is not the third periodic task"
+            );
+            require(periodicTasks[3] == operator, "Operator is not the fourth periodic task");
+            require(
+                periodicTasks[4] == yieldRepo,
+                "YieldRepurchaseFacility is not the fifth periodic task"
+            );
+            require(
+                periodicTasks[5] == emissionManager,
+                "EmissionManager is not the sixth periodic task"
             );
 
             require(IEnabler(heart).isEnabled() == true, "Heart is not enabled");
