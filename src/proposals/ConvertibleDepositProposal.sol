@@ -88,12 +88,12 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "# Convertible Deposits\n\n",
                 "This proposal activates and configures the Convertible Deposit system.\n\n",
                 "## Summary\n\n",
-                "This proposal has four main components:\n",
-                "- Grant appropriate roles to contracts\n",
-                "- Activate Convertible Deposit system contracts\n",
-                "- Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
-                "- Configure the auction and emissions parameters\n",
-                "- Configure periodic tasks\n\n"
+                "This proposal has five main components:\n",
+                "1. Grant appropriate roles to contracts\n",
+                "2. Activate Convertible Deposit system contracts\n",
+                "3. Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
+                "4. Configure the auction and emissions parameters\n",
+                "5. Configure periodic tasks\n\n"
             );
     }
 
