@@ -122,8 +122,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Resources\n\n",
-                "- [View audit report 1](TODO)\n", // TODO: Add audit report
-                "- [View audit report 2](TODO)\n", // TODO: Add audit report
+                "- [View the report for audit 1 (Guardian)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-09_Convertible_Deposits-Guardian.pdf)\n",
+                "- [View the report for audit 2 (Trust)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-10_Convertible_Deposits-Trust.pdf)\n",
                 "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n\n",
                 "## Pre-requisites\n\n",
                 "- Old Heart policy has been deactivated in the kernel\n",
