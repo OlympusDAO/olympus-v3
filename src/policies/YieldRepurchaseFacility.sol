@@ -1,47 +1,57 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+// Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
+// Interfaces
+import {IBondSDA} from "src/interfaces/IBondSDA.sol";
+import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
-
-import {IBondSDA} from "interfaces/IBondSDA.sol";
-
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
-import {RolesConsumer, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+// Bophades
+import {Kernel, Policy, Permissions, Keycode, toKeycode} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 interface BurnableERC20 {
     function burn(uint256 amount) external;
 }
 
-interface Clearinghouse {
-    function principalReceivables() external view returns (uint256);
-}
-
 /// @notice the Yield Repurchase Facility (Yield Repo) contract pulls a derived amount of yield from
 ///         the Olympus treasury each week and uses it, along with the backing of previously purchased
 ///         OHM, to purchase OHM off the market using a Bond Protocol SDA market.
-contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
+contract YieldRepurchaseFacility is IYieldRepo, Policy, PolicyEnabler {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
-    ///////////////////////// EVENTS /////////////////////////
+    ///////////////////////// CONSTANTS /////////////////////////
 
-    event RepoMarket(uint256 marketId, uint256 bidAmount);
-    event NextYieldSet(uint256 nextYield);
-    event Shutdown();
+    /// @notice The length of the epoch
+    /// @dev    3 epochs per day, 7 days = 21
+    uint48 public constant epochLength = 21;
+
+    /// @notice The backing per token
+    /// @dev    Assume backing of $11.33
+    uint256 public constant backingPerToken = 1133 * 1e7;
+
+    /// @notice The role assigned to the Heart contract
+    ///         This enables the Heart contract to call specific functions on this contract
+    bytes32 public constant ROLE_HEART = "heart";
+
+    /// @notice The length of the `EnableParams` struct in bytes
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 96;
 
     ///////////////////////// STATE /////////////////////////
 
     // Tokens
+    // solhint-disable immutable-vars-naming
     ERC4626 public immutable sReserve;
     ERC20 public immutable reserve;
     uint8 internal immutable _reserveDecimals;
@@ -63,14 +73,10 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     uint256 public nextYield; // the amount of reserve to pull as yield at the start of the next week
     uint256 public lastReserveBalance; // the sReserve balance, in reserve units, at the end of the last week
     uint256 public lastConversionRate; // the sReserve conversion rate at the end of the last week
+
     // we use this to compute yield accrued
     // yield = last reserve balance * ((current conversion rate / last conversion rate) - 1)
     //       + current clearinghouse principal receivables * clearinghouse APR / 52 weeks
-    bool public isShutdown;
-
-    // Constants
-    uint48 public constant epochLength = 21; // one week
-    uint256 public constant backingPerToken = 1133 * 1e7; // assume backing of $11.33
 
     ///////////////////////// SETUP /////////////////////////
 
@@ -92,26 +98,10 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _reserveDecimals = reserve.decimals();
         _ohmDecimals = ohm.decimals();
 
-        // Disable until initialization
-        isShutdown = true;
+        // Disabled by default
     }
 
-    function initialize(
-        uint256 initialReserveBalance,
-        uint256 initialConversionRate,
-        uint256 initialYield
-    ) external onlyRole("loop_daddy") {
-        // Initialize system variables
-        epoch = 20;
-        lastReserveBalance = initialReserveBalance;
-        lastConversionRate = initialConversionRate;
-        nextYield = initialYield;
-        emit NextYieldSet(initialYield);
-
-        // Enable
-        isShutdown = false;
-    }
-
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("TRSRY");
@@ -127,6 +117,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         _oracleDecimals = PRICE.decimals();
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -145,14 +136,14 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
     /// @return major The major version of the policy.
     /// @return minor The minor version of the policy.
     function VERSION() external pure returns (uint8 major, uint8 minor) {
-        return (1, 2);
+        return (1, 3);
     }
 
     ///////////////////////// EXTERNAL /////////////////////////
 
     /// @notice create a new bond market at the end of the day with some portion of remaining funds
-    function endEpoch() public override onlyRole("heart") {
-        if (isShutdown) return; // disabling this contract will not interfere with heartbeat
+    function endEpoch() public override onlyRole(ROLE_HEART) {
+        if (!isEnabled) return; // disabling this contract will not interfere with heartbeat
         epoch++;
 
         if (epoch % 3 != 0) return; // only execute once per day
@@ -193,26 +184,45 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     /// @notice allow manager to increase (by maximum 10%) or decrease yield for week if contract is inaccurate
     /// @param newNextYield to fund
-    function adjustNextYield(uint256 newNextYield) external onlyRole("loop_daddy") {
+    function adjustNextYield(uint256 newNextYield) external onlyAdminRole {
         if (newNextYield > nextYield && ((newNextYield * 1e18) / nextYield) > (11 * 1e17))
-            revert("Too much increase");
+            revert TooMuchIncrease();
 
         nextYield = newNextYield;
         emit NextYieldSet(nextYield);
     }
 
-    /// @notice retire contract by burning ohm balance and transferring tokens to treasury
-    /// @param tokensToTransfer list of tokens to transfer back to treasury (i.e. reserves)
-    function shutdown(ERC20[] memory tokensToTransfer) external onlyRole("loop_daddy") {
-        isShutdown = true;
-        emit Shutdown();
+    ///////////////////////// ENABLE/DISABLE /////////////////////////
+
+    /// @inheritdoc PolicyEnabler
+    /// @dev        This function expects the parameters to be an abi-encoded `address[]` with the tokens to transfer
+    function _enable(bytes calldata params_) internal override {
+        // Validate that the params are of the correct length
+        if (params_.length != ENABLE_PARAMS_LENGTH) revert InvalidParam("params length");
+
+        // Decode the params
+        EnableParams memory params = abi.decode(params_, (EnableParams));
+
+        // Initialize system variables
+        epoch = 20;
+        lastReserveBalance = params.initialReserveBalance;
+        lastConversionRate = params.initialConversionRate;
+        nextYield = params.initialYield;
+        emit NextYieldSet(params.initialYield);
+    }
+
+    /// @inheritdoc PolicyEnabler
+    /// @dev        This function expects the parameters to be an abi-encoded `address[]` with the tokens to transfer
+    function _disable(bytes calldata params_) internal override {
+        // Decode the params
+        address[] memory tokensToTransfer = abi.decode(params_, (address[]));
 
         // Burn OHM in contract
         BurnableERC20(address(ohm)).burn(ohm.balanceOf(address(this)));
 
         // Transfer all tokens to treasury
         for (uint256 i; i < tokensToTransfer.length; i++) {
-            ERC20 token = tokensToTransfer[i];
+            ERC20 token = ERC20(tokensToTransfer[i]);
             token.safeTransfer(address(TRSRY), token.balanceOf(address(this)));
         }
     }
@@ -311,7 +321,10 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
 
     /// @notice fetch combined sReserve balance of active clearinghouses and treasury, in reserve
     function getReserveBalance() public view override returns (uint256 balance) {
+        // TRSRY
         uint256 sBalance = sReserve.balanceOf(address(TRSRY));
+
+        // Clearinghouses
         uint256 len = CHREG.activeCount();
         for (uint256 i; i < len; i++) {
             sBalance += sReserve.balanceOf(CHREG.active(i));
@@ -331,7 +344,7 @@ contract YieldRepurchaseFacility is IYieldRepo, Policy, RolesConsumer {
         uint256 receivables;
         uint256 len = CHREG.registryCount();
         for (uint256 i; i < len; i++) {
-            receivables += Clearinghouse(CHREG.registry(i)).principalReceivables();
+            receivables += IGenericClearinghouse(CHREG.registry(i)).principalReceivables();
         }
 
         yield += (receivables * 5) / 1000 / 52;

@@ -11,7 +11,7 @@ import {Operator} from "src/policies/Operator.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {BondCallback} from "src/policies/BondCallback.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "src/policies/interfaces/IHeart_v1_6.sol";
 
 /// @notice
@@ -201,10 +201,14 @@ contract USDSMigration is OlyBatch {
         addToBatch(
             newYieldRepo,
             abi.encodeWithSelector(
-                YieldRepurchaseFacility.initialize.selector,
-                initialReserveBalance,
-                initialConversionRate,
-                initialYield
+                PolicyEnabler.enable.selector,
+                abi.encode(
+                    IYieldRepo.EnableParams({
+                        initialReserveBalance: initialReserveBalance,
+                        initialConversionRate: initialConversionRate,
+                        initialYield: initialYield
+                    })
+                )
             )
         );
 
