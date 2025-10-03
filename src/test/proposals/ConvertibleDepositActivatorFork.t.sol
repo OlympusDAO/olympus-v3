@@ -728,7 +728,7 @@ contract ConvertibleDepositActivatorForkTest is Test {
         uint256 yieldAmount = 50e18; // 50 USDS of yield
         console2.log("Simulated yield amount:", yieldAmount);
         console2.log("Simulated yield shares:", IERC4626(SUSDS).convertToShares(yieldAmount));
-        deal(USDS, SUSDS, yieldAmount);
+        deal(USDS, SUSDS, IERC20(USDS).balanceOf(SUSDS) + yieldAmount);
 
         // Get sUSDS balance before heartbeat to verify yield was created
         uint256 susdsBalanceBeforeHeartbeat = IERC20(SUSDS).balanceOf(address(treasury));
