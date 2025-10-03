@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.15;
 
+import {console2} from "forge-std/console2.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 // Bophades policies
-import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
-import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
-import {IHeart} from "src/policies/interfaces/IHeart_v1_6.sol";
+import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
+import {OlympusHeart} from "policies/Heart.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// @notice     Installs the YieldRepo contract and the new Heart which calls it
 contract YieldRepoInstall is OlyBatch {
-    address public kernel;
-    address public rolesAdmin;
-    address public newHeart;
-    address public yieldRepo;
-    address public oldHeart;
+    address kernel;
+    address rolesAdmin;
+    address newHeart;
+    address yieldRepo;
+    address oldHeart;
 
     function loadEnv() internal override {
         // Load contract addresses from the environment file
@@ -34,7 +35,7 @@ contract YieldRepoInstall is OlyBatch {
         // Yield Repo Install Script
 
         // 0. Deactivate the old heart
-        addToBatch(oldHeart, abi.encodeWithSelector(IHeart.deactivate.selector));
+        addToBatch(oldHeart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
 
         // A. Kernel Actions
         // A.1. Uninstall the old heart from the kernel
@@ -104,14 +105,10 @@ contract YieldRepoInstall is OlyBatch {
         addToBatch(
             yieldRepo,
             abi.encodeWithSelector(
-                PolicyEnabler.enable.selector,
-                abi.encode(
-                    IYieldRepo.EnableParams({
-                        initialReserveBalance: initialYieldEarningReserves,
-                        initialConversionRate: initialConversionRate,
-                        initialYield: initialYield
-                    })
-                )
+                YieldRepurchaseFacility.initialize.selector,
+                initialYieldEarningReserves,
+                initialConversionRate,
+                initialYield
             )
         );
     }

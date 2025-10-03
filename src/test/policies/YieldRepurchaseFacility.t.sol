@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
@@ -10,22 +11,24 @@ import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
+import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IBondAggregator} from "interfaces/IBondAggregator.sol";
+
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
-import {IYieldRepo} from "policies/interfaces/IYieldRepo.sol";
 
 // solhint-disable-next-line max-states-count
 contract YieldRepurchaseFacilityTest is Test {
@@ -61,10 +64,10 @@ contract YieldRepurchaseFacilityTest is Test {
     YieldRepurchaseFacility internal yieldRepo;
     RolesAdmin internal rolesAdmin;
 
-    uint256 internal initialReserves = 105_000_000e18;
-    uint256 internal initialConversionRate = 1_05e16;
-    uint256 internal initialPrincipalReceivables = 100_000_000e18;
-    uint256 internal initialYield = 50_000e18 + ((initialPrincipalReceivables * 5) / 1000) / 52;
+    uint256 initialReserves = 105_000_000e18;
+    uint256 initialConversionRate = 1_05e16;
+    uint256 initialPrincipalReceivables = 100_000_000e18;
+    uint256 initialYield = 50_000e18 + ((initialPrincipalReceivables * 5) / 1000) / 52;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -155,7 +158,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
             /// YieldRepurchaseFacility ROLES
             rolesAdmin.grantRole("heart", address(heart));
-            rolesAdmin.grantRole("admin", guardian);
+            rolesAdmin.grantRole("loop_daddy", guardian);
         }
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
@@ -191,15 +194,7 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Initialize the yield repo facility
         vm.prank(guardian);
-        yieldRepo.enable(
-            abi.encode(
-                IYieldRepo.EnableParams({
-                    initialReserveBalance: initialReserves,
-                    initialConversionRate: initialConversionRate,
-                    initialYield: initialYield
-                })
-            )
-        );
+        yieldRepo.initialize(initialReserves, initialConversionRate, initialYield);
     }
 
     function _mintYield() internal {
@@ -240,9 +235,8 @@ contract YieldRepurchaseFacilityTest is Test {
     // [X] shutdown
     // [X] getNextYield
     // [X] getReserveBalance
-    //  [ ] includes yield in the ConvertibleDepositFacility
 
-    function test_setup() public view {
+    function test_setup() public {
         // addresses are set correctly
         assertEq(address(yieldRepo.ohm()), address(ohm));
         assertEq(address(yieldRepo.reserve()), address(reserve));
@@ -375,7 +369,7 @@ contract YieldRepurchaseFacilityTest is Test {
     function test_endEpoch_isShutdown() public {
         // Shutdown the yieldRepo contract
         vm.prank(guardian);
-        yieldRepo.disable(abi.encode(new address[](0)));
+        yieldRepo.shutdown(new ERC20[](0));
 
         // Mint yield to the sReserve
         _mintYield();
@@ -571,7 +565,9 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Try to call adjustNextYield with an invalid caller
         // Expect it to fail
-        vm.expectRevert(abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin")));
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
         vm.prank(alice);
         yieldRepo.adjustNextYield(nextYield);
 
@@ -579,7 +575,7 @@ contract YieldRepurchaseFacilityTest is Test {
         // Expect it to fail
         uint256 newNextYield = (nextYield * 12) / 10;
 
-        vm.expectRevert(abi.encodeWithSignature("TooMuchIncrease()"));
+        vm.expectRevert(abi.encodePacked("Too much increase"));
         vm.prank(guardian);
         yieldRepo.adjustNextYield(newNextYield);
 
@@ -613,9 +609,11 @@ contract YieldRepurchaseFacilityTest is Test {
     function test_shutdown() public {
         // Try to call shutdown as an invalid caller
         // Expect it to fail
-        vm.expectRevert(abi.encodeWithSignature("NotAuthorised()"));
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
         vm.prank(alice);
-        yieldRepo.disable(abi.encode(new address[](0)));
+        yieldRepo.shutdown(new ERC20[](0));
 
         // Mint yield
         _mintYield();
@@ -639,17 +637,19 @@ contract YieldRepurchaseFacilityTest is Test {
 
         // Call shutdown with an invalid caller
         // Expect it to fail
-        vm.expectRevert(abi.encodeWithSignature("NotAuthorised()"));
+        vm.expectRevert(
+            abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("loop_daddy"))
+        );
         vm.prank(bob);
-        yieldRepo.disable(abi.encode(tokens));
+        yieldRepo.shutdown(tokens);
 
         // Call shutdown with a valid caller
         // Expect it to succeed
         vm.prank(guardian);
-        yieldRepo.disable(abi.encode(tokens));
+        yieldRepo.shutdown(tokens);
 
         // Check that the contract is shutdown
-        assertEq(yieldRepo.isEnabled(), false);
+        assertEq(yieldRepo.isShutdown(), true);
 
         // Check that the yieldRepo contract reserve balances have been transferred to the TRSRY
         assertEq(reserve.balanceOf(address(yieldRepo)), 0);
