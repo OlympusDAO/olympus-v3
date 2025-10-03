@@ -1,0 +1,12 @@
+{
+    "olympus.modules.OlympusDepositPositionManager": "0xb2c2Bab8023E7AEdc0fB13B10B24CA5Af5CdD16f",
+    "olympus.periphery.ConvertibleDepositActivator": "0xE63cCfBC94891D82EdFa548B3b75b1b8350FC67D",
+    "olympus.periphery.PositionTokenRenderer": "0x55ab13FcD09f686563F644a0E03D131CAb5E00d8",
+    "olympus.periphery.ReceiptTokenManager": "0x747b03cb0B004E0E0E3eB2C63c3DA910a1390889",
+    "olympus.policies.ConvertibleDepositAuctioneer": "0xc14156AF3bF6c11b1c40C8f51f64bA5496870126",
+    "olympus.policies.ConvertibleDepositFacility": "0x87568265eb6Ea27f37613d242D4192B6f6771269",
+    "olympus.policies.DepositManager": "0x2364bf0A9AA544039bC12130d3Ae167DfFbB93A5",
+    "olympus.policies.DepositRedemptionVault": "0x69b2Be653BAB628116b360818BE75a2d97b45C4a",
+    "olympus.policies.EmissionManager": "0x9dC1920981Fcf74786C838Bf6f6c3683a8713576",
+    "olympus.policies.OlympusHeart": "0xad381c116f27f56F8c0853431F4fCD9E9b142aff"
+}

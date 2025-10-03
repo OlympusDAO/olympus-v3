@@ -9,7 +9,7 @@ The following are required:
 - `bash` shell
 - A [foundry](https://getfoundry.sh/) installation
 - A `.env` file with the following environment variables:
-    - `RPC_URL`: The RPC URL of the chain you wish to submit the proposal on.
+    - `ALCHEMY_API_KEY`: The API key for the Alchemy RPC endpoint.
 
 ## Creating a Proposal Script
 

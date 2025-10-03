@@ -17,7 +17,7 @@ contract CoolerV2DelegatesForHohmProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail)
-        vm.createSelectFork(RPC_URL, MS_INSTALLATION_BLOCK + 1);
+        vm.createSelectFork(_RPC_ALIAS, MS_INSTALLATION_BLOCK + 1);
 
         /// @dev Deploy your proposal
         CoolerV2Proposal coolerProposal = new CoolerV2Proposal();

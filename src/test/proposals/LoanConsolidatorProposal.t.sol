@@ -17,7 +17,7 @@ contract LoanConsolidatorProposalTest is ProposalTest {
         // Mainnet Fork at a fixed block
         // Prior to the proposal deployment (otherwise it will fail)
         // 21531758 is when the LoanConsolidator was installed in the kernel
-        vm.createSelectFork(RPC_URL, 21531758 + 1);
+        vm.createSelectFork(_RPC_ALIAS, 21531758 + 1);
 
         /// @dev Deploy your proposal
         LoanConsolidatorProposal proposal = new LoanConsolidatorProposal();

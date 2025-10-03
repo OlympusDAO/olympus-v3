@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(erc20-unchecked-transfer,mixed-case-function)
 pragma solidity ^0.8.15;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {Kernel, Actions, toKeycode, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -45,7 +47,6 @@ contract ConvertibleDepositActivatorForkTest is Test {
     uint16 internal constant RECLAIM_RATE = 90e2; // 90%
 
     // Fork configuration - using a pinned block before CD deployment
-    string public RPC_URL = vm.envString("FORK_TEST_RPC_URL");
     uint256 internal constant FORK_BLOCK = 23324427; // Pinned block before CD deployment
 
     // Mainnet system contracts
@@ -97,7 +98,7 @@ contract ConvertibleDepositActivatorForkTest is Test {
 
     function setUp() public {
         // Fork mainnet at specific block
-        vm.createSelectFork(RPC_URL, FORK_BLOCK);
+        vm.createSelectFork("mainnet", FORK_BLOCK);
 
         // Setup test accounts
         user = makeAddr("user");
@@ -465,15 +466,16 @@ contract ConvertibleDepositActivatorForkTest is Test {
         activator.activate();
 
         // Verify periodic tasks are configured
-        assertEq(IPeriodicTaskManager(address(heart)).getPeriodicTaskCount(), 5);
+        assertEq(IPeriodicTaskManager(address(heart)).getPeriodicTaskCount(), 6);
 
         (address[] memory periodicTasks, ) = IPeriodicTaskManager(address(heart))
             .getPeriodicTasks();
-        assertEq(periodicTasks[0], RESERVE_MIGRATOR);
-        assertEq(periodicTasks[1], address(reserveWrapper));
-        assertEq(periodicTasks[2], OPERATOR);
-        assertEq(periodicTasks[3], YIELD_REPO);
-        assertEq(periodicTasks[4], address(emissionManager));
+        assertEq(periodicTasks[0], address(cdFacility));
+        assertEq(periodicTasks[1], RESERVE_MIGRATOR);
+        assertEq(periodicTasks[2], address(reserveWrapper));
+        assertEq(periodicTasks[3], OPERATOR);
+        assertEq(periodicTasks[4], YIELD_REPO);
+        assertEq(periodicTasks[5], address(emissionManager));
     }
 
     function test_activate_configuresAuthorizations() public {
@@ -704,6 +706,49 @@ contract ConvertibleDepositActivatorForkTest is Test {
         console2.log("Final min price:", params.minPrice);
     }
 
+    function test_heartbeatWithDepositAndYield_worksAfterActivation() public {
+        // Setup: Activate system and setup user
+        _grantRequiredRoles();
+        vm.prank(TIMELOCK);
+        activator.activate();
+        _setupUserWithUSDSBalance();
+
+        // Perform heartbeat so that conversion/wrapping is done separately to the yield collection
+        _performHeartbeats(1);
+
+        // User makes a deposit into ConvertibleDepositFacility
+        uint256 depositAmount = 1000e18; // 1000 USDS
+        vm.startPrank(user);
+        IERC20(USDS).approve(address(depositManager), depositAmount);
+        cdFacility.deposit(IERC20(USDS), PERIOD_1M, depositAmount, false);
+        vm.stopPrank();
+
+        // Simulate yield accrual in the sUSDS vault
+        // Mint additional USDS to the sUSDS contract to simulate yield
+        uint256 yieldAmount = 50e18; // 50 USDS of yield
+        console2.log("Simulated yield amount:", yieldAmount);
+        console2.log("Simulated yield shares:", IERC4626(SUSDS).convertToShares(yieldAmount));
+        deal(USDS, SUSDS, IERC20(USDS).balanceOf(SUSDS) + yieldAmount);
+
+        // Get sUSDS balance before heartbeat to verify yield was created
+        uint256 susdsBalanceBeforeHeartbeat = IERC20(SUSDS).balanceOf(address(treasury));
+        console2.log("Treasury sUSDS balance before heartbeat:", susdsBalanceBeforeHeartbeat);
+
+        // Perform heartbeat so that yield is collected and converted
+        _performHeartbeats(1);
+
+        // Get final treasury sUSDS balance after heartbeat
+        uint256 finalSusdsBalance = IERC20(SUSDS).balanceOf(address(treasury));
+        console2.log("Final treasury sUSDS balance:", finalSusdsBalance);
+
+        // Validate that the treasury contains more sUSDS than before
+        // The increase should be from the yield
+        assertTrue(
+            finalSusdsBalance > susdsBalanceBeforeHeartbeat,
+            "Treasury sUSDS balance should increase after yield collection"
+        );
+    }
+
     function test_roleAssignments_areCorrectAfterActivation() public {
         // Setup: Activate system
         _grantRequiredRoles();
@@ -771,3 +816,4 @@ contract ConvertibleDepositActivatorForkTest is Test {
         cdFacility.deposit(IERC20(USDS), PERIOD_1M, 1000e18, false);
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer,mixed-case-function)

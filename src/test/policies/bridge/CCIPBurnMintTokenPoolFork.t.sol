@@ -67,8 +67,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Set up forks
         // Mainnet is active
         // These use Sepolia RPCs, as CCIPLocalSimulatorFork only supports sepolia testnets
-        mainnetForkId = vm.createFork(vm.envString("ETH_TESTNET_RPC_URL"), MAINNET_BLOCK);
-        polygonForkId = vm.createFork(vm.envString("POLYGON_TESTNET_RPC_URL"), POLYGON_BLOCK);
+        mainnetForkId = vm.createFork("sepolia", MAINNET_BLOCK);
+        polygonForkId = vm.createFork("polygon-amoy", POLYGON_BLOCK);
         vm.selectFork(mainnetForkId);
 
         // Addresses

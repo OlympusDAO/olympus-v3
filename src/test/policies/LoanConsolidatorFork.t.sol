@@ -71,7 +71,6 @@ contract LoanConsolidatorForkTest is Test {
     uint256 internal trsrySDaiBalance;
     uint256 internal trsryUsdsBalance;
     uint256 internal trsrySusdsBalance;
-    string RPC_URL = vm.envString("FORK_TEST_RPC_URL");
 
     // These are replicated here so that if they are updated, the tests will fail
     bytes32 public constant ROLE_ADMIN = "loan_consolidator_admin";
@@ -80,7 +79,7 @@ contract LoanConsolidatorForkTest is Test {
     function setUp() public {
         // Mainnet Fork at a fixed block
         // After sUSDS deployment
-        vm.createSelectFork(RPC_URL, 20900000);
+        vm.createSelectFork("mainnet", 20900000);
 
         // Required Contracts
         coolerFactory = CoolerFactory(0x30Ce56e80aA96EbbA1E1a74bC5c0FEB5B0dB4216);

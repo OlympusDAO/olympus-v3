@@ -180,34 +180,40 @@ contract ConvertibleDepositActivator is Owned {
         // 1. Enable ReserveWrapper
         IEnabler(RESERVE_WRAPPER).enable("");
 
-        // 2. Add ReserveMigrator.migrate() to periodic tasks
+        // 2. Add ConvertibleDepositFacility to periodic tasks
+        // This is done before the ReserveMigrator and ReserveWrapper,
+        // so that any yield is converted into the correct asset
+        taskManager.addPeriodicTask(CD_FACILITY);
+
+        // 3. Add ReserveMigrator.migrate() to periodic tasks
         taskManager.addPeriodicTaskAtIndex(
             RESERVE_MIGRATOR,
             IReserveMigrator.migrate.selector,
-            0 // First task
+            1 // Second task
         );
 
-        // 3. Add ReserveWrapper to periodic tasks
+        // 4. Add ReserveWrapper to periodic tasks
         taskManager.addPeriodicTask(RESERVE_WRAPPER);
 
-        // 4. Add Operator.operate() to periodic tasks
+        // 5. Add Operator.operate() to periodic tasks
         taskManager.addPeriodicTaskAtIndex(
             OPERATOR,
             IOperator.operate.selector,
-            2 // Third task
-        );
-
-        // 5. Add YieldRepurchaseFacility.endEpoch() to periodic tasks
-        taskManager.addPeriodicTaskAtIndex(
-            YIELD_REPURCHASE_FACILITY,
-            IYieldRepo.endEpoch.selector,
             3 // Fourth task
         );
 
-        // 6. Add EmissionManager to periodic tasks
+        // 6. Add YieldRepurchaseFacility.endEpoch() to periodic tasks
+        // Tasks 2-4 are run before YRF, so that yield is properly calculated
+        taskManager.addPeriodicTaskAtIndex(
+            YIELD_REPURCHASE_FACILITY,
+            IYieldRepo.endEpoch.selector,
+            4 // Fifth task
+        );
+
+        // 7. Add EmissionManager to periodic tasks
         taskManager.addPeriodicTask(EMISSION_MANAGER);
 
-        // 7. Enable Heart
+        // 8. Enable Heart
         IEnabler(HEART).enable("");
     }
 
