@@ -16,9 +16,9 @@ contract ConvertibleDepositFacilitySplitTest is ConvertibleDepositFacilityTest {
 
     // ===== TESTS ===== //
 
-    // given the position was created by the YieldDepositFacility
+    // given the position was created by the second facility
     //  [X] it reverts when splitting via ConvertibleDepositFacility
-    function test_whenPositionFromYDF_reverts()
+    function test_whenPositionFromSecondFacility_reverts()
         public
         givenLocallyActive
         givenRecipientHasReserveToken

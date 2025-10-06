@@ -116,7 +116,7 @@ contract ConvertibleDepositFacilityReclaimTest is ConvertibleDepositFacilityTest
         // At this stage:
         // - The recipient has started redemption for 10e18 via the ConvertibleDepositFacility
         // - DepositManager has 10e18 in deposits from the ConvertibleDepositFacility, of which 10e18 are committed for redemption
-        // - DepositManager has 10e18 in deposits from the YieldDepositFacility, of which 0 are committed for redemption
+        // - DepositManager has 10e18 in deposits from the second facility, of which 0 are committed for redemption
         // - The recipient has committed 10e18 of funds from the ConvertibleDepositFacility via the OPERATOR
 
         // Expect revert

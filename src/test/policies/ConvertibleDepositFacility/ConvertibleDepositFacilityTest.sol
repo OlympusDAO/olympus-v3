@@ -10,7 +10,6 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
-import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -21,7 +20,6 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
-import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -31,7 +29,7 @@ import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol
 contract ConvertibleDepositFacilityTest is Test {
     Kernel public kernel;
     ConvertibleDepositFacility public facility;
-    YieldDepositFacility public yieldDepositFacility;
+    ConvertibleDepositFacility public facilityTwo;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
@@ -117,7 +115,7 @@ contract ConvertibleDepositFacilityTest is Test {
         receiptTokenManager = new ReceiptTokenManager();
         depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
-        yieldDepositFacility = new YieldDepositFacility(address(kernel), address(depositManager));
+        facilityTwo = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -127,7 +125,7 @@ contract ConvertibleDepositFacilityTest is Test {
         kernel.executeAction(Actions.InstallModule, address(convertibleDepositPositions));
         kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
-        kernel.executeAction(Actions.ActivatePolicy, address(yieldDepositFacility));
+        kernel.executeAction(Actions.ActivatePolicy, address(facilityTwo));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
@@ -136,7 +134,7 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("manager"), manager);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
-        rolesAdmin.grantRole(bytes32("deposit_operator"), address(yieldDepositFacility));
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(facilityTwo));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
 
         // Enable the deposit manager
@@ -147,9 +145,9 @@ contract ConvertibleDepositFacilityTest is Test {
         vm.prank(admin);
         facility.enable("");
 
-        // Enable the yield deposit facility
+        // Enable the second facility
         vm.prank(admin);
-        yieldDepositFacility.enable("");
+        facilityTwo.enable("");
 
         // Create a receipt token
         vm.startPrank(admin);
@@ -162,7 +160,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
         // Set the facility names
         depositManager.setOperatorName(address(facility), "cdf");
-        depositManager.setOperatorName(address(yieldDepositFacility), "ydf");
+        depositManager.setOperatorName(address(facilityTwo), "cdg");
 
         // Enable the token/period/facility combo
         depositManager.addAssetPeriod(
@@ -171,11 +169,11 @@ contract ConvertibleDepositFacilityTest is Test {
             address(facility)
         );
 
-        // Enable the token/period/facility combo for the yield deposit facility
+        // Enable the token/period/facility combo for the second facility
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(yieldDepositFacility)
+            address(facilityTwo)
         );
 
         // Set reclaim rates on facilities
@@ -184,7 +182,7 @@ contract ConvertibleDepositFacilityTest is Test {
             PERIOD_MONTHS,
             RECLAIM_RATE
         );
-        yieldDepositFacility.setAssetPeriodReclaimRate(
+        facilityTwo.setAssetPeriodReclaimRate(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
             RECLAIM_RATE
@@ -213,16 +211,16 @@ contract ConvertibleDepositFacilityTest is Test {
             address(facility)
         );
 
-        // Enable the token/period/facility combo for the yield deposit facility
+        // Enable the token/period/facility combo for the second facility
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(yieldDepositFacility)
+            address(facilityTwo)
         );
 
         // Set reclaim rates on facilities
         facility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
-        yieldDepositFacility.setAssetPeriodReclaimRate(
+        facilityTwo.setAssetPeriodReclaimRate(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
             90e2
@@ -355,7 +353,7 @@ contract ConvertibleDepositFacilityTest is Test {
 
     modifier mintYieldDepositToken(address account_, uint256 amount_) {
         vm.prank(account_);
-        (, previousDepositActual) = yieldDepositFacility.deposit(
+        (, previousDepositActual) = facilityTwo.deposit(
             iReserveToken,
             PERIOD_MONTHS,
             amount_,
@@ -410,11 +408,13 @@ contract ConvertibleDepositFacilityTest is Test {
         uint256 amount_
     ) internal returns (uint256 positionId) {
         vm.prank(account_);
-        (positionId, , ) = yieldDepositFacility.createPosition(
-            IYieldDepositFacility.CreatePositionParams({
+        (positionId, , ) = facilityTwo.createPosition(
+            IConvertibleDepositFacility.CreatePositionParams({
                 asset: iReserveToken,
                 periodMonths: PERIOD_MONTHS,
+                depositor: account_,
                 amount: amount_,
+                conversionPrice: CONVERSION_PRICE,
                 wrapPosition: false,
                 wrapReceipt: false
             })
