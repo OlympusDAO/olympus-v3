@@ -297,7 +297,7 @@ contract DepositRedemptionVaultStartRedemptionTest is DepositRedemptionVaultTest
         // At this stage:
         // - The recipient has reclaimed 1e18 via the ConvertibleDepositFacility
         // - DepositManager has 0 in deposits from the ConvertibleDepositFacility
-        // - DepositManager has 1e18 in deposits from the second facility
+        // - DepositManager has 1e18 in deposits from the YieldDepositFacility
 
         // Expect revert
         _expectRevertInsufficientAvailableDeposits(amount_, 0);

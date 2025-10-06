@@ -11,6 +11,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {YieldDepositFacility} from "src/policies/deposits/YieldDepositFacility.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -23,6 +24,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
+import {IYieldDepositFacility} from "src/policies/interfaces/deposits/IYieldDepositFacility.sol";
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -32,7 +34,7 @@ contract DepositRedemptionVaultTest is Test {
     Kernel public kernel;
     DepositRedemptionVault public redemptionVault;
     ConvertibleDepositFacility public cdFacility;
-    ConvertibleDepositFacility public cdFacilityTwo;
+    YieldDepositFacility public ydFacility;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
@@ -42,7 +44,7 @@ contract DepositRedemptionVaultTest is Test {
     ReceiptTokenManager public receiptTokenManager;
 
     address public cdFacilityAddress;
-    address public cdFacilityTwoAddress;
+    address public ydFacilityAddress;
 
     MockERC20 public ohm;
     MockERC20 public reserveToken;
@@ -126,8 +128,8 @@ contract DepositRedemptionVaultTest is Test {
         redemptionVault = new DepositRedemptionVault(address(kernel), address(depositManager));
         cdFacility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         cdFacilityAddress = address(cdFacility);
-        cdFacilityTwo = new ConvertibleDepositFacility(address(kernel), address(depositManager));
-        cdFacilityTwoAddress = address(cdFacilityTwo);
+        ydFacility = new YieldDepositFacility(address(kernel), address(depositManager));
+        ydFacilityAddress = address(ydFacility);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Install modules
@@ -138,7 +140,7 @@ contract DepositRedemptionVaultTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(redemptionVault));
         kernel.executeAction(Actions.ActivatePolicy, address(cdFacility));
-        kernel.executeAction(Actions.ActivatePolicy, address(cdFacilityTwo));
+        kernel.executeAction(Actions.ActivatePolicy, address(ydFacility));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
@@ -146,7 +148,7 @@ contract DepositRedemptionVaultTest is Test {
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(cdFacility));
-        rolesAdmin.grantRole(bytes32("deposit_operator"), address(cdFacilityTwo));
+        rolesAdmin.grantRole(bytes32("deposit_operator"), address(ydFacility));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
         rolesAdmin.grantRole(bytes32("manager"), manager);
 
@@ -163,21 +165,21 @@ contract DepositRedemptionVaultTest is Test {
         cdFacility.enable("");
 
         vm.prank(admin);
-        cdFacilityTwo.enable("");
+        ydFacility.enable("");
 
         // Register facilities in redemption vault
         vm.prank(admin);
         redemptionVault.authorizeFacility(address(cdFacility));
 
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(cdFacilityTwo));
+        redemptionVault.authorizeFacility(address(ydFacility));
 
         // Create receipt tokens
         vm.startPrank(admin);
 
         // Set the facility names
         depositManager.setOperatorName(address(cdFacility), "cdf");
-        depositManager.setOperatorName(address(cdFacilityTwo), "cdg");
+        depositManager.setOperatorName(address(ydFacility), "ydf");
 
         depositManager.addAsset(
             IERC20(address(reserveToken)),
@@ -193,11 +195,11 @@ contract DepositRedemptionVaultTest is Test {
             address(cdFacility)
         );
 
-        // Enable the token/period/facility combo for the second facility
+        // Enable the token/period/facility combo for the YieldDepositFacility
         depositManager.addAssetPeriod(
             IERC20(address(reserveToken)),
             PERIOD_MONTHS,
-            address(cdFacilityTwo)
+            address(ydFacility)
         );
 
         receiptTokenId = depositManager.getReceiptTokenId(
@@ -208,7 +210,7 @@ contract DepositRedemptionVaultTest is Test {
 
         // Set the reclaim rate
         cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
-        cdFacilityTwo.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
+        ydFacility.setAssetPeriodReclaimRate(IERC20(address(reserveToken)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Create a second receipt token
@@ -227,11 +229,11 @@ contract DepositRedemptionVaultTest is Test {
             address(cdFacility)
         );
 
-        // Enable the token/period/facility combo for the second facility
+        // Enable the token/period/facility combo for the YieldDepositFacility
         depositManager.addAssetPeriod(
             IERC20(address(reserveTokenTwo)),
             PERIOD_MONTHS,
-            address(cdFacilityTwo)
+            address(ydFacility)
         );
 
         receiptTokenIdTwo = depositManager.getReceiptTokenId(
@@ -242,11 +244,7 @@ contract DepositRedemptionVaultTest is Test {
 
         // Set the reclaim rate
         cdFacility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
-        cdFacilityTwo.setAssetPeriodReclaimRate(
-            IERC20(address(reserveTokenTwo)),
-            PERIOD_MONTHS,
-            90e2
-        );
+        ydFacility.setAssetPeriodReclaimRate(IERC20(address(reserveTokenTwo)), PERIOD_MONTHS, 90e2);
         vm.stopPrank();
 
         // Authorize the redemption vault to interact with CD Facility
@@ -432,14 +430,12 @@ contract DepositRedemptionVaultTest is Test {
     ) internal returns (uint256 positionId) {
         uint256 actualAmount;
 
-        vm.prank(auctioneer);
-        (positionId, , actualAmount) = cdFacilityTwo.createPosition(
-            IConvertibleDepositFacility.CreatePositionParams({
+        vm.prank(account_);
+        (positionId, , actualAmount) = ydFacility.createPosition(
+            IYieldDepositFacility.CreatePositionParams({
                 asset: iReserveToken,
                 periodMonths: PERIOD_MONTHS,
-                depositor: account_,
                 amount: amount_,
-                conversionPrice: CONVERSION_PRICE,
                 wrapPosition: false,
                 wrapReceipt: false
             })
@@ -641,11 +637,11 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    // modifier givenYieldFee(uint16 yieldFee_) {
-    //     vm.prank(admin);
-    //     ydFacility.setYieldFee(yieldFee_);
-    //     _;
-    // }
+    modifier givenYieldFee(uint16 yieldFee_) {
+        vm.prank(admin);
+        ydFacility.setYieldFee(yieldFee_);
+        _;
+    }
 
     modifier givenDepositPeriodEnded(uint48 elapsed_) {
         vm.warp(YIELD_EXPIRY + elapsed_);
@@ -654,7 +650,7 @@ contract DepositRedemptionVaultTest is Test {
 
     function _takeRateSnapshot() internal {
         vm.prank(HEART);
-        cdFacilityTwo.execute();
+        ydFacility.execute();
     }
 
     modifier givenRateSnapshotTaken() {

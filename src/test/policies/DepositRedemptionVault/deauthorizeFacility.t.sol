@@ -152,7 +152,7 @@ contract DepositRedemptionVaultDeauthorizeFacilityTest is DepositRedemptionVault
         vm.prank(admin);
         redemptionVault.deauthorizeFacility(cdFacilityAddress);
         vm.prank(admin);
-        redemptionVault.deauthorizeFacility(cdFacilityTwoAddress);
+        redemptionVault.deauthorizeFacility(ydFacilityAddress);
 
         // Assert all facilities are deauthorized
         assertFalse(
