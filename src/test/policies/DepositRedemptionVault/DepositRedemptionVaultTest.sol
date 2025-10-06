@@ -432,7 +432,7 @@ contract DepositRedemptionVaultTest is Test {
     ) internal returns (uint256 positionId) {
         uint256 actualAmount;
 
-        vm.prank(account_);
+        vm.prank(auctioneer);
         (positionId, , actualAmount) = cdFacilityTwo.createPosition(
             IConvertibleDepositFacility.CreatePositionParams({
                 asset: iReserveToken,

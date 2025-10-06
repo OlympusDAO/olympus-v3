@@ -407,7 +407,7 @@ contract ConvertibleDepositFacilityTest is Test {
         address account_,
         uint256 amount_
     ) internal returns (uint256 positionId) {
-        vm.prank(account_);
+        vm.prank(auctioneer);
         (positionId, , ) = facilityTwo.createPosition(
             IConvertibleDepositFacility.CreatePositionParams({
                 asset: iReserveToken,
