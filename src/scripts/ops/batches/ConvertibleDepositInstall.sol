@@ -433,7 +433,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                 IEnabler.enable.selector,
                 abi.encode(
                     IConvertibleDepositAuctioneer.EnableParams({
-                        target: 1000e9, // 100 OHM
+                        target: 1000e9, // 1000 OHM
                         tickSize: 200e9, // 200 OHM per tick
                         minPrice: 22e18, // 22 USDS / OHM
                         tickStep: 110e2, // 10% increase
