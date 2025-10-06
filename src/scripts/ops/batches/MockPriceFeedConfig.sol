@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Mock Price Feed
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
+
+import {Owned} from "solmate/auth/Owned.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -14,8 +17,11 @@ contract MockPriceFeedConfig is BatchScriptV2 {
     /// @notice Configure a mock price feed with the specified values
     function configurePriceFeed(
         bool useDaoMS_,
-        string calldata argsFile_
-    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Read arguments
         string memory priceFeedName = _readBatchArgString("configurePriceFeed", "priceFeedName");
         int256 latestAnswer = int256(_readBatchArgUint256("configurePriceFeed", "latestAnswer"));
@@ -59,4 +65,32 @@ contract MockPriceFeedConfig is BatchScriptV2 {
         console2.log("Mock price feed configuration batch prepared");
         proposeBatch();
     }
+
+    /// @notice Transfer ownership of a mock price feed to a new owner
+    function transferOwnership(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        // Read arguments
+        address newOwner = _readBatchArgAddress("transferOwnership", "newOwner");
+        string memory priceFeedName = _readBatchArgString("transferOwnership", "priceFeedName");
+
+        // Get price feed address
+        address priceFeed = _envAddressNotZero(priceFeedName);
+
+        console2.log("=== Transferring Mock Price Feed Ownership ===");
+        console2.log("Price feed:", priceFeedName);
+        console2.log("Address:", priceFeed);
+        console2.log("New owner:", newOwner);
+
+        // Transfer ownership
+        addToBatch(priceFeed, abi.encodeWithSelector(Owned.transferOwnership.selector, newOwner));
+
+        console2.log("Mock price feed ownership transfer batch prepared");
+        proposeBatch();
+    }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

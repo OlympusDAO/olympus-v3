@@ -95,7 +95,7 @@ set_account_address_ledger() {
 validate_and_set_account() {
     local account="$1"
     local ledger="$2"
-    
+
     # Validate that either account or ledger is specified (but not both)
     if [ -n "$account" ] && [ -n "$ledger" ]; then
         display_error "Cannot specify both --account and --ledger. Choose one."
@@ -104,7 +104,7 @@ validate_and_set_account() {
         display_error "Must specify either --account or --ledger."
         exit 1
     fi
-    
+
     if [ -n "$account" ]; then
         # Using cast wallet account
         set_account_address "$account"
