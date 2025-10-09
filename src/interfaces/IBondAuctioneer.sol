@@ -82,7 +82,7 @@ interface IBondAuctioneer {
     ///
     /// @param  creator_        Address of market creator
     /// @return isAuthorized    True if the creator can use a callback
-    function callbackAuthorized(address creator_) external returns (bool isAuthorized);
+    function callbackAuthorized(address creator_) external view returns (bool isAuthorized);
 
     /* ========== VIEW FUNCTIONS ========== */
 
