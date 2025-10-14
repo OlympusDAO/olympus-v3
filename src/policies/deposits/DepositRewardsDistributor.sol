@@ -1,0 +1,296 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity >=0.8.20;
+
+// Interfaces
+import {IDepositRewardsDistributor} from "../interfaces/IDepositRewardsDistributor.sol";
+import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+
+// Libraries
+import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+
+// Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+
+/// @title  Deposit Rewards Distributor
+/// @notice Merkle tree-based rewards distribution for deposit rewards program
+/// @dev    This contract allows users to accumulate rewards based on their convertible deposit positions
+///         and claim rewards from a weekly Merkle tree distribution. Users can claim multiple weeks
+///         in a single transaction for gas efficiency.
+///
+///         Key Features:
+///         - Off-chain rewards calculation with on-chain verification via Merkle proofs
+///         - Weekly merkle root updates by authorized updaters
+///         - Multi-week batch claiming to reduce gas costs
+///         - Emergency pause functionality
+///         - Rewards paid from treasury (typically USDS from yield generation)
+///
+///         Architecture:
+///         - Rewards are calculated off-chain based on deposit amount × time held
+///         - Backend generates weekly merkle trees with accumulated rewards per user
+///         - Merkle roots are posted on-chain by authorized role (typically multisig or automated keeper)
+///         - Users submit proofs to claim their rewards
+///
+contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDistributor {
+    using TransferHelper for ERC20;
+
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice The TRSRY module
+    TRSRYv1 internal TRSRY;
+
+    /// @notice Role that can update merkle roots
+    bytes32 public constant ROLE_MERKLE_UPDATER = "points_merkle_updater";
+
+    /// @notice Mapping from week number => merkle root
+    /// @dev    Week 0 is the first distribution week
+    mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
+
+    /// @notice Mapping from user address => week number => claimed status
+    mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
+
+    /// @notice Mapping from week number => reward token address
+    /// @dev    Allows different reward tokens for different weeks (e.g., USDS, DAI, etc.)
+    mapping(uint256 week => address rewardToken) public weeklyRewardTokens;
+
+    /// @notice The current week number
+    uint256 public currentWeek;
+
+    /// @notice Timestamp when the last merkle root was set
+    uint256 public lastRootSetTimestamp;
+
+    /// @notice Minimum duration between week advances (7 days)
+    uint256 public constant WEEK_DURATION = 7 days;
+
+    /// @notice Total rewards claimed by each user (in reward token decimals)
+    mapping(address user => mapping(address token => uint256 amount)) public totalClaimed;
+
+    /// @notice Total rewards distributed per week
+    mapping(uint256 week => uint256 amount) public weeklyRewardsDistributed;
+
+    /// @notice Mapping from week number => metadata IPFS hash
+    /// @dev    Points to off-chain data containing full distribution details
+    mapping(uint256 week => string ipfsHash) public weeklyMetadata;
+
+
+    modifier onlyAuthorized(bytes32 role_) {
+        ROLES.requireRole(role_, msg.sender);
+        _;
+    }
+
+    /// @param kernel_              The Kernel address
+    /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
+    constructor(address kernel_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
+        if (startTimestamp_ == 0) revert DRD_InvalidAddress();
+        lastRootSetTimestamp = startTimestamp_;
+        // Disabled by default by PolicyEnabler
+    }
+
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("TRSRY");
+
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
+    }
+
+    /// @inheritdoc Policy
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory permissions)
+    {
+        Keycode trsryKeycode = toKeycode("TRSRY");
+
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(trsryKeycode, TRSRY.increaseWithdrawApproval.selector);
+        permissions[1] = Permissions(trsryKeycode, TRSRY.withdrawReserves.selector);
+    }
+
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+        return (major, minor);
+    }
+
+    // ========== MERKLE ROOT MANAGEMENT ========== //
+
+    /// @notice Set the merkle root for the current week
+    /// @dev    This function can only be called by addresses with the ROLE_MERKLE_UPDATER role.
+    ///         After the first call, subsequent calls are only allowed after WEEK_DURATION (7 days)
+    ///         has passed. The function automatically advances to the next week.
+    ///
+    /// @param  merkleRoot_     The merkle root for the week's distribution
+    /// @param  rewardToken_    The ERC20 token used for rewards this week
+    /// @param  ipfsHash_       IPFS hash containing full distribution data for transparency
+    /// @return week            The week number that was set
+    /// @return timestamp       The new lastRootSetTimestamp (when this week ends)
+    function setMerkleRoot(
+        bytes32 merkleRoot_,
+        address rewardToken_,
+        string calldata ipfsHash_
+    ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (uint256 week, uint256 timestamp) {
+        // Validate inputs
+        if (merkleRoot_ == bytes32(0)) revert DRD_InvalidProof();
+        if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
+
+        // Cache storage variables to save gas
+        uint256 lastTimestamp = lastRootSetTimestamp;
+        week = currentWeek;
+
+        // Ensure at least WEEK_DURATION has passed since the last root was set
+        if (block.timestamp < lastTimestamp + WEEK_DURATION) {
+            revert DRD_WeekTooEarly();
+        }
+
+        // Set the merkle root for the current week
+        weeklyMerkleRoots[week] = merkleRoot_;
+        weeklyRewardTokens[week] = rewardToken_;
+        weeklyMetadata[week] = ipfsHash_;
+
+        // Update timestamp: add exactly WEEK_DURATION for consistent weekly snapshots
+        // This ensures off-chain calculations align with on-chain week boundaries
+        timestamp = lastTimestamp + WEEK_DURATION;
+        lastRootSetTimestamp = timestamp;
+
+        emit MerkleRootSet(week, merkleRoot_, rewardToken_, ipfsHash_);
+
+        // Advance to next week for the next call
+        currentWeek = week + 1;
+        emit WeekAdvanced(week + 1);
+    }
+
+    /// @notice Claim rewards for one or more weeks in a single transaction
+    /// @dev    This function handles both single week and multi-week claims.
+    ///         For single week: pass arrays of length 1.
+    ///         For multiple weeks: automatically handles different reward tokens (up to 2).
+    ///         Groups claims by token internally for efficient transfers.
+    ///
+    /// @param  weeks_      Array of week numbers to claim (can be length 1 for single week)
+    /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
+    /// @param  proofs_     Array of merkle proofs, one per week
+    function claimMultipleWeeks(
+        uint256[] calldata weeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external onlyEnabled {
+        if (weeks_.length == 0) revert DRD_NoWeeksSpecified();
+        if (weeks_.length != amounts_.length || weeks_.length != proofs_.length) {
+            revert DRD_ArrayLengthMismatch();
+        }
+
+        // We'll accumulate amounts per token in memory
+        // For simplicity, we use a maximum of 2 different tokens per batch
+        address token1;
+        address token2;
+        uint256 amount1;
+        uint256 amount2;
+        uint256 weeksForToken1;
+        uint256 weeksForToken2;
+
+        for (uint256 i = 0; i < weeks_.length; ) {
+            uint256 week = weeks_[i];
+            uint256 amount = amounts_[i];
+
+            // Get the reward token for this week
+            address weekToken = weeklyRewardTokens[week];
+            if (weekToken == address(0)) revert DRD_MerkleRootNotSet(week);
+
+            // Verify and mark as claimed
+            _verifyAndMarkClaimed(msg.sender, week, amount, proofs_[i]);
+
+            // Accumulate by token and count weeks
+            if (token1 == address(0)) {
+                token1 = weekToken;
+                amount1 += amount;
+                weeksForToken1++;
+            } else if (weekToken == token1) {
+                amount1 += amount;
+                weeksForToken1++;
+            } else if (token2 == address(0)) {
+                token2 = weekToken;
+                amount2 += amount;
+                weeksForToken2++;
+            } else if (weekToken == token2) {
+                amount2 += amount;
+                weeksForToken2++;
+            } else {
+                // More than 2 tokens in a single batch is not supported
+                // Users should split into multiple transactions
+                revert DRD_InvalidWeek(week);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        _transferRewards(msg.sender, token1, amount1, weeksForToken1);
+        _transferRewards(msg.sender, token2, amount2, weeksForToken2);
+    }
+
+    /// @notice Verify merkle proof and mark week as claimed for user
+    function _verifyAndMarkClaimed(
+        address user_,
+        uint256 week_,
+        uint256 amount_,
+        bytes32[] calldata proof_
+    ) internal {
+        // Check if already claimed
+        require(!hasClaimed[user_][week_], DRD_AlreadyClaimed(week_));
+
+        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
+        // We include week in the leaf to prevent replay attacks across weeks
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
+
+        // Verify merkle proof (week validity already checked by caller)
+        require(MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf), DRD_InvalidProof());
+
+        hasClaimed[user_][week_] = true;
+        weeklyRewardsDistributed[week_] += amount_;
+    }
+
+    /// @notice Internal function to transfer rewards from treasury and update accounting
+    /// @dev    Returns early if amount is 0 (no-op). Handles complete reward transfer flow:
+    ///         treasury withdrawal, state updates, and event emission.
+    /// @param  to_         Address to transfer rewards to
+    /// @param  token_      Reward token address
+    /// @param  amount_     Amount to transfer
+    /// @param  weekCount_  Number of weeks being claimed for this token (for event)
+    function _transferRewards(
+        address to_,
+        address token_,
+        uint256 amount_,
+        uint256 weekCount_
+    ) internal {
+        // Early return if no amount to transfer
+        if (amount_ == 0) return;
+
+        // Increase withdrawal approval and withdraw from treasury
+        // This requires that this policy has been granted the appropriate permissions
+        TRSRY.increaseWithdrawApproval(address(this), ERC20(token_), amount_);
+        TRSRY.withdrawReserves(to_, ERC20(token_), amount_);
+
+        // Update total claimed tracking
+        totalClaimed[to_][token_] += amount_;
+
+        // Emit rewards claimed event
+        emit RewardsClaimed(to_, amount_, token_, weekCount_);
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(PolicyEnabler, IERC165) returns (bool) {
+        return
+            interfaceId == type(IDepositRewardsDistributor).interfaceId ||
+            super.supportsInterface(interfaceId);
+    }
+}
+
