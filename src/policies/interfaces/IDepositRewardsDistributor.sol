@@ -47,9 +47,9 @@ interface IDepositRewardsDistributor is IERC165 {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    function currentWeek() external view returns (uint256);
+    function currentWeek() external view returns (uint40);
 
-    function lastRootSetTimestamp() external view returns (uint256);
+    function lastRootSetTimestamp() external view returns (uint40);
 
     function WEEK_DURATION() external view returns (uint256);
 

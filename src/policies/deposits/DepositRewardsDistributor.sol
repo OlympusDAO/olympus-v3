@@ -38,36 +38,22 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDistributor {
     using TransferHelper for ERC20;
 
-    // ========== STATE VARIABLES ========== //
+    /// @notice Role that can update merkle roots
+    bytes32 public constant ROLE_MERKLE_UPDATER = "points_merkle_updater";
+
+    /// @notice Minimum duration between week advances (7 days)
+    uint256 public constant WEEK_DURATION = 7 days;
 
     /// @notice The TRSRY module
     TRSRYv1 internal TRSRY;
-
-    /// @notice Role that can update merkle roots
-    bytes32 public constant ROLE_MERKLE_UPDATER = "points_merkle_updater";
 
     /// @notice Mapping from week number => merkle root
     /// @dev    Week 0 is the first distribution week
     mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
 
-    /// @notice Mapping from user address => week number => claimed status
-    mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
-
     /// @notice Mapping from week number => reward token address
     /// @dev    Allows different reward tokens for different weeks (e.g., USDS, DAI, etc.)
     mapping(uint256 week => address rewardToken) public weeklyRewardTokens;
-
-    /// @notice The current week number
-    uint256 public currentWeek;
-
-    /// @notice Timestamp when the last merkle root was set
-    uint256 public lastRootSetTimestamp;
-
-    /// @notice Minimum duration between week advances (7 days)
-    uint256 public constant WEEK_DURATION = 7 days;
-
-    /// @notice Total rewards claimed by each user (in reward token decimals)
-    mapping(address user => mapping(address token => uint256 amount)) public totalClaimed;
 
     /// @notice Total rewards distributed per week
     mapping(uint256 week => uint256 amount) public weeklyRewardsDistributed;
@@ -76,6 +62,17 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
     /// @dev    Points to off-chain data containing full distribution details
     mapping(uint256 week => string ipfsHash) public weeklyMetadata;
 
+    /// @notice Mapping from user address => week number => claimed status
+    mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
+
+    /// @notice Total rewards claimed by each user (in reward token decimals)
+    mapping(address user => mapping(address token => uint256 amount)) public totalClaimed;
+
+    /// @notice The current week number
+    uint40 public currentWeek;
+
+    /// @notice Timestamp when the last merkle root was set
+    uint40 public lastRootSetTimestamp;
 
     modifier onlyAuthorized(bytes32 role_) {
         ROLES.requireRole(role_, msg.sender);
@@ -86,7 +83,7 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
     /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
     constructor(address kernel_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
         if (startTimestamp_ == 0) revert DRD_InvalidAddress();
-        lastRootSetTimestamp = startTimestamp_;
+        lastRootSetTimestamp = uint40(startTimestamp_);
         // Disabled by default by PolicyEnabler
     }
 
@@ -158,12 +155,12 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
         // Update timestamp: add exactly WEEK_DURATION for consistent weekly snapshots
         // This ensures off-chain calculations align with on-chain week boundaries
         timestamp = lastTimestamp + WEEK_DURATION;
-        lastRootSetTimestamp = timestamp;
+        lastRootSetTimestamp = uint40(timestamp);
 
         emit MerkleRootSet(week, merkleRoot_, rewardToken_, ipfsHash_);
 
         // Advance to next week for the next call
-        currentWeek = week + 1;
+        currentWeek = uint40(week + 1);
         emit WeekAdvanced(week + 1);
     }
 
