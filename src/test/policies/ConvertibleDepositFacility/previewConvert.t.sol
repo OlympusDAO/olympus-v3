@@ -451,15 +451,15 @@ contract ConvertibleDepositFacilityPreviewConvertTest is ConvertibleDepositFacil
         );
     }
 
-    // given the position was created by the YieldDepositFacility
+    // given the position was created by the second facility
     //  [X] it reverts when previewing convert via ConvertibleDepositFacility
-    function test_whenPositionFromYDF_reverts()
+    function test_whenPositionFromSecondFacility_reverts()
         public
         givenLocallyActive
         givenRecipientHasReserveToken
         givenReserveTokenSpendingIsApprovedByRecipient
     {
-        // Create YDF position for the recipient
+        // Create position for the recipient from a different facility
         uint256 ydfPositionId = _createYieldDepositPosition(recipient, 1e18);
 
         uint256[] memory positionIds = new uint256[](1);

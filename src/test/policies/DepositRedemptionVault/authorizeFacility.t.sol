@@ -107,7 +107,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
     function test_multipleFacilities()
         public
         givenFacilityIsDeauthorized(cdFacilityAddress)
-        givenFacilityIsDeauthorized(address(ydFacility))
+        givenFacilityIsDeauthorized(address(cdFacilityTwo))
     {
         // Authorize first facility
         vm.prank(admin);
@@ -115,7 +115,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
 
         // Authorize second facility
         vm.prank(admin);
-        redemptionVault.authorizeFacility(address(ydFacility));
+        redemptionVault.authorizeFacility(address(cdFacilityTwo));
 
         // Assert both facilities are registered
         assertTrue(
@@ -123,7 +123,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
             "First facility should be registered"
         );
         assertTrue(
-            redemptionVault.isAuthorizedFacility(address(ydFacility)),
+            redemptionVault.isAuthorizedFacility(address(cdFacilityTwo)),
             "Second facility should be registered"
         );
 
@@ -135,7 +135,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
             if (facilities[i] == cdFacilityAddress) {
                 foundFirst = true;
             }
-            if (facilities[i] == address(ydFacility)) {
+            if (facilities[i] == address(cdFacilityTwo)) {
                 foundSecond = true;
             }
         }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -20,8 +21,11 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
     ///         Run this after ConvertibleDepositInstall.install()
     function configurePeriodicTasks(
         bool useDaoMS_,
-        string calldata argsFile_
-    ) external setUpWithChainIdAndArgsFile(useDaoMS_, argsFile_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Load contract addresses
@@ -98,3 +102,4 @@ contract HeartPeriodicTasksConfig is BatchScriptV2 {
         proposeBatch();
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

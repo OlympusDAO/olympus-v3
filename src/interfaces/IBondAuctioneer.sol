@@ -78,6 +78,12 @@ interface IBondAuctioneer {
     /// @param status_      Allow callback (true) : Disallow callback (false)
     function setCallbackAuthStatus(address creator_, bool status_) external;
 
+    /// @notice                 Indicates whether the provided address is allowed to use a callback address in its markets
+    ///
+    /// @param  creator_        Address of market creator
+    /// @return isAuthorized    True if the creator can use a callback
+    function callbackAuthorized(address creator_) external view returns (bool isAuthorized);
+
     /* ========== VIEW FUNCTIONS ========== */
 
     /// @notice                 Provides information for the Teller to execute purchases on a Market

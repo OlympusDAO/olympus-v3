@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -9,6 +10,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 import {Safe} from "@safe-utils-0.0.13/Safe.sol";
+import {Enum} from "safe-smart-account/common/Enum.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
@@ -20,19 +22,43 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    This could be a Safe Multisig or an EOA
     address internal _owner;
 
+    /// @notice Whether the owner is a Safe Multisig
     bool internal _isMultiSig;
+
+    /// @notice Whether to only sign the batch without proposing/executing it
+    /// @dev    Provided to setUp modifiers
+    bool internal _signOnly;
+
+    /// @notice safe-utils client
     Safe.Client internal _multiSig;
+
+    /// @notice Array of the target addresses for the batch
+    /// @dev    Loaded by {_runBatch()}
     address[] internal _batchTargets;
+
+    /// @notice Array of the calldata for the batch
+    /// @dev    Loaded by {_runBatch()}
     bytes[] internal _batchData;
 
+    /// @notice Contents of the arguments file
+    /// @dev    Loaded by {_loadArgs}
     string internal _argsFile;
 
+    /// @notice Derivation path for Ledger signing (if applicable)
+    /// @dev    Loaded by {_setUpBatchScript}
+    string internal _ledgerDerivationPath;
+
+    /// @notice Optional signature for the batch
+    /// @dev    Loaded by {_setUpBatchScript}
+    ///         If this is provided, the batch will be proposed using the signature instead of asking the sender to sign
+    bytes internal _signature;
+
     // TODOs
-    // [ ] Add Ledger signer support
+    // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
@@ -40,27 +66,27 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         address owner = msg.sender;
         if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
-        _setUpBatchScript(owner);
+        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
     }
 
-    modifier setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_) {
-        _setUp(chain_, useDaoMS_, argsFilePath_);
-        _;
-    }
-
-    modifier setUpWithChainIdAndArgsFile(bool useDaoMS_, string memory argsFilePath_) {
+    modifier setUp(bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, argsFilePath_);
+        _setUp(chainName, useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
         _;
     }
 
+    /// @dev    Deprecated.
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, "");
+        _setUp(chainName, useDaoMS_, false, "", "", "");
         _;
     }
 
-    function _setUpBatchScript(address owner_) internal {
+    function _hasSignature() internal view returns (bool) {
+        return bytes(_signature).length > 0;
+    }
+
+    function _setUpBatchScript(bool signOnly_, address owner_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
         // Validate that the owner is not the forge default deployer
         if (owner_ == 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38) {
             // solhint-disable-next-line gas-custom-errors
@@ -82,6 +108,28 @@ abstract contract BatchScriptV2 is WithEnvironment {
         } else {
             console2.log("  Owner address is an EOA");
             _isMultiSig = false;
+        }
+
+        _signOnly = signOnly_;
+        console2.log("  Sign only", _signOnly);
+
+        _signature = signature_;
+        if (_hasSignature()) {
+            console2.log("  Signature provided");
+        } else {
+            console2.log("  No signature provided");
+        }
+
+        // If signOnly is true, no signature should be provided
+        if (signOnly_ && _hasSignature()) {
+            revert("BatchScriptV2: Cannot provide signature when signOnly is true");
+        }
+
+        _ledgerDerivationPath = ledgerDerivationPath_;
+        if (bytes(_ledgerDerivationPath).length > 0) {
+            console2.log("  Ledger derivation path provided:", _ledgerDerivationPath);
+        } else {
+            console2.log("  No Ledger derivation path provided");
         }
     }
 
@@ -109,6 +157,32 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
+    function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
+        if (_signOnly) {
+            revert("BatchScriptV2: Cannot propose batch when signOnly is true");
+        }
+
+        // If there is no signature, propose normally
+        if (!_hasSignature()) {
+            txHash = _multiSig.proposeTransactions(
+                _batchTargets,
+                _batchData,
+                msg.sender,
+                "" // No derivation path
+            );
+            return txHash;
+        }
+
+        console2.log("  Using provided signature");
+        txHash = _multiSig.proposeTransactionsWithSignature(
+            _batchTargets,
+            _batchData,
+            msg.sender,
+            _signature
+        );
+        return txHash;
+    }
+
     function _proposeMultisigBatch() internal {
         if (_batchTargets.length == 0) {
             console2.log("No batch targets to propose");
@@ -120,23 +194,38 @@ abstract contract BatchScriptV2 is WithEnvironment {
         vm.startPrank(_owner);
         _runBatch();
         vm.stopPrank();
+        console2.log("Batch simulation completed");
+
+        // If signOnly, get the signature and return
+        if (_signOnly) {
+            console2.log("signOnly is true, approve the request to sign the batch");
+
+            (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
+
+            // This will revert if the user is using a Ledger and the derivation path is not provided
+            bytes memory signature = _multiSig.sign(
+                to,
+                data,
+                Enum.Operation.DelegateCall,
+                msg.sender,
+                _ledgerDerivationPath
+            );
+            console2.log("Batch signed. Signature:");
+            console2.logBytes(signature);
+            return;
+        }
 
         if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
-            console2.log("Batch simulation completed");
+            console2.log("Not broadcasting, skipping batch proposal");
             return;
         }
 
         console2.log("\n");
         console2.log("Proposing batch to multi-sig");
 
-        bytes32 txHash = _multiSig.proposeTransactions(
-            _batchTargets,
-            _batchData,
-            msg.sender,
-            ""
-        );
+        bytes32 txHash = _proposeMultisigBatchTransactions();
 
-        console2.log("Proposal created");
+        console2.log("Batch created");
         console2.logBytes32(txHash);
     }
 
@@ -244,3 +333,4 @@ abstract contract BatchScriptV2 is WithEnvironment {
             );
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

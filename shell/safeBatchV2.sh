@@ -9,6 +9,8 @@
 # --account <cast wallet> OR --ledger <mnemonic-index>
 # --chain <chain-name>
 # [--multisig <true|false>]
+# [--signonly <true|false>]
+# [--signature <signature>]
 # [--broadcast <true|false>]
 # [--testnet <true|false>]
 # [--args <args-file>]
@@ -32,6 +34,8 @@ load_env
 broadcast=${broadcast:-false}
 testnet=${testnet:-false}
 multisig=${multisig:-false}
+signonly=${signonly:-false}
+signature=${signature:-"0x"}
 ARGS_FILE=${args:-}
 
 # Validate named arguments
@@ -43,9 +47,7 @@ validate_text "$chain" "No chain specified. Specify the chain after the --chain 
 validate_boolean "$testnet" "Invalid value for --testnet. Must be true or false."
 validate_boolean "$broadcast" "Invalid value for --broadcast. Must be true or false."
 validate_boolean "$multisig" "Invalid value for --multisig. Must be true or false."
-
-# Validate and set account flags (consistent with deployV3.sh)
-validate_and_set_account "$account" "$ledger"
+validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
 
 echo ""
 echo "Summary:"
@@ -54,6 +56,7 @@ echo "  Function name: $function"
 echo "  Chain: $chain"
 echo "  Account address: $ACCOUNT_ADDRESS"
 echo "  Executing as multisig: $multisig"
+echo "  Sign only: $signonly"
 echo "  Testnet: $testnet"
 echo "  Broadcasting: $broadcast"
 if [ -n "$ARGS_FILE" ]; then
@@ -62,14 +65,41 @@ else
     echo "  Args file: (none)"
 fi
 
+# Validate and set account flags (consistent with deployV3.sh)
+if [ "$signonly" == "true" ]; then
+    # Validate that multisig is also true
+    if [ "$multisig" != "true" ]; then
+        display_error "When --signonly is true, --multisig must also be true."
+        exit 1
+    fi
+
+    # Validate that a signature is not provided
+    if [ "$signature" != "0x" ]; then
+        display_error "When --signonly is true, --signature must not be provided."
+        exit 1
+    fi
+
+    validate_text "$ledger" "No ledger index provided. Provide the mnemonic index after the --ledger flag."
+
+    set_account_address_ledger "$ledger"
+
+    # Calculate the derivation path
+    LEDGER_DERIVATION_PATH="m/44'/60'/${ledger}'/0/0"
+    # validate_and_set_account is not used, as it would set the LEDGER_FLAGS variable to use the Ledger. This would block ffi calls within the script from using the Ledger.
+    echo "  The script will result in your Ledger device prompting for approval of a signature."
+else
+    validate_and_set_account "$account" "$ledger"
+    LEDGER_DERIVATION_PATH=""
+fi
+
 # Execute the batch
 export TESTNET=$testnet
 
 # Build forge command
-FORGE_CMD="forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,string)()\" $multisig \"$ARGS_FILE\" --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow -vvv"
+FORGE_CMD="forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow -vvv"
 
-# Add broadcast flag only if not executing as multisig
-if [ "$multisig" != "true" ] && [ "$broadcast" == "true" ]; then
+# Add broadcast flag
+if [ "$broadcast" == "true" ]; then
     FORGE_CMD="$FORGE_CMD --broadcast"
 fi
 

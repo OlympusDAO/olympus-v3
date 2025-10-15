@@ -85,15 +85,15 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     function _getHeaderSection() private pure returns (string memory) {
         return
             string.concat(
-                "# Convertible Deposits - Complete Activation\n\n",
-                "This proposal combines the enabling of Convertible Deposit contracts with asset configuration into a single atomic operation.\n\n",
+                "# Convertible Deposits\n\n",
+                "This proposal activates and configures the Convertible Deposit system.\n\n",
                 "## Summary\n\n",
-                "This proposal has four main components:\n",
-                "- Enable base Convertible Deposit system contracts and perform initial configuration\n",
-                "- Configure USDS assets with different deposit periods (1m, 2m, 3m)\n",
-                "- Enable the ReserveWrapper contract for periodic USDS wrapping to sUSDS\n",
-                "- Configure the new Heart contract (1.7) with all necessary periodic tasks\n",
-                "- Enable the EmissionManager and ConvertibleDepositAuctioneer for full system operation\n\n"
+                "This proposal has five main components:\n",
+                "1. Grant appropriate roles to contracts\n",
+                "2. Activate Convertible Deposit system contracts\n",
+                "3. Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
+                "4. Configure the auction and emissions parameters\n",
+                "5. Configure periodic tasks\n\n"
             );
     }
 
@@ -102,17 +102,18 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Affected Contracts\n\n",
-                "- Heart policy (new - 1.7)\n",
                 "- Heart policy (existing - 1.6)\n",
+                "- EmissionManager policy (existing - 1.1)\n",
+                "- ReserveMigrator policy (existing)\n",
+                "- Operator policy (existing - 1.5)\n",
+                "- YieldRepurchaseFacility policy (existing - 1.2)\n",
+                "- Heart policy (new - 1.7)\n",
                 "- DepositManager policy (new - 1.0)\n",
                 "- ConvertibleDepositFacility policy (new - 1.0)\n",
                 "- ConvertibleDepositAuctioneer policy (new - 1.0)\n",
                 "- DepositRedemptionVault policy (new - 1.0)\n",
                 "- ReserveWrapper policy (new - 1.0)\n",
-                "- EmissionManager policy (existing - 1.2)\n",
-                "- ReserveMigrator policy (existing)\n",
-                "- Operator policy (existing - 1.5)\n",
-                "- YieldRepurchaseFacility policy (existing - 1.3)\n\n"
+                "- EmissionManager policy (new - 1.2)\n\n"
             );
     }
 
@@ -121,15 +122,14 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Resources\n\n",
-                "- [View the audit report](TODO)\n", // TODO: Add audit report
+                "- [View the report for audit 1 (Guardian)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-09_Convertible_Deposits-Guardian.pdf)\n",
+                "- [View the report for audit 2 (Trust)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-10_Convertible_Deposits-Trust.pdf)\n",
                 "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n\n",
                 "## Pre-requisites\n\n",
                 "- Old Heart policy has been deactivated in the kernel\n",
                 "- Old EmissionManager policy has been deactivated in the kernel\n",
                 "- DEPOS module has been installed in the kernel\n",
-                "- All new deposit-related policies have been activated in the kernel\n",
-                "- New Heart policy has been activated in the kernel\n",
-                "- New EmissionManager policy has been activated in the kernel\n\n"
+                "- All new policies have been activated in the kernel\n"
             );
     }
 
@@ -183,13 +183,14 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             string.concat(
                 "   - Enable deposit periods in ConvertibleDepositAuctioneer\n",
                 "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
-                "   - Enable EmissionManager with production parameters\n",
+                "   - Enable EmissionManager with initial parameters\n",
                 "   - Enable ReserveWrapper contract\n",
-                "   - Add ReserveMigrator.migrate() as first periodic task\n",
-                "   - Add ReserveWrapper as second periodic task\n",
-                "   - Add Operator.operate() as third periodic task\n",
-                "   - Add YieldRepurchaseFacility.endEpoch() as fourth periodic task\n",
-                "   - Add EmissionManager as fifth periodic task\n",
+                "   - Add ConvertibleDepositFacility as the first periodic task\n",
+                "   - Add ReserveMigrator.migrate() as second periodic task\n",
+                "   - Add ReserveWrapper as third periodic task\n",
+                "   - Add Operator.operate() as fourth periodic task\n",
+                "   - Add YieldRepurchaseFacility.endEpoch() as fifth periodic task\n",
+                "   - Add EmissionManager as six periodic task\n",
                 "   - Enable Heart contract\n"
             );
     }
@@ -563,6 +564,9 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // Validate periodic tasks
         {
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
             address heart = addresses.getAddress("olympus-policy-heart-1_7");
             address reserveWrapper = addresses.getAddress("olympus-policy-reserve-wrapper-1_0");
             address reserveMigrator = addresses.getAddress("olympus-policy-reserve-migrator-1_0");
@@ -573,27 +577,31 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             require(IEnabler(reserveWrapper).isEnabled() == true, "ReserveWrapper is not enabled");
 
             require(
-                IPeriodicTaskManager(heart).getPeriodicTaskCount() == 5,
+                IPeriodicTaskManager(heart).getPeriodicTaskCount() == 6,
                 "Heart does not have the expected number of periodic tasks"
             );
 
             (address[] memory periodicTasks, ) = IPeriodicTaskManager(heart).getPeriodicTasks();
             require(
-                periodicTasks[0] == reserveMigrator,
-                "ReserveMigrator is not the first periodic task"
+                periodicTasks[0] == cdFacility,
+                "ConvertibleDepositFacility is not the first periodic task"
             );
             require(
-                periodicTasks[1] == reserveWrapper,
-                "ReserveWrapper is not the second periodic task"
-            );
-            require(periodicTasks[2] == operator, "Operator is not the third periodic task");
-            require(
-                periodicTasks[3] == yieldRepo,
-                "YieldRepurchaseFacility is not the fourth periodic task"
+                periodicTasks[1] == reserveMigrator,
+                "ReserveMigrator is not the second periodic task"
             );
             require(
-                periodicTasks[4] == emissionManager,
-                "EmissionManager is not the fifth periodic task"
+                periodicTasks[2] == reserveWrapper,
+                "ReserveWrapper is not the third periodic task"
+            );
+            require(periodicTasks[3] == operator, "Operator is not the fourth periodic task");
+            require(
+                periodicTasks[4] == yieldRepo,
+                "YieldRepurchaseFacility is not the fifth periodic task"
+            );
+            require(
+                periodicTasks[5] == emissionManager,
+                "EmissionManager is not the sixth periodic task"
             );
 
             require(IEnabler(heart).isEnabled() == true, "Heart is not enabled");
