@@ -17,11 +17,20 @@ interface ICoolerV2OwnershipMigrator {
     /// @notice Thrown when the Cooler is not owned by the caller
     error Only_CoolerOwner();
 
+    /// @notice Thrown when the old owner address does not match the authorization
+    error Params_OldOwnerAuthorizationInvalid();
+
     /// @notice Thrown when the new owner address provided does not match the authorization
-    error Params_InvalidNewOwner();
+    error Params_NewOwnerAuthorizationInvalid();
 
     /// @notice Thrown when the new owner address is the same as the current owner
     error Params_SameOwner();
+
+    /// @notice Thrown when the collateral amount is invalid
+    ///
+    /// @param  requested The amount of collateral requested to migrate
+    /// @param  available The amount of collateral available in the position
+    error Params_InvalidCollateralAmount(uint128 requested, uint128 available);
 
     // ========= EVENTS ========= //
 
@@ -29,8 +38,8 @@ interface ICoolerV2OwnershipMigrator {
     event OwnershipMigrated(
         address indexed from,
         address indexed to,
-        uint256 collateralAmount,
-        uint256 debtAmount
+        uint128 collateralAmount,
+        uint128 debtAmount
     );
 
     // ========= FUNCTIONS ========= //
@@ -43,16 +52,7 @@ interface ICoolerV2OwnershipMigrator {
     function previewMigrateOwnership(
         address owner_,
         uint128 collateralAmount_
-    ) external view returns (uint256 debtToMigrate);
-
-    /// @notice Get the collateral and debt for a user's position.
-    ///
-    /// @param  owner_            The address of the owner of the position.
-    /// @return collateralAmount    The total amount of collateral in the position.
-    /// @return debtAmount          The total amount of debt in the position.
-    function userPosition(
-        address owner_
-    ) external view returns (uint256 collateralAmount, uint256 debtAmount);
+    ) external view returns (uint128 debtToMigrate);
 
     /// @notice Migrate ownership of a Cooler V2 position.
     ///
@@ -70,4 +70,15 @@ interface ICoolerV2OwnershipMigrator {
         IMonoCooler.Authorization memory newOwnerAuth_,
         IMonoCooler.Signature calldata newOwnerSig_
     ) external;
+
+    // ========= VIEW FUNCTIONS ========= //
+
+    /// @notice Get the collateral and debt for a user's position.
+    ///
+    /// @param  owner_            The address of the owner of the position.
+    /// @return collateralAmount    The total amount of collateral in the position.
+    /// @return debtAmount          The total amount of debt in the position.
+    function userPosition(
+        address owner_
+    ) external view returns (uint128 collateralAmount, uint128 debtAmount);
 }
