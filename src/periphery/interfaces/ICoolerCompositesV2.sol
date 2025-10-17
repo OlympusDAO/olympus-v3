@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.15;
+
+import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
+import {IMonoCooler} from "src/policies/interfaces/cooler/IMonoCooler.sol";
+import {ICoolerComposites} from "src/periphery/interfaces/ICoolerComposites.sol";
+
+/// @title  ICoolerCompositesV2
+/// @notice Interface for the Cooler Composites V2 contract, which extends the ICoolerComposites interface to add auto-delegation and support for providing OHM as collateral
+interface ICoolerCompositesV2 is ICoolerComposites {
+    // ========= ERRORS ========= //
+
+    /// @notice Thrown if delegation requests are provided while the `autoDelegate` flag is true
+    error DelegationRequestsInvalid();
+
+    /// @notice Thrown if the OHM warmup period is active and the caller is supplying OHM as collateral
+    error OhmWarmupPeriodActive();
+
+    // ========= FUNCTIONS ========= //
+
+    /// @notice Allow user to add collateral and borrow from Cooler V2
+    /// @dev    User must provide authorization signature before using function
+    ///
+    /// @param authorization        Authorization info. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
+    /// @param signature            Off-chain auth signature. Ignored if `authorization_.account` is the zero address.
+    /// @param collateralAmount     Amount of OHM or gOHM collateral to deposit
+    /// @param borrowAmount         Amount of debt token to borrow
+    /// @param delegationRequests   Resulting collateral delegation
+    /// @param autoDelegate         Whether to automatically create delegation requests for the caller/owner
+    /// @param useGohm              Whether the caller is supplying OHM (false) or gOHM (true) as collateral
+    function addCollateralAndBorrow(
+        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Signature calldata signature,
+        uint128 collateralAmount,
+        uint128 borrowAmount,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
+        bool autoDelegate,
+        bool useGohm
+    ) external;
+
+    /// @notice Allow user to add collateral and borrow from Cooler V2
+    /// @dev    User must provide authorization signature before using function
+    ///
+    /// @param authorization        Authorization info. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
+    /// @param signature            Off-chain auth signature. Ignored if `authorization_.account` is the zero address.
+    /// @param repayAmount          Amount of debt token to repay
+    /// @param collateralAmount     Amount of OHM or gOHM collateral to withdraw
+    /// @param delegationRequests   Resulting collateral delegation
+    /// @param autoDelegate         Whether to automatically create delegation requests for the caller/owner
+    /// @param useGohm              Whether the caller wants to receive collateral as OHM (false) or gOHM (true)
+    function repayAndRemoveCollateral(
+        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Signature calldata signature,
+        uint128 repayAmount,
+        uint128 collateralAmount,
+        IDLGTEv1.DelegationRequest[] calldata delegationRequests,
+        bool autoDelegate,
+        bool useGohm
+    ) external;
+}
