@@ -40,4 +40,8 @@ interface IStaking {
     function epoch() external view returns (uint256, uint256, uint256, uint256);
 
     function warmupPeriod() external view returns (uint256);
+
+    function OHM() external view returns (address);
+
+    function gOHM() external view returns (address);
 }
