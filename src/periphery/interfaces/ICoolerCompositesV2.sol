@@ -10,6 +10,15 @@ import {ICoolerComposites} from "src/periphery/interfaces/ICoolerComposites.sol"
 interface ICoolerCompositesV2 is ICoolerComposites {
     // ========= ERRORS ========= //
 
+    /// @notice Thrown if the collateral token does not match the staking contract's gOHM token
+    ///
+    /// @param  coolerCollateralToken   The address of the collateral token in the Cooler contract
+    /// @param  stakingGohm             The address of the gOHM token in the staking contract
+    error Params_CollateralTokenMismatch(address coolerCollateralToken, address stakingGohm);
+
+    /// @notice Thrown if the caller is not the owner
+    error OnlyOwner();
+
     /// @notice Thrown if delegation requests are provided while the `autoDelegate` flag is true
     error DelegationRequestsInvalid();
 
