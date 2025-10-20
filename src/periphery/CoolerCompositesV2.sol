@@ -82,34 +82,34 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     ///
     /// @return remainingBorrowable If unsuccessful, this return value will reflect the maximum amount borrowable after depositing the collateral
     function previewAddCollateralAndBorrow(
-        uint128 collateralAmount,
-        uint128 borrowAmount,
-        bool useGohm
+        uint128 collateralAmount_,
+        uint128 borrowAmount_,
+        bool useGohm_
     ) external view returns (bool, uint256, uint256) {
         // Convert the collateral amount to gOHM (if needed)
-        uint128 gOhmCollateralAmount = _getGohmAmount(collateralAmount, useGohm);
+        uint128 gOhmCollateralDelta = _getGohmAmount(collateralAmount_, useGohm_);
 
         // Obtain the current account position
         IMonoCooler.AccountPosition memory originalPosition = COOLER.accountPosition(msg.sender);
         int128 maxDebtDelta = COOLER.debtDeltaForMaxOriginationLtv(
             msg.sender,
-            int128(gOhmCollateralAmount)
+            int128(gOhmCollateralDelta)
         );
 
-        uint256 totalGohmCollateral = originalPosition.collateral + gOhmCollateralAmount;
+        uint256 totalGohmCollateral = originalPosition.collateral + gOhmCollateralDelta;
 
         // Validate that maxDebtDelta is positive
         if (maxDebtDelta < 0) {
             return (false, totalGohmCollateral, 0);
         }
 
-        // Validate that the LLTV will be exceeded by the borrow
+        // Validate that the LLTV will not be exceeded by the borrow
         uint128 maxDebtDeltaPositive = uint128(maxDebtDelta);
-        if (maxDebtDeltaPositive < borrowAmount) {
+        if (maxDebtDeltaPositive < borrowAmount_) {
             return (false, totalGohmCollateral, maxDebtDeltaPositive);
         }
 
-        return (true, totalGohmCollateral, maxDebtDeltaPositive - borrowAmount);
+        return (true, totalGohmCollateral, maxDebtDeltaPositive - borrowAmount_);
     }
 
     /// @inheritdoc ICoolerCompositesV2
@@ -160,12 +160,43 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     }
 
     /// @inheritdoc ICoolerCompositesV2
+    ///
+    /// @return remainingGohmCollateral If unsuccesful, returns the current collateral amount
+    /// @return remainingDebt   If unsuccessful, returns the current debt amount
     function previewRepayAndRemoveCollateral(
-        uint128 repayAmount,
-        uint128 collateralAmount,
-        bool useGohm
-    ) external view returns (bool success, uint256 remainingGohmCollateral, uint256 remainingDebt) {
-        //
+        uint128 repayAmount_,
+        uint128 collateralAmount_,
+        bool useGohm_
+    ) external view returns (bool, uint256, uint256) {
+        // Convert the collateral amount to gOHM (if needed)
+        uint128 gOhmCollateralDelta = _getGohmAmount(collateralAmount_, useGohm_);
+
+        // Obtain the current account position
+        IMonoCooler.AccountPosition memory originalPosition = COOLER.accountPosition(msg.sender);
+        int128 maxDebtDelta = COOLER.debtDeltaForMaxOriginationLtv(
+            msg.sender,
+            -int128(gOhmCollateralDelta)
+        );
+
+        // Validate that there is enough gOHM collateral
+        if (originalPosition.collateral < gOhmCollateralDelta) {
+            return (false, originalPosition.collateral, originalPosition.currentDebt);
+        }
+
+        uint256 totalGohmCollateral = originalPosition.collateral - gOhmCollateralDelta;
+
+        // Validate that the LLTV will not be exceeded by the repay and withdraw
+        uint128 maxDebtDeltaPositive = uint128(maxDebtDelta);
+        if (maxDebtDeltaPositive < repayAmount_) {
+            return (false, totalGohmCollateral, originalPosition.currentDebt);
+        }
+
+        // Validate that the caller is not over-paying
+        if (originalPosition.currentDebt < repayAmount_) {
+            return (false, totalGohmCollateral, 0);
+        }
+
+        return (true, totalGohmCollateral, originalPosition.currentDebt - repayAmount_);
     }
 
     /// @inheritdoc ICoolerCompositesV2
