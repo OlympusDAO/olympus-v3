@@ -38,7 +38,7 @@ interface ICoolerCompositesV2 is ICoolerComposites {
     /// @param autoDelegate         Whether to automatically create delegation requests for the caller/owner
     /// @param useGohm              Whether the caller is supplying OHM (false) or gOHM (true) as collateral
     function addCollateralAndBorrow(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 collateralAmount,
         uint128 borrowAmount,
@@ -58,7 +58,7 @@ interface ICoolerCompositesV2 is ICoolerComposites {
     /// @param autoDelegate         Whether to automatically create delegation requests for the caller/owner
     /// @param useGohm              Whether the caller wants to receive collateral as OHM (false) or gOHM (true)
     function repayAndRemoveCollateral(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 repayAmount,
         uint128 collateralAmount,

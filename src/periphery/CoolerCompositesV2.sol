@@ -74,7 +74,7 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     ///             - The staking warmup period is active and the caller is supplying OHM as collateral
     ///             - The caller has not provided the required authorization and signature
     function addCollateralAndBorrow(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 collateralAmount,
         uint128 borrowAmount,
@@ -120,7 +120,7 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     ///             - Delegation requests are provided while auto-delegation is true
     ///             - The caller has not provided the required authorization and signature
     function repayAndRemoveCollateral(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 repayAmount,
         uint128 collateralAmount,
@@ -179,7 +179,7 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
     /// @inheritdoc ICoolerComposites
     function addCollateralAndBorrow(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 collateralAmount,
         uint128 borrowAmount,
@@ -198,7 +198,7 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
     /// @inheritdoc ICoolerComposites
     function repayAndRemoveCollateral(
-        IMonoCooler.Authorization memory authorization,
+        IMonoCooler.Authorization calldata authorization,
         IMonoCooler.Signature calldata signature,
         uint128 repayAmount,
         uint128 collateralAmount,
