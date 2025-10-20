@@ -42,7 +42,7 @@ interface ICoolerCompositesV2 is ICoolerComposites {
     )
         external
         view
-        returns (bool success, uint128 totalGohmCollateral, uint128 remainingBorrowable);
+        returns (bool success, uint256 totalGohmCollateral, uint256 remainingBorrowable);
 
     /// @notice Allow user to add collateral and borrow from Cooler V2
     /// @dev    User must provide authorization signature before using function
@@ -76,7 +76,7 @@ interface ICoolerCompositesV2 is ICoolerComposites {
         uint128 repayAmount,
         uint128 collateralAmount,
         bool useGohm
-    ) external view returns (bool success, uint128 remainingGohmCollateral, uint128 remainingDebt);
+    ) external view returns (bool success, uint256 remainingGohmCollateral, uint256 remainingDebt);
 
     /// @notice Allow user to add collateral and borrow from Cooler V2
     /// @dev    User must provide authorization signature before using function

@@ -10,6 +10,7 @@ import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ICoolerComposites} from "src/periphery/interfaces/ICoolerComposites.sol";
 import {IStaking} from "src/interfaces/IStaking.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 // Libraries
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
@@ -65,17 +66,50 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
     // ========= ICoolerCompositesV2 IMPLEMENTATION ========= //
 
+    function _getGohmAmount(
+        uint128 collateralAmount_,
+        bool useGohm_
+    ) internal view returns (uint128) {
+        // No conversion necessary if using gOHM
+        if (useGohm_) return collateralAmount_;
+
+        // Otherwise, convert OHM to gOHM
+        return
+            SafeCast.encodeUInt128(IgOHM(address(_COLLATERAL_TOKEN)).balanceTo(collateralAmount_));
+    }
+
     /// @inheritdoc ICoolerCompositesV2
+    ///
+    /// @return remainingBorrowable If unsuccessful, this return value will reflect the maximum amount borrowable after depositing the collateral
     function previewAddCollateralAndBorrow(
         uint128 collateralAmount,
         uint128 borrowAmount,
         bool useGohm
-    )
-        external
-        view
-        returns (bool success, uint128 totalGohmCollateral, uint128 remainingBorrowable)
-    {
-        //
+    ) external view returns (bool, uint256, uint256) {
+        // Convert the collateral amount to gOHM (if needed)
+        uint128 gOhmCollateralAmount = _getGohmAmount(collateralAmount, useGohm);
+
+        // Obtain the current account position
+        IMonoCooler.AccountPosition memory originalPosition = COOLER.accountPosition(msg.sender);
+        int128 maxDebtDelta = COOLER.debtDeltaForMaxOriginationLtv(
+            msg.sender,
+            int128(gOhmCollateralAmount)
+        );
+
+        uint256 totalGohmCollateral = originalPosition.collateral + gOhmCollateralAmount;
+
+        // Validate that maxDebtDelta is positive
+        if (maxDebtDelta < 0) {
+            return (false, totalGohmCollateral, 0);
+        }
+
+        // Validate that the LLTV will be exceeded by the borrow
+        uint128 maxDebtDeltaPositive = uint128(maxDebtDelta);
+        if (maxDebtDeltaPositive < borrowAmount) {
+            return (false, totalGohmCollateral, maxDebtDeltaPositive);
+        }
+
+        return (true, totalGohmCollateral, maxDebtDeltaPositive - borrowAmount);
     }
 
     /// @inheritdoc ICoolerCompositesV2
@@ -130,7 +164,7 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
         uint128 repayAmount,
         uint128 collateralAmount,
         bool useGohm
-    ) external view returns (bool success, uint128 remainingGohmCollateral, uint128 remainingDebt) {
+    ) external view returns (bool success, uint256 remainingGohmCollateral, uint256 remainingDebt) {
         //
     }
 
