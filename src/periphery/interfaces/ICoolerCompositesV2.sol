@@ -27,6 +27,23 @@ interface ICoolerCompositesV2 is ICoolerComposites {
 
     // ========= FUNCTIONS ========= //
 
+    /// @notice Preview the result of adding collateral and borrowing from Cooler V2
+    ///
+    /// @param collateralAmount     Amount of OHM or gOHM collateral to deposit
+    /// @param borrowAmount         Amount of debt token to borrow
+    /// @param useGohm              Whether the caller is supplying OHM (false) or gOHM (true) as collateral
+    /// @return success             Whether the operation was successful
+    /// @return totalGohmCollateral The total amount of gOHM collateral that will be deposited in Cooler V2 after the transaction
+    /// @return remainingBorrowable The amount of debt that can still be borrowed from Cooler V2
+    function previewAddCollateralAndBorrow(
+        uint128 collateralAmount,
+        uint128 borrowAmount,
+        bool useGohm
+    )
+        external
+        view
+        returns (bool success, uint128 totalGohmCollateral, uint128 remainingBorrowable);
+
     /// @notice Allow user to add collateral and borrow from Cooler V2
     /// @dev    User must provide authorization signature before using function
     ///
@@ -46,6 +63,20 @@ interface ICoolerCompositesV2 is ICoolerComposites {
         bool autoDelegate,
         bool useGohm
     ) external;
+
+    /// @notice Preview the result of repaying debt and removing collateral from Cooler V2
+    ///
+    /// @param repayAmount              Amount of debt token to repay
+    /// @param collateralAmount         Amount of OHM or gOHM collateral to withdraw
+    /// @param useGohm                  Whether the caller is supplying OHM (false) or gOHM (true) as collateral
+    /// @return success                 Whether the operation was successful
+    /// @return remainingGohmCollateral The amount of gOHM collateral that will remain in Cooler V2 after the transaction
+    /// @return remainingDebt           The amount of debt that will remain in Cooler V2 after the transaction
+    function previewRepayAndRemoveCollateral(
+        uint128 repayAmount,
+        uint128 collateralAmount,
+        bool useGohm
+    ) external view returns (bool success, uint128 remainingGohmCollateral, uint128 remainingDebt);
 
     /// @notice Allow user to add collateral and borrow from Cooler V2
     /// @dev    User must provide authorization signature before using function

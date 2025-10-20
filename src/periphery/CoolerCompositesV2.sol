@@ -66,6 +66,19 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     // ========= ICoolerCompositesV2 IMPLEMENTATION ========= //
 
     /// @inheritdoc ICoolerCompositesV2
+    function previewAddCollateralAndBorrow(
+        uint128 collateralAmount,
+        uint128 borrowAmount,
+        bool useGohm
+    )
+        external
+        view
+        returns (bool success, uint128 totalGohmCollateral, uint128 remainingBorrowable)
+    {
+        //
+    }
+
+    /// @inheritdoc ICoolerCompositesV2
     /// @dev        This function is used to add collateral and borrow from the Cooler contract in a single call
     ///
     ///             This function reverts if:
@@ -110,6 +123,15 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
         // Borrow from the Cooler contract
         COOLER.borrow(borrowAmount, msg.sender, msg.sender);
+    }
+
+    /// @inheritdoc ICoolerCompositesV2
+    function previewRepayAndRemoveCollateral(
+        uint128 repayAmount,
+        uint128 collateralAmount,
+        bool useGohm
+    ) external view returns (bool success, uint128 remainingGohmCollateral, uint128 remainingDebt) {
+        //
     }
 
     /// @inheritdoc ICoolerCompositesV2
