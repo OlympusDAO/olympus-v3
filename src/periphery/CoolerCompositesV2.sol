@@ -28,10 +28,20 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
     // ========= STATE ========= //
 
+    /// @notice The address of the Cooler v2 contract
+    /// @dev    This address is immutable and cannot be changed
     IMonoCooler public immutable COOLER;
+
+    /// @notice The address of the staking contract
+    /// @dev    This address is immutable and cannot be changed
     IStaking public immutable STAKING;
+
+    /// @notice The address of the Cooler v2 collateral token
+    /// @dev    This address is fetched at the time of deployment
     ERC20 internal immutable _COLLATERAL_TOKEN;
-    ERC20 internal immutable _DEBT_TOKEN;
+
+    /// @notice The address of the OHM token
+    /// @dev    This address is fetched at the time of deployment
     ERC20 internal immutable _OHM;
 
     // ========= CONSTRUCTOR ========= //
@@ -42,9 +52,6 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
         _COLLATERAL_TOKEN = ERC20(address(cooler_.collateralToken()));
         _COLLATERAL_TOKEN.approve(address(cooler_), type(uint256).max);
-
-        _DEBT_TOKEN = ERC20(address(cooler_.debtToken()));
-        _DEBT_TOKEN.approve(address(cooler_), type(uint256).max);
 
         _OHM = ERC20(address(staking_.OHM()));
 
@@ -132,7 +139,11 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
         }
 
         // Pull debt token from the caller
-        _DEBT_TOKEN.safeTransferFrom(msg.sender, address(this), repayAmount);
+        ERC20 coolerDebtToken = ERC20(address(COOLER.debtToken()));
+        coolerDebtToken.safeTransferFrom(msg.sender, address(this), repayAmount);
+
+        // Repay debt
+        coolerDebtToken.safeApprove(address(COOLER), repayAmount);
         COOLER.repay(repayAmount, msg.sender);
 
         // Create delegation requests if auto-delegation is enabled
@@ -157,10 +168,10 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
         }
 
         // Return excess debt token to the caller
-        uint256 debtTokenBalance = _DEBT_TOKEN.balanceOf(address(this));
+        uint256 debtTokenBalance = coolerDebtToken.balanceOf(address(this));
         if (debtTokenBalance > 0) {
-            _DEBT_TOKEN.safeTransfer(msg.sender, debtTokenBalance);
-            emit TokenRefunded(address(_DEBT_TOKEN), msg.sender, debtTokenBalance);
+            coolerDebtToken.safeTransfer(msg.sender, debtTokenBalance);
+            emit TokenRefunded(address(coolerDebtToken), msg.sender, debtTokenBalance);
         }
     }
 
@@ -231,7 +242,9 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
 
         // Stake to gOHM
         _OHM.approve(address(STAKING), collateralAmount);
-        gOhmAmount = SafeCast.encodeUInt128(STAKING.stake(address(this), collateralAmount, false, true));
+        gOhmAmount = SafeCast.encodeUInt128(
+            STAKING.stake(address(this), collateralAmount, false, true)
+        );
 
         return gOhmAmount;
     }
@@ -244,8 +257,9 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     }
 
     /// @inheritdoc ICoolerComposites
+    /// @dev        Returns the debt token address from the Cooler contract
     function debtToken() external view override returns (IERC20) {
-        return IERC20(address(_DEBT_TOKEN));
+        return IERC20(address(COOLER.debtToken()));
     }
 
     /// @notice     Address of the OHM token
@@ -268,9 +282,11 @@ contract CoolerCompositesV2 is Owned, PeripheryEnabler, ICoolerCompositesV2, IVe
     }
 
     /// @inheritdoc PeripheryEnabler
+    /// @dev        This function is empty
     function _enable(bytes calldata) internal override {}
 
     /// @inheritdoc PeripheryEnabler
+    /// @dev        This function is empty
     function _disable(bytes calldata) internal override {}
 
     // ========= ERC165 IMPLEMENTATION ========= //
