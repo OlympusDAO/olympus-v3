@@ -1557,6 +1557,9 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     // given the day target is 1000
     //  given the tick size is 1000
+    //   [X] the tick size is halved upon the day target being met
+    //   [X] the tick price increases upon the day target being met
+
     function test_dayTargetAppliesImmediately()
         public
         givenDepositPeriodEnabled(PERIOD_MONTHS)
@@ -1611,7 +1614,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(positionTwo.remainingDeposit, 14999e18, "positionTwo remaining deposit");
         assertEq(positionTwo.conversionPrice, 17203503366054326292, "positionTwo conversion price");
 
-        // Check tick state
+        // Check tick state for deposit period two
         // - Capacity: 500e9 - 371790633608 = 128209366392
         // - Price: 18.15e18
         IConvertibleDepositAuctioneer.Tick memory tickTwo = auctioneer.getCurrentTick(
@@ -1619,6 +1622,13 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
         assertEq(tickTwo.capacity, 128209366392, "tickTwo capacity");
         assertEq(tickTwo.price, 1815e16, "tickTwo price");
+
+        // Check tick state for deposit period one
+        // - Capacity: 66666667 (as before)
+        // - Price: 15e18 (increased after the day target being met)
+        tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        assertEq(tickOne.capacity, 66666667, "tickOne capacity after bid two");
+        assertEq(tickOne.price, 165e17, "tickOne price after bid two");
 
         // Check global tick size
         assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
