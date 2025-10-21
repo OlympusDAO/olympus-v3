@@ -517,9 +517,6 @@ contract ConvertibleDepositAuctioneer is
                 1 days /
                 _depositPeriods.length();
 
-            // Skip if the new capacity is 0
-            if (capacityToAdd == 0) return previousTick;
-
             tick = previousTick;
             newCapacity = tick.capacity + capacityToAdd;
         }
