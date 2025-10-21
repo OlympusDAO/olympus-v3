@@ -685,7 +685,7 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Assert tick
         assertEq(tick.capacity, 5e9, "new tick capacity");
-        assertEq(tick.price, MIN_PRICE, "new tick price");
+        assertEq(tick.price, (MIN_PRICE * TICK_STEP) / 100e2, "new tick price"); // Increased as the day target was met
     }
 
     /// @notice Test that price decay uses initial tick size (10e9), not reduced current tick size (5e9)
@@ -784,9 +784,12 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         _mintReserveToken(recipient, 100000e18);
         _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
 
-        // Make large purchase to reduce tick size from 10e9 to 1e9
+        // Make large purchase to reduce tick size from 10e9 to 5e9
+        // Tick one: 10e9 capacity, price of 15e18, deposit of 150e18
+        // Tick two: 10e9 capacity, price of 165e17, deposit of 165e18, day target met, so tick size is halved to 5e9
+        // Tick three: 5e9 capacity, price of 1815e16, deposit of 90e18. Remaining capacity is 5e9 - 4958677685 = 41322315
         vm.prank(recipient);
-        auctioneer.bid(PERIOD_MONTHS, 30000e18, 1, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 405e18, 1, false, false);
 
         // Get state after purchase
         IConvertibleDepositAuctioneer.Tick memory tickAfterPurchase = auctioneer.getCurrentTick(
@@ -799,31 +802,23 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         /**
          * MATHEMATICAL PROOF (using actual test values):
          *
-         * Constants:
-         * - TARGET = 20e9
-         * - TICK_SIZE (initial) = 10e9
-         * - Current tick size (after large purchase) = 1e9
-         * - TICK_STEP = 110e2 (110%)
-         * - Time passed = 12 hours = 43200 seconds
-         * - 1 day = 86400 seconds
-         *
          * Capacity to add over 12 hours:
          * capacityToAdd = (20e9 * 43200) / 86400 / 1 = 10e9
          *
          * After purchase (from previous test):
-         * - tickAfterPurchase.capacity = 689818756 (~0.69e9)
-         * - Total capacity = 689818756 + 10e9 = 10689818756 (~10.69e9)
+         * - tickAfterPurchase.capacity = 41322315
+         * - Total capacity = 41322315 + 10e9 = 10041322315
          *
          * CORRECT BEHAVIOR (using initial TICK_SIZE = 10e9):
-         * - Check: 10.69e9 > 10e9? Yes, enter while loop
-         * - Subtract: 10.69e9 - 10e9 = 0.69e9, apply price decay once
-         * - Check: 0.69e9 > 10e9? No, exit loop
+         * - Check: 10041322315 > 10e9? Yes, enter while loop
+         * - Subtract: 10041322315 - 10e9 = 41322315, apply price decay once
+         * - Check: 41322315 > 10e9? No, exit loop
          * - Expected price = tickAfterPurchase.price * 100e2 / 110e2 (decay by tick step)
-         * - Expected capacity = 0.69e9 (but capped at current tick size 1e9)
+         * - Expected capacity = 41322315 (but capped at current tick size 1e9)
          *
-         * BUGGY BEHAVIOR (using reduced tick size = 1e9):
-         * - Check: 10.69e9 > 1e9? Yes, enter while loop
-         * - Multiple iterations (10+ times) subtracting 1e9 each time
+         * BUGGY BEHAVIOR (using reduced tick size = 5e9):
+         * - Check: 10.69e9 > 5e9? Yes, enter while loop
+         * - Multiple iterations (2+ times) subtracting 5e9 each time
          * - Result: excessive price decay, much lower than expected
          */
 
@@ -834,13 +829,13 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Expected values based on one decay iteration using initial tick size (10e9)
         uint256 capacityToAdd = 10e9; // (20e9 * 43200) / 86400 / 1
-        uint256 totalCapacity = 689818756 + capacityToAdd; // 10689818756
+        uint256 totalCapacity = 41322315 + capacityToAdd; // 10041322315
 
         // One decay iteration: totalCapacity - initialTickSize = remainingCapacity
-        uint256 remainingCapacity = totalCapacity - 10e9; // 689818756
+        uint256 remainingCapacity = totalCapacity - 10e9; // 41322315
 
         // Price decay: tickAfterPurchase.price * 100e2 / 110e2 (using mulDivUp for exact calculation)
-        uint256 expectedPrice = 2343708377743116994187; // Actual calculated value
+        uint256 expectedPrice = 165e17; // Actual calculated value
 
         // Final capacity capped at current tick size (1e9)
         uint256 expectedCapacity = remainingCapacity > 1e9 ? 1e9 : remainingCapacity;

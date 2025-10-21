@@ -1102,23 +1102,8 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
         }
 
-        // Place a bid for the second deposit period
-        _mintAndApprove(recipient, 1e18);
-        vm.prank(recipient);
-        (uint256 bidOneConvertedAmount, , , ) = auctioneer.bid(
-            PERIOD_MONTHS_TWO,
-            1e18,
-            1,
-            false,
-            false
-        );
-
         // Warp forward to that the ticks change
         vm.warp(block.timestamp + 1 hours);
-
-        IConvertibleDepositAuctioneer.Tick memory periodTwoTickBefore = auctioneer.getCurrentTick(
-            PERIOD_MONTHS_TWO
-        );
 
         _mintAndApprove(recipient, 40575e16);
 
@@ -1137,7 +1122,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Expect event
-        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 1);
+        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 0);
 
         // Call function
         vm.prank(recipient);
@@ -1154,7 +1139,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             expectedConvertedAmount,
             reserveTokenBalance - expectedDepositIn,
             balanceBefore,
-            1,
+            0,
             ohmOut,
             positionId,
             receiptTokenId
@@ -1164,11 +1149,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
-        assertEq(
-            auctioneer.getDayState().convertible,
-            expectedConvertedAmount + bidOneConvertedAmount,
-            "day convertible"
-        );
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
         _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
@@ -1177,27 +1158,19 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             10e9 + 10e9 + 5e9 - expectedConvertedAmount,
             tickThreePrice,
-            5e9, // The tick size is halved as the target is met or exceeded
+            TICK_SIZE / 2, // The tick size is halved as the target is met or exceeded
             uint48(block.timestamp)
         );
 
         // Assert the tick for the second deposit period
         {
-            IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
+            IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
                 PERIOD_MONTHS_TWO
             );
 
-            assertEq(
-                tick.capacity,
-                periodTwoTickBefore.capacity,
-                "period two previous tick capacity"
-            );
-            assertEq(tick.price, periodTwoTickBefore.price, "period two previous tick price");
-            assertEq(
-                tick.lastUpdate,
-                uint48(block.timestamp),
-                "period two previous tick lastUpdate"
-            );
+            assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
+            assertEq(tick.price, (MIN_PRICE * TICK_STEP) / 100e2, "period two tick price");
+            assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
         }
     }
 
