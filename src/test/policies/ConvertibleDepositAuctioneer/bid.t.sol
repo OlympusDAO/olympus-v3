@@ -1554,4 +1554,42 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         vm.prank(recipient);
         auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
     }
+
+    // given the day target is 1000
+    //  given the tick size is 1000
+    function test_dayTargetAppliesImmediately()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabledWithParameters(1000e9, 1000e9, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 2000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 2000e18)
+    {
+        // First bid: period one, just under the tick size
+        vm.prank(recipient);
+        (, uint256 positionIdOne, , ) = auctioneer.bid(PERIOD_MONTHS, 999e18, 1, false, false);
+
+        // Second bid: period two, just under the tick size
+        vm.prank(recipient);
+        (, uint256 positionIdTwo, , ) = auctioneer.bid(PERIOD_MONTHS_TWO, 999e18, 1, false, false);
+
+        // Assert output
+        // First bid:
+        // - Conversion price:
+        //   - 999e18 @ 15e18 = 15e18
+        IDepositPositionManager.Position memory positionOne = convertibleDepositPositions
+            .getPosition(positionIdOne);
+        assertEq(positionOne.remainingDeposit, 999e18, "positionOne remaining deposit");
+        assertEq(positionOne.conversionPrice, 15e18, "positionOne conversion price");
+
+        // Second bid:
+        // - 1e18 * 1e9 / 15e18 = 66666666
+        // - 998e18 * 1e9 / 16.5e18 = 60484848484
+        // - Total OHM out: 66666666 + 60484848484 = 60551515150
+        // - Conversion price: 999e18 * 1e9 / 60551515150 = 16498348514075126326
+        IDepositPositionManager.Position memory positionTwo = convertibleDepositPositions
+            .getPosition(positionIdTwo);
+        assertEq(positionTwo.remainingDeposit, 999e18, "positionTwo remaining deposit");
+        assertEq(positionTwo.conversionPrice, 16498348514075126326, "positionTwo conversion price");
+    }
 }
