@@ -1174,6 +1174,46 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         }
     }
 
+    function test_convertedAmountGreaterThanTickCapacity_reachesDayTarget_multipleDepositPeriods_sameBlock()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // Bid one: 15e18
+        // - Period one
+        // - Tick one: remaining capacity of 9e9, price of 15e18
+        // - Bid amount of 15e18 @ 15e18 = 1e9 OHM out
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS_TWO, 15e18, 1, false, false);
+
+        // Bid two:
+        // - Period two
+        // - Tick one: remaining capacity of 10e9, price of 15e18. Deposit amount of 150e18, OHM out = 10e9
+        // - Tick two: remaining capacity of 10e9, price of 165e17. Deposit amount of 148.5e18, OHM out = 9e9 (due to hitting day target)
+        // - Tick three: remaining capacity of 5e9, price of 1815e16. Deposit amount of 1.5e18, OHM out = 82644628
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 300e18, 1, false, false);
+
+        // Assert the tick for period one
+        _assertPreviousTick(
+            5e9 - 82644628,
+            1815e16,
+            TICK_SIZE / 2, // The tick size is halved as the target is met or exceeded
+            uint48(block.timestamp)
+        );
+
+        // Assert the tick for period two
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity"); // Halved as the day target is met
+        assertEq(tick.price, 165e17, "period two tick price"); // Increased as the day target is met
+        assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
+    }
+
     //  when the convertible amount of OHM will exceed multiples of the day target
     //   [X] the next tick size is set to half of the previous tick size
 
