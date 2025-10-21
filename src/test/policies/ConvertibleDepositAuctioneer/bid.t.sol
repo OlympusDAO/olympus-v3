@@ -1624,10 +1624,10 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(tickTwo.price, 1815e16, "tickTwo price");
 
         // Check tick state for deposit period one
-        // - Capacity: 66666667 (as before)
-        // - Price: 15e18 (increased after the day target being met)
+        // - Capacity: 500e9 (resets due to the day target being met)
+        // - Price: 16.5e18 (increased after the day target being met)
         tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
-        assertEq(tickOne.capacity, 66666667, "tickOne capacity after bid two");
+        assertEq(tickOne.capacity, 500e9, "tickOne capacity after bid two");
         assertEq(tickOne.price, 165e17, "tickOne price after bid two");
 
         // Check global tick size
