@@ -255,15 +255,19 @@ contract ConvertibleDepositAuctioneer is
                 }
 
                 _currentTickSize = output.tickSize;
+            }
 
-                // Check if we crossed a day target threshold
+            // Check if we crossed day target thresholds
+            if (_depositPeriods.length() > 1) {
                 // If so, synchronize price increases across all periods
-                bool crossedThreshold = (previousConvertible / _auctionParameters.target) !=
-                    (_dayState.convertible / _auctionParameters.target);
+                uint256 previousMultiplier = previousConvertible / _auctionParameters.target;
+                uint256 newMultiplier = _dayState.convertible / _auctionParameters.target;
+                uint256 thresholdsCrossed = newMultiplier - previousMultiplier;
 
-                if (crossedThreshold && _depositPeriods.length() > 1) {
+                if (thresholdsCrossed > 0) {
                     // Synchronize price increases across all periods
-                    _synchronizePriceIncrease(params.depositPeriod);
+                    // Apply the same number of price increases that occurred during the bid
+                    _synchronizePriceIncrease(params.depositPeriod, thresholdsCrossed);
                 }
             }
 
@@ -338,8 +342,9 @@ contract ConvertibleDepositAuctioneer is
             if (convertibleAmount == 0) break;
 
             // Determine if we're crossing a threshold or depleting capacity
+            uint256 baseConvertible = dayState.convertible + output.ohmOut;
             uint256 ohmUntilNextThreshold = _getOhmUntilNextThreshold(
-                dayState.convertible + output.ohmOut,
+                baseConvertible,
                 auctionParams.target
             );
             bool willCrossThreshold = (ohmUntilNextThreshold > 0 &&
@@ -364,7 +369,7 @@ contract ConvertibleDepositAuctioneer is
                 // Trigger tick transition: increase price and recalculate tick size
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
                 output.tickSize = _getNewTickSize(
-                    dayState.convertible + convertibleAmount + output.ohmOut,
+                    baseConvertible + convertibleAmount,
                     auctionParams
                 );
                 output.tickCapacity = output.tickSize;
@@ -970,11 +975,15 @@ contract ConvertibleDepositAuctioneer is
         }
     }
 
-    /// @notice Synchronizes price increases across all deposit periods when a day target threshold is crossed
+    /// @notice Synchronizes price increases across all deposit periods when day target thresholds are crossed
     /// @dev    This prevents attackers from switching to other periods to find cheaper OHM after the day target is met
     ///
     /// @param  excludedDepositPeriod_  The deposit period that triggered the threshold crossing and should be excluded from updates
-    function _synchronizePriceIncrease(uint8 excludedDepositPeriod_) internal {
+    /// @param  thresholdsCrossed_      The number of thresholds crossed, determines how many price increases to apply
+    function _synchronizePriceIncrease(
+        uint8 excludedDepositPeriod_,
+        uint256 thresholdsCrossed_
+    ) internal {
         // Iterate over periods
         uint256 periodLength = _depositPeriods.length();
         for (uint256 i; i < periodLength; i++) {
@@ -986,14 +995,16 @@ contract ConvertibleDepositAuctioneer is
             // Skip if the deposit period is not enabled
             if (!_depositPeriodsEnabled[period]) continue;
 
-            Tick memory tick = _depositPeriodPreviousTicks[period];
-            // Increase price by tick step
-            tick.price = _getNewTickPrice(tick.price, _tickStep);
+            Tick storage tick = _depositPeriodPreviousTicks[period];
+
+            // Apply price increases for each threshold crossed
+            for (uint256 j = 0; j < thresholdsCrossed_; j++) {
+                tick.price = _getNewTickPrice(tick.price, _tickStep);
+            }
+
             // Reset capacity to new global tick size
             tick.capacity = _currentTickSize;
             tick.lastUpdate = uint48(block.timestamp);
-
-            _depositPeriodPreviousTicks[period] = tick;
         }
     }
 
