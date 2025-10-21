@@ -1608,11 +1608,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // - 8250000000000000000000 * 1e9 / 16.5e18 = 500000000000 (tick depleted, tick price increases)
         // - (14999e18 - 8250000000000000000000 - 1000000005000000000) * 1e9 / 18.15e18 = 371790633608
         // - Total OHM out: 66666667 + 500000000000 + 371790633608 = 871857300275
-        // - Conversion price: 14999e18 * 1e9 / 871857300275 = 17203503366054326292
+        // - Conversion price: 14999e18 * 1e9 / 871857300275 = 17203503366054326293 (rounded up)
         IDepositPositionManager.Position memory positionTwo = convertibleDepositPositions
             .getPosition(positionIdTwo);
         assertEq(positionTwo.remainingDeposit, 14999e18, "positionTwo remaining deposit");
-        assertEq(positionTwo.conversionPrice, 17203503366054326292, "positionTwo conversion price");
+        assertEq(positionTwo.conversionPrice, 17203503366054326293, "positionTwo conversion price");
 
         // Check tick state for deposit period two
         // - Capacity: 500e9 - 371790633608 = 128209366392
