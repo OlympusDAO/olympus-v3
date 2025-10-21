@@ -1562,34 +1562,65 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         givenDepositPeriodEnabled(PERIOD_MONTHS)
         givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
         givenEnabledWithParameters(1000e9, 1000e9, MIN_PRICE)
-        givenAddressHasReserveToken(recipient, 2000e18)
-        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 2000e18)
+        givenAddressHasReserveToken(recipient, 30000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 30000e18)
     {
         // First bid: period one, just under the tick size
         vm.prank(recipient);
-        (, uint256 positionIdOne, , ) = auctioneer.bid(PERIOD_MONTHS, 999e18, 1, false, false);
-
-        // Second bid: period two, just under the tick size
-        vm.prank(recipient);
-        (, uint256 positionIdTwo, , ) = auctioneer.bid(PERIOD_MONTHS_TWO, 999e18, 1, false, false);
+        (, uint256 positionIdOne, , ) = auctioneer.bid(PERIOD_MONTHS, 14999e18, 1, false, false);
 
         // Assert output
         // First bid:
-        // - Conversion price:
-        //   - 999e18 @ 15e18 = 15e18
+        // - 14999e18 * 1e9 / 15e18 = 999933333333 (66666667 left over)
+        // - Conversion price: 14999e18 * 1e9 / 999933333333 = 15000000000005000334 (rounded up)
         IDepositPositionManager.Position memory positionOne = convertibleDepositPositions
             .getPosition(positionIdOne);
-        assertEq(positionOne.remainingDeposit, 999e18, "positionOne remaining deposit");
-        assertEq(positionOne.conversionPrice, 15e18, "positionOne conversion price");
+        assertEq(positionOne.remainingDeposit, 14999e18, "positionOne remaining deposit");
+        assertEq(positionOne.conversionPrice, 15000000000005000334, "positionOne conversion price");
+
+        // Check tick state
+        // - Capacity: 1000e9 - 999933333333 = 66666667
+        // - Price: 15e18
+        IConvertibleDepositAuctioneer.Tick memory tickOne = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+        assertEq(tickOne.capacity, 66666667, "tickOne capacity");
+        assertEq(tickOne.price, 15e18, "tickOne price");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 1000e9, "global tick size");
+
+        // Second bid: period two, just under the tick size
+        vm.prank(recipient);
+        (, uint256 positionIdTwo, , ) = auctioneer.bid(
+            PERIOD_MONTHS_TWO,
+            14999e18,
+            1,
+            false,
+            false
+        );
 
         // Second bid:
-        // - 1e18 * 1e9 / 15e18 = 66666666
-        // - 998e18 * 1e9 / 16.5e18 = 60484848484
-        // - Total OHM out: 66666666 + 60484848484 = 60551515150
-        // - Conversion price: 999e18 * 1e9 / 60551515150 = 16498348514075126326
+        // - 1000000005000000000 * 1e9 / 15e18 = 66666667 (results in the day target being met, tick size halving and tick price increasing)
+        // - 8250000000000000000000 * 1e9 / 16.5e18 = 500000000000 (tick depleted, tick price increases)
+        // - (14999e18 - 8250000000000000000000 - 1000000005000000000) * 1e9 / 18.15e18 = 371790633608
+        // - Total OHM out: 66666667 + 500000000000 + 371790633608 = 871857300275
+        // - Conversion price: 14999e18 * 1e9 / 871857300275 = 17203503366054326292
         IDepositPositionManager.Position memory positionTwo = convertibleDepositPositions
             .getPosition(positionIdTwo);
-        assertEq(positionTwo.remainingDeposit, 999e18, "positionTwo remaining deposit");
-        assertEq(positionTwo.conversionPrice, 16498348514075126326, "positionTwo conversion price");
+        assertEq(positionTwo.remainingDeposit, 14999e18, "positionTwo remaining deposit");
+        assertEq(positionTwo.conversionPrice, 17203503366054326292, "positionTwo conversion price");
+
+        // Check tick state
+        // - Capacity: 500e9 - 371790633608 = 128209366392
+        // - Price: 18.15e18
+        IConvertibleDepositAuctioneer.Tick memory tickTwo = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tickTwo.capacity, 128209366392, "tickTwo capacity");
+        assertEq(tickTwo.price, 1815e16, "tickTwo price");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
     }
 }
