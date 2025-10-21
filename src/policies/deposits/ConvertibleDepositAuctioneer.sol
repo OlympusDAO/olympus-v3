@@ -222,6 +222,7 @@ contract ConvertibleDepositAuctioneer is
             Tick memory updatedTick = _getCurrentTick(params.depositPeriod);
 
             // Get bid results
+            uint256 previousConvertible = _dayState.convertible;
             BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
             // Reject if the OHM out is 0
@@ -254,6 +255,16 @@ contract ConvertibleDepositAuctioneer is
                 }
 
                 _currentTickSize = output.tickSize;
+
+                // Check if we crossed a day target threshold
+                // If so, synchronize price increases across all periods
+                bool crossedThreshold = (previousConvertible / _auctionParameters.target) !=
+                    (_dayState.convertible / _auctionParameters.target);
+
+                if (crossedThreshold && _depositPeriods.length() > 1) {
+                    // Synchronize price increases across all periods
+                    _synchronizePriceIncrease(params.depositPeriod);
+                }
             }
 
             // Set values for the rest of the function
@@ -326,14 +337,31 @@ contract ConvertibleDepositAuctioneer is
             // No point in continuing if the converted amount is 0
             if (convertibleAmount == 0) break;
 
-            // If there is not enough capacity in the current tick, use the remaining capacity
-            if (output.tickCapacity <= convertibleAmount) {
-                convertibleAmount = output.tickCapacity;
-                // Convertible = deposit * OHM scale / price, so this is the inverse
+            // Determine if we're crossing a threshold or depleting capacity
+            uint256 ohmUntilNextThreshold = _getOhmUntilNextThreshold(
+                dayState.convertible + output.ohmOut,
+                auctionParams.target
+            );
+            bool willCrossThreshold = (ohmUntilNextThreshold > 0 &&
+                ohmUntilNextThreshold <= convertibleAmount);
+            bool willDepleteTick = (output.tickCapacity <= convertibleAmount);
+
+            // If either condition triggers, we need to perform a tick transition
+            if (willCrossThreshold || willDepleteTick) {
+                // Use whichever limit is more restrictive
+                if (willCrossThreshold && ohmUntilNextThreshold < output.tickCapacity) {
+                    // Day target threshold is the limiting factor
+                    convertibleAmount = ohmUntilNextThreshold;
+                } else {
+                    // Tick capacity is the limiting factor
+                    convertibleAmount = output.tickCapacity;
+                }
+
+                // Calculate deposit amount for this limited chunk
                 // Round in favour of the protocol
                 depositAmount = convertibleAmount.mulDivUp(output.tickPrice, _ohmScale);
 
-                // The tick has also been depleted, so update the price
+                // Trigger tick transition: increase price and recalculate tick size
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
                 output.tickSize = _getNewTickSize(
                     dayState.convertible + convertibleAmount + output.ohmOut,
@@ -341,7 +369,7 @@ contract ConvertibleDepositAuctioneer is
                 );
                 output.tickCapacity = output.tickSize;
             }
-            // Otherwise, the tick has enough capacity and needs to be updated
+            // Otherwise, the tick has enough capacity and we're not crossing threshold
             else {
                 output.tickCapacity -= convertibleAmount;
             }
@@ -447,6 +475,23 @@ contract ConvertibleDepositAuctioneer is
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
 
         return newTickSize;
+    }
+
+    /// @notice Internal function to calculate the amount of OHM remaining until the next day target threshold is reached
+    ///
+    /// @param  currentConvertible_ The current cumulative amount of OHM that has been converted
+    /// @param  target_             The day target
+    /// @return ohmUntilThreshold   The amount of OHM remaining until the next threshold
+    function _getOhmUntilNextThreshold(
+        uint256 currentConvertible_,
+        uint256 target_
+    ) internal pure returns (uint256 ohmUntilThreshold) {
+        if (target_ == 0) return type(uint256).max;
+
+        uint256 currentMultiplier = currentConvertible_ / target_;
+        uint256 nextThreshold = (currentMultiplier + 1) * target_;
+
+        return nextThreshold - currentConvertible_;
     }
 
     function _getCurrentTick(uint8 depositPeriod_) internal view returns (Tick memory tick) {
@@ -922,6 +967,33 @@ contract ConvertibleDepositAuctioneer is
 
             // Update the current tick for the deposit period
             _depositPeriodPreviousTicks[period] = updatedTick;
+        }
+    }
+
+    /// @notice Synchronizes price increases across all deposit periods when a day target threshold is crossed
+    /// @dev    This prevents attackers from switching to other periods to find cheaper OHM after the day target is met
+    ///
+    /// @param  excludedDepositPeriod_  The deposit period that triggered the threshold crossing and should be excluded from updates
+    function _synchronizePriceIncrease(uint8 excludedDepositPeriod_) internal {
+        // Iterate over periods
+        uint256 periodLength = _depositPeriods.length();
+        for (uint256 i; i < periodLength; i++) {
+            uint8 period = uint8(_depositPeriods.at(i));
+
+            // Skip if the deposit period is excluded
+            if (period == excludedDepositPeriod_) continue;
+
+            // Skip if the deposit period is not enabled
+            if (!_depositPeriodsEnabled[period]) continue;
+
+            Tick memory tick = _depositPeriodPreviousTicks[period];
+            // Increase price by tick step
+            tick.price = _getNewTickPrice(tick.price, _tickStep);
+            // Reset capacity to new global tick size
+            tick.capacity = _currentTickSize;
+            tick.lastUpdate = uint48(block.timestamp);
+
+            _depositPeriodPreviousTicks[period] = tick;
         }
     }
 
