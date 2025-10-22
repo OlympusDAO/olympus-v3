@@ -5,6 +5,8 @@ import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 
+import {console2} from "@forge-std-1.9.6/console2.sol";
+
 contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     event LoanRepaid(
         address indexed user,
@@ -574,5 +576,46 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             commitmentAmount_,
             "committed deposits"
         );
+    }
+
+    function test_smallPayments() public givenLocallyActive givenVaultHasDeposit(1000e18) {
+        uint256 depositAmount_ = 1e18;
+        uint256 commitmentAmount_ = 1e16;
+        uint256 yieldAmount_ = 1e16;
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+
+        // Mint and approve
+        reserveToken.mint(recipient, loan.principal + loan.interest);
+        vm.startPrank(recipient);
+        reserveToken.approve(address(redemptionVault), loan.principal + loan.interest);
+
+        console2.log("repayment of interest");
+        redemptionVault.repayLoan(0, loan.interest);
+
+        for (uint256 i = 0; i < 20; i++) {
+            console2.log("principal repayment", i);
+            redemptionVault.repayLoan(0, loan.principal / 20);
+        }
+
+        vm.stopPrank();
+
+        // Assert that the loan is fully repaid
+        assertEq(redemptionVault.getRedemptionLoan(recipient, 0).principal, 0);
+        assertEq(redemptionVault.getRedemptionLoan(recipient, 0).interest, 0);
     }
 }
