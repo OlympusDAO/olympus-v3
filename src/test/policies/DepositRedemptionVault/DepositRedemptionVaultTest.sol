@@ -276,6 +276,12 @@ contract DepositRedemptionVaultTest is Test {
 
     // ========== MODIFIERS ========== //
 
+    modifier givenMinimumDeposit(uint256 minimumDeposit_) {
+        vm.prank(admin);
+        depositManager.setAssetMinimumDeposit(iReserveToken, minimumDeposit_);
+        _;
+    }
+
     modifier givenAddressHasReserveToken(address to_, uint256 amount_) {
         reserveToken.mint(to_, amount_);
         _;

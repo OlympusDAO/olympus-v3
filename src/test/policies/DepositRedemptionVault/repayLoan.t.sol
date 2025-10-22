@@ -265,6 +265,96 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     }
 
     // when the amount is greater than the interest owed
+    //  given there is a minimum deposit configured for the asset
+    //   when the principal amount is less than the minimum deposit
+    //    [X] it reduces the interest owed
+    //    [X] it reduces the principal owed
+    //    [X] it reduces the total principal borrowed
+    //    [X] it transfers deposit tokens from the caller
+    //    [X] it does not transfer any receipt tokens
+    //    [X] it emits a LoanRepaid event
+
+    function test_whenAmountIsGreaterThanInterestOwed_givenMinimumDeposit()
+        public
+        givenLocallyActive
+        givenMinimumDeposit(1e16)
+        givenVaultHasDeposit(1000e18)
+    {
+        uint256 depositAmount_ = 1e18;
+        uint256 commitmentAmount_ = 1e16; // The loan principal repayment will be less than the minimum deposit
+        uint256 yieldAmount_ = 1e16;
+        uint256 yieldAmountTwo_ = 1e16;
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        // Accrue more yield
+        _accrueYield(iVault, yieldAmountTwo_);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 repaymentAmount = loan.principal + loan.interest;
+
+        // Mint and approve
+        reserveToken.mint(recipient, repaymentAmount);
+        vm.prank(recipient);
+        reserveToken.approve(address(redemptionVault), repaymentAmount);
+
+        // Call function
+        // Emit event
+        vm.expectEmit(true, true, true, true);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, repaymentAmount);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // repaymentAmount is minted and used
+            loan.interest,
+            0
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_,
+            "committed deposits"
+        );
+    }
+
     //  [X] it reduces the interest owed
     //  [X] it reduces the principal owed
     //  [X] it reduces the total principal borrowed
