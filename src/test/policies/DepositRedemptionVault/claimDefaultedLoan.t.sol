@@ -667,4 +667,329 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
             "committed deposits"
         );
     }
+
+    // given the max borrow percentage is 99.99%
+    //  [X] it marks the loan as defaulted
+    //  [X] it sets the loan principal to 0
+    //  [X] it sets the loan interest to 0
+    //  [X] it reduces the amount borrowed from the facility by the principal
+    //  [X] it reduces the committed amount from the facility by the principal
+    //  [X] it reduces the redemption amount by the principal
+    //  [X] it transfers the percentage of the principal as keeper reward to the caller
+    //  [X] it transfers the remainder of the principal to the TRSRY
+    //  [X] it emits a LoanDefaulted event
+    //  [X] it emits a RedemptionCancelled event
+
+    function test_givenMaxBorrowPercentageIs9999_givenClaimDefaultRewardPercentageIsNonZero_givenYieldAccrued_smallAmount()
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 9999) // 99.99%
+        givenCommittedDefault(10000)
+        givenLoanDefault
+        givenLoanExpired(recipient, 0)
+        givenClaimDefaultRewardPercentage(100) // 1%
+        givenVaultAccruesYield(iVault, 3e18)
+    {
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+
+        // Expect events
+        vm.expectEmit(true, true, true, true);
+        emit LoanDefaulted(recipient, 0, loan.principal, loan.interest, 10000);
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionCancelled(recipient, 0, address(iReserveToken), PERIOD_MONTHS, 10000, 0);
+
+        // Call function
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(recipient, 0);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, 10000, 0, 0, true, loan.dueDate);
+
+        // Assert deposit token balances
+        uint256 remainingCollateral = 10000 - 9999;
+        uint256 keeperReward = 0;
+        _assertDepositTokenBalances(
+            recipient,
+            loan.principal, // No change
+            remainingCollateral - keeperReward, // Remaining collateral that was not lent out, minus keeper reward
+            keeperReward // Keeper reward
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, 0, 0);
+
+        // Assert the redemption amount
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, 0).amount,
+            0,
+            "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
+        );
+    }
+
+    // given the max borrow percentage is 100%
+    //  [X] it marks the loan as defaulted
+    //  [X] it sets the loan principal to 0
+    //  [X] it sets the loan interest to 0
+    //  [X] it reduces the amount borrowed from the facility by the principal
+    //  [X] it reduces the committed amount from the facility by the principal
+    //  [X] it reduces the redemption amount by the principal
+    //  [X] it does not transfer any keeper reward to the caller
+    //  [X] it does not transfer any remaining collateral to the TRSRY
+    //  [X] it emits a LoanDefaulted event
+    //  [X] it emits a RedemptionCancelled event
+
+    function test_givenMaxBorrowPercentageIs100_givenClaimDefaultRewardPercentageIsNonZero()
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 100e2) // 100%
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenLoanExpired(recipient, 0)
+        givenClaimDefaultRewardPercentage(100) // 1%
+    {
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+
+        // Expect events
+        vm.expectEmit(true, true, true, true);
+        emit LoanDefaulted(recipient, 0, loan.principal, loan.interest, COMMITMENT_AMOUNT);
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionCancelled(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            COMMITMENT_AMOUNT,
+            0
+        );
+
+        // Call function
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(recipient, 0);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, COMMITMENT_AMOUNT, 0, 0, true, loan.dueDate);
+
+        // Assert deposit token balances
+        uint256 remainingCollateral = 0;
+        uint256 keeperReward = 0;
+        _assertDepositTokenBalances(
+            recipient,
+            loan.principal, // No change
+            remainingCollateral - keeperReward, // Remaining collateral that was not lent out, minus keeper reward
+            keeperReward // Keeper reward
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, 0, 0);
+
+        // Assert the redemption amount
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, 0).amount,
+            0,
+            "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits"
+        );
+    }
+
+    function test_givenMaxBorrowPercentageIs100_givenClaimDefaultRewardPercentageIsNonZero_givenPrincipalRepayment()
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 100e2) // 100%
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenClaimDefaultRewardPercentage(100) // 1%
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
+    {
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+
+        // Repay the loan interest
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, loan.interest);
+
+        // Repay just under the loan principal
+        uint256 repaymentAmount = loan.principal - 1;
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, repaymentAmount);
+
+        // Expire the loan
+        vm.warp(loan.dueDate);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Expect events
+        vm.expectEmit(true, true, true, true);
+        emit LoanDefaulted(
+            recipient,
+            0,
+            loan.principal - repaymentAmount,
+            0,
+            COMMITMENT_AMOUNT - repaymentAmount
+        );
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionCancelled(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            loan.principal - repaymentAmount,
+            repaymentAmount
+        );
+
+        // Call function
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(recipient, 0);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, COMMITMENT_AMOUNT, 0, 0, true, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // No change
+            loan.interest, // Interest was repaid, nothing else
+            0 // Keeper reward
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, 0, repaymentAmount);
+
+        // Assert the redemption amount
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, 0).amount,
+            repaymentAmount,
+            "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            repaymentAmount,
+            "committed deposits"
+        );
+    }
+
+    function test_givenMaxBorrowPercentageIs100_givenClaimDefaultRewardPercentageIsNonZero_givenPrincipalRepayment_givenYieldAccrued()
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 100e2) // 100%
+        givenCommittedDefault(COMMITMENT_AMOUNT)
+        givenLoanDefault
+        givenClaimDefaultRewardPercentage(100) // 1%
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
+        givenVaultAccruesYield(iVault, 3e18)
+    {
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+
+        // Repay the loan interest
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, loan.interest);
+
+        // Repay just under the loan principal
+        uint256 repaymentAmount = loan.principal - 1;
+        vm.prank(recipient);
+        redemptionVault.repayLoan(0, repaymentAmount);
+
+        // Expire the loan
+        vm.warp(loan.dueDate);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Expect events
+        vm.expectEmit(true, true, true, true);
+        emit LoanDefaulted(
+            recipient,
+            0,
+            loan.principal - repaymentAmount,
+            0,
+            COMMITMENT_AMOUNT - repaymentAmount
+        );
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionCancelled(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            loan.principal - repaymentAmount,
+            repaymentAmount
+        );
+
+        // Call function
+        vm.prank(defaultRewardClaimer);
+        redemptionVault.claimDefaultedLoan(recipient, 0);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, COMMITMENT_AMOUNT, 0, 0, true, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // No change
+            loan.interest, // Interest was repaid, nothing else
+            0 // Keeper reward
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(recipient, 0, repaymentAmount);
+
+        // Assert the redemption amount
+        assertEq(
+            redemptionVault.getUserRedemption(recipient, 0).amount,
+            repaymentAmount,
+            "redemption amount mismatch"
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            repaymentAmount,
+            "committed deposits"
+        );
+    }
 }
