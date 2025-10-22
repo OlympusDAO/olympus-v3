@@ -177,7 +177,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         // Deposit into vault
         // This will revert if the asset is not configured
         // This takes place before any state changes to avoid ERC777 re-entrancy
-        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
+        (actualAmount, ) = _depositAsset(
+            params_.asset,
+            params_.depositor,
+            params_.amount,
+            true // Enforce minimum deposit
+        );
 
         // Mint the receipt token to the caller
         receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
@@ -712,7 +717,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         // Transfer funds from payer to this contract
         // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
         // This takes place before any state changes to avoid ERC777 re-entrancy
-        _depositAsset(params_.asset, params_.payer, params_.amount);
+        _depositAsset(
+            params_.asset,
+            params_.payer,
+            params_.amount,
+            false // Do not enforce minimum deposit
+        );
 
         // Update borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
