@@ -376,7 +376,11 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
 
         // Set the max borrow percentage
         vm.prank(admin);
-        redemptionVault.setMaxBorrowPercentage(iReserveToken, address(cdFacility), maxBorrowPercentage_);
+        redemptionVault.setMaxBorrowPercentage(
+            iReserveToken,
+            address(cdFacility),
+            maxBorrowPercentage_
+        );
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
