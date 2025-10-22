@@ -934,6 +934,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         redemption.amount -= retainedCollateral + previousPrincipal;
 
         // Distribute residual value (keeper reward + treasury)
+        // TODO check if retainedCollateralActual is < keeperReward
         uint256 keeperReward = retainedCollateralActual.mulDiv(
             _claimDefaultRewardPercentage,
             ONE_HUNDRED_PERCENT
