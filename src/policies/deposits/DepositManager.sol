@@ -705,35 +705,38 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         // Check that the operator is not over-paying
         // This would cause accounting issues
         uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
-        if (currentBorrowed < params_.amount) {
-            revert DepositManager_BorrowedAmountExceeded(
-                address(params_.asset),
-                msg.sender,
-                params_.amount,
-                currentBorrowed
-            );
-        }
 
         // Transfer funds from payer to this contract
-        // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
         // This takes place before any state changes to avoid ERC777 re-entrancy
-        _depositAsset(
+        (actualAmount, ) = _depositAsset(
             params_.asset,
             params_.payer,
             params_.amount,
             false // Do not enforce minimum deposit
         );
 
+        // Check that the operator is not over-paying
+        // This would cause accounting issues
+        if (actualAmount > currentBorrowed) {
+            revert DepositManager_BorrowedAmountExceeded(
+                address(params_.asset),
+                msg.sender,
+                actualAmount,
+                currentBorrowed
+            );
+        }
+
         // Update borrowed amount
-        _borrowedAmounts[borrowingKey] -= params_.amount;
+        // Reduce by the actual amount, to avoid leakage
+        _borrowedAmounts[borrowingKey] -= actualAmount;
 
         // Validate operator solvency after borrowed amount change
         _validateOperatorSolvency(params_.asset, msg.sender);
 
         // Emit event
-        emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
+        emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, actualAmount);
 
-        return params_.amount;
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositManager

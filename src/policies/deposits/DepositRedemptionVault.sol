@@ -707,6 +707,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             loan.principal -= principalRepaid;
         }
 
+        // TODO use repayment actual from handleLoanRepay
+
         // Delegate to the facility for repayment of principal
         // This will revert if there is an over-payment
         if (principalRepaid > 0) {

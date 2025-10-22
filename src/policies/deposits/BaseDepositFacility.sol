@@ -306,6 +306,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 amount: amount_
             })
         );
+        // TODO check for changes after DepositManager
+        // TODO check whether committed deposits should use actual vs requested amount
 
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
         // This uses the requested amount, to be consistent with DepositManager

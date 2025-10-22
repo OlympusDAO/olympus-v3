@@ -110,6 +110,15 @@ contract DepositRedemptionVaultTest is Test {
 
         // Instantiate bophades
         _createStack();
+
+        // Simulate the asset vault having deposits
+        // Otherwise the asset/shares conversion will be wonky
+        {
+            // Deposit into the vault
+            reserveToken.mint(address(this), 10e18);
+            reserveToken.approve(address(vault), 10e18);
+            vault.deposit(10e18, address(this));
+        }
     }
 
     function _createStack() internal {
