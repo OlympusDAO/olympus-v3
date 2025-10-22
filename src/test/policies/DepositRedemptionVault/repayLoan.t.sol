@@ -434,7 +434,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
         givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, 100, 5e18);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
@@ -504,7 +504,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 yieldAmountTwo_
     ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
         depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
         yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
 

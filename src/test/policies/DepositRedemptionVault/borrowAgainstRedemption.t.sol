@@ -107,6 +107,30 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         redemptionVault.borrowAgainstRedemption(0);
     }
 
+    // when the loan amount would be less than 0
+    //  [X] it reverts
+
+    function test_borrowAmountLessThanZero_reverts(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 1) // 0.01%
+    {
+        // 9999 * 1 / 100e2 = 0.9999, which is a loan amount less than 1
+        commitmentAmount_ = bound(commitmentAmount_, 1, 9999);
+
+        // Deposit and commit funds
+        _depositAndStartRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Expect revert
+        _expectRevertMaxBorrowPercentageNotSet(iReserveToken);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+    }
+
     // [X] it creates a new loan record
     // [X] the due date is the deposit period term in the future fro now
     // [X] the principal is the amount specified
@@ -208,7 +232,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
         givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, 100, 5e18);
         uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
         uint256 expectedInterest = FullMath.mulDivUp(
             expectedLoanAmount,
@@ -283,7 +307,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         uint256 yieldAmount_
     ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
         depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         // Accrue yield
