@@ -3,8 +3,6 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionVaultTest {
@@ -282,13 +280,11 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
     function test_givenCommitmentAmountFuzz_givenYieldAmountFuzz(
         uint256 depositAmount_,
         uint256 commitmentAmount_,
-        uint256 yieldAmount_,
-        uint256 yieldAmountTwo_
+        uint256 yieldAmount_
     ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
         depositAmount_ = bound(depositAmount_, 1e18, 50e18);
         commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
