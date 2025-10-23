@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256, mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -235,11 +236,15 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
     // ========== REDEMPTION FLOW ========== //
 
-    modifier onlyValidRedemptionId(address user_, uint16 redemptionId_) {
+    function _onlyValidRedemptionId(address user_, uint16 redemptionId_) internal view {
         // If the deposit token is the zero address, the redemption is invalid
         if (
             _userRedemptions[_getUserRedemptionKey(user_, redemptionId_)].depositToken == address(0)
         ) revert RedemptionVault_InvalidRedemptionId(user_, redemptionId_);
+    }
+
+    modifier onlyValidRedemptionId(address user_, uint16 redemptionId_) {
+        _onlyValidRedemptionId(user_, redemptionId_);
         _;
     }
 
@@ -1088,3 +1093,4 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(asm-keccak256, mixed-case-variable)

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256, mixed-case-function)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -70,12 +71,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Reverts if the asset period is not configured
-    modifier onlyAssetPeriodExists(
+    function _onlyAssetPeriodExists(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) {
+    ) internal view {
         uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
@@ -85,15 +85,23 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         if (address(_assetPeriods[tokenId].asset) == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
-        _;
     }
 
-    /// @notice Reverts if the asset period is not enabled
-    modifier onlyAssetPeriodEnabled(
+    /// @notice Reverts if the asset period is not configured
+    modifier onlyAssetPeriodExists(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
     ) {
+        _onlyAssetPeriodExists(asset_, depositPeriod_, operator_);
+        _;
+    }
+
+    function _onlyAssetPeriodEnabled(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal view {
         uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
@@ -107,6 +115,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         if (!assetPeriod.isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
+    }
+
+    /// @notice Reverts if the asset period is not enabled
+    modifier onlyAssetPeriodEnabled(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) {
+        _onlyAssetPeriodEnabled(asset_, depositPeriod_, operator_);
         _;
     }
 
@@ -395,6 +412,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             }
         }
 
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes3 nameBytes3 = bytes3(bytes(name_));
         // Validate that the name isn't in use by another operator
         if (_operatorNames[nameBytes3]) revert DepositManager_OperatorNameInUse(name_);
@@ -934,3 +952,4 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
     }
 }
+/// forge-lint: disable-end(asm-keccak256, mixed-case-function)

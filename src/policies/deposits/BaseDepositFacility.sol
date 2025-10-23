@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -62,11 +63,15 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Reverts if the caller is not an authorized operator
-    modifier onlyAuthorizedOperator() {
+    function _onlyAuthorizedOperator() internal view {
         if (!_authorizedOperators.contains(msg.sender)) {
             revert DepositFacility_UnauthorizedOperator(msg.sender);
         }
+    }
+
+    /// @notice Reverts if the caller is not an authorized operator
+    modifier onlyAuthorizedOperator() {
+        _onlyAuthorizedOperator();
         _;
     }
 
@@ -651,3 +656,4 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(asm-keccak256, mixed-case-variable)
