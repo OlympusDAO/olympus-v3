@@ -720,7 +720,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
         givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, 1, 5e18);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
