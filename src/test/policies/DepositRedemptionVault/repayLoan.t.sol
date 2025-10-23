@@ -783,7 +783,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
         yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
-        maxSlippage_ = bound(maxSlippage_, 1, 1e18);
+        maxSlippage_ = bound(
+            maxSlippage_,
+            LOAN_PRINCIPAL_MAX_SLIPPAGE, // Ensures that if repaid amount != withdrawable amount, payment is completed
+            1e18
+        );
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
