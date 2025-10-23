@@ -323,8 +323,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
     {
         // Repay the loan
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, LOAN_AMOUNT / 2);
+        _repayLoan(recipient, 0, LOAN_AMOUNT / 2);
 
         // Warp to after redeemable timestamp
         uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
@@ -366,8 +365,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             // Approve the redemption vault to spend the reserve token
             iReserveToken.approve(address(redemptionVault), loanPayable);
 
-            vm.prank(recipient);
-            redemptionVault.repayLoan(0, loanPayable);
+            _repayLoan(recipient, 0, loanPayable);
         }
 
         // Warp to after redeemable timestamp

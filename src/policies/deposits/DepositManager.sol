@@ -681,13 +681,14 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - This function does not check for over-payment. It is expected to be handled by the calling contract.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The asset has not been added via addAsset()
-    ///             - The amount exceeds the current borrowed amount for the operator
     ///             - The payer has not approved DepositManager to spend the asset tokens
     ///             - The payer has insufficient asset token balance
     ///             - The asset is a fee-on-transfer token
@@ -701,13 +702,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
-
-        // Check that the operator is not over-paying
-        // This would cause accounting issues
         uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
 
         // Transfer funds from payer to this contract
         // This takes place before any state changes to avoid ERC777 re-entrancy
+        // This purposefully does not check for over-payment, as it is expected to be handled by the calling contract
         (actualAmount, ) = _depositAsset(
             params_.asset,
             params_.payer,
@@ -715,20 +714,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             false // Do not enforce minimum deposit
         );
 
-        // Check that the operator is not over-paying
-        // This would cause accounting issues
-        if (actualAmount > currentBorrowed) {
-            revert DepositManager_BorrowedAmountExceeded(
-                address(params_.asset),
-                msg.sender,
-                actualAmount,
-                currentBorrowed
-            );
-        }
-
         // Update borrowed amount
         // Reduce by the actual amount, to avoid leakage
-        _borrowedAmounts[borrowingKey] -= actualAmount;
+        // But cap at the borrowed amount, to avoid an underflow if there is an over-payment
+        _borrowedAmounts[borrowingKey] -= currentBorrowed < actualAmount
+            ? currentBorrowed
+            : actualAmount;
 
         // Validate operator solvency after borrowed amount change
         _validateOperatorSolvency(params_.asset, msg.sender);

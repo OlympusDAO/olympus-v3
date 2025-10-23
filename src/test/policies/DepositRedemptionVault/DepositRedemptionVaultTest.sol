@@ -81,6 +81,8 @@ contract DepositRedemptionVaultTest is Test {
 
     uint256 internal _previousDepositActualAmount;
 
+    uint256 public constant LOAN_PRINCIPAL_MAX_SLIPPAGE_DEFAULT = 0;
+
     function setUp() public virtual {
         vm.warp(INITIAL_BLOCK);
 
@@ -726,9 +728,18 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    function _repayLoan(address user_, uint16 redemptionId_, uint256 amount_) internal {
+    function _repayLoan(
+        address user_,
+        uint16 redemptionId_,
+        uint256 amount_,
+        uint256 maxSlippage_
+    ) internal {
         vm.prank(user_);
-        redemptionVault.repayLoan(redemptionId_, amount_);
+        redemptionVault.repayLoan(redemptionId_, amount_, maxSlippage_);
+    }
+
+    function _repayLoan(address user_, uint16 redemptionId_, uint256 amount_) internal {
+        _repayLoan(user_, redemptionId_, amount_, LOAN_PRINCIPAL_MAX_SLIPPAGE_DEFAULT);
     }
 
     modifier givenLoanRepaid(
@@ -1072,17 +1083,25 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
-    function _expectRevertLoanAmountExceeded(
+    function _expectRevertMaxSlippageExceededPartial() internal {
+        vm.expectPartialRevert(
+            IDepositRedemptionVault.RedemptionVault_MaxSlippageExceeded.selector
+        );
+    }
+
+    function _expectRevertMaxSlippageExceeded(
         address user_,
         uint16 redemptionId_,
-        uint256 amount_
+        uint256 actualAmount_,
+        uint256 maxAmount_
     ) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_LoanAmountExceeded.selector,
+                IDepositRedemptionVault.RedemptionVault_MaxSlippageExceeded.selector,
                 user_,
                 redemptionId_,
-                amount_
+                actualAmount_,
+                maxAmount_
             )
         );
     }

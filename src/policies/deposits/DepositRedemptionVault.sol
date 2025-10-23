@@ -644,6 +644,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     /// @inheritdoc IDepositRedemptionVault
     /// @dev        This function will repay the outstanding loan amount.
     ///             Interest is paid back first, followed by principal.
+    ///             To prevent irrecoverable overpayments, the maximum slippage is used to validate that a repayment is within bounds of the remaining loan principal.
     ///
     ///             This function will revert if:
     ///             - The contract is not enabled
@@ -653,7 +654,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - The loan is expired, defaulted or fully repaid
     function repayLoan(
         uint16 redemptionId_,
-        uint256 amount_
+        uint256 amount_,
+        uint256 maxSlippage_
     ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
         // Validate that the amount is not 0
         if (amount_ == 0) revert RedemptionVault_ZeroAmount();
@@ -682,56 +684,68 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         // This takes place before any state changes to avoid ERC777 re-entrancy
         ERC20(redemption.depositToken).safeTransferFrom(msg.sender, address(this), amount_);
 
-        // Update loan state
-        // Partial repayment (pay interest first, then principal)
-        uint256 principalRepaid;
-        uint256 interestRepaid;
+        // Determine the repayment amounts
+        // Note that the principal repayment may be different to the calculated amount, due to rounding errors in ERC4626 vaults. The value is updated once the actual value is known.
+        uint256 interestToRepay;
+        uint256 principalToRepay;
+        // Pay interest first, then principal
         if (amount_ <= loan.interest) {
-            loan.interest -= amount_;
-
-            // Update loan data
-            interestRepaid = amount_;
+            interestToRepay = amount_;
         } else {
-            interestRepaid = loan.interest;
-            principalRepaid = amount_ - loan.interest;
-
-            if (principalRepaid > loan.principal)
-                revert RedemptionVault_LoanAmountExceeded(
-                    msg.sender,
-                    redemptionId_,
-                    loan.principal
-                );
-
-            // Update loan data
-            loan.interest = 0;
-            loan.principal -= principalRepaid;
+            interestToRepay = loan.interest;
+            principalToRepay = amount_ - loan.interest;
         }
 
-        // TODO use repayment actual from handleLoanRepay
+        // Handle interest
+        if (interestToRepay > 0) {
+            // Transfer interest to the TRSRY
+            ERC20(redemption.depositToken).safeTransfer(address(TRSRY), interestToRepay);
+        }
 
-        // Delegate to the facility for repayment of principal
-        // This will revert if there is an over-payment
-        if (principalRepaid > 0) {
-            ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), principalRepaid);
+        // Handle principal
+        uint256 principalRepaidActual;
+        if (principalToRepay > 0) {
+            ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), principalToRepay);
 
-            IDepositFacility(redemption.facility).handleLoanRepay(
+            // Delegate to the facility for repayment of principal
+            principalRepaidActual = IDepositFacility(redemption.facility).handleLoanRepay(
                 IERC20(redemption.depositToken),
                 redemption.depositPeriod,
-                principalRepaid,
+                principalToRepay,
                 address(this)
             );
+
+            // Validate that the slippage is not too large if this is the final repayment
+            if (
+                principalToRepay >= loan.principal &&
+                principalRepaidActual > loan.principal + maxSlippage_
+            ) {
+                revert RedemptionVault_MaxSlippageExceeded(
+                    msg.sender,
+                    redemptionId_,
+                    principalRepaidActual,
+                    loan.principal + maxSlippage_
+                );
+            }
 
             // The DepositFacility may not use all of the approval, so reset it to 0
             ERC20(redemption.depositToken).safeApprove(address(DEPOSIT_MANAGER), 0);
         }
 
-        // Transfer interest to the TRSRY
-        ERC20(redemption.depositToken).safeTransfer(address(TRSRY), interestRepaid);
+        // Update loan state
+        if (interestToRepay > 0) {
+            loan.interest -= interestToRepay > loan.interest ? loan.interest : interestToRepay;
+        }
+        if (principalRepaidActual > 0) {
+            loan.principal -= principalRepaidActual > loan.principal
+                ? loan.principal
+                : principalRepaidActual;
+        }
 
         // Receipt tokens are not returned here.
         // They are only returned through cancelRedemption() or finishRedemption().
 
-        emit LoanRepaid(msg.sender, redemptionId_, principalRepaid, interestRepaid);
+        emit LoanRepaid(msg.sender, redemptionId_, principalRepaidActual, interestToRepay);
     }
 
     function _previewExtendLoan(

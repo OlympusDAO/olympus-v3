@@ -95,9 +95,14 @@ interface IDepositRedemptionVault {
     error RedemptionVault_InterestRateNotSet(address asset, address facility);
     error RedemptionVault_MaxBorrowPercentageNotSet(address asset, address facility);
     error RedemptionVault_LoanAmountExceeded(address user, uint16 redemptionId, uint256 amount);
-
     error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId);
     error RedemptionVault_InvalidLoan(address user, uint16 redemptionId);
+    error RedemptionVault_MaxSlippageExceeded(
+        address user,
+        uint16 redemptionId,
+        uint256 actualAmount,
+        uint256 maxAmount
+    );
 
     // ========== DATA STRUCTURES ========== //
 
@@ -240,7 +245,8 @@ interface IDepositRedemptionVault {
     ///
     /// @param redemptionId_    The ID of the redemption
     /// @param amount_          The amount to repay
-    function repayLoan(uint16 redemptionId_, uint256 amount_) external;
+    /// @param maxSlippage_     The maximum slippage allowed for the repayment
+    function repayLoan(uint16 redemptionId_, uint256 amount_, uint256 maxSlippage_) external;
 
     /// @notice Preview the interest payable for extending a loan
     ///

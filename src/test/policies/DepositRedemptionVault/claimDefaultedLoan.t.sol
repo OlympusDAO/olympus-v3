@@ -832,13 +832,11 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
         // Repay the loan interest
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, loan.interest);
+        _repayLoan(recipient, 0, loan.interest);
 
         // Repay just under the loan principal
         uint256 repaymentAmount = loan.principal - 1;
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, repaymentAmount);
+        _repayLoan(recipient, 0, repaymentAmount);
 
         // Expire the loan
         vm.warp(loan.dueDate);
@@ -919,13 +917,11 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
         // Repay the loan interest
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, loan.interest);
+        _repayLoan(recipient, 0, loan.interest);
 
         // Repay just under the loan principal
         uint256 repaymentAmount = loan.principal - 1;
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, repaymentAmount);
+        _repayLoan(recipient, 0, repaymentAmount);
 
         // Expire the loan
         vm.warp(loan.dueDate);

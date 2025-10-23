@@ -288,6 +288,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @dev        This function performs the following:
     ///             - Updates the committed deposits
     ///
+    ///             Notes:
+    ///             - This function is only callable by authorized operators
+    ///             - This function does not check for over-payment. It is expected to be handled by the calling contract.
+    ///
     ///             This function will revert if:
     ///             - This contract is not enabled
     ///             - The caller is not an authorized operator
@@ -306,15 +310,12 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 amount: amount_
             })
         );
-        // TODO check for changes after DepositManager
-        // TODO check whether committed deposits should use actual vs requested amount
 
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
-        // This uses the requested amount, to be consistent with DepositManager
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] += amount_;
-        _assetCommittedDeposits[depositToken_] += amount_;
+        ] += repaymentActual;
+        _assetCommittedDeposits[depositToken_] += repaymentActual;
 
         // Validate that the amount is not zero
         if (repaymentActual == 0) revert DepositFacility_ZeroAmount();

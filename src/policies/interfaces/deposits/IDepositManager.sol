@@ -197,7 +197,7 @@ interface IDepositManager is IAssetManager {
     ///
     /// @param asset           The underlying ERC20 asset
     /// @param payer           The address making the repayment
-    /// @param amount          The amount to repay
+    /// @param amount          The amount of principal to repay
     struct BorrowingRepayParams {
         IERC20 asset;
         address payer;
