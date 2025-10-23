@@ -158,6 +158,7 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
         givenCommitted(OPERATOR, COMMIT_AMOUNT)
         givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
         amount_ = bound(amount_, 1, COMMIT_AMOUNT);
 
