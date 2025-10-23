@@ -615,11 +615,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemptionId_
         );
 
-        if (principal == 0)
-            revert RedemptionVault_MaxBorrowPercentageNotSet(
-                redemption.depositToken,
-                redemption.facility
-            );
+        if (principal == 0) revert RedemptionVault_ZeroAmount();
 
         // Create loan
         // Use the calculated amount, independent of any off-by-one rounding errors
@@ -639,6 +635,10 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             principal,
             msg.sender
         );
+
+        // Validate that the actual loan amount is not 0
+        // This can happen if the
+        if (principalActual == 0) revert RedemptionVault_ZeroAmount();
 
         // Emit event
         emit LoanCreated(msg.sender, redemptionId_, principalActual, redemption.facility);

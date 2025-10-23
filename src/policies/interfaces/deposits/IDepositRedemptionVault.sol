@@ -93,7 +93,6 @@ interface IDepositRedemptionVault {
 
     // Borrowing Errors
     error RedemptionVault_InterestRateNotSet(address asset, address facility);
-    error RedemptionVault_MaxBorrowPercentageNotSet(address asset, address facility);
     error RedemptionVault_LoanAmountExceeded(address user, uint16 redemptionId, uint256 amount);
     error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId);
     error RedemptionVault_InvalidLoan(address user, uint16 redemptionId);

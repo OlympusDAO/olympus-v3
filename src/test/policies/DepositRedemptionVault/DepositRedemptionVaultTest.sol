@@ -1106,13 +1106,9 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
-    function _expectRevertMaxBorrowPercentageNotSet(IERC20 asset_) internal {
+    function _expectRevertMaxBorrowPercentageNotSet(IERC20) internal {
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositRedemptionVault.RedemptionVault_MaxBorrowPercentageNotSet.selector,
-                address(asset_),
-                address(cdFacility)
-            )
+            abi.encodeWithSelector(IDepositRedemptionVault.RedemptionVault_ZeroAmount.selector)
         );
     }
 
