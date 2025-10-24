@@ -8,6 +8,7 @@ import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepos
 
 contract ConvertibleDepositFacilityExecuteTest is ConvertibleDepositFacilityTest {
     event ClaimedYield(address indexed asset, uint256 amount);
+    event ClaimAllYieldFailed();
 
     // ========== TESTS ========== //
 
@@ -116,6 +117,34 @@ contract ConvertibleDepositFacilityExecuteTest is ConvertibleDepositFacilityTest
             0,
             "treasury balance: reserve token two"
         );
+    }
+
+    // given claimAllYield reverts
+    //  [X] it emits ClaimAllYieldFailed event
+
+    function test_givenClaimAllYieldReverts()
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositToken(
+            recipient,
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT
+        )
+        givenVaultAccruesYield(iVault, 10_000e18)
+    {
+        // Disable the DepositManager
+        // This will cause claimAllYield to revert
+        vm.prank(admin);
+        depositManager.disable("");
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit ClaimAllYieldFailed();
+
+        // Call function
+        vm.prank(HEART);
+        facility.execute();
     }
 
     // [X] it transfers the token yields to the treasury
