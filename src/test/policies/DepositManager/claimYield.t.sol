@@ -110,7 +110,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
     {
         // Simulate yield being accrued to the vault
-        asset.mint(address(vault), 10e18);
+        asset.mint(address(vault), 10_000e18);
 
         _takeSnapshot();
 
