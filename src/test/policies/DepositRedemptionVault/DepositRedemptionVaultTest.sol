@@ -1112,6 +1112,12 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 
+    function _expectRevertDepositFacilityZeroAmount() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IDepositFacility.DepositFacility_ZeroAmount.selector)
+        );
+    }
+
     function _expectRevertInterestRateNotSet(IERC20 asset_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(

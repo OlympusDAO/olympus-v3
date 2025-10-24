@@ -239,15 +239,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
-    ///
-    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The asset is not configured in BaseAssetManager
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function claimYield(
         IERC20 asset_,
@@ -261,6 +261,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         returns (uint256 actualAmount)
     {
         // Withdraw the funds from the vault
+        // The value returned can also be zero
         (, actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
@@ -275,11 +276,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
-    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
-    ///
-    ///             This function reverts if:
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The recipient is the zero address
@@ -287,7 +289,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The depositor has insufficient receipt token balance
     ///             - For wrapped tokens: depositor has not approved ReceiptTokenManager to spend the wrapped ERC20 token
     ///             - For unwrapped tokens: depositor has not approved the caller to spend ERC6909 tokens
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function withdraw(
         WithdrawParams calldata params_
@@ -647,7 +648,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     // ========== BORROWING FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
@@ -655,7 +658,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The recipient is the zero address
     ///             - The asset has not been added via addAsset()
     ///             - The amount exceeds the operator's available borrowing capacity
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function borrowingWithdraw(
         BorrowingWithdrawParams calldata params_
@@ -678,6 +680,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
 
         // Withdraw the funds from the vault to the recipient
+        // The value returned can also be zero
         (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         // Update borrowed amount

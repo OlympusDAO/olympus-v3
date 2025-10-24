@@ -230,6 +230,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         _assetCommittedDeposits[depositToken_] -= amount_;
 
         // Process the withdrawal through DepositManager
+        // The value returned can also be zero
         uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
                 asset: depositToken_,
@@ -240,9 +241,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
-
-        // Validate that the amount is not zero
-        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
@@ -255,6 +253,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ///             - This contract is not enabled
     ///             - The caller is not an authorized operator
     ///             - The amount is greater than the committed deposits for the operator
+    ///             - The amount withdrawn from the vault would be zero
     function handleBorrow(
         IERC20 depositToken_,
         uint8,
@@ -268,6 +267,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
+        // The value returned can also be zero
         uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
             IDepositManager.BorrowingWithdrawParams({
                 asset: depositToken_,
@@ -307,7 +307,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         address payer_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the repayment through DepositManager
-        // It will revert if more is being repaid than borrowed
+        // This allows for over-payment, as it is expected to be handled by the calling contract.
+        // The value returned can also be zero.
         uint256 repaymentActual = DEPOSIT_MANAGER.borrowingRepay(
             IDepositManager.BorrowingRepayParams({
                 asset: depositToken_,
@@ -321,9 +322,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             _getCommittedDepositsKey(depositToken_, msg.sender)
         ] += repaymentActual;
         _assetCommittedDeposits[depositToken_] += repaymentActual;
-
-        // Validate that the amount is not zero
-        if (repaymentActual == 0) revert DepositFacility_ZeroAmount();
 
         return repaymentActual;
     }

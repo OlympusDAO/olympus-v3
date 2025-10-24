@@ -461,7 +461,13 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     ///             - There is an unpaid loan
     function finishRedemption(
         uint16 redemptionId_
-    ) external nonReentrant onlyEnabled onlyValidRedemptionId(msg.sender, redemptionId_) {
+    )
+        external
+        nonReentrant
+        onlyEnabled
+        onlyValidRedemptionId(msg.sender, redemptionId_)
+        returns (uint256 actualAmount)
+    {
         // Get the redemption
         bytes32 redemptionKey = _getUserRedemptionKey(msg.sender, redemptionId_);
         UserRedemption storage redemption = _userRedemptions[redemptionKey];
@@ -494,7 +500,9 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
         IReceiptTokenManager rtm = DEPOSIT_MANAGER.getReceiptTokenManager();
         rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, redemptionAmount);
-        IDepositFacility(redemption.facility).handleCommitWithdraw(
+        // Withdraw the deposit tokens from the facility to the caller
+        // The value returned can also be zero
+        actualAmount = IDepositFacility(redemption.facility).handleCommitWithdraw(
             IERC20(redemption.depositToken),
             redemption.depositPeriod,
             redemptionAmount,
@@ -511,6 +519,8 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             redemption.depositPeriod,
             redemptionAmount
         );
+
+        return actualAmount;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -935,6 +945,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
             }
             // Withdraw deposit for retained collateral
             if (retainedCollateral > 0) {
+                // Caution: can be zero
                 retainedCollateralActual = IDepositFacility(redemption.facility)
                     .handleCommitWithdraw(
                         IERC20(redemption.depositToken),
@@ -955,11 +966,12 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         redemption.amount -= retainedCollateral + previousPrincipal;
 
         // Distribute residual value (keeper reward + treasury)
-        // TODO check if retainedCollateralActual is < keeperReward
+        // Keeper reward is a percentage of the retained collateral, and can be zero
         uint256 keeperReward = retainedCollateralActual.mulDiv(
             _claimDefaultRewardPercentage,
             ONE_HUNDRED_PERCENT
         );
+        // Treasury amount is the remainder of the retained collateral after the keeper reward has been deducted, and can be zero
         uint256 treasuryAmount = retainedCollateralActual - keeperReward;
 
         if (keeperReward > 0) {

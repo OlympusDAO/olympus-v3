@@ -196,7 +196,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         vm.expectEmit(true, true, true, true);
         emit LoanCreated(recipient, 0, LOAN_AMOUNT, address(cdFacility));
 
-        vm.startSnapshotGas("borrowAgainstRedemption");
+        vm.startSnapshotGas("borrowAgainstRedemptionOtherDeposits");
 
         // Call function
         vm.prank(recipient);
@@ -332,7 +332,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         vm.expectEmit(true, true, true, false);
         emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
 
-        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz");
+        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz_givenYieldAmountFuzz");
 
         // Call function
         vm.prank(recipient);
@@ -424,7 +424,9 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         vm.expectEmit(true, true, true, false);
         emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
 
-        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz");
+        vm.startSnapshotGas(
+            "borrowAgainstRedemptionCommitmentFuzz_givenYieldAmountFuzz_givenMaxBorrowPercentageFuzz"
+        );
 
         // Call function
         vm.prank(recipient);
@@ -513,7 +515,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         redemptionVault.borrowAgainstRedemption(0);
     }
 
-    function test_givenMaxBorrowPercentageIsSmall_givenCommitmentAmountIsSmall_gwhenActualLoanAmountIsLessThanOne_reverts(
+    function test_givenMaxBorrowPercentageIsSmall_givenCommitmentAmountIsSmall_whenActualLoanAmountIsLessThanOne_reverts(
         uint256 redemptionAmount_
     )
         public
@@ -529,7 +531,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, redemptionAmount_);
 
         // Expect revert
-        _expectRevertMaxBorrowPercentageNotSet(iReserveToken);
+        _expectRevertDepositFacilityZeroAmount();
 
         // Call function
         vm.prank(recipient);

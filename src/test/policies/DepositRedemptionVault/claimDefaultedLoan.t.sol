@@ -691,6 +691,11 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
     {
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
+        // Validate the loan amount (since there are assumptions)
+        assertEq(loan.initialPrincipal, 9999, "loan initial principal mismatch");
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
         // Expect events
         vm.expectEmit(true, true, true, true);
         emit LoanDefaulted(recipient, 0, loan.principal, loan.interest, 10000);
@@ -703,16 +708,28 @@ contract DepositRedemptionVaultClaimDefaultedLoanTest is DepositRedemptionVaultT
 
         // Assertions
         // Assert loan
-        _assertLoan(recipient, 0, 10000, 0, 0, true, loan.dueDate);
+        _assertLoan(
+            recipient,
+            0,
+            loan.initialPrincipal, // Doesn't change from the original value
+            0, // Principal is cleared
+            0, // Interest is cleared
+            true, // Loan is defaulted
+            loan.dueDate // Due date doesn't change
+        );
 
         // Assert deposit token balances
-        uint256 remainingCollateral = 10000 - 9999;
+        // Remaining collateral = 10000 - 9999 = 1
+        // An asset amount of 1 would result in < 1 shares
+        uint256 remainingCollateral = 0;
+        // Keeper reward = remainingCollateral * 100 / 100e2
+        // = 1 * 100 / 100e2 = 0.01 (rounded down to 0)
         uint256 keeperReward = 0;
         _assertDepositTokenBalances(
             recipient,
-            loan.principal, // No change
-            remainingCollateral - keeperReward, // Remaining collateral that was not lent out, minus keeper reward
-            keeperReward // Keeper reward
+            recipientReserveTokenBalanceBefore, // No change
+            remainingCollateral,
+            keeperReward
         );
 
         // Assert receipt token balances

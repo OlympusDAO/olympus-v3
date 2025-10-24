@@ -218,7 +218,8 @@ interface IDepositRedemptionVault {
     /// @dev    This function does not take an amount as an argument, because the amount is determined by the redemption
     ///
     /// @param  redemptionId_   The ID of the user redemption
-    function finishRedemption(uint16 redemptionId_) external;
+    /// @return actualAmount    The quantity of deposit tokens transferred to the caller
+    function finishRedemption(uint16 redemptionId_) external returns (uint256 actualAmount);
 
     // ========== BORROWING FUNCTIONS ========== //
 

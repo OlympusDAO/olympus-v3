@@ -48,6 +48,32 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
     }
 
+    // when the amount is less than one share
+    //  [X] it reverts
+
+    function test_whenAmountLessThanOneShare_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenCommitted(OPERATOR, previousDepositActual)
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenVaultAccruesYield(iVault, 10_000e18)
+    {
+        amount_ = bound(amount_, 1, vault.previewMint(1) - 1);
+
+        // Expect revert
+        vm.expectRevert("ZERO_SHARES");
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+    }
+
     // when the amount is greater than the borrowed amount
     //  [X] it transfers the tokens from the payer to the deposit manager
     //  [X] it updates the operator shares
@@ -164,15 +190,16 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
         givenReserveTokenSpendingIsApprovedByRecipient
     {
-        amount_ = bound(
-            amount_,
-            5, // 1 risks a ZERO_SHARES error
-            BORROW_AMOUNT
-        );
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
+
+        amount_ = bound(
+            amount_,
+            vault.previewMint(1), // At least one share in assets, otherwise it will revert
+            BORROW_AMOUNT
+        );
 
         _takeSnapshot();
 
