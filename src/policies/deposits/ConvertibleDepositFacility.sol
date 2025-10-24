@@ -416,6 +416,13 @@ contract ConvertibleDepositFacility is
     // ========== PERIODIC TASKS ========== //
 
     /// @inheritdoc IPeriodicTask
+    /// @dev        This function reverts if:
+    ///             - The caller is not authorized
+    ///
+    ///             Notes:
+    ///             - If disabled, nothing is done
+    ///             - This will attempt to claim yield for all configured assets
+    ///             - If the claimAllYield function fails for any asset, an event will be emitted instead of reverting
     function execute() external onlyRole(HEART_ROLE) {
         // Don't do anything if disabled
         if (!isEnabled) return;
@@ -424,7 +431,7 @@ contract ConvertibleDepositFacility is
             // Do nothing
         } catch {
             // This avoids the periodic task from failing loudly, as the claimAllYield function is not critical to the system
-            revert CDF_ClaimAllYieldFailed();
+            emit ClaimAllYieldFailed();
         }
     }
 

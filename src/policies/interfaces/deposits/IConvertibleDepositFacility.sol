@@ -27,6 +27,8 @@ interface IConvertibleDepositFacility {
 
     event ClaimedYield(address indexed asset, uint256 amount);
 
+    event ClaimAllYieldFailed();
+
     // ========== ERRORS ========== //
 
     error CDF_InvalidArgs(string reason_);
@@ -40,9 +42,6 @@ interface IConvertibleDepositFacility {
     error CDF_InvalidToken(uint256 positionId_, address token_, uint8 periodMonths_);
 
     error CDF_Unsupported(uint256 positionId_);
-
-    /// @dev Used when the claimAllYield function fails during a periodic task
-    error CDF_ClaimAllYieldFailed();
 
     // ========== DATA STRUCTURES ========== //
 
