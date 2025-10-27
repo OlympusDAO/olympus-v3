@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 // Interfaces
-import {IDepositRewardsDistributor} from "../interfaces/IDepositRewardsDistributor.sol";
+import {IRewardDistributor} from "../interfaces/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Libraries
@@ -16,26 +16,18 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @title  Deposit Rewards Distributor
-/// @notice Merkle tree-based rewards distribution for deposit rewards program
-/// @dev    This contract allows users to accumulate rewards based on their convertible deposit positions
-///         and claim rewards from a weekly Merkle tree distribution. Users can claim multiple weeks
-///         in a single transaction for gas efficiency.
-///
-///         Key Features:
-///         - Off-chain rewards calculation with on-chain verification via Merkle proofs
-///         - Weekly merkle root updates by authorized updaters
-///         - Multi-week batch claiming to reduce gas costs
-///         - Emergency pause functionality
-///         - Rewards paid from treasury (typically USDS from yield generation)
+/// @title  Reward Distributor
+/// @notice Merkle tree-based rewards distribution
+/// @dev    This contract allows users to accumulate rewards based on their protocol activity
+///         and claim rewards from a weekly Merkle tree distribution.
 ///
 ///         Architecture:
-///         - Rewards are calculated off-chain based on deposit amount × time held
+///         - Rewards are calculated off-chain
 ///         - Backend generates weekly merkle trees with accumulated rewards per user
-///         - Merkle roots are posted on-chain by authorized role (typically multisig or automated keeper)
+///         - Merkle roots are posted on-chain by authorized role
 ///         - Users submit proofs to claim their rewards
 ///
-contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDistributor {
+contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     using TransferHelper for ERC20;
 
     /// @notice Role that can update merkle roots
@@ -133,7 +125,12 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
         bytes32 merkleRoot_,
         address rewardToken_,
         string calldata ipfsHash_
-    ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (uint256 week, uint256 timestamp) {
+    )
+        external
+        onlyAuthorized(ROLE_MERKLE_UPDATER)
+        onlyEnabled
+        returns (uint256 week, uint256 timestamp)
+    {
         // Validate inputs
         if (merkleRoot_ == bytes32(0)) revert DRD_InvalidProof();
         if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
@@ -168,7 +165,6 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
     /// @dev    This function handles both single week and multi-week claims.
     ///         For single week: pass arrays of length 1.
     ///         For multiple weeks: automatically handles different reward tokens (up to 2).
-    ///         Groups claims by token internally for efficient transfers.
     ///
     /// @param  weeks_      Array of week numbers to claim (can be length 1 for single week)
     /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
@@ -183,8 +179,6 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
             revert DRD_ArrayLengthMismatch();
         }
 
-        // We'll accumulate amounts per token in memory
-        // For simplicity, we use a maximum of 2 different tokens per batch
         address token1;
         address token2;
         uint256 amount1;
@@ -244,7 +238,7 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
         require(!hasClaimed[user_][week_], DRD_AlreadyClaimed(week_));
 
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
-        // We include week in the leaf to prevent replay attacks across weeks
+        // Week is included in the leaf to prevent replay attacks across weeks
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
         // Verify merkle proof (week validity already checked by caller)
@@ -255,8 +249,6 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
     }
 
     /// @notice Internal function to transfer rewards from treasury and update accounting
-    /// @dev    Returns early if amount is 0 (no-op). Handles complete reward transfer flow:
-    ///         treasury withdrawal, state updates, and event emission.
     /// @param  to_         Address to transfer rewards to
     /// @param  token_      Reward token address
     /// @param  amount_     Amount to transfer
@@ -284,10 +276,11 @@ contract DepositRewardsDistributor is Policy, PolicyEnabler, IDepositRewardsDist
 
     // ========== ERC165 ========== //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override(PolicyEnabler, IERC165) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(PolicyEnabler, IERC165) returns (bool) {
         return
-            interfaceId == type(IDepositRewardsDistributor).interfaceId ||
+            interfaceId == type(IRewardDistributor).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
-

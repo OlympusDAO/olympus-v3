@@ -3,12 +3,17 @@ pragma solidity >=0.8.20;
 
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
-/// @title  IDepositRewardsDistributor
-/// @notice Interface for the Deposit Rewards Distributor contract
-interface IDepositRewardsDistributor is IERC165 {
+/// @title  IRewardDistributor
+/// @notice Interface for the Reward Distributor contract
+interface IRewardDistributor is IERC165 {
     // ========== EVENTS ========== //
 
-    event MerkleRootSet(uint256 indexed week, bytes32 merkleRoot, address rewardToken, string ipfsHash);
+    event MerkleRootSet(
+        uint256 indexed week,
+        bytes32 merkleRoot,
+        address rewardToken,
+        string ipfsHash
+    );
     event RewardsClaimed(
         address indexed user,
         uint256 totalAmount,
