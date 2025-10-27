@@ -89,6 +89,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         IConvertibleDepositAuctioneer.Tick memory tickPreUpdate = auctioneer.getCurrentTick(
             PERIOD_MONTHS
         );
+        uint48 lastUpdate = uint48(block.timestamp);
         uint256 tickSize = auctioneer.getCurrentTickSize();
 
         // Expect event
@@ -106,12 +107,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         vm.warp(block.timestamp + 4 hours);
 
         // Assert that the tick is updated prior to the tick step update
-        _assertPreviousTick(
-            tickPreUpdate.capacity,
-            tickPreUpdate.price,
-            tickSize,
-            tickPreUpdate.lastUpdate
-        );
+        _assertPreviousTick(tickPreUpdate.capacity, tickPreUpdate.price, tickSize, lastUpdate);
     }
 
     function test_contractActive_givenBid(
@@ -125,6 +121,7 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         IConvertibleDepositAuctioneer.Tick memory tickPreUpdate = auctioneer.getCurrentTick(
             PERIOD_MONTHS
         );
+        uint48 lastUpdate = uint48(block.timestamp);
         uint256 tickSize = auctioneer.getCurrentTickSize();
 
         // Expect event
@@ -142,11 +139,6 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
         vm.warp(block.timestamp + 4 hours);
 
         // Assert that the tick is updated prior to the tick step update
-        _assertPreviousTick(
-            tickPreUpdate.capacity,
-            tickPreUpdate.price,
-            tickSize,
-            tickPreUpdate.lastUpdate
-        );
+        _assertPreviousTick(tickPreUpdate.capacity, tickPreUpdate.price, tickSize, lastUpdate);
     }
 }
