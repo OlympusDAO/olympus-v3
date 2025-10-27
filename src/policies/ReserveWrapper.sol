@@ -77,8 +77,14 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
         Keycode trsryKeycode = TRSRY.KEYCODE();
 
         permissions = new Permissions[](2);
-        permissions[0] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.withdrawReserves.selector});
-        permissions[1] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.increaseWithdrawApproval.selector});
+        permissions[0] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
+        permissions[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
     }
 
     /// @notice Returns the version of the policy.
