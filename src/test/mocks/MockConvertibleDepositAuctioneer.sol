@@ -16,6 +16,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint256 public target;
     uint256 public tickSize;
     uint256 public minPrice;
+    uint256 public minimumBid;
 
     constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
         _depositAsset = IERC20(depositAsset_);
@@ -130,4 +131,12 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     ) external view override returns (bool, bool) {}
 
     function getDepositPeriodsCount() external view override returns (uint256) {}
+
+    function getMinimumBid() external view override returns (uint256) {
+        return minimumBid;
+    }
+
+    function setMinimumBid(uint256 newMinimumBid) external override {
+        minimumBid = newMinimumBid;
+    }
 }

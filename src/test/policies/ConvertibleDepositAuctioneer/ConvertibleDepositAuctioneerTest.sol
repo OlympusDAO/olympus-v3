@@ -76,6 +76,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         address indexed depositAsset,
         uint8 newAuctionTrackingPeriod
     );
+    event MinimumBidUpdated(address indexed depositAsset, uint256 newMinimumBid);
     event AuctionResult(
         address indexed depositAsset,
         uint256 ohmConvertible,
