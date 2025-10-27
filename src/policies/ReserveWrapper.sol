@@ -104,6 +104,14 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
     // ========== PERIODIC TASK ========== //
 
     /// @inheritdoc IPeriodicTask
+    /// @dev        This function reverts if:
+    ///             - The caller is not authorized
+    ///
+    ///             Notes:
+    ///             - If this contract disabled, nothing is done
+    ///             - If the reserve balance is 0, nothing is done
+    ///             - If the previewDeposit would result in zero shares, nothing is done
+    ///             - If TRSRY is not active, nothing is done
     function execute() external override onlyRole(HEART_ROLE) {
         // Skip if the policy is not enabled
         if (!isEnabled) return;
@@ -118,6 +126,11 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
 
         // Skip if depositing the balance would result in zero shares (as we don't want this to revert)
         if (_SRESERVE.previewDeposit(reserveBalance) == 0) {
+            return;
+        }
+
+        // Skip if TRSRY is not active (as it would revert)
+        if (!TRSRY.active()) {
             return;
         }
 
