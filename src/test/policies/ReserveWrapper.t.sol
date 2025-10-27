@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -140,6 +141,7 @@ contract ReserveWrapperTest is Test {
 
         // Expect revert
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("heart"))
         );
 
@@ -226,3 +228,4 @@ contract ReserveWrapperTest is Test {
         assertEq(sReserve.balanceOf(address(TRSRY)), expectedShares, "sReserve balance mismatch");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable, unwrapped-modifier-logic)
