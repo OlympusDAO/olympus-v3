@@ -1312,6 +1312,68 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    function test_convertedAmountGreaterThanTickCapacity_smallTickStep()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 796064875e20)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 796064875e20)
+    {
+        uint256 reserveTokenBalance = 796064875e20;
+        uint256 bidAmount = reserveTokenBalance - 1;
+
+        vm.prank(admin);
+        auctioneer.setTickStep(10001);
+
+        vm.startSnapshotGas("bid_smallTickStep");
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
+
+        vm.stopSnapshotGas();
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_smallTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, 1e3, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 100e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 100e18)
+    {
+        // We want the converted amount to be >= 2 * day target, 40e9
+        // Max bid amount = tick size * price / 1e9
+        // Tick one: tick size 1e3, price is 15e18, max bid amount is 15000000000000
+        // Tick two: tick size 1e3, price is 165e17, max bid amount is 16500000000000
+        // Tick three: tick size 1e3, price is 1815e16, max bid amount is 18150000000000
+        // Tick four: tick size 1e3, price is 19965e15, max bid amount is 19965000000000
+        // Tick five: tick size 1e3, price is 219615e14, max bid amount is 21961500000000
+        // Tick six: tick size 1e3, price is 2415765e13, max bid amount is 24157650000000
+        // Tick seven: tick size 1e3, price is 26573415e12, max bid amount is 26573415000000
+        // Tick eight: tick size 1e3, price is 29230756500000000000, max bid amount is 29230756500000
+        // Tick nine: tick size 1e3, price is 32153832150000000000, max bid amount is 32153832150000
+        // Tick ten: tick size 1e3, price is 35369215365000000000, max bid amount is 35369215365000
+        // Tick eleven: tick size 1e3, price is 38906136901500000000, max bid amount is 38906136901500
+        // Tick twelve: tick size 1e3, price is 42796750591650000000, max bid amount is 42796750591650
+        // Tick thirteen: tick size 1e3, price is 47076425650815000000, max bid amount is 47076425650815
+        // Tick fourteen: tick size 1e3, price is 51784068215896500000, max bid amount is 51784068215896
+        // Tick fifteen: tick size 1e3, price is 56962475037486150000, max bid amount is 56962475037486
+        // Tick sixteen: tick size 1e3, price is 62658722541234765000, max bid amount is 62658722541234
+        // Tick seventeen: tick size 1e3, price is 68924594795358241500, max bid amount is 68924594795358
+        // Tick eighteen: tick size 1e3, price is 75817054274894065650, max bid amount is 75817054274894
+        // Tick nineteen: tick size 1e3, price is 83398759702383472215, max bid amount is 83398759702383
+        // Total max bid amount = 15000000000000 + 16500000000000 + 18150000000000 + 19965000000000 + 21961500000000 + 24157650000000 + 26573415000000 + 29230756500000 + 32153832150000 + 35369215365000 + 38906136901500 + 42796750591650 + 47076425650815 + 51784068215896 + 56962475037486 + 62658722541234 + 68924594795358 + 75817054274894 + 83398759702383 = 79606487500000000000
+        uint256 bidAmount = 79606487500000000000;
+
+        vm.startSnapshotGas("bid_smallTickSize");
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
+
+        vm.stopSnapshotGas();
+    }
+
     // [X] it reduces the tick size exponentially as multiple day targets are reached
     function test_exponentialTickSizeReduction()
         public
