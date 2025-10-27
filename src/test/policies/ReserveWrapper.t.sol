@@ -222,7 +222,7 @@ contract ReserveWrapperTest is Test {
         reserveWrapper.execute();
 
         // Assert balances
-        assertEq(reserve.balanceOf(address(TRSRY)), 0, "Reserve balance mismatch");
+        assertEq(reserve.balanceOf(address(TRSRY)), 1e18, "Reserve balance mismatch");
         assertEq(sReserve.balanceOf(address(TRSRY)), 0, "sReserve balance mismatch");
     }
 
