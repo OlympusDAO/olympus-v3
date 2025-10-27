@@ -647,7 +647,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
         );
 
         // Validate that the actual loan amount is not 0
-        // This can happen if the
+        // This can happen when calculating the withdrawal amount from a vault
         if (principalActual == 0) revert RedemptionVault_ZeroAmount();
 
         // Emit event
