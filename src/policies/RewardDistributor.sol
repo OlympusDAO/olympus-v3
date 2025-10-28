@@ -168,7 +168,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @param  weeks_      Array of week numbers to claim (can be length 1 for single week)
     /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
     /// @param  proofs_     Array of merkle proofs, one per week
-    function claimMultipleWeeks(
+    function claim(
         uint256[] calldata weeks_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_

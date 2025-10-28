@@ -44,7 +44,7 @@ interface IRewardDistributor is IERC165 {
 
     // ========== USER FUNCTIONS ========== //
 
-    function claimMultipleWeeks(
+    function claim(
         uint256[] calldata weeks_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
