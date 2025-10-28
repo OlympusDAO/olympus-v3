@@ -100,8 +100,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     /// @dev    This function reverts if:
     ///         - amount_ is 0
     ///         - onBehalfOf_ is 0
-    ///         - wrapped_ == true: onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens
-    ///         - wrapped_ == false: onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens
+    ///         - onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens (note: ERC6909 allowances govern both wrapped and unwrapped token burns)
     ///         - ERC6909 token handling reverts
     ///
     /// @param onBehalfOf_   The address to burn the token from

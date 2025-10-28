@@ -70,7 +70,8 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     /// @notice Burn tokens from the specified address
     /// @dev    This is gated to the owner, as burning is controlled.
     ///         Burning should be performed through the owner contract.
-    ///         The owner is expected to handle spending approval.
+    ///         The owner is expected to handle spending approval before calling this function.
+    ///         This function does NOT check or update allowances.
     ///
     /// @param from_ The address to burn tokens from
     /// @param amount_ The amount of tokens to burn
