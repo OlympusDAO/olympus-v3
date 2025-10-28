@@ -69,19 +69,11 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     /// @notice Burn tokens from the specified address
     /// @dev    This is gated to the owner, as burning is controlled.
     ///         Burning should be performed through the owner contract.
-    ///
-    /// @dev    This function reverts if:
-    ///         - The amount is greater than the allowance
+    ///         The owner is expected to handle spending approval.
     ///
     /// @param from_ The address to burn tokens from
     /// @param amount_ The amount of tokens to burn
     function burnFrom(address from_, uint256 amount_) external onlyOwner {
-        uint256 allowed = allowance[from_][msg.sender];
-
-        if (allowed != type(uint256).max) {
-            allowance[from_][msg.sender] = allowed - amount_;
-        }
-
         _burn(from_, amount_);
     }
 

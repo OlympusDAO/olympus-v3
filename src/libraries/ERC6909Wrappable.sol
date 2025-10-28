@@ -100,7 +100,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     /// @dev    This function reverts if:
     ///         - amount_ is 0
     ///         - onBehalfOf_ is 0
-    ///         - wrapped_ == true: onBehalfOf_ has not approved this contract to spend the wrapped ERC20 token
+    ///         - wrapped_ == true: onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens
     ///         - wrapped_ == false: onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens
     ///         - ERC6909 token handling reverts
     ///
@@ -117,17 +117,17 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         if (amount_ == 0) revert ERC6909Wrappable_ZeroAmount();
         if (onBehalfOf_ == address(0)) revert ERC6909InvalidSender(onBehalfOf_);
 
+        // If the caller (spender) is not the owner, check allowance
+        if (onBehalfOf_ != msg.sender) {
+            // Spend allowance (since it is not implemented in _burn())
+            // The spender is msg.sender (the caller), not this contract
+            _spendAllowance(onBehalfOf_, msg.sender, tokenId_, amount_);
+        }
+
         if (wrapped_) {
-            // Will revert if the caller has not approved spending by this contract
+            // Burn the ERC20 token
             _getWrappedToken(tokenId_).burnFrom(onBehalfOf_, amount_);
         } else {
-            // If the caller (spender) is not the owner, check allowance
-            if (onBehalfOf_ != msg.sender) {
-                // Spend allowance (since it is not implemented in _burn())
-                // The spender is msg.sender (the caller), not this contract
-                _spendAllowance(onBehalfOf_, msg.sender, tokenId_, amount_);
-            }
-
             // Burn the ERC6909 token
             _burn(onBehalfOf_, tokenId_, amount_);
         }
