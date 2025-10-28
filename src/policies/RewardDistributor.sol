@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 // Interfaces
-import {IRewardDistributor} from "../interfaces/IRewardDistributor.sol";
+import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Libraries
@@ -26,7 +26,6 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - Backend generates weekly merkle trees with accumulated rewards per user
 ///         - Merkle roots are posted on-chain by authorized role
 ///         - Users submit proofs to claim their rewards
-///
 contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     using TransferHelper for ERC20;
 
