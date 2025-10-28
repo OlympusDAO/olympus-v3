@@ -232,8 +232,12 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         return _wrappableTokenIds.contains(tokenId_);
     }
 
-    modifier onlyValidTokenId(uint256 tokenId_) {
+    function _onlyValidTokenId(uint256 tokenId_) internal view {
         if (!isValidTokenId(tokenId_)) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
+    }
+
+    modifier onlyValidTokenId(uint256 tokenId_) {
+        _onlyValidTokenId(tokenId_);
         _;
     }
 

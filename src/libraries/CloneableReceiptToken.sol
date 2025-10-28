@@ -51,9 +51,13 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
 
     // ========== OWNER-ONLY FUNCTIONS ========== //
 
+    function _onlyOwner() internal view {
+        if (msg.sender != owner()) revert OnlyOwner();
+    }
+
     /// @notice Only the owner can call this function
     modifier onlyOwner() {
-        if (msg.sender != owner()) revert OnlyOwner();
+        _onlyOwner();
         _;
     }
 
