@@ -403,20 +403,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 
-    modifier givenWrappedReceiptTokenSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        IERC20 wrappedReceiptToken = IERC20(
-            depositManager.getReceiptTokenManager().getWrappedToken(receiptTokenId)
-        );
-
-        vm.prank(owner_);
-        wrappedReceiptToken.approve(spender_, amount_);
-        _;
-    }
-
     modifier givenTickStep(uint24 tickStep_) {
         vm.prank(admin);
         auctioneer.setTickStep(tickStep_);
