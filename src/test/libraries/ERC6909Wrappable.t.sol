@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -742,3 +743,4 @@ contract ERC6909WrappableTest is Test {
         assertEq(token.supportsInterface(type(IERC4626).interfaceId), false, "IERC4626 mismatch");
     }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer, unwrapped-modifier-logic)
