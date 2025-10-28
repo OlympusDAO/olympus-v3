@@ -564,27 +564,11 @@ contract ERC6909WrappableTest is Test {
         token.unwrap(999, AMOUNT);
     }
 
-    // when the owner has not approved the contract to spend the ERC20 token
+    // given the owner does not have sufficient ERC20 tokens
     //  [X] it reverts
-
-    function test_unwrap_whenRecipientHasNotApproved_reverts()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC20Tokens
-    {
-        vm.expectRevert(stdError.arithmeticError);
-
-        vm.prank(alice);
-        token.unwrap(TOKEN_ID, AMOUNT);
-    }
-
-    // given the owner has approved the contract to spend the ERC20 token
-    //  given the owner does not have sufficient ERC20 tokens
-    //   [X] it reverts
     function test_unwrap_givenOwnerHasInsufficientERC20Tokens_reverts()
         public
         givenERC20TokenExists
-        givenRecipientHasApprovedWrappedTokenSpending
     {
         vm.expectRevert(stdError.arithmeticError);
 
@@ -600,7 +584,7 @@ contract ERC6909WrappableTest is Test {
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
+        givenRecipientHasApprovedERC6909TokenSpending
     {
         vm.assume(caller_ != alice && caller_ != address(0));
 
@@ -614,12 +598,7 @@ contract ERC6909WrappableTest is Test {
     //  [X] the ERC20 token is burned from the owner
     //  [X] the ERC6909 token supply is increased
     //  [X] the ERC20 token supply is decreased
-    function test_unwrap_givenOwnerHasApproved()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
-    {
+    function test_unwrap() public givenERC20TokenExists givenRecipientHasERC20Tokens {
         // Unwrap the token
         vm.prank(alice);
         token.unwrap(TOKEN_ID, AMOUNT);
