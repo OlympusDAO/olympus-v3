@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
 import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {CloneERC20} from "src/external/clones/CloneERC20.sol";
@@ -82,6 +83,7 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
         // super does not implement ERC165, so no need to call it
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IERC20).interfaceId ||
             interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
             interfaceId_ == type(IDepositReceiptToken).interfaceId;
