@@ -37,6 +37,7 @@ interface IRewardDistributor is IERC165 {
     // ========== ADMIN FUNCTIONS ========== //
 
     function setMerkleRoot(
+        uint256 rewardWeek_,
         bytes32 merkleRoot_,
         address rewardToken_,
         string calldata ipfsHash_

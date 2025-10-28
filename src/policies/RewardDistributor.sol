@@ -115,12 +115,14 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     ///         After the first call, subsequent calls are only allowed after WEEK_DURATION (7 days)
     ///         has passed. The function automatically advances to the next week.
     ///
+    /// @param  rewardWeek_     The week number being set (must equal currentWeek)
     /// @param  merkleRoot_     The merkle root for the week's distribution
     /// @param  rewardToken_    The ERC20 token used for rewards this week
     /// @param  ipfsHash_       IPFS hash containing full distribution data for transparency
     /// @return week            The week number that was set
     /// @return timestamp       The new lastRootSetTimestamp (when this week ends)
     function setMerkleRoot(
+        uint256 rewardWeek_,
         bytes32 merkleRoot_,
         address rewardToken_,
         string calldata ipfsHash_
@@ -137,6 +139,9 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         // Cache storage variables to save gas
         uint256 lastTimestamp = lastRootSetTimestamp;
         week = currentWeek;
+
+        // Ensure the passed rewardWeek matches the current week
+        if (rewardWeek_ != week) revert DRD_InvalidWeek(rewardWeek_);
 
         // Ensure at least WEEK_DURATION has passed since the last root was set
         if (block.timestamp < lastTimestamp + WEEK_DURATION) {
