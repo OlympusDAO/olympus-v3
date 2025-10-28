@@ -8,6 +8,9 @@ import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC6909, IERC6909Metadata, IERC6909TokenSupply} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract ERC6909WrappableTest is Test {
     MockERC6909Wrappable public token;
@@ -714,5 +717,28 @@ contract ERC6909WrappableTest is Test {
         // Balance should remain the same
         assertERC20Balance(alice, initialBalance);
         assertERC20TotalSupply(initialTotalSupply);
+    }
+
+    // ERC165
+    function test_supportsInterface() public view {
+        assertEq(token.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
+        assertEq(
+            token.supportsInterface(type(IERC6909Wrappable).interfaceId),
+            true,
+            "IERC6909Wrappable mismatch"
+        );
+        assertEq(
+            token.supportsInterface(type(IERC6909TokenSupply).interfaceId),
+            true,
+            "IERC6909TokenSupply mismatch"
+        );
+        assertEq(
+            token.supportsInterface(type(IERC6909Metadata).interfaceId),
+            true,
+            "IERC6909Metadata mismatch"
+        );
+        assertEq(token.supportsInterface(type(IERC6909).interfaceId), true, "IERC6909 mismatch");
+        assertEq(token.supportsInterface(type(IERC20).interfaceId), false, "IERC20 mismatch");
+        assertEq(token.supportsInterface(type(IERC4626).interfaceId), false, "IERC4626 mismatch");
     }
 }
