@@ -188,8 +188,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         Keycode mintrKeycode = toKeycode("MINTR");
 
         permissions = new Permissions[](2);
-        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+        permissions[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[1] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.mintOhm.selector});
 
         return permissions;
     }

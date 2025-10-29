@@ -111,9 +111,18 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
-        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[0] = Permissions({
+            keycode: PRICE.KEYCODE(),
+            funcSelector: PRICE.updateMovingAverage.selector
+        });
+        permissions[1] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.mintOhm.selector
+        });
+        permissions[2] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
     }
 
     /// @notice Returns the version of the policy.
