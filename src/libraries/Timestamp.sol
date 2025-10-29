@@ -4,6 +4,13 @@ pragma solidity >=0.8.15;
 import {uint2str} from "./Uint2Str.sol";
 
 library Timestamp {
+    /// @notice Convert a timestamp to a padded string of the form "YYYY-MM-DD"
+    /// @dev    Note that as the timestamp is a uint48, it is not possible to represent dates after 2345.
+    ///
+    /// @param timestamp    The timestamp to convert
+    /// @return year        Year as a zero-padded string
+    /// @return month       Month as a zero-padded string
+    /// @return day         Day as a zero-padded string
     function toPaddedString(
         uint48 timestamp
     ) internal pure returns (string memory, string memory, string memory) {
