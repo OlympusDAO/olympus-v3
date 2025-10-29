@@ -80,7 +80,13 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
         // Create the wrappable token with proper metadata layout for CloneableReceiptToken
         string memory tokenName = string
-            .concat(operatorName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
+            .concat(
+                operatorName_,
+                asset_.name(),
+                " - ",
+                uint2str(depositPeriod_),
+                depositPeriod_ == 1 ? " month" : " months"
+            )
             .truncate32();
         string memory tokenSymbol = string
             .concat(operatorName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
