@@ -289,6 +289,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         bytes4 interfaceId_
     ) public view virtual override(ERC6909, IERC165) returns (bool) {
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IERC6909Wrappable).interfaceId ||
             interfaceId_ == type(IERC6909Metadata).interfaceId ||
             interfaceId_ == type(IERC6909TokenSupply).interfaceId ||

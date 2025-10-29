@@ -186,6 +186,8 @@ contract PositionTokenRenderer is IPositionTokenRenderer {
     // ========== ERC165 SUPPORT ========== //
 
     function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
-        return interfaceId_ == type(IPositionTokenRenderer).interfaceId;
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IPositionTokenRenderer).interfaceId;
     }
 }

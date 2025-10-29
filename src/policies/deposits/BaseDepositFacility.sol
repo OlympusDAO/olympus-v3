@@ -8,6 +8,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -650,6 +651,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
+            interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IDepositFacility).interfaceId ||
             super.supportsInterface(interfaceId);
     }

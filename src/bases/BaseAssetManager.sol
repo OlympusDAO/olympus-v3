@@ -5,6 +5,7 @@ pragma solidity >=0.8.20;
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -338,6 +339,8 @@ abstract contract BaseAssetManager is IAssetManager {
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return interfaceId == type(IAssetManager).interfaceId;
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IAssetManager).interfaceId;
     }
 }
