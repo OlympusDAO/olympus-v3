@@ -430,7 +430,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasDeficit() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = -int256(DEFICIT) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = int256(DEFICIT);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -438,7 +440,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasSurplus() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = int256(SURPLUS) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = -int256(SURPLUS);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -970,6 +974,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
@@ -1218,6 +1223,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
