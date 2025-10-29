@@ -375,9 +375,12 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 bondScale = 10 **
             uint8(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
 
@@ -436,6 +439,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        /// forge-lint: disable-next-line(unsafe-typecast)
         return decimals - int8(_oracleDecimals);
     }
 

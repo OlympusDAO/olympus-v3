@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // External libraries
@@ -249,3 +250,4 @@ contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePer
         }
     }
 }
+/// forge-lint: disable-end(mixed-case-variable)

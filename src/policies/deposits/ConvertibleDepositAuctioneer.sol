@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(screaming-snake-case-const)
 pragma solidity >=0.8.20;
 
 // Libraries
@@ -1176,3 +1177,4 @@ contract ConvertibleDepositAuctioneer is
         _auctionResultsNextIndex = 0;
     }
 }
+/// forge-lint: disable-end(screaming-snake-case-const)

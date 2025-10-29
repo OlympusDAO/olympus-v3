@@ -13,6 +13,7 @@ interface IEmissionManager {
 
     // ========== EVENTS ========== //
 
+    /// forge-lint: disable-next-line(mixed-case-variable)
     event SaleCreated(uint256 marketID, uint256 saleAmount);
 
     event BondMarketCreationFailed(uint256 saleAmount);
