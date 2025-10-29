@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity >=0.8.20;
 
 import {ReceiptTokenManagerTest} from "./ReceiptTokenManagerTest.sol";
@@ -263,3 +264,4 @@ contract ReceiptTokenManagerTransferTest is ReceiptTokenManagerTest {
         uint256 amount
     );
 }
+/// forge-lint: disable-end(mixed-case-variable)

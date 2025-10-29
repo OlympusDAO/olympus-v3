@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -48,6 +49,7 @@ abstract contract PeriodicTaskManagerTest is Test {
 
         // Grant permissions
         vm.startPrank(OWNER);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("admin"), ADMIN);
         vm.stopPrank();
 
@@ -77,6 +79,7 @@ abstract contract PeriodicTaskManagerTest is Test {
 
     function _expectRevertNotAdmin() internal {
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
         );
     }
@@ -157,3 +160,4 @@ abstract contract PeriodicTaskManagerTest is Test {
         assertEq(customSelectors.length, customSelectors_.length, "customSelectors.length");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable, unwrapped-modifier-logic)
