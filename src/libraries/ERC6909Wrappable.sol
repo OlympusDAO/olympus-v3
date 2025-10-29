@@ -116,10 +116,10 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         if (amount_ == 0) revert ERC6909Wrappable_ZeroAmount();
         if (onBehalfOf_ == address(0)) revert ERC6909InvalidSender(onBehalfOf_);
 
-        // If the caller (spender) is not the owner, check allowance
+        // If the caller is not the owner, check allowance
         if (onBehalfOf_ != msg.sender) {
-            // Spend allowance (since it is not implemented in _burn())
-            // The spender is msg.sender (the caller), not this contract
+            // Spend allowance (since it is not implemented in `ERC6909._burn()` or `CloneableReceiptToken.burnFrom()`)
+            // The caller is the spender, not this contract
             _spendAllowance(onBehalfOf_, msg.sender, tokenId_, amount_);
         }
 
