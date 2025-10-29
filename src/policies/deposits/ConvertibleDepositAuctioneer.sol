@@ -783,8 +783,7 @@ contract ConvertibleDepositAuctioneer is
         return (isEnabled, isPendingEnabled);
     }
 
-    /// @notice Modifier to check if a deposit period is enabled
-    modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
+    function _onlyDepositPeriodEnabled(uint8 depositPeriod_) internal view {
         (bool isEnabled, ) = isDepositPeriodEnabled(depositPeriod_);
         if (!isEnabled) {
             revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
@@ -792,6 +791,11 @@ contract ConvertibleDepositAuctioneer is
                 depositPeriod_
             );
         }
+    }
+
+    /// @notice Modifier to check if a deposit period is enabled
+    modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
+        _onlyDepositPeriodEnabled(depositPeriod_);
         _;
     }
 

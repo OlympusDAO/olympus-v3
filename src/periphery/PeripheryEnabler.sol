@@ -17,13 +17,21 @@ abstract contract PeripheryEnabler is IEnabler {
 
     // ========= MODIFIERS ========= //
 
-    modifier onlyEnabled() {
+    function _onlyEnabled() internal view {
         if (!isEnabled) revert NotEnabled();
+    }
+
+    modifier onlyEnabled() {
+        _onlyEnabled();
         _;
     }
 
-    modifier onlyDisabled() {
+    function _onlyDisabled() internal view {
         if (isEnabled) revert NotDisabled();
+    }
+
+    modifier onlyDisabled() {
+        _onlyDisabled();
         _;
     }
 
