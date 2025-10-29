@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -116,3 +117,4 @@ contract PolicyEnablerTest is Test {
         );
     }
 }
+/// forge-lint: disable-end(unwrapped-modifier-logic)

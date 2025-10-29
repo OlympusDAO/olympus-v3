@@ -137,12 +137,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
+        /// forge-lint: disable-start(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("manager"), manager);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Enable the deposit manager policy
         vm.prank(admin);

@@ -747,6 +747,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         kernel.executeAction(Actions.ActivatePolicy, address(facility2));
 
         // Grant roles to the second facility
+        /// forge-lint: disable-next-line(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility2));
 
         // Enable the second facility

@@ -29,6 +29,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
 
         // Expect revert
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
         );
 
@@ -62,6 +63,7 @@ contract PolicyEnablerEnableTest is PolicyEnablerTest {
     function test_callerHasEmergencyRole_reverts() public {
         // Expect revert
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
         );
 

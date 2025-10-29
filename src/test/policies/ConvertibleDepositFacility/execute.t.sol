@@ -68,6 +68,7 @@ contract ConvertibleDepositFacilityExecuteTest is ConvertibleDepositFacilityTest
         // Create a new facility
         facility = new ConvertibleDepositFacility(address(kernel), address(depositManager));
         kernel.executeAction(Actions.ActivatePolicy, address(facility));
+        /// forge-lint: disable-next-line(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
 
         // Enable the facility

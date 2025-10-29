@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -153,6 +154,7 @@ contract DepositRedemptionVaultTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
+        /// forge-lint: disable-start(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
@@ -160,6 +162,7 @@ contract DepositRedemptionVaultTest is Test {
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(cdFacilityTwo));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
         rolesAdmin.grantRole(bytes32("manager"), manager);
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Enable the deposit manager
         vm.prank(admin);
@@ -1172,3 +1175,4 @@ contract DepositRedemptionVaultTest is Test {
         );
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)

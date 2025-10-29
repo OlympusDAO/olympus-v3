@@ -293,6 +293,7 @@ contract DepositManagerTest is Test {
 
     function _expectRevertNotDepositOperator() internal {
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("deposit_operator"))
         );
     }
