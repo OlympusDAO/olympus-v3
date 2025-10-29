@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable custom-errors
+// solhint-disable immutable-vars-naming
 pragma solidity >=0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
