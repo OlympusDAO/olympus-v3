@@ -212,7 +212,6 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     ///             This function reverts if:
     ///             - The token ID does not exist
     ///             - The amount is zero
-    ///             - The caller has not approved this contract to spend the wrapped token
     ///             - The caller has an insufficient balance of the wrapped token
     function unwrap(uint256 tokenId_, uint256 amount_) public {
         // Burn the wrapped ERC20 token
