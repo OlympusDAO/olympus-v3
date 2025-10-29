@@ -336,7 +336,7 @@ contract CloneableReceiptTokenTest is Test {
     function test_transferFrom_whenCallerIsNotApprovedSpender_reverts(
         address caller_
     ) public givenTokensAreMinted {
-        vm.assume(caller_ != bob);
+        vm.assume(caller_ != bob && caller_ != alice);
 
         vm.expectRevert(stdError.arithmeticError);
 
