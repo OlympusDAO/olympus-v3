@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 // Libraries
@@ -733,3 +734,4 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)

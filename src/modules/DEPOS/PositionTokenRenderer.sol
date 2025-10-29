@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -191,3 +192,4 @@ contract PositionTokenRenderer is IPositionTokenRenderer {
             interfaceId_ == type(IPositionTokenRenderer).interfaceId;
     }
 }
+/// forge-lint: disable-end(mixed-case-function)
