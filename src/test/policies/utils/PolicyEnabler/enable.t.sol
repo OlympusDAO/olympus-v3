@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";

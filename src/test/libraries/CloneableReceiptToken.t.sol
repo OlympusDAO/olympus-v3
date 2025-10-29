@@ -12,6 +12,7 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 contract CloneableReceiptTokenTest is Test {
     using ClonesWithImmutableArgs for address;
@@ -475,6 +476,7 @@ contract CloneableReceiptTokenTest is Test {
 
     // ERC165
     function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(token));
         assertEq(token.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
         assertEq(token.supportsInterface(type(IERC20).interfaceId), true, "IERC20 mismatch");
         assertEq(

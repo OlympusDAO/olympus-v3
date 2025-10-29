@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.15;
-
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+pragma solidity >=0.8.0;
 
 library ERC165Helper {
     error ERC165Helper_SupportsInterfaceFailed();
@@ -11,7 +9,7 @@ library ERC165Helper {
     /// @dev    This function will revert if the contract does not support the IERC165 interface
     ///         The approach to detect support for ERC-165 is documented here: https://eips.ethereum.org/EIPS/eip-165#how-to-detect-if-a-contract-implements-erc-165
     function validateSupportsInterface(address contract_) internal view {
-        (bool success, bytes memory data) = contract_.staticcall(abi.encodeWithSelector(IERC165.supportsInterface.selector, bytes4(0x01ffc9a7)));
+        (bool success, bytes memory data) = contract_.staticcall(abi.encodeWithSelector(bytes4(0x01ffc9a7), bytes4(0x01ffc9a7)));
 
         if (!success) revert ERC165Helper_SupportsInterfaceFailed();
 

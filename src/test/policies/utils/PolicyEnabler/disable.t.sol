@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {PolicyEnablerTest} from "./PolicyEnablerTest.sol";

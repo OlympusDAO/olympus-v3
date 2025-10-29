@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
