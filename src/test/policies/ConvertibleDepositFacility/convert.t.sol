@@ -4,7 +4,6 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {stdError} from "forge-std/StdError.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {Actions} from "src/Kernel.sol";
