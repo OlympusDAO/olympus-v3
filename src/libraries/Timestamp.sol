@@ -14,7 +14,7 @@ library Timestamp {
         uint256 month;
         uint256 day;
         {
-            int256 __days = int256(int48(timestamp) / 1 days);
+            int256 __days = int256(uint256(timestamp) / 1 days);
 
             int256 num1 = __days + 68_569 + 2_440_588; // 2440588 = OFFSET19700101
             int256 num2 = (4 * num1) / 146_097;
