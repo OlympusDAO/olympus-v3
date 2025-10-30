@@ -515,6 +515,15 @@ contract EmissionManagerTest is Test {
         _;
     }
 
+    function _expectRevertRoleRequired(string memory role_) internal {
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32(bytes(role_))
+        );
+        vm.expectRevert(err);
+    }
+
     // execute test cases
 
     function test_execute_whenNotLocallyActive_NothingHappens() public {
@@ -564,9 +573,7 @@ contract EmissionManagerTest is Test {
 
     function test_execute_withoutHeartRole_reverts() public {
         // Call the function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("heart"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("heart");
 
         // Call the function
         vm.startPrank(guardian);
@@ -2502,9 +2509,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently enabled
         // Call the restart function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
 
@@ -2514,7 +2520,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently locally inactive
         // Try to call restart again with the wrong caller
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
     }
@@ -2566,9 +2573,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.enable(
             abi.encode(
@@ -2860,9 +2866,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the changeBaseRate function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.changeBaseRate(1e18, 1, true);
     }
@@ -2943,9 +2948,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setMinimumPremium function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setMinimumPremium(1e18);
     }
@@ -2982,9 +2986,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBacking function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBacking(11e18);
     }
@@ -3018,9 +3021,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setRestartTimeframe function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setRestartTimeframe(1);
     }
@@ -3054,9 +3056,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBondContracts function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBondContracts(address(1), address(1));
     }
@@ -3097,9 +3098,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setCDAuctionContract function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setCDAuctionContract(address(1));
     }
@@ -3145,9 +3145,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setTickSize function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
 
         vm.prank(rando_);
         emissionManager.setTickSize(1e9);
