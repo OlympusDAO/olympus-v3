@@ -422,6 +422,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("- Target: 1000 OHM");
         console2.log("- Tick size: 200 OHM");
         console2.log("- Min price: 22 USDS/OHM");
+        console2.log("- Tick size base: 2.0");
         console2.log("- Tick step: 110% (10% increase)");
         console2.log("- Tracking period: 7 days");
 
