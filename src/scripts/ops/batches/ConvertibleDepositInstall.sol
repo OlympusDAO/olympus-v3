@@ -436,6 +436,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                         target: 1000e9, // 1000 OHM
                         tickSize: 200e9, // 200 OHM per tick
                         minPrice: 22e18, // 22 USDS / OHM
+                        tickSizeBase: 2e18, // 2.0
                         tickStep: 110e2, // 10% increase
                         auctionTrackingPeriod: 7 // 7 days
                     })

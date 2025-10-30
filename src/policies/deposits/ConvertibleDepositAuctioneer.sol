@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 
 // Libraries
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
@@ -51,11 +52,18 @@ contract ConvertibleDepositAuctioneer is
 
     uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice Fixed point scale (WAD)
+    uint256 internal constant WAD = 1e18;
+
+    /// @notice Minimum and maximum allowed tick size base (in WAD)
+    uint256 internal constant TICK_SIZE_BASE_MIN = 1e18; // 1.0
+    uint256 internal constant TICK_SIZE_BASE_MAX = 10e18; // 10.0
+
     /// @notice Seconds in one day
     uint256 internal constant SECONDS_IN_DAY = 1 days;
 
     /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 192;
 
     /// @notice The minimum tick size
     uint256 internal constant _TICK_SIZE_MINIMUM = 1;
@@ -119,6 +127,9 @@ contract ConvertibleDepositAuctioneer is
     /// @dev    The minimum bid amount is the minimum amount of deposit asset that can be bid
     ///         See `getMinimumBid()` for more information
     uint256 internal _minimumBid;
+
+    /// @notice The base used for exponential tick size reduction (by 1/(base^multiplier)) when the day target is crossed (WAD, 1e18 = 1.0)
+    uint256 internal _tickSizeBase;
 
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
@@ -473,14 +484,14 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @notice Internal function to calculate the new tick size based on the amount of OHM that has been converted in the current day
-    /// @dev    This implements an exponential reduction of the tick size for every multiple of the day target that is reached
+    /// @dev    This implements exponential tick size reduction (by 1/(base^multiplier)) for each multiple of the day target that is reached
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
     function _getNewTickSize(
         uint256 ohmOut_,
         AuctionParameters memory auctionParams_
-    ) internal pure returns (uint256 newTickSize) {
+    ) internal view returns (uint256 newTickSize) {
         // If the day target is zero, the tick size is always the configured size (which should be 0 to disable auction)
         if (auctionParams_.target == 0) {
             return auctionParams_.tickSize;
@@ -495,8 +506,13 @@ contract ConvertibleDepositAuctioneer is
             return newTickSize;
         }
 
-        // Otherwise the tick size is halved as many times as the multiplier
-        newTickSize = auctionParams_.tickSize >> multiplier;
+        // Otherwise, the tick size is reduced by a factor of (base^multiplier) (WAD base)
+        // divisor = _tickSizeBase^multiplier (scaled by 1e18 via rpow)
+        uint256 divisor = FixedPointMathLib.rpow(_tickSizeBase, multiplier, WAD);
+        if (divisor == 0) return _TICK_SIZE_MINIMUM;
+
+        // newTickSize = tickSize * WAD / divisor (round down)
+        newTickSize = auctionParams_.tickSize.mulDiv(WAD, divisor);
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
@@ -1098,6 +1114,28 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
+    function getTickSizeBase() external view override returns (uint256) {
+        return _tickSizeBase;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN or ROLE_MANAGER role
+    ///             - The new tick size base is not within the bounds (1e18 ≤ base ≤ 10e18)
+    ///
+    /// @param      newBase_    The new tick size base
+    function setTickSizeBase(uint256 newBase_) public override onlyManagerOrAdminRole {
+        // Bounds: 1e18 ≤ base ≤ 10e18
+        if (newBase_ < TICK_SIZE_BASE_MIN || newBase_ > TICK_SIZE_BASE_MAX)
+            revert ConvertibleDepositAuctioneer_InvalidParams("tick size base");
+
+        // Do not snapshot/update current ticks; applies during bidding only
+        _tickSizeBase = newBase_;
+
+        emit TickSizeBaseUpdated(address(_DEPOSIT_ASSET), newBase_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
     /// @dev        Notes:
     ///             - Calling this function will erase the previous auction results, which in turn may affect the bond markets created to sell under-sold OHM capacity
     ///
@@ -1162,10 +1200,15 @@ contract ConvertibleDepositAuctioneer is
         _setAuctionParameters(params.target, params.tickSize, params.minPrice);
 
         // Set the tick step
+        // OK to call this as the caller will have admin role
         setTickStep(params.tickStep);
 
         // Set the auction tracking period
         setAuctionTrackingPeriod(params.auctionTrackingPeriod);
+
+        // Set the tick size base
+        // OK to call this as the caller will have admin role
+        setTickSizeBase(params.tickSizeBase);
 
         // Ensure all existing ticks have the current parameters
         // Also set the lastUpdate to the current block timestamp

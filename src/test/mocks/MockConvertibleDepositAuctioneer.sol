@@ -19,6 +19,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint256 public target;
     uint256 public tickSize;
     uint256 public minPrice;
+    uint256 public tickSizeBase;
     uint256 public minimumBid;
 
     constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
@@ -141,6 +142,14 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
 
     function setMinimumBid(uint256 newMinimumBid) external override {
         minimumBid = newMinimumBid;
+    }
+
+    function getTickSizeBase() external view override returns (uint256) {
+        return tickSizeBase;
+    }
+
+    function setTickSizeBase(uint256 newBase) external override {
+        tickSizeBase = newBase;
     }
 }
 /// forge-lint: disable-end(screaming-snake-case-immutable)
