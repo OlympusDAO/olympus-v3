@@ -470,6 +470,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("cd_emissionmanager"),
                 emissionManager
             )
@@ -478,6 +479,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Granting heart role to:", heart);
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
         );
 

@@ -527,9 +527,9 @@ contract EmissionManagerTest is Test {
     }
 
     function _expectRevertRoleRequired(string memory role_) internal {
-        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
+            /// forge-lint: disable-next-line(unsafe-typecast)
             bytes32(bytes(role_))
         );
         vm.expectRevert(err);

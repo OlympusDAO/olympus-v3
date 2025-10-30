@@ -274,6 +274,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             if (difference < 0) {
                 // Apply the capacity scalar to the remainder
                 // Round down in favour of the protocol (fewer emissions)
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 uint256 scaledCapacity = uint256(-difference).mulDiv(
                     bondMarketCapacityScalar,
                     ONE_HUNDRED_PERCENT
@@ -389,17 +390,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
             10 ** _reserveDecimals;
         int8 priceDecimals = _getPriceDecimals(minPrice);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-        /// forge-lint: disable-next-line(unsafe-typecast)
+        /// forge-lint: disable-start(unsafe-typecast)
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 bondScale = 10 **
             uint8(
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Create new bond market to buy the reserve with OHM
         activeMarketId = bondAuctioneer.createMarket(
