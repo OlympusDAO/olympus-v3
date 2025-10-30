@@ -51,6 +51,9 @@ contract ConvertibleDepositAuctioneer is
 
     uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice Seconds in one day
+    uint256 internal constant SECONDS_IN_DAY = 1 days;
+
     /// @notice The length of the enable parameters
     uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
 
@@ -533,7 +536,7 @@ contract ConvertibleDepositAuctioneer is
             // The capacity to add is the day target multiplied by the proportion of time passed in a day
             // It is also adjusted by the number of deposit periods that are enabled, otherwise each auction would have too much capacity added
             uint256 capacityToAdd = (_auctionParameters.target * timePassed) /
-                1 days /
+                SECONDS_IN_DAY /
                 _depositPeriods.length();
 
             tick = previousTick;
