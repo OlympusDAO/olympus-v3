@@ -2562,7 +2562,7 @@ contract EmissionManagerTest is Test {
 
     // initialize tests
 
-    function test_initialize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+    function test_enable_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
@@ -2584,7 +2584,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenAlreadyActive_reverts() public {
+    function test_enable_whenAlreadyActive_reverts() public {
         // Call the initialize function with the wrong caller
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
@@ -2603,7 +2603,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenRestartTimeframeNotElapsed_reverts(
+    function test_enable_whenRestartTimeframeNotElapsed_reverts(
         uint48 elapsed_
     ) public givenShutdown {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
@@ -2639,7 +2639,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenParamsLengthInvalid_reverts()
+    function test_enable_whenParamsLengthInvalid_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2652,7 +2652,7 @@ contract EmissionManagerTest is Test {
         emissionManager.enable(abi.encode(uint256(20)));
     }
 
-    function test_initialize_whenBaseEmissionRateZero_reverts()
+    function test_enable_whenBaseEmissionRateZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2677,7 +2677,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenMinimumPremiumZero_reverts()
+    function test_enable_whenMinimumPremiumZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2702,7 +2702,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenBackingZero_reverts()
+    function test_enable_whenBackingZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2727,7 +2727,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenRestartTimeframeZero_reverts()
+    function test_enable_whenRestartTimeframeZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2752,7 +2752,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
+    function test_enable_success() public givenShutdown givenRestartTimeframeElapsed {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Values are currently as setup
@@ -2793,7 +2793,7 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.tickSize(), tickSize, "TickSize should be updated");
     }
 
-    function test_initialize_setsTickSizeAndEmitsEvent()
+    function test_enable_setsTickSizeAndEmitsEvent()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2827,7 +2827,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_withZeroMinTickSize_reverts()
+    function test_enable_withZeroMinTickSize_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
