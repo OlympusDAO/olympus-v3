@@ -65,6 +65,7 @@ contract ConvertibleDepositActivator is Owned {
     uint256 public constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
     uint256 public constant EM_TICK_SIZE = 150e9; // 150 OHM
     uint256 public constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
+    uint256 public constant EM_BOND_MARKET_CAPACITY_SCALAR = 1e18; // 100% bond market capacity scalar
     uint48 public constant EM_RESTART_TIMEFRAME = 950400; // 11 days
 
     /// @notice True if the activation has been performed
@@ -168,6 +169,7 @@ contract ConvertibleDepositActivator is Owned {
                 backing: EM_BACKING,
                 tickSize: EM_TICK_SIZE,
                 minPriceScalar: EM_MIN_PRICE_SCALAR,
+                bondMarketCapacityScalar: EM_BOND_MARKET_CAPACITY_SCALAR,
                 restartTimeframe: EM_RESTART_TIMEFRAME
             })
         );

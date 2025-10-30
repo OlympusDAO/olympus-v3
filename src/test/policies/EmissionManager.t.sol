@@ -77,6 +77,7 @@ contract EmissionManagerTest is Test {
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSize = 10e9; // 10 OHM fixed tick size
     uint256 internal minPriceScalar = 11e17; // 110%
+    uint256 internal bondMarketCapacityScalar = 1e18; // 100%
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
@@ -86,6 +87,7 @@ contract EmissionManagerTest is Test {
     event BondMarketCreationFailed(uint256 saleAmount);
     event TickSizeChanged(uint256 newTickSize);
     event MinPriceScalarChanged(uint256 newMinPriceScalar);
+    event BondMarketCapacityScalarChanged(uint256 newBondMarketCapacityScalar);
 
     // test cases
     //
@@ -387,6 +389,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -455,6 +458,12 @@ contract EmissionManagerTest is Test {
         results[0] = 0;
         results[1] = 0;
         cdAuctioneer.setAuctionResults(results);
+        _;
+    }
+
+    modifier givenBondMarketCapacityScalar(uint256 scalar) {
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(scalar);
         _;
     }
 
@@ -856,6 +865,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2586,6 +2596,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2605,6 +2616,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2641,6 +2653,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2679,6 +2692,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2704,6 +2718,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2729,6 +2744,7 @@ contract EmissionManagerTest is Test {
                     backing: 0,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2754,6 +2770,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: 0
                 })
             )
@@ -2780,6 +2797,34 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar_,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+    }
+
+    function test_enable_whenBondMarketCapacityScalarAboveMax_reverts(
+        uint256 bondMarketCapacityScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        bondMarketCapacityScalar_ = bound(bondMarketCapacityScalar_, 2e18 + 1, type(uint256).max);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Bond Market Scalar");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar_,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2801,6 +2846,7 @@ contract EmissionManagerTest is Test {
                     backing: backing + 1,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe + 1
                 })
             )
@@ -2830,6 +2876,11 @@ contract EmissionManagerTest is Test {
             minPriceScalar,
             "Min price scalar should be updated"
         );
+        assertEq(
+            emissionManager.bondMarketCapacityScalar(),
+            bondMarketCapacityScalar,
+            "Bond market capacity scalar should be updated"
+        );
     }
 
     function test_enable_setsMinPriceScalar(
@@ -2853,6 +2904,7 @@ contract EmissionManagerTest is Test {
                     backing: backing + 1,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar_,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe + 1
                 })
             )
@@ -2888,6 +2940,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: testTickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2922,6 +2975,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: testTickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -3243,6 +3297,143 @@ contract EmissionManagerTest is Test {
         );
         vm.prank(guardian);
         emissionManager.setTickSize(newTickSize);
+    }
+
+    // execute with bond market capacity scalar tests
+    // when beatCounter is 0 and auction results are negative (deficit)
+    //   given the bond market capacity scalar is 0
+    //     [X] it does not create a bond market
+    //     [X] bondMarketPendingCapacity remains 0
+
+    function test_execute_whenDeficit_whenScalarIsZero_doesNotCreateBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(0)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
+    //   given the bond market capacity scalar is 100% (1e18)
+    //     [X] it creates a bond market with 100% of the deficit as capacity
+
+    function test_execute_whenDeficit_whenScalarIsOneHundredPercent_createsFullBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(1e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the bond market has the full deficit as capacity
+        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+
+        assertEq(capacity, DEFICIT, "Capacity should equal the deficit");
+    }
+
+    //   given the bond market capacity scalar is 200% (2e18)
+    //     [X] it creates a bond market with 200% of the deficit as capacity
+
+    function test_execute_whenDeficit_whenScalarIsTwoHundredPercent_createsDoubledBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(2e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the bond market has 200% of the deficit as capacity
+        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+
+        assertEq(capacity, DEFICIT * 2, "Capacity should be 200% of the deficit");
+    }
+
+    //   given the bond market capacity scalar results in a rounded-down value of 0
+    //     [X] it does not create a bond market
+    //     [X] bondMarketPendingCapacity remains 0
+
+    function test_execute_whenDeficit_whenScalarRoundsToZero_doesNotCreateBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenBondMarketCapacityScalar(1e9 - 1)
+    {
+        // Set auction results with a very small deficit
+        int256[] memory results = new int256[](2);
+        results[0] = -1e9; // -1 OHM
+        results[1] = 0;
+        cdAuctioneer.setAuctionResults(results);
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
     }
 
     function test_execute_passesCorrectTickSizeToAuctioneer()
@@ -3621,6 +3812,61 @@ contract EmissionManagerTest is Test {
             emissionManager.minPriceScalar(),
             newMinPriceScalar_,
             "Min price scalar should be updated"
+        );
+    }
+
+    // setBondMarketCapacityScalar tests
+    // given the caller does not have the admin role
+    //  [X] it reverts
+
+    function test_setBondMarketCapacityScalar_whenCallerDoesNotHaveAdminRole_reverts() public {
+        // Expect revert
+        _expectRevertRoleRequired("admin");
+
+        // Call function
+        vm.prank(alice);
+        emissionManager.setBondMarketCapacityScalar(1e18);
+    }
+
+    // when the new scalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR
+    //  [X] it reverts
+
+    function test_setBondMarketCapacityScalar_whenNewScalarAboveMax_reverts(
+        uint256 newScalar_
+    ) public {
+        newScalar_ = bound(newScalar_, 2e18 + 1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "InvalidParam(string)",
+            "Bond Market Capacity Scalar"
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(newScalar_);
+    }
+
+    // [X] the bond market capacity scalar is set to the new value
+    // [X] BondMarketCapacityScalarChanged event is emitted
+
+    function test_setBondMarketCapacityScalar_success(uint256 newScalar_) public {
+        newScalar_ = bound(newScalar_, 0, 2e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit BondMarketCapacityScalarChanged(newScalar_);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(newScalar_);
+
+        // Confirm the bond market capacity scalar is set
+        assertEq(
+            emissionManager.bondMarketCapacityScalar(),
+            newScalar_,
+            "Bond market capacity scalar should be updated"
         );
     }
 }
