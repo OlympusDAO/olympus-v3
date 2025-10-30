@@ -76,7 +76,7 @@ contract EmissionManagerTest is Test {
     uint256 internal changeBy = 1e5; // 0.01% change per execution
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSize = 10e9; // 10 OHM fixed tick size
-    uint256 internal minPriceScalar = 9e17; // 90%
+    uint256 internal minPriceScalar = 11e17; // 110%
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
@@ -85,6 +85,7 @@ contract EmissionManagerTest is Test {
 
     event BondMarketCreationFailed(uint256 saleAmount);
     event TickSizeChanged(uint256 newTickSize);
+    event MinPriceScalarChanged(uint256 newMinPriceScalar);
 
     // test cases
     //
@@ -411,8 +412,9 @@ contract EmissionManagerTest is Test {
         // 22377897966596497241 = 22.37 reserve/OHM
         PRICE.setCurrentPrice(22377897966596497241);
 
-        // 20140108169936847516
-        expectedMinPrice = (uint256(22377897966596497241) * 9e17) / 1e18;
+        // 22377897966596497241 * 11e17 / 1e18 = 24615687763256146965.1
+        // = 24615687763256146966 (rounded up)
+        expectedMinPrice = 24615687763256146966;
     }
 
     // internal helper functions
@@ -896,10 +898,10 @@ contract EmissionManagerTest is Test {
             // Adjusted to the decimals of the deposit/reserve asset
             // price = 22377897966596497241 (18 dp)
             // price (adjusted) = 22377897 (6 dp)
-            // minPrice = price * 9e17/1e18
-            // minPrice = 20140107
+            // minPrice = price * 11e17/1e18
+            // minPrice = 24615686.7 = 24615687 (rounded up)
 
-            assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
+            assertEq(cdAuctioneer.minPrice(), 24615687, "Min price");
         }
 
         // The pending capacity should be 0
@@ -2758,6 +2760,32 @@ contract EmissionManagerTest is Test {
         );
     }
 
+    function test_enable_whenMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 0, 1e18 - 1);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+    }
+
     function test_enable_success() public givenShutdown givenRestartTimeframeElapsed {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
@@ -2797,6 +2825,46 @@ contract EmissionManagerTest is Test {
             "Restart timeframe should be updated"
         );
         assertEq(emissionManager.tickSize(), tickSize, "TickSize should be updated");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar,
+            "Min price scalar should be updated"
+        );
+    }
+
+    function test_enable_setsMinPriceScalar(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 1e18, 10e18);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(minPriceScalar_);
+
+        // Initialize the emissions manager with guardian using new values
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate + 1,
+                    minimumPremium: minimumPremium + 1,
+                    backing: backing + 1,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    restartTimeframe: restartTimeframe + 1
+                })
+            )
+        );
+
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar_,
+            "Min price scalar should be updated"
+        );
     }
 
     function test_enable_setsTickSizeAndEmitsEvent()
@@ -3500,6 +3568,59 @@ contract EmissionManagerTest is Test {
             emissionManager.supportsInterface(type(IERC20).interfaceId),
             false,
             "Should not support IERC20"
+        );
+    }
+
+    // setMinPriceScalar tests
+
+    // given the caller does not have the admin role
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenCallerDoesNotHaveAdminRole_reverts() public {
+        // Expect revert
+        _expectRevertRoleRequired("admin");
+
+        // Call function
+        vm.prank(alice);
+        emissionManager.setMinPriceScalar(1e18);
+    }
+
+    // when the new min price scalar is below 1e18
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenNewMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 newMinPriceScalar_
+    ) public {
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 0, 1e18 - 1);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+    }
+
+    // [X] the min price scalar is set to the new value
+    // [X] MinPriceScalarChanged event is emitted
+
+    function test_setMinPriceScalar_success(uint256 newMinPriceScalar_) public {
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 1e18, 10e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(newMinPriceScalar_);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+
+        // Confirm the min price scalar is set
+        assertEq(
+            emissionManager.minPriceScalar(),
+            newMinPriceScalar_,
+            "Min price scalar should be updated"
         );
     }
 }
