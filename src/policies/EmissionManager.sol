@@ -93,7 +93,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     uint256 public tickSize;
 
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
-    /// @dev    The value must be greater than ONE_HUNDRED_PERCENT (100%)
+    /// @dev    The value must be greater than or equal to ONE_HUNDRED_PERCENT (100%)
     uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
