@@ -517,7 +517,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (add && (type(uint256).max - changeBy_ * forNumBeats_ < baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
 
-        rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
+        rateChange = BaseRateChange({changeBy: changeBy_, daysLeft: forNumBeats_, addition: add});
 
         emit BaseRateChanged(changeBy_, forNumBeats_, add);
     }
