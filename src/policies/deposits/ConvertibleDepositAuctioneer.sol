@@ -59,6 +59,9 @@ contract ConvertibleDepositAuctioneer is
     uint256 internal constant TICK_SIZE_BASE_MIN = 1e18; // 1.0
     uint256 internal constant TICK_SIZE_BASE_MAX = 10e18; // 10.0
 
+    /// @notice Maximum safe exponent for rpow to prevent overflow
+    uint256 internal constant MAX_RPOW_EXP = 41;
+
     /// @notice Seconds in one day
     uint256 internal constant SECONDS_IN_DAY = 1 days;
 
@@ -485,6 +488,7 @@ contract ConvertibleDepositAuctioneer is
 
     /// @notice Internal function to calculate the new tick size based on the amount of OHM that has been converted in the current day
     /// @dev    This implements exponential tick size reduction (by 1/(base^multiplier)) for each multiple of the day target that is reached
+    ///         If the new tick size is 0 or a calculation would result in an overflow, the tick size is set to the minimum
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
@@ -504,6 +508,12 @@ contract ConvertibleDepositAuctioneer is
         if (multiplier == 0) {
             newTickSize = auctionParams_.tickSize;
             return newTickSize;
+        }
+
+        // If the multiplier would result in an overflow in rpow, return minimum tick size
+        // For base = 1e18, rpow always returns 1e18 regardless of exponent, so overflow is impossible
+        if (_tickSizeBase != TICK_SIZE_BASE_MIN && multiplier > MAX_RPOW_EXP) {
+            return _TICK_SIZE_MINIMUM;
         }
 
         // Otherwise, the tick size is reduced by a factor of (base^multiplier) (WAD base)

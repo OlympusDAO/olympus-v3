@@ -204,6 +204,39 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(auctioneer.getCurrentTickSize(), 1, "tick size should floor to minimum");
     }
 
+    // when multiplier would overflow rpow
+    //  [X] tick size floors to minimum instead of reverting
+    function test_tickSizeMinimum_whenMultiplierOverflowsRpow()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(1, 1, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 1_000_000_000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1_000_000_000e18)
+    {
+        // Set base to maximum (10.0) for worst-case scenario
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(10e18);
+
+        // Make a large bid that will result in a very large multiplier
+        // multiplier = convertible / target
+        // With target=1 wei, even converting 1e9 OHM gives multiplier = 1e9
+        // For rpow with base=10e18, exponents > ~59 would overflow uint256
+        // This test verifies that when multiplier exceeds safe maximum (around 59 for base=10),
+        // the function returns minimum tick size instead of reverting from rpow overflow
+
+        // A single large bid will cross many thresholds
+        // With minPrice=1 and target=1, multiplier grows very quickly
+        vm.prank(recipient);
+        // This should not revert even if multiplier would overflow rpow
+        // Instead, it should return minimum tick size
+        auctioneer.bid(PERIOD_MONTHS, 1_000_000_000e18, 1, false, false);
+
+        // Verify the bid succeeded and tick size is at minimum
+        // When multiplier exceeds safe maximum, tick size floors to minimum (1)
+        uint256 tickSize = auctioneer.getCurrentTickSize();
+        assertEq(tickSize, 1, "tick size should floor to minimum when multiplier exceeds safe max");
+    }
+
     // when tickSizeBase = 3.0 and multiple day targets are achieved in cumulative bids
     //  [X] tick size equals floor(original / 3^2) after crossing 2 targets
     function test_tickSizeBaseThree_multipleTargets_cumulative()
