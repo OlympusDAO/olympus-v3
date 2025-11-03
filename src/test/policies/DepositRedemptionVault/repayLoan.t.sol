@@ -536,12 +536,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
             // Mint the receipt token to the account
             vm.prank(recipient);
-            (, uint256 actualAmount) = cdFacility.deposit(
-                iReserveToken,
-                PERIOD_MONTHS,
-                repaymentAmount,
-                false
-            );
+            cdFacility.deposit(iReserveToken, PERIOD_MONTHS, repaymentAmount, false);
         }
 
         uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
