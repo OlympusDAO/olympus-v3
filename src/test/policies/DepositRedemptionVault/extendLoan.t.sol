@@ -30,6 +30,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         // Expect revert
         _expectRevertInvalidRedemptionId(recipient, 0);
 
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
+
+        // Expect revert
+        _expectRevertInvalidRedemptionId(recipient, 0);
+
         // Call function
         vm.prank(recipient);
         redemptionVault.extendLoan(0, 1);
@@ -43,6 +49,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenLocallyActive
         givenCommittedDefault(COMMITMENT_AMOUNT)
     {
+        // Expect revert
+        _expectRevertInvalidLoan(recipient, 0);
+
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
+
         // Expect revert
         _expectRevertInvalidLoan(recipient, 0);
 
@@ -81,6 +93,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         // Expect revert
         _expectRevertRedemptionVaultZeroAmount();
 
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 0);
+
+        // Expect revert
+        _expectRevertRedemptionVaultZeroAmount();
+
         // Call function
         vm.prank(recipient);
         redemptionVault.extendLoan(0, 0);
@@ -96,6 +114,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
             bound(elapsed_, block.timestamp + PERIOD_MONTHS * 30 days, type(uint48).max)
         );
         vm.warp(elapsed_);
+
+        // Expect revert
+        _expectRevertLoanIncorrectState(recipient, 0);
+
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
 
         // Expect revert
         _expectRevertLoanIncorrectState(recipient, 0);
@@ -116,6 +140,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenLoanExpired(recipient, 0)
         givenLoanClaimedDefault(recipient, 0)
     {
+        // Expect revert
+        _expectRevertLoanIncorrectState(recipient, 0);
+
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
+
         // Expect revert
         _expectRevertLoanIncorrectState(recipient, 0);
 
@@ -142,6 +172,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         // Expect revert
         _expectRevertLoanIncorrectState(recipient, 0);
 
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
+
+        // Expect revert
+        _expectRevertLoanIncorrectState(recipient, 0);
+
         // Call function
         vm.prank(recipient);
         redemptionVault.extendLoan(0, 1);
@@ -157,6 +193,12 @@ contract DepositRedemptionVaultExtendLoanTest is DepositRedemptionVaultTest {
         givenLoanDefault
         givenAnnualInterestRate(iReserveToken, 0)
     {
+        // Expect revert
+        _expectRevertInterestRateNotSet(iReserveToken);
+
+        // Call preview function
+        redemptionVault.previewExtendLoan(recipient, 0, 1);
+
         // Expect revert
         _expectRevertInterestRateNotSet(iReserveToken);
 
