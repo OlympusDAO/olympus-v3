@@ -787,11 +787,16 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
     }
 
     /// @inheritdoc IDepositRedemptionVault
+    /// @dev        This function will revert if:
+    ///             - The redemption ID is invalid
+    ///             - The loan is invalid
+    ///             - The loan is expired, defaulted or fully repaid
+    ///             - The months is 0
     function previewExtendLoan(
         address user_,
         uint16 redemptionId_,
         uint8 months_
-    ) external view returns (uint48, uint256) {
+    ) external view onlyValidRedemptionId(user_, redemptionId_) returns (uint48, uint256) {
         // Validate that the months is not 0
         if (months_ == 0) revert RedemptionVault_ZeroAmount();
 
@@ -801,6 +806,16 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
 
         // Get the loan
         Loan memory loan = _redemptionLoan[redemptionKey];
+
+        // Validate that the redemption has a loan
+        if (loan.dueDate == 0) revert RedemptionVault_InvalidLoan(user_, redemptionId_);
+
+        // Validate that the loan is not:
+        // - expired
+        // - defaulted
+        // - fully repaid
+        if (block.timestamp >= loan.dueDate || loan.isDefaulted || loan.principal == 0)
+            revert RedemptionVault_LoanIncorrectState(user_, redemptionId_);
 
         // Preview the new due date and interest payable
         (uint48 newDueDate, uint256 interestPayable) = _previewExtendLoan(
