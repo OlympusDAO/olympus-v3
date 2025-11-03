@@ -48,19 +48,19 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param  asset_                  The asset to deposit
     /// @param  depositor_              The depositor
     /// @param  amount_                 The amount of assets to deposit
-    /// @param  enforceMinimumDeposit_  Whether to enforce the minimum deposit requirement
+    /// @param  enforceDepositChecks_   Whether to enforce the minimum deposit requirement and deposit cap
     /// @return actualAmount    The actual amount of assets redeemable by the shares
     /// @return shares          The number of shares received
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
         uint256 amount_,
-        bool enforceMinimumDeposit_
+        bool enforceDepositChecks_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
         // Validate that the deposit meets the minimum deposit requirement
-        if (enforceMinimumDeposit_ && amount_ < assetConfiguration.minimumDeposit) {
+        if (enforceDepositChecks_ && amount_ < assetConfiguration.minimumDeposit) {
             revert AssetManager_MinimumDepositNotMet(
                 address(asset_),
                 amount_,
@@ -69,7 +69,7 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // Validate that adding the deposit will not exceed the deposit cap
-        {
+        if (enforceDepositChecks_) {
             (, uint256 assetAmountBefore) = getOperatorAssets(asset_, msg.sender);
             if (assetAmountBefore + amount_ > assetConfiguration.depositCap) {
                 revert AssetManager_DepositCapExceeded(
