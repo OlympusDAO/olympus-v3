@@ -30,7 +30,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     using TransferHelper for ERC20;
 
     /// @notice Role that can update merkle roots
-    bytes32 public constant ROLE_MERKLE_UPDATER = "points_merkle_updater";
+    bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
 
     /// @notice Minimum duration between week advances (7 days)
     uint256 public constant WEEK_DURATION = 7 days;
@@ -50,7 +50,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     mapping(uint256 week => uint256 amount) public weeklyRewardsDistributed;
 
     /// @notice Mapping from week number => metadata IPFS hash
-    /// @dev    Points to off-chain data containing full distribution details
+    /// @dev    Units to off-chain data containing full distribution details
     mapping(uint256 week => string ipfsHash) public weeklyMetadata;
 
     /// @notice Mapping from user address => week number => claimed status
