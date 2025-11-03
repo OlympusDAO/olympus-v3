@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     uint256 public constant LOAN_PRINCIPAL_MAX_SLIPPAGE = 5;
@@ -465,6 +466,130 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         assertEq(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
             COMMITMENT_AMOUNT - (loan.initialPrincipal - principalAmount_),
+            "committed deposits"
+        );
+    }
+
+    //  given there is a deposit cap
+    //   when the deposit cap is reached
+    //    [X] it reduces the interest owed
+    //    [X] it reduces the principal owed
+    //    [X] it reduces the total principal borrowed
+    //    [X] it transfers deposit tokens from the caller
+    //    [X] it does not transfer any receipt tokens
+    //    [X] it emits a LoanRepaid event
+
+    function test_whenAmountIsGreaterThanInterestOwed_givenDepositCap()
+        public
+        givenLocallyActive
+        givenVaultHasDeposit(1000e18)
+    {
+        uint256 depositAmount_ = 1e18;
+        uint256 commitmentAmount_ = 1e16; // The loan principal repayment will be less than the minimum deposit
+        uint256 yieldAmount_ = 1e16;
+        uint256 yieldAmountTwo_ = 1e16;
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Borrow
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+
+        // Accrue more yield
+        _accrueYield(iVault, yieldAmountTwo_);
+
+        // Set the deposit cap
+        vm.prank(admin);
+        depositManager.setAssetDepositCap(iReserveToken, depositAmount_);
+
+        // Determine the amount to pay back
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 repaymentAmount = loan.principal + loan.interest + LOAN_PRINCIPAL_MAX_SLIPPAGE;
+
+        // Confirm that the deposit cap is active
+        {
+            (, uint256 assetAmountBefore) = depositManager.getOperatorAssets(
+                iReserveToken,
+                address(cdFacility)
+            );
+
+            // Approve deposit manager to spend the reserve tokens
+            vm.startPrank(recipient);
+            iReserveToken.approve(address(depositManager), repaymentAmount);
+            vm.stopPrank();
+
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IAssetManager.AssetManager_DepositCapExceeded.selector,
+                    address(iReserveToken),
+                    assetAmountBefore,
+                    depositAmount_
+                )
+            );
+
+            // Mint the receipt token to the account
+            vm.prank(recipient);
+            (, uint256 actualAmount) = cdFacility.deposit(
+                iReserveToken,
+                PERIOD_MONTHS,
+                repaymentAmount,
+                false
+            );
+        }
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Mint and approve
+        reserveToken.mint(recipient, repaymentAmount);
+        vm.prank(recipient);
+        reserveToken.approve(address(redemptionVault), repaymentAmount);
+
+        // Call function
+        // Emit event (but ignore the principal and interest amounts)
+        vm.expectEmit(true, true, true, false);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
+        _repayLoan(recipient, 0, repaymentAmount, LOAN_PRINCIPAL_MAX_SLIPPAGE);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // repaymentAmount is minted and used
+            loan.interest,
+            0
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            0,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertApproxEqAbs(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_,
+            LOAN_PRINCIPAL_MAX_SLIPPAGE,
             "committed deposits"
         );
     }
