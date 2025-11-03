@@ -3334,7 +3334,7 @@ contract EmissionManagerTest is Test {
     }
 
     //   given the bond market capacity scalar is 100% (1e18)
-    //     [X] it creates a bond market with 100% of the deficit as capacity
+    //    [X] it creates a bond market with 100% of the deficit as capacity
 
     function test_execute_whenDeficit_whenScalarIsOneHundredPercent_createsFullBondMarket()
         public
@@ -3367,7 +3367,7 @@ contract EmissionManagerTest is Test {
     }
 
     //   given the bond market capacity scalar is 200% (2e18)
-    //     [X] it creates a bond market with 200% of the deficit as capacity
+    //    [X] it creates a bond market with 200% of the deficit as capacity
 
     function test_execute_whenDeficit_whenScalarIsTwoHundredPercent_createsDoubledBondMarket()
         public
