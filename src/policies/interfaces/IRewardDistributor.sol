@@ -11,8 +11,7 @@ interface IRewardDistributor is IERC165 {
     event MerkleRootSet(
         uint256 indexed week,
         bytes32 merkleRoot,
-        address rewardToken,
-        string ipfsHash
+        address rewardToken
     );
     event RewardsClaimed(
         address indexed user,
@@ -38,8 +37,7 @@ interface IRewardDistributor is IERC165 {
     function setMerkleRoot(
         uint256 rewardWeek_,
         bytes32 merkleRoot_,
-        address rewardToken_,
-        string calldata ipfsHash_
+        address rewardToken_
     ) external returns (uint256 week, uint256 timestamp);
 
     // ========== USER FUNCTIONS ========== //
@@ -67,6 +65,4 @@ interface IRewardDistributor is IERC165 {
     function totalClaimed(address user, address token) external view returns (uint256);
 
     function weeklyRewardsDistributed(uint256 week) external view returns (uint256);
-
-    function weeklyMetadata(uint256 week) external view returns (string memory);
 }

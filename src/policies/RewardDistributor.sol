@@ -49,10 +49,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @notice Total rewards distributed per week
     mapping(uint256 week => uint256 amount) public weeklyRewardsDistributed;
 
-    /// @notice Mapping from week number => metadata IPFS hash
-    /// @dev    Units to off-chain data containing full distribution details
-    mapping(uint256 week => string ipfsHash) public weeklyMetadata;
-
     /// @notice Mapping from user address => week number => claimed status
     mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
 
@@ -118,14 +114,12 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @param  rewardWeek_     The week number being set (must equal currentWeek)
     /// @param  merkleRoot_     The merkle root for the week's distribution
     /// @param  rewardToken_    The ERC20 token used for rewards this week
-    /// @param  ipfsHash_       IPFS hash containing full distribution data for transparency
     /// @return week            The week number that was set
     /// @return timestamp       The new lastRootSetTimestamp (when this week ends)
     function setMerkleRoot(
         uint256 rewardWeek_,
         bytes32 merkleRoot_,
-        address rewardToken_,
-        string calldata ipfsHash_
+        address rewardToken_
     )
         external
         onlyAuthorized(ROLE_MERKLE_UPDATER)
@@ -151,14 +145,13 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         // Set the merkle root for the current week
         weeklyMerkleRoots[week] = merkleRoot_;
         weeklyRewardTokens[week] = rewardToken_;
-        weeklyMetadata[week] = ipfsHash_;
 
         // Update timestamp: add exactly WEEK_DURATION for consistent weekly snapshots
         // This ensures off-chain calculations align with on-chain week boundaries
         timestamp = lastTimestamp + WEEK_DURATION;
         lastRootSetTimestamp = uint40(timestamp);
 
-        emit MerkleRootSet(week, merkleRoot_, rewardToken_, ipfsHash_);
+        emit MerkleRootSet(week, merkleRoot_, rewardToken_);
 
         // Advance to next week for the next call
         currentWeek = uint40(week + 1);
