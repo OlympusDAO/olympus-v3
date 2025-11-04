@@ -162,7 +162,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
         // Advance to next week for the next call
         currentWeek = uint40(week + 1);
-        emit WeekAdvanced(week + 1);
     }
 
     /// @notice Claim rewards for one or more weeks in a single transaction

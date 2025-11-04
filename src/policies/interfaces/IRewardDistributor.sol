@@ -20,7 +20,6 @@ interface IRewardDistributor is IERC165 {
         address rewardToken,
         uint256 weekCount
     );
-    event WeekAdvanced(uint256 indexed newWeek);
 
     // ========== ERRORS ========== //
 
