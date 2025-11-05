@@ -416,8 +416,8 @@ This will:
 
 The following components can be shut down using the script:
 
-- `trsry` - Shutdown TRSRY withdrawals
-- `mintr` - Shutdown MINTR minting
+- `treasury` - Shutdown TRSRY withdrawals
+- `minter` - Shutdown MINTR minting
 - `cooler-v2` - Shutdown all Cooler V2 operations (borrows, liquidations, composites, migrator)
 - `emission-manager` - Shutdown EmissionManager and ConvertibleDepositAuctioneer
 - `convertible-deposits` - Disable ConvertibleDepositFacility, DepositRedemptionVault, and DepositManager
@@ -433,24 +433,24 @@ The following components can be shut down using the script:
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh trsry --sign --account emergency-signer --chain mainnet
+./shell/shutdown.sh treasury --sign --account emergency-signer --chain mainnet
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh trsry --submit 0x1234... --account emergency-signer --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --submit 0x1234... --account emergency-signer --chain mainnet --broadcast true
 ```
 
 #### Example 2: Shutdown MINTR (with Ledger)
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh mintr --sign --ledger 0 --chain mainnet
+./shell/shutdown.sh minter --sign --ledger 0 --chain mainnet
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh mintr --submit 0x5678... --ledger 0 --chain mainnet --broadcast true
+./shell/shutdown.sh minter --submit 0x5678... --ledger 0 --chain mainnet --broadcast true
 ```
 
 #### Example 3: Using `.env.emergency`
@@ -459,12 +459,12 @@ If `.env.emergency` exists with `ACCOUNT=emergency-signer`:
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh trsry --sign --chain mainnet
+./shell/shutdown.sh treasury --sign --chain mainnet
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh trsry --submit 0x1234... --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --submit 0x1234... --chain mainnet --broadcast true
 ```
 
 #### Example 4: Shutdown Cooler V2
@@ -535,8 +535,8 @@ Withdrawals from the TRSRY module can be stopped by calling the [Emergency polic
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh trsry --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh trsry --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --sign --account <wallet> --chain mainnet
+./shell/shutdown.sh treasury --submit <signature> --account <wallet> --chain mainnet --broadcast true
 ```
 
 **Manual execution**:
@@ -545,7 +545,7 @@ Withdrawals from the TRSRY module can be stopped by calling the [Emergency polic
 - Address: Check `src/scripts/env.json` for `olympus.policies.Emergency`
 - [ABI](abis/emergency.json)
 
-**Batch script**: `src/scripts/emergency/EmergencyShutdown.sol`
+**Batch script**: `src/scripts/emergency/Treasury.sol`
 
 ### MINTR
 
@@ -553,8 +553,8 @@ OHM minting by the MINTR can be stopped by calling the [Emergency policy](../../
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh mintr --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh mintr --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh minter --sign --account <wallet> --chain mainnet
+./shell/shutdown.sh minter --submit <signature> --account <wallet> --chain mainnet --broadcast true
 ```
 
 **Manual execution**:
@@ -563,7 +563,7 @@ OHM minting by the MINTR can be stopped by calling the [Emergency policy](../../
 - Address: Check `src/scripts/env.json` for `olympus.policies.Emergency`
 - [ABI](abis/emergency.json)
 
-**Batch script**: `src/scripts/emergency/EmergencyShutdown.sol`
+**Batch script**: `src/scripts/emergency/Minter.sol`
 
 ### Cooler v2
 
@@ -597,7 +597,7 @@ The Cooler V2 shutdown script handles all Cooler V2 operations: borrows, liquida
 - Required role: Currently owned by the DAO MS
 - Address: Check `src/scripts/env.json` for `olympus.periphery.CoolerV2Migrator`
 
-**Batch script**: `src/scripts/emergency/CoolerV2Shutdown.sol`
+**Batch script**: `src/scripts/emergency/CoolerV2.sol`
 
 ### Emission Manager
 
@@ -615,7 +615,7 @@ The EmissionManager shutdown script also disables the ConvertibleDepositAuctione
 - Address: Check `src/scripts/env.json` for `olympus.policies.EmissionManager`
 - [ABI](abis/emission_manager.json)
 
-**Batch script**: `src/scripts/emergency/EmissionManagerShutdown.sol`
+**Batch script**: `src/scripts/emergency/EmissionManager.sol`
 
 ### Convertible Deposits
 
@@ -635,7 +635,7 @@ The Convertible Deposits shutdown script disables ConvertibleDepositFacility, De
   - `olympus.policies.DepositRedemptionVault`
   - `olympus.policies.DepositManager`
 
-**Batch script**: `src/scripts/emergency/ConvertibleDepositShutdown.sol`
+**Batch script**: `src/scripts/emergency/ConvertibleDeposits.sol`
 
 ### CCIP Bridge
 
@@ -654,7 +654,7 @@ The CCIP shutdown script handles both the CCIP bridge and token pool.
 
 **Required multisig**: Emergency MS (can be done by Emergency MS)
 
-**Batch script**: `src/scripts/emergency/CCIPShutdown.sol`
+**Batch script**: `src/scripts/emergency/CCIP.sol`
 
 ### LayerZero Bridge
 
@@ -676,7 +676,7 @@ Bridging OHM between EVM chains is handled by the [LayerZero bridge](../../src/p
 
 **Required multisig**: DAO MS (must be done by DAO MS)
 
-**Batch script**: `src/scripts/emergency/LayerZeroBridgeShutdown.sol`
+**Batch script**: `src/scripts/emergency/LayerZeroBridge.sol`
 
 ### Yield Repurchase Facility
 
@@ -700,7 +700,7 @@ The `shutdown()` function takes an array of tokens that will be transferred into
 
 **Required multisig**: DAO MS (must be done by DAO MS)
 
-**Batch script**: `src/scripts/emergency/YieldRepurchaseFacilityShutdown.sol`
+**Batch script**: `src/scripts/emergency/YieldRepurchaseFacility.sol`
 
 ### Heart
 
@@ -720,7 +720,7 @@ The [Heart policy](../../src/policies/Heart.sol) can be shut down.
 
 **Required multisig**: Emergency MS (as of v1.7+) or DAO MS
 
-**Batch script**: `src/scripts/emergency/HeartShutdown.sol`
+**Batch script**: `src/scripts/emergency/Heart.sol`
 
 ### Reserve Migrator
 
@@ -742,7 +742,7 @@ The [ReserveMigrator policy](../../src/policies/ReserveMigrator.sol) can be shut
 
 **Required multisig**: DAO MS (must be done by DAO MS)
 
-**Batch script**: `src/scripts/emergency/ReserveMigratorShutdown.sol`
+**Batch script**: `src/scripts/emergency/ReserveMigrator.sol`
 
 ### Bond Manager
 
