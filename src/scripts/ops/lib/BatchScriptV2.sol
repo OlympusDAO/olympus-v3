@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -58,27 +59,37 @@ abstract contract BatchScriptV2 is WithEnvironment {
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, bool useEmergencyMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
         _loadArgs(argsFilePath_);
 
         address owner = msg.sender;
-        if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
+        if (useEmergencyMS_) {
+            owner = _envAddressNotZero("olympus.multisig.emergency");
+        } else if (useDaoMS_) {
+            owner = _envAddressNotZero("olympus.multisig.dao");
+        }
         _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
     }
 
     modifier setUp(bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
+        _setUp(chainName, useDaoMS_, false, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
+        _;
+    }
+
+    modifier setUpEmergency(bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _setUp(chainName, false, true, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
         _;
     }
 
     /// @dev    Deprecated.
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, false, "", "", "");
+        _setUp(chainName, useDaoMS_, false, false, "", "", "");
         _;
     }
 
@@ -301,6 +312,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     function _loadArgs(string memory argsFilePath_) internal {
         if (bytes(argsFilePath_).length > 0) {
             console2.log("Loading arguments from", argsFilePath_);
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             _argsFile = vm.readFile(argsFilePath_);
         }
     }
@@ -374,4 +386,4 @@ abstract contract BatchScriptV2 is WithEnvironment {
             );
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
