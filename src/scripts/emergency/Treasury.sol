@@ -2,10 +2,11 @@
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {IEmergencyBatch} from "src/scripts/emergency/IEmergencyBatch.sol";
 import {IEmergency} from "src/policies/interfaces/IEmergency.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-contract Treasury is BatchScriptV2 {
+contract Treasury is BatchScriptV2, IEmergencyBatch {
     /// @notice Emergency shutdown of treasury withdrawals
     ///
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it
@@ -19,7 +20,11 @@ contract Treasury is BatchScriptV2 {
         string memory argsFilePath_,
         string memory ledgerDerivationPath_,
         bytes memory signature_
-    ) external setUpEmergency(signOnly_, argsFilePath_, ledgerDerivationPath_, signature_) {
+    )
+        external
+        override
+        setUpEmergency(signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
+    {
         _validateArgsFileEmpty(argsFilePath_);
 
         console2.log("\n");
