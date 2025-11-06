@@ -3441,6 +3441,76 @@ contract EmissionManagerTest is Test {
     }
 
     //   given the bond market capacity scalar results in a rounded-down value of 0
+    //     given there was a previous pending bond market
+    //       [X] it does not create a bond market
+    //       [X] bondMarketPendingCapacity is reset to 0
+
+    function test_execute_whenDeficit_whenScalarRoundsToZero_doesNotCreateBondMarket_givenExistingPendingCapacity()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+    {
+        // Disable new bond markets
+        vm.prank(guardian);
+        bondAuctioneer.setAllowNewMarkets(false);
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Assert that there is a pending capacity
+        assertEq(
+            emissionManager.bondMarketPendingCapacity(),
+            DEFICIT,
+            "Pending capacity should be the deficit"
+        );
+
+        // Re-enable bond markets
+        vm.prank(guardian);
+        bondAuctioneer.setAllowNewMarkets(true);
+
+        // Set the bond market capacity scalar
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(1e9 - 1);
+
+        // Mimic givenNextBeatIsZero
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+        vm.warp(block.timestamp + 86400);
+
+        // Set auction results with a very small deficit
+        int256[] memory results = new int256[](2);
+        results[0] = -1e9; // -1 OHM
+        results[1] = 0;
+        cdAuctioneer.setAuctionResults(results);
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
     //     [X] it does not create a bond market
     //     [X] bondMarketPendingCapacity remains 0
 
