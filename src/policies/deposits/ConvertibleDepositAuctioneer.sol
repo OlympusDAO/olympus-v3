@@ -287,20 +287,6 @@ contract ConvertibleDepositAuctioneer is
                 _currentTickSize = output.tickSize;
             }
 
-            // Check if we crossed day target thresholds
-            if (_depositPeriods.length() > 1) {
-                // If so, synchronize price increases across all periods
-                uint256 previousMultiplier = previousConvertible / _auctionParameters.target;
-                uint256 newMultiplier = _dayState.convertible / _auctionParameters.target;
-                uint256 thresholdsCrossed = newMultiplier - previousMultiplier;
-
-                if (thresholdsCrossed > 0) {
-                    // Synchronize price increases across all periods
-                    // Apply the same number of price increases that occurred during the bid
-                    _synchronizePriceIncrease(params.depositPeriod, thresholdsCrossed);
-                }
-            }
-
             // Set values for the rest of the function
             ohmOut = output.ohmOut;
             depositIn = output.depositIn;
@@ -1024,39 +1010,6 @@ contract ConvertibleDepositAuctioneer is
 
             // Update the current tick for the deposit period
             _depositPeriodPreviousTicks[period] = updatedTick;
-        }
-    }
-
-    /// @notice Synchronizes price increases across all deposit periods when day target thresholds are crossed
-    /// @dev    This prevents attackers from switching to other periods to find cheaper OHM after the day target is met
-    ///
-    /// @param  excludedDepositPeriod_  The deposit period that triggered the threshold crossing and should be excluded from updates
-    /// @param  thresholdsCrossed_      The number of thresholds crossed, determines how many price increases to apply
-    function _synchronizePriceIncrease(
-        uint8 excludedDepositPeriod_,
-        uint256 thresholdsCrossed_
-    ) internal {
-        // Iterate over periods
-        uint256 periodLength = _depositPeriods.length();
-        for (uint256 i; i < periodLength; i++) {
-            uint8 period = uint8(_depositPeriods.at(i));
-
-            // Skip if the deposit period is excluded
-            if (period == excludedDepositPeriod_) continue;
-
-            // Skip if the deposit period is not enabled
-            if (!_depositPeriodsEnabled[period]) continue;
-
-            Tick storage tick = _depositPeriodPreviousTicks[period];
-
-            // Apply price increases for each threshold crossed
-            for (uint256 j = 0; j < thresholdsCrossed_; j++) {
-                tick.price = _getNewTickPrice(tick.price, _tickStep);
-            }
-
-            // Reset capacity to new global tick size
-            tick.capacity = _currentTickSize;
-            tick.lastUpdate = uint48(block.timestamp);
         }
     }
 
