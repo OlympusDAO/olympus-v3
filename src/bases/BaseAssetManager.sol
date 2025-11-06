@@ -152,6 +152,9 @@ abstract contract BaseAssetManager is IAssetManager {
             // Early exit if the amount of shares is 0, to prevent a revert
             if (shares == 0) return (0, 0);
 
+            // Early exit if the shares would result in a zero amount of assets (and hence a revert)
+            if (vault.previewRedeem(shares) == 0) return (0, 0);
+
             assetAmount = vault.redeem(shares, depositor_, address(this));
         }
 
