@@ -305,6 +305,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         IERC20 depositToken_,
         uint8,
         uint256 amount_,
+        uint256 maxAmount_,
         address payer_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the repayment through DepositManager
@@ -314,15 +315,20 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             IDepositManager.BorrowingRepayParams({
                 asset: depositToken_,
                 payer: payer_,
-                amount: amount_
+                amount: amount_,
+                maxAmount: maxAmount_
             })
         );
 
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
+        // Cap at the max amount, otherwise there will be an over-commitment of deposits
+        uint256 committedAmountAdjustment = maxAmount_ < repaymentActual
+            ? maxAmount_
+            : repaymentActual;
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] += repaymentActual;
-        _assetCommittedDeposits[depositToken_] += repaymentActual;
+        ] += committedAmountAdjustment;
+        _assetCommittedDeposits[depositToken_] += committedAmountAdjustment;
 
         return repaymentActual;
     }

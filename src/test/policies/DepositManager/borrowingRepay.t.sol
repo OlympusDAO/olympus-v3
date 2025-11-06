@@ -46,7 +46,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -68,7 +69,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -90,7 +92,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -124,7 +127,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: 0
             })
         );
 
@@ -201,7 +205,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
 
         // Assert token balance
@@ -275,7 +284,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
 
         // Assert token balance
@@ -341,7 +355,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: previousRecipientBorrowActualAmount
+                amount: previousRecipientBorrowActualAmount,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -372,7 +387,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -425,7 +445,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         uint256 actualAmount = depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
 
         // Assert tokens

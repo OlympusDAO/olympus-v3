@@ -727,6 +727,7 @@ contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnable
                 IERC20(redemption.depositToken),
                 redemption.depositPeriod,
                 principalToRepay,
+                loan.principal, // Repayment is capped at the outstanding principal of the loan
                 address(this)
             );
 

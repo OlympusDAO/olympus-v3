@@ -33,7 +33,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, BORROW_AMOUNT, recipient);
     }
 
     // given the caller is not authorized
@@ -49,7 +49,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(caller_);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
+        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, BORROW_AMOUNT, recipient);
     }
 
     // when the amount is less than one share
@@ -75,7 +75,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, BORROW_AMOUNT, recipient);
     }
 
     // when the amount is greater than the borrowed amount
@@ -131,6 +131,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             iReserveToken,
             PERIOD_MONTHS,
             amount_,
+            BORROW_AMOUNT,
             recipient
         );
 
@@ -206,6 +207,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             iReserveToken,
             PERIOD_MONTHS,
             amount_,
+            BORROW_AMOUNT,
             recipient
         );
 
@@ -274,7 +276,13 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient);
+        facility.handleLoanRepay(
+            iReserveToken,
+            PERIOD_MONTHS,
+            BORROW_AMOUNT,
+            BORROW_AMOUNT,
+            recipient
+        );
     }
 
     // [X] it transfers the tokens from the payer to the deposit manager
@@ -314,6 +322,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             iReserveToken,
             PERIOD_MONTHS,
             amount_,
+            BORROW_AMOUNT,
             recipient
         );
 
