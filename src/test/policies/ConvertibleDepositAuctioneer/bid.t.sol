@@ -1339,8 +1339,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 PERIOD_MONTHS_TWO
             );
 
+            // Capacity: halved as the day target is met
+            // Price: unaffected by the day target being met
+            // Last update: updated to the current block timestamp
             assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
-            assertEq(tick.price, (MIN_PRICE * TICK_STEP) / 100e2, "period two tick price");
+            assertEq(tick.price, MIN_PRICE, "period two tick price");
             assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
         }
     }
@@ -1380,8 +1383,12 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
             PERIOD_MONTHS_TWO
         );
-        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity"); // Halved as the day target is met
-        assertEq(tick.price, 165e17, "period two tick price"); // Increased as the day target is met
+
+        // Capacity: halved as the day target is met
+        // Price: unaffected by the day target being met
+        // Last update: updated to the current block timestamp
+        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
+        assertEq(tick.price, MIN_PRICE, "period two tick price");
         assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
     }
 

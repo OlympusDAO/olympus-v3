@@ -783,28 +783,39 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         // 2. (360375e15 - 150e18) * 1e9 / 165e17 = 12,750,000,000. Greater than the tick size of 10e9. Bid amount becomes 165e18. New price is 165e17 * 110e2 / 100e2 = 1815e16. Day target met, so tick size becomes 5e9.
         // 3. (360375e15 - 150e18 - 165e18) * 1e9 / 1815e16 = 25e8. Less than the tick size of 5e9.
 
+        // Assert tick
+        // Capacity: 5e9
+        // Price: 15e18
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tick.capacity, 5e9, "new tick capacity");
+        assertEq(tick.price, MIN_PRICE, "new tick price");
+
         // Warp forward
         uint48 timePassed = 21600;
         vm.warp(block.timestamp + timePassed);
 
         // Added capacity will be 6/24 * 20e9 / 2 = 2.5e9
-        // New capacity will be 10e9 + 2.5e9 = 12.5e9
+        // New capacity will be 5e9 + 2.5e9 = 7.5e9
         // Tick size is 5e9
         // Iteration 1:
-        // - Capacity = 12.5e9 - 5e9 = 7.5e9
-        // - Price = 1815e16 * 100e2 / 110e2 = 165e17
+        // - Capacity = 6.5e9 - 5e9 = 2.5e9
+        // - Price = 15e18
         // - Capacity is not greater than the standard tick size, so it exits
         //
         // Capacity is capped to the current tick size
 
         // Call function
-        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+        IConvertibleDepositAuctioneer.Tick memory tickAfterWarp = auctioneer.getCurrentTick(
             PERIOD_MONTHS_TWO
         );
 
         // Assert tick
-        assertEq(tick.capacity, 5e9, "new tick capacity");
-        assertEq(tick.price, 165e17, "new tick price"); // Increased as the day target was met
+        // Capacity: halved as the day target is met
+        // Price: unaffected by the day target being met
+        assertEq(tickAfterWarp.capacity, 2.5e9, "new tick capacity");
+        assertEq(tickAfterWarp.price, MIN_PRICE, "new tick price");
     }
 
     /// @notice Test that price decay uses initial tick size (10e9), not reduced current tick size (5e9)
