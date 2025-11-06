@@ -170,9 +170,84 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     }
 
     // when the repayment amount exceeds the borrowed amount
+    //  given there is second loan
+    //   [X] _borrowedAmounts is reduced by the amount repaid, capped at the principal amount of the first loan
+
+    function test_whenAmountExceedsBorrowed_givenSecondLoan(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenRecipientHasApprovedSpendingAsset(100e18)
+    {
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, 100e18);
+
+        // Mint the repayment amount to the recipient
+        asset.mint(RECIPIENT, amount_);
+
+        _takeSnapshot(amount_);
+        uint256 recipientAssetBalanceBefore = iAsset.balanceOf(address(RECIPIENT));
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+        );
+
+        // Assert token balance
+        assertEq(iAsset.balanceOf(address(RECIPIENT)), recipientAssetBalanceBefore - amount_);
+
+        // Borrowed amounts
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            BORROW_AMOUNT,
+            "borrowed amount" // Does not go below the principal amount of the second loan
+        );
+        assertEq(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorReceiptTokenBalance - BORROW_AMOUNT, // Repaid amount is available for borrowing
+            "borrowing capacity"
+        );
+
+        // Operator assets should be increased
+        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore + _expectedDepositedShares,
+            "operator shares"
+        );
+
+        assertApproxEqAbs(
+            operatorSharesInAssets,
+            _operatorSharesInAssetsBefore + amount_,
+            1,
+            "operator shares in assets"
+        );
+
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _depositManagerSharesBefore + _expectedDepositedShares,
+            "vault balance"
+        );
+    }
+
     //  [X] it transfers the assets from the payer to the deposit manager
     //  [X] it returns the actual amount of transferred assets
-    //  [X] the borrowed amount is reduced by the borrowed amount
+    //  [X] _borrowedAmounts is reduced by the actual amount repaid
     //  [X] the borrowing capacity is increased by the actual amount repaid
     //  [X] it increases the operator shares by the actual amount (in terms of shares) repaid
 

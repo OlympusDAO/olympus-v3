@@ -150,7 +150,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         _repayLoan(recipient, 0, 1);
     }
 
-    // when the amount is greater than the principal and interest owed
+    // when the amount is greater than the principal and interest owed (including slippage)
     //  [X] it reverts
 
     function test_whenAmountIsGreaterThanPrincipalAndInterest_reverts(
@@ -926,6 +926,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         _accrueYield(iVault, yieldAmountTwo_);
 
         uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+        uint256 committedDepositsBefore = cdFacility.getCommittedDeposits(
+            iReserveToken,
+            address(redemptionVault)
+        );
 
         // Determine the amount to pay back
         // This includes a buffer to ensure full repayment
@@ -972,10 +976,120 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         );
 
         // Assert committed funds
-        assertApproxEqAbs(
+        assertEq(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
-            commitmentAmount_ + maxSlippage_,
-            5,
+            committedDepositsBefore + loan.principal,
+            "committed deposits"
+        );
+    }
+
+    function test_givenVaultHasDifferentWithdrawableAmount_whenRepayingInFull_whenSlippageIsLessThanMax_givenSecondLoan(
+        uint256 depositAmount_,
+        uint256 commitmentAmount_,
+        uint256 yieldAmount_,
+        uint256 yieldAmountTwo_,
+        uint256 maxSlippage_
+    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
+        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
+        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+        maxSlippage_ = bound(
+            maxSlippage_,
+            LOAN_PRINCIPAL_MAX_SLIPPAGE, // Ensures that if repaid amount != withdrawable amount, payment is completed
+            1e18
+        );
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Loan one
+        {
+            _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+            _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+            vm.prank(recipient);
+            redemptionVault.borrowAgainstRedemption(0);
+        }
+
+        // Loan two
+        {
+            _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+            _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+            vm.prank(recipient);
+            redemptionVault.borrowAgainstRedemption(1);
+        }
+
+        // Accrue more yield
+        _accrueYield(iVault, yieldAmountTwo_);
+
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+        uint256 recipientReceiptTokenBalanceBefore = receiptTokenManager.balanceOf(
+            recipient,
+            receiptTokenId
+        );
+        uint256 committedDepositsBefore = cdFacility.getCommittedDeposits(
+            iReserveToken,
+            address(redemptionVault)
+        );
+
+        // Get the details of the second loan for use later
+        IDepositRedemptionVault.Loan memory loanTwo = redemptionVault.getRedemptionLoan(
+            recipient,
+            1
+        );
+
+        // Determine the amount to pay back for loan one
+        // This includes a buffer to ensure full repayment
+        IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
+        uint256 repaymentAmount = loan.principal + loan.interest + maxSlippage_;
+
+        // Mint and approve
+        reserveToken.mint(recipient, repaymentAmount);
+        vm.prank(recipient);
+        reserveToken.approve(address(redemptionVault), repaymentAmount);
+
+        // Call function
+        // Emit event (but ignore the principal and interest amounts)
+        vm.expectEmit(true, true, true, false);
+        emit LoanRepaid(recipient, 0, loan.principal, loan.interest);
+
+        // Call function
+        _repayLoan(recipient, 0, repaymentAmount, maxSlippage_);
+
+        // Assertions
+        // Assert loan
+        _assertLoan(recipient, 0, loan.initialPrincipal, 0, 0, false, loan.dueDate);
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(
+            recipient,
+            recipientReserveTokenBalanceBefore, // repaymentAmount is minted and used
+            loan.interest,
+            0
+        );
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            recipientReceiptTokenBalanceBefore, // No change
+            commitmentAmount_ + commitmentAmount_ // Deposited for redemption
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            loanTwo.principal, // Repayment does not affect the second loan outstanding
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            committedDepositsBefore + loan.principal,
             "committed deposits"
         );
     }
