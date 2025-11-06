@@ -151,7 +151,10 @@ contract ConvertibleDepositActivator is Owned {
         cdAuctioneer.enableDepositPeriod(PERIOD_2M);
         cdAuctioneer.enableDepositPeriod(PERIOD_3M);
 
-        // 2. Enable ConvertibleDepositAuctioneer (with disabled auction)
+        // 2. Set minimum bid on ConvertibleDepositAuctioneer
+        cdAuctioneer.setMinimumBid(CDA_MINIMUM_BID);
+
+        // 3. Enable ConvertibleDepositAuctioneer (with disabled auction)
         bytes memory auctioneerParams = abi.encode(
             IConvertibleDepositAuctioneer.EnableParams({
                 target: CDA_INITIAL_TARGET,
@@ -164,7 +167,7 @@ contract ConvertibleDepositActivator is Owned {
         );
         IEnabler(CD_AUCTIONEER).enable(auctioneerParams);
 
-        // 3. Enable EmissionManager
+        // 4. Enable EmissionManager
         bytes memory emissionParams = abi.encode(
             IEmissionManager.EnableParams({
                 baseEmissionsRate: EM_BASE_EMISSIONS_RATE,
