@@ -59,6 +59,7 @@ contract ConvertibleDepositActivator is Owned {
     uint256 public constant CDA_INITIAL_TICK_SIZE_BASE = 2e18; // 2.0
     uint24 public constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
     uint8 public constant CDA_AUCTION_TRACKING_PERIOD = 7; // 7 days
+    uint256 public constant CDA_MINIMUM_BID = 100e18; // 100 USDS
 
     // EmissionManager parameters
     uint256 public constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
