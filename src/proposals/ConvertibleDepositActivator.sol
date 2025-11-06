@@ -64,7 +64,7 @@ contract ConvertibleDepositActivator is Owned {
     // EmissionManager parameters
     uint256 public constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
     uint256 public constant EM_MINIMUM_PREMIUM = 1e18; // 100% premium
-    uint256 public constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
+    uint256 public constant EM_BACKING = 11690000000000000000; // 11.69 USDS/OHM
     uint256 public constant EM_TICK_SIZE = 150e9; // 150 OHM
     uint256 public constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
     uint256 public constant EM_BOND_MARKET_CAPACITY_SCALAR = 1e18; // 100% bond market capacity scalar
