@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -16,6 +18,7 @@ import {IReserveWrapper} from "src/policies/interfaces/IReserveWrapper.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 
 contract ReserveWrapperTest is Test {
+    using ModuleTestFixtureGenerator for OlympusTreasury;
     event ReserveWrapped(address indexed reserve, address indexed sReserve, uint256 amount);
 
     address internal ADMIN;
@@ -31,6 +34,7 @@ contract ReserveWrapperTest is Test {
 
     RolesAdmin internal rolesAdmin;
     ReserveWrapper internal reserveWrapper;
+    address internal godmode;
 
     function setUp() public {
         // Create users
@@ -52,6 +56,7 @@ contract ReserveWrapperTest is Test {
         // Deploy policies
         rolesAdmin = new RolesAdmin(kernel);
         reserveWrapper = new ReserveWrapper(address(kernel), address(reserve), address(sReserve));
+        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
 
         // Label the tokens for easier debugging
         vm.label(address(reserve), "reserve");
@@ -62,6 +67,7 @@ contract ReserveWrapperTest is Test {
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(reserveWrapper));
+        kernel.executeAction(Actions.ActivatePolicy, address(godmode));
 
         // Grant the roles
         rolesAdmin.grantRole("admin", ADMIN);
@@ -140,6 +146,7 @@ contract ReserveWrapperTest is Test {
 
         // Expect revert
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("heart"))
         );
 
@@ -199,6 +206,26 @@ contract ReserveWrapperTest is Test {
         assertEq(sReserve.balanceOf(address(TRSRY)), 0, "sReserve balance mismatch");
     }
 
+    // given TRSRY is disabled
+    //  [X] it does nothing
+
+    function test_execute_givenTRSRYIsDisabled() public givenEnabled {
+        // Mint some reserve to the TRSRY
+        reserve.mint(address(TRSRY), 1e18);
+
+        // Disable the TRSRY
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        // Execute
+        vm.prank(HEART);
+        reserveWrapper.execute();
+
+        // Assert balances
+        assertEq(reserve.balanceOf(address(TRSRY)), 1e18, "Reserve balance mismatch");
+        assertEq(sReserve.balanceOf(address(TRSRY)), 0, "sReserve balance mismatch");
+    }
+
     // [X] it withdraws the reserve from the TRSRY
     // [X] it wraps the reserve into the sReserve
     // [X] the TRSRY's sReserve balance is increased by the sReserve shares
@@ -226,3 +253,4 @@ contract ReserveWrapperTest is Test {
         assertEq(sReserve.balanceOf(address(TRSRY)), expectedShares, "sReserve balance mismatch");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable, unwrapped-modifier-logic)
