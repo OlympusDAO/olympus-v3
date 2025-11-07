@@ -29,7 +29,6 @@ This document describes the roles that are used in the Olympus protocol.
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
-| emergency | ConvertibleDepositFacility | Disable the contract |
 | emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
 | emergency | CoolerTreasuryBorrower | Allows enable/disable on the CoolerTreasuryBorrower |
 | emergency | DepositManager | Disable contract |
