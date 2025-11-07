@@ -1339,8 +1339,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 PERIOD_MONTHS_TWO
             );
 
+            // Capacity: halved as the day target is met
+            // Price: unaffected by the day target being met
+            // Last update: updated to the current block timestamp
             assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
-            assertEq(tick.price, (MIN_PRICE * TICK_STEP) / 100e2, "period two tick price");
+            assertEq(tick.price, MIN_PRICE, "period two tick price");
             assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
         }
     }
@@ -1380,8 +1383,12 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
             PERIOD_MONTHS_TWO
         );
-        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity"); // Halved as the day target is met
-        assertEq(tick.price, 165e17, "period two tick price"); // Increased as the day target is met
+
+        // Capacity: halved as the day target is met
+        // Price: unaffected by the day target being met
+        // Last update: updated to the current block timestamp
+        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
+        assertEq(tick.price, MIN_PRICE, "period two tick price");
         assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
     }
 
@@ -1897,8 +1904,67 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
 
     // given the day target is 1000
     //  given the tick size is 1000
-    //   [X] the tick size is halved upon the day target being met
-    //   [X] the tick price increases upon the day target being met
+    //   when the day target is met in the middle of the bid
+    //    given the other deposit period has a tick capacity larger than the new tick size
+    //     [X] the tick size is halved upon the day target being met
+    //     [X] the tick price increases upon the day target being met
+    //     [X] the tick capacity is reduced to the standard tick size
+    //     [X] the tick capacity of other deposit periods is affected
+    //     [X] the tick price of other deposit periods is not affected
+
+    function test_dayTargetAppliesImmediately_otherDepositPeriodHasNoBid()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabledWithParameters(1000e9, 1000e9, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 30000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 30000e18)
+    {
+        // First bid: period two, day target is reached
+        vm.prank(recipient);
+        (, uint256 positionIdOne, , ) = auctioneer.bid(
+            PERIOD_MONTHS_TWO,
+            16000e18,
+            1,
+            false,
+            false
+        );
+
+        // Assert output
+        // First bid:
+        // - 15000e18 * 1e9 / 15e18 = 1000e9, new price of 16.5e18 and capacity of 500e9 (halved)
+        // - 1000e18 * 1e9 / 16.5e18 = 60606060606 (rounded down), price is same, capacity is 500e9 - 60606060606 = 439393939394
+        // - Conversion price: 16000e18 * 1e9 / (1000e9 + 60606060606) = 15085714285715147756 (rounded up)
+        IDepositPositionManager.Position memory positionOne = convertibleDepositPositions
+            .getPosition(positionIdOne);
+        assertEq(positionOne.remainingDeposit, 16000e18, "positionOne remaining deposit");
+        assertEq(positionOne.conversionPrice, 15085714285715147756, "positionOne conversion price");
+
+        // Check tick state for deposit period two
+        // - Capacity: 439393939394 (remaining capacity)
+        // - Price: 16.5e18 (moved to the next tick)
+        IConvertibleDepositAuctioneer.Tick memory tickOne = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tickOne.capacity, 439393939394, "tickOne capacity");
+        assertEq(tickOne.price, 16.5e18, "tickOne price");
+
+        // Check tick state for deposit period one
+        // - Capacity: 500e9 (reduced due to the day target being met)
+        // - Price: 15e18 (remains the same as before)
+        tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        assertEq(tickOne.capacity, 500e9, "tickOne capacity after bid two");
+        assertEq(tickOne.price, 15e18, "tickOne price after bid two");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
+    }
+
+    //    [X] the tick size is halved upon the day target being met
+    //    [X] the tick price increases upon the day target being met
+    //    [X] the tick capacity is reduced to the standard tick size
+    //    [X] the tick capacity of other deposit periods is not affected
+    //    [X] the tick price of other deposit periods is not affected
 
     function test_dayTargetAppliesImmediately()
         public
@@ -1964,11 +2030,11 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         assertEq(tickTwo.price, 1815e16, "tickTwo price");
 
         // Check tick state for deposit period one
-        // - Capacity: 500e9 (resets due to the day target being met)
-        // - Price: 16.5e18 (increased after the day target being met)
+        // - Capacity: 66666667 (remains the same as before, it was under the reduced tick size)
+        // - Price: 15e18 (remains the same as before)
         tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
-        assertEq(tickOne.capacity, 500e9, "tickOne capacity after bid two");
-        assertEq(tickOne.price, 165e17, "tickOne price after bid two");
+        assertEq(tickOne.capacity, 66666667, "tickOne capacity after bid two");
+        assertEq(tickOne.price, 15e18, "tickOne price after bid two");
 
         // Check global tick size
         assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
