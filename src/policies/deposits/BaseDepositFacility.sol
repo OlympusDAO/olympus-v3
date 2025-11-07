@@ -584,22 +584,19 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         }
 
         // Perform the split
+        // Allow inheriting contracts to perform custom actions when a position is split
+        // This is called before the position is split in the DEPOS contract, to avoid issues with state changes due to an ERC721 callback
+        _split(positionId_, amount_);
+
         // This will revert if the amount is 0 or greater than the position amount
         uint256 newPositionId = DEPOS.split(positionId_, amount_, to_, wrap_);
-
-        // Allow inheriting contracts to perform custom actions when a position is split
-        _split(positionId_, newPositionId, amount_);
 
         return newPositionId;
     }
 
     /// @notice     Internal function to handle the splitting of a position
-    /// @dev        Inheriting contracts can implement this function to perform custom actions when a position is split. This function is called after the position is split, so beware of reentrancy.
-    function _split(
-        uint256 oldPositionId_,
-        uint256 newPositionId_,
-        uint256 amount_
-    ) internal virtual {}
+    /// @dev        Inheriting contracts can implement this function to perform custom actions when a position is split. This function is called before the position is split in the underlying DEPOS module.
+    function _split(uint256 oldPositionId_, uint256 amount_) internal virtual {}
 
     // ========== RECLAIM RATE MANAGEMENT ========== //
 
