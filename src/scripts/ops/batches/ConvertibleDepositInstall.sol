@@ -17,6 +17,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
@@ -449,8 +450,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Configure and initialize EmissionManager
-    function configureEmissionManager(
+    function configureEmissionManagerRoles(
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
@@ -462,9 +462,6 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
-
-        console2.log("=== Configuring EmissionManager ===");
-        console2.log("Setting up emissions system for supply growth");
 
         // Grant roles
         console2.log("Granting cd_emissionmanager role to:", emissionManager);
@@ -484,6 +481,26 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
         );
+
+        console2.log("EmissionManager roles batch prepared");
+        proposeBatch();
+    }
+
+    /// @notice Configure and initialize EmissionManager
+    function configureEmissionManager(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
+
+        console2.log("=== Configuring EmissionManager ===");
+        console2.log("Setting up emissions system for supply growth");
 
         console2.log("Enabling EmissionManager with parameters:");
         console2.log("- Base emissions rate: 0.02%/day");
@@ -675,6 +692,42 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         addToBatch(reserveWrapper, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         console2.log("ReserveWrapper enablement batch prepared");
+        proposeBatch();
+    }
+
+    function runActivator(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address activator = _envAddressNotZero("olympus.periphery.ConvertibleDepositActivator");
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+
+        console2.log("=== Activator ===");
+
+        console2.log("Granting admin role to activator");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Running activator");
+        addToBatch(
+            activator,
+            abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector)
+        );
+
+        console2.log("Revoking admin role from activator");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Activator batch prepared");
         proposeBatch();
     }
 }
