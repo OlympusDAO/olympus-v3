@@ -466,6 +466,7 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IDepositPositionManager).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

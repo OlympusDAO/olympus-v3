@@ -14,6 +14,10 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 import {IReserveWrapper} from "src/policies/interfaces/IReserveWrapper.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 
@@ -251,6 +255,33 @@ contract ReserveWrapperTest is Test {
         // Assert balances
         assertEq(reserve.balanceOf(address(TRSRY)), 0, "Reserve balance mismatch");
         assertEq(sReserve.balanceOf(address(TRSRY)), expectedShares, "sReserve balance mismatch");
+    }
+
+    // supportsInterface tests
+
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(reserveWrapper));
+        assertEq(
+            reserveWrapper.supportsInterface(type(IERC165).interfaceId),
+            true,
+            "IERC165 mismatch"
+        );
+        assertEq(
+            reserveWrapper.supportsInterface(type(IPeriodicTask).interfaceId),
+            true,
+            "IPeriodicTask mismatch"
+        );
+        assertEq(
+            reserveWrapper.supportsInterface(type(IReserveWrapper).interfaceId),
+            true,
+            "IReserveWrapper mismatch"
+        );
+
+        assertEq(
+            reserveWrapper.supportsInterface(type(IERC20).interfaceId),
+            false,
+            "Should not support IERC20"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-variable, unwrapped-modifier-logic)

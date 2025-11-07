@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable one-contract-per-file
-pragma solidity 0.8.15;
+pragma solidity >=0.8.20;
 
 import {console2} from "forge-std/console2.sol";
 

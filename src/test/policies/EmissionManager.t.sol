@@ -29,7 +29,10 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
 import {PolicyAdmin} from "policies/utils/PolicyAdmin.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IPeriodicTask} from "interfaces/IPeriodicTask.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // solhint-disable-next-line max-states-count
 contract EmissionManagerTest is Test {
@@ -3455,5 +3458,33 @@ contract EmissionManagerTest is Test {
         );
         assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
         assertFalse(emissionManager.isEnabled(), "EmissionManager should be disabled");
+    }
+
+    // supportsInterface tests
+
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(emissionManager));
+        assertEq(emissionManager.supportsInterface(bytes4(0x01ffc9a7)), true, "IERC165 mismatch");
+        assertEq(
+            emissionManager.supportsInterface(type(IEmissionManager).interfaceId),
+            true,
+            "IEmissionManager mismatch"
+        );
+        assertEq(
+            emissionManager.supportsInterface(type(IPeriodicTask).interfaceId),
+            true,
+            "IPeriodicTask mismatch"
+        );
+        assertEq(
+            emissionManager.supportsInterface(type(IEnabler).interfaceId),
+            true,
+            "IEnabler mismatch"
+        );
+
+        assertEq(
+            emissionManager.supportsInterface(type(IERC20).interfaceId),
+            false,
+            "Should not support IERC20"
+        );
     }
 }

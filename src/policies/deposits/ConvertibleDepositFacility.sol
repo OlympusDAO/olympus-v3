@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
@@ -441,6 +442,7 @@ contract ConvertibleDepositFacility is
         bytes4 interfaceId
     ) public view virtual override(BaseDepositFacility, IPeriodicTask) returns (bool) {
         return
+            interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IConvertibleDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||
             super.supportsInterface(interfaceId);

@@ -727,6 +727,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         bytes4 interfaceId
     ) public view virtual override(PolicyEnabler, IPeriodicTask) returns (bool) {
         return
+            interfaceId == bytes4(0x01ffc9a7) || // ERC-165
             interfaceId == type(IPeriodicTask).interfaceId ||
             interfaceId == type(IEmissionManager).interfaceId ||
             super.supportsInterface(interfaceId);
