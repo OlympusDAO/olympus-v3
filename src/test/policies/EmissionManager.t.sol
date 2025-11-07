@@ -29,6 +29,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
 import {PolicyAdmin} from "policies/utils/PolicyAdmin.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // solhint-disable-next-line max-states-count
 contract EmissionManagerTest is Test {
@@ -39,6 +40,7 @@ contract EmissionManagerTest is Test {
     address internal bob;
     address internal heart;
     address internal guardian;
+    address internal manager;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -251,11 +253,12 @@ contract EmissionManagerTest is Test {
         userCreator = new UserFactory();
         {
             /// Deploy bond system to test against
-            address[] memory users = userCreator.create(4);
+            address[] memory users = userCreator.create(5);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
             heart = users[3];
+            manager = users[4];
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
 
             /// Deploy the bond system
@@ -340,6 +343,7 @@ contract EmissionManagerTest is Test {
             // Emission manager roles
             rolesAdmin.grantRole("heart", heart);
             rolesAdmin.grantRole("admin", guardian);
+            rolesAdmin.grantRole("manager", manager);
 
             // Emergency roles
             rolesAdmin.grantRole("emergency", guardian);
@@ -2377,6 +2381,33 @@ contract EmissionManagerTest is Test {
 
         // Confirm the backing has been updated
         assertEq(emissionManager.backing(), expectedBacking, "Backing should be updated");
+    }
+
+    // createPendingBondMarket tests
+
+    // when the caller is not itself, an admin nor a manager
+    //  [X] it reverts
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_createPendingBondMarket_whenCallerNotAuthorized_reverts(address caller_) public {
+        vm.assume(caller_ != address(emissionManager) && caller_ != manager && caller_ != guardian);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.createPendingBondMarket();
+    }
+
+    function test_createPendingBondMarket_whenContractIsDisabled_reverts() public givenShutdown {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+
+        // Call function
+        vm.prank(address(emissionManager));
+        emissionManager.createPendingBondMarket();
     }
 
     // shutdown tests

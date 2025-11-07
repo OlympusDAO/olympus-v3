@@ -702,8 +702,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///
     ///         This function will revert if:
     ///         - The caller is not this contract, or an address with the admin/manager role
+    ///         - The contract is disabled
     ///         - The bond market cannot be created
-    function createPendingBondMarket() external {
+    function createPendingBondMarket() external onlyEnabled {
         // Validate that the caller is this contract or an admin/manager
         if (msg.sender != address(this) && !_isManager(msg.sender) && !_isAdmin(msg.sender))
             revert NotAuthorised();
