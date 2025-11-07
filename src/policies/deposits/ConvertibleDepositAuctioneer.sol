@@ -252,7 +252,6 @@ contract ConvertibleDepositAuctioneer is
             Tick memory updatedTick = _getCurrentTick(params.depositPeriod);
 
             // Get bid results
-            uint256 previousConvertible = _dayState.convertible;
             BidOutput memory output = _previewBid(params.depositAmount, updatedTick);
 
             // Reject if the OHM out is 0
