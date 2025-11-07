@@ -61,8 +61,9 @@ contract ConvertibleDepositFacilitySetAssetPeriodReclaimRateTest is ConvertibleD
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IDepositFacility.DepositFacility_InvalidAddress.selector,
-                address(0)
+                IDepositFacility.DepositFacility_InvalidReclaimRate.selector,
+                reclaimRate_,
+                100e2
             )
         );
 

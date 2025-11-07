@@ -629,7 +629,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             );
 
         // Validate that the reclaim rate does not exceed 100%
-        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositFacility_InvalidAddress(address(0));
+        if (reclaimRate_ > ONE_HUNDRED_PERCENT)
+            revert DepositFacility_InvalidReclaimRate(reclaimRate_, ONE_HUNDRED_PERCENT);
 
         // Set the reclaim rate
         _assetPeriodReclaimRates[_getAssetPeriodKey(asset_, depositPeriod_)] = reclaimRate_;
