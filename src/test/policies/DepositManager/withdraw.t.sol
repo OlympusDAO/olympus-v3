@@ -87,7 +87,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
     {
-        _expectRevertERC20CloneInsufficientAllowance();
+        _expectRevertReceiptTokenInsufficientAllowance(0, previousDepositorDepositActualAmount);
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
@@ -113,7 +113,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
-        givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT + 1)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT + 1)
     {
         _expectRevertERC20CloneInsufficientBalance();
 
@@ -141,7 +141,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
-        givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
     {
         uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 

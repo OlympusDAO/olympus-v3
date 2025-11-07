@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
 import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {CloneERC20} from "src/external/clones/CloneERC20.sol";
@@ -50,9 +51,13 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
 
     // ========== OWNER-ONLY FUNCTIONS ========== //
 
+    function _onlyOwner() internal view {
+        if (msg.sender != owner()) revert OnlyOwner();
+    }
+
     /// @notice Only the owner can call this function
     modifier onlyOwner() {
-        if (msg.sender != owner()) revert OnlyOwner();
+        _onlyOwner();
         _;
     }
 
@@ -69,19 +74,12 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     /// @notice Burn tokens from the specified address
     /// @dev    This is gated to the owner, as burning is controlled.
     ///         Burning should be performed through the owner contract.
-    ///
-    /// @dev    This function reverts if:
-    ///         - The amount is greater than the allowance
+    ///         The owner is expected to handle spending approval before calling this function.
+    ///         This function does NOT check or update allowances.
     ///
     /// @param from_ The address to burn tokens from
     /// @param amount_ The amount of tokens to burn
     function burnFrom(address from_, uint256 amount_) external onlyOwner {
-        uint256 allowed = allowance[from_][msg.sender];
-
-        if (allowed != type(uint256).max) {
-            allowance[from_][msg.sender] = allowed - amount_;
-        }
-
         _burn(from_, amount_);
     }
 
@@ -90,6 +88,7 @@ contract CloneableReceiptToken is CloneERC20, IERC20BurnableMintable, IDepositRe
     function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
         // super does not implement ERC165, so no need to call it
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IERC20).interfaceId ||
             interfaceId_ == type(IERC20BurnableMintable).interfaceId ||
             interfaceId_ == type(IDepositReceiptToken).interfaceId;

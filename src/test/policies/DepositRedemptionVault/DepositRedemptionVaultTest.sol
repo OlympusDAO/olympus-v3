@@ -492,26 +492,6 @@ contract DepositRedemptionVaultTest is Test {
         _;
     }
 
-    function _approveWrappedReceiptTokenSpending(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) internal {
-        IERC20 wrappedToken = _getWrappedReceiptToken(iReserveToken, PERIOD_MONTHS);
-
-        vm.prank(owner_);
-        wrappedToken.approve(spender_, amount_);
-    }
-
-    modifier givenWrappedReceiptTokenSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        _approveWrappedReceiptTokenSpending(owner_, spender_, amount_);
-        _;
-    }
-
     modifier givenReceiptTokenSpendingIsApproved(
         address owner_,
         address spender_,

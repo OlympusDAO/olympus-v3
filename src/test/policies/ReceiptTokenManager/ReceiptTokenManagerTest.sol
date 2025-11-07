@@ -65,12 +65,6 @@ contract ReceiptTokenManagerTest is Test {
         _;
     }
 
-    modifier allowReceiptTokenManagerToSpendWrapped() {
-        vm.prank(RECIPIENT);
-        _wrappedToken.approve(address(receiptTokenManager), MINT_AMOUNT);
-        _;
-    }
-
     modifier allowOwnerToSpendAll() {
         vm.prank(RECIPIENT);
         receiptTokenManager.approve(OWNER, _tokenId, type(uint256).max);

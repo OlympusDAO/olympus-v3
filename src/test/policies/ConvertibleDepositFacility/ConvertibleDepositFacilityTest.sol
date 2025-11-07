@@ -452,10 +452,8 @@ contract ConvertibleDepositFacilityTest is Test {
         address spender_,
         uint256 amount_
     ) internal {
-        IERC20 wrappedToken = _getWrappedReceiptToken(iReserveToken, PERIOD_MONTHS);
-
         vm.prank(owner_);
-        wrappedToken.approve(spender_, amount_);
+        receiptTokenManager.approve(spender_, receiptTokenId, amount_);
     }
 
     modifier givenWrappedReceiptTokenSpendingIsApproved(

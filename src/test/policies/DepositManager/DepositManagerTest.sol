@@ -221,19 +221,6 @@ contract DepositManagerTest is Test {
         _;
     }
 
-    modifier givenDepositorHasApprovedSpendingWrappedReceiptToken(uint256 amount_) {
-        uint256 receiptTokenId = depositManager.getReceiptTokenId(
-            iAsset,
-            DEPOSIT_PERIOD,
-            DEPOSIT_OPERATOR
-        );
-        address wrappedToken = receiptTokenManager.getWrappedToken(receiptTokenId);
-
-        vm.prank(DEPOSITOR);
-        IERC20(wrappedToken).approve(address(receiptTokenManager), amount_);
-        _;
-    }
-
     modifier givenDepositorHasApprovedSpendingReceiptToken(uint256 amount_) {
         uint256 receiptTokenId = depositManager.getReceiptTokenId(
             iAsset,
