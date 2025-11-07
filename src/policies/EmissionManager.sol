@@ -15,6 +15,8 @@ import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -138,6 +140,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             revert InvalidParam("Bond Auctioneer address cannot be 0");
         if (teller_ == address(0)) revert InvalidParam("Bond Teller address cannot be 0");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
+
+        // Validate that the auctioneer implements the IEnabler interface
+        if (!IERC165(cdAuctioneer_).supportsInterface(type(IEnabler).interfaceId))
+            revert InvalidParam("CD Auctioneer does not implement IEnabler");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
@@ -263,7 +269,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
-        if (cdAuctioneer.getAuctionResultsNextIndex() == 0) {
+        // This only applies if the auctioneer is enabled. Otherwise, it would create a bond market at every third heartbeat (as the auction results index is not incremented while the auctioneer is disabled)
+        if (
+            IEnabler(address(cdAuctioneer)).isEnabled() &&
+            cdAuctioneer.getAuctionResultsNextIndex() == 0
+        ) {
             int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
             int256 difference;
             for (uint256 i = 0; i < auctionResults.length; i++) {

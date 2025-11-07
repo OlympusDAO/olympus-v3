@@ -418,6 +418,10 @@ contract EmissionManagerTest is Test {
         // 22377897966596497241 * 11e17 / 1e18 = 24615687763256146965.1
         // = 24615687763256146966 (rounded up)
         expectedMinPrice = 24615687763256146966;
+
+        // Enable the mock auctioneer
+        vm.prank(guardian);
+        cdAuctioneer.enable("");
     }
 
     // internal helper functions
@@ -3334,7 +3338,44 @@ contract EmissionManagerTest is Test {
     }
 
     //   given the bond market capacity scalar is 100% (1e18)
-    //     [X] it creates a bond market with 100% of the deficit as capacity
+    //    given the auctioneer is disabled
+    //     [X] it does not create a bond market
+    //     [X] it does not set the pending capacity
+
+    function test_execute_whenDeficit_whenScalarIsOneHundredPercent_givenAuctioneerIsDisabled()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(1e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Disable the auctioneer
+        vm.prank(guardian);
+        cdAuctioneer.disable("");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        // The auction results index is not incremented while the auctioneer is disabled. If bond market creation was not skipped, a bond market could be created at every third heartbeat.
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
+    //    [X] it creates a bond market with 100% of the deficit as capacity
 
     function test_execute_whenDeficit_whenScalarIsOneHundredPercent_createsFullBondMarket()
         public
@@ -3367,7 +3408,7 @@ contract EmissionManagerTest is Test {
     }
 
     //   given the bond market capacity scalar is 200% (2e18)
-    //     [X] it creates a bond market with 200% of the deficit as capacity
+    //    [X] it creates a bond market with 200% of the deficit as capacity
 
     function test_execute_whenDeficit_whenScalarIsTwoHundredPercent_createsDoubledBondMarket()
         public
