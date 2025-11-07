@@ -64,7 +64,7 @@ contract ConvertibleDepositActivator is Owned {
     uint256 public constant EM_MINIMUM_PREMIUM = 1e18; // 100% premium
     uint256 public constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
     uint256 public constant EM_TICK_SIZE = 150e9; // 150 OHM
-    uint256 public constant EM_MIN_PRICE_SCALAR = 1e18; // 100% min price multiplier
+    uint256 public constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
     uint48 public constant EM_RESTART_TIMEFRAME = 950400; // 11 days
 
     /// @notice True if the activation has been performed

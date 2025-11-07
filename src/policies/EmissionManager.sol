@@ -93,6 +93,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     uint256 public tickSize;
 
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
+    /// @dev    The value must be greater than or equal to ONE_HUNDRED_PERCENT (100%)
     uint256 public minPriceScalar;
 
     uint8 internal _oracleDecimals;
@@ -314,8 +315,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (params.backing == 0) revert InvalidParam("backing");
         if (params.restartTimeframe == 0) revert InvalidParam("restartTimeframe");
         if (params.tickSize == 0) revert InvalidParam("Tick Size");
-        if (params.minPriceScalar == 0 || params.minPriceScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Min Price Scalar");
+        if (params.minPriceScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
 
         // Assign
         baseEmissionRate = params.baseEmissionsRate;
@@ -614,13 +614,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD minimum price scalar
     /// @dev    This function reverts if:
-    ///         - newScalar is 0
-    ///         - newScalar is greater than ONE_HUNDRED_PERCENT (100% in 18 decimals)
+    ///         - newScalar is less than ONE_HUNDRED_PERCENT (100% in 18 decimals)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
     function setMinPriceScalar(uint256 newScalar) external onlyAdminRole {
-        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Min Price Scalar");
+        if (newScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
 
         emit MinPriceScalarChanged(newScalar);
@@ -688,7 +686,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///
     /// @param  price Price of OHM in reserve token terms, scaled to the reserve asset's decimals
     function getMinPriceFor(uint256 price) public view returns (uint256) {
-        return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+        // Round in favour of the protocol
+        return price.mulDivUp(minPriceScalar, ONE_HUNDRED_PERCENT);
     }
 
     /// @notice Returns the current price from the PRICE module

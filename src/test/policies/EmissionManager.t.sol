@@ -76,7 +76,7 @@ contract EmissionManagerTest is Test {
     uint256 internal changeBy = 1e5; // 0.01% change per execution
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSize = 10e9; // 10 OHM fixed tick size
-    uint256 internal minPriceScalar = 9e17; // 90%
+    uint256 internal minPriceScalar = 11e17; // 110%
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
@@ -85,6 +85,7 @@ contract EmissionManagerTest is Test {
 
     event BondMarketCreationFailed(uint256 saleAmount);
     event TickSizeChanged(uint256 newTickSize);
+    event MinPriceScalarChanged(uint256 newMinPriceScalar);
 
     // test cases
     //
@@ -411,8 +412,9 @@ contract EmissionManagerTest is Test {
         // 22377897966596497241 = 22.37 reserve/OHM
         PRICE.setCurrentPrice(22377897966596497241);
 
-        // 20140108169936847516
-        expectedMinPrice = (uint256(22377897966596497241) * 9e17) / 1e18;
+        // 22377897966596497241 * 11e17 / 1e18 = 24615687763256146965.1
+        // = 24615687763256146966 (rounded up)
+        expectedMinPrice = 24615687763256146966;
     }
 
     // internal helper functions
@@ -515,6 +517,15 @@ contract EmissionManagerTest is Test {
         _;
     }
 
+    function _expectRevertRoleRequired(string memory role_) internal {
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32(bytes(role_))
+        );
+        vm.expectRevert(err);
+    }
+
     // execute test cases
 
     function test_execute_whenNotLocallyActive_NothingHappens() public {
@@ -564,9 +575,7 @@ contract EmissionManagerTest is Test {
 
     function test_execute_withoutHeartRole_reverts() public {
         // Call the function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("heart"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("heart");
 
         // Call the function
         vm.startPrank(guardian);
@@ -889,10 +898,10 @@ contract EmissionManagerTest is Test {
             // Adjusted to the decimals of the deposit/reserve asset
             // price = 22377897966596497241 (18 dp)
             // price (adjusted) = 22377897 (6 dp)
-            // minPrice = price * 9e17/1e18
-            // minPrice = 20140107
+            // minPrice = price * 11e17/1e18
+            // minPrice = 24615686.7 = 24615687 (rounded up)
 
-            assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
+            assertEq(cdAuctioneer.minPrice(), 24615687, "Min price");
         }
 
         // The pending capacity should be 0
@@ -2502,9 +2511,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently enabled
         // Call the restart function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
 
@@ -2514,7 +2522,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently locally inactive
         // Try to call restart again with the wrong caller
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
     }
@@ -2562,13 +2571,12 @@ contract EmissionManagerTest is Test {
 
     // initialize tests
 
-    function test_initialize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+    function test_enable_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.enable(
             abi.encode(
@@ -2584,7 +2592,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenAlreadyActive_reverts() public {
+    function test_enable_whenAlreadyActive_reverts() public {
         // Call the initialize function with the wrong caller
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
@@ -2603,7 +2611,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenRestartTimeframeNotElapsed_reverts(
+    function test_enable_whenRestartTimeframeNotElapsed_reverts(
         uint48 elapsed_
     ) public givenShutdown {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
@@ -2639,7 +2647,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenParamsLengthInvalid_reverts()
+    function test_enable_whenParamsLengthInvalid_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2652,7 +2660,7 @@ contract EmissionManagerTest is Test {
         emissionManager.enable(abi.encode(uint256(20)));
     }
 
-    function test_initialize_whenBaseEmissionRateZero_reverts()
+    function test_enable_whenBaseEmissionRateZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2677,7 +2685,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenMinimumPremiumZero_reverts()
+    function test_enable_whenMinimumPremiumZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2702,7 +2710,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenBackingZero_reverts()
+    function test_enable_whenBackingZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2727,7 +2735,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_whenRestartTimeframeZero_reverts()
+    function test_enable_whenRestartTimeframeZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2752,7 +2760,33 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
+    function test_enable_whenMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 0, 1e18 - 1);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+    }
+
+    function test_enable_success() public givenShutdown givenRestartTimeframeElapsed {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Values are currently as setup
@@ -2791,9 +2825,49 @@ contract EmissionManagerTest is Test {
             "Restart timeframe should be updated"
         );
         assertEq(emissionManager.tickSize(), tickSize, "TickSize should be updated");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar,
+            "Min price scalar should be updated"
+        );
     }
 
-    function test_initialize_setsTickSizeAndEmitsEvent()
+    function test_enable_setsMinPriceScalar(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 1e18, 10e18);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(minPriceScalar_);
+
+        // Initialize the emissions manager with guardian using new values
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate + 1,
+                    minimumPremium: minimumPremium + 1,
+                    backing: backing + 1,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    restartTimeframe: restartTimeframe + 1
+                })
+            )
+        );
+
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar_,
+            "Min price scalar should be updated"
+        );
+    }
+
+    function test_enable_setsTickSizeAndEmitsEvent()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2827,7 +2901,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_withZeroMinTickSize_reverts()
+    function test_enable_withZeroMinTickSize_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2860,9 +2934,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the changeBaseRate function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.changeBaseRate(1e18, 1, true);
     }
@@ -2943,9 +3016,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setMinimumPremium function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setMinimumPremium(1e18);
     }
@@ -2982,9 +3054,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBacking function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBacking(11e18);
     }
@@ -3018,9 +3089,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setRestartTimeframe function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setRestartTimeframe(1);
     }
@@ -3054,9 +3124,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBondContracts function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBondContracts(address(1), address(1));
     }
@@ -3097,9 +3166,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setCDAuctionContract function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setCDAuctionContract(address(1));
     }
@@ -3145,9 +3213,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setTickSize function with the wrong caller
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
 
         vm.prank(rando_);
         emissionManager.setTickSize(1e9);
@@ -3502,6 +3568,59 @@ contract EmissionManagerTest is Test {
             emissionManager.supportsInterface(type(IERC20).interfaceId),
             false,
             "Should not support IERC20"
+        );
+    }
+
+    // setMinPriceScalar tests
+
+    // given the caller does not have the admin role
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenCallerDoesNotHaveAdminRole_reverts() public {
+        // Expect revert
+        _expectRevertRoleRequired("admin");
+
+        // Call function
+        vm.prank(alice);
+        emissionManager.setMinPriceScalar(1e18);
+    }
+
+    // when the new min price scalar is below 1e18
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenNewMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 newMinPriceScalar_
+    ) public {
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 0, 1e18 - 1);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+    }
+
+    // [X] the min price scalar is set to the new value
+    // [X] MinPriceScalarChanged event is emitted
+
+    function test_setMinPriceScalar_success(uint256 newMinPriceScalar_) public {
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 1e18, 10e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(newMinPriceScalar_);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+
+        // Confirm the min price scalar is set
+        assertEq(
+            emissionManager.minPriceScalar(),
+            newMinPriceScalar_,
+            "Min price scalar should be updated"
         );
     }
 }
