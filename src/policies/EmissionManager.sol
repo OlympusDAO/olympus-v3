@@ -304,6 +304,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
                         // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
                         emit BondMarketCreationFailed(scaledCapacity);
                     }
+                } else {
+                    // Ensure that we reset the pending capacity
+                    if (bondMarketPendingCapacity > 0) {
+                        bondMarketPendingCapacity = 0;
+                    }
                 }
             }
             // Otherwise, make sure we reset the pending capacity
