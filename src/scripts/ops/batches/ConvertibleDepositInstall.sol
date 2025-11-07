@@ -17,6 +17,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
@@ -691,6 +692,42 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         addToBatch(reserveWrapper, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         console2.log("ReserveWrapper enablement batch prepared");
+        proposeBatch();
+    }
+
+    function runActivator(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address activator = _envAddressNotZero("olympus.periphery.ConvertibleDepositActivator");
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+
+        console2.log("=== Activator ===");
+
+        console2.log("Granting admin role to activator");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Running activator");
+        addToBatch(
+            activator,
+            abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector)
+        );
+
+        console2.log("Revoking admin role from activator");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Activator batch prepared");
         proposeBatch();
     }
 }
