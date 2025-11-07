@@ -899,4 +899,515 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
             "auction should be inactive when target is 0"
         );
     }
+
+    // ========== GAS SNAPSHOT TESTS FOR TICK DECAY OPTIMIZATION ========== //
+
+    /// @notice Test price decay with few ticks (~8 ticks)
+    /// @dev MATHEMATICAL PROOF:
+    ///      Tick size: 2e8 (0.2e9 OHM)
+    ///      Target: 20e9 OHM/day
+    ///      Time warp: 2 hours
+    ///
+    ///      STEP 1: Initial state after bid
+    ///      Starting price: 998409613180787391841156435 wei
+    ///      Starting capacity: 98614089 wei of OHM
+    ///
+    ///      STEP 2: Calculate decay
+    ///      Capacity added = (20e9 * 2 hours) / 24 hours = 1666666666 wei of OHM
+    ///      Total capacity = initialCapacity + addedCapacity = 98614089 + 1666666666 = 1765280755 wei
+    ///
+    ///      Decay loop: while (newCapacity > tickSize)
+    ///      Tick size = 2e8 = 200000000 wei
+    ///
+    ///      Iteration 0: newCapacity = 1765280755 > 200000000 ✓
+    ///                   price = 998409613180787391841156435.mulDivUp(100e2, 110e2) = 907645102891624901673778578
+    ///                   newCapacity = 1765280755 - 200000000 = 1565280755
+    ///
+    ///      Iteration 1: newCapacity = 1565280755 > 200000000 ✓
+    ///                   price = 907645102891624901673778578.mulDivUp(100e2, 110e2) = 825131911719659001521616890
+    ///                   newCapacity = 1565280755 - 200000000 = 1365280755
+    ///
+    ///      Iteration 2: newCapacity = 1365280755 > 200000000 ✓
+    ///                   price = 825131911719659001521616890.mulDivUp(100e2, 110e2) = 750119919745144546837833537
+    ///                   newCapacity = 1365280755 - 200000000 = 1165280755
+    ///
+    ///      Iteration 3: newCapacity = 1165280755 > 200000000 ✓
+    ///                   price = 750119919745144546837833537.mulDivUp(100e2, 110e2) = 681927199768313224398030489
+    ///                   newCapacity = 1165280755 - 200000000 = 965280755
+    ///
+    ///      Iteration 4: newCapacity = 965280755 > 200000000 ✓
+    ///                   price = 681927199768313224398030489.mulDivUp(100e2, 110e2) = 619933817971193840361845900
+    ///                   newCapacity = 965280755 - 200000000 = 765280755
+    ///
+    ///      Iteration 5: newCapacity = 765280755 > 200000000 ✓
+    ///                   price = 619933817971193840361845900.mulDivUp(100e2, 110e2) = 563576198155630763965314455
+    ///                   newCapacity = 765280755 - 200000000 = 565280755
+    ///
+    ///      Iteration 6: newCapacity = 565280755 > 200000000 ✓
+    ///                   price = 563576198155630763965314455.mulDivUp(100e2, 110e2) = 512341998323300694513922232
+    ///                   newCapacity = 565280755 - 200000000 = 365280755
+    ///
+    ///      Iteration 7: newCapacity = 365280755 > 200000000 ✓
+    ///                   price = 512341998323300694513922232.mulDivUp(100e2, 110e2) = 465765453021182449558111120
+    ///                   newCapacity = 365280755 - 200000000 = 165280755
+    ///
+    ///      Iteration 8: newCapacity = 165280755 > 200000000 ✗ (loop exits)
+    ///
+    ///      Final price = 465765453021182449558111120 wei
+    ///      Final capacity = 165280755 wei
+    ///
+    ///      STEP 3: Calculate final capacity
+    ///      Total capacity = initialCapacity + addedCapacity
+    ///      Initial capacity = 2e8 (full tick after bid)
+    ///      Added capacity = 1,666,666,666 OHM
+    ///      Total capacity = 2e8 + 1,666,666,666 = 1,866,666,666 OHM
+    ///
+    ///      After 8 tick traversals: 1,866,666,666 - (8 × 2e8) = 1,866,666,666 - 1,600,000,000 = 266,666,666 OHM
+    ///      Since 266666666 < 1e8 (current tick size), the final capacity is 1e8
+    ///      Final capacity = 1e8 OHM
+    function test_priceDecay_fewTicks()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, 2e8, MIN_PRICE)
+        givenRecipientHasBid(1000000000e18)
+    {
+        // Get initial price after bids
+        IConvertibleDepositAuctioneer.Tick memory initialTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Warp to create capacity requiring 8 ticks
+        uint48 timeWarp = uint48(2 hours);
+        vm.warp(block.timestamp + timeWarp);
+
+        // Snapshot gas
+        vm.startSnapshotGas("priceDecay_fewTicks");
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        uint256 gasUsed = vm.stopSnapshotGas();
+
+        // Log results
+        console2.log("=== Few Ticks (8 ticks) ===");
+        console2.log("Initial price after bids:", initialTick.price);
+        console2.log("Initial capacity:", initialTick.capacity);
+        console2.log("Time warped (hours):", timeWarp / 1 hours);
+        console2.log("Gas used:", gasUsed);
+        console2.log("Final price:", tick.price);
+        console2.log("Final capacity:", tick.capacity);
+
+        // Verify correctness with hard-coded expected values
+        assertEq(tick.price, 465765453021182449558111120, "Final price after 8 ticks");
+        assertEq(tick.capacity, 1e8, "Final capacity after 8 tick traversals");
+    }
+
+    /// @notice Test price decay with many ticks (25 ticks)
+    /// @dev MATHEMATICAL PROOF:
+    ///      Tick size: 2e8 (0.2e9 OHM)
+    ///      Target: 20e9 OHM/day
+    ///      Time warp: 6 hours
+    ///
+    ///      STEP 1: Initial state after bid
+    ///      Starting price: 998409613180787391841156435 wei
+    ///      Starting capacity: 98614089 wei of OHM
+    ///
+    ///      STEP 2: Calculate decay
+    ///      Capacity added = (20e9 * 6 hours) / 24 hours = 5000000000 wei of OHM
+    ///      Total capacity = initialCapacity + addedCapacity = 98614089 + 5000000000 = 5098614089 wei
+    ///
+    ///      Decay loop: while (newCapacity > tickSize)
+    ///      Tick size = 2e8 = 200000000 wei
+    ///
+    ///      Iteration 0: newCapacity = 5098614089 > 200000000 ✓
+    ///                   price = 998409613180787391841156435.mulDivUp(100e2, 110e2) = 907645102891624901673778578
+    ///                   newCapacity = 5098614089 - 200000000 = 4898614089
+    ///
+    ///      Iteration 1: newCapacity = 4898614089 > 200000000 ✓
+    ///                   price = 907645102891624901673778578.mulDivUp(100e2, 110e2) = 825131911719659001521616890
+    ///                   newCapacity = 4898614089 - 200000000 = 4698614089
+    ///
+    ///      Iteration 2: newCapacity = 4698614089 > 200000000 ✓
+    ///                   price = 825131911719659001521616890.mulDivUp(100e2, 110e2) = 750119919745144546837833537
+    ///                   newCapacity = 4698614089 - 200000000 = 4498614089
+    ///
+    ///      Iteration 3: newCapacity = 4498614089 > 200000000 ✓
+    ///                   price = 750119919745144546837833537.mulDivUp(100e2, 110e2) = 681927199768313224398030489
+    ///                   newCapacity = 4498614089 - 200000000 = 4298614089
+    ///
+    ///      Iteration 4: newCapacity = 4298614089 > 200000000 ✓
+    ///                   price = 681927199768313224398030489.mulDivUp(100e2, 110e2) = 619933817971193840361845900
+    ///                   newCapacity = 4298614089 - 200000000 = 4098614089
+    ///
+    ///      Iteration 5: newCapacity = 4098614089 > 200000000 ✓
+    ///                   price = 619933817971193840361845900.mulDivUp(100e2, 110e2) = 563576198155630763965314455
+    ///                   newCapacity = 4098614089 - 200000000 = 3898614089
+    ///
+    ///      Iteration 6: newCapacity = 3898614089 > 200000000 ✓
+    ///                   price = 563576198155630763965314455.mulDivUp(100e2, 110e2) = 512341998323300694513922232
+    ///                   newCapacity = 3898614089 - 200000000 = 3698614089
+    ///
+    ///      Iteration 7: newCapacity = 3698614089 > 200000000 ✓
+    ///                   price = 512341998323300694513922232.mulDivUp(100e2, 110e2) = 465765453021182449558111120
+    ///                   newCapacity = 3698614089 - 200000000 = 3498614089
+    ///
+    ///      Iteration 8: newCapacity = 3498614089 > 200000000 ✓
+    ///                   price = 465765453021182449558111120.mulDivUp(100e2, 110e2) = 423423139110165863234646473
+    ///                   newCapacity = 3498614089 - 200000000 = 3298614089
+    ///
+    ///      Iteration 9: newCapacity = 3298614089 > 200000000 ✓
+    ///                   price = 423423139110165863234646473.mulDivUp(100e2, 110e2) = 384930126463787148395133158
+    ///                   newCapacity = 3298614089 - 200000000 = 3098614089
+    ///
+    ///      Iteration 10: newCapacity = 3098614089 > 200000000 ✓
+    ///                    price = 384930126463787148395133158.mulDivUp(100e2, 110e2) = 349936478603442862177393780
+    ///                    newCapacity = 3098614089 - 200000000 = 2898614089
+    ///
+    ///      Iteration 11: newCapacity = 2898614089 > 200000000 ✓
+    ///                    price = 349936478603442862177393780.mulDivUp(100e2, 110e2) = 318124071457675329252176164
+    ///                    newCapacity = 2898614089 - 200000000 = 2698614089
+    ///
+    ///      Iteration 12: newCapacity = 2698614089 > 200000000 ✓
+    ///                    price = 318124071457675329252176164.mulDivUp(100e2, 110e2) = 289203701325159390229251059
+    ///                    newCapacity = 2698614089 - 200000000 = 2498614089
+    ///
+    ///      Iteration 13: newCapacity = 2498614089 > 200000000 ✓
+    ///                    price = 289203701325159390229251059.mulDivUp(100e2, 110e2) = 262912455750144900208410054
+    ///                    newCapacity = 2498614089 - 200000000 = 2298614089
+    ///
+    ///      Iteration 14: newCapacity = 2298614089 > 200000000 ✓
+    ///                    price = 262912455750144900208410054.mulDivUp(100e2, 110e2) = 239011323409222636553100050
+    ///                    newCapacity = 2298614089 - 200000000 = 2098614089
+    ///
+    ///      Iteration 15: newCapacity = 2098614089 > 200000000 ✓
+    ///                    price = 239011323409222636553100050.mulDivUp(100e2, 110e2) = 217283021281111487775545500
+    ///                    newCapacity = 2098614089 - 200000000 = 1898614089
+    ///
+    ///      Iteration 16: newCapacity = 1898614089 > 200000000 ✓
+    ///                    price = 217283021281111487775545500.mulDivUp(100e2, 110e2) = 197530019346464988886859546
+    ///                    newCapacity = 1898614089 - 200000000 = 1698614089
+    ///
+    ///      Iteration 17: newCapacity = 1698614089 > 200000000 ✓
+    ///                    price = 197530019346464988886859546.mulDivUp(100e2, 110e2) = 179572744860422717169872315
+    ///                    newCapacity = 1698614089 - 200000000 = 1498614089
+    ///
+    ///      Iteration 18: newCapacity = 1498614089 > 200000000 ✓
+    ///                    price = 179572744860422717169872315.mulDivUp(100e2, 110e2) = 163247949873111561063520287
+    ///                    newCapacity = 1498614089 - 200000000 = 1298614089
+    ///
+    ///      Iteration 19: newCapacity = 1298614089 > 200000000 ✓
+    ///                    price = 163247949873111561063520287.mulDivUp(100e2, 110e2) = 148407227157374146421382080
+    ///                    newCapacity = 1298614089 - 200000000 = 1098614089
+    ///
+    ///      Iteration 20: newCapacity = 1098614089 > 200000000 ✓
+    ///                    price = 148407227157374146421382080.mulDivUp(100e2, 110e2) = 134915661052158314928529164
+    ///                    newCapacity = 1098614089 - 200000000 = 898614089
+    ///
+    ///      Iteration 21: newCapacity = 898614089 > 200000000 ✓
+    ///                    price = 134915661052158314928529164.mulDivUp(100e2, 110e2) = 122650600956507559025935604
+    ///                    newCapacity = 898614089 - 200000000 = 698614089
+    ///
+    ///      Iteration 22: newCapacity = 698614089 > 200000000 ✓
+    ///                    price = 122650600956507559025935604.mulDivUp(100e2, 110e2) = 111500546324097780932668731
+    ///                    newCapacity = 698614089 - 200000000 = 498614089
+    ///
+    ///      Iteration 23: newCapacity = 498614089 > 200000000 ✓
+    ///                    price = 111500546324097780932668731.mulDivUp(100e2, 110e2) = 101364133021907073575153392
+    ///                    newCapacity = 498614089 - 200000000 = 298614089
+    ///
+    ///      Iteration 24: newCapacity = 298614089 > 200000000 ✓
+    ///                    price = 101364133021907073575153392.mulDivUp(100e2, 110e2) = 92149211838097339613775811
+    ///                    newCapacity = 298614089 - 200000000 = 98614089
+    ///
+    ///      Iteration 25: newCapacity = 98614089 > 200000000 ✗ (loop exits)
+    ///
+    ///      Final price = 92149211838097339613775811 wei
+    ///      Final capacity = 98614089 wei
+    function test_priceDecay_manyTicks()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, 2e8, MIN_PRICE)
+        givenRecipientHasBid(1000000000e18)
+    {
+        // Get initial price after bids
+        IConvertibleDepositAuctioneer.Tick memory initialTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Warp to create capacity requiring 25 ticks
+        uint48 timeWarp = uint48(6 hours);
+        vm.warp(block.timestamp + timeWarp);
+
+        // Snapshot gas
+        vm.startSnapshotGas("priceDecay_manyTicks");
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        uint256 gasUsed = vm.stopSnapshotGas();
+
+        // Log results
+        console2.log("=== Many Ticks (25 ticks) ===");
+        console2.log("Initial price after bids:", initialTick.price);
+        console2.log("Initial capacity:", initialTick.capacity);
+        console2.log("Time warped (hours):", timeWarp / 1 hours);
+        console2.log("Gas used:", gasUsed);
+        console2.log("Final price:", tick.price);
+        console2.log("Final capacity:", tick.capacity);
+
+        // Verify correctness with hard-coded expected values
+        assertEq(tick.price, 92149211838097339613775811, "Final price after 25 ticks");
+        assertEq(tick.capacity, 98614089, "Final capacity after 25 tick traversals");
+    }
+
+    /// @notice Test price decay with few ticks (~50 ticks)
+    /// @dev MATHEMATICAL PROOF:
+    ///      Tick size: 2e8 (0.2e9 OHM)
+    ///      Target: 20e9 OHM/day
+    ///      Time warp: 12 hours
+    ///
+    ///      STEP 1: Initial state after bid
+    ///      Starting price: 998409613180787391841156435 wei
+    ///      Starting capacity: 98614089 wei of OHM
+    ///
+    ///      STEP 2: Calculate decay
+    ///      Capacity added = (20e9 * 12 hours) / 24 hours = 10000000000 wei of OHM
+    ///      Total capacity = initialCapacity + addedCapacity = 98614089 + 10000000000 = 10098614089 wei
+    ///
+    ///      Decay loop: while (newCapacity > tickSize)
+    ///      Tick size = 2e8 = 200000000 wei
+    ///
+    ///      Iteration 0: newCapacity = 10098614089 > 200000000 ✓
+    ///                   price = 998409613180787391841156435.mulDivUp(100e2, 110e2) = 907645102891624901673778578
+    ///                   newCapacity = 10098614089 - 200000000 = 9898614089
+    ///
+    ///      Iteration 1: newCapacity = 9898614089 > 200000000 ✓
+    ///                   price = 907645102891624901673778578.mulDivUp(100e2, 110e2) = 825131911719659001521616890
+    ///                   newCapacity = 9898614089 - 200000000 = 9698614089
+    ///
+    ///      Iteration 2: newCapacity = 9698614089 > 200000000 ✓
+    ///                   price = 825131911719659001521616890.mulDivUp(100e2, 110e2) = 750119919745144546837833537
+    ///                   newCapacity = 9698614089 - 200000000 = 9498614089
+    ///
+    ///      Iteration 3: newCapacity = 9498614089 > 200000000 ✓
+    ///                   price = 750119919745144546837833537.mulDivUp(100e2, 110e2) = 681927199768313224398030489
+    ///                   newCapacity = 9498614089 - 200000000 = 9298614089
+    ///
+    ///      Iteration 4: newCapacity = 9298614089 > 200000000 ✓
+    ///                   price = 681927199768313224398030489.mulDivUp(100e2, 110e2) = 619933817971193840361845900
+    ///                   newCapacity = 9298614089 - 200000000 = 9098614089
+    ///
+    ///      Iteration 5: newCapacity = 9098614089 > 200000000 ✓
+    ///                   price = 619933817971193840361845900.mulDivUp(100e2, 110e2) = 563576198155630763965314455
+    ///                   newCapacity = 9098614089 - 200000000 = 8898614089
+    ///
+    ///      Iteration 6: newCapacity = 8898614089 > 200000000 ✓
+    ///                   price = 563576198155630763965314455.mulDivUp(100e2, 110e2) = 512341998323300694513922232
+    ///                   newCapacity = 8898614089 - 200000000 = 8698614089
+    ///
+    ///      Iteration 7: newCapacity = 8698614089 > 200000000 ✓
+    ///                   price = 512341998323300694513922232.mulDivUp(100e2, 110e2) = 465765453021182449558111120
+    ///                   newCapacity = 8698614089 - 200000000 = 8498614089
+    ///
+    ///      Iteration 8: newCapacity = 8498614089 > 200000000 ✓
+    ///                   price = 465765453021182449558111120.mulDivUp(100e2, 110e2) = 423423139110165863234646473
+    ///                   newCapacity = 8498614089 - 200000000 = 8298614089
+    ///
+    ///      Iteration 9: newCapacity = 8298614089 > 200000000 ✓
+    ///                   price = 423423139110165863234646473.mulDivUp(100e2, 110e2) = 384930126463787148395133158
+    ///                   newCapacity = 8298614089 - 200000000 = 8098614089
+    ///
+    ///      Iteration 10: newCapacity = 8098614089 > 200000000 ✓
+    ///                    price = 384930126463787148395133158.mulDivUp(100e2, 110e2) = 349936478603442862177393780
+    ///                    newCapacity = 8098614089 - 200000000 = 7898614089
+    ///
+    ///      Iteration 11: newCapacity = 7898614089 > 200000000 ✓
+    ///                    price = 349936478603442862177393780.mulDivUp(100e2, 110e2) = 318124071457675329252176164
+    ///                    newCapacity = 7898614089 - 200000000 = 7698614089
+    ///
+    ///      Iteration 12: newCapacity = 7698614089 > 200000000 ✓
+    ///                    price = 318124071457675329252176164.mulDivUp(100e2, 110e2) = 289203701325159390229251059
+    ///                    newCapacity = 7698614089 - 200000000 = 7498614089
+    ///
+    ///      Iteration 13: newCapacity = 7498614089 > 200000000 ✓
+    ///                    price = 289203701325159390229251059.mulDivUp(100e2, 110e2) = 262912455750144900208410054
+    ///                    newCapacity = 7498614089 - 200000000 = 7298614089
+    ///
+    ///      Iteration 14: newCapacity = 7298614089 > 200000000 ✓
+    ///                    price = 262912455750144900208410054.mulDivUp(100e2, 110e2) = 239011323409222636553100050
+    ///                    newCapacity = 7298614089 - 200000000 = 7098614089
+    ///
+    ///      Iteration 15: newCapacity = 7098614089 > 200000000 ✓
+    ///                    price = 239011323409222636553100050.mulDivUp(100e2, 110e2) = 217283021281111487775545500
+    ///                    newCapacity = 7098614089 - 200000000 = 6898614089
+    ///
+    ///      Iteration 16: newCapacity = 6898614089 > 200000000 ✓
+    ///                    price = 217283021281111487775545500.mulDivUp(100e2, 110e2) = 197530019346464988886859546
+    ///                    newCapacity = 6898614089 - 200000000 = 6698614089
+    ///
+    ///      Iteration 17: newCapacity = 6698614089 > 200000000 ✓
+    ///                    price = 197530019346464988886859546.mulDivUp(100e2, 110e2) = 179572744860422717169872315
+    ///                    newCapacity = 6698614089 - 200000000 = 6498614089
+    ///
+    ///      Iteration 18: newCapacity = 6498614089 > 200000000 ✓
+    ///                    price = 179572744860422717169872315.mulDivUp(100e2, 110e2) = 163247949873111561063520287
+    ///                    newCapacity = 6498614089 - 200000000 = 6298614089
+    ///
+    ///      Iteration 19: newCapacity = 6298614089 > 200000000 ✓
+    ///                    price = 163247949873111561063520287.mulDivUp(100e2, 110e2) = 148407227157374146421382080
+    ///                    newCapacity = 6298614089 - 200000000 = 6098614089
+    ///
+    ///      Iteration 20: newCapacity = 6098614089 > 200000000 ✓
+    ///                    price = 148407227157374146421382080.mulDivUp(100e2, 110e2) = 134915661052158314928529164
+    ///                    newCapacity = 6098614089 - 200000000 = 5898614089
+    ///
+    ///      Iteration 21: newCapacity = 5898614089 > 200000000 ✓
+    ///                    price = 134915661052158314928529164.mulDivUp(100e2, 110e2) = 122650600956507559025935604
+    ///                    newCapacity = 5898614089 - 200000000 = 5698614089
+    ///
+    ///      Iteration 22: newCapacity = 5698614089 > 200000000 ✓
+    ///                    price = 122650600956507559025935604.mulDivUp(100e2, 110e2) = 111500546324097780932668731
+    ///                    newCapacity = 5698614089 - 200000000 = 5498614089
+    ///
+    ///      Iteration 23: newCapacity = 5498614089 > 200000000 ✓
+    ///                    price = 111500546324097780932668731.mulDivUp(100e2, 110e2) = 101364133021907073575153392
+    ///                    newCapacity = 5498614089 - 200000000 = 5298614089
+    ///
+    ///      Iteration 24: newCapacity = 5298614089 > 200000000 ✓
+    ///                    price = 101364133021907073575153392.mulDivUp(100e2, 110e2) = 92149211838097339613775811
+    ///                    newCapacity = 5298614089 - 200000000 = 5098614089
+    ///
+    ///      Iteration 25: newCapacity = 5098614089 > 200000000 ✓
+    ///                    price = 92149211838097339613775811.mulDivUp(100e2, 110e2) = 83772010761906672376159829
+    ///                    newCapacity = 5098614089 - 200000000 = 4898614089
+    ///
+    ///      Iteration 26: newCapacity = 4898614089 > 200000000 ✓
+    ///                    price = 83772010761906672376159829.mulDivUp(100e2, 110e2) = 76156373419915156705599845
+    ///                    newCapacity = 4898614089 - 200000000 = 4698614089
+    ///
+    ///      Iteration 27: newCapacity = 4698614089 > 200000000 ✓
+    ///                    price = 76156373419915156705599845.mulDivUp(100e2, 110e2) = 69233066745377415186908950
+    ///                    newCapacity = 4698614089 - 200000000 = 4498614089
+    ///
+    ///      Iteration 28: newCapacity = 4498614089 > 200000000 ✓
+    ///                    price = 69233066745377415186908950.mulDivUp(100e2, 110e2) = 62939151586706741079008137
+    ///                    newCapacity = 4498614089 - 200000000 = 4298614089
+    ///
+    ///      Iteration 29: newCapacity = 4298614089 > 200000000 ✓
+    ///                    price = 62939151586706741079008137.mulDivUp(100e2, 110e2) = 57217410533369764617280125
+    ///                    newCapacity = 4298614089 - 200000000 = 4098614089
+    ///
+    ///      Iteration 30: newCapacity = 4098614089 > 200000000 ✓
+    ///                    price = 57217410533369764617280125.mulDivUp(100e2, 110e2) = 52015827757608876924800114
+    ///                    newCapacity = 4098614089 - 200000000 = 3898614089
+    ///
+    ///      Iteration 31: newCapacity = 3898614089 > 200000000 ✓
+    ///                    price = 52015827757608876924800114.mulDivUp(100e2, 110e2) = 47287116143280797204363740
+    ///                    newCapacity = 3898614089 - 200000000 = 3698614089
+    ///
+    ///      Iteration 32: newCapacity = 3698614089 > 200000000 ✓
+    ///                    price = 47287116143280797204363740.mulDivUp(100e2, 110e2) = 42988287402982542913057946
+    ///                    newCapacity = 3698614089 - 200000000 = 3498614089
+    ///
+    ///      Iteration 33: newCapacity = 3498614089 > 200000000 ✓
+    ///                    price = 42988287402982542913057946.mulDivUp(100e2, 110e2) = 39080261275438675375507224
+    ///                    newCapacity = 3498614089 - 200000000 = 3298614089
+    ///
+    ///      Iteration 34: newCapacity = 3298614089 > 200000000 ✓
+    ///                    price = 39080261275438675375507224.mulDivUp(100e2, 110e2) = 35527510250398795795915659
+    ///                    newCapacity = 3298614089 - 200000000 = 3098614089
+    ///
+    ///      Iteration 35: newCapacity = 3098614089 > 200000000 ✓
+    ///                    price = 35527510250398795795915659.mulDivUp(100e2, 110e2) = 32297736591271632541741509
+    ///                    newCapacity = 3098614089 - 200000000 = 2898614089
+    ///
+    ///      Iteration 36: newCapacity = 2898614089 > 200000000 ✓
+    ///                    price = 32297736591271632541741509.mulDivUp(100e2, 110e2) = 29361578719337847765219554
+    ///                    newCapacity = 2898614089 - 200000000 = 2698614089
+    ///
+    ///      Iteration 37: newCapacity = 2698614089 > 200000000 ✓
+    ///                    price = 29361578719337847765219554.mulDivUp(100e2, 110e2) = 26692344290307134332017777
+    ///                    newCapacity = 2698614089 - 200000000 = 2498614089
+    ///
+    ///      Iteration 38: newCapacity = 2498614089 > 200000000 ✓
+    ///                    price = 26692344290307134332017777.mulDivUp(100e2, 110e2) = 24265767536642849392743434
+    ///                    newCapacity = 2498614089 - 200000000 = 2298614089
+    ///
+    ///      Iteration 39: newCapacity = 2298614089 > 200000000 ✓
+    ///                    price = 24265767536642849392743434.mulDivUp(100e2, 110e2) = 22059788669675317629766759
+    ///                    newCapacity = 2298614089 - 200000000 = 2098614089
+    ///
+    ///      Iteration 40: newCapacity = 2098614089 > 200000000 ✓
+    ///                    price = 22059788669675317629766759.mulDivUp(100e2, 110e2) = 20054353336068470572515236
+    ///                    newCapacity = 2098614089 - 200000000 = 1898614089
+    ///
+    ///      Iteration 41: newCapacity = 1898614089 > 200000000 ✓
+    ///                    price = 20054353336068470572515236.mulDivUp(100e2, 110e2) = 18231230305516791429559306
+    ///                    newCapacity = 1898614089 - 200000000 = 1698614089
+    ///
+    ///      Iteration 42: newCapacity = 1698614089 > 200000000 ✓
+    ///                    price = 18231230305516791429559306.mulDivUp(100e2, 110e2) = 16573845732287992208690279
+    ///                    newCapacity = 1698614089 - 200000000 = 1498614089
+    ///
+    ///      Iteration 43: newCapacity = 1498614089 > 200000000 ✓
+    ///                    price = 16573845732287992208690279.mulDivUp(100e2, 110e2) = 15067132483898174735172981
+    ///                    newCapacity = 1498614089 - 200000000 = 1298614089
+    ///
+    ///      Iteration 44: newCapacity = 1298614089 > 200000000 ✓
+    ///                    price = 15067132483898174735172981.mulDivUp(100e2, 110e2) = 13697393167180158850157256
+    ///                    newCapacity = 1298614089 - 200000000 = 1098614089
+    ///
+    ///      Iteration 45: newCapacity = 1098614089 > 200000000 ✓
+    ///                    price = 13697393167180158850157256.mulDivUp(100e2, 110e2) = 12452175606527417136506597
+    ///                    newCapacity = 1098614089 - 200000000 = 898614089
+    ///
+    ///      Iteration 46: newCapacity = 898614089 > 200000000 ✓
+    ///                    price = 12452175606527417136506597.mulDivUp(100e2, 110e2) = 11320159642297651942278725
+    ///                    newCapacity = 898614089 - 200000000 = 698614089
+    ///
+    ///      Iteration 47: newCapacity = 698614089 > 200000000 ✓
+    ///                    price = 11320159642297651942278725.mulDivUp(100e2, 110e2) = 10291054220270592674798841
+    ///                    newCapacity = 698614089 - 200000000 = 498614089
+    ///
+    ///      Iteration 48: newCapacity = 498614089 > 200000000 ✓
+    ///                    price = 10291054220270592674798841.mulDivUp(100e2, 110e2) = 9355503836609629704362583
+    ///                    newCapacity = 498614089 - 200000000 = 298614089
+    ///
+    ///      Iteration 49: newCapacity = 298614089 > 200000000 ✓
+    ///                    price = 9355503836609629704362583.mulDivUp(100e2, 110e2) = 8505003487826936094875076
+    ///                    newCapacity = 298614089 - 200000000 = 98614089
+    ///
+    ///      Iteration 50: newCapacity = 98614089 > 200000000 ✗ (loop exits)
+    ///
+    ///      Final price = 8505003487826936094875076 wei
+    ///      Final capacity = 98614089 wei
+    function test_priceDecay_veryManyTicks()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, 2e8, MIN_PRICE)
+        givenRecipientHasBid(1000000000e18)
+    {
+        // Get initial price after bids
+        IConvertibleDepositAuctioneer.Tick memory initialTick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+
+        // Warp to create capacity requiring 50 ticks
+        uint48 timeWarp = uint48(12 hours);
+        vm.warp(block.timestamp + timeWarp);
+
+        // Snapshot gas
+        vm.startSnapshotGas("priceDecay_veryManyTicks");
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        uint256 gasUsed = vm.stopSnapshotGas();
+
+        // Log results
+        console2.log("=== Very Many Ticks (50 ticks) ===");
+        console2.log("Initial price after bids:", initialTick.price);
+        console2.log("Initial capacity:", initialTick.capacity);
+        console2.log("Time warped (hours):", timeWarp / 1 hours);
+        console2.log("Gas used:", gasUsed);
+        console2.log("Final price:", tick.price);
+        console2.log("Final capacity:", tick.capacity);
+
+        // Verify correctness with hard-coded expected values
+        assertEq(tick.price, 8505003487826936094875076, "Final price after 50 ticks");
+        assertEq(tick.capacity, 98614089, "Final capacity after 50 tick traversals");
+    }
+
+    // TODO add tests for overflow of tick price calculation
 }
