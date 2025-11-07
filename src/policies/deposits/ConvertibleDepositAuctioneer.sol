@@ -111,6 +111,11 @@ contract ConvertibleDepositAuctioneer is
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
 
+    /// @notice The minimum bid amount
+    /// @dev    The minimum bid amount is the minimum amount of deposit asset that can be bid
+    ///         See `getMinimumBid()` for more information
+    uint256 internal _minimumBid;
+
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
 
@@ -176,6 +181,8 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function reverts if:
     ///             - The contract is not active
+    ///             - The auction is disabled
+    ///             - The bid amount is below the minimum bid
     ///             - Deposits are not enabled for the asset/period/operator
     ///             - The depositor has not approved the DepositManager to spend the deposit asset
     ///             - The depositor has an insufficient balance of the deposit asset
@@ -213,6 +220,11 @@ contract ConvertibleDepositAuctioneer is
         // If target is 0, auction is disabled - reject all bids
         if (_auctionParameters.target == 0) {
             revert ConvertibleDepositAuctioneer_ConvertedAmountZero();
+        }
+
+        // Check minimum bid requirement
+        if (params.depositAmount < _minimumBid) {
+            revert ConvertibleDepositAuctioneer_BidBelowMinimum(params.depositAmount, _minimumBid);
         }
 
         uint256 ohmOut;
@@ -410,6 +422,11 @@ contract ConvertibleDepositAuctioneer is
             return 0;
         }
 
+        // If bid amount is below minimum, return 0
+        if (bidAmount_ < _minimumBid) {
+            return 0;
+        }
+
         // Get the updated tick based on the current state
         Tick memory currentTick = _getCurrentTick(depositPeriod_);
 
@@ -599,6 +616,11 @@ contract ConvertibleDepositAuctioneer is
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getTickStep() external view override returns (uint24) {
         return _tickStep;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getMinimumBid() external view override returns (uint256) {
+        return _minimumBid;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -1091,6 +1113,18 @@ contract ConvertibleDepositAuctioneer is
 
         // Emit event
         emit AuctionTrackingPeriodUpdated(address(_DEPOSIT_ASSET), days_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN or ROLE_MANAGER role
+    ///
+    /// @param      minimumBid_    The new minimum bid amount
+    function setMinimumBid(uint256 minimumBid_) external override onlyManagerOrAdminRole {
+        _minimumBid = minimumBid_;
+
+        // Emit event
+        emit MinimumBidUpdated(address(_DEPOSIT_ASSET), minimumBid_);
     }
 
     // ========== ACTIVATION/DEACTIVATION ========== //

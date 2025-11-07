@@ -62,6 +62,11 @@ interface IConvertibleDepositAuctioneer {
         uint8 newAuctionTrackingPeriod
     );
 
+    /// @notice Emitted when the minimum bid is updated
+    ///
+    /// @param  newMinimumBid The new minimum bid amount
+    event MinimumBidUpdated(address indexed depositAsset, uint256 newMinimumBid);
+
     /// @notice Emitted when a deposit period is enabled
     ///
     /// @param  depositAsset      The asset that is being deposited
@@ -115,6 +120,12 @@ interface IConvertibleDepositAuctioneer {
         uint8 depositPeriod,
         bool isEnabled
     );
+
+    /// @notice Emitted when the bid amount is below the minimum required
+    ///
+    /// @param  bidAmount     The amount of the bid
+    /// @param  minimumBid    The minimum bid amount required
+    error ConvertibleDepositAuctioneer_BidBelowMinimum(uint256 bidAmount, uint256 minimumBid);
 
     // ========== DATA STRUCTURES ========== //
 
@@ -256,6 +267,11 @@ interface IConvertibleDepositAuctioneer {
     /// @return index The index where the next auction result will be stored
     function getAuctionResultsNextIndex() external view returns (uint8 index);
 
+    /// @notice Get the minimum bid amount
+    ///
+    /// @return minimumBid The minimum bid amount required
+    function getMinimumBid() external view returns (uint256 minimumBid);
+
     // ========== ASSET CONFIGURATION ========== //
 
     /// @notice Get the deposit asset
@@ -323,4 +339,10 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  days_ The number of days that auction results are tracked for
     function setAuctionTrackingPeriod(uint8 days_) external;
+
+    /// @notice Set the minimum bid amount
+    /// @dev    Only callable by the admin or manager
+    ///
+    /// @param  minimumBid_ The new minimum bid amount
+    function setMinimumBid(uint256 minimumBid_) external;
 }

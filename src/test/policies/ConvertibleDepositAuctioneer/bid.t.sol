@@ -1802,4 +1802,126 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Check global tick size
         assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
     }
+
+    // ========== MINIMUM BID TESTS ========== //
+
+    function test_bidBelowMinimumBid_reverts(
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // Set a minimum bid
+        uint256 minimumBid = 100e18;
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Ensure bid amount is below minimum
+        uint256 bidAmount = bound(bidAmount_, 1, minimumBid - 1);
+
+        // Test previewBid returns 0
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertEq(previewOhmOut, 0, "previewBid should return 0 for bid below minimum");
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_BidBelowMinimum.selector,
+                bidAmount,
+                minimumBid
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+    }
+
+    function test_bidAtMinimumBid(
+        uint256 minimumBid_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        uint256 minimumBid = bound(minimumBid_, 1e18, 100e18);
+
+        // Set minimum bid
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, minimumBid);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value for bid at minimum");
+
+        // Call function with exact minimum bid
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, minimumBid, 0, false, false);
+
+        // Should succeed without reverting
+    }
+
+    function test_bidAboveMinimumBid_succeeds(
+        uint256 minimumBid_,
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        uint256 minimumBid = bound(minimumBid_, 1e18, 50e18);
+        uint256 bidAmount = bound(bidAmount_, minimumBid + 1, 100e18);
+
+        // Set minimum bid
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value for bid above minimum");
+
+        // Call function with bid above minimum
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+
+        // Should succeed without reverting
+    }
+
+    function test_minimumBidZero_allowsAnyBid(
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // convertible = deposit * 1e9 / minPrice
+        // deposit = convertible * minPrice / 1e9
+        uint256 minimumDepositAmount = (1 * MIN_PRICE) / 1e9;
+
+        // Ensure bid amount is small but non-zero
+        uint256 bidAmount = bound(bidAmount_, minimumDepositAmount, 1e18);
+
+        // Set minimum bid to 0 (disabled)
+        vm.prank(admin);
+        auctioneer.setMinimumBid(0);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value when minimum bid is 0");
+
+        // Call function with small bid
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+
+        // Should succeed without reverting
+    }
 }
