@@ -45,6 +45,8 @@ interface IDepositFacility {
         uint256 available
     );
 
+    error DepositFacility_InvalidReclaimRate(uint16 reclaimRate, uint16 maxReclaimRate);
+
     // ========== OPERATOR AUTHORIZATION ========== //
 
     /// @notice Authorize an operator (e.g., a redemption vault) to handle actions through this facility
