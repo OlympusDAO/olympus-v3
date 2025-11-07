@@ -196,6 +196,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Granting heart role to:", heart);
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
         );
 
@@ -385,6 +386,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("cd_auctioneer"),
                 convertibleDepositAuctioneer
             )
@@ -395,6 +397,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("deposit_operator"),
                 convertibleDepositFacility
             )
@@ -712,6 +715,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Granting admin role to activator");
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator)
         );
 
@@ -724,6 +728,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Revoking admin role from activator");
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator)
         );
 

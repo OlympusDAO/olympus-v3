@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
 pragma solidity >=0.8.20;
@@ -679,6 +680,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
             // Validate that the activator does not have the "admin" role
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(activator, bytes32("admin")) == false,
                 "Activator should not have the admin role"
             );
@@ -690,3 +692,4 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 contract ConvertibleDepositProposalScript is ProposalScript {
     constructor() ProposalScript(new ConvertibleDepositProposal()) {}
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
