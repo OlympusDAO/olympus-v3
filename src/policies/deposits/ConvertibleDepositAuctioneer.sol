@@ -552,10 +552,8 @@ contract ConvertibleDepositAuctioneer is
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
 
             // Tick price does not go below the minimum
-            // Tick capacity is full if the min price is exceeded
             if (tick.price < _auctionParameters.minPrice) {
                 tick.price = _auctionParameters.minPrice;
-                newCapacity = tickSize;
                 break;
             }
         }

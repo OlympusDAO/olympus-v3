@@ -284,6 +284,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(lastUpdate + 1);
 
         uint256 newTickSize = bound(newTickSize_, 1, TICK_SIZE);
+        uint256 addedCapacity = (TARGET * 1) / 24 hours;
+        uint256 newCapacity = newTickSize < addedCapacity ? newTickSize : addedCapacity;
 
         // Call function
         vm.prank(emissionManager);
@@ -294,7 +296,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new tick size is >= the current tick capacity
@@ -308,6 +310,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newTickSize = bound(newTickSize_, TICK_SIZE, 2 * TICK_SIZE);
 
         // Call function
@@ -319,7 +322,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new min price is > than the current tick price
@@ -333,6 +336,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newMinPrice = bound(newMinPrice_, MIN_PRICE + 1, 2 * MIN_PRICE);
 
         // Call function
@@ -344,7 +348,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, newMinPrice, TICK_SIZE, uint48(block.timestamp));
     }
 
     // when the new min price is <= the current tick price
@@ -358,6 +362,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newMinPrice = bound(newMinPrice_, 1, MIN_PRICE);
 
         // Call function
@@ -369,7 +374,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
     }
 
     // given this is the first day of the auction cycle

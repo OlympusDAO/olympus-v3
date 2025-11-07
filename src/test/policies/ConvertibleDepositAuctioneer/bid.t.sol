@@ -1102,9 +1102,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
         }
 
-        // Warp forward to that the ticks change
-        vm.warp(block.timestamp + 1 hours);
-
         _mintAndApprove(recipient, 40575e16);
 
         {
