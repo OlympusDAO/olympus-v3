@@ -135,12 +135,14 @@ interface IDepositFacility {
     /// @param depositToken_    The deposit token being repaid
     /// @param depositPeriod_   The deposit period in months
     /// @param amount_          The amount of principal being repaid
+    /// @param maxAmount_       The maximum amount of principal that can be repaid
     /// @param payer_           The address making the repayment
     /// @return actualAmount    The amount of tokens repaid
     function handleLoanRepay(
         IERC20 depositToken_,
         uint8 depositPeriod_,
         uint256 amount_,
+        uint256 maxAmount_,
         address payer_
     ) external returns (uint256 actualAmount);
 

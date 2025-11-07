@@ -705,6 +705,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        Notes:
     ///             - This function is only callable by addresses with the deposit operator role
     ///             - This function does not check for over-payment. It is expected to be handled by the calling contract.
+    ///             - If the actual amount repaid is greater than the maximum amount provided, updates to the state variables are capped at the maximum amount.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
@@ -723,7 +724,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
-        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
 
         // Transfer funds from payer to this contract
         // This takes place before any state changes to avoid ERC777 re-entrancy
@@ -737,9 +737,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
         // Update borrowed amount
         // Reduce by the actual amount, to avoid leakage
-        // But cap at the borrowed amount, to avoid an underflow if there is an over-payment
-        _borrowedAmounts[borrowingKey] -= currentBorrowed < actualAmount
-            ? currentBorrowed
+        // But cap at the max amount, to avoid an underflow for other loans
+        _borrowedAmounts[borrowingKey] -= params_.maxAmount < actualAmount
+            ? params_.maxAmount
             : actualAmount;
 
         // Validate operator solvency after borrowed amount change
