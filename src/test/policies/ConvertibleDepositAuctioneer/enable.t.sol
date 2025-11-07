@@ -23,6 +23,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -45,6 +46,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -100,6 +102,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: tickSize_,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -127,6 +130,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: 0,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -154,6 +158,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: 0,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -183,6 +188,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: tickStep,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -210,6 +216,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: 0
                 })
@@ -261,6 +268,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -316,6 +324,7 @@ contract ConvertibleDepositAuctioneerEnableTest is ConvertibleDepositAuctioneerT
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })

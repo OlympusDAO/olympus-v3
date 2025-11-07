@@ -67,6 +67,11 @@ interface IConvertibleDepositAuctioneer {
     /// @param  newMinimumBid The new minimum bid amount
     event MinimumBidUpdated(address indexed depositAsset, uint256 newMinimumBid);
 
+    /// @notice Emitted when the tick size base is updated
+    ///
+    /// @param  newBase The new tick size base
+    event TickSizeBaseUpdated(address indexed depositAsset, uint256 newBase);
+
     /// @notice Emitted when a deposit period is enabled
     ///
     /// @param  depositAsset      The asset that is being deposited
@@ -166,12 +171,14 @@ interface IConvertibleDepositAuctioneer {
     /// @param  target                  Number of OHM available to sell per day
     /// @param  tickSize                Number of OHM in a tick
     /// @param  minPrice                Minimum price that OHM can be sold for, in terms of the bid token
+    /// @param  tickSizeBase            Base for exponential tick size reduction (by 1/(base^multiplier)) when the day target is crossed
     /// @param  tickStep                Percentage increase (decrease) per tick
     /// @param  auctionTrackingPeriod   Number of days that auction results are tracked for
     struct EnableParams {
         uint256 target;
         uint256 tickSize;
         uint256 minPrice;
+        uint256 tickSizeBase;
         uint24 tickStep;
         uint8 auctionTrackingPeriod;
     }
@@ -345,4 +352,15 @@ interface IConvertibleDepositAuctioneer {
     ///
     /// @param  minimumBid_ The new minimum bid amount
     function setMinimumBid(uint256 minimumBid_) external;
+
+    /// @notice Get the exponent base used for determining the tick size when the day target is crossed
+    ///
+    /// @return baseWad The tick size base
+    function getTickSizeBase() external view returns (uint256 baseWad);
+
+    /// @notice Set the exponent base used for determining the tick size when the day target is crossed
+    /// @dev    Only callable by the admin or manager
+    ///
+    /// @param  newBase_ The new base
+    function setTickSizeBase(uint256 newBase_) external;
 }

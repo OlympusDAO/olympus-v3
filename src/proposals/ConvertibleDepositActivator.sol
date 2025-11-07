@@ -56,6 +56,7 @@ contract ConvertibleDepositActivator is Owned {
     uint256 public constant CDA_INITIAL_TARGET = 0;
     uint256 public constant CDA_INITIAL_TICK_SIZE = 0;
     uint256 public constant CDA_INITIAL_MIN_PRICE = 0;
+    uint256 public constant CDA_INITIAL_TICK_SIZE_BASE = 2e18; // 2.0
     uint24 public constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
     uint8 public constant CDA_AUCTION_TRACKING_PERIOD = 7; // 7 days
 
@@ -155,6 +156,7 @@ contract ConvertibleDepositActivator is Owned {
                 target: CDA_INITIAL_TARGET,
                 tickSize: CDA_INITIAL_TICK_SIZE,
                 minPrice: CDA_INITIAL_MIN_PRICE,
+                tickSizeBase: CDA_INITIAL_TICK_SIZE_BASE,
                 tickStep: CDA_INITIAL_TICK_STEP_MULTIPLIER,
                 auctionTrackingPeriod: CDA_AUCTION_TRACKING_PERIOD
             })

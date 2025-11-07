@@ -98,6 +98,180 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    // when tickSizeBase = 1.0 (no reduction)
+    //  [X] crossing the day target does not reduce tick size
+    function test_tickSizeBaseOne_noReductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 1.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(1e18);
+
+        // Cross the day target exactly with a single bid:
+        // Proof:
+        // - Tick 1 (capacity 10e9) @ 15e18 requires 150e18 deposit
+        // - Tick 2 (capacity 10e9) @ 16.5e18 requires 165e18 deposit
+        // - Total to reach 20e9 = 150e18 + 165e18 = 315e18
+        // Use 315e18 (>=) to ensure crossing to multiplier=1
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (no reduction):
+        // - Base = 1.0 (1e18)
+        // - Multiplier = floor(ohmOut / target) >= 1 after crossing target
+        // - New tick size = floor(originalTickSize / base^multiplier) = floor(10e9 / 1^1) = 10e9
+        // Therefore, expected tick size = 10e9
+        assertEq(auctioneer.getCurrentTickSize(), 10e9, "tick size should not reduce");
+    }
+
+    // when tickSizeBase = 1.5
+    //  [X] crossing one day target reduces tick size by ~1/1.5 (floor)
+    function test_tickSizeBaseOnePointFive_reductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 1.5
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(15e17); // 1.5e18
+
+        // Cross the day target exactly with a single bid of 315e18 (see proof above)
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 10e9 (OHM units, 9 decimals)
+        // - Base = 1.5 (15e17), multiplier = 1 after crossing target once
+        // - New tick size = floor(10e9 / 1.5) = floor(6,666,666,666.666...) = 6,666,666,666
+        // Therefore, expected tick size = 6_666_666_666
+        assertEq(auctioneer.getCurrentTickSize(), 6_666_666_666, "tick size reduced by base");
+    }
+
+    // when tickSizeBase = 3.0
+    //  [X] crossing one day target reduces tick size by 1/3 (floor)
+    function test_tickSizeBaseThree_reductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 3.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(3e18);
+
+        // Cross the day target exactly with a single bid of 315e18 (see proof above)
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 10e9 (OHM units, 9 decimals)
+        // - Base = 3.0 (3e18), multiplier = 1 after crossing target once
+        // - New tick size = floor(10e9 / 3) = floor(3,333,333,333.333...) = 3,333,333,333
+        // Therefore, expected tick size = 3_333_333_333
+        assertEq(auctioneer.getCurrentTickSize(), 3_333_333_333, "tick size reduced by base");
+    }
+
+    // when base is large and multiple targets are crossed in one bid
+    //  [X] tick size reduction floors to minimum when division would be zero
+    function test_tickSizeMinimum_whenDivisionRoundsToZero()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(1_000, 1_000, 1) // target=1000 wei of OHM, tickSize=1000 wei of OHM, minPrice=1
+        givenAddressHasReserveToken(recipient, 1e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
+    {
+        // Set base to 10.0 to accelerate reduction
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(10e18);
+
+        // Single bid will vastly exceed target due to minPrice=1, crossing many thresholds
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 1000 wei of OHM
+        // - Base = 10; after first threshold: floor(1000/10^1)=10
+        // - After second: floor(100/10^2)=1
+        // - After third: floor(10/10^3)=0 -> implementation floors to minimum (1)
+        // Therefore, expected tick size = 1
+        assertEq(auctioneer.getCurrentTickSize(), 1, "tick size should floor to minimum");
+    }
+
+    // when multiplier would overflow rpow
+    //  [X] tick size floors to minimum instead of reverting
+    function test_tickSizeMinimum_whenMultiplierOverflowsRpow()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(1, 1, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 1_000_000_000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1_000_000_000e18)
+    {
+        // Set base to maximum (10.0) for worst-case scenario
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(10e18);
+
+        // Make a large bid that will result in a very large multiplier
+        // multiplier = convertible / target
+        // With target=1 wei, even converting 1e9 OHM gives multiplier = 1e9
+        // For rpow with base=10e18, exponents > ~59 would overflow uint256
+        // This test verifies that when multiplier exceeds safe maximum (around 59 for base=10),
+        // the function returns minimum tick size instead of reverting from rpow overflow
+
+        // A single large bid will cross many thresholds
+        // With minPrice=1 and target=1, multiplier grows very quickly
+        vm.prank(recipient);
+        // This should not revert even if multiplier would overflow rpow
+        // Instead, it should return minimum tick size
+        auctioneer.bid(PERIOD_MONTHS, 1_000_000_000e18, 1, false, false);
+
+        // Verify the bid succeeded and tick size is at minimum
+        // When multiplier exceeds safe maximum, tick size floors to minimum (1)
+        uint256 tickSize = auctioneer.getCurrentTickSize();
+        assertEq(tickSize, 1, "tick size should floor to minimum when multiplier exceeds safe max");
+    }
+
+    // when tickSizeBase = 3.0 and multiple day targets are achieved in cumulative bids
+    //  [X] tick size equals floor(original / 3^2) after crossing 2 targets
+    function test_tickSizeBaseThree_multipleTargets_cumulative()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(20e9, TICK_SIZE, MIN_PRICE) // TARGET=20e9, tickSize=10e9
+        givenAddressHasReserveToken(recipient, 10_000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 10_000e18)
+    {
+        // Set base to 3.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(3e18);
+
+        // Cumulatively bid small chunks until we cross 2 * TARGET (40e9)
+        // This avoids over-shooting too far while keeping the test simple.
+        uint256 chunk = 50e18; // small deposit increments
+        while (auctioneer.getDayState().convertible < 40e9) {
+            vm.prank(recipient);
+            auctioneer.bid(PERIOD_MONTHS, chunk, 1, false, false);
+        }
+
+        // Proof (manual):
+        // After crossing 2 day targets, multiplier = 2.
+        // New tick size = floor(originalTickSize / base^multiplier)
+        //                = floor(10e9 / 3^2)
+        //                = floor(10e9 / 9)
+        //                = floor(1,111,111,111.111...)
+        //                = 1,111,111,111
+        assertEq(
+            auctioneer.getCurrentTickSize(),
+            1_111_111_111,
+            "tick size for multiplier=2, base=3"
+        );
+    }
+
     function _assertActualAmount(
         uint256 actualAmount_,
         uint256 previousReceiptBalance_

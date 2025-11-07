@@ -55,6 +55,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant TICK_SIZE = 10e9;
     uint24 public constant TICK_STEP = 110e2; // 110%
     uint256 public constant MIN_PRICE = 15e18;
+    uint256 public constant TICK_SIZE_BASE = 2e18; // 2.0
     uint256 public constant TARGET = 20e9;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
@@ -77,6 +78,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint8 newAuctionTrackingPeriod
     );
     event MinimumBidUpdated(address indexed depositAsset, uint256 newMinimumBid);
+    event TickSizeBaseUpdated(address indexed depositAsset, uint256 newBase);
     event AuctionResult(
         address indexed depositAsset,
         uint256 ohmConvertible,
@@ -344,6 +346,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -364,6 +367,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     target: target_,
                     tickSize: tickSize_,
                     minPrice: minPrice_,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
