@@ -738,11 +738,11 @@ contract ConvertibleDepositAuctioneer is
         _depositPeriods.add(depositPeriod_);
 
         // Initialize the tick with the new auction parameters
-        _depositPeriodPreviousTicks[depositPeriod_] = Tick(
-            minPrice_,
-            tickSize_,
-            uint48(block.timestamp)
-        );
+        _depositPeriodPreviousTicks[depositPeriod_] = Tick({
+            price: minPrice_,
+            capacity: tickSize_,
+            lastUpdate: uint48(block.timestamp)
+        });
 
         // Emit event for actual enabling
         emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
@@ -898,7 +898,11 @@ contract ConvertibleDepositAuctioneer is
         if (target_ > 0 && tickSize_ > target_)
             revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
 
-        _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
+        _auctionParameters = AuctionParameters({
+            target: target_,
+            tickSize: tickSize_,
+            minPrice: minPrice_
+        });
 
         // Emit event
         emit AuctionParametersUpdated(address(_DEPOSIT_ASSET), target_, tickSize_, minPrice_);
@@ -938,7 +942,7 @@ contract ConvertibleDepositAuctioneer is
         }
 
         // Reset the day state
-        _dayState = Day(uint48(block.timestamp), 0);
+        _dayState = Day({initTimestamp: uint48(block.timestamp), convertible: 0});
     }
 
     /// @notice Sets tick parameters for all enabled deposit periods
@@ -1184,7 +1188,7 @@ contract ConvertibleDepositAuctioneer is
         _processPendingDepositPeriodChanges(params.tickSize, params.minPrice);
 
         // Reset the day state
-        _dayState = Day(uint48(block.timestamp), 0);
+        _dayState = Day({initTimestamp: uint48(block.timestamp), convertible: 0});
 
         // Reset the auction results
         _auctionResults = new int256[](_auctionTrackingPeriod);
