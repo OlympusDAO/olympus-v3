@@ -34,12 +34,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
+    uint256 internal constant MAX_BOND_MARKET_CAPACITY_SCALAR = 2e18;
+
     /// @notice The role assigned to the Heart contract.
     ///         This enables the Heart contract to call specific functions on this contract.
     bytes32 public constant ROLE_HEART = "heart";
 
     /// @notice The length of the `EnableParams` struct in bytes
-    uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 224;
 
     // ========== STATE VARIABLES ========== //
 
@@ -95,6 +97,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
     /// @dev    The value must be greater than or equal to ONE_HUNDRED_PERCENT (100%)
     uint256 public minPriceScalar;
+
+    /// @notice The multiplier applied to bond market capacity from auction remainders, in terms of ONE_HUNDRED_PERCENT
+    /// @dev    The value must be between 0 and MAX_BOND_MARKET_CAPACITY_SCALAR (0-200%)
+    uint256 public bondMarketCapacityScalar;
 
     uint8 internal _oracleDecimals;
     // solhint-disable immutable-vars-naming
@@ -266,20 +272,28 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
             // If there was under-selling, create a market to sell the remaining OHM
             if (difference < 0) {
-                uint256 remainder = uint256(-difference);
+                // Apply the capacity scalar to the remainder
+                // Round down in favour of the protocol (fewer emissions)
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                uint256 scaledCapacity = uint256(-difference).mulDiv(
+                    bondMarketCapacityScalar,
+                    ONE_HUNDRED_PERCENT
+                );
 
-                // Set the pending capacity (used by the createPendingBondMarket() function)
-                bondMarketPendingCapacity = remainder;
+                // Only set pending capacity if the scaled value is non-zero
+                if (scaledCapacity > 0) {
+                    bondMarketPendingCapacity = scaledCapacity;
 
-                // Attempt to create the bond market
-                try this.createPendingBondMarket() {
-                    // Do nothing if successful
-                    // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
-                } catch {
-                    // We don't want the periodic task to fail, so catch the error
-                    // But trigger an event that can be monitored
-                    // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
-                    emit BondMarketCreationFailed(remainder);
+                    // Attempt to create the bond market
+                    try this.createPendingBondMarket() {
+                        // Do nothing if successful
+                        // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
+                    } catch {
+                        // We don't want the periodic task to fail, so catch the error
+                        // But trigger an event that can be monitored
+                        // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
+                        emit BondMarketCreationFailed(scaledCapacity);
+                    }
                 }
             }
             // Otherwise, make sure we reset the pending capacity
@@ -316,6 +330,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (params.restartTimeframe == 0) revert InvalidParam("restartTimeframe");
         if (params.tickSize == 0) revert InvalidParam("Tick Size");
         if (params.minPriceScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
+        if (params.bondMarketCapacityScalar > MAX_BOND_MARKET_CAPACITY_SCALAR)
+            revert InvalidParam("Bond Market Scalar");
 
         // Assign
         baseEmissionRate = params.baseEmissionsRate;
@@ -324,12 +340,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         restartTimeframe = params.restartTimeframe;
         tickSize = params.tickSize;
         minPriceScalar = params.minPriceScalar;
+        bondMarketCapacityScalar = params.bondMarketCapacityScalar;
 
         emit MinimumPremiumChanged(params.minimumPremium);
         emit BackingChanged(params.backing);
         emit RestartTimeframeChanged(params.restartTimeframe);
         emit TickSizeChanged(params.tickSize);
         emit MinPriceScalarChanged(params.minPriceScalar);
+        emit BondMarketCapacityScalarChanged(params.bondMarketCapacityScalar);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -372,17 +390,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
             10 ** _reserveDecimals;
         int8 priceDecimals = _getPriceDecimals(minPrice);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-        /// forge-lint: disable-next-line(unsafe-typecast)
+        /// forge-lint: disable-start(unsafe-typecast)
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 bondScale = 10 **
             uint8(
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Create new bond market to buy the reserve with OHM
         activeMarketId = bondAuctioneer.createMarket(
@@ -499,7 +517,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (add && (type(uint256).max - changeBy_ * forNumBeats_ < baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
 
-        rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
+        rateChange = BaseRateChange({changeBy: changeBy_, daysLeft: forNumBeats_, addition: add});
 
         emit BaseRateChanged(changeBy_, forNumBeats_, add);
     }
@@ -622,6 +640,19 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         minPriceScalar = newScalar;
 
         emit MinPriceScalarChanged(newScalar);
+    }
+
+    /// @notice Allow governance to set the bond market capacity scalar
+    /// @dev    This function reverts if:
+    ///         - newScalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR (200%)
+    ///
+    /// @param  newScalar   as a percentage in 18 decimals
+    function setBondMarketCapacityScalar(uint256 newScalar) external onlyAdminRole {
+        if (newScalar > MAX_BOND_MARKET_CAPACITY_SCALAR)
+            revert InvalidParam("Bond Market Capacity Scalar");
+
+        bondMarketCapacityScalar = newScalar;
+        emit BondMarketCapacityScalarChanged(newScalar);
     }
 
     // =========- VIEW FUNCTIONS ========== //

@@ -470,6 +470,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("cd_emissionmanager"),
                 emissionManager
             )
@@ -478,6 +479,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Granting heart role to:", heart);
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
         );
 
@@ -487,6 +489,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("- Backing: 11.67 USDS/OHM");
         console2.log("- Tick size scalar: 20%");
         console2.log("- Min price scalar: 100%");
+        console2.log("- Bond market capacity scalar: 100%");
         console2.log("- Restart timeframe: 11 days");
         // Enable EmissionManager
         addToBatch(
@@ -500,6 +503,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                         backing: 11670000000000000000, // 11.67 USDS / OHM
                         tickSize: 100e9, // 100 OHM
                         minPriceScalar: 1e18, // Minimum price is market price
+                        bondMarketCapacityScalar: 1e18, // 100% bond market capacity scalar
                         restartTimeframe: 950400 // 11 days
                     })
                 )
