@@ -699,10 +699,13 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         _approveReserveTokenSpending(recipient, address(depositManager), 100000e18);
 
         // Make large purchase to reduce tick size from 10e9 to 5e9
+        // Tick one: 10e9 capacity, price of 15e18, deposit of 150e18
+        // Tick two: 10e9 capacity, price of 165e17, deposit of 165e18, day target met, so tick size is halved to 5e9
+        // Tick three: 5e9 capacity, price of 1815e16, deposit of 90e18. Remaining capacity is 5e9 - 4958677685 = 41322315
         vm.prank(recipient);
-        auctioneer.bid(PERIOD_MONTHS, 30000e18, 1, false, false);
+        auctioneer.bid(PERIOD_MONTHS, 405e18, 1, false, false);
 
-        // Get state after purchase (deterministic based on bid logic)
+        // Get state after purchase
         IConvertibleDepositAuctioneer.Tick memory tickAfterPurchase = auctioneer.getCurrentTick(
             PERIOD_MONTHS
         );
@@ -713,30 +716,17 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
         /**
          * MATHEMATICAL PROOF (using actual test values):
          *
-         * Constants:
-         * - TARGET = 20e9
-         * - TICK_SIZE (initial) = 10e9
-         * - Current tick size (after large purchase) = 1e9
-         * - TICK_STEP = 110e2
-         * - Time passed = 6 hours = 21600 seconds
-         * - 1 day = 86400 seconds
-         *
          * Capacity to add over 6 hours:
          * capacityToAdd = (20e9 * 21600) / 86400 / 1 = 5e9
          *
          * After purchase (actual values from test):
-         * - tickAfterPurchase.capacity = 689818756 (~0.69e9)
-         * - Total capacity = 689818756 + 5e9 = 5689818756 (~5.69e9)
+         * - tickAfterPurchase.capacity = 41322315
+         * - Total capacity = 41322315 + 5e9 = 5041322315
          *
          * CORRECT BEHAVIOR (using initial TICK_SIZE = 10e9):
-         * - Since 5.69e9 < 10e9, no decay iterations needed
-         * - Expected capacity = 5.69e9 (but capped at current tick size 1e9)
+         * - Check: 5041322315 > 10e9? Not, exit loop
          * - Expected price = unchanged from after purchase
-         *
-         * BUGGY BEHAVIOR (using reduced tick size = 1e9):
-         * - Check: 5.69e9 > 1e9? Yes, enter while loop
-         * - Multiple iterations subtracting 1e9 each time, causing excessive price decay
-         * - Result: unintended accelerated price decay
+         * - Expected capacity = 5041322315 (but capped at current tick size 5e9)
          */
 
         // Get actual result
@@ -746,12 +736,9 @@ contract ConvertibleDepositAuctioneerCurrentTickTest is ConvertibleDepositAuctio
 
         // Expected values based on actual test scenario
         uint256 capacityToAdd = 5e9; // (20e9 * 21600) / 86400 / 1
-        // uint256 totalCapacity = 689818756 + capacityToAdd; // 5689818756
 
-        // With initial tick size (10e9): 5689818756 < 10e9, so no decay iterations
-        // Final capacity is capped at current tick size (1e9) since day target was met
-        uint256 expectedCapacity = 1e9; // Capped at current tick size
-        uint256 expectedPrice = 2578079215517428693605; // No price change expected
+        uint256 expectedCapacity = 5e9; // Capped at current tick size
+        uint256 expectedPrice = 1815e16; // No price change expected
 
         console2.log("Capacity after purchase:", tickAfterPurchase.capacity);
         console2.log("Capacity to add (6 hours):", capacityToAdd);

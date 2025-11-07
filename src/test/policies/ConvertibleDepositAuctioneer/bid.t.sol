@@ -1312,6 +1312,100 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    // [X] it reduces the tick size exponentially as multiple day targets are reached
+    function test_exponentialTickSizeReduction()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(10e9, TICK_SIZE, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // This test demonstrates exponential reduction of tick size as multiples of the day target are reached
+        // Day target = 10e9
+        // Initial tick size = 10e9
+        //
+        // Expected exponential reduction:
+        // - 0x to 1x target (0 to 10e9): tick size = 10e9 (original)
+        // - 1x to 2x target (10e9 to 20e9): tick size = 10e9 / 2^1 = 5e9
+        // - 2x to 3x target (20e9 to 30e9): tick size = 10e9 / 2^2 = 2.5e9
+        // - 3x to 4x target (30e9 to 40e9): tick size = 10e9 / 2^3 = 1.25e9
+        //
+        // We'll bid enough to reach just past 30e9 (3x target) to show 3 levels of exponential reduction
+
+        // Tick 1: 10e9 OHM, price = 15e18, max bid = 150e18
+        // Total converted after tick 1: 10e9 (1x target reached)
+        // Tick 2: 5e9 OHM, price = 16.5e18, max bid = 82.5e18
+        // Total converted after tick 2: 15e9 (1x target reached)
+        // Tick 3: 5e9 OHM, price = 18.15e18, max bid = 90.75e18
+        // Total converted after tick 3: 20e9 (2x target reached)
+        // Tick 4: 2.5e9 OHM, price = 19.965e18, max bid = 49.9125e18
+        // Total converted after tick 4: 22.5e9 (2x target reached)
+        // Tick 5: 2.5e9 OHM, price = 21.9615e18, max bid = 54.90375e18
+        // Total converted after tick 5: 25e9 (2x target reached)
+        // Tick 6: 2.5e9 OHM, price = 24.15765e18, max bid = 60.394125e18
+        // Total converted after tick 6: 27.5e9 (2x target reached)
+        // Tick 7: 2.5e9 OHM, price = 26.573415e18, max bid = 66.4335375e18
+        // Total converted after tick 7: 30e9 (3x target reached)
+        // Tick 8: 1.25e9 OHM, price = 29.2307565e18, max bid = 36.538445625e18
+        //
+        // Bid 8: 1e18 @ 29.2307565e18 = 34210541 OHM out
+        //
+        // Total bid amount = 150e18 + 82.5e18 + 90.75e18 + 49.9125e18 + 54.90375e18 + 60.394125e18
+        //                    + 66.4335375e18 + 1e18
+        //                  = 555893912500000000000
+        // Total OHM out = 10e9 + 5e9 + 5e9 + 2.5e9 + 2.5e9 + 2.5e9 + 2.5e9 + 34210541 = 30034210541
+
+        uint256 bidAmount = 555893912500000000000;
+        uint256 expectedConvertedAmount = 30034210541;
+
+        // Check preview
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, ) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount,
+            1,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            30034210541,
+            1000e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state (auction parameters remain unchanged)
+        _assertAuctionParameters(10e9, TICK_SIZE, MIN_PRICE);
+
+        // The key assertion: verify that the current tick size is 1.25e9 (10e9 / 2^3)
+        // This demonstrates exponential reduction: 10e9 -> 5e9 -> 2.5e9 -> 1.25e9
+        // If it were linear, the tick size would be 10e9 / (3 * 2) = 1.666...e9
+        uint256 expectedTickSize = 125e7; // 1.25e9
+
+        // Assert the tick capacity and tick size
+        _assertPreviousTick(
+            expectedTickSize - 34210541, // remaining capacity in current tick
+            29.2307565e18,
+            expectedTickSize, // This should be 1.25e9, demonstrating exponential reduction
+            uint48(block.timestamp)
+        );
+    }
+
     //  when the tick step is > 100e2
     //   [X] it returns the amount of OHM that can be converted at multiple prices
     //   [X] it issues CD terms with the average price, time to expiry and redemption period

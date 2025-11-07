@@ -452,6 +452,7 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @notice Internal function to calculate the new tick size based on the amount of OHM that has been converted in the current day
+    /// @dev    This implements an exponential reduction of the tick size for every multiple of the day target that is reached
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
@@ -474,7 +475,7 @@ contract ConvertibleDepositAuctioneer is
         }
 
         // Otherwise the tick size is halved as many times as the multiplier
-        newTickSize = auctionParams_.tickSize / (multiplier * 2);
+        newTickSize = auctionParams_.tickSize >> multiplier;
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
