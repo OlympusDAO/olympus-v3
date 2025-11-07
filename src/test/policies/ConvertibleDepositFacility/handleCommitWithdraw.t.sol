@@ -38,6 +38,24 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT, recipient);
     }
 
+    // when the amount is 0
+    //  [X] it reverts
+
+    function test_whenAmountZero_reverts()
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, 0, recipient);
+    }
+
     // given the operator has not committed funds
     //  given another operator has committed funds
     //   [X] it reverts
@@ -142,6 +160,69 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         facility.handleCommitWithdraw(iReserveToken, PERIOD_MONTHS, COMMIT_AMOUNT, recipient);
     }
 
+    // when the amount is less than one share
+    //  [X] it does not revert
+
+    function test_whenAmountLessThanOneShare(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
+        givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 10_000e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        // Bound the amount to be less than one share
+        amount_ = bound(amount_, 1, vault.previewRedeem(1) - 1);
+
+        // Expect event
+        // Don't assert the actual amount as it can be slightly different due to rounding inconsistencies
+        vm.expectEmit(true, true, true, false);
+        emit AssetCommitWithdrawn(address(iReserveToken), OPERATOR, amount_);
+
+        // Call function
+        vm.prank(OPERATOR);
+        uint256 actualAmount = facility.handleCommitWithdraw(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient
+        );
+
+        assertEq(actualAmount, 0, "actual amount mismatch");
+
+        // Assert tokens
+        assertEq(
+            receiptTokenManager.balanceOf(OPERATOR, receiptTokenId),
+            previousDepositActual - amount_,
+            "operator receipt token balance"
+        );
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            0, // Nothing withdrawn
+            "recipient token balance"
+        );
+
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            COMMIT_AMOUNT - amount_, // Uses requested amount
+            "committed deposits"
+        );
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            COMMIT_AMOUNT - amount_, // Uses requested amount
+            "committed deposits per operator"
+        );
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            previousDepositActual * 2 - COMMIT_AMOUNT, // Total deposits - initial committed funds (no need to reduce by the withdrawal amount, since it is contained within the commitment amount)
+            "available deposits"
+        );
+    }
+
     // [X] it burns the receipt tokens from the caller
     // [X] it transfers the deposit tokens to the recipient
     // [X] it emits an event
@@ -158,11 +239,14 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
         givenAddressHasConvertibleDepositTokenDefault(OPERATOR)
         givenCommitted(OPERATOR, COMMIT_AMOUNT)
         givenReceiptTokenSpendingIsApproved(OPERATOR, address(depositManager), COMMIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        amount_ = bound(amount_, 1, COMMIT_AMOUNT);
+        // Bound the amount to be greater than one share
+        amount_ = bound(amount_, vault.previewRedeem(1), COMMIT_AMOUNT);
 
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        // Don't assert the actual amount as it can be slightly different due to rounding inconsistencies
+        vm.expectEmit(true, true, true, false);
         emit AssetCommitWithdrawn(address(iReserveToken), OPERATOR, amount_);
 
         // Call function
@@ -175,7 +259,12 @@ contract ConvertibleDepositFacilityHandleCommitWithdrawTest is ConvertibleDeposi
             previousDepositActual - amount_,
             "operator receipt token balance"
         );
-        assertEq(iReserveToken.balanceOf(recipient), amount_, "recipient token balance");
+        assertApproxEqAbs(
+            iReserveToken.balanceOf(recipient),
+            amount_,
+            5,
+            "recipient token balance"
+        );
 
         assertEq(
             facility.getCommittedDeposits(iReserveToken),

@@ -48,32 +48,104 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, recipient);
     }
 
-    // when the amount is greater than the borrowed amount
+    // when the amount is less than one share
     //  [X] it reverts
 
-    function test_whenAmountGreaterThanBorrowed_reverts(
+    function test_whenAmountLessThanOneShare_reverts(
         uint256 amount_
     )
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
-        givenAddressHasConvertibleDepositToken(
-            recipient,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
+        givenVaultHasDeposit(1000e18)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenVaultAccruesYield(iVault, 10_000e18)
     {
-        amount_ = bound(amount_, BORROW_AMOUNT + 1, type(uint256).max);
+        amount_ = bound(amount_, 1, vault.previewMint(1) - 1);
 
         // Expect revert
-        _expectRevertExceedsBorrowed(amount_, BORROW_AMOUNT);
+        vm.expectRevert("ZERO_SHARES");
 
         // Call function
         vm.prank(OPERATOR);
         facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+    }
+
+    // when the amount is greater than the borrowed amount
+    //  [X] it transfers the tokens from the payer to the deposit manager
+    //  [X] it updates the operator shares
+    //  [X] it updates the committed deposits
+    //  [X] it updates the committed deposits for the operator
+
+    function test_whenAmountGreaterThanBorrowed(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenCommitted(OPERATOR, previousDepositActual)
+        givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+    {
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, RESERVE_TOKEN_AMOUNT);
+
+        _takeSnapshot();
+
+        // Call function
+        vm.prank(OPERATOR);
+        uint256 actualAmount = facility.handleLoanRepay(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient
+        );
+
+        // Assert that the recipient's balance has decreased by the amount
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            _recipientBalanceBefore - amount_,
+            "recipient balance"
+        );
+
+        // Assert that the operator's shares in assets have increased by the amount
+        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(facility)
+        );
+        assertApproxEqAbs(
+            operatorSharesInAssetsAfter,
+            _operatorSharesInAssetsBefore + actualAmount,
+            5,
+            "operator shares in assets"
+        );
+
+        // Assert that the available deposits have not increased
+        // Committed amount increased, borrowed amount decreased
+        assertEq(
+            facility.getAvailableDeposits(iReserveToken),
+            _availableDepositsBefore,
+            "available deposits"
+        );
+
+        // Assert that the overall committed deposits have increased
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken),
+            previousDepositActual - BORROW_AMOUNT + actualAmount,
+            "committed deposits"
+        );
+
+        // Assert that the committed deposits for the operator have increased
+        assertEq(
+            facility.getCommittedDeposits(iReserveToken, OPERATOR),
+            previousDepositActual - BORROW_AMOUNT + actualAmount,
+            "committed deposits for operator"
+        );
     }
 
     // given the payer has not approved the deposit manager to spend the tokens
@@ -118,21 +190,27 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
         givenReserveTokenSpendingIsApprovedByRecipient
     {
-        amount_ = bound(
-            amount_,
-            5, // 1 risks a ZERO_SHARES error
-            BORROW_AMOUNT
-        );
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
 
+        amount_ = bound(
+            amount_,
+            vault.previewMint(1), // At least one share in assets, otherwise it will revert
+            BORROW_AMOUNT
+        );
+
         _takeSnapshot();
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, recipient);
+        uint256 actualAmount = facility.handleLoanRepay(
+            iReserveToken,
+            PERIOD_MONTHS,
+            amount_,
+            recipient
+        );
 
         // Assert that the recipient's balance has decreased by the amount
         assertEq(
@@ -148,7 +226,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         );
         assertApproxEqAbs(
             operatorSharesInAssetsAfter,
-            _operatorSharesInAssetsBefore + amount_,
+            _operatorSharesInAssetsBefore + actualAmount,
             5,
             "operator shares in assets"
         );
@@ -164,14 +242,14 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         // Assert that the overall committed deposits have increased
         assertEq(
             facility.getCommittedDeposits(iReserveToken),
-            previousDepositActual - BORROW_AMOUNT + amount_,
+            previousDepositActual - BORROW_AMOUNT + actualAmount,
             "committed deposits"
         );
 
         // Assert that the committed deposits for the operator have increased
         assertEq(
             facility.getCommittedDeposits(iReserveToken, OPERATOR),
-            previousDepositActual - BORROW_AMOUNT + amount_,
+            previousDepositActual - BORROW_AMOUNT + actualAmount,
             "committed deposits for operator"
         );
     }

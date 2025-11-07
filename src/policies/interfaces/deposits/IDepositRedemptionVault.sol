@@ -93,11 +93,15 @@ interface IDepositRedemptionVault {
 
     // Borrowing Errors
     error RedemptionVault_InterestRateNotSet(address asset, address facility);
-    error RedemptionVault_MaxBorrowPercentageNotSet(address asset, address facility);
     error RedemptionVault_LoanAmountExceeded(address user, uint16 redemptionId, uint256 amount);
-
     error RedemptionVault_LoanIncorrectState(address user, uint16 redemptionId);
     error RedemptionVault_InvalidLoan(address user, uint16 redemptionId);
+    error RedemptionVault_MaxSlippageExceeded(
+        address user,
+        uint16 redemptionId,
+        uint256 actualAmount,
+        uint256 maxAmount
+    );
 
     // ========== DATA STRUCTURES ========== //
 
@@ -214,7 +218,8 @@ interface IDepositRedemptionVault {
     /// @dev    This function does not take an amount as an argument, because the amount is determined by the redemption
     ///
     /// @param  redemptionId_   The ID of the user redemption
-    function finishRedemption(uint16 redemptionId_) external;
+    /// @return actualAmount    The quantity of deposit tokens transferred to the caller
+    function finishRedemption(uint16 redemptionId_) external returns (uint256 actualAmount);
 
     // ========== BORROWING FUNCTIONS ========== //
 
@@ -240,7 +245,8 @@ interface IDepositRedemptionVault {
     ///
     /// @param redemptionId_    The ID of the redemption
     /// @param amount_          The amount to repay
-    function repayLoan(uint16 redemptionId_, uint256 amount_) external;
+    /// @param maxSlippage_     The maximum slippage allowed for the repayment
+    function repayLoan(uint16 redemptionId_, uint256 amount_, uint256 maxSlippage_) external;
 
     /// @notice Preview the interest payable for extending a loan
     ///

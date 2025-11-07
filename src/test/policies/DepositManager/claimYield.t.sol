@@ -95,6 +95,69 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         depositManager.claimYield(iAsset, ADMIN, amount_);
     }
 
+    // when the amount is less than one share
+    //  [X] it does not revert
+
+    function test_whenAmountLessThanOneShare(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+    {
+        // Simulate yield being accrued to the vault
+        asset.mint(address(vault), 10_000e18);
+
+        _takeSnapshot();
+
+        // Determine an amount that will be less than one share
+        amount_ = bound(amount_, 1, vault.previewRedeem(1) - 1);
+
+        address recipient = makeAddr("recipient");
+
+        // Claim the yield
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.claimYield(iAsset, recipient, amount_);
+
+        assertEq(actualAmount, 0, "actual amount mismatch");
+
+        // Operator shares
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        assertEq(operatorSharesAfter, _operatorSharesBefore, "Operator shares mismatch");
+
+        // Assert solvency
+        // Assets + borrowed >= liabilities
+        assertGe(
+            operatorSharesInAssetsAfter +
+                depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "insolvent"
+        );
+
+        // Vault balance
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _operatorSharesBefore,
+            "Vault balance mismatch"
+        );
+
+        // Asset liabilities
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            _operatorLiabilitiesBefore,
+            "Asset liabilities mismatch"
+        );
+
+        _assertReceiptToken(0, 0, true, false); // Unaffected
+        _assertDepositAssetBalance(DEPOSITOR, 0);
+        _assertDepositAssetBalance(recipient, 0, 0);
+    }
+
     // given the asset period is disabled
     //  [X] the asset is transferred to the recipient
 

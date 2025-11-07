@@ -83,6 +83,7 @@ contract ConvertibleDepositFacilityHandleCommitCancelTest is ConvertibleDepositF
             RESERVE_TOKEN_AMOUNT
         )
         givenCommitted(OPERATOR, COMMIT_AMOUNT)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
         amount_ = bound(amount_, 1, COMMIT_AMOUNT);
 

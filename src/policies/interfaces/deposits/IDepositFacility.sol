@@ -134,7 +134,7 @@ interface IDepositFacility {
     ///
     /// @param depositToken_    The deposit token being repaid
     /// @param depositPeriod_   The deposit period in months
-    /// @param amount_          The amount being repaid
+    /// @param amount_          The amount of principal being repaid
     /// @param payer_           The address making the repayment
     /// @return actualAmount    The amount of tokens repaid
     function handleLoanRepay(

@@ -385,6 +385,7 @@ contract ConvertibleDepositFacility is
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
+        // The value returned can also be zero
         uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), amount_);
 
         // Emit the event

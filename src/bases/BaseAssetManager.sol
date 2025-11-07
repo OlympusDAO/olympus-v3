@@ -44,20 +44,22 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         - Adding the deposit would exceed the deposit cap
     ///         - Zero shares would be received from the vault
     ///
-    /// @param  asset_          The asset to deposit
-    /// @param  depositor_      The depositor
-    /// @param  amount_         The amount of assets to deposit
+    /// @param  asset_                  The asset to deposit
+    /// @param  depositor_              The depositor
+    /// @param  amount_                 The amount of assets to deposit
+    /// @param  enforceMinimumDeposit_  Whether to enforce the minimum deposit requirement
     /// @return actualAmount    The actual amount of assets redeemable by the shares
     /// @return shares          The number of shares received
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
-        uint256 amount_
+        uint256 amount_,
+        bool enforceMinimumDeposit_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
         // Validate that the deposit meets the minimum deposit requirement
-        if (amount_ < assetConfiguration.minimumDeposit) {
+        if (enforceMinimumDeposit_ && amount_ < assetConfiguration.minimumDeposit) {
             revert AssetManager_MinimumDepositNotMet(
                 address(asset_),
                 amount_,
@@ -123,7 +125,8 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param  asset_      The asset to withdraw
     /// @param  depositor_  The depositor
     /// @param  amount_     The amount of assets to withdraw
-    /// @return shares      The number of shares withdrawn
+    /// @return shares      The number of shares withdrawn (can be 0)
+    /// @return assetAmount The amount of assets withdrawn (can be 0)
     function _withdrawAsset(
         IERC20 asset_,
         address depositor_,
@@ -145,8 +148,8 @@ abstract contract BaseAssetManager is IAssetManager {
             // but ensures that the vault remains solvent
             shares = vault.convertToShares(amount_);
 
-            // Amount of shares must be non-zero
-            if (shares == 0) revert AssetManager_ZeroAmount();
+            // Early exit if the amount of shares is 0, to prevent a revert
+            if (shares == 0) return (0, 0);
 
             assetAmount = vault.redeem(shares, depositor_, address(this));
         }
@@ -308,8 +311,12 @@ abstract contract BaseAssetManager is IAssetManager {
         return _assetConfigurations[asset_].isConfigured;
     }
 
-    modifier onlyConfiguredAsset(IERC20 asset_) {
+    function _onlyConfiguredAsset(IERC20 asset_) internal view {
         if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
+    }
+
+    modifier onlyConfiguredAsset(IERC20 asset_) {
+        _onlyConfiguredAsset(asset_);
         _;
     }
 

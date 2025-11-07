@@ -306,9 +306,9 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     }
 
     // when the borrow amount is less than one vault share
-    //  [X] it reverts
+    //  [X] it does nothing
 
-    function test_whenBorrowAmountIsLessThanOneShare_reverts(
+    function test_whenBorrowAmountIsLessThanOneShare(
         uint256 amount_
     )
         public
@@ -327,17 +327,57 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         uint256 oneShareInAssets = vault.previewRedeem(1);
         amount_ = bound(amount_, 1, oneShareInAssets - 1);
 
-        // Expect revert
-        _expectRevertZeroAmount();
+        _takeSnapshot(amount_);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingWithdraw(
+        uint256 actualAmount = depositManager.borrowingWithdraw(
             IDepositManager.BorrowingWithdrawParams({
                 asset: iAsset,
                 recipient: RECIPIENT,
                 amount: amount_
             })
+        );
+
+        assertEq(actualAmount, 0, "actual amount");
+
+        // Assert tokens
+        assertEq(
+            iAsset.balanceOf(RECIPIENT),
+            previousRecipientBorrowActualAmount, // No change
+            "recipient balance"
+        );
+
+        // Borrowed amounts
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            BORROW_AMOUNT + amount_, // Adjusted for the amount requested
+            "borrowed amount"
+        );
+        assertEq(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorDepositActualAmount - BORROW_AMOUNT - amount_, // Adjusted for the amount requested
+            "borrowing capacity"
+        );
+
+        // Operator assets should be the same
+        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(operatorShares, _operatorSharesBefore, "operator shares");
+
+        assertEq(
+            operatorSharesInAssets,
+            _operatorSharesInAssetsBefore,
+            "operator shares in assets"
+        );
+
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _depositManagerSharesBefore,
+            "vault balance"
         );
     }
 
