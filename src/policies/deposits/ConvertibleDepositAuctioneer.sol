@@ -1059,6 +1059,10 @@ contract ConvertibleDepositAuctioneer is
         if (newStep_ < ONE_HUNDRED_PERCENT)
             revert ConvertibleDepositAuctioneer_InvalidParams("tick step");
 
+        // Capture the tick state, otherwise the tick step change will apply retroactively
+        _updateCurrentTicks(0);
+
+        // Set the tick step
         _tickStep = newStep_;
 
         // Emit event
