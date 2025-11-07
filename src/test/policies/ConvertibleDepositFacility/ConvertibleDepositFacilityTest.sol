@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
+// solhint-disable custom-errors
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -129,6 +131,7 @@ contract ConvertibleDepositFacilityTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
+        /// forge-lint: disable-start(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), auctioneer);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("admin"), admin);
@@ -136,6 +139,7 @@ contract ConvertibleDepositFacilityTest is Test {
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facilityTwo));
         rolesAdmin.grantRole(bytes32("heart"), HEART);
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Enable the deposit manager
         vm.prank(admin);
@@ -802,3 +806,4 @@ contract ConvertibleDepositFacilityTest is Test {
         );
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)

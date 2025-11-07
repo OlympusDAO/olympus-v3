@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity >=0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -184,3 +183,4 @@ contract DepositManagerRescueTest is DepositManagerTest {
         assertEq(randomToken.balanceOf(address(trsry)), tokenAmount);
     }
 }
+/// forge-lint: disable-end(mixed-case-variable)

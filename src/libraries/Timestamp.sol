@@ -34,9 +34,11 @@ library Timestamp {
             _month = _month + 2 - 12 * num1;
             _year = 100 * (num2 - 49) + _year + num1;
 
+            /// forge-lint: disable-start(unsafe-typecast)
             year = uint256(_year);
             month = uint256(_month);
             day = uint256(_day);
+            /// forge-lint: disable-end(unsafe-typecast)
         }
 
         string memory yearStr = uint2str(year % 10_000);

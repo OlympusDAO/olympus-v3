@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -429,7 +430,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasDeficit() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = -int256(DEFICIT) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = int256(DEFICIT);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -437,7 +440,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasSurplus() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = int256(SURPLUS) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = -int256(SURPLUS);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -559,6 +564,7 @@ contract EmissionManagerTest is Test {
 
     function test_execute_withoutHeartRole_reverts() public {
         // Call the function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("heart"));
         vm.expectRevert(err);
 
@@ -968,6 +974,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
@@ -1216,6 +1223,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
@@ -2494,6 +2502,7 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently enabled
         // Call the restart function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -2557,6 +2566,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -2850,6 +2860,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the changeBaseRate function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -2932,6 +2943,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setMinimumPremium function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -2970,6 +2982,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBacking function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -3005,6 +3018,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setRestartTimeframe function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -3040,6 +3054,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBondContracts function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -3082,6 +3097,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setCDAuctionContract function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
         vm.prank(rando_);
@@ -3129,6 +3145,7 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setTickSize function with the wrong caller
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
         vm.expectRevert(err);
 
@@ -3488,3 +3505,4 @@ contract EmissionManagerTest is Test {
         );
     }
 }
+/// forge-lint: disable-end(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)

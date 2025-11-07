@@ -231,6 +231,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             // 1. Revoke "heart" role from old Heart contract
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("heart"), heartOld),
                 "Revoke heart role from old Heart policy"
             );
@@ -243,6 +244,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             address daoMS = addresses.getAddress("olympus-multisig-dao");
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("manager"), daoMS),
                 "Grant manager role to DAO MS"
             );
@@ -258,6 +260,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("deposit_operator"),
                     cdFacility
                 ),
@@ -275,6 +278,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("cd_auctioneer"),
                     cdAuctioneer
                 ),
@@ -290,6 +294,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("cd_emissionmanager"),
                     emissionManager
                 ),
@@ -303,6 +308,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart),
                 "Grant heart role to Heart contract"
             );
@@ -315,6 +321,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // 7. Grant "admin" role (temporarily) to Activator contract
         _pushAction(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator),
             "Grant admin role to temporary activator contract"
         );
@@ -329,6 +336,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         // 9. Revoke "admin" role from Activator contract
         _pushAction(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator),
             "Revoke admin role from temporary activator contract"
         );
@@ -358,6 +366,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(heartOld, bytes32("heart")) == false,
                 "Old Heart policy still has the heart role"
             );
@@ -369,6 +378,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address daoMS = addresses.getAddress("olympus-multisig-dao");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(daoMS, bytes32("manager")) == true,
                 "DAO MS does not have the manager role"
             );
@@ -380,6 +390,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "olympus-policy-convertible-deposit-facility-1_0"
             );
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(cdFacility, bytes32("deposit_operator")) == true,
                 "ConvertibleDepositFacility does not have the deposit_operator role"
             );
@@ -391,6 +402,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "olympus-policy-convertible-deposit-auctioneer-1_0"
             );
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(cdAuctioneer, bytes32("cd_auctioneer")) == true,
                 "ConvertibleDepositAuctioneer does not have the cd_auctioneer role"
             );
@@ -400,6 +412,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(emissionManager, bytes32("cd_emissionmanager")) == true,
                 "EmissionManager does not have the cd_emissionmanager role"
             );
@@ -409,6 +422,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address heart = addresses.getAddress("olympus-policy-heart-1_7");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(heart, bytes32("heart")) == true,
                 "Heart does not have the heart role"
             );
@@ -430,6 +444,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             require(IEnabler(depositManager).isEnabled() == true, "DepositManager is not enabled");
 
             require(
+                /// forge-lint: disable-next-line(asm-keccak256)
                 keccak256(bytes(IDepositManager(depositManager).getOperatorName(cdFacility))) ==
                     keccak256(bytes(CDF_NAME)),
                 "DepositManager operator name for ConvertibleDepositFacility is incorrect"

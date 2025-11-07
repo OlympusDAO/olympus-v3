@@ -3,10 +3,6 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
-import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract ConvertibleDepositAuctioneerEnableDepositPeriodTest is ConvertibleDepositAuctioneerTest {
     event DepositPeriodEnableQueued(address indexed depositAsset, uint8 depositPeriod);

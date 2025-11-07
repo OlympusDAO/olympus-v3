@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 // Libraries
@@ -187,8 +188,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         Keycode mintrKeycode = toKeycode("MINTR");
 
         permissions = new Permissions[](2);
-        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+        permissions[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[1] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.mintOhm.selector});
 
         return permissions;
     }
@@ -371,9 +375,12 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 bondScale = 10 **
             uint8(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
 
@@ -432,6 +439,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        /// forge-lint: disable-next-line(unsafe-typecast)
         return decimals - int8(_oracleDecimals);
     }
 
@@ -733,3 +741,4 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)

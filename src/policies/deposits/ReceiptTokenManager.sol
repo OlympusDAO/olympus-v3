@@ -112,11 +112,15 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     // ========== MINTING/BURNING ========== //
 
-    modifier onlyTokenOwner(uint256 tokenId_) {
+    function _onlyTokenOwner(uint256 tokenId_) internal view {
         address owner = getTokenOwner(tokenId_);
         if (msg.sender != owner) {
             revert ReceiptTokenManager_NotOwner(msg.sender, owner);
         }
+    }
+
+    modifier onlyTokenOwner(uint256 tokenId_) {
+        _onlyTokenOwner(tokenId_);
         _;
     }
 

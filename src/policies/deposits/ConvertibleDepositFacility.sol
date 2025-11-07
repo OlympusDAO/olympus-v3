@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -78,11 +79,17 @@ contract ConvertibleDepositFacility is
         Keycode deposKeycode = toKeycode("DEPOS");
 
         permissions = new Permissions[](5);
-        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(deposKeycode, DEPOS.mint.selector);
-        permissions[3] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
-        permissions[4] = Permissions(deposKeycode, DEPOS.split.selector);
+        permissions[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[1] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.mintOhm.selector});
+        permissions[2] = Permissions({keycode: deposKeycode, funcSelector: DEPOS.mint.selector});
+        permissions[3] = Permissions({
+            keycode: deposKeycode,
+            funcSelector: DEPOS.setRemainingDeposit.selector
+        });
+        permissions[4] = Permissions({keycode: deposKeycode, funcSelector: DEPOS.split.selector});
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -448,3 +455,4 @@ contract ConvertibleDepositFacility is
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

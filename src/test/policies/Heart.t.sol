@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -612,3 +613,4 @@ contract HeartTest is Test {
         assertEq(address(heart.distributor()), address(distributor), "distributor");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable)
