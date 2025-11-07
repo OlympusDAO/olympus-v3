@@ -59,11 +59,12 @@ contract ConvertibleDepositActivator is Owned {
     uint256 public constant CDA_INITIAL_TICK_SIZE_BASE = 2e18; // 2.0
     uint24 public constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
     uint8 public constant CDA_AUCTION_TRACKING_PERIOD = 7; // 7 days
+    uint256 public constant CDA_MINIMUM_BID = 100e18; // 100 USDS
 
     // EmissionManager parameters
     uint256 public constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
     uint256 public constant EM_MINIMUM_PREMIUM = 1e18; // 100% premium
-    uint256 public constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
+    uint256 public constant EM_BACKING = 11690000000000000000; // 11.69 USDS/OHM
     uint256 public constant EM_TICK_SIZE = 150e9; // 150 OHM
     uint256 public constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
     uint256 public constant EM_BOND_MARKET_CAPACITY_SCALAR = 1e18; // 100% bond market capacity scalar
@@ -150,7 +151,10 @@ contract ConvertibleDepositActivator is Owned {
         cdAuctioneer.enableDepositPeriod(PERIOD_2M);
         cdAuctioneer.enableDepositPeriod(PERIOD_3M);
 
-        // 2. Enable ConvertibleDepositAuctioneer (with disabled auction)
+        // 2. Set minimum bid on ConvertibleDepositAuctioneer
+        cdAuctioneer.setMinimumBid(CDA_MINIMUM_BID);
+
+        // 3. Enable ConvertibleDepositAuctioneer (with disabled auction)
         bytes memory auctioneerParams = abi.encode(
             IConvertibleDepositAuctioneer.EnableParams({
                 target: CDA_INITIAL_TARGET,
@@ -163,7 +167,7 @@ contract ConvertibleDepositActivator is Owned {
         );
         IEnabler(CD_AUCTIONEER).enable(auctioneerParams);
 
-        // 3. Enable EmissionManager
+        // 4. Enable EmissionManager
         bytes memory emissionParams = abi.encode(
             IEmissionManager.EnableParams({
                 baseEmissionsRate: EM_BASE_EMISSIONS_RATE,
