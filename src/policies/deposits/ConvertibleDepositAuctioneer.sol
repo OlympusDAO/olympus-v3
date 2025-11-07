@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-/// forge-lint: disable-start(screaming-snake-case-const)
+/// forge-lint: disable-start(mixed-case-function, screaming-snake-case-const)
 pragma solidity >=0.8.20;
 
 // Libraries
@@ -916,9 +916,11 @@ contract ConvertibleDepositAuctioneer is
 
         // Store the auction results
         // Negative values will indicate under-selling
+        /// forge-lint: disable-start(unsafe-typecast)
         _auctionResults[_auctionResultsNextIndex] =
             int256(_dayState.convertible) -
             int256(previousTarget_);
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Emit event
         emit AuctionResult(
@@ -1189,4 +1191,4 @@ contract ConvertibleDepositAuctioneer is
         _auctionResultsNextIndex = 0;
     }
 }
-/// forge-lint: disable-end(screaming-snake-case-const)
+/// forge-lint: disable-end(mixed-case-function, screaming-snake-case-const)
