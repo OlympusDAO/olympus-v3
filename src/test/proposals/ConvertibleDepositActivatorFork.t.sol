@@ -467,7 +467,7 @@ contract ConvertibleDepositActivatorForkTest is Test {
         // EmissionManager parameters
         assertEq(emissionManager.baseEmissionRate(), activator.EM_BASE_EMISSIONS_RATE()); // Should be 0.02%/day
         assertEq(emissionManager.minimumPremium(), activator.EM_MINIMUM_PREMIUM()); // Should be 100% premium
-        assertEq(emissionManager.backing(), activator.EM_BACKING()); // Should be 11.74 USDS/OHM
+        assertEq(emissionManager.backing(), activator.EM_BACKING()); // Should be 11.69 USDS/OHM
         assertEq(emissionManager.tickSize(), activator.EM_TICK_SIZE()); // Should be 150 OHM
         assertEq(emissionManager.minPriceScalar(), activator.EM_MIN_PRICE_SCALAR()); // Should be 120% min price multiplier
         assertEq(
