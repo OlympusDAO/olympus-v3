@@ -385,8 +385,21 @@ Before using the shutdown script, ensure you have completed the setup steps desc
 #### Basic Syntax
 
 ```bash
-./shell/shutdown.sh <component> [--sign|--submit <signature>] [--account <wallet>|--ledger <index>] [--chain <chain>] [--broadcast <true|false>]
+./shell/shutdown.sh <component> --chain <chain> [--sign | --submit <signature>] [--account <wallet> | --ledger <index>] [--broadcast <true|false>] [--rpc-url <url>] [--args <path>]
 ```
+
+- `--chain` is required. Use a Foundry RPC alias (e.g. `mainnet`) or supply `--rpc-url`.
+- `--account` expects the cast wallet name; `--ledger` expects the Ledger mnemonic index. Configure defaults in `.env.emergency`.
+- `--broadcast true` is only valid when submitting a signature, never with `--sign`.
+- `--args` can pass a JSON payload to scripts that require additional parameters. Most current scripts expect an empty arguments file; use `--args` only when instructed.
+
+#### Listing Supported Targets
+
+```bash
+./shell/shutdown.sh --list
+```
+
+This displays all supported chains, components, and the multisig expected to execute them.
 
 #### Two-Phase Signing Process
 
@@ -394,7 +407,7 @@ The shutdown script uses a two-phase signing process to work with Ledger devices
 
 **Phase 1: Generate Signature** (`--sign`)
 ```bash
-./shell/shutdown.sh <component> --sign [--account <wallet>|--ledger <index>] --chain mainnet
+./shell/shutdown.sh <component> --sign [--account <wallet>|--ledger <index>] --chain <chain>
 ```
 
 This will:
@@ -404,7 +417,7 @@ This will:
 
 **Phase 2: Submit Transaction** (`--submit <signature>`)
 ```bash
-./shell/shutdown.sh <component> --submit <signature> [--account <wallet>|--ledger <index>] --chain mainnet --broadcast true
+./shell/shutdown.sh <component> --submit <signature> [--account <wallet>|--ledger <index>] --chain <chain> --broadcast true
 ```
 
 This will:
@@ -412,45 +425,51 @@ This will:
 - Submit the transaction to the Safe multisig
 - Broadcast the transaction (if `--broadcast true`)
 
-### Available Components
+### Quick Reference: Components and Signers
 
-The following components can be shut down using the script:
+Run `./shell/shutdown.sh --list` to print the current list of supported targets, their owning multisig, and supported chains.
 
-- `treasury` - Shutdown TRSRY withdrawals
-- `minter` - Shutdown MINTR minting
-- `cooler-v2` - Shutdown all Cooler V2 operations (borrows, liquidations, composites, migrator)
-- `emission-manager` - Shutdown EmissionManager and ConvertibleDepositAuctioneer
-- `convertible-deposits` - Disable ConvertibleDepositFacility, DepositRedemptionVault, and DepositManager
-- `ccip` - Disable CCIP bridge and emergency shutdown CCIP token pool
-- `layerzero-bridge` - Disable LayerZero bridge
-- `yield-repurchase-facility` - Shutdown YieldRepurchaseFacility
-- `heart` - Deactivate Heart
-- `reserve-migrator` - Deactivate ReserveMigrator
+| Component | Description | Required multisig |
+| --- | --- | --- |
+| `treasury` | Shutdown TRSRY withdrawals | Emergency MS |
+| `minter` | Shutdown MINTR minting | Emergency MS |
+| `cooler-v2` | Pause Cooler V2 core operations | Emergency MS |
+| `cooler-v2-periphery` | Disable Cooler composites and migrator helpers | DAO MS |
+| `emission-manager` | Disable EmissionManager and ConvertibleDepositAuctioneer | Emergency MS |
+| `convertible-deposits` | Disable ConvertibleDepositFacility, DepositRedemptionVault, DepositManager | Emergency MS |
+| `ccip-bridge` | Disable CCIP bridge contract | DAO MS |
+| `ccip-token-pool-mainnet` | Shutdown mainnet CCIP token pool | DAO MS |
+| `ccip-token-pool-non-mainnet` | Shutdown non-mainnet CCIP token pools | Emergency MS |
+| `layerzero-bridge` | Disable LayerZero bridge | DAO MS |
+| `yield-repurchase-facility` | Shutdown YieldRepurchaseFacility | DAO MS |
+| `heart` | Deactivate Heart | Emergency MS |
+| `reserve-migrator` | Deactivate ReserveMigrator | DAO MS |
+| `reserve-wrapper` | Deactivate ReserveWrapper | DAO MS |
 
-### Examples
+### Script Examples
 
 #### Example 1: Shutdown TRSRY (with cast wallet)
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh treasury --sign --account emergency-signer --chain mainnet
+./shell/shutdown.sh treasury --sign --account emergency-signer --chain <chain>
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh treasury --submit 0x1234... --account emergency-signer --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --submit 0x1234... --account emergency-signer --chain <chain> --broadcast true
 ```
 
 #### Example 2: Shutdown MINTR (with Ledger)
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh minter --sign --ledger 0 --chain mainnet
+./shell/shutdown.sh minter --sign --ledger 0 --chain <chain>
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh minter --submit 0x5678... --ledger 0 --chain mainnet --broadcast true
+./shell/shutdown.sh minter --submit 0x5678... --ledger 0 --chain <chain> --broadcast true
 ```
 
 #### Example 3: Using `.env.emergency`
@@ -459,32 +478,32 @@ If `.env.emergency` exists with `ACCOUNT=emergency-signer`:
 
 **Phase 1 - Generate signature**:
 ```bash
-./shell/shutdown.sh treasury --sign --chain mainnet
+./shell/shutdown.sh treasury --sign --chain <chain>
 ```
 
 **Phase 2 - Submit transaction**:
 ```bash
-./shell/shutdown.sh treasury --submit 0x1234... --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --submit 0x1234... --chain <chain> --broadcast true
 ```
 
 #### Example 4: Shutdown Cooler V2
 
 ```bash
 # Phase 1
-./shell/shutdown.sh cooler-v2 --sign --account emergency-signer --chain mainnet
+./shell/shutdown.sh cooler-v2 --sign --account emergency-signer --chain <chain>
 
 # Phase 2
-./shell/shutdown.sh cooler-v2 --submit 0xabcd... --account emergency-signer --chain mainnet --broadcast true
+./shell/shutdown.sh cooler-v2 --submit 0xabcd... --account emergency-signer --chain <chain> --broadcast true
 ```
 
 #### Example 5: Shutdown YieldRepurchaseFacility
 
 ```bash
 # Phase 1
-./shell/shutdown.sh yield-repurchase-facility --sign --account emergency-signer --chain mainnet
+./shell/shutdown.sh yield-repurchase-facility --sign --account emergency-signer --chain <chain>
 
 # Phase 2
-./shell/shutdown.sh yield-repurchase-facility --submit 0xefgh... --account emergency-signer --chain mainnet --broadcast true
+./shell/shutdown.sh yield-repurchase-facility --submit 0xefgh... --account emergency-signer --chain <chain> --broadcast true
 ```
 
 ### Troubleshooting
@@ -535,8 +554,8 @@ Withdrawals from the TRSRY module can be stopped by calling the [Emergency polic
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh treasury --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh treasury --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh treasury --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh treasury --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -553,8 +572,8 @@ OHM minting by the MINTR can be stopped by calling the [Emergency policy](../../
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh minter --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh minter --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh minter --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh minter --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -571,8 +590,8 @@ The Cooler V2 shutdown script handles all Cooler V2 operations: borrows, liquida
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh cooler-v2 --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh cooler-v2 --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh cooler-v2 --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh cooler-v2 --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -599,14 +618,32 @@ The Cooler V2 shutdown script handles all Cooler V2 operations: borrows, liquida
 
 **Batch script**: `src/scripts/emergency/CoolerV2.sol`
 
+### Cooler v2 Periphery
+
+The Cooler V2 periphery shutdown script disables contracts that are owned by the DAO multisig (composites and migrator helpers). Use this **in addition** to the `cooler-v2` script when the exploit surface includes periphery helpers.
+
+**Using shutdown script**:
+```bash
+./shell/shutdown.sh cooler-v2-periphery --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh cooler-v2-periphery --submit <signature> --account <wallet> --chain <chain> --broadcast true
+```
+
+**Manual execution**:
+- `CoolerComposites.disable("")`
+- `CoolerV2Migrator.disable("")`
+- Required role: DAO MS (owner)
+- Addresses: See `olympus.periphery.CoolerComposites` and `olympus.periphery.CoolerV2Migrator` in `src/scripts/env.json`
+
+**Batch script**: `src/scripts/emergency/CoolerV2Periphery.sol`
+
 ### Emission Manager
 
 The EmissionManager shutdown script also disables the ConvertibleDepositAuctioneer as they are related components.
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh emission-manager --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh emission-manager --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh emission-manager --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh emission-manager --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -623,8 +660,8 @@ The Convertible Deposits shutdown script disables ConvertibleDepositFacility, De
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh convertible-deposits --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh convertible-deposits --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh convertible-deposits --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh convertible-deposits --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -639,22 +676,56 @@ The Convertible Deposits shutdown script disables ConvertibleDepositFacility, De
 
 ### CCIP Bridge
 
-The CCIP shutdown script handles both the CCIP bridge and token pool.
+Disable the CCIP cross-chain bridge contract. Must be executed by the DAO MS.
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh ccip --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh ccip --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh ccip-bridge --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh ccip-bridge --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
-- Bridge: Function `disable()` - Check `src/scripts/env.json` for CCIP bridge address
-- Token Pool: Function `emergencyShutdownAll()` - Check `src/scripts/env.json` for CCIP token pool address
-- See [BRIDGE_CCIP](../BRIDGE_CCIP.md) for detailed instructions
+- Function: `disable("")` (empty bytes)
+- Required role: DAO MS (owner with `emergency` equivalent capabilities)
+- Address: `olympus.periphery.CCIPCrossChainBridge` in `src/scripts/env.json`
+- Reference: [BRIDGE_CCIP.md](../BRIDGE_CCIP.md)
 
-**Required multisig**: Emergency MS (can be done by Emergency MS)
+**Batch script**: `src/scripts/emergency/CCIPBridge.sol`
 
-**Batch script**: `src/scripts/emergency/CCIP.sol`
+### CCIP Token Pool (Mainnet)
+
+Withdraw all liquidity from the LockRelease token pool on canonical chains (Ethereum mainnet and Sepolia). Requires DAO MS execution.
+
+**Using shutdown script**:
+```bash
+./shell/shutdown.sh ccip-token-pool-mainnet --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh ccip-token-pool-mainnet --submit <signature> --account <wallet> --chain <chain> --broadcast true
+```
+
+**Manual execution**:
+- Function: `withdrawLiquidity(totalBalance)`
+- Required role: DAO MS (rebalancer)
+- Addresses: `olympus.periphery.CCIPLockReleaseTokenPool`, `olympus.legacy.OHM`
+- Note: Script auto-detects the current liquidity balance; replicate manually by querying the OHM balance of the token pool.
+
+**Batch script**: `src/scripts/emergency/CCIPTokenPoolMainnet.sol`
+
+### CCIP Token Pool (Non-Mainnet)
+
+Disable the burn/mint token pool on non-canonical chains (all chains except mainnet/Sepolia). Executed by the Emergency MS.
+
+**Using shutdown script**:
+```bash
+./shell/shutdown.sh ccip-token-pool-non-mainnet --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh ccip-token-pool-non-mainnet --submit <signature> --account <wallet> --chain <chain> --broadcast true
+```
+
+**Manual execution**:
+- Function: `disable("")` (empty bytes)
+- Required role: Emergency MS
+- Address: `olympus.policies.CCIPBurnMintTokenPool`
+
+**Batch script**: `src/scripts/emergency/CCIPTokenPoolNonMainnet.sol`
 
 ### LayerZero Bridge
 
@@ -664,8 +735,8 @@ Bridging OHM between EVM chains is handled by the [LayerZero bridge](../../src/p
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh layerzero-bridge --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh layerzero-bridge --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh layerzero-bridge --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh layerzero-bridge --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -686,8 +757,8 @@ The [YieldRepurchaseFacility policy](../../src/policies/YieldRepurchaseFacility.
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh yield-repurchase-facility --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh yield-repurchase-facility --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh yield-repurchase-facility --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh yield-repurchase-facility --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -708,8 +779,8 @@ The [Heart policy](../../src/policies/Heart.sol) can be shut down.
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh heart --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh heart --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh heart --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh heart --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -730,8 +801,8 @@ The [ReserveMigrator policy](../../src/policies/ReserveMigrator.sol) can be shut
 
 **Using shutdown script**:
 ```bash
-./shell/shutdown.sh reserve-migrator --sign --account <wallet> --chain mainnet
-./shell/shutdown.sh reserve-migrator --submit <signature> --account <wallet> --chain mainnet --broadcast true
+./shell/shutdown.sh reserve-migrator --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh reserve-migrator --submit <signature> --account <wallet> --chain <chain> --broadcast true
 ```
 
 **Manual execution**:
@@ -743,6 +814,23 @@ The [ReserveMigrator policy](../../src/policies/ReserveMigrator.sol) can be shut
 **Required multisig**: DAO MS (must be done by DAO MS)
 
 **Batch script**: `src/scripts/emergency/ReserveMigrator.sol`
+
+### Reserve Wrapper
+
+Disable the ReserveWrapper policy via the DAO MS.
+
+**Using shutdown script**:
+```bash
+./shell/shutdown.sh reserve-wrapper --sign --account <wallet> --chain <chain>
+./shell/shutdown.sh reserve-wrapper --submit <signature> --account <wallet> --chain <chain> --broadcast true
+```
+
+**Manual execution**:
+- Function: `disable("")` (empty bytes)
+- Required role: `reserve_wrapper_admin` / DAO MS owner
+- Address: `olympus.policies.ReserveWrapper` in `src/scripts/env.json`
+
+**Batch script**: `src/scripts/emergency/ReserveWrapper.sol`
 
 ### Bond Manager
 
