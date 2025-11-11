@@ -9,6 +9,9 @@ import {ConvertibleDepositProposal} from "src/proposals/ConvertibleDepositPropos
 contract ConvertibleDepositProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
+        // At this point:
+        // - Contracts deployed
+        // - Modules and policies installed in the Kernel
         vm.createSelectFork(_RPC_ALIAS, 23774671);
 
         // Deploy proposal under test
