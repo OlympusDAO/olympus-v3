@@ -3,6 +3,7 @@ cache/
 node_modules/
 .env
 .env.*
+!.env.emergency.sample
 remappings.txt
 broadcast/
 src/test/sim/in/*.json
