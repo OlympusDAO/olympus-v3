@@ -152,7 +152,9 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             string.concat(
                 "## Proposal Steps\n\n",
                 "### Phase 1: Cleanup Previous Policies\n",
-                "1. Revoke the `heart` role from the old Heart policy\n\n",
+                "1a. Revoke the `heart` role from the old Heart policy\n",
+                "1b. Disable the old Heart policy\n",
+                "1c. Disable the old EmissionManager policy\n\n",
                 "### Phase 2: Grant Roles to New Policies\n",
                 "2. Grant the `manager` role to the DAO MS\n",
                 "3. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
@@ -231,7 +233,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
 
-            // 1. Revoke "heart" role from old Heart contract
+            // 1a. Revoke "heart" role from old Heart contract
             _pushAction(
                 rolesAdmin,
                 /// forge-lint: disable-next-line(unsafe-typecast)
@@ -239,7 +241,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "Revoke heart role from old Heart policy"
             );
 
-            // 1a. Disable the old Heart policy
+            // 1b. Disable the old Heart policy
             _pushAction(
                 heartOld,
                 abi.encodeWithSignature("deactivate()"),
@@ -250,7 +252,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
 
-            // 1b. Disable the old EmissionManager policy
+            // 1c. Disable the old EmissionManager policy
             _pushAction(
                 emissionManagerOld,
                 abi.encodeWithSignature("shutdown()"),
