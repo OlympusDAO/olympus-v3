@@ -248,12 +248,12 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         }
 
         {
-            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager-1_1");
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
 
             // 1b. Disable the old EmissionManager policy
             _pushAction(
                 emissionManagerOld,
-                abi.encodeWithSignature("deactivate()"),
+                abi.encodeWithSignature("shutdown()"),
                 "Disable old EmissionManager policy"
             );
         }
@@ -398,7 +398,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
             // 1b. Validate that the old EmissionManager policy is disabled
             // It is not deactivated, as that requires the DAO MS
-            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager-1_1");
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
             require(
                 IEmissionManager_v1_1(emissionManagerOld).locallyActive() == false,
                 "Old EmissionManager policy is not disabled"
