@@ -225,9 +225,10 @@ main() {
         signer_flags+=(--account "$account")
     else
         account_address=$(cast wallet address --ledger --mnemonic-index "$ledger_index")
-        signer_flags+=(--ledger --mnemonic-indexes "$ledger_index")
         if [ "$sign_only" = "true" ]; then
             ledger_path="m/44'/60'/${ledger_index}'/0/0"
+        else
+            signer_flags+=(--ledger --mnemonic-indexes "$ledger_index")
         fi
     fi
 
@@ -256,7 +257,6 @@ main() {
     echo "Shutdown summary"
     echo "----------------"
     echo " Component        : $component"
-    echo " Contract target  : $contract_name"
     echo " Owner            : $owner_type"
     echo " Chain            : $chain"
     echo " RPC URL          : $rpc_url"
