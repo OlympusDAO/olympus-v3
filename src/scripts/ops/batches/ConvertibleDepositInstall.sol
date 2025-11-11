@@ -56,41 +56,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
-        // Get old policy addresses (may be zero)
-        address oldHeart = _envLastAddress(chain, "olympus.policies.OlympusHeart");
-        address oldEmissionManager = _envLastAddress(chain, "olympus.policies.EmissionManager");
-
         console2.log("=== Installing ConvertibleDeposit System ===");
         console2.log("Installing modules and activating policies");
-
-        // Deactivate old policies if they exist
-        if (oldHeart != address(0)) {
-            console2.log("0. Deactivating old OlympusHeart policy:", oldHeart);
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.DeactivatePolicy,
-                    oldHeart
-                )
-            );
-        } else {
-            console2.log("0. No old OlympusHeart policy to deactivate");
-        }
-
-        if (oldEmissionManager != address(0)) {
-            console2.log("0. Deactivating old EmissionManager policy:", oldEmissionManager);
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.DeactivatePolicy,
-                    oldEmissionManager
-                )
-            );
-        } else {
-            console2.log("0. No old EmissionManager policy to deactivate");
-        }
 
         // Install DEPOS module
         console2.log("1. Installing OlympusDepositPositionManager module");
@@ -174,6 +141,60 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log(
             "Note: Heart periodic tasks should be configured by HeartPeriodicTasksConfig script"
         );
+
+        proposeBatch();
+
+        // Notes:
+        // - The current Heart and EmissionManager policies are still activated in the kernel and enabled (operating)
+        // - After the OCG proposal has been executed, the current Heart and EmissionManager policies will need to be deactivated using the `deactivateOldPolicies` function
+    }
+
+    /// @notice Deactivate old policies
+    /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
+    function deactivateOldPolicies(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address kernel = _envAddressNotZero("olympus.Kernel");
+
+        // Get old policy addresses (may be zero)
+        address oldHeart = _envLastAddress(chain, "olympus.policies.OlympusHeart");
+        address oldEmissionManager = _envLastAddress(chain, "olympus.policies.EmissionManager");
+
+        if (oldHeart == address(0)) {
+            revert("No old OlympusHeart policy to deactivate");
+        }
+        if (oldEmissionManager == address(0)) {
+            revert("No old EmissionManager policy to deactivate");
+        }
+
+        console2.log("=== Deactivating Old Policies ===");
+
+        console2.log("Deactivating old OlympusHeart policy:", oldHeart);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                oldHeart
+            )
+        );
+
+        console2.log("Deactivating old EmissionManager policy:", oldEmissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                oldEmissionManager
+            )
+        );
+        console2.log("Old policies deactivated");
 
         proposeBatch();
     }
