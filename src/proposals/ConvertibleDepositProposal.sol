@@ -23,6 +23,8 @@ import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.so
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
+import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
 
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
@@ -219,7 +221,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
         // Pre-requisites:
-        // - Previous Heart and EmissionManager have been deactivated from the kernel
+        // - Previous Heart and EmissionManager have not been deactivated from the kernel
         // - All required modules and policies have been installed and activated in the kernel
         // - DEPOS module has been installed in the kernel
         // - All deposit-related policies have been activated
@@ -235,6 +237,24 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("heart"), heartOld),
                 "Revoke heart role from old Heart policy"
+            );
+
+            // 1a. Disable the old Heart policy
+            _pushAction(
+                heartOld,
+                abi.encodeWithSignature("deactivate()"),
+                "Disable old Heart policy"
+            );
+        }
+
+        {
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager-1_1");
+
+            // 1b. Disable the old EmissionManager policy
+            _pushAction(
+                emissionManagerOld,
+                abi.encodeWithSignature("deactivate()"),
+                "Disable old EmissionManager policy"
             );
         }
 
@@ -363,13 +383,25 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // ========== PHASE 1 VALIDATIONS ========== //
 
-        // 1. Validate that the "heart" role is revoked from the old Heart policy
         {
+            // 1. Validate that the "heart" role is revoked from the old Heart policy
             address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
             require(
                 /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(heartOld, bytes32("heart")) == false,
                 "Old Heart policy still has the heart role"
+            );
+
+            // 1a. Validate that the old Heart policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            require(IHeart_v1_6(heartOld).active() == false, "Old Heart policy is not disabled");
+
+            // 1b. Validate that the old EmissionManager policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager-1_1");
+            require(
+                IEmissionManager_v1_1(emissionManagerOld).locallyActive() == false,
+                "Old EmissionManager policy is not disabled"
             );
         }
 

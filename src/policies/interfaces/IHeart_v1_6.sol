@@ -79,4 +79,7 @@ interface IHeart {
 
     /// @notice Current reward amount based on linear auction
     function currentReward() external view returns (uint256);
+
+    /// @notice Whether the contract is active
+    function active() external view returns (bool);
 }
