@@ -179,9 +179,9 @@ contract EmissionManagerTest is Test {
     //
     // admin functions
     // [X] initialize
-    //    [X] when the caller doesn't have emissions_admin role
+    //    [X] when the caller doesn't have admin role
     //       [X] it reverts
-    //    [X] when the caller has emissions_admin role
+    //    [X] when the caller has admin role
     //       [X] when the contract is enabled
     //          [X] it reverts
     //       [X] when the restart timeframe has not passed since the last shutdown
@@ -201,9 +201,9 @@ contract EmissionManagerTest is Test {
     //       [X] it sets locallyActive to true
     //
     // [X] changeBaseRate
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin or em_manager role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin or em_manager role
     //       [X] when a negative rate adjustment would result in an underflow
     //          [X] it reverts
     //       [X] when a positive rate adjustment would result in an overflow
@@ -211,25 +211,25 @@ contract EmissionManagerTest is Test {
     //       [X] it sets the rateChange to changeBy, forNumBeats, and add parameters
     //
     // [X] setMinimumPremium
-    //     [X] when the caller doesn't have the emissions_admin role
+    //     [X] when the caller doesn't have the admin or em_manager role
     //        [X] it reverts
-    //     [X] when the caller has the emissions_admin role
+    //     [X] when the caller has the admin or em_manager role
     //        [X] when the new minimum premium is zero
     //           [X] it reverts
     //        [X] it sets the minimum premium
     //
     // [X] setBacking
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new backing is more than 10% lower than the current backing
     //          [X] it reverts
     //       [X] it sets the backing
     //
     // [X] setRestartTimeframe
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new restart timeframe is zero
     //          [X] it reverts
     //       [X] it sets the restart timeframe
@@ -350,7 +350,7 @@ contract EmissionManagerTest is Test {
             // Emission manager roles
             rolesAdmin.grantRole("heart", heart);
             rolesAdmin.grantRole("admin", guardian);
-            rolesAdmin.grantRole("manager", manager);
+            rolesAdmin.grantRole("em_manager", manager);
 
             // Emergency roles
             rolesAdmin.grantRole("emergency", guardian);
@@ -528,6 +528,11 @@ contract EmissionManagerTest is Test {
     modifier givenRestartTimeframeElapsed() {
         vm.warp(block.timestamp + restartTimeframe);
         _;
+    }
+
+    function _expectRevertNotAuthorized() internal {
+        bytes memory err = abi.encodeWithSignature("NotAuthorised()");
+        vm.expectRevert(err);
     }
 
     function _expectRevertRoleRequired(string memory role_) internal {
@@ -2988,11 +2993,11 @@ contract EmissionManagerTest is Test {
 
     // changeBaseRate tests
 
-    function test_changeBaseRate_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_changeBaseRate_whenCallerNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the changeBaseRate function with the wrong caller
-        _expectRevertRoleRequired("admin");
+        _expectRevertNotAuthorized();
 
         vm.prank(rando_);
         emissionManager.changeBaseRate(1e18, 1, true);
@@ -3026,7 +3031,10 @@ contract EmissionManagerTest is Test {
         emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
     }
 
-    function test_changeBaseRate_positive_success() public {
+    function test_changeBaseRate_positive_success(address caller_) public {
+        // Caller can be admin or manager
+        vm.assume(caller_ == guardian || caller_ == manager);
+
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
             .rateChange();
@@ -3037,7 +3045,7 @@ contract EmissionManagerTest is Test {
         uint256 changeBy_ = 1e3;
         uint48 forNumBeats = 5;
 
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
 
         // Confirm the rate change has been set
@@ -3047,7 +3055,10 @@ contract EmissionManagerTest is Test {
         assertEq(addition, true, "Addition should be true");
     }
 
-    function test_changeBaseRate_negative_success() public {
+    function test_changeBaseRate_negative_success(address caller_) public {
+        // Caller can be admin or manager
+        vm.assume(caller_ == guardian || caller_ == manager);
+
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
             .rateChange();
@@ -3058,7 +3069,7 @@ contract EmissionManagerTest is Test {
         uint256 changeBy_ = 1e3;
         uint48 forNumBeats = 5;
 
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.changeBaseRate(changeBy_, forNumBeats, false);
 
         // Confirm the rate change has been set
@@ -3070,11 +3081,11 @@ contract EmissionManagerTest is Test {
 
     // setMinimumPremium tests
 
-    function test_setMinimumPremium_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_setMinimumPremium_whenCallerNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the setMinimumPremium function with the wrong caller
-        _expectRevertRoleRequired("admin");
+        _expectRevertNotAuthorized();
 
         vm.prank(rando_);
         emissionManager.setMinimumPremium(1e18);
@@ -3088,14 +3099,17 @@ contract EmissionManagerTest is Test {
         emissionManager.setMinimumPremium(0);
     }
 
-    function test_setMinimumPremium_success() public {
+    function test_setMinimumPremium_success(address caller_) public {
+        // Caller can be admin or manager
+        vm.assume(caller_ == guardian || caller_ == manager);
+
         uint256 newMinimumPremium = 1e18;
 
         // Confirm the current minimum premium
         assertEq(emissionManager.minimumPremium(), minimumPremium, "Minimum premium should be 0");
 
         // Set the new minimum premium
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setMinimumPremium(newMinimumPremium);
 
         // Confirm the new minimum premium
@@ -3875,15 +3889,17 @@ contract EmissionManagerTest is Test {
 
     // setMinPriceScalar tests
 
-    // given the caller does not have the admin role
+    // given the caller does not have the admin or em_manager role
     //  [X] it reverts
 
-    function test_setMinPriceScalar_whenCallerDoesNotHaveAdminRole_reverts() public {
+    function test_setMinPriceScalar_whenCallerNotAuthorized_reverts(address caller_) public {
+        vm.assume(caller_ != guardian && caller_ != manager);
+
         // Expect revert
-        _expectRevertRoleRequired("admin");
+        _expectRevertNotAuthorized();
 
         // Call function
-        vm.prank(alice);
+        vm.prank(caller_);
         emissionManager.setMinPriceScalar(1e18);
     }
 
@@ -3907,7 +3923,10 @@ contract EmissionManagerTest is Test {
     // [X] the min price scalar is set to the new value
     // [X] MinPriceScalarChanged event is emitted
 
-    function test_setMinPriceScalar_success(uint256 newMinPriceScalar_) public {
+    function test_setMinPriceScalar_success(address caller_, uint256 newMinPriceScalar_) public {
+        // Caller can be admin or manager
+        vm.assume(caller_ == guardian || caller_ == manager);
+
         newMinPriceScalar_ = bound(newMinPriceScalar_, 1e18, 10e18);
 
         // Expect event to be emitted
@@ -3915,7 +3934,7 @@ contract EmissionManagerTest is Test {
         emit MinPriceScalarChanged(newMinPriceScalar_);
 
         // Call function
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setMinPriceScalar(newMinPriceScalar_);
 
         // Confirm the min price scalar is set
