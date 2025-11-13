@@ -3284,17 +3284,21 @@ contract EmissionManagerTest is Test {
 
     // setTickSize tests
 
-    function test_setTickSize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_setTickSize_whenCallerisNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the setTickSize function with the wrong caller
-        _expectRevertRoleRequired("admin");
+        _expectRevertNotAuthorized();
 
         vm.prank(rando_);
         emissionManager.setTickSize(1e9);
     }
 
-    function test_setTickSize_success() public {
+    function test_setTickSize_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         uint256 newTickSize = 5e9; // 5 OHM
 
         // Expect event to be emitted
@@ -3302,7 +3306,7 @@ contract EmissionManagerTest is Test {
         emit TickSizeChanged(newTickSize);
 
         // Set new tick size
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setTickSize(newTickSize);
 
         // Confirm new value
