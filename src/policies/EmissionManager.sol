@@ -42,6 +42,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///         This enables the Heart contract to call specific functions on this contract.
     bytes32 public constant ROLE_HEART = "heart";
 
+    /// @notice The role defined for the manager of this contract
+    bytes32 public constant ROLE_EM_MANAGER = "em_manager";
+
     /// @notice The length of the `EnableParams` struct in bytes
     uint256 internal constant ENABLE_PARAMS_LENGTH = 224;
 
@@ -478,6 +481,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     // ========== ADMIN FUNCTIONS ========== //
 
+    /// @notice Reverts if the caller does not have the admin or em_manager role
+    function _onlyAdminOrEmManagerRole() internal view {
+        if (!_isAdmin(msg.sender) && !ROLES.hasRole(msg.sender, ROLE_EM_MANAGER))
+            revert NotAuthorised();
+    }
+
+    modifier onlyAdminOrEmManagerRole() {
+        _onlyAdminOrEmManagerRole();
+        _;
+    }
+
     /// @inheritdoc PolicyEnabler
     /// @dev        This function performs the following:
     ///             - Sets the shutdown timestamp
@@ -529,7 +543,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 changeBy_,
         uint48 forNumBeats_,
         bool add
-    ) external onlyAdminRole {
+    ) external onlyAdminOrEmManagerRole {
         // Prevent underflow on negative adjustments
         if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
@@ -549,7 +563,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///         - newMinimumPremium_ is 0
     ///
     /// @param  newMinimumPremium_  The new minimum premium, in terms of ONE_HUNDRED_PERCENT
-    function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminRole {
+    function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminOrEmManagerRole {
         if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
 
         minimumPremium = newMinimumPremium_;
@@ -664,7 +678,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///         - newScalar is less than ONE_HUNDRED_PERCENT (100% in 18 decimals)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
-    function setMinPriceScalar(uint256 newScalar) external onlyAdminRole {
+    function setMinPriceScalar(uint256 newScalar) external onlyAdminOrEmManagerRole {
         if (newScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
 
@@ -677,7 +691,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///         - newScalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR (200%)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
-    function setBondMarketCapacityScalar(uint256 newScalar) external onlyAdminRole {
+    function setBondMarketCapacityScalar(uint256 newScalar) external onlyAdminOrEmManagerRole {
         if (newScalar > MAX_BOND_MARKET_CAPACITY_SCALAR)
             revert InvalidParam("Bond Market Capacity Scalar");
 
