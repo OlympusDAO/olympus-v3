@@ -30,17 +30,15 @@ The Emergency MS address is configured in `src/scripts/env.json` under the key `
 - **Base Sepolia**: `0x1A5309F208f161a393E8b5A253de8Ab894A67188` (same as DAO MS)
 - **Berachain**: `0xa5ea62894027D981D34BB99A04BD36B818b2Aaf0`
 - **Berachain Bartio**: `0x1A5309F208f161a393E8b5A253de8Ab894A67188` (same as DAO MS)
-- **Sepolia**: See `src/scripts/env.json` for current configuration
+- **Sepolia**: `0x81E6E5Ba12a11ceed3E8BfE825B56ae9b7260691`
 
 **⚠️ Missing Emergency MS Addresses:**
 
 The following chains are missing Emergency MS addresses (set to zero address) in `src/scripts/env.json`:
 - **Arbitrum**: Currently `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
-- **Sepolia**: Some entries show `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
 
 **TODO Task**:
 - [ ] Verify Emergency MS deployment status for Arbitrum
-- [ ] Verify Emergency MS deployment status for Sepolia
 - [ ] Configure Emergency MS addresses in `src/scripts/env.json` for all chains where the protocol is deployed
 - [ ] Update this documentation once Emergency MS addresses are configured
 
