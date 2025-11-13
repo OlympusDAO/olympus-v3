@@ -661,11 +661,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD tick size
     /// @dev    This function reverts if:
-    ///         - The caller does not have the admin role
+    ///         - The caller does not have the admin or em_manager role
     ///         - newTickSize_ is 0
     ///
     /// @param  newTickSize_    as a fixed amount in OHM decimals (9)
-    function setTickSize(uint256 newTickSize_) external onlyAdminRole {
+    function setTickSize(uint256 newTickSize_) external onlyAdminOrEmManagerRole {
         if (newTickSize_ == 0) revert InvalidParam("Tick Size");
         tickSize = newTickSize_;
 
