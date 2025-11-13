@@ -3031,9 +3031,10 @@ contract EmissionManagerTest is Test {
         emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
     }
 
-    function test_changeBaseRate_positive_success(address caller_) public {
+    function test_changeBaseRate_positive_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
         // Caller can be admin or manager
-        vm.assume(caller_ == guardian || caller_ == manager);
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
 
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
@@ -3055,9 +3056,10 @@ contract EmissionManagerTest is Test {
         assertEq(addition, true, "Addition should be true");
     }
 
-    function test_changeBaseRate_negative_success(address caller_) public {
+    function test_changeBaseRate_negative_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
         // Caller can be admin or manager
-        vm.assume(caller_ == guardian || caller_ == manager);
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
 
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
@@ -3099,9 +3101,10 @@ contract EmissionManagerTest is Test {
         emissionManager.setMinimumPremium(0);
     }
 
-    function test_setMinimumPremium_success(address caller_) public {
+    function test_setMinimumPremium_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
         // Caller can be admin or manager
-        vm.assume(caller_ == guardian || caller_ == manager);
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
 
         uint256 newMinimumPremium = 1e18;
 
@@ -3923,9 +3926,10 @@ contract EmissionManagerTest is Test {
     // [X] the min price scalar is set to the new value
     // [X] MinPriceScalarChanged event is emitted
 
-    function test_setMinPriceScalar_success(address caller_, uint256 newMinPriceScalar_) public {
+    function test_setMinPriceScalar_success(uint8 callerIndex_, uint256 newMinPriceScalar_) public {
+        vm.assume(callerIndex_ < 2);
         // Caller can be admin or manager
-        vm.assume(caller_ == guardian || caller_ == manager);
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
 
         newMinPriceScalar_ = bound(newMinPriceScalar_, 1e18, 10e18);
 
@@ -3946,15 +3950,19 @@ contract EmissionManagerTest is Test {
     }
 
     // setBondMarketCapacityScalar tests
-    // given the caller does not have the admin role
+    // given the caller does not have the admin or em_manager role
     //  [X] it reverts
 
-    function test_setBondMarketCapacityScalar_whenCallerDoesNotHaveAdminRole_reverts() public {
+    function test_setBondMarketCapacityScalar_whenCallerIsNotAuthorized_reverts(
+        address caller_
+    ) public {
+        vm.assume(caller_ != guardian && caller_ != manager);
+
         // Expect revert
-        _expectRevertRoleRequired("admin");
+        _expectRevertNotAuthorized();
 
         // Call function
-        vm.prank(alice);
+        vm.prank(caller_);
         emissionManager.setBondMarketCapacityScalar(1e18);
     }
 
@@ -3981,7 +3989,14 @@ contract EmissionManagerTest is Test {
     // [X] the bond market capacity scalar is set to the new value
     // [X] BondMarketCapacityScalarChanged event is emitted
 
-    function test_setBondMarketCapacityScalar_success(uint256 newScalar_) public {
+    function test_setBondMarketCapacityScalar_success(
+        uint8 callerIndex_,
+        uint256 newScalar_
+    ) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         newScalar_ = bound(newScalar_, 0, 2e18);
 
         // Expect event to be emitted
@@ -3989,7 +4004,7 @@ contract EmissionManagerTest is Test {
         emit BondMarketCapacityScalarChanged(newScalar_);
 
         // Call function
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setBondMarketCapacityScalar(newScalar_);
 
         // Confirm the bond market capacity scalar is set
