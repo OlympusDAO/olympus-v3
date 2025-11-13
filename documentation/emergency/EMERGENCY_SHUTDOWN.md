@@ -91,7 +91,7 @@ The following software must be installed and configured:
 
 3. **Node.js and pnpm** - For project dependencies
    - Install Node.js: [nodejs.org](https://nodejs.org/)
-   - Install pnpm: `npm install -g pnpm`
+   - Install pnpm: `npm install -g pnpm` (this might reqire a `sudo` prefix, depending on the system)
 
 4. Check out the repo using git: `git clone https://github.com/OlympusDAO/olympus-v3.git`
 
