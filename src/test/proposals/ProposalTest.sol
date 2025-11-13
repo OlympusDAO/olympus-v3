@@ -47,9 +47,8 @@ abstract contract ProposalTest is Test {
         // Proposals execution may change addresses, so we need to update the addresses object.
         addresses = suite.addresses();
 
-        if (entries.length != 0) {
-            _logRoleEvents(entries, addresses);
-        }
+        // Log role events
+        _logRoleEvents(entries, addresses);
 
         // Check if simulated calldatas match the ones from mainnet.
         if (hasBeenSubmitted) {
@@ -92,15 +91,20 @@ abstract contract ProposalTest is Test {
     ///         back to the raw hex string).
     /// @param logs_ The logs recorded during the proposal execution.
     /// @param addresses_ The addresses registry, used to resolve names for relevant addresses.
-    function _logRoleEvents(
-        Vm.Log[] memory logs_,
-        Addresses addresses_
-    ) internal view {
+    function _logRoleEvents(Vm.Log[] memory logs_, Addresses addresses_) internal view {
+        console2.log("\n\n------- Role events -------\n");
+
+        if (logs_.length == 0) {
+            console2.log("No role events found\n");
+            return;
+        }
+
         /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 roleGrantedSig = keccak256("RoleGranted(bytes32,address)");
         /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 roleRevokedSig = keccak256("RoleRevoked(bytes32,address)");
 
+        bool roleEventFound = false;
         for (uint256 i; i < logs_.length; i++) {
             Vm.Log memory entry = logs_[i];
 
@@ -116,30 +120,25 @@ abstract contract ProposalTest is Test {
             address account = address(uint160(uint256(entry.topics[2])));
 
             string memory roleLabel = BytesLib.bytes32ToString(role);
-            string memory accountDescriptor = _formatAccountDescriptor(
-                addresses_,
-                account
-            );
+            string memory accountDescriptor = _formatAccountDescriptor(addresses_, account);
 
             if (signature == roleGrantedSig) {
+                roleEventFound = true;
+
                 console2.log(
-                    string.concat(
-                        "+ Role '",
-                        roleLabel,
-                        "' granted to ",
-                        accountDescriptor
-                    )
+                    string.concat("+ Role '", roleLabel, "' granted to ", accountDescriptor)
                 );
             } else {
+                roleEventFound = true;
+
                 console2.log(
-                    string.concat(
-                        "- Role '",
-                        roleLabel,
-                        "' revoked from ",
-                        accountDescriptor
-                    )
+                    string.concat("- Role '", roleLabel, "' revoked from ", accountDescriptor)
                 );
             }
+        }
+
+        if (!roleEventFound) {
+            console2.log("No role events found\n");
         }
     }
 
@@ -179,10 +178,7 @@ abstract contract ProposalTest is Test {
             ) {
                 uint256 thisChainId = block.chainid;
                 for (uint256 i; i < recordedAddresses.length; i++) {
-                    if (
-                        recordedAddresses[i] == account_ &&
-                        chainIds[i] == thisChainId
-                    ) {
+                    if (recordedAddresses[i] == account_ && chainIds[i] == thisChainId) {
                         return names[i];
                     }
                 }
@@ -196,10 +192,7 @@ abstract contract ProposalTest is Test {
             ) {
                 uint256 thisChainId = block.chainid;
                 for (uint256 i; i < newAddresses.length; i++) {
-                    if (
-                        newAddresses[i] == account_ &&
-                        chainIds[i] == thisChainId
-                    ) {
+                    if (newAddresses[i] == account_ && chainIds[i] == thisChainId) {
                         return changedNames[i];
                     }
                 }
