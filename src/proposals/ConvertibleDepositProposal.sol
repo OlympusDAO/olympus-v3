@@ -57,10 +57,11 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
     // EmissionManager parameters
     uint256 internal constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
-    uint256 internal constant EM_MINIMUM_PREMIUM = 1e18; // 100% premium
-    uint256 internal constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
+    uint256 internal constant EM_MINIMUM_PREMIUM = 5e17; // 50% premium
+    uint256 internal constant EM_BACKING = 11690000000000000000; // 11.69 USDS/OHM
     uint256 internal constant EM_TICK_SIZE = 150e9; // 150 OHM
-    uint256 internal constant EM_MIN_PRICE_SCALAR = 1e18; // 100% min price multiplier
+    uint256 internal constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
+    uint256 internal constant EM_BOND_MARKET_CAPACITY_SCALAR = 0; // 0% bond market capacity scalar, bond market is disabled
     uint48 internal constant EM_RESTART_TIMEFRAME = 950400; // 11 days
 
     // ========== PROPOSAL ========== //
