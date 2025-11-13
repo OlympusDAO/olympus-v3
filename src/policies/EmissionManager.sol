@@ -496,6 +496,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice Restart the emission manager
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
+    ///         - The restart timeframe has passed since shutdown
     function restart() external onlyAdminRole {
         // Restart can be activated only within the specified timeframe since shutdown
         // Outside of this span of time, admin must reinitialize
@@ -515,6 +518,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice Set the base emissions rate
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
+    ///         - There is an underflow or overflow on adjustments
     ///
     /// @param  changeBy_       uint256 added or subtracted from baseEmissionRate
     /// @param  forNumBeats_    uint256 number of times to change baseEmissionRate by changeBy_
@@ -539,6 +545,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Set the minimum premium for emissions
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
     ///         - newMinimumPremium_ is 0
     ///
     /// @param  newMinimumPremium_  The new minimum premium, in terms of ONE_HUNDRED_PERCENT
@@ -552,6 +559,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Set the new bond vesting period in seconds
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newVestingPeriod_ is more than 31536000 (1 year in seconds)
     ///
     /// @param newVestingPeriod_ uint48
@@ -566,6 +574,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to adjust backing price if deviated from reality
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newBacking is 0
     ///         - newBacking is less than 90% of current backing (to prevent large sudden drops)
     ///
@@ -583,6 +592,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to adjust the timeframe for restart after shutdown
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newTimeframe is 0
     ///
     /// @param  newTimeframe    to adjust it to
@@ -597,6 +607,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice allow governance to set the bond contracts used by the emission manager
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - bondAuctioneer_ is the zero address
     ///         - teller_ is the zero address
     ///
@@ -615,6 +626,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD contract used by the emission manager
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - cdAuctioneer_ is the zero address
     ///         - The deposit asset of the CDAuctioneer is not the same as the reserve asset in this contract
     ///
@@ -635,6 +647,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD tick size
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newTickSize_ is 0
     ///
     /// @param  newTickSize_    as a fixed amount in OHM decimals (9)
@@ -647,6 +660,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD minimum price scalar
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
     ///         - newScalar is less than ONE_HUNDRED_PERCENT (100% in 18 decimals)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
@@ -657,8 +671,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         emit MinPriceScalarChanged(newScalar);
     }
 
-    /// @notice Allow governance to set the bond market capacity scalar
+    /// @notice Allow governance to set the bond market capacity scalar, which acts as a multiplier for the bond market capacity
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
     ///         - newScalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR (200%)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
