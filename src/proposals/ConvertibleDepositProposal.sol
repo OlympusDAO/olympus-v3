@@ -25,6 +25,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
 import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
+import {EmissionManager} from "src/policies/EmissionManager.sol";
 
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
@@ -602,8 +603,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             address cdAuctioneer = addresses.getAddress(
                 "olympus-policy-convertible-deposit-auctioneer-1_0"
             );
-            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
 
+            // Deposit periods
             (bool period1MEnabled, ) = IConvertibleDepositAuctioneer(cdAuctioneer)
                 .isDepositPeriodEnabled(PERIOD_1M);
             require(
@@ -625,10 +626,74 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "USDS-3m period is not enabled in ConvertibleDepositAuctioneer"
             );
 
+            // Initial auction parameters
+            IConvertibleDepositAuctioneer.AuctionParameters
+                memory auctionParams = IConvertibleDepositAuctioneer(cdAuctioneer)
+                    .getAuctionParameters();
+            require(
+                auctionParams.target == CDA_INITIAL_TARGET,
+                "Initial target is not CDA_INITIAL_TARGET"
+            );
+            require(
+                auctionParams.tickSize == CDA_INITIAL_TICK_SIZE,
+                "Initial tick size is not CDA_INITIAL_TICK_SIZE"
+            );
+            require(
+                auctionParams.minPrice == CDA_INITIAL_MIN_PRICE,
+                "Initial min price is not CDA_INITIAL_MIN_PRICE"
+            );
+
+            // Auction configuration
+            uint256 tickStep = IConvertibleDepositAuctioneer(cdAuctioneer).getTickStep();
+            require(
+                tickStep == CDA_INITIAL_TICK_STEP_MULTIPLIER,
+                "Initial tick step is not CDA_INITIAL_TICK_STEP_MULTIPLIER"
+            );
+            uint256 trackingPeriod = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .getAuctionTrackingPeriod();
+            require(
+                trackingPeriod == CDA_AUCTION_TRACKING_PERIOD,
+                "Initial auction tracking period is not CDA_AUCTION_TRACKING_PERIOD"
+            );
+
             require(
                 IEnabler(cdAuctioneer).isEnabled() == true,
                 "ConvertibleDepositAuctioneer is not enabled"
             );
+        }
+
+        // Validate EmissionManager
+        {
+            EmissionManager emissionManager = EmissionManager(
+                addresses.getAddress("olympus-policy-emissionmanager-1_2")
+            );
+
+            require(
+                emissionManager.baseEmissionRate() == EM_BASE_EMISSIONS_RATE,
+                "Initial base emissions rate is not EM_BASE_EMISSIONS_RATE"
+            );
+            require(
+                emissionManager.minimumPremium() == EM_MINIMUM_PREMIUM,
+                "Initial minimum premium is not EM_MINIMUM_PREMIUM"
+            );
+            require(emissionManager.backing() == EM_BACKING, "Initial backing is not EM_BACKING");
+            require(
+                emissionManager.tickSize() == EM_TICK_SIZE,
+                "Initial tick size is not EM_TICK_SIZE"
+            );
+            require(
+                emissionManager.minPriceScalar() == EM_MIN_PRICE_SCALAR,
+                "Initial min price scalar is not EM_MIN_PRICE_SCALAR"
+            );
+            require(
+                emissionManager.bondMarketCapacityScalar() == EM_BOND_MARKET_CAPACITY_SCALAR,
+                "Initial bond market capacity scalar is not EM_BOND_MARKET_CAPACITY_SCALAR"
+            );
+            require(
+                emissionManager.restartTimeframe() == EM_RESTART_TIMEFRAME,
+                "Initial restart timeframe is not EM_RESTART_TIMEFRAME"
+            );
+
             require(
                 IEnabler(emissionManager).isEnabled() == true,
                 "EmissionManager is not enabled"
