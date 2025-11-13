@@ -82,7 +82,8 @@ To execute shutdown procedures using the Emergency MS:
 The following software must be installed and configured:
 
 1. **Foundry** - For running batch scripts
-   - Install: `curl -L https://foundry.paradigm.xyz | bash`
+   - Install foundryup: `curl -L https://foundry.paradigm.xyz | bash`
+   - Install foundry tools: `foundryup`
    - Verify: `forge --version` and `cast --version`
 
 2. **Bash** - Shell interpreter (typically pre-installed on macOS/Linux)
@@ -91,6 +92,10 @@ The following software must be installed and configured:
 3. **Node.js and pnpm** - For project dependencies
    - Install Node.js: [nodejs.org](https://nodejs.org/)
    - Install pnpm: `npm install -g pnpm`
+
+4. Check out the repo using git: `git clone https://github.com/OlympusDAO/olympus-v3.git`
+
+5. Install dependencies and build: `pnpm run build`
 
 ### Wallet Setup Options
 
