@@ -159,7 +159,6 @@ contract HeartTest is Test {
             // Configure access control
 
             // Heart ROLES
-            rolesAdmin.grantRole("heart_admin", policy);
             rolesAdmin.grantRole("admin", ADMIN);
             rolesAdmin.grantRole("manager", MANAGER);
             rolesAdmin.grantRole("emergency", EMERGENCY);
@@ -597,7 +596,7 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_setDistributor() public {
-        // Reverts if the caller is not "heart_admin"
+        // Reverts if the caller is not "admin"
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("admin")
