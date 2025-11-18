@@ -11,6 +11,7 @@
 # [--multisig <true|false>]
 # [--signonly <true|false>]
 # [--signature <signature>]
+# [--nonce <nonce>]
 # [--broadcast <true|false>]
 # [--testnet <true|false>]
 # [--args <args-file>]
@@ -64,6 +65,11 @@ if [ -n "$ARGS_FILE" ]; then
 else
     echo "  Args file: (none)"
 fi
+if [ -n "$nonce" ]; then
+    echo "  Nonce: $nonce"
+else
+    echo "  Nonce: (default)"
+fi
 
 # Validate and set account flags (consistent with deployV3.sh)
 if [ "$signonly" == "true" ]; then
@@ -91,6 +97,9 @@ else
     validate_and_set_account "$account" "$ledger"
     LEDGER_DERIVATION_PATH=""
 fi
+
+# Set the nonce
+export SAFE_NONCE=$nonce
 
 # Execute the batch
 export TESTNET=$testnet

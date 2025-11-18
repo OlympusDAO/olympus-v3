@@ -162,24 +162,51 @@ abstract contract BatchScriptV2 is WithEnvironment {
             revert("BatchScriptV2: Cannot propose batch when signOnly is true");
         }
 
-        // If there is no signature, propose normally
+        // Determine the nonce to use
+        uint256 nonce = _multiSig.getNonce();
+        {
+            try vm.envUint("SAFE_NONCE") returns (uint256 nonce_) {
+                console2.log("  Using nonce from environment:", nonce_);
+                nonce = nonce_;
+            } catch {
+                // Do nothing
+                console2.log("  No nonce provided in environment, using Safe nonce:", nonce);
+            }
+        }
+
+        // Get tx data
+        (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
+
+        // Prepare the tx params
+        Safe.ExecTransactionParams memory params = Safe.ExecTransactionParams({
+            to: to,
+            value: 0,
+            data: data,
+            operation: Enum.Operation.DelegateCall,
+            sender: msg.sender,
+            signature: _signature, // Empty signature, will be signed later
+            nonce: nonce
+        });
+
+        // If there is no signature, get the signature
         if (!_hasSignature()) {
-            txHash = _multiSig.proposeTransactions(
-                _batchTargets,
-                _batchData,
+            console2.log("  No signature provided, getting signature");
+            bytes memory signature = _multiSig.sign(
+                to,
+                data,
+                Enum.Operation.DelegateCall,
                 msg.sender,
                 "" // No derivation path
             );
-            return txHash;
+            params.signature = signature;
+        }
+        else {
+            console2.log("  Using provided signature");
         }
 
-        console2.log("  Using provided signature");
-        txHash = _multiSig.proposeTransactionsWithSignature(
-            _batchTargets,
-            _batchData,
-            msg.sender,
-            _signature
-        );
+        console2.log("  Submitting transaction");
+        txHash = _multiSig.proposeTransaction(params);
+
         return txHash;
     }
 
