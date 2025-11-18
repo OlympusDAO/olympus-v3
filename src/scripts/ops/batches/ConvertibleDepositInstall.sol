@@ -149,6 +149,47 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         // - After the OCG proposal has been executed, the current Heart and EmissionManager policies will need to be deactivated using the `deactivateOldPolicies` function
     }
 
+    /// @notice Replaces the initial EmissionManager policy with the new one
+    function replaceEmissionManager(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address prevEmissionManager = 0xb4f620c39F3BA4a1E7aD264fEd6239B0C618DB50;
+
+        console2.log("=== Replacing EmissionManager ===");
+
+        console2.log("Deactivating old EmissionManager policy:", prevEmissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                prevEmissionManager
+            )
+        );
+
+        console2.log("Activating new EmissionManager policy:", emissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                emissionManager
+            )
+        );
+
+        console2.log("EmissionManager replacement batch prepared");
+
+        proposeBatch();
+    }
+
     /// @notice Deactivate old policies
     /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
     function deactivateOldPolicies(
