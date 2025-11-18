@@ -157,13 +157,13 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
-    function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
-        if (_signOnly) {
-            revert("BatchScriptV2: Cannot propose batch when signOnly is true");
-        }
-
+    /// @notice Get the nonce to use for the batch
+    /// @dev    If a nonce is provided using the "SAFE_NONCE" environment variable, it will be used. Otherwise the Safe's nonce will be used.
+    ///
+    /// @return nonce The nonce to use for the batch
+    function _getNonce() internal view returns (uint256 nonce) {
         // Determine the nonce to use
-        uint256 nonce = _multiSig.getNonce();
+        nonce = _multiSig.getNonce();
         {
             try vm.envUint("SAFE_NONCE") returns (uint256 nonce_) {
                 console2.log("  Using nonce from environment:", nonce_);
@@ -173,6 +173,16 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 console2.log("  No nonce provided in environment, using Safe nonce:", nonce);
             }
         }
+
+        return nonce;
+    }
+
+    function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
+        if (_signOnly) {
+            revert("BatchScriptV2: Cannot propose batch when signOnly is true");
+        }
+
+        uint256 nonce = _getNonce();
 
         // Get tx data
         (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
@@ -196,6 +206,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 data,
                 Enum.Operation.DelegateCall,
                 msg.sender,
+                nonce,
                 "" // No derivation path
             );
             params.signature = signature;
@@ -227,6 +238,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
         if (_signOnly) {
             console2.log("signOnly is true, approve the request to sign the batch");
 
+            uint256 nonce = _getNonce();
+
             (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
 
             // This will revert if the user is using a Ledger and the derivation path is not provided
@@ -235,6 +248,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 data,
                 Enum.Operation.DelegateCall,
                 msg.sender,
+                nonce,
                 _ledgerDerivationPath
             );
             console2.log("Batch signed. Signature:");
