@@ -7,12 +7,15 @@ import {ProposalTest} from "./ProposalTest.sol";
 import {ConvertibleDepositProposal} from "src/proposals/ConvertibleDepositProposal.sol";
 
 contract ConvertibleDepositProposalTest is ProposalTest {
+    /// @dev Block the kernel installation batch was executed
+    uint256 public constant BLOCK = 23831097;
+
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
         // At this point:
         // - Contracts deployed
         // - Modules and policies installed in the Kernel
-        vm.createSelectFork(_RPC_ALIAS, 23774671);
+        vm.createSelectFork(_RPC_ALIAS, BLOCK + 1);
 
         // Deploy proposal under test
         ConvertibleDepositProposal proposal = new ConvertibleDepositProposal();
