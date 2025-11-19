@@ -93,7 +93,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "# Convertible Deposits\n\n",
                 "This proposal activates and configures the Convertible Deposit system.\n\n",
                 "## Summary\n\n",
-                "This proposal has five main components:\n",
+                "This proposal has five main components:\n\n",
                 "1. Grant appropriate roles to contracts\n",
                 "2. Activate Convertible Deposit system contracts\n",
                 "3. Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
@@ -134,7 +134,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "- Old Heart policy has been deactivated in the kernel\n",
                 "- Old EmissionManager policy has been deactivated in the kernel\n",
                 "- DEPOS module has been installed in the kernel\n",
-                "- All new policies have been activated in the kernel\n"
+                "- All new policies have been activated in the kernel\n\n"
             );
     }
 
@@ -153,18 +153,18 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Proposal Steps\n\n",
-                "### Phase 1: Cleanup Previous Policies\n",
+                "### Phase 1: Cleanup Previous Policies\n\n",
                 "1a. Revoke the `heart` role from the old Heart policy\n",
                 "1b. Disable the old Heart policy\n",
                 "1c. Disable the old EmissionManager policy\n\n",
-                "### Phase 2: Grant Roles to New Policies\n",
+                "### Phase 2: Grant Roles to New Policies\n\n",
                 "2. Grant the `manager` role to the DAO MS\n",
                 "3. Grant the `em_manager` role to the DAO MS\n",
                 "4. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
                 "5. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
                 "6. Grant the `cd_emissionmanager` role to EmissionManager\n",
                 "7. Grant the `heart` role to Heart contract\n\n",
-                "### Phase 3: Execute Activator Contract\n",
+                "### Phase 3: Execute Activator Contract\n\n",
                 "8. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
             );
     }
