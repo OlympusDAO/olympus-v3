@@ -42,7 +42,7 @@ LIB_DIR="$REPO_ROOT/shell/lib"
 source "$LIB_DIR/error.sh"
 
 require_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
+    if ! command -v "$1" > /dev/null 2>&1; then
         display_error "Required command '$1' not found in PATH."
         exit 1
     fi
@@ -129,7 +129,7 @@ normalise_bool() {
     local value
     value=$(echo "${1:-false}" | tr '[:upper:]' '[:lower:]')
     case "$value" in
-        true|false) echo "$value" ;;
+        true | false) echo "$value" ;;
         *)
             display_error "Invalid boolean value '$1'. Expected true or false."
             exit 1
@@ -302,7 +302,7 @@ _argc_run() {
 }
 
 _argc_usage() {
-    cat <<-'EOF'
+    cat <<- 'EOF'
 Olympus emergency shutdown orchestrator
 
 USAGE: shutdown.argc [OPTIONS] [COMPONENT]
@@ -338,111 +338,111 @@ _argc_parse() {
         _argc_item="${argc__args[_argc_index]}"
         _argc_key="${_argc_item%%=*}"
         case "$_argc_key" in
-        --help | -help | -h)
-            _argc_usage
-            ;;
-        --version | -version | -V)
-            _argc_version
-            ;;
-        --)
-            _argc_dash="${#argc__positionals[@]}"
-            argc__positionals+=("${argc__args[@]:$((_argc_index + 1))}")
-            _argc_index=$_argc_len
-            break
-            ;;
-        --chain)
-            _argc_take_args "--chain <CHAIN>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_chain:-}" ]]; then
-                argc_chain="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--chain\` cannot be used multiple times"
-            fi
-            ;;
-        --rpc-url)
-            _argc_take_args "--rpc-url <RPC-URL>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_rpc_url:-}" ]]; then
-                argc_rpc_url="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--rpc-url\` cannot be used multiple times"
-            fi
-            ;;
-        --account)
-            _argc_take_args "--account <ACCOUNT>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_account:-}" ]]; then
-                argc_account="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--account\` cannot be used multiple times"
-            fi
-            ;;
-        --ledger)
-            _argc_take_args "--ledger <LEDGER>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_ledger:-}" ]]; then
-                argc_ledger="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--ledger\` cannot be used multiple times"
-            fi
-            ;;
-        --sign)
-            if [[ "$_argc_item" == *=* ]]; then
-                _argc_die "error: flag \`--sign\` don't accept any value"
-            fi
-            _argc_index=$((_argc_index + 1))
-            if [[ -n "${argc_sign:-}" ]]; then
-                _argc_die "error: the argument \`--sign\` cannot be used multiple times"
-            else
-                argc_sign=1
-            fi
-            ;;
-        --submit)
-            _argc_take_args "--submit <SUBMIT>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_submit:-}" ]]; then
-                argc_submit="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--submit\` cannot be used multiple times"
-            fi
-            ;;
-        --broadcast)
-            _argc_take_args "--broadcast <BROADCAST>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            _argc_validate_choices '`<BROADCAST>`' "$(printf "%s\n" true false)" "${_argc_take_args_values[@]}"
-            if [[ -z "${argc_broadcast:-}" ]]; then
-                argc_broadcast="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--broadcast\` cannot be used multiple times"
-            fi
-            ;;
-        --args)
-            _argc_take_args "--args <ARGS>" 1 1 "-" ""
-            _argc_index=$((_argc_index + _argc_take_args_len + 1))
-            if [[ -z "${argc_args:-}" ]]; then
-                argc_args="${_argc_take_args_values[0]:-}"
-            else
-                _argc_die "error: the argument \`--args\` cannot be used multiple times"
-            fi
-            ;;
-        --list)
-            if [[ "$_argc_item" == *=* ]]; then
-                _argc_die "error: flag \`--list\` don't accept any value"
-            fi
-            _argc_index=$((_argc_index + 1))
-            if [[ -n "${argc_list:-}" ]]; then
-                _argc_die "error: the argument \`--list\` cannot be used multiple times"
-            else
-                argc_list=1
-            fi
-            ;;
-        *)
-            if _argc_maybe_flag_option "-" "$_argc_item"; then
-                _argc_die "error: unexpected argument \`$_argc_key\` found"
-            fi
-            argc__positionals+=("$_argc_item")
-            _argc_index=$((_argc_index + 1))
-            ;;
+            --help | -help | -h)
+                _argc_usage
+                ;;
+            --version | -version | -V)
+                _argc_version
+                ;;
+            --)
+                _argc_dash="${#argc__positionals[@]}"
+                argc__positionals+=("${argc__args[@]:$((_argc_index + 1))}")
+                _argc_index=$_argc_len
+                break
+                ;;
+            --chain)
+                _argc_take_args "--chain <CHAIN>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_chain:-}" ]]; then
+                    argc_chain="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--chain\` cannot be used multiple times"
+                fi
+                ;;
+            --rpc-url)
+                _argc_take_args "--rpc-url <RPC-URL>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_rpc_url:-}" ]]; then
+                    argc_rpc_url="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--rpc-url\` cannot be used multiple times"
+                fi
+                ;;
+            --account)
+                _argc_take_args "--account <ACCOUNT>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_account:-}" ]]; then
+                    argc_account="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--account\` cannot be used multiple times"
+                fi
+                ;;
+            --ledger)
+                _argc_take_args "--ledger <LEDGER>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_ledger:-}" ]]; then
+                    argc_ledger="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--ledger\` cannot be used multiple times"
+                fi
+                ;;
+            --sign)
+                if [[ "$_argc_item" == *=* ]]; then
+                    _argc_die "error: flag \`--sign\` don't accept any value"
+                fi
+                _argc_index=$((_argc_index + 1))
+                if [[ -n "${argc_sign:-}" ]]; then
+                    _argc_die "error: the argument \`--sign\` cannot be used multiple times"
+                else
+                    argc_sign=1
+                fi
+                ;;
+            --submit)
+                _argc_take_args "--submit <SUBMIT>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_submit:-}" ]]; then
+                    argc_submit="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--submit\` cannot be used multiple times"
+                fi
+                ;;
+            --broadcast)
+                _argc_take_args "--broadcast <BROADCAST>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                _argc_validate_choices '`<BROADCAST>`' "$(printf "%s\n" true false)" "${_argc_take_args_values[@]}"
+                if [[ -z "${argc_broadcast:-}" ]]; then
+                    argc_broadcast="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--broadcast\` cannot be used multiple times"
+                fi
+                ;;
+            --args)
+                _argc_take_args "--args <ARGS>" 1 1 "-" ""
+                _argc_index=$((_argc_index + _argc_take_args_len + 1))
+                if [[ -z "${argc_args:-}" ]]; then
+                    argc_args="${_argc_take_args_values[0]:-}"
+                else
+                    _argc_die "error: the argument \`--args\` cannot be used multiple times"
+                fi
+                ;;
+            --list)
+                if [[ "$_argc_item" == *=* ]]; then
+                    _argc_die "error: flag \`--list\` don't accept any value"
+                fi
+                _argc_index=$((_argc_index + 1))
+                if [[ -n "${argc_list:-}" ]]; then
+                    _argc_die "error: the argument \`--list\` cannot be used multiple times"
+                else
+                    argc_list=1
+                fi
+                ;;
+            *)
+                if _argc_maybe_flag_option "-" "$_argc_item"; then
+                    _argc_die "error: unexpected argument \`$_argc_key\` found"
+                fi
+                argc__positionals+=("$_argc_item")
+                _argc_index=$((_argc_index + 1))
+                ;;
         esac
     done
     if [[ -n "${_argc_action:-}" ]]; then
@@ -454,7 +454,7 @@ _argc_parse() {
         fi
         _argc_match_positionals 0
         local values_index values_size
-        IFS=: read -r values_index values_size <<<"${_argc_match_positionals_values[0]:-}"
+        IFS=: read -r values_index values_size <<< "${_argc_match_positionals_values[0]:-}"
         if [[ -n "$values_index" ]]; then
             argc_component="${argc__positionals[values_index]}"
         fi
@@ -493,7 +493,7 @@ _argc_take_args() {
     if [[ -n "$delimiter" ]] && [[ "${#_argc_take_args_values[@]}" -gt 0 ]]; then
         local item values arr=()
         for item in "${_argc_take_args_values[@]}"; do
-            IFS="$delimiter" read -r -a values <<<"$item"
+            IFS="$delimiter" read -r -a values <<< "$item"
             arr+=("${values[@]}")
         done
         _argc_take_args_values=("${arr[@]}")
@@ -512,10 +512,10 @@ _argc_match_positionals() {
     while [[ $param_index -lt $params_len && $arg_index -lt $args_len ]]; do
         local takes=0
         if [[ "${params[param_index]}" -eq 1 ]]; then
-            if [[ $param_index -eq 0 ]] &&
-                [[ ${_argc_dash:-} -gt 0 ]] &&
-                [[ $params_len -eq 2 ]] &&
-                [[ "${params[$((param_index + 1))]}" -eq 1 ]] \
+            if [[ $param_index -eq 0 ]] \
+                && [[ ${_argc_dash:-} -gt 0 ]] \
+                && [[ $params_len -eq 2 ]] \
+                && [[ "${params[$((param_index + 1))]}" -eq 1 ]] \
                 ; then
                 takes=${_argc_dash:-}
             else
@@ -547,7 +547,7 @@ _argc_validate_choices() {
     local render_name="$1" raw_choices="$2" choices item choice concated_choices=""
     while IFS= read -r line; do
         choices+=("$line")
-    done <<<"$raw_choices"
+    done <<< "$raw_choices"
     for choice in "${choices[@]}"; do
         if [[ -z "$concated_choices" ]]; then
             concated_choices="$choice"
@@ -579,7 +579,7 @@ _argc_maybe_flag_option() {
             cond=true
         fi
     elif [[ "$arg" == -* ]]; then
-        if (( ${#arg} < 3 )) || [[ ! "$arg" =~ ^---.* ]]; then
+        if ((${#arg} < 3)) || [[ ! "$arg" =~ ^---.* ]]; then
             cond=true
         fi
     fi
@@ -605,4 +605,3 @@ _argc_die() {
 _argc_run "$@"
 
 # ARGC-BUILD }
-

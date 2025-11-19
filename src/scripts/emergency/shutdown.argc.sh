@@ -42,7 +42,7 @@ LIB_DIR="$REPO_ROOT/shell/lib"
 source "$LIB_DIR/error.sh"
 
 require_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
+    if ! command -v "$1" > /dev/null 2>&1; then
         display_error "Required command '$1' not found in PATH."
         exit 1
     fi
@@ -129,7 +129,7 @@ normalise_bool() {
     local value
     value=$(echo "${1:-false}" | tr '[:upper:]' '[:lower:]')
     case "$value" in
-        true|false) echo "$value" ;;
+        true | false) echo "$value" ;;
         *)
             display_error "Invalid boolean value '$1'. Expected true or false."
             exit 1
@@ -280,4 +280,3 @@ main() {
 }
 
 eval "$(argc --argc-eval "$0" "$@")"
-
