@@ -40,6 +40,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
+| em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |

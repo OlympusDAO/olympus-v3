@@ -69,7 +69,7 @@ rev = "bf943f80fec5ac647159d26161446ac5d716a294"
 name = "safe-utils"
 version = "0.0.13"
 git = "https://github.com/Recon-Fuzz/safe-utils.git"
-rev = "b37a35e04c8b99e2db6f0f4dc388b7e188ce3aad"
+rev = "fcdc133d170a3cb2f01aef517d413f43a755e536"
 
 [[dependencies]]
 name = "solidity-http"

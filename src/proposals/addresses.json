@@ -190,7 +190,7 @@
         "name": "olympus-policy-convertible-deposit-facility-1_0"
     },
     {
-        "addr": "0xb4f620c39F3BA4a1E7aD264fEd6239B0C618DB50",
+        "addr": "0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff",
         "chainId": 1,
         "name": "olympus-policy-emissionmanager-1_2"
     },
@@ -230,7 +230,7 @@
         "name": "external-tokens-sUSDS"
     },
     {
-        "addr": "0x5261fBA7B50aA22B19B9edF939b771D109dE991F",
+        "addr": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
         "chainId": 1,
         "name": "olympus-periphery-convertible-deposit-activator"
     }
