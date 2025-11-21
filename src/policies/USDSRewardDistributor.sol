@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
@@ -41,6 +42,10 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @notice The reward token (immutable)
     ERC20 public immutable REWARD_TOKEN;
 
+    /// @notice The vault token for alternative reward distribution (ERC4626 compliant)
+    /// @dev    Used when REWARD_TOKEN is not available in TRSRY. Rewards are converted using convertToShares.
+    ERC20 public immutable VAULT_TOKEN;
+
     /// @notice Mapping from week number => merkle root
     /// @dev    Week 0 is the first distribution week
     mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
@@ -58,11 +63,19 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
     /// @param kernel_              The Kernel address
     /// @param rewardToken_         The ERC20 token to distribute as rewards
+    /// @param vaultToken_          The ERC4626 vault token for alternative reward distribution
     /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
-    constructor(address kernel_, address rewardToken_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
+    constructor(
+        address kernel_,
+        address rewardToken_,
+        address vaultToken_,
+        uint256 startTimestamp_
+    ) Policy(Kernel(kernel_)) {
         if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
+        if (vaultToken_ == address(0)) revert DRD_InvalidAddress();
         if (startTimestamp_ == 0) revert DRD_InvalidAddress();
         REWARD_TOKEN = ERC20(rewardToken_);
+        VAULT_TOKEN = ERC20(vaultToken_);
         START_TIMESTAMP = uint40(startTimestamp_);
         // Disabled by default by PolicyEnabler
     }
@@ -113,7 +126,7 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     ///
     /// @param  week_          The week number being set
     /// @param  merkleRoot_     The merkle root for the week's distribution
-    /// @return timestamp       The timestamp when the week ends
+    /// @return weekEndTime     The timestamp when the week ends
     function setMerkleRoot(
         uint40 week_,
         bytes32 merkleRoot_
@@ -204,8 +217,10 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     }
 
     /// @notice Internal function to transfer rewards from treasury and update accounting
+    /// @dev    Attempts to transfer REWARD_TOKEN from TRSRY. If insufficient balance, converts
+    ///         the amount to vault shares using ERC4626 convertToShares() and transfers VAULT_TOKEN instead.
     /// @param  to_         Address to transfer rewards to
-    /// @param  amount_     Amount to transfer
+    /// @param  amount_     Amount to transfer (in REWARD_TOKEN units)
     /// @param  weekCount_  Number of weeks being claimed (for event)
     function _transferRewards(
         address to_,
@@ -215,13 +230,44 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         // Early return if no amount to transfer
         if (amount_ == 0) return;
 
-        // Increase withdrawal approval and withdraw from treasury
-        // This requires that this policy has been granted the appropriate permissions
-        TRSRY.increaseWithdrawApproval(address(this), REWARD_TOKEN, amount_);
-        TRSRY.withdrawReserves(to_, REWARD_TOKEN, amount_);
+        // Check if TRSRY has sufficient REWARD_TOKEN balance
+        uint256 trsryBalance = REWARD_TOKEN.balanceOf(address(TRSRY));
 
-        // Emit rewards claimed event with week count
-        emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
+        if (trsryBalance >= amount_) {
+            // Sufficient balance: transfer REWARD_TOKEN directly from TRSRY
+            _withdrawFromTreasury(to_, REWARD_TOKEN, amount_);
+
+            // Emit rewards claimed event with week count
+            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
+        } else {
+            // Insufficient balance: convert to vault shares and transfer VAULT_TOKEN
+            // Convert reward amount to vault shares using ERC4626 convertToShares
+            uint256 vaultShares = _convertToVaultShares(amount_);
+
+            // Transfer vault shares from TRSRY
+            _withdrawFromTreasury(to_, VAULT_TOKEN, vaultShares);
+
+            // Emit event with both original reward amount and converted vault shares
+            emit RewardsClaimedViaVault(to_, amount_, vaultShares, address(VAULT_TOKEN), weekCount_);
+        }
+    }
+
+    /// @notice Withdraw tokens from treasury
+    /// @param  to_     Address to transfer tokens to
+    /// @param  token_  Token to withdraw (ERC20)
+    /// @param  amount_ Amount to withdraw
+    function _withdrawFromTreasury(address to_, ERC20 token_, uint256 amount_) internal {
+        TRSRY.increaseWithdrawApproval(address(this), token_, amount_);
+        TRSRY.withdrawReserves(to_, token_, amount_);
+    }
+
+    /// @notice Convert reward token amount to vault shares using ERC4626 convertToShares
+    /// @param  rewardAmount_   Amount in reward token units
+    /// @return                 Equivalent amount in vault shares
+    function _convertToVaultShares(uint256 rewardAmount_) internal view returns (uint256) {
+        // VAULT_TOKEN is expected to implement ERC4626 convertToShares(uint256 assets) -> uint256 shares
+        // This converts the reward amount (assets) to equivalent vault shares
+        return IERC4626(address(VAULT_TOKEN)).convertToShares(rewardAmount_);
     }
 
     // ========== ERC165 ========== //

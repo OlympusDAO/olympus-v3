@@ -15,6 +15,13 @@ interface IRewardDistributor is IERC165 {
         address rewardToken,
         uint256 weekCount
     );
+    event RewardsClaimedViaVault(
+        address indexed user,
+        uint256 rewardAmount,
+        uint256 vaultShares,
+        address vaultToken,
+        uint256 weekCount
+    );
 
     // ========== ERRORS ========== //
 
