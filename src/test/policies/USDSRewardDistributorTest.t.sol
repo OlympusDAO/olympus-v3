@@ -13,7 +13,7 @@ import {IRewardDistributor} from "policies/interfaces/IRewardDistributor.sol";
 /// contract initialization, state variables, and event emission.
 contract USDSRewardDistributorTest is Test {
     MockERC20 internal usds;
-    MockERC20 internal vaultToken;
+    MockERC20 internal sUSDS;
     USDSRewardDistributor internal distributor;
 
     uint40 internal constant WEEK_DURATION = 7 days;
@@ -28,34 +28,29 @@ contract USDSRewardDistributorTest is Test {
 
         // Deploy mock tokens
         usds = new MockERC20("USDS", "USDS", 18);
-        vaultToken = new MockERC20("Vault Token", "vToken", 18);
+        sUSDS = new MockERC20("Vault Token", "vToken", 18);
 
         // Deploy distributor with mock kernel
-        distributor = new USDSRewardDistributor(mockKernel, address(usds), address(vaultToken), startTimestamp);
+        distributor = new USDSRewardDistributor(mockKernel, address(sUSDS), startTimestamp);
     }
 
     // ========== Test Constructor and State Variables ========== //
 
     function test_constructor_initializes_correctly() public {
-        assertEq(address(distributor.REWARD_TOKEN()), address(usds));
-        assertEq(address(distributor.VAULT_TOKEN()), address(vaultToken));
+        assertEq(address(distributor.REWARD_TOKEN_VAULT().asset()), address(usds));
+        assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
         assertEq(distributor.START_TIMESTAMP(), startTimestamp);
         assertEq(distributor.WEEK_DURATION(), WEEK_DURATION);
     }
 
-    function test_constructor_rejects_zero_reward_token() public {
+    function test_constructor_rejects_zero_reward_token_vault() public {
         vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
-        new USDSRewardDistributor(mockKernel, address(0), address(vaultToken), startTimestamp);
-    }
-
-    function test_constructor_rejects_zero_vault_token() public {
-        vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
-        new USDSRewardDistributor(mockKernel, address(usds), address(0), startTimestamp);
+        new USDSRewardDistributor(mockKernel, address(0), startTimestamp);
     }
 
     function test_constructor_rejects_zero_start_timestamp() public {
         vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
-        new USDSRewardDistributor(mockKernel, address(usds), address(vaultToken), 0);
+        new USDSRewardDistributor(mockKernel, address(sUSDS), 0);
     }
 
     // ========== Test State Variables ========== //
@@ -65,7 +60,7 @@ contract USDSRewardDistributorTest is Test {
     }
 
     function test_vaultToken_is_immutable() public view {
-        assertEq(address(distributor.VAULT_TOKEN()), address(vaultToken));
+        assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
     }
 
     function test_startTimestamp_is_immutable() public view {
@@ -116,14 +111,12 @@ contract USDSRewardDistributorTest is Test {
 
         USDSRewardDistributor dist1 = new USDSRewardDistributor(
             mockKernel,
-            address(token1),
             address(vault1),
             startTimestamp
         );
 
         USDSRewardDistributor dist2 = new USDSRewardDistributor(
             mockKernel,
-            address(token2),
             address(vault2),
             startTimestamp + 1 days
         );
@@ -131,8 +124,8 @@ contract USDSRewardDistributorTest is Test {
         // Verify they have different state
         assertEq(address(dist1.REWARD_TOKEN()), address(token1));
         assertEq(address(dist2.REWARD_TOKEN()), address(token2));
-        assertEq(address(dist1.VAULT_TOKEN()), address(vault1));
-        assertEq(address(dist2.VAULT_TOKEN()), address(vault2));
+        assertEq(address(dist1.REWARD_TOKEN_VAULT()), address(vault1));
+        assertEq(address(dist2.REWARD_TOKEN_VAULT()), address(vault2));
         assertEq(dist1.START_TIMESTAMP(), startTimestamp);
         assertEq(dist2.START_TIMESTAMP(), startTimestamp + 1 days);
     }
