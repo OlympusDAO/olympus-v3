@@ -146,8 +146,7 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         emit MerkleRootSet(week_, merkleRoot_, address(REWARD_TOKEN));
     }
 
-    /// @notice Claim rewards for one or more weeks in a single transaction
-    /// @dev    All weeks are claimed for the same reward token.
+    /// @notice Claim rewards for one or more weeks in a single transaction as USDS.
     ///
     /// @param  weeks_      Array of week numbers to claim
     /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
@@ -181,7 +180,108 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
             }
         }
 
-        _transferRewards(msg.sender, totalAmount, weeks_.length);
+        _transferRewards(msg.sender, totalAmount, weeks_.length, false);
+    }
+
+    /// @notice Claim rewards for one or more weeks as sUSDS vault tokens.
+    /// @dev    Claims rewards as sUSDS instead of unwrapping to USDS.
+    ///
+    /// @param  weeks_      Array of week numbers to claim
+    /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
+    /// @param  proofs_     Array of merkle proofs, one per week
+    function claimAsVaultToken(
+        uint256[] calldata weeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external onlyEnabled {
+        if (weeks_.length == 0) revert DRD_NoWeeksSpecified();
+        if (weeks_.length != amounts_.length || weeks_.length != proofs_.length) {
+            revert DRD_ArrayLengthMismatch();
+        }
+
+        uint256 totalAmount;
+
+        for (uint256 i = 0; i < weeks_.length; ) {
+            uint256 week = weeks_[i];
+            uint256 amount = amounts_[i];
+
+            // Verify merkle root is set for this week
+            if (weeklyMerkleRoots[week] == bytes32(0)) revert DRD_MerkleRootNotSet(week);
+
+            // Verify and mark as claimed
+            _verifyAndMarkClaimed(msg.sender, week, amount, proofs_[i]);
+
+            totalAmount += amount;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        _transferRewards(msg.sender, totalAmount, weeks_.length, true);
+    }
+
+    /// @notice Preview the claimable rewards for a user without claiming
+    /// @dev    This function does not modify state and allows users to verify their claims before submitting.
+    ///
+    /// @param  user_           The user address to preview claims for
+    /// @param  claimWeeks_     Array of week numbers to preview
+    /// @param  amounts_        Array of amounts for each week (must match merkle leaves)
+    /// @param  proofs_         Array of merkle proofs, one per week
+    /// @return claimableAmount The total amount of USDS claimable
+    /// @return vaultShares     The amount of sUSDS vault shares equivalent to the claimable amount
+    function previewClaim(
+        address user_,
+        uint256[] calldata claimWeeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
+        if (claimWeeks_.length == 0) revert DRD_NoWeeksSpecified();
+        if (claimWeeks_.length != amounts_.length || claimWeeks_.length != proofs_.length) {
+            revert DRD_ArrayLengthMismatch();
+        }
+
+        for (uint256 i = 0; i < claimWeeks_.length; ) {
+            uint256 week = claimWeeks_[i];
+            uint256 amount = amounts_[i];
+
+            // Verify merkle root is set for this week
+            if (weeklyMerkleRoots[week] == bytes32(0)) revert DRD_MerkleRootNotSet(week);
+
+            // Verify proof without marking as claimed
+            _verifyProof(user_, week, amount, proofs_[i]);
+
+            claimableAmount += amount;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Calculate equivalent vault shares
+        if (claimableAmount > 0) {
+            vaultShares = REWARD_TOKEN_VAULT.previewWithdraw(claimableAmount);
+        }
+    }
+
+    /// @notice Verify merkle proof without modifying state
+    /// @dev    Used for preview functionality
+    function _verifyProof(
+        address user_,
+        uint256 week_,
+        uint256 amount_,
+        bytes32[] calldata proof_
+    ) internal view {
+        // Check if already claimed
+        if (hasClaimed[user_][week_]) revert DRD_AlreadyClaimed(week_);
+
+        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
+
+        // Verify merkle proof
+        if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
+            revert DRD_InvalidProof();
+        }
     }
 
     /// @notice Verify merkle proof and mark week as claimed for user
@@ -191,57 +291,65 @@ contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal {
-        // Check if already claimed
-        if (hasClaimed[user_][week_]) revert DRD_AlreadyClaimed(week_);
+        // Verify proof first
+        _verifyProof(user_, week_, amount_, proof_);
 
-        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
-        // Week is included in the leaf to prevent replay attacks across weeks
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
-
-        // Verify merkle proof (week validity already checked by caller)
-        if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
-            revert DRD_InvalidProof();
-        }
-
+        // Mark as claimed
         hasClaimed[user_][week_] = true;
     }
 
     /// @notice Internal function to transfer rewards from treasury and update accounting
-    /// @dev    Pulls sUSDS from the treasury, unwraps it to USDS, transfers the exact amount to the user,
-    ///         and returns any leftover sUSDS to the treasury.
-    /// @param  to_         Address to transfer rewards to
-    /// @param  amount_     Amount of USDS to transfer
-    /// @param  weekCount_  Number of weeks being claimed (for event)
+    /// @dev    Pulls sUSDS from the treasury, optionally unwraps it to USDS, and transfers to the user.
+    ///
+    /// @param  to_             Address to transfer rewards to
+    /// @param  amount_         Amount of USDS to transfer (or the USDS-equivalent if claimAsVault is true)
+    /// @param  weekCount_      Number of weeks being claimed (for event)
+    /// @param  claimAsVault_   If true, transfers sUSDS; if false, unwraps to USDS first
     function _transferRewards(
         address to_,
         uint256 amount_,
-        uint256 weekCount_
+        uint256 weekCount_,
+        bool claimAsVault_
     ) internal {
         // Early return if no amount to transfer
         if (amount_ == 0) return;
 
-        // Calculate how much vault shares is needed to withdraw the exact USDS amount
         IERC4626 vault = IERC4626(address(REWARD_TOKEN_VAULT));
-        uint256 sharesNeeded = vault.previewWithdraw(amount_);
 
-        TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), sharesNeeded);
+        if (claimAsVault_) {
+            // Calculate how many vault shares represent the USDS amount
+            uint256 vaultShares = vault.previewWithdraw(amount_);
 
-        // Withdraw USDS from the vault and transfer to user
-        uint256 sharesBurned = vault.withdraw(amount_, to_, address(this));
+            // Withdraw sUSDS from treasury and transfer directly to user
+            TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), vaultShares);
+            ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(to_, vaultShares);
 
-        // Calculate leftover sUSDS shares (if any due to rounding)
-        uint256 leftoverShares = sharesNeeded - sharesBurned;
+            // Emit vault token claimed event
+            emit RewardsClaimedViaVault(to_, amount_, vaultShares, address(REWARD_TOKEN_VAULT), weekCount_);
+        } else {
+            // Calculate how much vault shares is needed to withdraw the exact USDS amount
+            uint256 sharesNeeded = vault.previewWithdraw(amount_);
 
-        // Return any leftover sUSDS to the treasury
-        if (leftoverShares > 0) {
-            ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(
-                address(TRSRY),
-                leftoverShares
-            );
+            // Withdraw sUSDS from treasury
+            TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), sharesNeeded);
+
+            // Withdraw USDS from the vault and transfer to user
+            uint256 sharesBurned = vault.withdraw(amount_, to_, address(this));
+
+            // Calculate leftover sUSDS shares (if any due to rounding)
+            uint256 leftoverShares = sharesNeeded - sharesBurned;
+
+            // Return any leftover sUSDS to the treasury
+            if (leftoverShares > 0) {
+                ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(
+                    address(TRSRY),
+                    leftoverShares
+                );
+            }
+
+            // Emit rewards claimed event with week count
+            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
         }
-
-        // Emit rewards claimed event with week count
-        emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
     }
 
     // ========== ERC165 ========== //

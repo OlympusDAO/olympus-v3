@@ -49,7 +49,20 @@ interface IRewardDistributor is IERC165 {
         bytes32[][] calldata proofs_
     ) external;
 
+    function claimAsVaultToken(
+        uint256[] calldata weeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external;
+
     // ========== VIEW FUNCTIONS ========== //
+
+    function previewClaim(
+        address user_,
+        uint256[] calldata claimWeeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external view returns (uint256 claimableAmount, uint256 vaultShares);
 
     function START_TIMESTAMP() external view returns (uint40);
 

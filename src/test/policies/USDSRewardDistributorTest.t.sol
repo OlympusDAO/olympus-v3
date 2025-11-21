@@ -129,4 +129,79 @@ contract USDSRewardDistributorTest is Test {
         assertEq(dist1.START_TIMESTAMP(), startTimestamp);
         assertEq(dist2.START_TIMESTAMP(), startTimestamp + 1 days);
     }
+
+    // ========== Test PreviewClaim Function ========== //
+
+    function test_previewClaim_reverts_when_no_weeks_specified() public {
+        address testUser = address(0xABCD);
+        uint256[] memory claimWeeks = new uint256[](0);
+        uint256[] memory amounts = new uint256[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+
+        vm.expectRevert(IRewardDistributor.DRD_NoWeeksSpecified.selector);
+        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+    }
+
+    function test_previewClaim_reverts_when_array_lengths_mismatch() public {
+        address testUser = address(0xABCD);
+        uint256[] memory claimWeeks = new uint256[](2);
+        uint256[] memory amounts = new uint256[](1); // Mismatched length
+        bytes32[][] memory proofs = new bytes32[][](2);
+
+        vm.expectRevert(IRewardDistributor.DRD_ArrayLengthMismatch.selector);
+        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+    }
+
+    function test_previewClaim_reverts_when_merkle_root_not_set() public {
+        address testUser = address(0xABCD);
+        uint256[] memory claimWeeks = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[][] memory proofs = new bytes32[][](1);
+
+        claimWeeks[0] = 0;
+        amounts[0] = 1000e18;
+        proofs[0] = new bytes32[](1);
+
+        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, 0));
+        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+    }
+
+    // ========== Test Claim and ClaimAsVaultToken Error Conditions ========== //
+    // Note: Full claim testing requires proper Kernel setup with ROLES and TRSRY modules
+
+    function test_claim_reverts_when_no_weeks_specified() public {
+        uint256[] memory claimWeeks = new uint256[](0);
+        uint256[] memory amounts = new uint256[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+
+        vm.expectRevert(IRewardDistributor.DRD_NoWeeksSpecified.selector);
+        distributor.claim(claimWeeks, amounts, proofs);
+    }
+
+    function test_claim_reverts_when_array_lengths_mismatch() public {
+        uint256[] memory claimWeeks = new uint256[](2);
+        uint256[] memory amounts = new uint256[](1); // Mismatched length
+        bytes32[][] memory proofs = new bytes32[][](2);
+
+        vm.expectRevert(IRewardDistributor.DRD_ArrayLengthMismatch.selector);
+        distributor.claim(claimWeeks, amounts, proofs);
+    }
+
+    function test_claimAsVaultToken_reverts_when_no_weeks_specified() public {
+        uint256[] memory claimWeeks = new uint256[](0);
+        uint256[] memory amounts = new uint256[](0);
+        bytes32[][] memory proofs = new bytes32[][](0);
+
+        vm.expectRevert(IRewardDistributor.DRD_NoWeeksSpecified.selector);
+        distributor.claimAsVaultToken(claimWeeks, amounts, proofs);
+    }
+
+    function test_claimAsVaultToken_reverts_when_array_lengths_mismatch() public {
+        uint256[] memory claimWeeks = new uint256[](2);
+        uint256[] memory amounts = new uint256[](1); // Mismatched length
+        bytes32[][] memory proofs = new bytes32[][](2);
+
+        vm.expectRevert(IRewardDistributor.DRD_ArrayLengthMismatch.selector);
+        distributor.claimAsVaultToken(claimWeeks, amounts, proofs);
+    }
 }
