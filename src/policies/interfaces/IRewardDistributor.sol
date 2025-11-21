@@ -48,7 +48,7 @@ interface IRewardDistributor is IERC165 {
 
     function currentWeek() external view returns (uint40);
 
-    function lastRootSetTimestamp() external view returns (uint40);
+    function startTimestamp() external view returns (uint40);
 
     function WEEK_DURATION() external view returns (uint256);
 

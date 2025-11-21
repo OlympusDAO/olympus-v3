@@ -58,8 +58,8 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @notice The current week number
     uint40 public currentWeek;
 
-    /// @notice Timestamp when the last merkle root was set
-    uint40 public lastRootSetTimestamp;
+    /// @notice Timestamp when week 0 begins
+    uint40 public immutable startTimestamp;
 
     modifier onlyAuthorized(bytes32 role_) {
         ROLES.requireRole(role_, msg.sender);
@@ -70,7 +70,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
     constructor(address kernel_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
         if (startTimestamp_ == 0) revert DRD_InvalidAddress();
-        lastRootSetTimestamp = uint40(startTimestamp_);
+        startTimestamp = uint40(startTimestamp_);
         // Disabled by default by PolicyEnabler
     }
 
@@ -108,14 +108,14 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
     /// @notice Set the merkle root for the current week
     /// @dev    This function can only be called by addresses with the ROLE_MERKLE_UPDATER role.
-    ///         After the first call, subsequent calls are only allowed after WEEK_DURATION (7 days)
-    ///         has passed. The function automatically advances to the next week.
+    ///         Calls are only allowed when the current week deadline has been reached based on
+    ///         the start timestamp and week number. The function automatically advances to the next week.
     ///
     /// @param  rewardWeek_     The week number being set (must equal currentWeek)
     /// @param  merkleRoot_     The merkle root for the week's distribution
     /// @param  rewardToken_    The ERC20 token used for rewards this week
     /// @return week            The week number that was set
-    /// @return timestamp       The new lastRootSetTimestamp (when this week ends)
+    /// @return timestamp       The timestamp when the current week ends
     function setMerkleRoot(
         uint40 rewardWeek_,
         bytes32 merkleRoot_,
@@ -131,14 +131,16 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
 
         // Cache storage variables to save gas
-        uint256 lastTimestamp = lastRootSetTimestamp;
         week = currentWeek;
 
         // Ensure the passed rewardWeek matches the current week
         if (rewardWeek_ != week) revert DRD_InvalidWeek(rewardWeek_);
 
-        // Ensure at least WEEK_DURATION has passed since the last root was set
-        if (block.timestamp < lastTimestamp + WEEK_DURATION) {
+        // Calculate when the current week should end based on start timestamp and week number
+        uint256 weekEndTime = startTimestamp + (week + 1) * WEEK_DURATION;
+
+        // Ensure the current time has reached or passed the week deadline
+        if (block.timestamp < weekEndTime) {
             revert DRD_WeekTooEarly();
         }
 
@@ -146,10 +148,8 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         weeklyMerkleRoots[week] = merkleRoot_;
         weeklyRewardTokens[week] = rewardToken_;
 
-        // Update timestamp: add exactly WEEK_DURATION for consistent weekly snapshots
-        // This ensures off-chain calculations align with on-chain week boundaries
-        timestamp = lastTimestamp + WEEK_DURATION;
-        lastRootSetTimestamp = uint40(timestamp);
+        // Calculate the timestamp when this week ends
+        timestamp = weekEndTime;
 
         emit MerkleRootSet(week, merkleRoot_, rewardToken_);
 
