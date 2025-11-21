@@ -57,6 +57,4 @@ interface IRewardDistributor is IERC165 {
     function hasClaimed(address user, uint256 week) external view returns (bool);
 
     function weeklyRewardTokens(uint256 week) external view returns (address);
-
-    function totalClaimed(address user, address token) external view returns (uint256);
 }

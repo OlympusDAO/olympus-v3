@@ -49,9 +49,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @notice Mapping from user address => week number => claimed status
     mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
 
-    /// @notice Total rewards claimed by each user (in reward token decimals)
-    mapping(address user => mapping(address token => uint256 amount)) public totalClaimed;
-
     /// @notice The current week number
     uint40 public currentWeek;
 
@@ -266,9 +263,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         // This requires that this policy has been granted the appropriate permissions
         TRSRY.increaseWithdrawApproval(address(this), ERC20(token_), amount_);
         TRSRY.withdrawReserves(to_, ERC20(token_), amount_);
-
-        // Update total claimed tracking
-        totalClaimed[to_][token_] += amount_;
 
         // Emit rewards claimed event with week count
         emit RewardsClaimed(to_, amount_, token_, weekCount_);
