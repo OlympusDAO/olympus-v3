@@ -46,9 +46,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @dev    Allows different reward tokens for different weeks (e.g., USDS, DAI, etc.)
     mapping(uint256 week => address rewardToken) public weeklyRewardTokens;
 
-    /// @notice Total rewards distributed per week
-    mapping(uint256 week => uint256 amount) public weeklyRewardsDistributed;
-
     /// @notice Mapping from user address => week number => claimed status
     mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
 
@@ -249,7 +246,6 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         }
 
         hasClaimed[user_][week_] = true;
-        weeklyRewardsDistributed[week_] += amount_;
     }
 
     /// @notice Internal function to transfer rewards from treasury and update accounting
@@ -274,7 +270,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         // Update total claimed tracking
         totalClaimed[to_][token_] += amount_;
 
-        // Emit rewards claimed event
+        // Emit rewards claimed event with week count
         emit RewardsClaimed(to_, amount_, token_, weekCount_);
     }
 
