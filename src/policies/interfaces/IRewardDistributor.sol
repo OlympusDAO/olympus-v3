@@ -8,11 +8,7 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 interface IRewardDistributor is IERC165 {
     // ========== EVENTS ========== //
 
-    event MerkleRootSet(
-        uint256 indexed week,
-        bytes32 merkleRoot,
-        address rewardToken
-    );
+    event MerkleRootSet(uint256 indexed week, bytes32 merkleRoot, address rewardToken);
     event RewardsClaimed(
         address indexed user,
         uint256 totalAmount,
@@ -35,7 +31,7 @@ interface IRewardDistributor is IERC165 {
     // ========== ADMIN FUNCTIONS ========== //
 
     function setMerkleRoot(
-        uint256 rewardWeek_,
+        uint40 rewardWeek_,
         bytes32 merkleRoot_,
         address rewardToken_
     ) external returns (uint256 week, uint256 timestamp);

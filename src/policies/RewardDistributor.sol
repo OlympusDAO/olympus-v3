@@ -117,7 +117,7 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @return week            The week number that was set
     /// @return timestamp       The new lastRootSetTimestamp (when this week ends)
     function setMerkleRoot(
-        uint256 rewardWeek_,
+        uint40 rewardWeek_,
         bytes32 merkleRoot_,
         address rewardToken_
     )
@@ -231,14 +231,16 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
         bytes32[] calldata proof_
     ) internal {
         // Check if already claimed
-        require(!hasClaimed[user_][week_], DRD_AlreadyClaimed(week_));
+        if (hasClaimed[user_][week_]) revert DRD_AlreadyClaimed(week_);
 
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
         // Week is included in the leaf to prevent replay attacks across weeks
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
         // Verify merkle proof (week validity already checked by caller)
-        require(MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf), DRD_InvalidProof());
+        if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
+            revert DRD_InvalidProof();
+        }
 
         hasClaimed[user_][week_] = true;
         weeklyRewardsDistributed[week_] += amount_;
