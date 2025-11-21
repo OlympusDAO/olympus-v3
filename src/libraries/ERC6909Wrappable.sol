@@ -100,8 +100,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     /// @dev    This function reverts if:
     ///         - amount_ is 0
     ///         - onBehalfOf_ is 0
-    ///         - wrapped_ == true: onBehalfOf_ has not approved this contract to spend the wrapped ERC20 token
-    ///         - wrapped_ == false: onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens
+    ///         - onBehalfOf_ is not the caller and has not approved the caller to spend the ERC6909 tokens (note: ERC6909 allowances govern both wrapped and unwrapped token burns)
     ///         - ERC6909 token handling reverts
     ///
     /// @param onBehalfOf_   The address to burn the token from
@@ -117,17 +116,17 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         if (amount_ == 0) revert ERC6909Wrappable_ZeroAmount();
         if (onBehalfOf_ == address(0)) revert ERC6909InvalidSender(onBehalfOf_);
 
+        // If the caller is not the owner, check allowance
+        if (onBehalfOf_ != msg.sender) {
+            // Spend allowance (since it is not implemented in `ERC6909._burn()` or `CloneableReceiptToken.burnFrom()`)
+            // The caller is the spender, not this contract
+            _spendAllowance(onBehalfOf_, msg.sender, tokenId_, amount_);
+        }
+
         if (wrapped_) {
-            // Will revert if the caller has not approved spending by this contract
+            // Burn the ERC20 token
             _getWrappedToken(tokenId_).burnFrom(onBehalfOf_, amount_);
         } else {
-            // If the caller (spender) is not the owner, check allowance
-            if (onBehalfOf_ != msg.sender) {
-                // Spend allowance (since it is not implemented in _burn())
-                // The spender is msg.sender (the caller), not this contract
-                _spendAllowance(onBehalfOf_, msg.sender, tokenId_, amount_);
-            }
-
             // Burn the ERC6909 token
             _burn(onBehalfOf_, tokenId_, amount_);
         }
@@ -213,7 +212,6 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
     ///             This function reverts if:
     ///             - The token ID does not exist
     ///             - The amount is zero
-    ///             - The caller has not approved this contract to spend the wrapped token
     ///             - The caller has an insufficient balance of the wrapped token
     function unwrap(uint256 tokenId_, uint256 amount_) public {
         // Burn the wrapped ERC20 token
@@ -233,8 +231,12 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         return _wrappableTokenIds.contains(tokenId_);
     }
 
-    modifier onlyValidTokenId(uint256 tokenId_) {
+    function _onlyValidTokenId(uint256 tokenId_) internal view {
         if (!isValidTokenId(tokenId_)) revert ERC6909Wrappable_InvalidTokenId(tokenId_);
+    }
+
+    modifier onlyValidTokenId(uint256 tokenId_) {
+        _onlyValidTokenId(tokenId_);
         _;
     }
 
@@ -287,6 +289,7 @@ abstract contract ERC6909Wrappable is ERC6909Metadata, IERC6909Wrappable, IERC69
         bytes4 interfaceId_
     ) public view virtual override(ERC6909, IERC165) returns (bool) {
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IERC6909Wrappable).interfaceId ||
             interfaceId_ == type(IERC6909Metadata).interfaceId ||
             interfaceId_ == type(IERC6909TokenSupply).interfaceId ||

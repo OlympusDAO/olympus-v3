@@ -163,6 +163,7 @@ contract ConvertibleDepositFacilityHandleCommitTest is ConvertibleDepositFacilit
             PERIOD_MONTHS,
             RESERVE_TOKEN_AMOUNT
         )
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
         amount_ = bound(amount_, 1, previousDepositActual);
 

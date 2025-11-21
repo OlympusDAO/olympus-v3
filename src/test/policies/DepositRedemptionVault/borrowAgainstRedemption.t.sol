@@ -3,8 +3,6 @@ pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionVaultTest {
@@ -109,8 +107,32 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         redemptionVault.borrowAgainstRedemption(0);
     }
 
+    // when the loan amount would be less than 0
+    //  [X] it reverts
+
+    function test_borrowAmountLessThanZero_reverts(
+        uint256 commitmentAmount_
+    )
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 1) // 0.01%
+    {
+        // 9999 * 1 / 100e2 = 0.9999, which is a loan amount less than 1
+        commitmentAmount_ = bound(commitmentAmount_, 1, 9999);
+
+        // Deposit and commit funds
+        _depositAndStartRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        // Expect revert
+        _expectRevertMaxBorrowPercentageNotSet(iReserveToken);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+    }
+
     // [X] it creates a new loan record
-    // [X] the due date is the deposit period term in the future fro now
+    // [X] the due date is the deposit period term in the future from now
     // [X] the principal is the amount specified
     // [X] the interest is the principal * interest rate * deposit period / 12
     // [X] the loan id is 0
@@ -174,7 +196,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         vm.expectEmit(true, true, true, true);
         emit LoanCreated(recipient, 0, LOAN_AMOUNT, address(cdFacility));
 
-        vm.startSnapshotGas("borrowAgainstRedemption");
+        vm.startSnapshotGas("borrowAgainstRedemptionOtherDeposits");
 
         // Call function
         vm.prank(recipient);
@@ -210,7 +232,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
         givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, 100, 5e18);
         uint256 expectedLoanAmount = (90e2 * commitmentAmount_) / 100e2;
         uint256 expectedInterest = FullMath.mulDivUp(
             expectedLoanAmount,
@@ -282,13 +304,11 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
     function test_givenCommitmentAmountFuzz_givenYieldAmountFuzz(
         uint256 depositAmount_,
         uint256 commitmentAmount_,
-        uint256 yieldAmount_,
-        uint256 yieldAmountTwo_
+        uint256 yieldAmount_
     ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
         depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
         yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
@@ -312,7 +332,7 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         vm.expectEmit(true, true, true, false);
         emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
 
-        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz");
+        vm.startSnapshotGas("borrowAgainstRedemptionCommitmentFuzz_givenYieldAmountFuzz");
 
         // Call function
         vm.prank(recipient);
@@ -359,6 +379,239 @@ contract DepositRedemptionVaultBorrowAgainstRedemptionTest is DepositRedemptionV
         assertEq(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
             commitmentAmount_ - expectedLoanAmount,
+            "committed deposits"
+        );
+    }
+
+    function test_givenCommitmentAmountFuzz_givenYieldAmountFuzz_givenMaxBorrowPercentageFuzz(
+        uint256 depositAmount_,
+        uint256 commitmentAmount_,
+        uint256 yieldAmount_,
+        uint16 maxBorrowPercentage_
+    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
+        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
+        commitmentAmount_ = bound(commitmentAmount_, 1e16, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
+        maxBorrowPercentage_ = uint16(bound(maxBorrowPercentage_, 1, 100e2));
+
+        // Set the max borrow percentage
+        vm.prank(admin);
+        redemptionVault.setMaxBorrowPercentage(
+            iReserveToken,
+            address(cdFacility),
+            maxBorrowPercentage_
+        );
+
+        // Accrue yield
+        _accrueYield(iVault, yieldAmount_);
+
+        // Deposit
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+
+        // Commit funds
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+
+        uint256 expectedLoanAmount = (maxBorrowPercentage_ * commitmentAmount_) / 100e2;
+        uint256 expectedInterest = FullMath.mulDivUp(
+            expectedLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        );
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        // Expect event
+        // 3rd arg is not tracked as it cannot always be predicted
+        vm.expectEmit(true, true, true, false);
+        emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
+
+        vm.startSnapshotGas(
+            "borrowAgainstRedemptionCommitmentFuzz_givenYieldAmountFuzz_givenMaxBorrowPercentageFuzz"
+        );
+
+        // Call function
+        vm.prank(recipient);
+        uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
+
+        vm.stopSnapshotGas();
+        // Assert actual loan amount is as expected
+        assertApproxEqAbs(
+            actualLoanAmount,
+            expectedLoanAmount,
+            5,
+            "actual loan amount is unexpected"
+        );
+
+        // Assert loan record
+        _assertLoan(
+            recipient,
+            0,
+            expectedLoanAmount,
+            expectedLoanAmount,
+            expectedInterest,
+            false,
+            expectedDueDate
+        );
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(recipient, actualLoanAmount, 0, 0);
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - commitmentAmount_,
+            commitmentAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            expectedLoanAmount,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been reduced
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            commitmentAmount_ - expectedLoanAmount,
+            "committed deposits"
+        );
+    }
+
+    // given the max borrow percentage is 0.01%
+    //  when the commitment amount would result in a loan amount less than 1
+    //   [X] it reverts
+    //  when the commitment amount would result in an actual loan amount less than 1
+    //   [X] it reverts
+    //  [X] it creates a new loan record
+    //  [X] the due date is the deposit period term in the future from now
+    //  [X] the principal is the amount specified
+    //  [X] the interest is the principal * interest rate * deposit period / 12
+    //  [X] the loan id is 0
+    //  [X] the total borrowed is the new amount
+    //  [X] it emits a LoanCreated event
+    //  [X] it transfers the deposit tokens to the caller
+    //  [X] the redemption vault retains custody of the receipt tokens
+
+    function test_givenMaxBorrowPercentageIsSmall_givenCommitmentAmountIsSmall_reverts(
+        uint256 redemptionAmount_
+    )
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 1) // 0.01%
+        givenAddressHasConvertibleDepositTokenDefault(1e18)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        // A redemption amount of 1-9999 will result in a loan amount less than 1
+        redemptionAmount_ = bound(redemptionAmount_, 1, 9999);
+
+        // Start redemption
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, redemptionAmount_);
+
+        // Expect revert
+        _expectRevertMaxBorrowPercentageNotSet(iReserveToken);
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+    }
+
+    function test_givenMaxBorrowPercentageIsSmall_givenCommitmentAmountIsSmall_whenActualLoanAmountIsLessThanOne_reverts(
+        uint256 redemptionAmount_
+    )
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 1) // 0.01%
+        givenAddressHasConvertibleDepositTokenDefault(1e18)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        // A redemption amount of 10000-19999 will result in an actual loan amount less than 1 (when withdrawn)
+        redemptionAmount_ = bound(redemptionAmount_, 10000, 19999);
+
+        // Start redemption
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, redemptionAmount_);
+
+        // Expect revert
+        _expectRevertDepositFacilityZeroAmount();
+
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.borrowAgainstRedemption(0);
+    }
+
+    function test_givenMaxBorrowPercentageIsSmall(
+        uint256 redemptionAmount_
+    )
+        public
+        givenLocallyActive
+        givenMaxBorrowPercentage(iReserveToken, 1) // 0.01%
+        givenAddressHasConvertibleDepositTokenDefault(1e18)
+        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        // A redemption amount of 20000 and above should work
+        redemptionAmount_ = bound(redemptionAmount_, 20000, _previousDepositActualAmount);
+
+        uint256 expectedLoanAmount = (1 * redemptionAmount_) / 100e2;
+        uint256 expectedInterest = FullMath.mulDivUp(
+            expectedLoanAmount,
+            10e2 * PERIOD_MONTHS,
+            100e2 * 12
+        );
+        uint48 expectedDueDate = uint48(block.timestamp + PERIOD_MONTHS * 30 days);
+
+        assertGt(expectedLoanAmount, 0, "expected loan amount should be greater than 0");
+
+        // Start redemption
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, redemptionAmount_);
+
+        // Expect event
+        // Don't assert the loan amount as it can be slightly different due to rounding inconsistencies
+        vm.expectEmit(true, true, true, false);
+        emit LoanCreated(recipient, 0, expectedLoanAmount, address(cdFacility));
+
+        // Call function
+        vm.prank(recipient);
+        uint256 actualLoanAmount = redemptionVault.borrowAgainstRedemption(0);
+
+        // Assert actual loan amount is as expected
+        assertApproxEqAbs(
+            actualLoanAmount,
+            expectedLoanAmount,
+            5,
+            "actual loan amount is unexpected"
+        );
+
+        // Assert loan record
+        _assertLoan(
+            recipient,
+            0,
+            expectedLoanAmount,
+            expectedLoanAmount,
+            expectedInterest,
+            false,
+            expectedDueDate
+        );
+
+        // Assert deposit token balances
+        _assertDepositTokenBalances(recipient, actualLoanAmount, 0, 0);
+
+        // Assert receipt token balances
+        _assertReceiptTokenBalances(
+            recipient,
+            _previousDepositActualAmount - redemptionAmount_,
+            redemptionAmount_
+        );
+
+        // Assert borrowed amount on DepositManager
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
+            expectedLoanAmount,
+            "getBorrowedAmount"
+        );
+
+        // Assert committed funds have been reduced
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            redemptionAmount_ - expectedLoanAmount,
             "committed deposits"
         );
     }

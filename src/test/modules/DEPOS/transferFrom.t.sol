@@ -153,4 +153,67 @@ contract TransferFromDEPOSTest is DEPOSTest {
         );
         _assertUserPosition(address(this), 0, initialUserPositions.length);
     }
+
+    // given the owner has approved an address to spend the position
+    //  when transferFrom is called by a different address
+    //   [X] it reverts
+    function test_whenSpenderIsApproved_differentAddress_reverts()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        )
+    {
+        // Approve an address to spend the position
+        address approvedAddress = makeAddr("APPROVED_ADDRESS");
+        DEPOS.approve(approvedAddress, 0);
+
+        // Expect revert
+        vm.expectRevert("NOT_AUTHORIZED");
+
+        // Call function
+        vm.prank(OTHER);
+        DEPOS.transferFrom(address(this), OTHER, 0);
+    }
+
+    //  [X] it transfers the ownership of the position to the to_ address
+    //  [X] it adds the position to the to_ address's list of positions
+    //  [X] it removes the position from the from_ address's list of positions
+    function test_whenSpenderIsApproved()
+        public
+        givenPositionCreated(
+            address(this),
+            REMAINING_DEPOSIT,
+            CONVERSION_PRICE,
+            CONVERSION_EXPIRY,
+            true
+        )
+    {
+        // Approve an address to spend the position
+        address approvedAddress = makeAddr("APPROVED_ADDRESS");
+        DEPOS.approve(approvedAddress, 0);
+
+        // Call function
+        vm.prank(approvedAddress);
+        DEPOS.transferFrom(address(this), OTHER, 0);
+
+        // ERC721 balance updated
+        _assertERC721Balance(address(this), 0);
+        _assertERC721Balance(OTHER, 1);
+        _assertERC721Owner(0, OTHER, true);
+
+        // Position record updated
+        _assertPosition(0, OTHER, REMAINING_DEPOSIT, CONVERSION_PRICE, CONVERSION_EXPIRY, true);
+
+        // Position ownership updated
+        assertEq(
+            DEPOS.getUserPositionIds(address(this)).length,
+            0,
+            "getUserPositionIds should return 0 length"
+        );
+        _assertUserPosition(OTHER, 0, 1);
+    }
 }

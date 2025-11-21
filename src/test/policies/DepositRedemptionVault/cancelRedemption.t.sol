@@ -289,8 +289,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
         amount_ = bound(amount_, 1, LOAN_AMOUNT - 1);
 
         // Repay the loan
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, amount_);
+        _repayLoan(recipient, 0, amount_);
 
         // Expect revert
         _expectRevertRedemptionVaultUnpaidLoan(recipient, 0);
@@ -328,8 +327,7 @@ contract DepositRedemptionVaultCancelRedemptionTest is DepositRedemptionVaultTes
             // Approve the redemption vault to spend the reserve token
             iReserveToken.approve(address(redemptionVault), loanPayable);
 
-            vm.prank(recipient);
-            redemptionVault.repayLoan(0, loanPayable);
+            _repayLoan(recipient, 0, loanPayable);
         }
 
         // Bound the amount to cancel

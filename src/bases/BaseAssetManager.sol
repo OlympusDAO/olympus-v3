@@ -5,6 +5,7 @@ pragma solidity >=0.8.20;
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -44,20 +45,22 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         - Adding the deposit would exceed the deposit cap
     ///         - Zero shares would be received from the vault
     ///
-    /// @param  asset_          The asset to deposit
-    /// @param  depositor_      The depositor
-    /// @param  amount_         The amount of assets to deposit
+    /// @param  asset_                  The asset to deposit
+    /// @param  depositor_              The depositor
+    /// @param  amount_                 The amount of assets to deposit
+    /// @param  enforceDepositChecks_   Whether to enforce the minimum deposit requirement and deposit cap
     /// @return actualAmount    The actual amount of assets redeemable by the shares
     /// @return shares          The number of shares received
     function _depositAsset(
         IERC20 asset_,
         address depositor_,
-        uint256 amount_
+        uint256 amount_,
+        bool enforceDepositChecks_
     ) internal onlyConfiguredAsset(asset_) returns (uint256 actualAmount, uint256 shares) {
         AssetConfiguration memory assetConfiguration = _assetConfigurations[asset_];
 
         // Validate that the deposit meets the minimum deposit requirement
-        if (amount_ < assetConfiguration.minimumDeposit) {
+        if (enforceDepositChecks_ && amount_ < assetConfiguration.minimumDeposit) {
             revert AssetManager_MinimumDepositNotMet(
                 address(asset_),
                 amount_,
@@ -66,7 +69,7 @@ abstract contract BaseAssetManager is IAssetManager {
         }
 
         // Validate that adding the deposit will not exceed the deposit cap
-        {
+        if (enforceDepositChecks_) {
             (, uint256 assetAmountBefore) = getOperatorAssets(asset_, msg.sender);
             if (assetAmountBefore + amount_ > assetConfiguration.depositCap) {
                 revert AssetManager_DepositCapExceeded(
@@ -123,7 +126,8 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param  asset_      The asset to withdraw
     /// @param  depositor_  The depositor
     /// @param  amount_     The amount of assets to withdraw
-    /// @return shares      The number of shares withdrawn
+    /// @return shares      The number of shares withdrawn (can be 0)
+    /// @return assetAmount The amount of assets withdrawn (can be 0)
     function _withdrawAsset(
         IERC20 asset_,
         address depositor_,
@@ -145,8 +149,11 @@ abstract contract BaseAssetManager is IAssetManager {
             // but ensures that the vault remains solvent
             shares = vault.convertToShares(amount_);
 
-            // Amount of shares must be non-zero
-            if (shares == 0) revert AssetManager_ZeroAmount();
+            // Early exit if the amount of shares is 0, to prevent a revert
+            if (shares == 0) return (0, 0);
+
+            // Early exit if the shares would result in a zero amount of assets (and hence a revert)
+            if (vault.previewRedeem(shares) == 0) return (0, 0);
 
             assetAmount = vault.redeem(shares, depositor_, address(this));
         }
@@ -178,6 +185,7 @@ abstract contract BaseAssetManager is IAssetManager {
 
     /// @notice Get the key for the operator shares
     function _getOperatorKey(IERC20 asset_, address operator_) internal pure returns (bytes32) {
+        /// forge-lint: disable-next-line(asm-keccak256)
         return keccak256(abi.encode(address(asset_), operator_));
     }
 
@@ -308,8 +316,12 @@ abstract contract BaseAssetManager is IAssetManager {
         return _assetConfigurations[asset_].isConfigured;
     }
 
-    modifier onlyConfiguredAsset(IERC20 asset_) {
+    function _onlyConfiguredAsset(IERC20 asset_) internal view {
         if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
+    }
+
+    modifier onlyConfiguredAsset(IERC20 asset_) {
+        _onlyConfiguredAsset(asset_);
         _;
     }
 
@@ -331,6 +343,8 @@ abstract contract BaseAssetManager is IAssetManager {
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return interfaceId == type(IAssetManager).interfaceId;
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IAssetManager).interfaceId;
     }
 }

@@ -77,13 +77,20 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
     // [X] it sets the tick step
     // [X] it emits an event
 
-    function test_contractActive(uint24 tickStep_) public givenEnabled {
+    function test_contractActive(
+        uint24 tickStep_
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled {
         uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
 
-        uint48 lastUpdate = uint48(block.timestamp);
-
         // Warp to change the block timestamp
-        vm.warp(lastUpdate + 1);
+        vm.warp(block.timestamp + 4 hours);
+
+        // Capture the tick before the tick step is updated
+        IConvertibleDepositAuctioneer.Tick memory tickPreUpdate = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+        uint48 lastUpdate = uint48(block.timestamp);
+        uint256 tickSize = auctioneer.getCurrentTickSize();
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -95,5 +102,43 @@ contract ConvertibleDepositAuctioneerTickStepTest is ConvertibleDepositAuctionee
 
         // Assert state
         assertEq(auctioneer.getTickStep(), tickStep, "tick step");
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + 4 hours);
+
+        // Assert that the tick is updated prior to the tick step update
+        _assertPreviousTick(tickPreUpdate.capacity, tickPreUpdate.price, tickSize, lastUpdate);
+    }
+
+    function test_contractActive_givenBid(
+        uint24 tickStep_
+    ) public givenDepositPeriodEnabled(PERIOD_MONTHS) givenEnabled givenRecipientHasBid(1000e18) {
+        uint24 tickStep = uint24(bound(tickStep_, 100e2, type(uint24).max));
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + 4 hours);
+
+        IConvertibleDepositAuctioneer.Tick memory tickPreUpdate = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+        uint48 lastUpdate = uint48(block.timestamp);
+        uint256 tickSize = auctioneer.getCurrentTickSize();
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit TickStepUpdated(address(iReserveToken), tickStep);
+
+        // Call function
+        vm.prank(admin);
+        auctioneer.setTickStep(tickStep);
+
+        // Assert state
+        assertEq(auctioneer.getTickStep(), tickStep, "tick step");
+
+        // Warp to change the block timestamp
+        vm.warp(block.timestamp + 4 hours);
+
+        // Assert that the tick is updated prior to the tick step update
+        _assertPreviousTick(tickPreUpdate.capacity, tickPreUpdate.price, tickSize, lastUpdate);
     }
 }

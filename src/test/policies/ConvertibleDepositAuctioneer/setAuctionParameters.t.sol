@@ -261,6 +261,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Assert auction results
         // Values are updated
         _assertAuctionResults(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(lastConvertible) - int256(TARGET),
             lastAuctionResults[0],
             lastAuctionResults[1],
@@ -284,6 +285,8 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         vm.warp(lastUpdate + 1);
 
         uint256 newTickSize = bound(newTickSize_, 1, TICK_SIZE);
+        uint256 addedCapacity = (TARGET * 1) / 24 hours;
+        uint256 newCapacity = newTickSize < addedCapacity ? newTickSize : addedCapacity;
 
         // Call function
         vm.prank(emissionManager);
@@ -294,7 +297,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been adjusted to the new tick size
-        _assertPreviousTick(newTickSize, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new tick size is >= the current tick capacity
@@ -308,6 +311,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newTickSize = bound(newTickSize_, TICK_SIZE, 2 * TICK_SIZE);
 
         // Call function
@@ -319,7 +323,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick capacity has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, newTickSize, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, newTickSize, uint48(block.timestamp));
     }
 
     // when the new min price is > than the current tick price
@@ -333,6 +337,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newMinPrice = bound(newMinPrice_, MIN_PRICE + 1, 2 * MIN_PRICE);
 
         // Call function
@@ -344,7 +349,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been set to the new min price
-        _assertPreviousTick(TICK_SIZE, newMinPrice, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, newMinPrice, TICK_SIZE, uint48(block.timestamp));
     }
 
     // when the new min price is <= the current tick price
@@ -358,6 +363,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Warp to change the block timestamp
         vm.warp(lastUpdate + 1);
 
+        uint256 newCapacity = (TARGET * 1) / 24 hours;
         uint256 newMinPrice = bound(newMinPrice_, 1, MIN_PRICE);
 
         // Call function
@@ -369,7 +375,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert current tick
         // Tick price has been unchanged
-        _assertPreviousTick(TICK_SIZE, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
+        _assertPreviousTick(newCapacity, MIN_PRICE, TICK_SIZE, uint48(block.timestamp));
     }
 
     // given this is the first day of the auction cycle
@@ -420,6 +426,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
 
         // Assert auction results
         // Values are updated for the previous day
+        /// forge-lint: disable-next-line(unsafe-typecast)
         _assertAuctionResults(int256(dayOneConvertible) - int256(dayOneTarget), 0, 0, 0, 0, 0, 0);
         _assertAuctionResultsNextIndex(1);
     }
@@ -435,6 +442,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayOneTarget = TARGET;
             uint256 dayOneConvertible = auctioneer.getDayState().convertible;
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[0] = int256(dayOneConvertible) - int256(dayOneTarget);
         }
 
@@ -447,6 +455,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayTwoConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayTwoDeposit);
             _mintAndBid(recipient, dayTwoDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[1] = int256(dayTwoConvertible) - int256(dayTwoTarget);
         }
 
@@ -459,6 +468,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayThreeConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayThreeDeposit);
             _mintAndBid(recipient, dayThreeDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[2] = int256(dayThreeConvertible) - int256(dayThreeTarget);
         }
 
@@ -471,6 +481,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFourConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayFourDeposit);
             _mintAndBid(recipient, dayFourDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[3] = int256(dayFourConvertible) - int256(dayFourTarget);
         }
 
@@ -483,6 +494,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 dayFiveConvertible = auctioneer.previewBid(PERIOD_MONTHS, dayFiveDeposit);
             _mintAndBid(recipient, dayFiveDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[4] = int256(dayFiveConvertible) - int256(dayFiveTarget);
         }
 
@@ -495,6 +507,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             uint256 daySixConvertible = auctioneer.previewBid(PERIOD_MONTHS, daySixDeposit);
             _mintAndBid(recipient, daySixDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[5] = int256(daySixConvertible) - int256(daySixTarget);
         }
 
@@ -508,6 +521,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
             daySevenConvertible = auctioneer.previewBid(PERIOD_MONTHS, daySevenDeposit);
             _mintAndBid(recipient, daySevenDeposit);
 
+            /// forge-lint: disable-next-line(unsafe-typecast)
             expectedAuctionResults[6] = int256(daySevenConvertible) - int256(daySevenTarget);
         }
 
@@ -624,6 +638,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         // Assert auction results
         // Values are updated for the previous day
         _assertAuctionResults(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(dayEightConvertible) - int256(dayEightTarget),
             0,
             0,
@@ -685,6 +700,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         int256[] memory results = auctioneer.getAuctionResults();
         assertEq(
             results[0],
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(lastConvertible) - int256(TARGET),
             "auction results should use old target"
         );
@@ -735,6 +751,7 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         int256[] memory results = auctioneer.getAuctionResults();
         assertEq(
             results[0],
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(lastConvertible) - int256(TARGET),
             "auction results should use old target"
         );
@@ -968,10 +985,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         console2.log("\n=== DIFFERENCES ===");
         console2.log(
             "Period A capacity difference:",
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(actualTickA.capacity) - int256(expectedTickA.capacity)
         );
         console2.log(
             "Period B capacity difference:",
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(actualTickB.capacity) - int256(expectedTickB.capacity)
         );
 
@@ -1113,10 +1132,12 @@ contract ConvertibleDepositAuctioneerAuctionParametersTest is ConvertibleDeposit
         console2.log("\n=== DIFFERENCES ===");
         console2.log(
             "Period A capacity difference:",
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(actualTickA.capacity) - int256(expectedTickA.capacity)
         );
         console2.log(
             "Period B capacity difference:",
+            /// forge-lint: disable-next-line(unsafe-typecast)
             int256(actualTickB.capacity) - int256(expectedTickB.capacity)
         );
 

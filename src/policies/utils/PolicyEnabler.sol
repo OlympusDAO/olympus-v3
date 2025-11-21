@@ -22,15 +22,23 @@ abstract contract PolicyEnabler is IEnabler, PolicyAdmin {
 
     // ===== MODIFIERS ===== //
 
+    function _onlyEnabled() internal view {
+        if (!isEnabled) revert NotEnabled();
+    }
+
     /// @notice Modifier that reverts if the policy is not enabled
     modifier onlyEnabled() {
-        if (!isEnabled) revert NotEnabled();
+        _onlyEnabled();
         _;
+    }
+
+    function _onlyDisabled() internal view {
+        if (isEnabled) revert NotDisabled();
     }
 
     /// @notice Modifier that reverts if the policy is enabled
     modifier onlyDisabled() {
-        if (isEnabled) revert NotDisabled();
+        _onlyDisabled();
         _;
     }
 
@@ -103,6 +111,8 @@ abstract contract PolicyEnabler is IEnabler, PolicyAdmin {
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return interfaceId == type(IEnabler).interfaceId;
+        return
+            interfaceId == bytes4(0x01ffc9a7) || // ERC-165
+            interfaceId == type(IEnabler).interfaceId;
     }
 }

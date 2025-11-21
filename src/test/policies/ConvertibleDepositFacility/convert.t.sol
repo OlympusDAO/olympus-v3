@@ -4,7 +4,6 @@ pragma solidity >=0.8.20;
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {stdError} from "forge-std/StdError.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {Actions} from "src/Kernel.sol";
@@ -308,7 +307,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(receiptTokenManager),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT - 1
         )
     {
@@ -321,7 +320,11 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         amounts_[1] = 5e18;
 
         // Expect revert
-        vm.expectRevert(stdError.arithmeticError);
+        _expectRevertReceiptTokenInsufficientAllowance(
+            address(depositManager),
+            RESERVE_TOKEN_AMOUNT - 1,
+            5e18 + 5e18
+        );
 
         // Call function
         vm.prank(recipient);
@@ -343,7 +346,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(receiptTokenManager),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -423,11 +426,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         _createPosition(recipient, 10e6 / 2, conversionPrice, false, true);
 
         // Approve spending
-        _approveWrappedReceiptTokenSpending(
-            recipient,
-            address(receiptTokenManager),
-            expectedAssets
-        );
+        _approveWrappedReceiptTokenSpending(recipient, address(depositManager), expectedAssets);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -494,7 +493,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, RESERVE_TOKEN_AMOUNT / 2)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(receiptTokenManager),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -581,7 +580,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         givenAddressHasPosition(recipient, 5e18)
         givenWrappedReceiptTokenSpendingIsApproved(
             recipient,
-            address(receiptTokenManager),
+            address(depositManager),
             RESERVE_TOKEN_AMOUNT
         )
     {
@@ -747,6 +746,7 @@ contract ConvertibleDepositFacilityConvertTest is ConvertibleDepositFacilityTest
         kernel.executeAction(Actions.ActivatePolicy, address(facility2));
 
         // Grant roles to the second facility
+        /// forge-lint: disable-next-line(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility2));
 
         // Enable the second facility

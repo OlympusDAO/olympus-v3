@@ -46,7 +46,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -68,7 +69,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -90,15 +92,20 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
 
     // given no funds have been borrowed
-    //  [X] it reverts
+    //  [X] it transfers the assets from the payer to the deposit manager
+    //  [X] it returns the actual amount of transferred assets
+    //  [X] the borrowed amount is unaffected
+    //  [X] the borrowing capacity is unaffected
+    //  [X] it increases the operator shares by the actual amount (in terms of shares) repaid
 
-    function test_givenNoBorrows_reverts()
+    function test_givenNoBorrows()
         public
         givenIsEnabled
         givenFacilityNameIsSetDefault
@@ -106,9 +113,13 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
+        givenRecipientHasApprovedSpendingAsset(BORROW_AMOUNT)
     {
-        // Expect revert
-        _expectRevertBorrowedAmountExceeded(BORROW_AMOUNT, 0);
+        // Mint the asset to the recipient
+        asset.mint(RECIPIENT, BORROW_AMOUNT);
+
+        _takeSnapshot(BORROW_AMOUNT);
+        uint256 recipientAssetBalanceBefore = iAsset.balanceOf(address(RECIPIENT));
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -116,15 +127,57 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: BORROW_AMOUNT
+                amount: BORROW_AMOUNT,
+                maxAmount: 0
             })
+        );
+
+        // Assert token balance
+        assertEq(iAsset.balanceOf(address(RECIPIENT)), recipientAssetBalanceBefore - BORROW_AMOUNT);
+
+        // Borrowed amounts
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "borrowed amount" // No borrows, but it also doesn't underflow
+        );
+        assertEq(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorDepositActualAmount, // Full deposit
+            "borrowing capacity"
+        );
+
+        // Operator assets should be increased
+        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore + _expectedDepositedShares,
+            "operator shares"
+        );
+
+        assertApproxEqAbs(
+            operatorSharesInAssets,
+            _operatorSharesInAssetsBefore + BORROW_AMOUNT,
+            1,
+            "operator shares in assets"
+        );
+
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _depositManagerSharesBefore + _expectedDepositedShares,
+            "vault balance"
         );
     }
 
     // when the repayment amount exceeds the borrowed amount
-    //  [X] it reverts
+    //  given there is second loan
+    //   [X] _borrowedAmounts is reduced by the amount repaid, capped at the principal amount of the first loan
 
-    function test_whenAmountExceedsBorrowed_reverts(
+    function test_whenAmountExceedsBorrowed_givenSecondLoan(
         uint256 amount_
     )
         public
@@ -135,16 +188,148 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(BORROW_AMOUNT)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenRecipientHasApprovedSpendingAsset(100e18)
     {
-        amount_ = bound(amount_, BORROW_AMOUNT + 1, type(uint256).max);
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, 100e18);
 
-        // Expect revert
-        _expectRevertBorrowedAmountExceeded(amount_, BORROW_AMOUNT);
+        // Mint the repayment amount to the recipient
+        asset.mint(RECIPIENT, amount_);
+
+        _takeSnapshot(amount_);
+        uint256 recipientAssetBalanceBefore = iAsset.balanceOf(address(RECIPIENT));
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
+        );
+
+        // Assert token balance
+        assertEq(iAsset.balanceOf(address(RECIPIENT)), recipientAssetBalanceBefore - amount_);
+
+        // Borrowed amounts
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            BORROW_AMOUNT,
+            "borrowed amount" // Does not go below the principal amount of the second loan
+        );
+        assertEq(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorReceiptTokenBalance - BORROW_AMOUNT, // Repaid amount is available for borrowing
+            "borrowing capacity"
+        );
+
+        // Operator assets should be increased
+        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore + _expectedDepositedShares,
+            "operator shares"
+        );
+
+        assertApproxEqAbs(
+            operatorSharesInAssets,
+            _operatorSharesInAssetsBefore + amount_,
+            1,
+            "operator shares in assets"
+        );
+
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _depositManagerSharesBefore + _expectedDepositedShares,
+            "vault balance"
+        );
+    }
+
+    //  [X] it transfers the assets from the payer to the deposit manager
+    //  [X] it returns the actual amount of transferred assets
+    //  [X] _borrowedAmounts is reduced by the actual amount repaid
+    //  [X] the borrowing capacity is increased by the actual amount repaid
+    //  [X] it increases the operator shares by the actual amount (in terms of shares) repaid
+
+    function test_whenAmountExceedsBorrowed(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenRecipientHasApprovedSpendingAsset(100e18)
+    {
+        amount_ = bound(amount_, BORROW_AMOUNT + 1, 100e18);
+
+        // Mint the repayment amount to the recipient
+        asset.mint(RECIPIENT, amount_);
+
+        _takeSnapshot(amount_);
+        uint256 recipientAssetBalanceBefore = iAsset.balanceOf(address(RECIPIENT));
+
+        // Call function
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
+        );
+
+        // Assert token balance
+        assertEq(iAsset.balanceOf(address(RECIPIENT)), recipientAssetBalanceBefore - amount_);
+
+        // Borrowed amounts
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "borrowed amount" // No underflow
+        );
+        assertEq(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorDepositActualAmount, // Full deposit
+            "borrowing capacity"
+        );
+
+        // Operator assets should be increased
+        (uint256 operatorShares, uint256 operatorSharesInAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(
+            operatorShares,
+            _operatorSharesBefore + _expectedDepositedShares,
+            "operator shares"
+        );
+
+        assertApproxEqAbs(
+            operatorSharesInAssets,
+            _operatorSharesInAssetsBefore + amount_,
+            1,
+            "operator shares in assets"
+        );
+
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            _depositManagerSharesBefore + _expectedDepositedShares,
+            "vault balance"
         );
     }
 
@@ -170,7 +355,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: RECIPIENT,
-                amount: previousRecipientBorrowActualAmount
+                amount: previousRecipientBorrowActualAmount,
+                maxAmount: BORROW_AMOUNT
             })
         );
     }
@@ -201,7 +387,12 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
     }
 
@@ -247,17 +438,23 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         _takeSnapshot(amount_);
 
         // Expect event
-        vm.expectEmit(true, true, true, true);
+        // The amount can be off by a few wei, so don't assert that
+        vm.expectEmit(true, true, true, false);
         emit BorrowingRepayment(address(iAsset), DEPOSIT_OPERATOR, RECIPIENT, amount_);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
         uint256 actualAmount = depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({asset: iAsset, payer: RECIPIENT, amount: amount_})
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: amount_,
+                maxAmount: BORROW_AMOUNT
+            })
         );
 
         // Assert tokens
-        assertEq(actualAmount, amount_, "actual amount");
+        assertApproxEqAbs(actualAmount, amount_, 5, "actual amount");
         assertEq(
             iAsset.balanceOf(RECIPIENT),
             previousRecipientBorrowActualAmount - amount_,
@@ -267,7 +464,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         // Borrowed amounts
         assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
-            BORROW_AMOUNT - amount_,
+            BORROW_AMOUNT - actualAmount,
             "borrowed amount"
         );
         assertEq(
@@ -275,7 +472,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             firstDepositActualAmount +
                 previousDepositorDepositActualAmount -
                 BORROW_AMOUNT +
-                amount_,
+                actualAmount,
             "borrowing capacity"
         );
 
@@ -293,8 +490,8 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
 
         assertApproxEqAbs(
             operatorSharesInAssets,
-            _operatorSharesInAssetsBefore + amount_,
-            1,
+            _operatorSharesInAssetsBefore + actualAmount,
+            5,
             "operator shares in assets"
         );
 

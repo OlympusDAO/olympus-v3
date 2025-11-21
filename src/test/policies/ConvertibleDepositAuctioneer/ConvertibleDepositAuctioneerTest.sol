@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -55,6 +56,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
     uint256 public constant TICK_SIZE = 10e9;
     uint24 public constant TICK_STEP = 110e2; // 110%
     uint256 public constant MIN_PRICE = 15e18;
+    uint256 public constant TICK_SIZE_BASE = 2e18; // 2.0
     uint256 public constant TARGET = 20e9;
     uint8 public constant AUCTION_TRACKING_PERIOD = 7;
     uint16 public constant RECLAIM_RATE = 90e2;
@@ -76,6 +78,8 @@ contract ConvertibleDepositAuctioneerTest is Test {
         address indexed depositAsset,
         uint8 newAuctionTrackingPeriod
     );
+    event MinimumBidUpdated(address indexed depositAsset, uint256 newMinimumBid);
+    event TickSizeBaseUpdated(address indexed depositAsset, uint256 newBase);
     event AuctionResult(
         address indexed depositAsset,
         uint256 ohmConvertible,
@@ -136,12 +140,14 @@ contract ConvertibleDepositAuctioneerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Grant roles
+        /// forge-lint: disable-start(unsafe-typecast)
         rolesAdmin.grantRole(bytes32("cd_emissionmanager"), emissionManager);
         rolesAdmin.grantRole(bytes32("admin"), admin);
         rolesAdmin.grantRole(bytes32("emergency"), emergency);
         rolesAdmin.grantRole(bytes32("manager"), manager);
         rolesAdmin.grantRole(bytes32("deposit_operator"), address(facility));
         rolesAdmin.grantRole(bytes32("cd_auctioneer"), address(auctioneer));
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Enable the deposit manager policy
         vm.prank(admin);
@@ -341,6 +347,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     target: TARGET,
                     tickSize: TICK_SIZE,
                     minPrice: MIN_PRICE,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -361,6 +368,7 @@ contract ConvertibleDepositAuctioneerTest is Test {
                     target: target_,
                     tickSize: tickSize_,
                     minPrice: minPrice_,
+                    tickSizeBase: TICK_SIZE_BASE,
                     tickStep: TICK_STEP,
                     auctionTrackingPeriod: AUCTION_TRACKING_PERIOD
                 })
@@ -399,20 +407,6 @@ contract ConvertibleDepositAuctioneerTest is Test {
         uint256 amount_
     ) {
         _approveReserveTokenSpending(owner_, spender_, amount_);
-        _;
-    }
-
-    modifier givenWrappedReceiptTokenSpendingIsApproved(
-        address owner_,
-        address spender_,
-        uint256 amount_
-    ) {
-        IERC20 wrappedReceiptToken = IERC20(
-            depositManager.getReceiptTokenManager().getWrappedToken(receiptTokenId)
-        );
-
-        vm.prank(owner_);
-        wrappedReceiptToken.approve(spender_, amount_);
         _;
     }
 
@@ -495,3 +489,4 @@ contract ConvertibleDepositAuctioneerTest is Test {
         _;
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)

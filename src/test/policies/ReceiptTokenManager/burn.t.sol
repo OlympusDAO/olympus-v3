@@ -194,7 +194,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         createReceiptToken
         mintToRecipientWrapped
     {
-        vm.expectRevert(stdError.arithmeticError);
+        expectInsufficientAllowance(OWNER, 0, MINT_AMOUNT / 2);
 
         // Then burn wrapped tokens
         vm.prank(OWNER);
@@ -208,7 +208,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         public
         createReceiptToken
         mintToRecipient
-        allowReceiptTokenManagerToSpendWrapped
+        allowOwnerToSpend
     {
         vm.expectRevert(stdError.arithmeticError);
 
@@ -223,7 +223,7 @@ contract ReceiptTokenManagerBurnTest is ReceiptTokenManagerTest {
         public
         createReceiptToken
         mintToRecipientWrapped
-        allowReceiptTokenManagerToSpendWrapped
+        allowOwnerToSpend
     {
         // Then burn wrapped tokens
         vm.prank(OWNER);

@@ -21,6 +21,7 @@ contract DepositRedemptionVaultAuthorizeFacilityTest is DepositRedemptionVaultTe
         vm.assume(caller_ != admin);
 
         // Expect revert
+        /// forge-lint: disable-next-line(unsafe-typecast)
         _expectRoleRevert(bytes32("admin"));
 
         // Call function

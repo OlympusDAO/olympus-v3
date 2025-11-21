@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -57,13 +58,13 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 trsryMajor, ) = TRSRY.VERSION();
+        (uint8 rolesMajor, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+        if (rolesMajor != 1 || trsryMajor != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -73,11 +74,17 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Keycode trsryKeycode = TRSRY.KEYCODE();
 
         permissions = new Permissions[](2);
-        permissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        permissions[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        permissions[0] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
+        permissions[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
     }
 
     /// @notice Returns the version of the policy.
@@ -103,6 +110,14 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
     // ========== PERIODIC TASK ========== //
 
     /// @inheritdoc IPeriodicTask
+    /// @dev        This function reverts if:
+    ///             - The caller is not authorized
+    ///
+    ///             Notes:
+    ///             - If this contract disabled, nothing is done
+    ///             - If the reserve balance is 0, nothing is done
+    ///             - If the previewDeposit would result in zero shares, nothing is done
+    ///             - If TRSRY is not active, nothing is done
     function execute() external override onlyRole(HEART_ROLE) {
         // Skip if the policy is not enabled
         if (!isEnabled) return;
@@ -117,6 +132,11 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
 
         // Skip if depositing the balance would result in zero shares (as we don't want this to revert)
         if (_SRESERVE.previewDeposit(reserveBalance) == 0) {
+            return;
+        }
+
+        // Skip if TRSRY is not active (as it would revert)
+        if (!TRSRY.active()) {
             return;
         }
 
@@ -145,3 +165,4 @@ contract ReserveWrapper is Policy, PolicyEnabler, IPeriodicTask, IReserveWrapper
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

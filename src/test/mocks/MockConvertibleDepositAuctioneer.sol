@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(screaming-snake-case-immutable)
+// solhint-disable custom-errors
+// solhint-disable immutable-vars-naming
 pragma solidity >=0.8.15;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
@@ -16,6 +19,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint256 public target;
     uint256 public tickSize;
     uint256 public minPrice;
+    uint256 public tickSizeBase;
+    uint256 public minimumBid;
 
     constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
         _depositAsset = IERC20(depositAsset_);
@@ -130,4 +135,21 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     ) external view override returns (bool, bool) {}
 
     function getDepositPeriodsCount() external view override returns (uint256) {}
+
+    function getMinimumBid() external view override returns (uint256) {
+        return minimumBid;
+    }
+
+    function setMinimumBid(uint256 newMinimumBid) external override {
+        minimumBid = newMinimumBid;
+    }
+
+    function getTickSizeBase() external view override returns (uint256) {
+        return tickSizeBase;
+    }
+
+    function setTickSizeBase(uint256 newBase) external override {
+        tickSizeBase = newBase;
+    }
 }
+/// forge-lint: disable-end(screaming-snake-case-immutable)

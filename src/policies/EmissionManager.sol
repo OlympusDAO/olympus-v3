@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 // Libraries
@@ -14,6 +15,8 @@ import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -33,12 +36,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
+    uint256 internal constant MAX_BOND_MARKET_CAPACITY_SCALAR = 2e18;
+
     /// @notice The role assigned to the Heart contract.
     ///         This enables the Heart contract to call specific functions on this contract.
     bytes32 public constant ROLE_HEART = "heart";
 
+    /// @notice The role defined for the manager of this contract
+    bytes32 public constant ROLE_EM_MANAGER = "em_manager";
+
     /// @notice The length of the `EnableParams` struct in bytes
-    uint256 internal constant ENABLE_PARAMS_LENGTH = 192;
+    uint256 internal constant ENABLE_PARAMS_LENGTH = 224;
 
     // ========== STATE VARIABLES ========== //
 
@@ -92,7 +100,12 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     uint256 public tickSize;
 
     /// @notice The multiplier applied to the price, in terms of ONE_HUNDRED_PERCENT
+    /// @dev    The value must be greater than or equal to ONE_HUNDRED_PERCENT (100%)
     uint256 public minPriceScalar;
+
+    /// @notice The multiplier applied to bond market capacity from auction remainders, in terms of ONE_HUNDRED_PERCENT
+    /// @dev    The value must be between 0 and MAX_BOND_MARKET_CAPACITY_SCALAR (0-200%)
+    uint256 public bondMarketCapacityScalar;
 
     uint8 internal _oracleDecimals;
     // solhint-disable immutable-vars-naming
@@ -130,6 +143,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
             revert InvalidParam("Bond Auctioneer address cannot be 0");
         if (teller_ == address(0)) revert InvalidParam("Bond Teller address cannot be 0");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("CD Auctioneer address cannot be 0");
+
+        // Validate that the auctioneer implements the IEnabler interface
+        if (!IERC165(cdAuctioneer_).supportsInterface(type(IEnabler).interfaceId))
+            revert InvalidParam("CD Auctioneer does not implement IEnabler");
 
         ohm = ERC20(ohm_);
         gohm = IgOHM(gohm_);
@@ -187,8 +204,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         Keycode mintrKeycode = toKeycode("MINTR");
 
         permissions = new Permissions[](2);
-        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
+        permissions[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[1] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.mintOhm.selector});
 
         return permissions;
     }
@@ -252,7 +272,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         );
 
         // If the tracking period is complete, determine if there was under-selling of OHM
-        if (cdAuctioneer.getAuctionResultsNextIndex() == 0) {
+        // This only applies if the auctioneer is enabled. Otherwise, it would create a bond market at every third heartbeat (as the auction results index is not incremented while the auctioneer is disabled)
+        if (
+            IEnabler(address(cdAuctioneer)).isEnabled() &&
+            cdAuctioneer.getAuctionResultsNextIndex() == 0
+        ) {
             int256[] memory auctionResults = cdAuctioneer.getAuctionResults();
             int256 difference;
             for (uint256 i = 0; i < auctionResults.length; i++) {
@@ -261,20 +285,33 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
             // If there was under-selling, create a market to sell the remaining OHM
             if (difference < 0) {
-                uint256 remainder = uint256(-difference);
+                // Apply the capacity scalar to the remainder
+                // Round down in favour of the protocol (fewer emissions)
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                uint256 scaledCapacity = uint256(-difference).mulDiv(
+                    bondMarketCapacityScalar,
+                    ONE_HUNDRED_PERCENT
+                );
 
-                // Set the pending capacity (used by the createPendingBondMarket() function)
-                bondMarketPendingCapacity = remainder;
+                // Only set pending capacity if the scaled value is non-zero
+                if (scaledCapacity > 0) {
+                    bondMarketPendingCapacity = scaledCapacity;
 
-                // Attempt to create the bond market
-                try this.createPendingBondMarket() {
-                    // Do nothing if successful
-                    // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
-                } catch {
-                    // We don't want the periodic task to fail, so catch the error
-                    // But trigger an event that can be monitored
-                    // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
-                    emit BondMarketCreationFailed(remainder);
+                    // Attempt to create the bond market
+                    try this.createPendingBondMarket() {
+                        // Do nothing if successful
+                        // createPendingBondMarket() resets the pending capacity, so it does not need to be done here
+                    } catch {
+                        // We don't want the periodic task to fail, so catch the error
+                        // But trigger an event that can be monitored
+                        // Upon failure, the createPendingBondMarket() function can be called again to trigger the bond market
+                        emit BondMarketCreationFailed(scaledCapacity);
+                    }
+                } else {
+                    // Ensure that we reset the pending capacity
+                    if (bondMarketPendingCapacity > 0) {
+                        bondMarketPendingCapacity = 0;
+                    }
                 }
             }
             // Otherwise, make sure we reset the pending capacity
@@ -310,8 +347,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (params.backing == 0) revert InvalidParam("backing");
         if (params.restartTimeframe == 0) revert InvalidParam("restartTimeframe");
         if (params.tickSize == 0) revert InvalidParam("Tick Size");
-        if (params.minPriceScalar == 0 || params.minPriceScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Min Price Scalar");
+        if (params.minPriceScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
+        if (params.bondMarketCapacityScalar > MAX_BOND_MARKET_CAPACITY_SCALAR)
+            revert InvalidParam("Bond Market Scalar");
 
         // Assign
         baseEmissionRate = params.baseEmissionsRate;
@@ -320,12 +358,14 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         restartTimeframe = params.restartTimeframe;
         tickSize = params.tickSize;
         minPriceScalar = params.minPriceScalar;
+        bondMarketCapacityScalar = params.bondMarketCapacityScalar;
 
         emit MinimumPremiumChanged(params.minimumPremium);
         emit BackingChanged(params.backing);
         emit RestartTimeframeChanged(params.restartTimeframe);
         emit TickSizeChanged(params.tickSize);
         emit MinPriceScalarChanged(params.minPriceScalar);
+        emit BondMarketCapacityScalarChanged(params.bondMarketCapacityScalar);
     }
 
     // ========== BOND CALLBACK ========== //
@@ -368,14 +408,17 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 minPrice = ((ONE_HUNDRED_PERCENT + minimumPremium) * backing) /
             10 ** _reserveDecimals;
         int8 priceDecimals = _getPriceDecimals(minPrice);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
         // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+        /// forge-lint: disable-start(unsafe-typecast)
         uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
         uint256 bondScale = 10 **
             uint8(
                 36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
             );
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Create new bond market to buy the reserve with OHM
         activeMarketId = bondAuctioneer.createMarket(
@@ -432,10 +475,22 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        /// forge-lint: disable-next-line(unsafe-typecast)
         return decimals - int8(_oracleDecimals);
     }
 
     // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Reverts if the caller does not have the admin or em_manager role
+    function _onlyAdminOrEmManagerRole() internal view {
+        if (!_isAdmin(msg.sender) && !ROLES.hasRole(msg.sender, ROLE_EM_MANAGER))
+            revert NotAuthorised();
+    }
+
+    modifier onlyAdminOrEmManagerRole() {
+        _onlyAdminOrEmManagerRole();
+        _;
+    }
 
     /// @inheritdoc PolicyEnabler
     /// @dev        This function performs the following:
@@ -455,6 +510,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice Restart the emission manager
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
+    ///         - The restart timeframe has passed since shutdown
     function restart() external onlyAdminRole {
         // Restart can be activated only within the specified timeframe since shutdown
         // Outside of this span of time, admin must reinitialize
@@ -474,6 +532,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     }
 
     /// @notice Set the base emissions rate
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
+    ///         - There is an underflow or overflow on adjustments
     ///
     /// @param  changeBy_       uint256 added or subtracted from baseEmissionRate
     /// @param  forNumBeats_    uint256 number of times to change baseEmissionRate by changeBy_
@@ -482,7 +543,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         uint256 changeBy_,
         uint48 forNumBeats_,
         bool add
-    ) external onlyAdminRole {
+    ) external onlyAdminOrEmManagerRole {
         // Prevent underflow on negative adjustments
         if (!add && (changeBy_ * forNumBeats_ > baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
@@ -491,17 +552,18 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         if (add && (type(uint256).max - changeBy_ * forNumBeats_ < baseEmissionRate))
             revert InvalidParam("changeBy * forNumBeats");
 
-        rateChange = BaseRateChange(changeBy_, forNumBeats_, add);
+        rateChange = BaseRateChange({changeBy: changeBy_, daysLeft: forNumBeats_, addition: add});
 
         emit BaseRateChanged(changeBy_, forNumBeats_, add);
     }
 
     /// @notice Set the minimum premium for emissions
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
     ///         - newMinimumPremium_ is 0
     ///
     /// @param  newMinimumPremium_  The new minimum premium, in terms of ONE_HUNDRED_PERCENT
-    function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminRole {
+    function setMinimumPremium(uint256 newMinimumPremium_) external onlyAdminOrEmManagerRole {
         if (newMinimumPremium_ == 0) revert InvalidParam("newMinimumPremium");
 
         minimumPremium = newMinimumPremium_;
@@ -511,6 +573,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Set the new bond vesting period in seconds
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newVestingPeriod_ is more than 31536000 (1 year in seconds)
     ///
     /// @param newVestingPeriod_ uint48
@@ -525,6 +588,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to adjust backing price if deviated from reality
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newBacking is 0
     ///         - newBacking is less than 90% of current backing (to prevent large sudden drops)
     ///
@@ -542,6 +606,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to adjust the timeframe for restart after shutdown
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - newTimeframe is 0
     ///
     /// @param  newTimeframe    to adjust it to
@@ -556,6 +621,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice allow governance to set the bond contracts used by the emission manager
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - bondAuctioneer_ is the zero address
     ///         - teller_ is the zero address
     ///
@@ -574,6 +640,7 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD contract used by the emission manager
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin role
     ///         - cdAuctioneer_ is the zero address
     ///         - The deposit asset of the CDAuctioneer is not the same as the reserve asset in this contract
     ///
@@ -594,10 +661,11 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD tick size
     /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
     ///         - newTickSize_ is 0
     ///
     /// @param  newTickSize_    as a fixed amount in OHM decimals (9)
-    function setTickSize(uint256 newTickSize_) external onlyAdminRole {
+    function setTickSize(uint256 newTickSize_) external onlyAdminOrEmManagerRole {
         if (newTickSize_ == 0) revert InvalidParam("Tick Size");
         tickSize = newTickSize_;
 
@@ -606,16 +674,29 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
 
     /// @notice Allow governance to set the CD minimum price scalar
     /// @dev    This function reverts if:
-    ///         - newScalar is 0
-    ///         - newScalar is greater than ONE_HUNDRED_PERCENT (100% in 18 decimals)
+    ///         - The caller does not have the admin or em_manager role
+    ///         - newScalar is less than ONE_HUNDRED_PERCENT (100% in 18 decimals)
     ///
     /// @param  newScalar   as a percentage in 18 decimals
-    function setMinPriceScalar(uint256 newScalar) external onlyAdminRole {
-        if (newScalar == 0 || newScalar > ONE_HUNDRED_PERCENT)
-            revert InvalidParam("Min Price Scalar");
+    function setMinPriceScalar(uint256 newScalar) external onlyAdminOrEmManagerRole {
+        if (newScalar < ONE_HUNDRED_PERCENT) revert InvalidParam("Min Price Scalar");
         minPriceScalar = newScalar;
 
         emit MinPriceScalarChanged(newScalar);
+    }
+
+    /// @notice Allow governance to set the bond market capacity scalar, which acts as a multiplier for the bond market capacity
+    /// @dev    This function reverts if:
+    ///         - The caller does not have the admin or em_manager role
+    ///         - newScalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR (200%)
+    ///
+    /// @param  newScalar   as a percentage in 18 decimals
+    function setBondMarketCapacityScalar(uint256 newScalar) external onlyAdminOrEmManagerRole {
+        if (newScalar > MAX_BOND_MARKET_CAPACITY_SCALAR)
+            revert InvalidParam("Bond Market Capacity Scalar");
+
+        bondMarketCapacityScalar = newScalar;
+        emit BondMarketCapacityScalarChanged(newScalar);
     }
 
     // =========- VIEW FUNCTIONS ========== //
@@ -680,7 +761,8 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///
     /// @param  price Price of OHM in reserve token terms, scaled to the reserve asset's decimals
     function getMinPriceFor(uint256 price) public view returns (uint256) {
-        return (price * minPriceScalar) / ONE_HUNDRED_PERCENT;
+        // Round in favour of the protocol
+        return price.mulDivUp(minPriceScalar, ONE_HUNDRED_PERCENT);
     }
 
     /// @notice Returns the current price from the PRICE module
@@ -702,8 +784,9 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
     ///
     ///         This function will revert if:
     ///         - The caller is not this contract, or an address with the admin/manager role
+    ///         - The contract is disabled
     ///         - The bond market cannot be created
-    function createPendingBondMarket() external {
+    function createPendingBondMarket() external onlyEnabled {
         // Validate that the caller is this contract or an admin/manager
         if (msg.sender != address(this) && !_isManager(msg.sender) && !_isAdmin(msg.sender))
             revert NotAuthorised();
@@ -726,8 +809,10 @@ contract EmissionManager is IEmissionManager, IPeriodicTask, Policy, PolicyEnabl
         bytes4 interfaceId
     ) public view virtual override(PolicyEnabler, IPeriodicTask) returns (bool) {
         return
+            interfaceId == bytes4(0x01ffc9a7) || // ERC-165
             interfaceId == type(IPeriodicTask).interfaceId ||
             interfaceId == type(IEmissionManager).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable, screaming-snake-case-immutable)

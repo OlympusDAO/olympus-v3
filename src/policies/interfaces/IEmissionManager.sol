@@ -13,6 +13,7 @@ interface IEmissionManager {
 
     // ========== EVENTS ========== //
 
+    /// forge-lint: disable-next-line(mixed-case-variable)
     event SaleCreated(uint256 marketID, uint256 saleAmount);
 
     event BondMarketCreationFailed(uint256 saleAmount);
@@ -47,6 +48,9 @@ interface IEmissionManager {
     /// @notice Emitted when the minimum price scalar is changed
     event MinPriceScalarChanged(uint256 newMinPriceScalar);
 
+    /// @notice Emitted when the bond market capacity scalar is changed
+    event BondMarketCapacityScalarChanged(uint256 newBondMarketCapacityScalar);
+
     // ========== DATA STRUCTURES ========== //
 
     struct BaseRateChange {
@@ -62,6 +66,7 @@ interface IEmissionManager {
     /// @param backing              backing price of OHM in reserve token, in reserve scale
     /// @param tickSize             fixed tick size in OHM decimals (9)
     /// @param minPriceScalar       scalar for min price
+    /// @param bondMarketCapacityScalar scalar for bond market capacity from auction remainders
     /// @param restartTimeframe     time in seconds that the manager needs to be restarted after a shutdown, otherwise it must be re-initialized
     struct EnableParams {
         uint256 baseEmissionsRate;
@@ -69,6 +74,7 @@ interface IEmissionManager {
         uint256 backing;
         uint256 tickSize;
         uint256 minPriceScalar;
+        uint256 bondMarketCapacityScalar;
         uint48 restartTimeframe;
     }
 }

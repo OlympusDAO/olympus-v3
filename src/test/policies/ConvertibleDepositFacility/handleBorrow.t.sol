@@ -3,8 +3,6 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepositFacility/ConvertibleDepositFacilityTest.sol";
 
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-
 contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilityTest {
     uint256 public constant COMMIT_AMOUNT = 1e18;
     uint256 public constant BORROW_AMOUNT = 1e18;
@@ -321,5 +319,30 @@ contract ConvertibleDepositFacilityHandleBorrowTest is ConvertibleDepositFacilit
             COMMIT_AMOUNT,
             "committed deposits for operator two"
         );
+    }
+
+    // when the amount to borrow is less than one vault share
+    //  [X] it reverts
+
+    function test_whenAmountLessThanOneShare_reverts(
+        uint256 amount_
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(1000e18)
+        givenAddressHasConvertibleDepositTokenDefault(recipient)
+        givenCommitted(OPERATOR, previousDepositActual)
+        givenVaultAccruesYield(iVault, 10_000e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        uint256 oneShareInAssets = vault.previewRedeem(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        // Expect revert
+        _expectRevertZeroAmount();
+
+        // Call function
+        vm.prank(OPERATOR);
+        facility.handleBorrow(iReserveToken, PERIOD_MONTHS, amount_, recipient);
     }
 }

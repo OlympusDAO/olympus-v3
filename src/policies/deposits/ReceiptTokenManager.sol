@@ -80,7 +80,13 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
         // Create the wrappable token with proper metadata layout for CloneableReceiptToken
         string memory tokenName = string
-            .concat(operatorName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
+            .concat(
+                operatorName_,
+                asset_.name(),
+                " - ",
+                uint2str(depositPeriod_),
+                depositPeriod_ == 1 ? " month" : " months"
+            )
             .truncate32();
         string memory tokenSymbol = string
             .concat(operatorName_, asset_.symbol(), "-", uint2str(depositPeriod_), "m")
@@ -106,11 +112,15 @@ contract ReceiptTokenManager is ERC6909Wrappable, IReceiptTokenManager {
 
     // ========== MINTING/BURNING ========== //
 
-    modifier onlyTokenOwner(uint256 tokenId_) {
+    function _onlyTokenOwner(uint256 tokenId_) internal view {
         address owner = getTokenOwner(tokenId_);
         if (msg.sender != owner) {
             revert ReceiptTokenManager_NotOwner(msg.sender, owner);
         }
+    }
+
+    modifier onlyTokenOwner(uint256 tokenId_) {
+        _onlyTokenOwner(tokenId_);
         _;
     }
 

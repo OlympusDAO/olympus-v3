@@ -4,6 +4,13 @@ pragma solidity >=0.8.15;
 import {uint2str} from "./Uint2Str.sol";
 
 library Timestamp {
+    /// @notice Convert a timestamp to a padded string of the form "YYYY-MM-DD"
+    /// @dev    This has only been tested up to year 2345.
+    ///
+    /// @param timestamp    The timestamp to convert
+    /// @return year        Year as a zero-padded string
+    /// @return month       Month as a zero-padded string
+    /// @return day         Day as a zero-padded string
     function toPaddedString(
         uint48 timestamp
     ) internal pure returns (string memory, string memory, string memory) {
@@ -14,7 +21,7 @@ library Timestamp {
         uint256 month;
         uint256 day;
         {
-            int256 __days = int256(int48(timestamp) / 1 days);
+            int256 __days = int256(uint256(timestamp) / 1 days);
 
             int256 num1 = __days + 68_569 + 2_440_588; // 2440588 = OFFSET19700101
             int256 num2 = (4 * num1) / 146_097;
@@ -27,9 +34,11 @@ library Timestamp {
             _month = _month + 2 - 12 * num1;
             _year = 100 * (num2 - 49) + _year + num1;
 
+            /// forge-lint: disable-start(unsafe-typecast)
             year = uint256(_year);
             month = uint256(_month);
             day = uint256(_day);
+            /// forge-lint: disable-end(unsafe-typecast)
         }
 
         string memory yearStr = uint2str(year % 10_000);

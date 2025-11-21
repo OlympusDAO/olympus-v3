@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
 pragma solidity >=0.8.20;
@@ -22,6 +23,9 @@ import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.so
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
+import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
+import {EmissionManager} from "src/policies/EmissionManager.sol";
 
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
@@ -54,10 +58,11 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
     // EmissionManager parameters
     uint256 internal constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
-    uint256 internal constant EM_MINIMUM_PREMIUM = 1e18; // 100% premium
-    uint256 internal constant EM_BACKING = 11740000000000000000; // 11.74 USDS/OHM
+    uint256 internal constant EM_MINIMUM_PREMIUM = 5e17; // 50% premium
+    uint256 internal constant EM_BACKING = 11690000000000000000; // 11.69 USDS/OHM
     uint256 internal constant EM_TICK_SIZE = 150e9; // 150 OHM
-    uint256 internal constant EM_MIN_PRICE_SCALAR = 1e18; // 100% min price multiplier
+    uint256 internal constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
+    uint256 internal constant EM_BOND_MARKET_CAPACITY_SCALAR = 0; // 0% bond market capacity scalar, bond market is disabled
     uint48 internal constant EM_RESTART_TIMEFRAME = 950400; // 11 days
 
     // ========== PROPOSAL ========== //
@@ -88,7 +93,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "# Convertible Deposits\n\n",
                 "This proposal activates and configures the Convertible Deposit system.\n\n",
                 "## Summary\n\n",
-                "This proposal has five main components:\n",
+                "This proposal has five main components:\n\n",
                 "1. Grant appropriate roles to contracts\n",
                 "2. Activate Convertible Deposit system contracts\n",
                 "3. Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
@@ -129,7 +134,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "- Old Heart policy has been deactivated in the kernel\n",
                 "- Old EmissionManager policy has been deactivated in the kernel\n",
                 "- DEPOS module has been installed in the kernel\n",
-                "- All new policies have been activated in the kernel\n"
+                "- All new policies have been activated in the kernel\n\n"
             );
     }
 
@@ -148,16 +153,19 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         return
             string.concat(
                 "## Proposal Steps\n\n",
-                "### Phase 1: Cleanup Previous Policies\n",
-                "1. Revoke the `heart` role from the old Heart policy\n\n",
-                "### Phase 2: Grant Roles to New Policies\n",
+                "### Phase 1: Cleanup Previous Policies\n\n",
+                "1a. Revoke the `heart` role from the old Heart policy\n",
+                "1b. Disable the old Heart policy\n",
+                "1c. Disable the old EmissionManager policy\n\n",
+                "### Phase 2: Grant Roles to New Policies\n\n",
                 "2. Grant the `manager` role to the DAO MS\n",
-                "3. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
-                "4. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
-                "5. Grant the `cd_emissionmanager` role to EmissionManager\n",
-                "6. Grant the `heart` role to Heart contract\n\n",
-                "### Phase 3: Execute Activator Contract\n",
-                "7. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
+                "3. Grant the `em_manager` role to the DAO MS\n",
+                "4. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
+                "5. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
+                "6. Grant the `cd_emissionmanager` role to EmissionManager\n",
+                "7. Grant the `heart` role to Heart contract\n\n",
+                "### Phase 3: Execute Activator Contract\n\n",
+                "8. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
             );
     }
 
@@ -165,7 +173,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     function _getProposalStepsPhase3Part1() private pure returns (string memory) {
         return
             string.concat(
-                "8. Execute ConvertibleDepositActivator.activate() which performs:\n",
+                "9. Execute ConvertibleDepositActivator.activate() which performs:\n",
                 "   - Enable DepositManager contract\n",
                 "   - Set operator name on DepositManager for ConvertibleDepositFacility\n",
                 "   - Enable ConvertibleDepositFacility contract\n",
@@ -199,7 +207,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
     function _getConclusionSection() private pure returns (string memory) {
         return
             string.concat(
-                "9. Revoke `admin` role from ConvertibleDepositActivator contract\n\n",
+                "10. Revoke `admin` role from ConvertibleDepositActivator contract\n\n",
                 "## Result\n\n",
                 "After execution, the Convertible Deposit system will be fully operational with USDS assets configured for 1, 2, and 3 month deposit periods.\n"
             );
@@ -218,7 +226,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
         // Pre-requisites:
-        // - Previous Heart and EmissionManager have been deactivated from the kernel
+        // - Previous Heart and EmissionManager have not been deactivated from the kernel
         // - All required modules and policies have been installed and activated in the kernel
         // - DEPOS module has been installed in the kernel
         // - All deposit-related policies have been activated
@@ -228,11 +236,30 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
 
-            // 1. Revoke "heart" role from old Heart contract
+            // 1a. Revoke "heart" role from old Heart contract
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("heart"), heartOld),
                 "Revoke heart role from old Heart policy"
+            );
+
+            // 1b. Disable the old Heart policy
+            _pushAction(
+                heartOld,
+                abi.encodeWithSignature("deactivate()"),
+                "Disable old Heart policy"
+            );
+        }
+
+        {
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
+
+            // 1c. Disable the old EmissionManager policy
+            _pushAction(
+                emissionManagerOld,
+                abi.encodeWithSignature("shutdown()"),
+                "Disable old EmissionManager policy"
             );
         }
 
@@ -243,12 +270,24 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             address daoMS = addresses.getAddress("olympus-multisig-dao");
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("manager"), daoMS),
                 "Grant manager role to DAO MS"
             );
         }
 
-        // 3. Grant "deposit_operator" role to ConvertibleDepositFacility
+        // 3. Grant "em_manager" role to DAO MS
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            _pushAction(
+                rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("em_manager"), daoMS),
+                "Grant em_manager role to DAO MS"
+            );
+        }
+
+        // 4. Grant "deposit_operator" role to ConvertibleDepositFacility
         {
             address cdFacility = addresses.getAddress(
                 "olympus-policy-convertible-deposit-facility-1_0"
@@ -258,6 +297,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("deposit_operator"),
                     cdFacility
                 ),
@@ -265,7 +305,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             );
         }
 
-        // 4. Grant "cd_auctioneer" role to ConvertibleDepositAuctioneer
+        // 5. Grant "cd_auctioneer" role to ConvertibleDepositAuctioneer
         {
             address cdAuctioneer = addresses.getAddress(
                 "olympus-policy-convertible-deposit-auctioneer-1_0"
@@ -275,6 +315,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("cd_auctioneer"),
                     cdAuctioneer
                 ),
@@ -282,7 +323,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             );
         }
 
-        // 5. Grant "cd_emissionmanager" role to EmissionManager
+        // 6. Grant "cd_emissionmanager" role to EmissionManager
         {
             address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
 
@@ -290,6 +331,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
                     bytes32("cd_emissionmanager"),
                     emissionManager
                 ),
@@ -297,12 +339,13 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             );
         }
 
-        // 6. Grant "heart" role to Heart contract
+        // 7. Grant "heart" role to Heart contract
         {
             address heart = addresses.getAddress("olympus-policy-heart-1_7");
 
             _pushAction(
                 rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart),
                 "Grant heart role to Heart contract"
             );
@@ -312,23 +355,25 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         address activator = addresses.getAddress("olympus-periphery-convertible-deposit-activator");
 
-        // 7. Grant "admin" role (temporarily) to Activator contract
+        // 8. Grant "admin" role (temporarily) to Activator contract
         _pushAction(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator),
             "Grant admin role to temporary activator contract"
         );
 
-        // 8. Run activator
+        // 9. Run activator
         _pushAction(
             activator,
             abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector),
             "Call temporary activator contract"
         );
 
-        // 9. Revoke "admin" role from Activator contract
+        // 10. Revoke "admin" role from Activator contract
         _pushAction(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator),
             "Revoke admin role from temporary activator contract"
         );
@@ -354,12 +399,25 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
         // ========== PHASE 1 VALIDATIONS ========== //
 
-        // 1. Validate that the "heart" role is revoked from the old Heart policy
         {
+            // 1. Validate that the "heart" role is revoked from the old Heart policy
             address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(heartOld, bytes32("heart")) == false,
                 "Old Heart policy still has the heart role"
+            );
+
+            // 1a. Validate that the old Heart policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            require(IHeart_v1_6(heartOld).active() == false, "Old Heart policy is not disabled");
+
+            // 1b. Validate that the old EmissionManager policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
+            require(
+                IEmissionManager_v1_1(emissionManagerOld).locallyActive() == false,
+                "Old EmissionManager policy is not disabled"
             );
         }
 
@@ -369,46 +427,61 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
         {
             address daoMS = addresses.getAddress("olympus-multisig-dao");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(daoMS, bytes32("manager")) == true,
                 "DAO MS does not have the manager role"
             );
         }
 
-        // 3. Validate that ConvertibleDepositFacility has "deposit_operator" role
+        // 3. Validate that DAO MS has "em_manager" role
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(daoMS, bytes32("em_manager")) == true,
+                "DAO MS does not have the em_manager role"
+            );
+        }
+
+        // 4. Validate that ConvertibleDepositFacility has "deposit_operator" role
         {
             address cdFacility = addresses.getAddress(
                 "olympus-policy-convertible-deposit-facility-1_0"
             );
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(cdFacility, bytes32("deposit_operator")) == true,
                 "ConvertibleDepositFacility does not have the deposit_operator role"
             );
         }
 
-        // 4. Validate that ConvertibleDepositAuctioneer has "cd_auctioneer" role
+        // 5. Validate that ConvertibleDepositAuctioneer has "cd_auctioneer" role
         {
             address cdAuctioneer = addresses.getAddress(
                 "olympus-policy-convertible-deposit-auctioneer-1_0"
             );
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(cdAuctioneer, bytes32("cd_auctioneer")) == true,
                 "ConvertibleDepositAuctioneer does not have the cd_auctioneer role"
             );
         }
 
-        // 5. Validate that EmissionManager has "cd_emissionmanager" role
+        // 6. Validate that EmissionManager has "cd_emissionmanager" role
         {
             address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(emissionManager, bytes32("cd_emissionmanager")) == true,
                 "EmissionManager does not have the cd_emissionmanager role"
             );
         }
 
-        // 6. Validate that Heart has the "heart" role
+        // 7. Validate that Heart has the "heart" role
         {
             address heart = addresses.getAddress("olympus-policy-heart-1_7");
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(heart, bytes32("heart")) == true,
                 "Heart does not have the heart role"
             );
@@ -430,6 +503,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             require(IEnabler(depositManager).isEnabled() == true, "DepositManager is not enabled");
 
             require(
+                /// forge-lint: disable-next-line(asm-keccak256)
                 keccak256(bytes(IDepositManager(depositManager).getOperatorName(cdFacility))) ==
                     keccak256(bytes(CDF_NAME)),
                 "DepositManager operator name for ConvertibleDepositFacility is incorrect"
@@ -529,8 +603,8 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
             address cdAuctioneer = addresses.getAddress(
                 "olympus-policy-convertible-deposit-auctioneer-1_0"
             );
-            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
 
+            // Deposit periods
             (bool period1MEnabled, ) = IConvertibleDepositAuctioneer(cdAuctioneer)
                 .isDepositPeriodEnabled(PERIOD_1M);
             require(
@@ -552,10 +626,74 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
                 "USDS-3m period is not enabled in ConvertibleDepositAuctioneer"
             );
 
+            // Initial auction parameters
+            IConvertibleDepositAuctioneer.AuctionParameters
+                memory auctionParams = IConvertibleDepositAuctioneer(cdAuctioneer)
+                    .getAuctionParameters();
+            require(
+                auctionParams.target == CDA_INITIAL_TARGET,
+                "Initial target is not CDA_INITIAL_TARGET"
+            );
+            require(
+                auctionParams.tickSize == CDA_INITIAL_TICK_SIZE,
+                "Initial tick size is not CDA_INITIAL_TICK_SIZE"
+            );
+            require(
+                auctionParams.minPrice == CDA_INITIAL_MIN_PRICE,
+                "Initial min price is not CDA_INITIAL_MIN_PRICE"
+            );
+
+            // Auction configuration
+            uint256 tickStep = IConvertibleDepositAuctioneer(cdAuctioneer).getTickStep();
+            require(
+                tickStep == CDA_INITIAL_TICK_STEP_MULTIPLIER,
+                "Initial tick step is not CDA_INITIAL_TICK_STEP_MULTIPLIER"
+            );
+            uint256 trackingPeriod = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .getAuctionTrackingPeriod();
+            require(
+                trackingPeriod == CDA_AUCTION_TRACKING_PERIOD,
+                "Initial auction tracking period is not CDA_AUCTION_TRACKING_PERIOD"
+            );
+
             require(
                 IEnabler(cdAuctioneer).isEnabled() == true,
                 "ConvertibleDepositAuctioneer is not enabled"
             );
+        }
+
+        // Validate EmissionManager
+        {
+            EmissionManager emissionManager = EmissionManager(
+                addresses.getAddress("olympus-policy-emissionmanager-1_2")
+            );
+
+            require(
+                emissionManager.baseEmissionRate() == EM_BASE_EMISSIONS_RATE,
+                "Initial base emissions rate is not EM_BASE_EMISSIONS_RATE"
+            );
+            require(
+                emissionManager.minimumPremium() == EM_MINIMUM_PREMIUM,
+                "Initial minimum premium is not EM_MINIMUM_PREMIUM"
+            );
+            require(emissionManager.backing() == EM_BACKING, "Initial backing is not EM_BACKING");
+            require(
+                emissionManager.tickSize() == EM_TICK_SIZE,
+                "Initial tick size is not EM_TICK_SIZE"
+            );
+            require(
+                emissionManager.minPriceScalar() == EM_MIN_PRICE_SCALAR,
+                "Initial min price scalar is not EM_MIN_PRICE_SCALAR"
+            );
+            require(
+                emissionManager.bondMarketCapacityScalar() == EM_BOND_MARKET_CAPACITY_SCALAR,
+                "Initial bond market capacity scalar is not EM_BOND_MARKET_CAPACITY_SCALAR"
+            );
+            require(
+                emissionManager.restartTimeframe() == EM_RESTART_TIMEFRAME,
+                "Initial restart timeframe is not EM_RESTART_TIMEFRAME"
+            );
+
             require(
                 IEnabler(emissionManager).isEnabled() == true,
                 "EmissionManager is not enabled"
@@ -664,6 +802,7 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 
             // Validate that the activator does not have the "admin" role
             require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 roles.hasRole(activator, bytes32("admin")) == false,
                 "Activator should not have the admin role"
             );
@@ -675,3 +814,4 @@ contract ConvertibleDepositProposal is GovernorBravoProposal {
 contract ConvertibleDepositProposalScript is ProposalScript {
     constructor() ProposalScript(new ConvertibleDepositProposal()) {}
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

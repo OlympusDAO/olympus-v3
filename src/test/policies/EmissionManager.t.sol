@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -29,6 +30,10 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {EmissionManager} from "policies/EmissionManager.sol";
 import {PolicyAdmin} from "policies/utils/PolicyAdmin.sol";
 import {IEmissionManager} from "policies/interfaces/IEmissionManager.sol";
+import {IPeriodicTask} from "interfaces/IPeriodicTask.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // solhint-disable-next-line max-states-count
 contract EmissionManagerTest is Test {
@@ -39,6 +44,7 @@ contract EmissionManagerTest is Test {
     address internal bob;
     address internal heart;
     address internal guardian;
+    address internal manager;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -70,7 +76,8 @@ contract EmissionManagerTest is Test {
     uint256 internal changeBy = 1e5; // 0.01% change per execution
     uint48 internal changeDuration = 2; // 2 executions
     uint256 internal tickSize = 10e9; // 10 OHM fixed tick size
-    uint256 internal minPriceScalar = 9e17; // 90%
+    uint256 internal minPriceScalar = 11e17; // 110%
+    uint256 internal bondMarketCapacityScalar = 1e18; // 100%
 
     uint256 internal DEFICIT = 1000e9;
     uint256 internal SURPLUS = 1001e9;
@@ -79,6 +86,8 @@ contract EmissionManagerTest is Test {
 
     event BondMarketCreationFailed(uint256 saleAmount);
     event TickSizeChanged(uint256 newTickSize);
+    event MinPriceScalarChanged(uint256 newMinPriceScalar);
+    event BondMarketCapacityScalarChanged(uint256 newBondMarketCapacityScalar);
 
     // test cases
     //
@@ -170,9 +179,9 @@ contract EmissionManagerTest is Test {
     //
     // admin functions
     // [X] initialize
-    //    [X] when the caller doesn't have emissions_admin role
+    //    [X] when the caller doesn't have admin role
     //       [X] it reverts
-    //    [X] when the caller has emissions_admin role
+    //    [X] when the caller has admin role
     //       [X] when the contract is enabled
     //          [X] it reverts
     //       [X] when the restart timeframe has not passed since the last shutdown
@@ -192,9 +201,9 @@ contract EmissionManagerTest is Test {
     //       [X] it sets locallyActive to true
     //
     // [X] changeBaseRate
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin or em_manager role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin or em_manager role
     //       [X] when a negative rate adjustment would result in an underflow
     //          [X] it reverts
     //       [X] when a positive rate adjustment would result in an overflow
@@ -202,25 +211,25 @@ contract EmissionManagerTest is Test {
     //       [X] it sets the rateChange to changeBy, forNumBeats, and add parameters
     //
     // [X] setMinimumPremium
-    //     [X] when the caller doesn't have the emissions_admin role
+    //     [X] when the caller doesn't have the admin or em_manager role
     //        [X] it reverts
-    //     [X] when the caller has the emissions_admin role
+    //     [X] when the caller has the admin or em_manager role
     //        [X] when the new minimum premium is zero
     //           [X] it reverts
     //        [X] it sets the minimum premium
     //
     // [X] setBacking
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new backing is more than 10% lower than the current backing
     //          [X] it reverts
     //       [X] it sets the backing
     //
     // [X] setRestartTimeframe
-    //    [X] when the caller doesn't have the emissions_admin role
+    //    [X] when the caller doesn't have the admin role
     //       [X] it reverts
-    //    [X] when the caller has the emissions_admin role
+    //    [X] when the caller has the admin role
     //       [X] when the new restart timeframe is zero
     //          [X] it reverts
     //       [X] it sets the restart timeframe
@@ -251,11 +260,12 @@ contract EmissionManagerTest is Test {
         userCreator = new UserFactory();
         {
             /// Deploy bond system to test against
-            address[] memory users = userCreator.create(4);
+            address[] memory users = userCreator.create(5);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
             heart = users[3];
+            manager = users[4];
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
 
             /// Deploy the bond system
@@ -340,6 +350,7 @@ contract EmissionManagerTest is Test {
             // Emission manager roles
             rolesAdmin.grantRole("heart", heart);
             rolesAdmin.grantRole("admin", guardian);
+            rolesAdmin.grantRole("em_manager", manager);
 
             // Emergency roles
             rolesAdmin.grantRole("emergency", guardian);
@@ -378,6 +389,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -403,8 +415,13 @@ contract EmissionManagerTest is Test {
         // 22377897966596497241 = 22.37 reserve/OHM
         PRICE.setCurrentPrice(22377897966596497241);
 
-        // 20140108169936847516
-        expectedMinPrice = (uint256(22377897966596497241) * 9e17) / 1e18;
+        // 22377897966596497241 * 11e17 / 1e18 = 24615687763256146965.1
+        // = 24615687763256146966 (rounded up)
+        expectedMinPrice = 24615687763256146966;
+
+        // Enable the mock auctioneer
+        vm.prank(guardian);
+        cdAuctioneer.enable("");
     }
 
     // internal helper functions
@@ -422,7 +439,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasDeficit() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = -int256(DEFICIT) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = int256(DEFICIT);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -430,7 +449,9 @@ contract EmissionManagerTest is Test {
 
     modifier givenCDAuctioneerHasSurplus() {
         int256[] memory results = new int256[](2);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[0] = int256(SURPLUS) * 2;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         results[1] = -int256(SURPLUS);
         cdAuctioneer.setAuctionResults(results);
         _;
@@ -441,6 +462,12 @@ contract EmissionManagerTest is Test {
         results[0] = 0;
         results[1] = 0;
         cdAuctioneer.setAuctionResults(results);
+        _;
+    }
+
+    modifier givenBondMarketCapacityScalar(uint256 scalar) {
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(scalar);
         _;
     }
 
@@ -503,6 +530,20 @@ contract EmissionManagerTest is Test {
         _;
     }
 
+    function _expectRevertNotAuthorized() internal {
+        bytes memory err = abi.encodeWithSignature("NotAuthorised()");
+        vm.expectRevert(err);
+    }
+
+    function _expectRevertRoleRequired(string memory role_) internal {
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(bytes(role_))
+        );
+        vm.expectRevert(err);
+    }
+
     // execute test cases
 
     function test_execute_whenNotLocallyActive_NothingHappens() public {
@@ -552,8 +593,7 @@ contract EmissionManagerTest is Test {
 
     function test_execute_withoutHeartRole_reverts() public {
         // Call the function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("heart"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("heart");
 
         // Call the function
         vm.startPrank(guardian);
@@ -834,6 +874,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -876,10 +917,10 @@ contract EmissionManagerTest is Test {
             // Adjusted to the decimals of the deposit/reserve asset
             // price = 22377897966596497241 (18 dp)
             // price (adjusted) = 22377897 (6 dp)
-            // minPrice = price * 9e17/1e18
-            // minPrice = 20140107
+            // minPrice = price * 11e17/1e18
+            // minPrice = 24615686.7 = 24615687 (rounded up)
 
-            assertEq(cdAuctioneer.minPrice(), 20140107, "Min price");
+            assertEq(cdAuctioneer.minPrice(), 24615687, "Min price");
         }
 
         // The pending capacity should be 0
@@ -961,6 +1002,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
@@ -1209,6 +1251,7 @@ contract EmissionManagerTest is Test {
             );
             assertEq(
                 minPrice,
+                /// forge-lint: disable-next-line(divide-before-multiply)
                 (((backing * (1e18 + minimumPremium)) / 1e18) * 10 ** uint8(36 - 1)) /
                     10 ** uint8(18 - 1),
                 "Min price"
@@ -2379,6 +2422,33 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.backing(), expectedBacking, "Backing should be updated");
     }
 
+    // createPendingBondMarket tests
+
+    // when the caller is not itself, an admin nor a manager
+    //  [X] it reverts
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_createPendingBondMarket_whenCallerNotAuthorized_reverts(address caller_) public {
+        vm.assume(caller_ != address(emissionManager) && caller_ != manager && caller_ != guardian);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.createPendingBondMarket();
+    }
+
+    function test_createPendingBondMarket_whenContractIsDisabled_reverts() public givenShutdown {
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+
+        // Call function
+        vm.prank(address(emissionManager));
+        emissionManager.createPendingBondMarket();
+    }
+
     // shutdown tests
 
     function test_shutdown_whenCallerNotEmergencyShutdownRole_reverts(address rando_) public {
@@ -2460,8 +2530,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently enabled
         // Call the restart function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
 
@@ -2471,7 +2541,8 @@ contract EmissionManagerTest is Test {
 
         // Emissions Manager is currently locally inactive
         // Try to call restart again with the wrong caller
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.restart();
     }
@@ -2519,12 +2590,12 @@ contract EmissionManagerTest is Test {
 
     // initialize tests
 
-    function test_initialize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
+    function test_enable_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
         vm.assume(rando_ != guardian);
 
         // Call the initialize function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.enable(
             abi.encode(
@@ -2534,13 +2605,14 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenAlreadyActive_reverts() public {
+    function test_enable_whenAlreadyActive_reverts() public {
         // Call the initialize function with the wrong caller
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
@@ -2553,13 +2625,14 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenRestartTimeframeNotElapsed_reverts(
+    function test_enable_whenRestartTimeframeNotElapsed_reverts(
         uint48 elapsed_
     ) public givenShutdown {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
@@ -2589,13 +2662,14 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenParamsLengthInvalid_reverts()
+    function test_enable_whenParamsLengthInvalid_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2608,7 +2682,7 @@ contract EmissionManagerTest is Test {
         emissionManager.enable(abi.encode(uint256(20)));
     }
 
-    function test_initialize_whenBaseEmissionRateZero_reverts()
+    function test_enable_whenBaseEmissionRateZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2627,13 +2701,14 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenMinimumPremiumZero_reverts()
+    function test_enable_whenMinimumPremiumZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2652,13 +2727,14 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenBackingZero_reverts()
+    function test_enable_whenBackingZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2677,13 +2753,14 @@ contract EmissionManagerTest is Test {
                     backing: 0,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
         );
     }
 
-    function test_initialize_whenRestartTimeframeZero_reverts()
+    function test_enable_whenRestartTimeframeZero_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2702,13 +2779,68 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: 0
                 })
             )
         );
     }
 
-    function test_initialize_success() public givenShutdown givenRestartTimeframeElapsed {
+    function test_enable_whenMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 0, 1e18 - 1);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+    }
+
+    function test_enable_whenBondMarketCapacityScalarAboveMax_reverts(
+        uint256 bondMarketCapacityScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        bondMarketCapacityScalar_ = bound(bondMarketCapacityScalar_, 2e18 + 1, type(uint256).max);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Try to initialize the emissions manager with guardian, expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Bond Market Scalar");
+        vm.expectRevert(err);
+
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate,
+                    minimumPremium: minimumPremium,
+                    backing: backing,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar_,
+                    restartTimeframe: restartTimeframe
+                })
+            )
+        );
+    }
+
+    function test_enable_success() public givenShutdown givenRestartTimeframeElapsed {
         assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
 
         // Values are currently as setup
@@ -2723,6 +2855,7 @@ contract EmissionManagerTest is Test {
                     backing: backing + 1,
                     tickSize: tickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe + 1
                 })
             )
@@ -2747,9 +2880,55 @@ contract EmissionManagerTest is Test {
             "Restart timeframe should be updated"
         );
         assertEq(emissionManager.tickSize(), tickSize, "TickSize should be updated");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar,
+            "Min price scalar should be updated"
+        );
+        assertEq(
+            emissionManager.bondMarketCapacityScalar(),
+            bondMarketCapacityScalar,
+            "Bond market capacity scalar should be updated"
+        );
     }
 
-    function test_initialize_setsTickSizeAndEmitsEvent()
+    function test_enable_setsMinPriceScalar(
+        uint256 minPriceScalar_
+    ) public givenShutdown givenRestartTimeframeElapsed {
+        minPriceScalar_ = bound(minPriceScalar_, 1e18, 10e18);
+
+        assertFalse(emissionManager.isEnabled(), "Contract should not be enabled");
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(minPriceScalar_);
+
+        // Initialize the emissions manager with guardian using new values
+        vm.prank(guardian);
+        emissionManager.enable(
+            abi.encode(
+                IEmissionManager.EnableParams({
+                    baseEmissionsRate: baseEmissionRate + 1,
+                    minimumPremium: minimumPremium + 1,
+                    backing: backing + 1,
+                    tickSize: tickSize,
+                    minPriceScalar: minPriceScalar_,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
+                    restartTimeframe: restartTimeframe + 1
+                })
+            )
+        );
+
+        // Check that the contract is enabled
+        assertTrue(emissionManager.isEnabled(), "Contract should be enabled");
+        assertEq(
+            emissionManager.minPriceScalar(),
+            minPriceScalar_,
+            "Min price scalar should be updated"
+        );
+    }
+
+    function test_enable_setsTickSizeAndEmitsEvent()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2770,6 +2949,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: testTickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2783,7 +2963,7 @@ contract EmissionManagerTest is Test {
         );
     }
 
-    function test_initialize_withZeroMinTickSize_reverts()
+    function test_enable_withZeroMinTickSize_reverts()
         public
         givenShutdown
         givenRestartTimeframeElapsed
@@ -2804,6 +2984,7 @@ contract EmissionManagerTest is Test {
                     backing: backing,
                     tickSize: testTickSize,
                     minPriceScalar: minPriceScalar,
+                    bondMarketCapacityScalar: bondMarketCapacityScalar,
                     restartTimeframe: restartTimeframe
                 })
             )
@@ -2812,12 +2993,12 @@ contract EmissionManagerTest is Test {
 
     // changeBaseRate tests
 
-    function test_changeBaseRate_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_changeBaseRate_whenCallerNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the changeBaseRate function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertNotAuthorized();
+
         vm.prank(rando_);
         emissionManager.changeBaseRate(1e18, 1, true);
     }
@@ -2850,7 +3031,11 @@ contract EmissionManagerTest is Test {
         emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
     }
 
-    function test_changeBaseRate_positive_success() public {
+    function test_changeBaseRate_positive_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
             .rateChange();
@@ -2861,7 +3046,7 @@ contract EmissionManagerTest is Test {
         uint256 changeBy_ = 1e3;
         uint48 forNumBeats = 5;
 
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.changeBaseRate(changeBy_, forNumBeats, true);
 
         // Confirm the rate change has been set
@@ -2871,7 +3056,11 @@ contract EmissionManagerTest is Test {
         assertEq(addition, true, "Addition should be true");
     }
 
-    function test_changeBaseRate_negative_success() public {
+    function test_changeBaseRate_negative_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         // Confirm there is no current rate change
         (uint256 currentChangeBy, uint48 currentBeatsLeft, bool addition) = emissionManager
             .rateChange();
@@ -2882,7 +3071,7 @@ contract EmissionManagerTest is Test {
         uint256 changeBy_ = 1e3;
         uint48 forNumBeats = 5;
 
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.changeBaseRate(changeBy_, forNumBeats, false);
 
         // Confirm the rate change has been set
@@ -2894,12 +3083,12 @@ contract EmissionManagerTest is Test {
 
     // setMinimumPremium tests
 
-    function test_setMinimumPremium_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_setMinimumPremium_whenCallerNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the setMinimumPremium function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertNotAuthorized();
+
         vm.prank(rando_);
         emissionManager.setMinimumPremium(1e18);
     }
@@ -2912,14 +3101,18 @@ contract EmissionManagerTest is Test {
         emissionManager.setMinimumPremium(0);
     }
 
-    function test_setMinimumPremium_success() public {
+    function test_setMinimumPremium_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         uint256 newMinimumPremium = 1e18;
 
         // Confirm the current minimum premium
         assertEq(emissionManager.minimumPremium(), minimumPremium, "Minimum premium should be 0");
 
         // Set the new minimum premium
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setMinimumPremium(newMinimumPremium);
 
         // Confirm the new minimum premium
@@ -2936,8 +3129,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBacking function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBacking(11e18);
     }
@@ -2971,8 +3164,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setRestartTimeframe function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setRestartTimeframe(1);
     }
@@ -3006,8 +3199,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setBondContracts function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setBondContracts(address(1), address(1));
     }
@@ -3048,8 +3241,8 @@ contract EmissionManagerTest is Test {
         vm.assume(rando_ != guardian);
 
         // Call the setCDAuctionContract function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertRoleRequired("admin");
+
         vm.prank(rando_);
         emissionManager.setCDAuctionContract(address(1));
     }
@@ -3091,18 +3284,21 @@ contract EmissionManagerTest is Test {
 
     // setTickSize tests
 
-    function test_setTickSize_whenCallerNotEmissionsAdmin_reverts(address rando_) public {
-        vm.assume(rando_ != guardian);
+    function test_setTickSize_whenCallerisNotAuthorized_reverts(address rando_) public {
+        vm.assume(rando_ != guardian && rando_ != manager);
 
         // Call the setTickSize function with the wrong caller
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", bytes32("admin"));
-        vm.expectRevert(err);
+        _expectRevertNotAuthorized();
 
         vm.prank(rando_);
         emissionManager.setTickSize(1e9);
     }
 
-    function test_setTickSize_success() public {
+    function test_setTickSize_success(uint8 callerIndex_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
         uint256 newTickSize = 5e9; // 5 OHM
 
         // Expect event to be emitted
@@ -3110,7 +3306,7 @@ contract EmissionManagerTest is Test {
         emit TickSizeChanged(newTickSize);
 
         // Set new tick size
-        vm.prank(guardian);
+        vm.prank(caller_);
         emissionManager.setTickSize(newTickSize);
 
         // Confirm new value
@@ -3126,6 +3322,250 @@ contract EmissionManagerTest is Test {
         );
         vm.prank(guardian);
         emissionManager.setTickSize(newTickSize);
+    }
+
+    // execute with bond market capacity scalar tests
+    // when beatCounter is 0 and auction results are negative (deficit)
+    //   given the bond market capacity scalar is 0
+    //     [X] it does not create a bond market
+    //     [X] bondMarketPendingCapacity remains 0
+
+    function test_execute_whenDeficit_whenScalarIsZero_doesNotCreateBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(0)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
+    //   given the bond market capacity scalar is 100% (1e18)
+    //    given the auctioneer is disabled
+    //     [X] it does not create a bond market
+    //     [X] it does not set the pending capacity
+
+    function test_execute_whenDeficit_whenScalarIsOneHundredPercent_givenAuctioneerIsDisabled()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(1e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Disable the auctioneer
+        vm.prank(guardian);
+        cdAuctioneer.disable("");
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        // The auction results index is not incremented while the auctioneer is disabled. If bond market creation was not skipped, a bond market could be created at every third heartbeat.
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
+    //    [X] it creates a bond market with 100% of the deficit as capacity
+
+    function test_execute_whenDeficit_whenScalarIsOneHundredPercent_createsFullBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(1e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the bond market has the full deficit as capacity
+        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+
+        assertEq(capacity, DEFICIT, "Capacity should equal the deficit");
+    }
+
+    //   given the bond market capacity scalar is 200% (2e18)
+    //    [X] it creates a bond market with 200% of the deficit as capacity
+
+    function test_execute_whenDeficit_whenScalarIsTwoHundredPercent_createsDoubledBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+        givenBondMarketCapacityScalar(2e18)
+    {
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that a bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId + 1,
+            "Market counter should increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Verify the bond market has 200% of the deficit as capacity
+        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+
+        assertEq(capacity, DEFICIT * 2, "Capacity should be 200% of the deficit");
+    }
+
+    //   given the bond market capacity scalar results in a rounded-down value of 0
+    //     given there was a previous pending bond market
+    //       [X] it does not create a bond market
+    //       [X] bondMarketPendingCapacity is reset to 0
+
+    function test_execute_whenDeficit_whenScalarRoundsToZero_doesNotCreateBondMarket_givenExistingPendingCapacity()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenCDAuctioneerHasDeficit
+    {
+        // Disable new bond markets
+        vm.prank(guardian);
+        bondAuctioneer.setAllowNewMarkets(false);
+
+        // Warp to the next day
+        vm.warp(block.timestamp + 86400);
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Assert that there is a pending capacity
+        assertEq(
+            emissionManager.bondMarketPendingCapacity(),
+            DEFICIT,
+            "Pending capacity should be the deficit"
+        );
+
+        // Re-enable bond markets
+        vm.prank(guardian);
+        bondAuctioneer.setAllowNewMarkets(true);
+
+        // Set the bond market capacity scalar
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(1e9 - 1);
+
+        // Mimic givenNextBeatIsZero
+        vm.startPrank(heart);
+        emissionManager.execute();
+        emissionManager.execute();
+        vm.stopPrank();
+        vm.warp(block.timestamp + 86400);
+
+        // Set auction results with a very small deficit
+        int256[] memory results = new int256[](2);
+        results[0] = -1e9; // -1 OHM
+        results[1] = 0;
+        cdAuctioneer.setAuctionResults(results);
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
+    }
+
+    //     [X] it does not create a bond market
+    //     [X] bondMarketPendingCapacity remains 0
+
+    function test_execute_whenDeficit_whenScalarRoundsToZero_doesNotCreateBondMarket()
+        public
+        givenNextBeatIsZero
+        givenPremiumEqualToMinimum
+        givenBondMarketCapacityScalar(1e9 - 1)
+    {
+        // Set auction results with a very small deficit
+        int256[] memory results = new int256[](2);
+        results[0] = -1e9; // -1 OHM
+        results[1] = 0;
+        cdAuctioneer.setAuctionResults(results);
+
+        // Get the ID of the next bond market from the aggregator
+        uint256 nextBondMarketId = aggregator.marketCounter();
+
+        // Call execute
+        vm.prank(heart);
+        emissionManager.execute();
+
+        // Check that no bond market was created
+        assertEq(
+            aggregator.marketCounter(),
+            nextBondMarketId,
+            "Market counter should not increment"
+        );
+
+        // Confirm that the beat counter is now 0
+        assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
+
+        // Confirm that pending capacity is 0
+        assertEq(emissionManager.bondMarketPendingCapacity(), 0, "Pending capacity should be 0");
     }
 
     function test_execute_passesCorrectTickSizeToAuctioneer()
@@ -3425,4 +3865,158 @@ contract EmissionManagerTest is Test {
         assertEq(cdAuctioneer.isAuctionActive(), false, "Auction should be inactive");
         assertFalse(emissionManager.isEnabled(), "EmissionManager should be disabled");
     }
+
+    // supportsInterface tests
+
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(emissionManager));
+        assertEq(emissionManager.supportsInterface(bytes4(0x01ffc9a7)), true, "IERC165 mismatch");
+        assertEq(
+            emissionManager.supportsInterface(type(IEmissionManager).interfaceId),
+            true,
+            "IEmissionManager mismatch"
+        );
+        assertEq(
+            emissionManager.supportsInterface(type(IPeriodicTask).interfaceId),
+            true,
+            "IPeriodicTask mismatch"
+        );
+        assertEq(
+            emissionManager.supportsInterface(type(IEnabler).interfaceId),
+            true,
+            "IEnabler mismatch"
+        );
+
+        assertEq(
+            emissionManager.supportsInterface(type(IERC20).interfaceId),
+            false,
+            "Should not support IERC20"
+        );
+    }
+
+    // setMinPriceScalar tests
+
+    // given the caller does not have the admin or em_manager role
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenCallerNotAuthorized_reverts(address caller_) public {
+        vm.assume(caller_ != guardian && caller_ != manager);
+
+        // Expect revert
+        _expectRevertNotAuthorized();
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.setMinPriceScalar(1e18);
+    }
+
+    // when the new min price scalar is below 1e18
+    //  [X] it reverts
+
+    function test_setMinPriceScalar_whenNewMinPriceScalarBelowOneHundredPercent_reverts(
+        uint256 newMinPriceScalar_
+    ) public {
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 0, 1e18 - 1);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("InvalidParam(string)", "Min Price Scalar");
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+    }
+
+    // [X] the min price scalar is set to the new value
+    // [X] MinPriceScalarChanged event is emitted
+
+    function test_setMinPriceScalar_success(uint8 callerIndex_, uint256 newMinPriceScalar_) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
+        newMinPriceScalar_ = bound(newMinPriceScalar_, 1e18, 10e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit MinPriceScalarChanged(newMinPriceScalar_);
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.setMinPriceScalar(newMinPriceScalar_);
+
+        // Confirm the min price scalar is set
+        assertEq(
+            emissionManager.minPriceScalar(),
+            newMinPriceScalar_,
+            "Min price scalar should be updated"
+        );
+    }
+
+    // setBondMarketCapacityScalar tests
+    // given the caller does not have the admin or em_manager role
+    //  [X] it reverts
+
+    function test_setBondMarketCapacityScalar_whenCallerIsNotAuthorized_reverts(
+        address caller_
+    ) public {
+        vm.assume(caller_ != guardian && caller_ != manager);
+
+        // Expect revert
+        _expectRevertNotAuthorized();
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.setBondMarketCapacityScalar(1e18);
+    }
+
+    // when the new scalar is greater than MAX_BOND_MARKET_CAPACITY_SCALAR
+    //  [X] it reverts
+
+    function test_setBondMarketCapacityScalar_whenNewScalarAboveMax_reverts(
+        uint256 newScalar_
+    ) public {
+        newScalar_ = bound(newScalar_, 2e18 + 1, type(uint256).max);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "InvalidParam(string)",
+            "Bond Market Capacity Scalar"
+        );
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(guardian);
+        emissionManager.setBondMarketCapacityScalar(newScalar_);
+    }
+
+    // [X] the bond market capacity scalar is set to the new value
+    // [X] BondMarketCapacityScalarChanged event is emitted
+
+    function test_setBondMarketCapacityScalar_success(
+        uint8 callerIndex_,
+        uint256 newScalar_
+    ) public {
+        vm.assume(callerIndex_ < 2);
+        // Caller can be admin or manager
+        address caller_ = callerIndex_ == 0 ? guardian : manager;
+
+        newScalar_ = bound(newScalar_, 0, 2e18);
+
+        // Expect event to be emitted
+        vm.expectEmit(true, true, true, true);
+        emit BondMarketCapacityScalarChanged(newScalar_);
+
+        // Call function
+        vm.prank(caller_);
+        emissionManager.setBondMarketCapacityScalar(newScalar_);
+
+        // Confirm the bond market capacity scalar is set
+        assertEq(
+            emissionManager.bondMarketCapacityScalar(),
+            newScalar_,
+            "Bond market capacity scalar should be updated"
+        );
+    }
 }
+/// forge-lint: disable-end(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)

@@ -47,6 +47,7 @@ contract ConvertibleDepositFacilityCreatePositionTest is ConvertibleDepositFacil
     {
         // Expect revert
         vm.expectRevert(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("cd_auctioneer"))
         );
 

@@ -17,6 +17,7 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
@@ -55,41 +56,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         address reserveWrapper = _envAddressNotZero("olympus.policies.ReserveWrapper");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
-        // Get old policy addresses (may be zero)
-        address oldHeart = _envLastAddress(chain, "olympus.policies.OlympusHeart");
-        address oldEmissionManager = _envLastAddress(chain, "olympus.policies.EmissionManager");
-
         console2.log("=== Installing ConvertibleDeposit System ===");
         console2.log("Installing modules and activating policies");
-
-        // Deactivate old policies if they exist
-        if (oldHeart != address(0)) {
-            console2.log("0. Deactivating old OlympusHeart policy:", oldHeart);
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.DeactivatePolicy,
-                    oldHeart
-                )
-            );
-        } else {
-            console2.log("0. No old OlympusHeart policy to deactivate");
-        }
-
-        if (oldEmissionManager != address(0)) {
-            console2.log("0. Deactivating old EmissionManager policy:", oldEmissionManager);
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.DeactivatePolicy,
-                    oldEmissionManager
-                )
-            );
-        } else {
-            console2.log("0. No old EmissionManager policy to deactivate");
-        }
 
         // Install DEPOS module
         console2.log("1. Installing OlympusDepositPositionManager module");
@@ -175,6 +143,101 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         proposeBatch();
+
+        // Notes:
+        // - The current Heart and EmissionManager policies are still activated in the kernel and enabled (operating)
+        // - After the OCG proposal has been executed, the current Heart and EmissionManager policies will need to be deactivated using the `deactivateOldPolicies` function
+    }
+
+    /// @notice Replaces the initial EmissionManager policy with the new one
+    function replaceEmissionManager(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address prevEmissionManager = 0xb4f620c39F3BA4a1E7aD264fEd6239B0C618DB50;
+
+        console2.log("=== Replacing EmissionManager ===");
+
+        console2.log("Deactivating old EmissionManager policy:", prevEmissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                prevEmissionManager
+            )
+        );
+
+        console2.log("Activating new EmissionManager policy:", emissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                emissionManager
+            )
+        );
+
+        console2.log("EmissionManager replacement batch prepared");
+
+        proposeBatch();
+    }
+
+    /// @notice Deactivate old policies
+    /// @dev    Currently, the DAO MS has kernel executor role, so this will be run as a batch script through the DAO MS
+    function deactivateOldPolicies(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address kernel = _envAddressNotZero("olympus.Kernel");
+
+        // Get old policy addresses (may be zero)
+        address oldHeart = _envLastAddress(chain, "olympus.policies.OlympusHeart");
+        address oldEmissionManager = _envLastAddress(chain, "olympus.policies.EmissionManager");
+
+        if (oldHeart == address(0)) {
+            revert("No old OlympusHeart policy to deactivate");
+        }
+        if (oldEmissionManager == address(0)) {
+            revert("No old EmissionManager policy to deactivate");
+        }
+
+        console2.log("=== Deactivating Old Policies ===");
+
+        console2.log("Deactivating old OlympusHeart policy:", oldHeart);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                oldHeart
+            )
+        );
+
+        console2.log("Deactivating old EmissionManager policy:", oldEmissionManager);
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                oldEmissionManager
+            )
+        );
+        console2.log("Old policies deactivated");
+
+        proposeBatch();
     }
 
     function grantHeartRole(
@@ -195,6 +258,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("Granting heart role to:", heart);
         addToBatch(
             rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
         );
 
@@ -384,6 +448,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("cd_auctioneer"),
                 convertibleDepositAuctioneer
             )
@@ -394,6 +459,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes32("deposit_operator"),
                 convertibleDepositFacility
             )
@@ -422,6 +488,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("- Target: 1000 OHM");
         console2.log("- Tick size: 200 OHM");
         console2.log("- Min price: 22 USDS/OHM");
+        console2.log("- Tick size base: 2.0");
         console2.log("- Tick step: 110% (10% increase)");
         console2.log("- Tracking period: 7 days");
 
@@ -436,6 +503,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                         target: 1000e9, // 1000 OHM
                         tickSize: 200e9, // 200 OHM per tick
                         minPrice: 22e18, // 22 USDS / OHM
+                        tickSizeBase: 2e18, // 2.0
                         tickStep: 110e2, // 10% increase
                         auctionTrackingPeriod: 7 // 7 days
                     })
@@ -444,6 +512,42 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         );
 
         console2.log("ConvertibleDepositAuctioneer configuration batch prepared");
+        proposeBatch();
+    }
+
+    function configureEmissionManagerRoles(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+        address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
+
+        // Grant roles
+        console2.log("Granting cd_emissionmanager role to:", emissionManager);
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                bytes32("cd_emissionmanager"),
+                emissionManager
+            )
+        );
+
+        console2.log("Granting heart role to:", heart);
+        addToBatch(
+            rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
+        );
+
+        console2.log("EmissionManager roles batch prepared");
         proposeBatch();
     }
 
@@ -457,29 +561,11 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         _validateArgsFileEmpty(argsFile_);
 
-        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
         address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
 
         console2.log("=== Configuring EmissionManager ===");
         console2.log("Setting up emissions system for supply growth");
-
-        // Grant roles
-        console2.log("Granting cd_emissionmanager role to:", emissionManager);
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("cd_emissionmanager"),
-                emissionManager
-            )
-        );
-
-        console2.log("Granting heart role to:", heart);
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart)
-        );
 
         console2.log("Enabling EmissionManager with parameters:");
         console2.log("- Base emissions rate: 0.02%/day");
@@ -487,6 +573,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         console2.log("- Backing: 11.67 USDS/OHM");
         console2.log("- Tick size scalar: 20%");
         console2.log("- Min price scalar: 100%");
+        console2.log("- Bond market capacity scalar: 100%");
         console2.log("- Restart timeframe: 11 days");
         // Enable EmissionManager
         addToBatch(
@@ -500,6 +587,7 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
                         backing: 11670000000000000000, // 11.67 USDS / OHM
                         tickSize: 100e9, // 100 OHM
                         minPriceScalar: 1e18, // Minimum price is market price
+                        bondMarketCapacityScalar: 1e18, // 100% bond market capacity scalar
                         restartTimeframe: 950400 // 11 days
                     })
                 )
@@ -669,6 +757,44 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         addToBatch(reserveWrapper, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         console2.log("ReserveWrapper enablement batch prepared");
+        proposeBatch();
+    }
+
+    function runActivator(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        address activator = _envAddressNotZero("olympus.periphery.ConvertibleDepositActivator");
+        address rolesAdmin = _envAddressNotZero("olympus.policies.RolesAdmin");
+
+        console2.log("=== Activator ===");
+
+        console2.log("Granting admin role to activator");
+        addToBatch(
+            rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Running activator");
+        addToBatch(
+            activator,
+            abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector)
+        );
+
+        console2.log("Revoking admin role from activator");
+        addToBatch(
+            rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator)
+        );
+
+        console2.log("Activator batch prepared");
         proposeBatch();
     }
 }

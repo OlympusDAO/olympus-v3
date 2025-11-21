@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256, mixed-case-function)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -70,12 +71,11 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Reverts if the asset period is not configured
-    modifier onlyAssetPeriodExists(
+    function _onlyAssetPeriodExists(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    ) {
+    ) internal view {
         uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
@@ -85,15 +85,23 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         if (address(_assetPeriods[tokenId].asset) == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
-        _;
     }
 
-    /// @notice Reverts if the asset period is not enabled
-    modifier onlyAssetPeriodEnabled(
+    /// @notice Reverts if the asset period is not configured
+    modifier onlyAssetPeriodExists(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
     ) {
+        _onlyAssetPeriodExists(asset_, depositPeriod_, operator_);
+        _;
+    }
+
+    function _onlyAssetPeriodEnabled(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal view {
         uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
             address(this),
             asset_,
@@ -107,6 +115,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         if (!assetPeriod.isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
+    }
+
+    /// @notice Reverts if the asset period is not enabled
+    modifier onlyAssetPeriodEnabled(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) {
+        _onlyAssetPeriodEnabled(asset_, depositPeriod_, operator_);
         _;
     }
 
@@ -177,7 +194,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         // Deposit into vault
         // This will revert if the asset is not configured
         // This takes place before any state changes to avoid ERC777 re-entrancy
-        (actualAmount, ) = _depositAsset(params_.asset, params_.depositor, params_.amount);
+        (actualAmount, ) = _depositAsset(
+            params_.asset,
+            params_.depositor,
+            params_.amount,
+            true // Enforce minimum deposit
+        );
 
         // Mint the receipt token to the caller
         receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
@@ -217,15 +239,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
-    ///
-    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The asset is not configured in BaseAssetManager
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function claimYield(
         IERC20 asset_,
@@ -239,6 +261,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         returns (uint256 actualAmount)
     {
         // Withdraw the funds from the vault
+        // The value returned can also be zero
         (, actualAmount) = _withdrawAsset(asset_, recipient_, amount_);
 
         // The receipt token supply is not adjusted here, as there is no minting/burning of receipt tokens
@@ -253,11 +276,12 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
-    ///             The actions of the calling deposit operator are restricted to its own namespace, preventing the operator from accessing funds of other operators.
-    ///
-    ///             This function reverts if:
+    ///             This function will revert if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The recipient is the zero address
@@ -265,7 +289,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The depositor has insufficient receipt token balance
     ///             - For wrapped tokens: depositor has not approved ReceiptTokenManager to spend the wrapped ERC20 token
     ///             - For unwrapped tokens: depositor has not approved the caller to spend ERC6909 tokens
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function withdraw(
         WithdrawParams calldata params_
@@ -390,6 +413,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
             }
         }
 
+        /// forge-lint: disable-next-line(unsafe-typecast)
         bytes3 nameBytes3 = bytes3(bytes(name_));
         // Validate that the name isn't in use by another operator
         if (_operatorNames[nameBytes3]) revert DepositManager_OperatorNameInUse(name_);
@@ -624,7 +648,9 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     // ========== BORROWING FUNCTIONS ========== //
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
@@ -632,7 +658,6 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - The recipient is the zero address
     ///             - The asset has not been added via addAsset()
     ///             - The amount exceeds the operator's available borrowing capacity
-    ///             - Zero shares would be withdrawn from the vault
     ///             - The operator becomes insolvent after the withdrawal (assets + borrowed < liabilities)
     function borrowingWithdraw(
         BorrowingWithdrawParams calldata params_
@@ -655,6 +680,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
 
         // Withdraw the funds from the vault to the recipient
+        // The value returned can also be zero
         (, actualAmount) = _withdrawAsset(params_.asset, params_.recipient, params_.amount);
 
         // Update borrowed amount
@@ -676,13 +702,15 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by addresses with the deposit operator role
+    /// @dev        Notes:
+    ///             - This function is only callable by addresses with the deposit operator role
+    ///             - This function does not check for over-payment. It is expected to be handled by the calling contract.
+    ///             - If the actual amount repaid is greater than the maximum amount provided, updates to the state variables are capped at the maximum amount.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The asset has not been added via addAsset()
-    ///             - The amount exceeds the current borrowed amount for the operator
     ///             - The payer has not approved DepositManager to spend the asset tokens
     ///             - The payer has insufficient asset token balance
     ///             - The asset is a fee-on-transfer token
@@ -697,33 +725,30 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
 
-        // Check that the operator is not over-paying
-        // This would cause accounting issues
-        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
-        if (currentBorrowed < params_.amount) {
-            revert DepositManager_BorrowedAmountExceeded(
-                address(params_.asset),
-                msg.sender,
-                params_.amount,
-                currentBorrowed
-            );
-        }
-
         // Transfer funds from payer to this contract
-        // We ignore the actual amount deposited into the vault, as the payer will not be able to over-pay in case of an off-by-one issue
         // This takes place before any state changes to avoid ERC777 re-entrancy
-        _depositAsset(params_.asset, params_.payer, params_.amount);
+        // This purposefully does not check for over-payment, as it is expected to be handled by the calling contract
+        (actualAmount, ) = _depositAsset(
+            params_.asset,
+            params_.payer,
+            params_.amount,
+            false // Do not enforce minimum deposit
+        );
 
         // Update borrowed amount
-        _borrowedAmounts[borrowingKey] -= params_.amount;
+        // Reduce by the actual amount, to avoid leakage
+        // But cap at the max amount, to avoid an underflow for other loans
+        _borrowedAmounts[borrowingKey] -= params_.maxAmount < actualAmount
+            ? params_.maxAmount
+            : actualAmount;
 
         // Validate operator solvency after borrowed amount change
         _validateOperatorSolvency(params_.asset, msg.sender);
 
         // Emit event
-        emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, params_.amount);
+        emit BorrowingRepayment(address(params_.asset), msg.sender, params_.payer, actualAmount);
 
-        return params_.amount;
+        return actualAmount;
     }
 
     /// @inheritdoc IDepositManager
@@ -930,3 +955,4 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         }
     }
 }
+/// forge-lint: disable-end(asm-keccak256, mixed-case-function)

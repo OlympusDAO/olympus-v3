@@ -335,6 +335,25 @@ contract ReceiptTokenManagerCreateTokenTest is ReceiptTokenManagerTest {
         assertEq(actualName, expectedName, "Token name should match expected truncated name");
     }
 
+    function test_tokenHasCorrectName_depositPeriodOneMonth() public {
+        vm.prank(OWNER);
+        uint256 tokenId = receiptTokenManager.createToken(
+            IERC20(address(asset)),
+            1,
+            OPERATOR,
+            OPERATOR_NAME
+        );
+
+        string memory actualName = receiptTokenManager.getTokenName(tokenId);
+        assertTrue(bytes(actualName).length > 0, "Token name should not be empty");
+
+        // Name should be exactly equal to the truncated expected name
+        string memory expectedName = string
+            .concat(OPERATOR_NAME, asset.name(), " - 1 month")
+            .truncate32();
+        assertEq(actualName, expectedName, "Token name should match expected truncated name");
+    }
+
     // given token metadata validation
     //  [X] symbol is set correctly (truncated to 32 bytes)
     function test_tokenHasCorrectSymbol() public {

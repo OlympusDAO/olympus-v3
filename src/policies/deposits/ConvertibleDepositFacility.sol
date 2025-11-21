@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IConvertibleDepositFacility} from "src/policies/interfaces/deposits/IConvertibleDepositFacility.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
@@ -77,11 +79,17 @@ contract ConvertibleDepositFacility is
         Keycode deposKeycode = toKeycode("DEPOS");
 
         permissions = new Permissions[](5);
-        permissions[0] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[2] = Permissions(deposKeycode, DEPOS.mint.selector);
-        permissions[3] = Permissions(deposKeycode, DEPOS.setRemainingDeposit.selector);
-        permissions[4] = Permissions(deposKeycode, DEPOS.split.selector);
+        permissions[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[1] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.mintOhm.selector});
+        permissions[2] = Permissions({keycode: deposKeycode, funcSelector: DEPOS.mint.selector});
+        permissions[3] = Permissions({
+            keycode: deposKeycode,
+            funcSelector: DEPOS.setRemainingDeposit.selector
+        });
+        permissions[4] = Permissions({keycode: deposKeycode, funcSelector: DEPOS.split.selector});
     }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
@@ -385,6 +393,7 @@ contract ConvertibleDepositFacility is
 
         // Claim the yield
         // This will revert if the asset is not supported, or the receipt token becomes insolvent
+        // The value returned can also be zero
         uint256 actualYield = DEPOSIT_MANAGER.claimYield(asset_, address(TRSRY), amount_);
 
         // Emit the event
@@ -415,6 +424,13 @@ contract ConvertibleDepositFacility is
     // ========== PERIODIC TASKS ========== //
 
     /// @inheritdoc IPeriodicTask
+    /// @dev        This function reverts if:
+    ///             - The caller is not authorized
+    ///
+    ///             Notes:
+    ///             - If disabled, nothing is done
+    ///             - This will attempt to claim yield for all configured assets
+    ///             - If the claimAllYield function fails for any asset, an event will be emitted instead of reverting
     function execute() external onlyRole(HEART_ROLE) {
         // Don't do anything if disabled
         if (!isEnabled) return;
@@ -423,7 +439,7 @@ contract ConvertibleDepositFacility is
             // Do nothing
         } catch {
             // This avoids the periodic task from failing loudly, as the claimAllYield function is not critical to the system
-            revert CDF_ClaimAllYieldFailed();
+            emit ClaimAllYieldFailed();
         }
     }
 
@@ -433,8 +449,10 @@ contract ConvertibleDepositFacility is
         bytes4 interfaceId
     ) public view virtual override(BaseDepositFacility, IPeriodicTask) returns (bool) {
         return
+            interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IConvertibleDepositFacility).interfaceId ||
             interfaceId == type(IPeriodicTask).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

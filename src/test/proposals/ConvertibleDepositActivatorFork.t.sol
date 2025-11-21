@@ -457,6 +457,24 @@ contract ConvertibleDepositActivatorForkTest is Test {
             IConvertibleDepositAuctioneer(address(cdAuctioneer)).getAuctionTrackingPeriod(),
             activator.CDA_AUCTION_TRACKING_PERIOD()
         ); // Should be 7 days
+
+        // Verify minimum bid is set correctly
+        assertEq(
+            IConvertibleDepositAuctioneer(address(cdAuctioneer)).getMinimumBid(),
+            activator.CDA_MINIMUM_BID()
+        ); // Should be 100 USDS
+
+        // EmissionManager parameters
+        assertEq(emissionManager.baseEmissionRate(), activator.EM_BASE_EMISSIONS_RATE()); // Should be 0.02%/day
+        assertEq(emissionManager.minimumPremium(), activator.EM_MINIMUM_PREMIUM()); // Should be 100% premium
+        assertEq(emissionManager.backing(), activator.EM_BACKING()); // Should be 11.69 USDS/OHM
+        assertEq(emissionManager.tickSize(), activator.EM_TICK_SIZE()); // Should be 150 OHM
+        assertEq(emissionManager.minPriceScalar(), activator.EM_MIN_PRICE_SCALAR()); // Should be 120% min price multiplier
+        assertEq(
+            emissionManager.bondMarketCapacityScalar(),
+            activator.EM_BOND_MARKET_CAPACITY_SCALAR()
+        ); // Should be 100% bond market capacity scalar
+        assertEq(emissionManager.restartTimeframe(), activator.EM_RESTART_TIMEFRAME()); // Should be 11 days
     }
 
     function test_activate_configuresPeriodicTasks() public {

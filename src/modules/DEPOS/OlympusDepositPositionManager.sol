@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // Interfaces
@@ -466,27 +467,41 @@ contract OlympusDepositPositionManager is DEPOSv1 {
 
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
+            interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IDepositPositionManager).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
 
     // ========== MODIFIERS ========== //
 
-    modifier onlyValidPosition(uint256 positionId_) {
+    function _onlyValidPosition(uint256 positionId_) internal view {
         if (_getPosition(positionId_).conversionPrice == 0)
             revert DEPOS_InvalidPositionId(positionId_);
+    }
+
+    modifier onlyValidPosition(uint256 positionId_) {
+        _onlyValidPosition(positionId_);
         _;
+    }
+
+    function _onlyPositionOperator(uint256 positionId_) internal view {
+        // This validates that the caller is the operator of the position
+        if (_getPosition(positionId_).operator != msg.sender) revert DEPOS_NotOperator(positionId_);
     }
 
     modifier onlyPositionOperator(uint256 positionId_) {
-        // This validates that the caller is the operator of the position
-        if (_getPosition(positionId_).operator != msg.sender) revert DEPOS_NotOperator(positionId_);
+        _onlyPositionOperator(positionId_);
         _;
     }
 
-    modifier onlyPositionOwner(uint256 positionId_) {
+    function _onlyPositionOwner(uint256 positionId_) internal view {
         // This validates that the caller is the owner of the position
         if (_getPosition(positionId_).owner != msg.sender) revert DEPOS_NotOwner(positionId_);
+    }
+
+    modifier onlyPositionOwner(uint256 positionId_) {
+        _onlyPositionOwner(positionId_);
         _;
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

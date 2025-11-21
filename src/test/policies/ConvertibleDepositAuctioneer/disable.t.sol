@@ -3,7 +3,6 @@ pragma solidity >=0.8.20;
 
 import {ConvertibleDepositAuctioneerTest} from "./ConvertibleDepositAuctioneerTest.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
-import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 
 contract ConvertibleDepositAuctioneerDisableTest is ConvertibleDepositAuctioneerTest {
     // when the caller does not have the "emergency" role

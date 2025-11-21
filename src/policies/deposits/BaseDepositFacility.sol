@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(asm-keccak256, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Interfaces
@@ -7,6 +8,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -62,11 +64,15 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Reverts if the caller is not an authorized operator
-    modifier onlyAuthorizedOperator() {
+    function _onlyAuthorizedOperator() internal view {
         if (!_authorizedOperators.contains(msg.sender)) {
             revert DepositFacility_UnauthorizedOperator(msg.sender);
         }
+    }
+
+    /// @notice Reverts if the caller is not an authorized operator
+    modifier onlyAuthorizedOperator() {
+        _onlyAuthorizedOperator();
         _;
     }
 
@@ -225,6 +231,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         _assetCommittedDeposits[depositToken_] -= amount_;
 
         // Process the withdrawal through DepositManager
+        // The value returned can also be zero
         uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
                 asset: depositToken_,
@@ -235,9 +242,6 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
                 isWrapped: false
             })
         );
-
-        // Validate that the amount is not zero
-        if (actualAmount == 0) revert DepositFacility_ZeroAmount();
 
         // Emit event
         emit AssetCommitWithdrawn(address(depositToken_), msg.sender, actualAmount);
@@ -250,6 +254,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     ///             - This contract is not enabled
     ///             - The caller is not an authorized operator
     ///             - The amount is greater than the committed deposits for the operator
+    ///             - The amount withdrawn from the vault would be zero
     function handleBorrow(
         IERC20 depositToken_,
         uint8,
@@ -263,6 +268,7 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
         // Process the borrowing through DepositManager
         // It will revert if more is being borrowed than available
+        // The value returned can also be zero
         uint256 actualAmount = DEPOSIT_MANAGER.borrowingWithdraw(
             IDepositManager.BorrowingWithdrawParams({
                 asset: depositToken_,
@@ -288,6 +294,10 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
     /// @dev        This function performs the following:
     ///             - Updates the committed deposits
     ///
+    ///             Notes:
+    ///             - This function is only callable by authorized operators
+    ///             - This function does not check for over-payment. It is expected to be handled by the calling contract.
+    ///
     ///             This function will revert if:
     ///             - This contract is not enabled
     ///             - The caller is not an authorized operator
@@ -295,27 +305,30 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         IERC20 depositToken_,
         uint8,
         uint256 amount_,
+        uint256 maxAmount_,
         address payer_
     ) external nonReentrant onlyEnabled onlyAuthorizedOperator returns (uint256) {
         // Process the repayment through DepositManager
-        // It will revert if more is being repaid than borrowed
+        // This allows for over-payment, as it is expected to be handled by the calling contract.
+        // The value returned can also be zero.
         uint256 repaymentActual = DEPOSIT_MANAGER.borrowingRepay(
             IDepositManager.BorrowingRepayParams({
                 asset: depositToken_,
                 payer: payer_,
-                amount: amount_
+                amount: amount_,
+                maxAmount: maxAmount_
             })
         );
 
         // Repayment of a principal amount increases the committed deposits (since it was deducted in `handleBorrow()`
-        // This uses the requested amount, to be consistent with DepositManager
+        // Cap at the max amount, otherwise there will be an over-commitment of deposits
+        uint256 committedAmountAdjustment = maxAmount_ < repaymentActual
+            ? maxAmount_
+            : repaymentActual;
         _assetOperatorCommittedDeposits[
             _getCommittedDepositsKey(depositToken_, msg.sender)
-        ] += amount_;
-        _assetCommittedDeposits[depositToken_] += amount_;
-
-        // Validate that the amount is not zero
-        if (repaymentActual == 0) revert DepositFacility_ZeroAmount();
+        ] += committedAmountAdjustment;
+        _assetCommittedDeposits[depositToken_] += committedAmountAdjustment;
 
         return repaymentActual;
     }
@@ -577,22 +590,19 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         }
 
         // Perform the split
+        // Allow inheriting contracts to perform custom actions when a position is split
+        // This is called before the position is split in the DEPOS contract, to avoid issues with state changes due to an ERC721 callback
+        _split(positionId_, amount_);
+
         // This will revert if the amount is 0 or greater than the position amount
         uint256 newPositionId = DEPOS.split(positionId_, amount_, to_, wrap_);
-
-        // Allow inheriting contracts to perform custom actions when a position is split
-        _split(positionId_, newPositionId, amount_);
 
         return newPositionId;
     }
 
     /// @notice     Internal function to handle the splitting of a position
-    /// @dev        Inheriting contracts can implement this function to perform custom actions when a position is split. This function is called after the position is split, so beware of reentrancy.
-    function _split(
-        uint256 oldPositionId_,
-        uint256 newPositionId_,
-        uint256 amount_
-    ) internal virtual {}
+    /// @dev        Inheriting contracts can implement this function to perform custom actions when a position is split. This function is called before the position is split in the underlying DEPOS module.
+    function _split(uint256 oldPositionId_, uint256 amount_) internal virtual {}
 
     // ========== RECLAIM RATE MANAGEMENT ========== //
 
@@ -619,7 +629,8 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
             );
 
         // Validate that the reclaim rate does not exceed 100%
-        if (reclaimRate_ > ONE_HUNDRED_PERCENT) revert DepositFacility_InvalidAddress(address(0));
+        if (reclaimRate_ > ONE_HUNDRED_PERCENT)
+            revert DepositFacility_InvalidReclaimRate(reclaimRate_, ONE_HUNDRED_PERCENT);
 
         // Set the reclaim rate
         _assetPeriodReclaimRates[_getAssetPeriodKey(asset_, depositPeriod_)] = reclaimRate_;
@@ -644,7 +655,9 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
 
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
+            interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IDepositFacility).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(asm-keccak256, mixed-case-variable)

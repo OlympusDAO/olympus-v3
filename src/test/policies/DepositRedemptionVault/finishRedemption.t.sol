@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
+/// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
@@ -323,8 +324,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         givenReserveTokenSpendingByRedemptionVaultIsApprovedByRecipient
     {
         // Repay the loan
-        vm.prank(recipient);
-        redemptionVault.repayLoan(0, LOAN_AMOUNT / 2);
+        _repayLoan(recipient, 0, LOAN_AMOUNT / 2);
 
         // Warp to after redeemable timestamp
         uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
@@ -366,8 +366,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             // Approve the redemption vault to spend the reserve token
             iReserveToken.approve(address(redemptionVault), loanPayable);
 
-            vm.prank(recipient);
-            redemptionVault.repayLoan(0, loanPayable);
+            _repayLoan(recipient, 0, loanPayable);
         }
 
         // Warp to after redeemable timestamp
@@ -386,9 +385,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Assertions
+        assertEq(actualAmount, COMMITMENT_AMOUNT, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -461,9 +461,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Assertions
+        assertEq(actualAmount, remainingRedemptionAmount, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -497,8 +498,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         redemptionVault.cancelRedemption(0, cancelledAmount_);
 
         // Warp to after redeemable timestamp
-        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
-        vm.warp(redeemableAt);
+        vm.warp(redemptionVault.getUserRedemption(recipient, 0).redeemableAt);
 
         uint256 remainingAmount = COMMITMENT_AMOUNT - cancelledAmount_;
 
@@ -514,9 +514,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Assertions
+        assertEq(actualAmount, remainingAmount, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -628,13 +629,14 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Stop gas snapshot
         uint256 gasUsed = vm.stopSnapshotGas();
         console2.log("Gas used", gasUsed);
 
         // Assertions
+        assertEq(actualAmount, COMMITMENT_AMOUNT, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -682,9 +684,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Assertions
+        assertEq(actualAmount, COMMITMENT_AMOUNT, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -713,23 +716,16 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
     )
         public
         givenLocallyActive
-        givenAddressHasConvertibleDepositToken(
-            recipientTwo,
-            iReserveToken,
-            PERIOD_MONTHS,
-            RESERVE_TOKEN_AMOUNT
-        )
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
-        givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+        givenVaultAccruesYield(iVault, 100e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 1e17, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, vault.previewRedeem(1), 5e18);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
 
         // Warp to after redeemable timestamp
-        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
-        vm.warp(redeemableAt);
+        vm.warp(redemptionVault.getUserRedemption(recipient, 0).redeemableAt);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -742,17 +738,17 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         );
 
         // Start gas snapshot
-        vm.startSnapshotGas("redeem");
+        vm.startSnapshotGas("redeemFuzz");
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(0);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
 
         // Stop gas snapshot
         console2.log("Gas used", vm.stopSnapshotGas());
 
         // Assertions
-        uint256 expectedRemainingReceiptTokens = _previousDepositActualAmount - commitmentAmount_;
+        assertApproxEqAbs(actualAmount, commitmentAmount_, 5, "actual amount mismatch");
         _assertRedeemed(
             recipient,
             0,
@@ -762,7 +758,7 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             commitmentAmount_,
             0,
             0,
-            expectedRemainingReceiptTokens
+            _previousDepositActualAmount - commitmentAmount_
         );
 
         // Assert that there are no remaining committed deposits
@@ -770,6 +766,78 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
             0,
             "committed deposits should be 0"
+        );
+    }
+
+    // when completing redemption results in withdrawing zero deposit tokens
+    //  [X] it does not transfer any deposit tokens
+    //  [X] it burns the receipt tokens
+    //  [X] it removes the redemption from the user's redemptions
+    //  [X] it emits a RedemptionFinished event
+    //  [X] it returns 0 as the amount of deposit tokens transferred
+
+    function test_whenWithdrawnAmountIsZero(
+        uint256 redemptionAmount
+    )
+        public
+        givenLocallyActive
+        givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
+        givenVaultAccruesYield(iVault, 10_000e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+    {
+        redemptionAmount = bound(redemptionAmount, 1, vault.previewRedeem(1) - 1);
+
+        // Commit a very small amount to ensure that the withdrawal amount is 0
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, redemptionAmount);
+
+        // Warp to after redeemable timestamp
+        vm.warp(redemptionVault.getUserRedemption(recipient, 0).redeemableAt);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            redemptionAmount
+        );
+
+        // Start gas snapshot
+        vm.startSnapshotGas("redeemZero");
+
+        // Call function
+        vm.prank(recipient);
+        uint256 actualAmount = redemptionVault.finishRedemption(0);
+
+        // Stop gas snapshot
+        console2.log("Gas used", vm.stopSnapshotGas());
+
+        // Assertions
+        assertEq(actualAmount, 0, "actual amount mismatch");
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            cdFacilityAddress,
+            0, // Nothing withdrawn
+            0,
+            0,
+            _previousDepositActualAmount - redemptionAmount
+        );
+
+        // Assert that there are no remaining committed deposits
+        assertEq(
+            cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
+            0,
+            "committed deposits should be 0"
+        );
+
+        // Assert that the depositor did not receive any deposit tokens
+        assertEq(
+            iReserveToken.balanceOf(recipient),
+            0,
+            "depositor should not have received any deposit tokens"
         );
     }
 
@@ -818,9 +886,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Call function
         vm.prank(recipient);
-        redemptionVault.finishRedemption(redemptionId);
+        uint256 actualAmount = redemptionVault.finishRedemption(redemptionId);
 
         // Assert that the position's remaining deposit was reduced
+        assertEq(actualAmount, amount_, "actual amount mismatch");
         uint256 finalRemainingDeposit = convertibleDepositPositions
             .getPosition(positionId)
             .remainingDeposit;
@@ -905,7 +974,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Finish redemption immediately without additional time warp
         vm.prank(recipient);
-        redemptionVault.finishRedemption(redemptionId);
+        uint256 actualAmount = redemptionVault.finishRedemption(redemptionId);
+
+        // Assertions
+        assertEq(actualAmount, amount_, "actual amount mismatch");
 
         // Verify the redemption was completed
         assertEq(
@@ -956,8 +1028,11 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
 
         // Finish redemption should succeed (FIX: no handlePositionRedemption call since already updated)
         vm.startPrank(recipient);
-        redemptionVault.finishRedemption(redemptionId);
+        uint256 actualAmount = redemptionVault.finishRedemption(redemptionId);
         vm.stopPrank();
+
+        // Assertions
+        assertEq(actualAmount, COMMITMENT_AMOUNT, "actual amount mismatch");
 
         // Verify redemption completed successfully
         IDepositRedemptionVault.UserRedemption memory redemption = redemptionVault
@@ -1015,8 +1090,10 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         // recipient can finish redemption and receives tokens - this is the expected behavior
         // (With position already updated, no double-deduction occurs)
         vm.startPrank(recipient);
-        redemptionVault.finishRedemption(redemptionId);
+        uint256 actualAmount = redemptionVault.finishRedemption(redemptionId);
         vm.stopPrank();
+
+        assertEq(actualAmount, COMMITMENT_AMOUNT, "actual amount mismatch");
 
         // Verify recipient received the tokens and redemption completed
         assertEq(
@@ -1039,3 +1116,4 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
         );
     }
 }
+/// forge-lint: disable-end(unwrapped-modifier-logic)

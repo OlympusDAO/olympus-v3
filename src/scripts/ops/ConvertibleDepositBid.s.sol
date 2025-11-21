@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
@@ -484,3 +485,4 @@ contract ConvertibleDepositBid is WithEnvironment {
         return reclaimedAmount;
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

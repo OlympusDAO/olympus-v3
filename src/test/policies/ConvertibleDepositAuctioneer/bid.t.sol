@@ -98,6 +98,180 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
     }
 
+    // when tickSizeBase = 1.0 (no reduction)
+    //  [X] crossing the day target does not reduce tick size
+    function test_tickSizeBaseOne_noReductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 1.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(1e18);
+
+        // Cross the day target exactly with a single bid:
+        // Proof:
+        // - Tick 1 (capacity 10e9) @ 15e18 requires 150e18 deposit
+        // - Tick 2 (capacity 10e9) @ 16.5e18 requires 165e18 deposit
+        // - Total to reach 20e9 = 150e18 + 165e18 = 315e18
+        // Use 315e18 (>=) to ensure crossing to multiplier=1
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (no reduction):
+        // - Base = 1.0 (1e18)
+        // - Multiplier = floor(ohmOut / target) >= 1 after crossing target
+        // - New tick size = floor(originalTickSize / base^multiplier) = floor(10e9 / 1^1) = 10e9
+        // Therefore, expected tick size = 10e9
+        assertEq(auctioneer.getCurrentTickSize(), 10e9, "tick size should not reduce");
+    }
+
+    // when tickSizeBase = 1.5
+    //  [X] crossing one day target reduces tick size by ~1/1.5 (floor)
+    function test_tickSizeBaseOnePointFive_reductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 1.5
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(15e17); // 1.5e18
+
+        // Cross the day target exactly with a single bid of 315e18 (see proof above)
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 10e9 (OHM units, 9 decimals)
+        // - Base = 1.5 (15e17), multiplier = 1 after crossing target once
+        // - New tick size = floor(10e9 / 1.5) = floor(6,666,666,666.666...) = 6,666,666,666
+        // Therefore, expected tick size = 6_666_666_666
+        assertEq(auctioneer.getCurrentTickSize(), 6_666_666_666, "tick size reduced by base");
+    }
+
+    // when tickSizeBase = 3.0
+    //  [X] crossing one day target reduces tick size by 1/3 (floor)
+    function test_tickSizeBaseThree_reductionOnTarget()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 400e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 400e18)
+    {
+        // Set base to 3.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(3e18);
+
+        // Cross the day target exactly with a single bid of 315e18 (see proof above)
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 315e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 10e9 (OHM units, 9 decimals)
+        // - Base = 3.0 (3e18), multiplier = 1 after crossing target once
+        // - New tick size = floor(10e9 / 3) = floor(3,333,333,333.333...) = 3,333,333,333
+        // Therefore, expected tick size = 3_333_333_333
+        assertEq(auctioneer.getCurrentTickSize(), 3_333_333_333, "tick size reduced by base");
+    }
+
+    // when base is large and multiple targets are crossed in one bid
+    //  [X] tick size reduction floors to minimum when division would be zero
+    function test_tickSizeMinimum_whenDivisionRoundsToZero()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(1_000, 1_000, 1) // target=1000 wei of OHM, tickSize=1000 wei of OHM, minPrice=1
+        givenAddressHasReserveToken(recipient, 1e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1e18)
+    {
+        // Set base to 10.0 to accelerate reduction
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(10e18);
+
+        // Single bid will vastly exceed target due to minPrice=1, crossing many thresholds
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 1e18, 1, false, false);
+
+        // Proof (manual):
+        // - Original tick size = 1000 wei of OHM
+        // - Base = 10; after first threshold: floor(1000/10^1)=10
+        // - After second: floor(100/10^2)=1
+        // - After third: floor(10/10^3)=0 -> implementation floors to minimum (1)
+        // Therefore, expected tick size = 1
+        assertEq(auctioneer.getCurrentTickSize(), 1, "tick size should floor to minimum");
+    }
+
+    // when multiplier would overflow rpow
+    //  [X] tick size floors to minimum instead of reverting
+    function test_tickSizeMinimum_whenMultiplierOverflowsRpow()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(1, 1, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 1_000_000_000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1_000_000_000e18)
+    {
+        // Set base to maximum (10.0) for worst-case scenario
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(10e18);
+
+        // Make a large bid that will result in a very large multiplier
+        // multiplier = convertible / target
+        // With target=1 wei, even converting 1e9 OHM gives multiplier = 1e9
+        // For rpow with base=10e18, exponents > ~59 would overflow uint256
+        // This test verifies that when multiplier exceeds safe maximum (around 59 for base=10),
+        // the function returns minimum tick size instead of reverting from rpow overflow
+
+        // A single large bid will cross many thresholds
+        // With minPrice=1 and target=1, multiplier grows very quickly
+        vm.prank(recipient);
+        // This should not revert even if multiplier would overflow rpow
+        // Instead, it should return minimum tick size
+        auctioneer.bid(PERIOD_MONTHS, 1_000_000_000e18, 1, false, false);
+
+        // Verify the bid succeeded and tick size is at minimum
+        // When multiplier exceeds safe maximum, tick size floors to minimum (1)
+        uint256 tickSize = auctioneer.getCurrentTickSize();
+        assertEq(tickSize, 1, "tick size should floor to minimum when multiplier exceeds safe max");
+    }
+
+    // when tickSizeBase = 3.0 and multiple day targets are achieved in cumulative bids
+    //  [X] tick size equals floor(original / 3^2) after crossing 2 targets
+    function test_tickSizeBaseThree_multipleTargets_cumulative()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(20e9, TICK_SIZE, MIN_PRICE) // TARGET=20e9, tickSize=10e9
+        givenAddressHasReserveToken(recipient, 10_000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 10_000e18)
+    {
+        // Set base to 3.0
+        vm.prank(admin);
+        auctioneer.setTickSizeBase(3e18);
+
+        // Cumulatively bid small chunks until we cross 2 * TARGET (40e9)
+        // This avoids over-shooting too far while keeping the test simple.
+        uint256 chunk = 50e18; // small deposit increments
+        while (auctioneer.getDayState().convertible < 40e9) {
+            vm.prank(recipient);
+            auctioneer.bid(PERIOD_MONTHS, chunk, 1, false, false);
+        }
+
+        // Proof (manual):
+        // After crossing 2 day targets, multiplier = 2.
+        // New tick size = floor(originalTickSize / base^multiplier)
+        //                = floor(10e9 / 3^2)
+        //                = floor(10e9 / 9)
+        //                = floor(1,111,111,111.111...)
+        //                = 1,111,111,111
+        assertEq(
+            auctioneer.getCurrentTickSize(),
+            1_111_111_111,
+            "tick size for multiplier=2, base=3"
+        );
+    }
+
     function _assertActualAmount(
         uint256 actualAmount_,
         uint256 previousReceiptBalance_
@@ -1102,24 +1276,6 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
                 (tickThreeConvertedAmount == 0 ? 0 : tickThreeBidAmount);
         }
 
-        // Place a bid for the second deposit period
-        _mintAndApprove(recipient, 1e18);
-        vm.prank(recipient);
-        (uint256 bidOneConvertedAmount, , , ) = auctioneer.bid(
-            PERIOD_MONTHS_TWO,
-            1e18,
-            1,
-            false,
-            false
-        );
-
-        // Warp forward to that the ticks change
-        vm.warp(block.timestamp + 1 hours);
-
-        IConvertibleDepositAuctioneer.Tick memory periodTwoTickBefore = auctioneer.getCurrentTick(
-            PERIOD_MONTHS_TWO
-        );
-
         _mintAndApprove(recipient, 40575e16);
 
         {
@@ -1137,7 +1293,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         );
 
         // Expect event
-        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 1);
+        _expectBidEvent(expectedDepositIn, expectedConvertedAmount, 0);
 
         // Call function
         vm.prank(recipient);
@@ -1154,7 +1310,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             expectedConvertedAmount,
             reserveTokenBalance - expectedDepositIn,
             balanceBefore,
-            1,
+            0,
             ohmOut,
             positionId,
             receiptTokenId
@@ -1164,11 +1320,7 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertActualAmount(actualAmount, balanceBefore);
 
         // Assert the day state
-        assertEq(
-            auctioneer.getDayState().convertible,
-            expectedConvertedAmount + bidOneConvertedAmount,
-            "day convertible"
-        );
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
 
         // Assert the state
         _assertAuctionParameters(TARGET, TICK_SIZE, MIN_PRICE);
@@ -1177,28 +1329,67 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         _assertPreviousTick(
             10e9 + 10e9 + 5e9 - expectedConvertedAmount,
             tickThreePrice,
-            5e9, // The tick size is halved as the target is met or exceeded
+            TICK_SIZE / 2, // The tick size is halved as the target is met or exceeded
             uint48(block.timestamp)
         );
 
         // Assert the tick for the second deposit period
         {
-            IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getPreviousTick(
+            IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
                 PERIOD_MONTHS_TWO
             );
 
-            assertEq(
-                tick.capacity,
-                periodTwoTickBefore.capacity,
-                "period two previous tick capacity"
-            );
-            assertEq(tick.price, periodTwoTickBefore.price, "period two previous tick price");
-            assertEq(
-                tick.lastUpdate,
-                uint48(block.timestamp),
-                "period two previous tick lastUpdate"
-            );
+            // Capacity: halved as the day target is met
+            // Price: unaffected by the day target being met
+            // Last update: updated to the current block timestamp
+            assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
+            assertEq(tick.price, MIN_PRICE, "period two tick price");
+            assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
         }
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_reachesDayTarget_multipleDepositPeriods_sameBlock()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // Bid one: 15e18
+        // - Period one
+        // - Tick one: remaining capacity of 9e9, price of 15e18
+        // - Bid amount of 15e18 @ 15e18 = 1e9 OHM out
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS_TWO, 15e18, 1, false, false);
+
+        // Bid two:
+        // - Period two
+        // - Tick one: remaining capacity of 10e9, price of 15e18. Deposit amount of 150e18, OHM out = 10e9
+        // - Tick two: remaining capacity of 10e9, price of 165e17. Deposit amount of 148.5e18, OHM out = 9e9 (due to hitting day target)
+        // - Tick three: remaining capacity of 5e9, price of 1815e16. Deposit amount of 1.5e18, OHM out = 82644628
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, 300e18, 1, false, false);
+
+        // Assert the tick for period one
+        _assertPreviousTick(
+            5e9 - 82644628,
+            1815e16,
+            TICK_SIZE / 2, // The tick size is halved as the target is met or exceeded
+            uint48(block.timestamp)
+        );
+
+        // Assert the tick for period two
+        IConvertibleDepositAuctioneer.Tick memory tick = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+
+        // Capacity: halved as the day target is met
+        // Price: unaffected by the day target being met
+        // Last update: updated to the current block timestamp
+        assertEq(tick.capacity, TICK_SIZE / 2, "period two tick capacity");
+        assertEq(tick.price, MIN_PRICE, "period two tick price");
+        assertEq(tick.lastUpdate, uint48(block.timestamp), "period two tick lastUpdate");
     }
 
     //  when the convertible amount of OHM will exceed multiples of the day target
@@ -1295,6 +1486,162 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
             10e9 + 10e9 + 5e9 + 5e9 + 5e9 + 5e9 + 25e8 - expectedConvertedAmount,
             26573415e12,
             25e8, // The tick size is halved twice as the target is met or exceeded twice
+            uint48(block.timestamp)
+        );
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_smallTickStep()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 796064875e20)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 796064875e20)
+    {
+        uint256 reserveTokenBalance = 796064875e20;
+        uint256 bidAmount = reserveTokenBalance - 1;
+
+        vm.prank(admin);
+        auctioneer.setTickStep(10001);
+
+        vm.startSnapshotGas("bid_smallTickStep");
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
+
+        vm.stopSnapshotGas();
+    }
+
+    function test_convertedAmountGreaterThanTickCapacity_smallTickSize()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(TARGET, 1e3, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 100e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 100e18)
+    {
+        // We want the converted amount to be >= 2 * day target, 40e9
+        // Max bid amount = tick size * price / 1e9
+        // Tick one: tick size 1e3, price is 15e18, max bid amount is 15000000000000
+        // Tick two: tick size 1e3, price is 165e17, max bid amount is 16500000000000
+        // Tick three: tick size 1e3, price is 1815e16, max bid amount is 18150000000000
+        // Tick four: tick size 1e3, price is 19965e15, max bid amount is 19965000000000
+        // Tick five: tick size 1e3, price is 219615e14, max bid amount is 21961500000000
+        // Tick six: tick size 1e3, price is 2415765e13, max bid amount is 24157650000000
+        // Tick seven: tick size 1e3, price is 26573415e12, max bid amount is 26573415000000
+        // Tick eight: tick size 1e3, price is 29230756500000000000, max bid amount is 29230756500000
+        // Tick nine: tick size 1e3, price is 32153832150000000000, max bid amount is 32153832150000
+        // Tick ten: tick size 1e3, price is 35369215365000000000, max bid amount is 35369215365000
+        // Tick eleven: tick size 1e3, price is 38906136901500000000, max bid amount is 38906136901500
+        // Tick twelve: tick size 1e3, price is 42796750591650000000, max bid amount is 42796750591650
+        // Tick thirteen: tick size 1e3, price is 47076425650815000000, max bid amount is 47076425650815
+        // Tick fourteen: tick size 1e3, price is 51784068215896500000, max bid amount is 51784068215896
+        // Tick fifteen: tick size 1e3, price is 56962475037486150000, max bid amount is 56962475037486
+        // Tick sixteen: tick size 1e3, price is 62658722541234765000, max bid amount is 62658722541234
+        // Tick seventeen: tick size 1e3, price is 68924594795358241500, max bid amount is 68924594795358
+        // Tick eighteen: tick size 1e3, price is 75817054274894065650, max bid amount is 75817054274894
+        // Tick nineteen: tick size 1e3, price is 83398759702383472215, max bid amount is 83398759702383
+        // Total max bid amount = 15000000000000 + 16500000000000 + 18150000000000 + 19965000000000 + 21961500000000 + 24157650000000 + 26573415000000 + 29230756500000 + 32153832150000 + 35369215365000 + 38906136901500 + 42796750591650 + 47076425650815 + 51784068215896 + 56962475037486 + 62658722541234 + 68924594795358 + 75817054274894 + 83398759702383 = 79606487500000000000
+        uint256 bidAmount = 79606487500000000000;
+
+        vm.startSnapshotGas("bid_smallTickSize");
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 1, false, false);
+
+        vm.stopSnapshotGas();
+    }
+
+    // [X] it reduces the tick size exponentially as multiple day targets are reached
+    function test_exponentialTickSizeReduction()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabledWithParameters(10e9, TICK_SIZE, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // This test demonstrates exponential reduction of tick size as multiples of the day target are reached
+        // Day target = 10e9
+        // Initial tick size = 10e9
+        //
+        // Expected exponential reduction:
+        // - 0x to 1x target (0 to 10e9): tick size = 10e9 (original)
+        // - 1x to 2x target (10e9 to 20e9): tick size = 10e9 / 2^1 = 5e9
+        // - 2x to 3x target (20e9 to 30e9): tick size = 10e9 / 2^2 = 2.5e9
+        // - 3x to 4x target (30e9 to 40e9): tick size = 10e9 / 2^3 = 1.25e9
+        //
+        // We'll bid enough to reach just past 30e9 (3x target) to show 3 levels of exponential reduction
+
+        // Tick 1: 10e9 OHM, price = 15e18, max bid = 150e18
+        // Total converted after tick 1: 10e9 (1x target reached)
+        // Tick 2: 5e9 OHM, price = 16.5e18, max bid = 82.5e18
+        // Total converted after tick 2: 15e9 (1x target reached)
+        // Tick 3: 5e9 OHM, price = 18.15e18, max bid = 90.75e18
+        // Total converted after tick 3: 20e9 (2x target reached)
+        // Tick 4: 2.5e9 OHM, price = 19.965e18, max bid = 49.9125e18
+        // Total converted after tick 4: 22.5e9 (2x target reached)
+        // Tick 5: 2.5e9 OHM, price = 21.9615e18, max bid = 54.90375e18
+        // Total converted after tick 5: 25e9 (2x target reached)
+        // Tick 6: 2.5e9 OHM, price = 24.15765e18, max bid = 60.394125e18
+        // Total converted after tick 6: 27.5e9 (2x target reached)
+        // Tick 7: 2.5e9 OHM, price = 26.573415e18, max bid = 66.4335375e18
+        // Total converted after tick 7: 30e9 (3x target reached)
+        // Tick 8: 1.25e9 OHM, price = 29.2307565e18, max bid = 36.538445625e18
+        //
+        // Bid 8: 1e18 @ 29.2307565e18 = 34210541 OHM out
+        //
+        // Total bid amount = 150e18 + 82.5e18 + 90.75e18 + 49.9125e18 + 54.90375e18 + 60.394125e18
+        //                    + 66.4335375e18 + 1e18
+        //                  = 555893912500000000000
+        // Total OHM out = 10e9 + 5e9 + 5e9 + 2.5e9 + 2.5e9 + 2.5e9 + 2.5e9 + 34210541 = 30034210541
+
+        uint256 bidAmount = 555893912500000000000;
+        uint256 expectedConvertedAmount = 30034210541;
+
+        // Check preview
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+
+        // Assert that the preview is as expected
+        assertEq(previewOhmOut, expectedConvertedAmount, "preview converted amount");
+
+        // Call function
+        vm.prank(recipient);
+        (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, ) = auctioneer.bid(
+            PERIOD_MONTHS,
+            bidAmount,
+            1,
+            false,
+            false
+        );
+
+        // Assert returned values
+        _assertConvertibleDepositPosition(
+            bidAmount,
+            30034210541,
+            1000e18 - bidAmount,
+            0,
+            0,
+            ohmOut,
+            positionId,
+            receiptTokenId
+        );
+
+        // Assert the day state
+        assertEq(auctioneer.getDayState().convertible, expectedConvertedAmount, "day convertible");
+
+        // Assert the state (auction parameters remain unchanged)
+        _assertAuctionParameters(10e9, TICK_SIZE, MIN_PRICE);
+
+        // The key assertion: verify that the current tick size is 1.25e9 (10e9 / 2^3)
+        // This demonstrates exponential reduction: 10e9 -> 5e9 -> 2.5e9 -> 1.25e9
+        // If it were linear, the tick size would be 10e9 / (3 * 2) = 1.666...e9
+        uint256 expectedTickSize = 125e7; // 1.25e9
+
+        // Assert the tick capacity and tick size
+        _assertPreviousTick(
+            expectedTickSize - 34210541, // remaining capacity in current tick
+            29.2307565e18,
+            expectedTickSize, // This should be 1.25e9, demonstrating exponential reduction
             uint48(block.timestamp)
         );
     }
@@ -1553,5 +1900,265 @@ contract ConvertibleDepositAuctioneerBidTest is ConvertibleDepositAuctioneerTest
         // Call function
         vm.prank(recipient);
         auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+    }
+
+    // given the day target is 1000
+    //  given the tick size is 1000
+    //   when the day target is met in the middle of the bid
+    //    given the other deposit period has a tick capacity larger than the new tick size
+    //     [X] the tick size is halved upon the day target being met
+    //     [X] the tick price increases upon the day target being met
+    //     [X] the tick capacity is reduced to the standard tick size
+    //     [X] the tick capacity of other deposit periods is affected
+    //     [X] the tick price of other deposit periods is not affected
+
+    function test_dayTargetAppliesImmediately_otherDepositPeriodHasNoBid()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabledWithParameters(1000e9, 1000e9, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 30000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 30000e18)
+    {
+        // First bid: period two, day target is reached
+        vm.prank(recipient);
+        (, uint256 positionIdOne, , ) = auctioneer.bid(
+            PERIOD_MONTHS_TWO,
+            16000e18,
+            1,
+            false,
+            false
+        );
+
+        // Assert output
+        // First bid:
+        // - 15000e18 * 1e9 / 15e18 = 1000e9, new price of 16.5e18 and capacity of 500e9 (halved)
+        // - 1000e18 * 1e9 / 16.5e18 = 60606060606 (rounded down), price is same, capacity is 500e9 - 60606060606 = 439393939394
+        // - Conversion price: 16000e18 * 1e9 / (1000e9 + 60606060606) = 15085714285715147756 (rounded up)
+        IDepositPositionManager.Position memory positionOne = convertibleDepositPositions
+            .getPosition(positionIdOne);
+        assertEq(positionOne.remainingDeposit, 16000e18, "positionOne remaining deposit");
+        assertEq(positionOne.conversionPrice, 15085714285715147756, "positionOne conversion price");
+
+        // Check tick state for deposit period two
+        // - Capacity: 439393939394 (remaining capacity)
+        // - Price: 16.5e18 (moved to the next tick)
+        IConvertibleDepositAuctioneer.Tick memory tickOne = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tickOne.capacity, 439393939394, "tickOne capacity");
+        assertEq(tickOne.price, 16.5e18, "tickOne price");
+
+        // Check tick state for deposit period one
+        // - Capacity: 500e9 (reduced due to the day target being met)
+        // - Price: 15e18 (remains the same as before)
+        tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        assertEq(tickOne.capacity, 500e9, "tickOne capacity after bid two");
+        assertEq(tickOne.price, 15e18, "tickOne price after bid two");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
+    }
+
+    //    [X] the tick size is halved upon the day target being met
+    //    [X] the tick price increases upon the day target being met
+    //    [X] the tick capacity is reduced to the standard tick size
+    //    [X] the tick capacity of other deposit periods is not affected
+    //    [X] the tick price of other deposit periods is not affected
+
+    function test_dayTargetAppliesImmediately()
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenDepositPeriodEnabled(PERIOD_MONTHS_TWO)
+        givenEnabledWithParameters(1000e9, 1000e9, MIN_PRICE)
+        givenAddressHasReserveToken(recipient, 30000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 30000e18)
+    {
+        // First bid: period one, just under the tick size
+        vm.prank(recipient);
+        (, uint256 positionIdOne, , ) = auctioneer.bid(PERIOD_MONTHS, 14999e18, 1, false, false);
+
+        // Assert output
+        // First bid:
+        // - 14999e18 * 1e9 / 15e18 = 999933333333 (66666667 left over)
+        // - Conversion price: 14999e18 * 1e9 / 999933333333 = 15000000000005000334 (rounded up)
+        IDepositPositionManager.Position memory positionOne = convertibleDepositPositions
+            .getPosition(positionIdOne);
+        assertEq(positionOne.remainingDeposit, 14999e18, "positionOne remaining deposit");
+        assertEq(positionOne.conversionPrice, 15000000000005000334, "positionOne conversion price");
+
+        // Check tick state
+        // - Capacity: 1000e9 - 999933333333 = 66666667
+        // - Price: 15e18
+        IConvertibleDepositAuctioneer.Tick memory tickOne = auctioneer.getCurrentTick(
+            PERIOD_MONTHS
+        );
+        assertEq(tickOne.capacity, 66666667, "tickOne capacity");
+        assertEq(tickOne.price, 15e18, "tickOne price");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 1000e9, "global tick size");
+
+        // Second bid: period two, just under the tick size
+        vm.prank(recipient);
+        (, uint256 positionIdTwo, , ) = auctioneer.bid(
+            PERIOD_MONTHS_TWO,
+            14999e18,
+            1,
+            false,
+            false
+        );
+
+        // Second bid:
+        // - 1000000005000000000 * 1e9 / 15e18 = 66666667 (results in the day target being met, tick size halving and tick price increasing)
+        // - 8250000000000000000000 * 1e9 / 16.5e18 = 500000000000 (tick depleted, tick price increases)
+        // - (14999e18 - 8250000000000000000000 - 1000000005000000000) * 1e9 / 18.15e18 = 371790633608
+        // - Total OHM out: 66666667 + 500000000000 + 371790633608 = 871857300275
+        // - Conversion price: 14999e18 * 1e9 / 871857300275 = 17203503366054326293 (rounded up)
+        IDepositPositionManager.Position memory positionTwo = convertibleDepositPositions
+            .getPosition(positionIdTwo);
+        assertEq(positionTwo.remainingDeposit, 14999e18, "positionTwo remaining deposit");
+        assertEq(positionTwo.conversionPrice, 17203503366054326293, "positionTwo conversion price");
+
+        // Check tick state for deposit period two
+        // - Capacity: 500e9 - 371790633608 = 128209366392
+        // - Price: 18.15e18
+        IConvertibleDepositAuctioneer.Tick memory tickTwo = auctioneer.getCurrentTick(
+            PERIOD_MONTHS_TWO
+        );
+        assertEq(tickTwo.capacity, 128209366392, "tickTwo capacity");
+        assertEq(tickTwo.price, 1815e16, "tickTwo price");
+
+        // Check tick state for deposit period one
+        // - Capacity: 66666667 (remains the same as before, it was under the reduced tick size)
+        // - Price: 15e18 (remains the same as before)
+        tickOne = auctioneer.getCurrentTick(PERIOD_MONTHS);
+        assertEq(tickOne.capacity, 66666667, "tickOne capacity after bid two");
+        assertEq(tickOne.price, 15e18, "tickOne price after bid two");
+
+        // Check global tick size
+        assertEq(auctioneer.getCurrentTickSize(), 500e9, "global tick size");
+    }
+
+    // ========== MINIMUM BID TESTS ========== //
+
+    function test_bidBelowMinimumBid_reverts(
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // Set a minimum bid
+        uint256 minimumBid = 100e18;
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Ensure bid amount is below minimum
+        uint256 bidAmount = bound(bidAmount_, 1, minimumBid - 1);
+
+        // Test previewBid returns 0
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertEq(previewOhmOut, 0, "previewBid should return 0 for bid below minimum");
+
+        // Expect revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.ConvertibleDepositAuctioneer_BidBelowMinimum.selector,
+                bidAmount,
+                minimumBid
+            )
+        );
+
+        // Call function
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+    }
+
+    function test_bidAtMinimumBid(
+        uint256 minimumBid_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        uint256 minimumBid = bound(minimumBid_, 1e18, 100e18);
+
+        // Set minimum bid
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, minimumBid);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value for bid at minimum");
+
+        // Call function with exact minimum bid
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, minimumBid, 0, false, false);
+
+        // Should succeed without reverting
+    }
+
+    function test_bidAboveMinimumBid_succeeds(
+        uint256 minimumBid_,
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        uint256 minimumBid = bound(minimumBid_, 1e18, 50e18);
+        uint256 bidAmount = bound(bidAmount_, minimumBid + 1, 100e18);
+
+        // Set minimum bid
+        vm.prank(admin);
+        auctioneer.setMinimumBid(minimumBid);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value for bid above minimum");
+
+        // Call function with bid above minimum
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+
+        // Should succeed without reverting
+    }
+
+    function test_minimumBidZero_allowsAnyBid(
+        uint256 bidAmount_
+    )
+        public
+        givenDepositPeriodEnabled(PERIOD_MONTHS)
+        givenEnabled
+        givenAddressHasReserveToken(recipient, 1000e18)
+        givenReserveTokenSpendingIsApproved(recipient, address(depositManager), 1000e18)
+    {
+        // convertible = deposit * 1e9 / minPrice
+        // deposit = convertible * minPrice / 1e9
+        uint256 minimumDepositAmount = (1 * MIN_PRICE) / 1e9;
+
+        // Ensure bid amount is small but non-zero
+        uint256 bidAmount = bound(bidAmount_, minimumDepositAmount, 1e18);
+
+        // Set minimum bid to 0 (disabled)
+        vm.prank(admin);
+        auctioneer.setMinimumBid(0);
+
+        // Test previewBid returns correct value
+        uint256 previewOhmOut = auctioneer.previewBid(PERIOD_MONTHS, bidAmount);
+        assertGt(previewOhmOut, 0, "previewBid should return non-zero value when minimum bid is 0");
+
+        // Call function with small bid
+        vm.prank(recipient);
+        auctioneer.bid(PERIOD_MONTHS, bidAmount, 0, false, false);
+
+        // Should succeed without reverting
     }
 }

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, screaming-snake-case-const)
 pragma solidity >=0.8.20;
 
 // Libraries
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
@@ -50,8 +52,21 @@ contract ConvertibleDepositAuctioneer is
 
     uint24 public constant ONE_HUNDRED_PERCENT = 100e2;
 
+    /// @notice Fixed point scale (WAD)
+    uint256 internal constant WAD = 1e18;
+
+    /// @notice Minimum and maximum allowed tick size base (in WAD)
+    uint256 internal constant TICK_SIZE_BASE_MIN = 1e18; // 1.0
+    uint256 internal constant TICK_SIZE_BASE_MAX = 10e18; // 10.0
+
+    /// @notice Maximum safe exponent for rpow to prevent overflow
+    uint256 internal constant MAX_RPOW_EXP = 41;
+
+    /// @notice Seconds in one day
+    uint256 internal constant SECONDS_IN_DAY = 1 days;
+
     /// @notice The length of the enable parameters
-    uint256 internal constant _ENABLE_PARAMS_LENGTH = 160;
+    uint256 internal constant _ENABLE_PARAMS_LENGTH = 192;
 
     /// @notice The minimum tick size
     uint256 internal constant _TICK_SIZE_MINIMUM = 1;
@@ -110,6 +125,14 @@ contract ConvertibleDepositAuctioneer is
     /// @notice The tick step
     /// @dev    See `getTickStep()` for more information
     uint24 internal _tickStep;
+
+    /// @notice The minimum bid amount
+    /// @dev    The minimum bid amount is the minimum amount of deposit asset that can be bid
+    ///         See `getMinimumBid()` for more information
+    uint256 internal _minimumBid;
+
+    /// @notice The base used for exponential tick size reduction (by 1/(base^multiplier)) when the day target is crossed (WAD, 1e18 = 1.0)
+    uint256 internal _tickSizeBase;
 
     /// @notice The index of the next auction result
     uint8 internal _auctionResultsNextIndex;
@@ -176,6 +199,8 @@ contract ConvertibleDepositAuctioneer is
     ///
     ///             This function reverts if:
     ///             - The contract is not active
+    ///             - The auction is disabled
+    ///             - The bid amount is below the minimum bid
     ///             - Deposits are not enabled for the asset/period/operator
     ///             - The depositor has not approved the DepositManager to spend the deposit asset
     ///             - The depositor has an insufficient balance of the deposit asset
@@ -213,6 +238,11 @@ contract ConvertibleDepositAuctioneer is
         // If target is 0, auction is disabled - reject all bids
         if (_auctionParameters.target == 0) {
             revert ConvertibleDepositAuctioneer_ConvertedAmountZero();
+        }
+
+        // Check minimum bid requirement
+        if (params.depositAmount < _minimumBid) {
+            revert ConvertibleDepositAuctioneer_BidBelowMinimum(params.depositAmount, _minimumBid);
         }
 
         uint256 ohmOut;
@@ -326,22 +356,40 @@ contract ConvertibleDepositAuctioneer is
             // No point in continuing if the converted amount is 0
             if (convertibleAmount == 0) break;
 
-            // If there is not enough capacity in the current tick, use the remaining capacity
-            if (output.tickCapacity <= convertibleAmount) {
-                convertibleAmount = output.tickCapacity;
-                // Convertible = deposit * OHM scale / price, so this is the inverse
+            // Determine if we're crossing a threshold or depleting capacity
+            uint256 baseConvertible = dayState.convertible + output.ohmOut;
+            uint256 ohmUntilNextThreshold = _getOhmUntilNextThreshold(
+                baseConvertible,
+                auctionParams.target
+            );
+            bool willCrossThreshold = (ohmUntilNextThreshold > 0 &&
+                ohmUntilNextThreshold <= convertibleAmount);
+            bool willDepleteTick = (output.tickCapacity <= convertibleAmount);
+
+            // If either condition triggers, we need to perform a tick transition
+            if (willCrossThreshold || willDepleteTick) {
+                // Use whichever limit is more restrictive
+                if (willCrossThreshold && ohmUntilNextThreshold < output.tickCapacity) {
+                    // Day target threshold is the limiting factor
+                    convertibleAmount = ohmUntilNextThreshold;
+                } else {
+                    // Tick capacity is the limiting factor
+                    convertibleAmount = output.tickCapacity;
+                }
+
+                // Calculate deposit amount for this limited chunk
                 // Round in favour of the protocol
                 depositAmount = convertibleAmount.mulDivUp(output.tickPrice, _ohmScale);
 
-                // The tick has also been depleted, so update the price
+                // Trigger tick transition: increase price and recalculate tick size
                 output.tickPrice = _getNewTickPrice(output.tickPrice, _tickStep);
                 output.tickSize = _getNewTickSize(
-                    dayState.convertible + convertibleAmount + output.ohmOut,
+                    baseConvertible + convertibleAmount,
                     auctionParams
                 );
                 output.tickCapacity = output.tickSize;
             }
-            // Otherwise, the tick has enough capacity and needs to be updated
+            // Otherwise, the tick has enough capacity and we're not crossing threshold
             else {
                 output.tickCapacity -= convertibleAmount;
             }
@@ -374,6 +422,11 @@ contract ConvertibleDepositAuctioneer is
     {
         // If target is 0, auction is disabled - return 0
         if (_auctionParameters.target == 0) {
+            return 0;
+        }
+
+        // If bid amount is below minimum, return 0
+        if (bidAmount_ < _minimumBid) {
             return 0;
         }
 
@@ -419,13 +472,15 @@ contract ConvertibleDepositAuctioneer is
     }
 
     /// @notice Internal function to calculate the new tick size based on the amount of OHM that has been converted in the current day
+    /// @dev    This implements exponential tick size reduction (by 1/(base^multiplier)) for each multiple of the day target that is reached
+    ///         If the new tick size is 0 or a calculation would result in an overflow, the tick size is set to the minimum
     ///
     /// @param  ohmOut_     The amount of OHM that has been converted in the current day
     /// @return newTickSize The new tick size
     function _getNewTickSize(
         uint256 ohmOut_,
         AuctionParameters memory auctionParams_
-    ) internal pure returns (uint256 newTickSize) {
+    ) internal view returns (uint256 newTickSize) {
         // If the day target is zero, the tick size is always the configured size (which should be 0 to disable auction)
         if (auctionParams_.target == 0) {
             return auctionParams_.tickSize;
@@ -440,13 +495,41 @@ contract ConvertibleDepositAuctioneer is
             return newTickSize;
         }
 
-        // Otherwise the tick size is halved as many times as the multiplier
-        newTickSize = auctionParams_.tickSize / (multiplier * 2);
+        // If the multiplier would result in an overflow in rpow, return minimum tick size
+        // For base = 1e18, rpow always returns 1e18 regardless of exponent, so overflow is impossible
+        if (_tickSizeBase != TICK_SIZE_BASE_MIN && multiplier > MAX_RPOW_EXP) {
+            return _TICK_SIZE_MINIMUM;
+        }
+
+        // Otherwise, the tick size is reduced by a factor of (base^multiplier) (WAD base)
+        // divisor = _tickSizeBase^multiplier (scaled by 1e18 via rpow)
+        uint256 divisor = FixedPointMathLib.rpow(_tickSizeBase, multiplier, WAD);
+        if (divisor == 0) return _TICK_SIZE_MINIMUM;
+
+        // newTickSize = tickSize * WAD / divisor (round down)
+        newTickSize = auctionParams_.tickSize.mulDiv(WAD, divisor);
 
         // This can round down to zero (which would cause problems with calculations), so provide a fallback
         if (newTickSize == 0) return _TICK_SIZE_MINIMUM;
 
         return newTickSize;
+    }
+
+    /// @notice Internal function to calculate the amount of OHM remaining until the next day target threshold is reached
+    ///
+    /// @param  currentConvertible_ The current cumulative amount of OHM that has been converted
+    /// @param  target_             The day target
+    /// @return ohmUntilThreshold   The amount of OHM remaining until the next threshold
+    function _getOhmUntilNextThreshold(
+        uint256 currentConvertible_,
+        uint256 target_
+    ) internal pure returns (uint256 ohmUntilThreshold) {
+        if (target_ == 0) return type(uint256).max;
+
+        uint256 currentMultiplier = currentConvertible_ / target_;
+        uint256 nextThreshold = (currentMultiplier + 1) * target_;
+
+        return nextThreshold - currentConvertible_;
     }
 
     function _getCurrentTick(uint8 depositPeriod_) internal view returns (Tick memory tick) {
@@ -464,11 +547,8 @@ contract ConvertibleDepositAuctioneer is
             // The capacity to add is the day target multiplied by the proportion of time passed in a day
             // It is also adjusted by the number of deposit periods that are enabled, otherwise each auction would have too much capacity added
             uint256 capacityToAdd = (_auctionParameters.target * timePassed) /
-                1 days /
+                SECONDS_IN_DAY /
                 _depositPeriods.length();
-
-            // Skip if the new capacity is 0
-            if (capacityToAdd == 0) return previousTick;
 
             tick = previousTick;
             newCapacity = tick.capacity + capacityToAdd;
@@ -487,10 +567,8 @@ contract ConvertibleDepositAuctioneer is
             tick.price = tick.price.mulDivUp(ONE_HUNDRED_PERCENT, _tickStep);
 
             // Tick price does not go below the minimum
-            // Tick capacity is full if the min price is exceeded
             if (tick.price < _auctionParameters.minPrice) {
                 tick.price = _auctionParameters.minPrice;
-                newCapacity = tickSize;
                 break;
             }
         }
@@ -551,6 +629,11 @@ contract ConvertibleDepositAuctioneer is
     /// @inheritdoc IConvertibleDepositAuctioneer
     function getTickStep() external view override returns (uint24) {
         return _tickStep;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getMinimumBid() external view override returns (uint256) {
+        return _minimumBid;
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -655,11 +738,11 @@ contract ConvertibleDepositAuctioneer is
         _depositPeriods.add(depositPeriod_);
 
         // Initialize the tick with the new auction parameters
-        _depositPeriodPreviousTicks[depositPeriod_] = Tick(
-            minPrice_,
-            tickSize_,
-            uint48(block.timestamp)
-        );
+        _depositPeriodPreviousTicks[depositPeriod_] = Tick({
+            price: minPrice_,
+            capacity: tickSize_,
+            lastUpdate: uint48(block.timestamp)
+        });
 
         // Emit event for actual enabling
         emit DepositPeriodEnabled(address(_DEPOSIT_ASSET), depositPeriod_);
@@ -714,8 +797,7 @@ contract ConvertibleDepositAuctioneer is
         return (isEnabled, isPendingEnabled);
     }
 
-    /// @notice Modifier to check if a deposit period is enabled
-    modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
+    function _onlyDepositPeriodEnabled(uint8 depositPeriod_) internal view {
         (bool isEnabled, ) = isDepositPeriodEnabled(depositPeriod_);
         if (!isEnabled) {
             revert ConvertibleDepositAuctioneer_DepositPeriodNotEnabled(
@@ -723,6 +805,11 @@ contract ConvertibleDepositAuctioneer is
                 depositPeriod_
             );
         }
+    }
+
+    /// @notice Modifier to check if a deposit period is enabled
+    modifier onlyDepositPeriodEnabled(uint8 depositPeriod_) {
+        _onlyDepositPeriodEnabled(depositPeriod_);
         _;
     }
 
@@ -811,7 +898,11 @@ contract ConvertibleDepositAuctioneer is
         if (target_ > 0 && tickSize_ > target_)
             revert ConvertibleDepositAuctioneer_InvalidParams("tick size");
 
-        _auctionParameters = AuctionParameters(target_, tickSize_, minPrice_);
+        _auctionParameters = AuctionParameters({
+            target: target_,
+            tickSize: tickSize_,
+            minPrice: minPrice_
+        });
 
         // Emit event
         emit AuctionParametersUpdated(address(_DEPOSIT_ASSET), target_, tickSize_, minPrice_);
@@ -829,9 +920,11 @@ contract ConvertibleDepositAuctioneer is
 
         // Store the auction results
         // Negative values will indicate under-selling
+        /// forge-lint: disable-start(unsafe-typecast)
         _auctionResults[_auctionResultsNextIndex] =
             int256(_dayState.convertible) -
             int256(previousTarget_);
+        /// forge-lint: disable-end(unsafe-typecast)
 
         // Emit event
         emit AuctionResult(
@@ -849,7 +942,7 @@ contract ConvertibleDepositAuctioneer is
         }
 
         // Reset the day state
-        _dayState = Day(uint48(block.timestamp), 0);
+        _dayState = Day({initTimestamp: uint48(block.timestamp), convertible: 0});
     }
 
     /// @notice Sets tick parameters for all enabled deposit periods
@@ -978,10 +1071,36 @@ contract ConvertibleDepositAuctioneer is
         if (newStep_ < ONE_HUNDRED_PERCENT)
             revert ConvertibleDepositAuctioneer_InvalidParams("tick step");
 
+        // Capture the tick state, otherwise the tick step change will apply retroactively
+        _updateCurrentTicks(0);
+
+        // Set the tick step
         _tickStep = newStep_;
 
         // Emit event
         emit TickStepUpdated(address(_DEPOSIT_ASSET), newStep_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    function getTickSizeBase() external view override returns (uint256) {
+        return _tickSizeBase;
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN or ROLE_MANAGER role
+    ///             - The new tick size base is not within the bounds (1e18 ≤ base ≤ 10e18)
+    ///
+    /// @param      newBase_    The new tick size base
+    function setTickSizeBase(uint256 newBase_) public override onlyManagerOrAdminRole {
+        // Bounds: 1e18 ≤ base ≤ 10e18
+        if (newBase_ < TICK_SIZE_BASE_MIN || newBase_ > TICK_SIZE_BASE_MAX)
+            revert ConvertibleDepositAuctioneer_InvalidParams("tick size base");
+
+        // Do not snapshot/update current ticks; applies during bidding only
+        _tickSizeBase = newBase_;
+
+        emit TickSizeBaseUpdated(address(_DEPOSIT_ASSET), newBase_);
     }
 
     /// @inheritdoc IConvertibleDepositAuctioneer
@@ -1006,6 +1125,18 @@ contract ConvertibleDepositAuctioneer is
 
         // Emit event
         emit AuctionTrackingPeriodUpdated(address(_DEPOSIT_ASSET), days_);
+    }
+
+    /// @inheritdoc IConvertibleDepositAuctioneer
+    /// @dev        This function will revert if:
+    ///             - The caller does not have the ROLE_ADMIN or ROLE_MANAGER role
+    ///
+    /// @param      minimumBid_    The new minimum bid amount
+    function setMinimumBid(uint256 minimumBid_) external override onlyManagerOrAdminRole {
+        _minimumBid = minimumBid_;
+
+        // Emit event
+        emit MinimumBidUpdated(address(_DEPOSIT_ASSET), minimumBid_);
     }
 
     // ========== ACTIVATION/DEACTIVATION ========== //
@@ -1037,10 +1168,15 @@ contract ConvertibleDepositAuctioneer is
         _setAuctionParameters(params.target, params.tickSize, params.minPrice);
 
         // Set the tick step
+        // OK to call this as the caller will have admin role
         setTickStep(params.tickStep);
 
         // Set the auction tracking period
         setAuctionTrackingPeriod(params.auctionTrackingPeriod);
+
+        // Set the tick size base
+        // OK to call this as the caller will have admin role
+        setTickSizeBase(params.tickSizeBase);
 
         // Ensure all existing ticks have the current parameters
         // Also set the lastUpdate to the current block timestamp
@@ -1052,10 +1188,11 @@ contract ConvertibleDepositAuctioneer is
         _processPendingDepositPeriodChanges(params.tickSize, params.minPrice);
 
         // Reset the day state
-        _dayState = Day(uint48(block.timestamp), 0);
+        _dayState = Day({initTimestamp: uint48(block.timestamp), convertible: 0});
 
         // Reset the auction results
         _auctionResults = new int256[](_auctionTrackingPeriod);
         _auctionResultsNextIndex = 0;
     }
 }
+/// forge-lint: disable-end(mixed-case-function, screaming-snake-case-const)

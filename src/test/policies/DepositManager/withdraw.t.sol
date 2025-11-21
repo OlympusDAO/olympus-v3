@@ -87,7 +87,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
     {
-        _expectRevertERC20CloneInsufficientAllowance();
+        _expectRevertReceiptTokenInsufficientAllowance(0, previousDepositorDepositActualAmount);
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.withdraw(
@@ -113,7 +113,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
-        givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT + 1)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT + 1)
     {
         _expectRevertERC20CloneInsufficientBalance();
 
@@ -141,7 +141,7 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         givenAssetPeriodIsAdded
         givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
         givenDeposit(MINT_AMOUNT, true)
-        givenDepositorHasApprovedSpendingWrappedReceiptToken(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
     {
         uint256 expectedShares = vault.previewWithdraw(previousDepositorDepositActualAmount);
 
@@ -587,6 +587,44 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             0,
             "Liabilities should be 0"
+        );
+    }
+
+    // when the amount to withdraw is less than one vault share
+    //  [X] it does nothing
+
+    function test_withdraw_lessThanOneVaultShare(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasApprovedSpendingReceiptToken(MINT_AMOUNT)
+    {
+        // Accrue yield
+        // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
+        _accrueYield(1000e18);
+
+        // Determine an amount that is less than one share
+        uint256 oneShareInAssets = vault.previewRedeem(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        uint256 actualAmount = _withdraw(amount_, false);
+
+        assertEq(actualAmount, 0, "actual amount");
+        _assertAssetBalance(0, 0, amount_, false, 5);
+        _assertReceiptToken(amount_, 0, true, false);
+        _assertDepositAssetBalance(DEPOSITOR, 0, 1);
+
+        // Liabilities are reduced
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            previousDepositorDepositActualAmount - amount_, // Adjusted for the amount requested
+            "Liabilities"
         );
     }
 }

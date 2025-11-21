@@ -18,9 +18,17 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         address facility_,
         string memory facilityName_
     ) internal view {
+        string memory depositPeriodString = depositPeriod_ == 1 ? " month" : " months";
+
         // Check name
         string memory expectedName = String.truncate32(
-            string.concat(facilityName_, asset_.name(), " - ", uint2str(depositPeriod_), " months")
+            string.concat(
+                facilityName_,
+                asset_.name(),
+                " - ",
+                uint2str(depositPeriod_),
+                depositPeriodString
+            )
         );
         assertEq(
             receiptTokenManager.getTokenName(tokenId_),

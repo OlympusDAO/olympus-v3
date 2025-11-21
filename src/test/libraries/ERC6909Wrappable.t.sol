@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -8,6 +9,9 @@ import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC6909, IERC6909Metadata, IERC6909TokenSupply} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract ERC6909WrappableTest is Test {
     MockERC6909Wrappable public token;
@@ -135,18 +139,27 @@ contract ERC6909WrappableTest is Test {
         _;
     }
 
-    modifier givenRecipientHasApprovedWrappedTokenSpending() {
-        address wrappedToken = token.getWrappedToken(TOKEN_ID);
-
-        vm.prank(alice);
-        CloneableReceiptToken(wrappedToken).approve(address(token), AMOUNT);
-        _;
-    }
-
     modifier givenRecipientHasApprovedERC6909TokenSpending() {
         vm.prank(alice);
         token.approve(address(this), TOKEN_ID, AMOUNT); // Approve the test contract as the caller
         _;
+    }
+
+    function _expectRevertInsufficientAllowance(
+        address spender_,
+        uint256 currentAllowance_,
+        uint256 amount_,
+        uint256 tokenId_
+    ) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC6909.ERC6909InsufficientAllowance.selector,
+                spender_,
+                currentAllowance_,
+                amount_,
+                tokenId_
+            )
+        );
     }
 
     // ========== TESTS ========== //
@@ -262,24 +275,39 @@ contract ERC6909WrappableTest is Test {
     }
 
     // when wrapped is true
-    //  given the recipient has not approved the caller to spend the ERC20 token
+    //  given the owner has not approved the caller to spend the ERC20 token
     //   [X] it reverts
-    function test_burn_whenWrappedIsTrue_givenRecipientHasNotApproved_reverts()
+    function test_burn_whenWrappedIsTrue_givenOwnerHasNotApproved_reverts()
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
     {
-        vm.expectRevert(stdError.arithmeticError);
+        _expectRevertInsufficientAllowance(address(this), 0, AMOUNT, TOKEN_ID);
+
         token.burn(alice, TOKEN_ID, AMOUNT, true);
     }
 
     //  given the recipient has approved the caller to spend the ERC20 token
+    //   when the caller is not the approved spender
+    //    [X] it reverts
+    function test_burn_whenWrappedIsTrue_givenCallerIsNotApprovedSpender_reverts()
+        public
+        givenERC20TokenExists
+        givenRecipientHasERC20Tokens
+        givenRecipientHasApprovedERC6909TokenSpending
+    {
+        _expectRevertInsufficientAllowance(bob, 0, AMOUNT, TOKEN_ID);
+
+        vm.prank(bob);
+        token.burn(alice, TOKEN_ID, AMOUNT, true);
+    }
+
     //   given the recipient does not have sufficient ERC20 tokens
     //    [X] it reverts
     function test_burn_whenWrappedIsTrue_givenRecipientHasInsufficientERC20Tokens_reverts()
         public
         givenERC20TokenExists
-        givenRecipientHasApprovedWrappedTokenSpending
+        givenRecipientHasApprovedERC6909TokenSpending
     {
         vm.expectRevert(stdError.arithmeticError);
 
@@ -290,13 +318,13 @@ contract ERC6909WrappableTest is Test {
     //   [X] the ERC6909 token is not burned from the recipient
     //   [X] the ERC20 token total supply is decreased
     //   [X] the ERC6909 token total supply is unchanged
-    function test_burn_whenWrappedIsTrue_givenRecipientHasApproved(
+    function test_burn_whenWrappedIsTrue_givenOwnerHasApproved(
         uint256 amount_
     )
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
+        givenRecipientHasApprovedERC6909TokenSpending
     {
         amount_ = bound(amount_, 1, AMOUNT);
 
@@ -305,26 +333,14 @@ contract ERC6909WrappableTest is Test {
 
         assertERC20Balance(alice, AMOUNT - amount_);
         assertERC20TotalSupply(AMOUNT - amount_);
-        assertERC20Allowance(alice, AMOUNT - amount_);
+        assertERC20Allowance(alice, 0);
 
         assertERC6909Balance(alice, 0);
         assertERC6909TotalSupply(0);
-        assertERC6909Allowance(alice, 0);
+        assertERC6909Allowance(alice, AMOUNT - amount_);
     }
 
     //  when the caller is the owner
-    //   given the caller has not approved ERC6909Wrappable to spend the wrapped tokens
-    //    [X] it reverts
-    function test_burn_whenWrappedIsTrue_whenCallerIsOwner_givenCallerHasNotApproved_reverts()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC20Tokens
-    {
-        vm.expectRevert(stdError.arithmeticError);
-
-        token.burn(alice, TOKEN_ID, AMOUNT, true);
-    }
-
     //   [X] the ERC20 token is burned from the recipient
     //   [X] the ERC6909 token is not burned from the recipient
     //   [X] the ERC20 token total supply is decreased
@@ -333,7 +349,6 @@ contract ERC6909WrappableTest is Test {
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
     {
         // Burn the token
         vm.prank(alice);
@@ -356,15 +371,8 @@ contract ERC6909WrappableTest is Test {
         givenERC20TokenExists
         givenRecipientHasERC6909Tokens
     {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ERC6909.ERC6909InsufficientAllowance.selector,
-                address(this), // Test contract is the spender now
-                0,
-                AMOUNT,
-                TOKEN_ID
-            )
-        );
+        _expectRevertInsufficientAllowance(address(this), 0, AMOUNT, TOKEN_ID);
+
         token.burn(alice, TOKEN_ID, AMOUNT, false);
     }
 
@@ -564,27 +572,11 @@ contract ERC6909WrappableTest is Test {
         token.unwrap(999, AMOUNT);
     }
 
-    // when the owner has not approved the contract to spend the ERC20 token
+    // given the owner does not have sufficient ERC20 tokens
     //  [X] it reverts
-
-    function test_unwrap_whenRecipientHasNotApproved_reverts()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC20Tokens
-    {
-        vm.expectRevert(stdError.arithmeticError);
-
-        vm.prank(alice);
-        token.unwrap(TOKEN_ID, AMOUNT);
-    }
-
-    // given the owner has approved the contract to spend the ERC20 token
-    //  given the owner does not have sufficient ERC20 tokens
-    //   [X] it reverts
     function test_unwrap_givenOwnerHasInsufficientERC20Tokens_reverts()
         public
         givenERC20TokenExists
-        givenRecipientHasApprovedWrappedTokenSpending
     {
         vm.expectRevert(stdError.arithmeticError);
 
@@ -600,7 +592,7 @@ contract ERC6909WrappableTest is Test {
         public
         givenERC20TokenExists
         givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
+        givenRecipientHasApprovedERC6909TokenSpending
     {
         vm.assume(caller_ != alice && caller_ != address(0));
 
@@ -614,12 +606,7 @@ contract ERC6909WrappableTest is Test {
     //  [X] the ERC20 token is burned from the owner
     //  [X] the ERC6909 token supply is increased
     //  [X] the ERC20 token supply is decreased
-    function test_unwrap_givenOwnerHasApproved()
-        public
-        givenERC20TokenExists
-        givenRecipientHasERC20Tokens
-        givenRecipientHasApprovedWrappedTokenSpending
-    {
+    function test_unwrap() public givenERC20TokenExists givenRecipientHasERC20Tokens {
         // Unwrap the token
         vm.prank(alice);
         token.unwrap(TOKEN_ID, AMOUNT);
@@ -732,4 +719,28 @@ contract ERC6909WrappableTest is Test {
         assertERC20Balance(alice, initialBalance);
         assertERC20TotalSupply(initialTotalSupply);
     }
+
+    // ERC165
+    function test_supportsInterface() public view {
+        assertEq(token.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
+        assertEq(
+            token.supportsInterface(type(IERC6909Wrappable).interfaceId),
+            true,
+            "IERC6909Wrappable mismatch"
+        );
+        assertEq(
+            token.supportsInterface(type(IERC6909TokenSupply).interfaceId),
+            true,
+            "IERC6909TokenSupply mismatch"
+        );
+        assertEq(
+            token.supportsInterface(type(IERC6909Metadata).interfaceId),
+            true,
+            "IERC6909Metadata mismatch"
+        );
+        assertEq(token.supportsInterface(type(IERC6909).interfaceId), true, "IERC6909 mismatch");
+        assertEq(token.supportsInterface(type(IERC20).interfaceId), false, "IERC20 mismatch");
+        assertEq(token.supportsInterface(type(IERC4626).interfaceId), false, "IERC4626 mismatch");
+    }
 }
+/// forge-lint: disable-end(erc20-unchecked-transfer, unwrapped-modifier-logic)

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -158,7 +159,6 @@ contract HeartTest is Test {
             // Configure access control
 
             // Heart ROLES
-            rolesAdmin.grantRole("heart_admin", policy);
             rolesAdmin.grantRole("admin", ADMIN);
             rolesAdmin.grantRole("manager", MANAGER);
             rolesAdmin.grantRole("emergency", EMERGENCY);
@@ -596,7 +596,7 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_setDistributor() public {
-        // Reverts if the caller is not "heart_admin"
+        // Reverts if the caller is not "admin"
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("admin")
@@ -612,3 +612,4 @@ contract HeartTest is Test {
         assertEq(address(heart.distributor()), address(distributor), "distributor");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable)
