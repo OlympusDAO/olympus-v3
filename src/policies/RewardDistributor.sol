@@ -111,6 +111,12 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     ///         Calls are only allowed when the current week deadline has been reached based on
     ///         the start timestamp and week number. The function automatically advances to the next week.
     ///
+    ///         CRITICAL: Once a merkle root is set for a week, it cannot be changed. If an incorrect
+    ///         root is set, the week will be locked with that root and users will be unable to claim
+    ///         with the correct merkle proof. Ensure the merkle root is verified before calling this
+    ///         function. If an error is discovered, a new distribution week will be required to distribute
+    ///         the correct rewards.
+    ///
     /// @param  rewardWeek_     The week number being set (must equal currentWeek)
     /// @param  merkleRoot_     The merkle root for the week's distribution
     /// @param  rewardToken_    The ERC20 token used for rewards this week
