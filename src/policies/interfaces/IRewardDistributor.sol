@@ -18,23 +18,21 @@ interface IRewardDistributor is IERC165 {
 
     // ========== ERRORS ========== //
 
-    error DRD_InvalidWeek(uint256 week);
+    error DRD_WeekAlreadySet(uint256 week);
     error DRD_AlreadyClaimed(uint256 week);
     error DRD_InvalidProof();
     error DRD_NoWeeksSpecified();
     error DRD_MerkleRootNotSet(uint256 week);
     error DRD_ArrayLengthMismatch();
     error DRD_InvalidAddress();
-    error DRD_InsufficientApproval();
     error DRD_WeekTooEarly();
 
     // ========== ADMIN FUNCTIONS ========== //
 
     function setMerkleRoot(
-        uint40 rewardWeek_,
-        bytes32 merkleRoot_,
-        address rewardToken_
-    ) external returns (uint256 week, uint256 timestamp);
+        uint40 week_,
+        bytes32 merkleRoot_
+    ) external returns (uint256 timestamp);
 
     // ========== USER FUNCTIONS ========== //
 
@@ -46,15 +44,11 @@ interface IRewardDistributor is IERC165 {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    function currentWeek() external view returns (uint40);
-
-    function startTimestamp() external view returns (uint40);
+    function START_TIMESTAMP() external view returns (uint40);
 
     function WEEK_DURATION() external view returns (uint256);
 
     function weeklyMerkleRoots(uint256 week) external view returns (bytes32);
 
     function hasClaimed(address user, uint256 week) external view returns (bool);
-
-    function weeklyRewardTokens(uint256 week) external view returns (address);
 }

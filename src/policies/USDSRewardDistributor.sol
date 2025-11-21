@@ -16,8 +16,8 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @title  Reward Distributor
-/// @notice Merkle tree-based rewards distribution
+/// @title  USDS Reward Distributor
+/// @notice Merkle tree-based rewards distribution for USDS rewards
 /// @dev    This contract allows users to accumulate rewards based on their protocol activity
 ///         and claim rewards from a weekly Merkle tree distribution.
 ///
@@ -26,7 +26,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - Backend generates weekly merkle trees with accumulated rewards per user
 ///         - Merkle roots are posted on-chain by authorized role
 ///         - Users submit proofs to claim their rewards
-contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
+contract USDSRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     using TransferHelper for ERC20;
 
     /// @notice Role that can update merkle roots
@@ -38,22 +38,18 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     /// @notice The TRSRY module
     TRSRYv1 internal TRSRY;
 
+    /// @notice The reward token (immutable)
+    ERC20 public immutable REWARD_TOKEN;
+
     /// @notice Mapping from week number => merkle root
     /// @dev    Week 0 is the first distribution week
     mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
 
-    /// @notice Mapping from week number => reward token address
-    /// @dev    Allows different reward tokens for different weeks (e.g., USDS, DAI, etc.)
-    mapping(uint256 week => address rewardToken) public weeklyRewardTokens;
-
     /// @notice Mapping from user address => week number => claimed status
     mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
 
-    /// @notice The current week number
-    uint40 public currentWeek;
-
     /// @notice Timestamp when week 0 begins
-    uint40 public immutable startTimestamp;
+    uint40 public immutable START_TIMESTAMP;
 
     modifier onlyAuthorized(bytes32 role_) {
         ROLES.requireRole(role_, msg.sender);
@@ -61,10 +57,13 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     }
 
     /// @param kernel_              The Kernel address
+    /// @param rewardToken_         The ERC20 token to distribute as rewards
     /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
-    constructor(address kernel_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, address rewardToken_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
+        if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
         if (startTimestamp_ == 0) revert DRD_InvalidAddress();
-        startTimestamp = uint40(startTimestamp_);
+        REWARD_TOKEN = ERC20(rewardToken_);
+        START_TIMESTAMP = uint40(startTimestamp_);
         // Disabled by default by PolicyEnabler
     }
 
@@ -100,10 +99,11 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
     // ========== MERKLE ROOT MANAGEMENT ========== //
 
-    /// @notice Set the merkle root for the current week
+    /// @notice Set the merkle root for a week
     /// @dev    This function can only be called by addresses with the ROLE_MERKLE_UPDATER role.
-    ///         Calls are only allowed when the current week deadline has been reached based on
-    ///         the start timestamp and week number. The function automatically advances to the next week.
+    ///         Weeks can be set in any order (skipped weeks are allowed for distribution flexibility).
+    ///         Calls are only allowed when the week deadline has been reached based on
+    ///         the start timestamp and week number.
     ///
     ///         CRITICAL: Once a merkle root is set for a week, it cannot be changed. If an incorrect
     ///         root is set, the week will be locked with that root and users will be unable to claim
@@ -111,58 +111,42 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
     ///         function. If an error is discovered, a new distribution week will be required to distribute
     ///         the correct rewards.
     ///
-    /// @param  rewardWeek_     The week number being set (must equal currentWeek)
+    /// @param  week_          The week number being set
     /// @param  merkleRoot_     The merkle root for the week's distribution
-    /// @param  rewardToken_    The ERC20 token used for rewards this week
-    /// @return week            The week number that was set
-    /// @return timestamp       The timestamp when the current week ends
+    /// @return timestamp       The timestamp when the week ends
     function setMerkleRoot(
-        uint40 rewardWeek_,
-        bytes32 merkleRoot_,
-        address rewardToken_
+        uint40 week_,
+        bytes32 merkleRoot_
     )
         external
         onlyAuthorized(ROLE_MERKLE_UPDATER)
         onlyEnabled
-        returns (uint256 week, uint256 timestamp)
+        returns (uint256 weekEndTime)
     {
-        // Validate inputs
+        // Validate input
         if (merkleRoot_ == bytes32(0)) revert DRD_InvalidProof();
-        if (rewardToken_ == address(0)) revert DRD_InvalidAddress();
 
-        // Cache storage variables to save gas
-        week = currentWeek;
+        // Ensure the week hasn't already been set
+        if (weeklyMerkleRoots[week_] != bytes32(0)) revert DRD_WeekAlreadySet(week_);
 
-        // Ensure the passed rewardWeek matches the current week
-        if (rewardWeek_ != week) revert DRD_InvalidWeek(rewardWeek_);
-
-        // Calculate when the current week should end based on start timestamp and week number
-        uint256 weekEndTime = startTimestamp + (week + 1) * WEEK_DURATION;
+        // Calculate when this week should end based on start timestamp and week number
+        weekEndTime = START_TIMESTAMP + (week_ + 1) * WEEK_DURATION;
 
         // Ensure the current time has reached or passed the week deadline
         if (block.timestamp < weekEndTime) {
             revert DRD_WeekTooEarly();
         }
 
-        // Set the merkle root for the current week
-        weeklyMerkleRoots[week] = merkleRoot_;
-        weeklyRewardTokens[week] = rewardToken_;
+        // Set the merkle root for this week
+        weeklyMerkleRoots[week_] = merkleRoot_;
 
-        // Calculate the timestamp when this week ends
-        timestamp = weekEndTime;
-
-        emit MerkleRootSet(week, merkleRoot_, rewardToken_);
-
-        // Advance to next week for the next call
-        currentWeek = uint40(week + 1);
+        emit MerkleRootSet(week_, merkleRoot_, address(REWARD_TOKEN));
     }
 
     /// @notice Claim rewards for one or more weeks in a single transaction
-    /// @dev    This function handles both single week and multi-week claims.
-    ///         For single week: pass arrays of length 1.
-    ///         For multiple weeks: automatically handles different reward tokens (up to 2).
+    /// @dev    All weeks are claimed for the same reward token.
     ///
-    /// @param  weeks_      Array of week numbers to claim (can be length 1 for single week)
+    /// @param  weeks_      Array of week numbers to claim
     /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
     /// @param  proofs_     Array of merkle proofs, one per week
     function claim(
@@ -175,52 +159,26 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
             revert DRD_ArrayLengthMismatch();
         }
 
-        address token1;
-        address token2;
-        uint256 amount1;
-        uint256 amount2;
-        uint256 weeksForToken1;
-        uint256 weeksForToken2;
+        uint256 totalAmount;
 
         for (uint256 i = 0; i < weeks_.length; ) {
             uint256 week = weeks_[i];
             uint256 amount = amounts_[i];
 
-            // Get the reward token for this week
-            address weekToken = weeklyRewardTokens[week];
-            if (weekToken == address(0)) revert DRD_MerkleRootNotSet(week);
+            // Verify merkle root is set for this week
+            if (weeklyMerkleRoots[week] == bytes32(0)) revert DRD_MerkleRootNotSet(week);
 
             // Verify and mark as claimed
             _verifyAndMarkClaimed(msg.sender, week, amount, proofs_[i]);
 
-            // Accumulate by token and count weeks
-            if (token1 == address(0)) {
-                token1 = weekToken;
-                amount1 += amount;
-                weeksForToken1++;
-            } else if (weekToken == token1) {
-                amount1 += amount;
-                weeksForToken1++;
-            } else if (token2 == address(0)) {
-                token2 = weekToken;
-                amount2 += amount;
-                weeksForToken2++;
-            } else if (weekToken == token2) {
-                amount2 += amount;
-                weeksForToken2++;
-            } else {
-                // More than 2 tokens in a single batch is not supported
-                // Users should split into multiple transactions
-                revert DRD_InvalidWeek(week);
-            }
+            totalAmount += amount;
 
             unchecked {
                 ++i;
             }
         }
 
-        _transferRewards(msg.sender, token1, amount1, weeksForToken1);
-        _transferRewards(msg.sender, token2, amount2, weeksForToken2);
+        _transferRewards(msg.sender, totalAmount, weeks_.length);
     }
 
     /// @notice Verify merkle proof and mark week as claimed for user
@@ -247,12 +205,10 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
     /// @notice Internal function to transfer rewards from treasury and update accounting
     /// @param  to_         Address to transfer rewards to
-    /// @param  token_      Reward token address
     /// @param  amount_     Amount to transfer
-    /// @param  weekCount_  Number of weeks being claimed for this token (for event)
+    /// @param  weekCount_  Number of weeks being claimed (for event)
     function _transferRewards(
         address to_,
-        address token_,
         uint256 amount_,
         uint256 weekCount_
     ) internal {
@@ -261,11 +217,11 @@ contract RewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
 
         // Increase withdrawal approval and withdraw from treasury
         // This requires that this policy has been granted the appropriate permissions
-        TRSRY.increaseWithdrawApproval(address(this), ERC20(token_), amount_);
-        TRSRY.withdrawReserves(to_, ERC20(token_), amount_);
+        TRSRY.increaseWithdrawApproval(address(this), REWARD_TOKEN, amount_);
+        TRSRY.withdrawReserves(to_, REWARD_TOKEN, amount_);
 
         // Emit rewards claimed event with week count
-        emit RewardsClaimed(to_, amount_, token_, weekCount_);
+        emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
     }
 
     // ========== ERC165 ========== //
