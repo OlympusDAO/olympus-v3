@@ -48,32 +48,32 @@ interface IRewardDistributor is IERC165 {
     /// @notice Emitted when the Merkle root for a week is already set
     ///
     /// @param  week            The week in question
-    error DRD_WeekAlreadySet(uint256 week);
+    error RewardDistributor_WeekAlreadySet(uint256 week);
 
     /// @notice Emitted when rewards for a given week have already been claimed
     ///
     /// @param  week            The week in question
-    error DRD_AlreadyClaimed(uint256 week);
+    error RewardDistributor_AlreadyClaimed(uint256 week);
 
     /// @notice Emitted when an invalid Merkle proof is submitted
-    error DRD_InvalidProof();
+    error RewardDistributor_InvalidProof();
 
     /// @notice Emitted when no weeks are specified for a claim
-    error DRD_NoWeeksSpecified();
+    error RewardDistributor_NoWeeksSpecified();
 
     /// @notice Emitted when a Merkle root has not been set for a given week
     ///
     /// @param  week            The week missing a Merkle root
-    error DRD_MerkleRootNotSet(uint256 week);
+    error RewardDistributor_MerkleRootNotSet(uint256 week);
 
     /// @notice Emitted when provided arrays are not the same length
-    error DRD_ArrayLengthMismatch();
+    error RewardDistributor_ArrayLengthMismatch();
 
     /// @notice Emitted when an invalid address is provided
-    error DRD_InvalidAddress();
+    error RewardDistributor_InvalidAddress();
 
     /// @notice Emitted when setting a Merkle root before week has elapsed
-    error DRD_WeekTooEarly();
+    error RewardDistributor_WeekTooEarly();
 
     // ========== ADMIN FUNCTIONS ========== //
 

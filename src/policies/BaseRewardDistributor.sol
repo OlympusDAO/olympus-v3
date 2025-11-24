@@ -70,8 +70,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         address rewardTokenVault_,
         uint256 startTimestamp_
     ) Policy(Kernel(kernel_)) {
-        if (rewardTokenVault_ == address(0)) revert DRD_InvalidAddress();
-        if (startTimestamp_ == 0) revert DRD_InvalidAddress();
+        if (rewardTokenVault_ == address(0)) revert RewardDistributor_InvalidAddress();
+        if (startTimestamp_ == 0) revert RewardDistributor_InvalidAddress();
         REWARD_TOKEN = IERC20(IERC4626(rewardTokenVault_).asset());
         REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
         START_TIMESTAMP = uint40(startTimestamp_);
@@ -133,17 +133,17 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         returns (uint256 weekEndTime)
     {
         // Validate input
-        if (merkleRoot_ == bytes32(0)) revert DRD_InvalidProof();
+        if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidProof();
 
         // Ensure the week hasn't already been set
-        if (weeklyMerkleRoots[week_] != bytes32(0)) revert DRD_WeekAlreadySet(week_);
+        if (weeklyMerkleRoots[week_] != bytes32(0)) revert RewardDistributor_WeekAlreadySet(week_);
 
         // Calculate when this week should end based on start timestamp and week number
         weekEndTime = START_TIMESTAMP + (week_ + 1) * WEEK_DURATION;
 
         // Ensure the current time has reached or passed the week deadline
         if (block.timestamp < weekEndTime) {
-            revert DRD_WeekTooEarly();
+            revert RewardDistributor_WeekTooEarly();
         }
 
         // Set the merkle root for this week
@@ -232,9 +232,9 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
     ) internal pure {
-        if (weeks_.length == 0) revert DRD_NoWeeksSpecified();
+        if (weeks_.length == 0) revert RewardDistributor_NoWeeksSpecified();
         if (weeks_.length != amounts_.length || weeks_.length != proofs_.length) {
-            revert DRD_ArrayLengthMismatch();
+            revert RewardDistributor_ArrayLengthMismatch();
         }
     }
 
@@ -256,7 +256,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
             uint256 amount = amounts_[i];
 
             // Verify merkle root is set for this week
-            if (weeklyMerkleRoots[week] == bytes32(0)) revert DRD_MerkleRootNotSet(week);
+            if (weeklyMerkleRoots[week] == bytes32(0))
+                revert RewardDistributor_MerkleRootNotSet(week);
 
             // Verify and mark as claimed
             _verifyAndMarkClaimed(user_, week, amount, proofs_[i]);
@@ -282,14 +283,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         bytes32[] calldata proof_
     ) internal view virtual {
         // Check if already claimed
-        if (hasClaimed[user_][week_]) revert DRD_AlreadyClaimed(week_);
+        if (hasClaimed[user_][week_]) revert RewardDistributor_AlreadyClaimed(week_);
 
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
         // Verify Merkle proof
         if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
-            revert DRD_InvalidProof();
+            revert RewardDistributor_InvalidProof();
         }
     }
 

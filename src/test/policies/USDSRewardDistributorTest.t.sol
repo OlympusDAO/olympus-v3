@@ -122,12 +122,12 @@ contract USDSRewardDistributorTest is Test {
     }
 
     function test_constructor_rejects_zero_reward_token_vault() public {
-        vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
         new USDSRewardDistributor(address(kernel), address(0), startTimestamp);
     }
 
     function test_constructor_rejects_zero_start_timestamp() public {
-        vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
         new USDSRewardDistributor(address(kernel), address(sUSDS), 0);
     }
 
@@ -157,7 +157,7 @@ contract USDSRewardDistributorTest is Test {
     function test_setMerkleRoot_reverts_too_early() public {
         // Still in week 0
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.DRD_WeekTooEarly.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_WeekTooEarly.selector);
         distributor.setMerkleRoot(0, bytes32(uint256(1)));
     }
 
@@ -167,7 +167,9 @@ contract USDSRewardDistributorTest is Test {
         vm.startPrank(admin);
         distributor.setMerkleRoot(0, bytes32(uint256(1)));
 
-        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_WeekAlreadySet.selector, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRewardDistributor.RewardDistributor_WeekAlreadySet.selector, 0)
+        );
         distributor.setMerkleRoot(0, bytes32(uint256(2)));
         vm.stopPrank();
     }
@@ -301,7 +303,10 @@ contract USDSRewardDistributorTest is Test {
         assertEq(shares, 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IRewardDistributor.DRD_AlreadyClaimed.selector, week)
+            abi.encodeWithSelector(
+                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                week
+            )
         );
         distributor.claim(claimWeeks, amounts, proofs, false);
         vm.stopPrank();
@@ -334,7 +339,7 @@ contract USDSRewardDistributorTest is Test {
         assertEq(shares, 0);
 
         vm.prank(alice);
-        vm.expectRevert(IRewardDistributor.DRD_InvalidProof.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
         distributor.claim(claimWeeks, amounts, proofs, false);
     }
 
@@ -363,7 +368,10 @@ contract USDSRewardDistributorTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, week)
+            abi.encodeWithSelector(
+                IRewardDistributor.RewardDistributor_MerkleRootNotSet.selector,
+                week
+            )
         );
         distributor.claim(claimWeeks, amounts, proofs, false);
     }
