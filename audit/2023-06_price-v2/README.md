@@ -54,7 +54,7 @@ Additionally, the contracts use various base contracts from `solmate` including 
 
 ## On-chain context
 
-```
+```text
 DEPLOYMENT: mainnet initially, arbitrum and optimism later
 ERC20: whitelisted
 ERC721: none
@@ -67,7 +67,7 @@ EXTERNAL-ADMINS: trusted
 
 Please answer the following questions to provide more context:
 
-### Q: Are there any additional protocol roles? If yes, please explain in detail:
+### Q: Are there any additional protocol roles? If yes, please explain in detail
 
 1. The roles
 2. The actions those roles can take
@@ -76,9 +76,9 @@ Please answer the following questions to provide more context:
 
 A: There are generally three roles in the current access control framework for Olympus. These are each held by a separate multisig.
 
--   Admin (DAO MS) - Required for any functions that install new contracts or update system dependencies or that can withdraw reserves or arbitrarily mint/burn OHM
--   Policy (Policy MS) - Able to set system parameters for various systems to optimize performance, such as market op durations and scale
--   Emergency (Emergency MS) - Able to deactivate key system components in the event of emergency.
+- Admin (DAO MS) - Required for any functions that install new contracts or update system dependencies or that can withdraw reserves or arbitrarily mint/burn OHM
+- Policy (Policy MS) - Able to set system parameters for various systems to optimize performance, such as market op durations and scale
+- Emergency (Emergency MS) - Able to deactivate key system components in the event of emergency.
 
 ---
 
@@ -88,26 +88,26 @@ A: None
 
 ---
 
-### Q: Please list any known issues/acceptable risks that should not result in a valid finding.
+### Q: Please list any known issues/acceptable risks that should not result in a valid finding
 
 A: We're aware that L2 deployments of Chainlink oracles require additional validation of the sequencer uptime feed. We don't intend to deploy to L2s immediately and will add a L2 version of that submodule when we do.
 
 ---
 
-### Q: Please provide links to previous audits (if any).
+### Q: Please provide links to previous audits (if any)
 
 A: Olympus V3 was audited multiple times prior to launch in November, 2022. The currently deployed Olympus V3 contracts can be found on [GitHub](https://github.com/OlympusDAO/olympus-v3).
 You can reference these audits here:
 
--   Spearbit (07/2022)
-    -   [Report](https://docs.olympusdao.finance/assets/files/OlympusDAO-1-1ec939694a04535f430fd977a133c77a.pdf)
--   Code4rena Olympus V3 Audit (08/2022)
-    -   [Repo](https://github.com/code-423n4/2022-08-olympus)
-    -   [Findings](https://github.com/code-423n4/2022-08-olympus-findings)
--   Kebabsec Olympus V3 Remediation and Follow-up Audits (10/2022 - 11/2022)
-    -   [Remediation Audit Phase 1 Report](https://hackmd.io/tJdujc0gSICv06p_9GgeFQ)
-    -   [Remediation Audit Phase 2 Report](https://hackmd.io/@12og4u7y8i/rk5PeIiEs)
-    -   [Follow-on Audit Report](https://hackmd.io/@12og4u7y8i/Sk56otcBs)
+- Spearbit (07/2022)
+    - [Report](https://docs.olympusdao.finance/assets/files/OlympusDAO-1-1ec939694a04535f430fd977a133c77a.pdf)
+- Code4rena Olympus V3 Audit (08/2022)
+    - [Repo](https://github.com/code-423n4/2022-08-olympus)
+    - [Findings](https://github.com/code-423n4/2022-08-olympus-findings)
+- Kebabsec Olympus V3 Remediation and Follow-up Audits (10/2022 - 11/2022)
+    - [Remediation Audit Phase 1 Report](https://hackmd.io/tJdujc0gSICv06p_9GgeFQ)
+    - [Remediation Audit Phase 2 Report](https://hackmd.io/@12og4u7y8i/rk5PeIiEs)
+    - [Follow-on Audit Report](https://hackmd.io/@12og4u7y8i/Sk56otcBs)
 
 ---
 
@@ -117,7 +117,7 @@ A: The RBS system is triggered on an 8 hour interval via a keeper bot. The Heart
 
 ---
 
-### Q: In case of external protocol integrations, are the risks of an external protocol pausing or executing an emergency withdrawal acceptable? If not, Watsons will submit issues related to these situations that can harm your protocol's functionality.
+### Q: In case of external protocol integrations, are the risks of an external protocol pausing or executing an emergency withdrawal acceptable? If not, Watsons will submit issues related to these situations that can harm your protocol's functionality
 
 A: Not Acceptable. The only external integration are in the price feed submodules. The issues of a price feed failing to return data or update are known. Issues related to the validation of data returned from the price feeds is acceptable though.
 
@@ -139,22 +139,22 @@ The purpose of the Olympus PRICEv2 Oracle System is to standardize and simplify 
 
 Features:
 
--   A price can be configured for any asset, identified by its contract address.
--   Any interface for an oracle can be supported by creating a submodule for it. The current ones are Chainlink, UniV3, LP token prices (Univ2, balancer).
--   Prices for complex tokens can be calculated via recursive calls within PRICEv2 via submodules designed for this purpose (see LP token price submodules).
--   Allows defining a strategy to determine a price from multiple sources, including using a moving average as one of the sources. An example is taking the median of three price sources. Strategies can also be added by adding new submodules. An asset with only one feed does not require a strategy.
--   All prices are standardized in the same number of decimals (18) and are against USD (the system unit of account)
--   Any two asset prices can be combined to get a relative price of asset A in units of asset B via a single function call. An example would be OHM/DAI price.
--   A moving average can be configured and stored for any asset configured on the PRICE module. Different policies can maintain moving averages for tokens required for their use case.
+- A price can be configured for any asset, identified by its contract address.
+- Any interface for an oracle can be supported by creating a submodule for it. The current ones are Chainlink, UniV3, LP token prices (Univ2, balancer).
+- Prices for complex tokens can be calculated via recursive calls within PRICEv2 via submodules designed for this purpose (see LP token price submodules).
+- Allows defining a strategy to determine a price from multiple sources, including using a moving average as one of the sources. An example is taking the median of three price sources. Strategies can also be added by adding new submodules. An asset with only one feed does not require a strategy.
+- All prices are standardized in the same number of decimals (18) and are against USD (the system unit of account)
+- Any two asset prices can be combined to get a relative price of asset A in units of asset B via a single function call. An example would be OHM/DAI price.
+- A moving average can be configured and stored for any asset configured on the PRICE module. Different policies can maintain moving averages for tokens required for their use case.
 
 ### Architecture
 
 The oracle system has 4 main pieces:
 
--   Bookkeeper Policy - provides access-controlled functions for managing PRICEv2 module data configuration and submodules.
--   PRICEv2 Module - The core of the oracle system. The module exposes two key functions `getPrice(asset)` and `getPriceIn(asset,base)` which allow policies to easily retrieve prices of configured assets in the system unit of account (USD) or in terms of another asset.
--   Feed Submodules - Submodules that serve as an adapter to specific price feeds and handle all validation of price data from them.
--   Strategy Submodules - Submodules that performs logic on an array of prices from different feeds and returns a canonical value for the asset.
+- Bookkeeper Policy - provides access-controlled functions for managing PRICEv2 module data configuration and submodules.
+- PRICEv2 Module - The core of the oracle system. The module exposes two key functions `getPrice(asset)` and `getPriceIn(asset,base)` which allow policies to easily retrieve prices of configured assets in the system unit of account (USD) or in terms of another asset.
+- Feed Submodules - Submodules that serve as an adapter to specific price feeds and handle all validation of price data from them.
+- Strategy Submodules - Submodules that performs logic on an array of prices from different feeds and returns a canonical value for the asset.
 
 The following diagram places these in context of the Default Framework:
 ![PRICEv2 Architecture](./PRICEv2_architecture.png)
@@ -163,8 +163,8 @@ The following diagram places these in context of the Default Framework:
 
 Oracles are a large risk in any DeFi system that incorporates them. Most systems use a single oracle feed for an asset and exit if there is a problem validating the data provided. To avoid reliance on any single oracle or any one provider long-term, we designed this system to be able to ingest one or more price feeds for a specific asset and then apply a strategy to determine a canonical price to use for any system within the protocol. Therefore, an asset can be configured with:
 
--   1 or more price feed sources (e.g. Chainlink, UniV3)
--   A strategy to resolve data from the various price feeds (e.g. median, average, first non-zero). A strategy is not required if there is only one price feed.
+- 1 or more price feed sources (e.g. Chainlink, UniV3)
+- A strategy to resolve data from the various price feeds (e.g. median, average, first non-zero). A strategy is not required if there is only one price feed.
 
 Additionally, some token prices are based on the price of a bundle of assets which they represent a claim on (e.g. LP tokens, ERC4626 vaults). By allowing recursion from a Submodule back to the PRICEv2 module, we can dynamically calculate prices for these tokens. An example would be a Balancer OHM-WETH token. The BalancerPoolTokenPrice submodule gets the tokens in the pool and calls `PRICEv2.getPrice()` for each asset and then uses balance data to determine get the pool token value. We recognize that many recent exploits have happened due to vulnerable LP token pricing oracles. As such, we've implemented re-entrancy guard checks on both the Balancer and UniV2 LP calculations to ensure the internal balances have not been altered via a flash loan during a transaction. We have a submodule implemented for Curve LP tokens as well, but we have not identified a solution to triggering the lock within a staticcall.
 
@@ -185,14 +185,14 @@ To configure system:
 
 The OlympusDAO RBS system was audited extensively from 07/2022 to 11/2022 (see links above). The general purpose of the system is to perform market operations to stabilize the price of OHM against a reserve asset (current configured as DAI). It does so by offering fixed price "wall" swaps at a certain spread to the current target price, and by deploying dutch auction "cushion" markets at a narrow spread. Since the audits a couple minor adjustments were made, including:
 
--   v1.1: Add a minimum target price to the system that is manually set by permissioned roles.
--   v1.2: Change the heart reward logic to use a reverse dutch auction system to allow for more reliable incentivization of keepers.
+- v1.1: Add a minimum target price to the system that is manually set by permissioned roles.
+- v1.2: Change the heart reward logic to use a reverse dutch auction system to allow for more reliable incentivization of keepers.
 
 Additionally, the introduction of the PRICEv2 system requires some additional small updates to use the new oracle system instead of the purpose-built PRICEv1 version. The changes in this version include:
 
--   Moving the minimum target price variable and setter functions from the PRICEv1 module contract to the Operator policy contract.
--   Swapping out PRICEv1 references for PRICEv2 in the Operator policy contract (e.g. `PRICEv1.getLastPrice()` to `PRICEv2.getPriceIn(ohm, reserve)`).
--   Swapping out PRICEv1 references for PRICEv2 in the Heart policy contract (e.g. `PRICEv1.updateMovingAverage()` to `PRICEv2.storePrice(ohm); PRICEv2.storePrice(reserve);`).
+- Moving the minimum target price variable and setter functions from the PRICEv1 module contract to the Operator policy contract.
+- Swapping out PRICEv1 references for PRICEv2 in the Operator policy contract (e.g. `PRICEv1.getLastPrice()` to `PRICEv2.getPriceIn(ohm, reserve)`).
+- Swapping out PRICEv1 references for PRICEv2 in the Heart policy contract (e.g. `PRICEv1.updateMovingAverage()` to `PRICEv2.storePrice(ohm); PRICEv2.storePrice(reserve);`).
 
 ## Getting Started
 
