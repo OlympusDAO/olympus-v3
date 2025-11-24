@@ -12,19 +12,17 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 /// @title  USDS Reward Distributor
-/// @notice Merkle tree-based rewards distribution for USDS rewards
-/// @dev    This contract allows users to accumulate rewards based on their protocol activity
-///         and claim rewards from a weekly Merkle tree distribution.
-///
-///         Extends BaseRewardDistributor with USDS/sUSDS-specific functionality.
+/// @notice Merkle tree-based rewards distribution contract for USDS rewards
 contract USDSRewardDistributor is BaseRewardDistributor {
     using TransferHelper for ERC20;
 
     // ========== CONSTRUCTOR ========== //
 
-    /// @param kernel_              The Kernel address
-    /// @param rewardTokenVault_    The ERC4626 vault token
-    /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
+    /// @notice Constructor
+    ///
+    /// @param  kernel_             The Kernel address
+    /// @param  rewardTokenVault_   The ERC4626 vault token (sUSDS)
+    /// @param  startTimestamp_     The timestamp when week 0 begins (midnight UTC of start date)
     constructor(
         address kernel_,
         address rewardTokenVault_,
@@ -34,7 +32,19 @@ contract USDSRewardDistributor is BaseRewardDistributor {
     // ========== INTERNAL OVERRIDES ========== //
 
     /// @inheritdoc BaseRewardDistributor
-    /// @dev    Pulls sUSDS from the treasury, optionally unwraps it to USDS, and transfers to the user.
+    /// @dev    This function performs the following:
+    ///         - Withdraws sUSDS from the treasury
+    ///         - If `asVaultToken_` is true, transfers sUSDS directly to the user
+    ///         - If `asVaultToken_` is false, unwraps sUSDS to USDS and transfers to the user
+    ///         - Returns any leftover sUSDS to the treasury (due to rounding)
+    ///
+    ///         This function will revert if:
+    ///         - The amount is zero (handled by early return)
+    ///
+    /// @param  to_             Address to transfer rewards to
+    /// @param  amount_         Amount of USDS to transfer (or equivalent sUSDS)
+    /// @param  weekCount_      Number of weeks being claimed (for event)
+    /// @param  asVaultToken_   If true, transfer as sUSDS; if false, unwrap to USDS
     function _transferRewards(
         address to_,
         uint256 amount_,
@@ -55,7 +65,13 @@ contract USDSRewardDistributor is BaseRewardDistributor {
             ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(to_, vaultShares);
 
             // Emit vault token claimed event
-            emit RewardsClaimedViaVault(to_, amount_, vaultShares, address(REWARD_TOKEN_VAULT), weekCount_);
+            emit RewardsClaimedAsVaultToken(
+                to_,
+                amount_,
+                vaultShares,
+                address(REWARD_TOKEN_VAULT),
+                weekCount_
+            );
         } else {
             // Calculate how much vault shares is needed to withdraw the exact USDS amount
             uint256 sharesNeeded = vault.previewWithdraw(amount_);
@@ -71,10 +87,7 @@ contract USDSRewardDistributor is BaseRewardDistributor {
 
             // Return any leftover sUSDS to the treasury
             if (leftoverShares > 0) {
-                ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(
-                    address(TRSRY),
-                    leftoverShares
-                );
+                ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(address(TRSRY), leftoverShares);
             }
 
             // Emit rewards claimed event with week count

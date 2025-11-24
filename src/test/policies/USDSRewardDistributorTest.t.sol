@@ -16,7 +16,6 @@ import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.so
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract USDSRewardDistributorTest is Test {
-
     MockERC20 internal usds;
     MockERC4626 internal sUSDS;
     USDSRewardDistributor internal distributor;
@@ -68,19 +67,21 @@ contract USDSRewardDistributorTest is Test {
         // Grant permission to test contract to call saveRole
         // modulePermissions is at slot 6
         // mapping(Keycode => mapping(Policy => mapping(bytes4 => bool)))
-        bytes32 slot = keccak256(abi.encode(ROLESv1.saveRole.selector,
-            keccak256(abi.encode(address(this),
-                keccak256(abi.encode(toKeycode("ROLES"), 6))
-            ))
-        ));
+        bytes32 slot = keccak256(
+            abi.encode(
+                ROLESv1.saveRole.selector,
+                keccak256(abi.encode(address(this), keccak256(abi.encode(toKeycode("ROLES"), 6))))
+            )
+        );
         vm.store(address(kernel), slot, bytes32(uint256(1)));
 
         // Grant permission to test contract to call increaseWithdrawApproval
-        bytes32 slot2 = keccak256(abi.encode(TRSRYv1.increaseWithdrawApproval.selector,
-            keccak256(abi.encode(address(this),
-                keccak256(abi.encode(toKeycode("TRSRY"), 6))
-            ))
-        ));
+        bytes32 slot2 = keccak256(
+            abi.encode(
+                TRSRYv1.increaseWithdrawApproval.selector,
+                keccak256(abi.encode(address(this), keccak256(abi.encode(toKeycode("TRSRY"), 6))))
+            )
+        );
         vm.store(address(kernel), slot2, bytes32(uint256(1)));
 
         // Approve distributor to withdraw from TRSRY
@@ -103,7 +104,11 @@ contract USDSRewardDistributorTest is Test {
 
     // ========== Helper Functions ========== //
 
-    function _generateLeaf(address user, uint256 week, uint256 amount) internal pure returns (bytes32) {
+    function _generateLeaf(
+        address user,
+        uint256 week,
+        uint256 amount
+    ) internal pure returns (bytes32) {
         return keccak256(bytes.concat(keccak256(abi.encode(user, week, amount))));
     }
 
@@ -143,7 +148,9 @@ contract USDSRewardDistributorTest is Test {
         vm.warp(startTimestamp + WEEK_DURATION);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
+        );
         distributor.setMerkleRoot(0, bytes32(uint256(1)));
     }
 
@@ -284,11 +291,18 @@ contract USDSRewardDistributorTest is Test {
         distributor.claim(claimWeeks, amounts, proofs, false);
 
         // Verify previewClaim returns 0 after claiming
-        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(
+            alice,
+            claimWeeks,
+            amounts,
+            proofs
+        );
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_AlreadyClaimed.selector, week));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRewardDistributor.DRD_AlreadyClaimed.selector, week)
+        );
         distributor.claim(claimWeeks, amounts, proofs, false);
         vm.stopPrank();
     }
@@ -310,7 +324,12 @@ contract USDSRewardDistributorTest is Test {
         proofs[0] = new bytes32[](0);
 
         // Verify previewClaim returns 0 for invalid proof
-        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(
+            alice,
+            claimWeeks,
+            amounts,
+            proofs
+        );
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
@@ -333,12 +352,19 @@ contract USDSRewardDistributorTest is Test {
         proofs[0] = new bytes32[](0);
 
         // Verify previewClaim returns 0 when root not set
-        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(
+            alice,
+            claimWeeks,
+            amounts,
+            proofs
+        );
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, week));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, week)
+        );
         distributor.claim(claimWeeks, amounts, proofs, false);
     }
 
@@ -358,7 +384,12 @@ contract USDSRewardDistributorTest is Test {
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = new bytes32[](0);
 
-        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(
+            alice,
+            claimWeeks,
+            amounts,
+            proofs
+        );
 
         assertEq(claimable, amount);
         assertEq(shares, sUSDS.previewWithdraw(amount));

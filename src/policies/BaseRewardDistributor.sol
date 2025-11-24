@@ -17,13 +17,10 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title  Base Reward Distributor
-/// @notice Abstract base contract for merkle tree-based rewards distribution
-/// @dev    This contract provides core functionality for merkle-based reward claims.
-///         Implementations should override virtual functions to customize behavior.
-///
-///         Architecture:
+/// @notice Abstract base contract for Merkle tree-based rewards distribution
+/// @dev    Architecture:
 ///         - Rewards are calculated off-chain
-///         - Backend generates weekly merkle trees with accumulated rewards per user
+///         - Backend generates weekly Merkle trees with accumulated rewards per user
 ///         - Merkle roots are posted on-chain by authorized role
 ///         - Users submit proofs to claim their rewards
 abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
@@ -32,7 +29,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Role that can update merkle roots
     bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
 
-    /// @notice Minimum duration between week advances (7 days)
+    /// @notice Minimum duration between week advances
     uint256 public constant WEEK_DURATION = 7 days;
 
     /// @notice The TRSRY module
@@ -41,7 +38,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice The reward token
     IERC20 public immutable REWARD_TOKEN;
 
-    /// @notice The reward token vault (e.g., sUSDS for USDS rewards)
+    /// @notice The reward token vault
     IERC4626 public immutable REWARD_TOKEN_VAULT;
 
     /// @notice Mapping from week number => merkle root
@@ -63,9 +60,11 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== CONSTRUCTOR ========== //
 
-    /// @param kernel_              The Kernel address
-    /// @param rewardTokenVault_    The ERC4626 vault token
-    /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
+    /// @notice Constructor
+    ///
+    /// @param  kernel_             The Kernel address
+    /// @param  rewardTokenVault_   The ERC4626 vault token
+    /// @param  startTimestamp_     The timestamp when week 0 begins (midnight UTC of start date)
     constructor(
         address kernel_,
         address rewardTokenVault_,
@@ -114,13 +113,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== MERKLE ROOT MANAGEMENT ========== //
 
-    /// @notice Set the merkle root for a week
-    /// @dev    - Only callable by the ROLE_MERKLE_UPDATER role.
-    ///         - Weeks can be set in any order.
-    ///         - Calls are only allowed when the week deadline has been reached.
-    ///         - Merkle tree cannot be updated once set.
-    /// @param  week_          The week number being set
-    /// @param  merkleRoot_     The merkle root for the week's distribution
+    /// @notice Set the Merkle root for a week
+    /// @dev    - Only callable by the ROLE_MERKLE_UPDATER role
+    ///         - Weeks can be set in any order
+    ///         - Calls are only allowed when the week deadline has been reached
+    ///         - Merkle tree cannot be updated once set
+    ///
+    /// @param  week_           The week number being set
+    /// @param  merkleRoot_     The Merkle root for the week's distribution
     /// @return weekEndTime     The timestamp when the week ends
     function setMerkleRoot(
         uint40 week_,
@@ -155,15 +155,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     // ========== CLAIM FUNCTIONS ========== //
 
     /// @notice Preview the claimable rewards for a user without claiming
-    /// @dev    This function does not modify state and allows users to verify their claims before submitting.
-    ///         Returns 0 amounts if no valid claims are found (merkle root not set or proof invalid).
+    /// @dev    Returns 0 amounts if no valid claims are found (Merkle root not set or proof invalid)
     ///
-    /// @param  user_           The user address to preview claims for
-    /// @param  claimWeeks_     Array of week numbers to preview
-    /// @param  amounts_        Array of amounts for each week (must match merkle leaves)
-    /// @param  proofs_         Array of merkle proofs, one per week
-    /// @return claimableAmount The total amount of reward token claimable
-    /// @return vaultShares     The amount of vault shares equivalent to the claimable amount
+    /// @param  user_               The user address to preview claims for
+    /// @param  claimWeeks_         Array of week numbers to preview
+    /// @param  amounts_            Array of amounts for each week (must match Merkle leaves)
+    /// @param  proofs_             Array of Merkle proofs, one per week
+    /// @return claimableAmount     The total amount of reward token claimable
+    /// @return vaultShares         The amount of vault shares equivalent to the claimable amount
     function previewClaim(
         address user_,
         uint256[] calldata claimWeeks_,
@@ -203,10 +202,11 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     }
 
     /// @notice Claim rewards for one or more weeks in a single transaction
+    ///
     /// @param  weeks_          Array of week numbers to claim
-    /// @param  amounts_        Array of amounts for each week (must match merkle leaves)
-    /// @param  proofs_         Array of merkle proofs, one per week
-    /// @param  asVaultToken_   If true, claim as vault token (e.g., sUSDS); if false, unwrap to underlying token (e.g., USDS)
+    /// @param  amounts_        Array of amounts for each week (must match Merkle leaves)
+    /// @param  proofs_         Array of Merkle proofs, one per week
+    /// @param  asVaultToken_   If true, claim as vault token; if false, unwrap to underlying token
     function claim(
         uint256[] calldata weeks_,
         uint256[] calldata amounts_,
@@ -223,6 +223,10 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     // ========== INTERNAL HELPERS ========== //
 
     /// @notice Validate claim input arrays
+    ///
+    /// @param  weeks_          Array of week numbers to claim
+    /// @param  amounts_        Array of amounts for each week
+    /// @param  proofs_         Array of Merkle proofs, one per week
     function _validateClaimArrays(
         uint256[] calldata weeks_,
         uint256[] calldata amounts_,
@@ -235,6 +239,12 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     }
 
     /// @notice Process claims and return total amount
+    ///
+    /// @param  user_           The user address claiming rewards
+    /// @param  weeks_          Array of week numbers to claim
+    /// @param  amounts_        Array of amounts for each week
+    /// @param  proofs_         Array of Merkle proofs, one per week
+    /// @return totalAmount     The total amount claimed across all weeks
     function _processClaims(
         address user_,
         uint256[] calldata weeks_,
@@ -259,8 +269,12 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
     }
 
-    /// @notice Verify merkle proof without modifying state
-    /// @dev    Used for preview functionality
+    /// @notice Verify Merkle proof without modifying state
+    ///
+    /// @param  user_           The user address
+    /// @param  week_           The week number
+    /// @param  amount_         The amount to verify
+    /// @param  proof_          The Merkle proof
     function _verifyProof(
         address user_,
         uint256 week_,
@@ -273,15 +287,19 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
-        // Verify merkle proof
+        // Verify Merkle proof
         if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
             revert DRD_InvalidProof();
         }
     }
 
-    /// @notice Verify merkle proof without reverting on failure
-    /// @dev    Returns false instead of reverting, useful for preview functions
-    /// @return isValid True if proof is valid and claimable, false otherwise
+    /// @notice Verify Merkle proof without reverting on failure
+    ///
+    /// @param  user_           The user address
+    /// @param  week_           The week number
+    /// @param  amount_         The amount to verify
+    /// @param  proof_          The Merkle proof
+    /// @return isValid         True if proof is valid and claimable, false otherwise
     function _verifyProofSafe(
         address user_,
         uint256 week_,
@@ -294,11 +312,16 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
-        // Verify merkle proof and return result
+        // Verify Merkle proof and return result
         return MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf);
     }
 
-    /// @notice Verify merkle proof and mark week as claimed for user
+    /// @notice Verify Merkle proof and mark week as claimed for user
+    ///
+    /// @param  user_           The user address
+    /// @param  week_           The week number
+    /// @param  amount_         The amount to verify
+    /// @param  proof_          The Merkle proof
     function _verifyAndMarkClaimed(
         address user_,
         uint256 week_,
@@ -314,6 +337,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     /// @notice Internal function to transfer rewards from treasury
     /// @dev    Must be implemented by derived contracts
+    ///
     /// @param  to_             Address to transfer rewards to
     /// @param  amount_         Amount to transfer
     /// @param  weekCount_      Number of weeks being claimed (for event)
@@ -325,7 +349,10 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         bool asVaultToken_
     ) internal virtual;
 
-    /// @notice Emit merkle root set event
+    /// @notice Emit Merkle root set event
+    ///
+    /// @param  week_           The week number
+    /// @param  merkleRoot_     The Merkle root
     function _emitMerkleRootSet(uint256 week_, bytes32 merkleRoot_) internal {
         emit MerkleRootSet(week_, merkleRoot_, address(REWARD_TOKEN));
     }
