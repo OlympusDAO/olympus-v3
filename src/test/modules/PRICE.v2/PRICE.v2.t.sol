@@ -13,7 +13,11 @@ import {MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
-import "modules/PRICE/OlympusPrice.v2.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
+import {ModuleWithSubmodules} from "src/Submodules.sol";
+import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {BalancerPoolTokenPrice, IVault, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
@@ -189,7 +193,8 @@ contract PriceV2Test is Test {
     UniswapV3Price internal univ3Price;
     SimplePriceFeedStrategy internal strategy;
 
-    address internal writer;
+    address internal moduleWriter;
+    address internal priceWriter;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
@@ -327,7 +332,8 @@ contract PriceV2Test is Test {
             price = new OlympusPricev2(kernel, 18, OBSERVATION_FREQUENCY);
 
             // Deploy mock module writer
-            writer = price.generateGodmodeFixture(type(OlympusPricev2).name);
+            moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
+            priceWriter = price.generateGodmodeFixture(type(OlympusPricev2).name);
 
             // Deploy price submodules
             chainlinkPrice = new ChainlinkPriceFeeds(price);
@@ -339,10 +345,11 @@ contract PriceV2Test is Test {
         {
             /// Initialize system and kernel
             kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.ActivatePolicy, address(writer));
+            kernel.executeAction(Actions.ActivatePolicy, address(moduleWriter));
+            kernel.executeAction(Actions.ActivatePolicy, address(priceWriter));
 
             // Install submodules on price module
-            vm.startPrank(writer);
+            vm.startPrank(moduleWriter);
             price.installSubmodule(chainlinkPrice);
             price.installSubmodule(bptPrice);
             price.installSubmodule(univ3Price);
@@ -385,7 +392,7 @@ contract PriceV2Test is Test {
     }
 
     function _addOneMAAsset(uint256 nonce_, uint256 numObs_) internal {
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
             .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
@@ -415,7 +422,7 @@ contract PriceV2Test is Test {
     }
 
     function _addOneMAAssetWithObservations(uint256[] memory observations_) internal {
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
             .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
 
@@ -446,7 +453,7 @@ contract PriceV2Test is Test {
 
     function _addBaseAssets(uint256 nonce_) internal {
         // Configure price feed data and add asset to price module
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // WETH - One feed with no strategy
         {
@@ -721,7 +728,7 @@ contract PriceV2Test is Test {
             abi.encode(ethParams) // bytes memory params_
         );
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.addAsset(
             address(weth), // address asset_
             false, // bool storeMovingAverage_ // don't track WETH MA
@@ -972,7 +979,7 @@ contract PriceV2Test is Test {
         assertEq(t2_movingAverageTimestamp, t1_movingAverageTimestamp);
 
         // Store the MA price
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Get the current price again
@@ -1156,7 +1163,7 @@ contract PriceV2Test is Test {
 
         // Warp OBSERVATION_FREQUENCY seconds forward, store the price, to increment nextObsIndex to 1
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Get last price, expect the most recent observation to be returned
@@ -1213,7 +1220,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.addAsset(
             address(onema), // address asset_
             true, // bool storeMovingAverage_ // track ONEMA MA
@@ -1331,7 +1338,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Cache the current price of weth
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
         uint48 start = uint48(block.timestamp);
 
@@ -1359,7 +1366,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Cache the current price of weth
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
         uint48 start = uint48(block.timestamp);
 
@@ -1412,7 +1419,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Cache the current price of weth
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
         uint48 start = uint48(block.timestamp);
 
@@ -1508,7 +1515,7 @@ contract PriceV2Test is Test {
 
         // Cache the current price of weth
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
 
         // Get last price of weth in ohm
@@ -1733,7 +1740,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Store the price of one asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         price.storePrice(address(weth));
         vm.stopPrank();
 
@@ -1756,7 +1763,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Store the price of one asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         price.storePrice(address(alpha));
         vm.stopPrank();
 
@@ -1915,7 +1922,7 @@ contract PriceV2Test is Test {
         uint48 firstStoreTime = uint48(block.timestamp);
 
         // Store the price of one asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         price.storePrice(address(weth));
         vm.stopPrank();
 
@@ -1954,7 +1961,7 @@ contract PriceV2Test is Test {
         uint48 firstStoreTime = uint48(block.timestamp);
 
         // Store the price of base asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         price.storePrice(address(alpha));
         vm.stopPrank();
 
@@ -1994,7 +2001,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(twoma));
     }
 
@@ -2009,7 +2016,7 @@ contract PriceV2Test is Test {
         // Try to call storePrice with weth and expect revert (single feed)
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
 
         // Set ohm price to zero
@@ -2019,7 +2026,7 @@ contract PriceV2Test is Test {
         // Try to get current price and expect revert
         err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
         vm.expectRevert(err);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(ohm));
     }
 
@@ -2036,8 +2043,8 @@ contract PriceV2Test is Test {
         vm.expectRevert(err);
         price.storePrice(address(weth));
 
-        // Try to call storePrice with permissioned address (writer) and expect to succeed
-        vm.prank(writer);
+        // Try to call storePrice with permissioned address (priceWriter) and expect to succeed
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
     }
 
@@ -2047,7 +2054,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Cache the current price of weth
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
         uint48 start = uint48(block.timestamp);
 
@@ -2057,7 +2064,7 @@ contract PriceV2Test is Test {
 
         // Call the function
         // Should not revert
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
     }
 
@@ -2080,7 +2087,7 @@ contract PriceV2Test is Test {
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(weth));
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
@@ -2094,7 +2101,7 @@ contract PriceV2Test is Test {
         assertEq(asset.nextObsIndex, 0); // always 0 when no moving average
 
         // Store price again and check that event is emitted
-        vm.prank(writer);
+        vm.prank(priceWriter);
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(weth), uint256(2001e18), uint48(block.timestamp));
         price.storePrice(address(weth));
@@ -2121,7 +2128,7 @@ contract PriceV2Test is Test {
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Get updated cached data for onema
@@ -2141,7 +2148,7 @@ contract PriceV2Test is Test {
             vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
             onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
-            vm.prank(writer);
+            vm.prank(priceWriter);
             price.storePrice(address(onema));
         }
 
@@ -2160,7 +2167,7 @@ contract PriceV2Test is Test {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Get updated cached data for onema
@@ -2169,7 +2176,7 @@ contract PriceV2Test is Test {
 
         // Store price again and check that event is emitted
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(onema), uint256(50e18), uint48(block.timestamp));
         price.storePrice(address(onema));
@@ -2184,7 +2191,7 @@ contract PriceV2Test is Test {
         // Add an asset that uses the moving average
         // The strategy is the average price of the single price feed
         // 2 observations are stored at any time
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
             .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
 
@@ -2215,7 +2222,7 @@ contract PriceV2Test is Test {
         // Warp forward in time and store a new price (5e8)
         uint48 start = uint48(block.timestamp);
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the price feed
@@ -2237,7 +2244,7 @@ contract PriceV2Test is Test {
         // Warp forward in time and store a different price (10e8)
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(10e8));
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the price feed
@@ -2266,7 +2273,7 @@ contract PriceV2Test is Test {
         // Add an asset that uses the moving average
         // The strategy is the average price of the two price feeds
         // 2 observations are stored at any time
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
             .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
         ChainlinkPriceFeeds.OneFeedParams memory ohmUsdFeedParams = ChainlinkPriceFeeds
@@ -2304,7 +2311,7 @@ contract PriceV2Test is Test {
         // Warp forward in time and store a new price
         uint48 start = uint48(block.timestamp);
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the two price feeds
@@ -2326,7 +2333,7 @@ contract PriceV2Test is Test {
         // Warp forward in time and store a new price
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(20e8));
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the price feed
@@ -2360,7 +2367,7 @@ contract PriceV2Test is Test {
             abi.encode(ethParams) // bytes memory params_
         );
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.addAsset(
             address(weth), // address asset_
             false, // bool storeMovingAverage_ // don't track WETH MA
@@ -2387,7 +2394,7 @@ contract PriceV2Test is Test {
         onemaUsdPriceFeed.setLatestAnswer(int256(50e8));
         onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.storeObservations();
 
         // Non-MA assets should not have any effect
@@ -2418,7 +2425,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the an asset again
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         bytes memory err = abi.encodeWithSignature(
             "PRICE_AssetAlreadyApproved(address)",
@@ -2454,7 +2461,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         bytes memory err = abi.encodeWithSignature("PRICE_AssetNotContract(address)", address(eoa));
         vm.expectRevert(err);
@@ -2525,7 +2532,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as there is no strategy, but no MA + 2 price feeds > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
@@ -2561,7 +2568,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as useMovingAverage is enabled, but storeMovingAverage is not
         bytes memory err = abi.encodeWithSignature(
@@ -2578,10 +2585,10 @@ contract PriceV2Test is Test {
             uint48(0), // uint48 lastObservationTime_
             new uint256[](0), // uint256[] memory observations_
             PRICEv2.Component( // Add a strategy so that addAsset has no other reason to revert
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode(0) // no params required
-            ), // Component memory strategy_
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getAveragePrice.selector,
+                    abi.encode(0) // no params required
+                ), // Component memory strategy_
             feeds //
         );
     }
@@ -2598,7 +2605,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as there is no strategy, but MA + single price feed > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
@@ -2640,7 +2647,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -2697,7 +2704,7 @@ contract PriceV2Test is Test {
         observations[0] = 9e18; // Junk number that should be different to anything from price feeds
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -2736,7 +2743,7 @@ contract PriceV2Test is Test {
         observations[0] = 9e18;
         observations[0] = 8e18;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as there should only be 1 observation (cached result) when no moving average is being stored
         bytes memory err = abi.encodeWithSignature(
@@ -2777,7 +2784,7 @@ contract PriceV2Test is Test {
         uint256[] memory observations = new uint256[](1);
         observations[0] = 0;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as the observations input should not contain 0
         bytes memory err = abi.encodeWithSignature(
@@ -2820,7 +2827,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -2867,7 +2874,7 @@ contract PriceV2Test is Test {
         uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as one price feed call will fail due to invalid selector
         bytes memory err = abi.encodeWithSignature(
@@ -2915,7 +2922,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as one price feed call will fail due to zero price
         bytes memory err = abi.encodeWithSelector(
@@ -2961,7 +2968,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as one price feed call will fail due to zero price
         bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, address(weth));
@@ -3014,7 +3021,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as one price feed call will fail due to zero price
         bytes memory err = abi.encodeWithSelector(
@@ -3070,7 +3077,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Reverts as one price feed call will fail due to zero price
         bytes memory err = abi.encodeWithSelector(
@@ -3116,7 +3123,7 @@ contract PriceV2Test is Test {
         uint256 expectedCumulativeObservations = observations[0] + observations[1];
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -3180,7 +3187,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
 
         // Try and add the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
 
@@ -3215,7 +3222,7 @@ contract PriceV2Test is Test {
         // No assets registered
 
         // Try and remove the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_AssetNotApproved(address)",
             address(weth)
@@ -3229,7 +3236,7 @@ contract PriceV2Test is Test {
         _addBaseAssets(nonce_);
 
         // Remove the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -3266,7 +3273,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's price feeds
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -3323,7 +3330,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's price feeds
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect a revert as the new price feeds length is incompatible with the strategy configuration
         bytes memory err = abi.encodeWithSelector(
@@ -3383,7 +3390,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_AssetNotApproved(address)",
             address(weth)
@@ -3400,7 +3407,7 @@ contract PriceV2Test is Test {
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](0);
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsPriceFeedInsufficient(address,uint256,uint256)",
             address(weth),
@@ -3429,7 +3436,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_SubmoduleNotInstalled(address,bytes)",
             address(weth),
@@ -3457,7 +3464,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
 
@@ -3475,7 +3482,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
 
         // Set up a new feed
@@ -3498,7 +3505,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_DuplicatePriceFeed(address,uint256)",
             address(weth),
@@ -3522,7 +3529,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -3575,7 +3582,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_AssetNotApproved(address)",
             address(weth)
@@ -3596,7 +3603,7 @@ contract PriceV2Test is Test {
         );
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_SubmoduleNotInstalled(address,bytes)",
             address(weth),
@@ -3618,7 +3625,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
@@ -3651,7 +3658,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
             address(reserve),
@@ -3677,7 +3684,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
             address(onema),
@@ -3701,7 +3708,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_StrategyFailed(address,bytes)",
             address(reserve),
@@ -3729,7 +3736,7 @@ contract PriceV2Test is Test {
         );
 
         // Update the asset's strategy
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsStoreMovingAverageRequired(address)",
             address(weth)
@@ -3755,7 +3762,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
         observations[1] = 3e18;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
@@ -3796,7 +3803,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
         observations[1] = 3e18;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
@@ -3848,7 +3855,7 @@ contract PriceV2Test is Test {
             address(onema)
         );
         vm.expectRevert(err);
-        vm.prank(writer);
+        vm.prank(priceWriter);
         price.updateAssetMovingAverage(
             address(onema),
             storeMovingAverage, // disable storeMovingAverage (previously enabled)
@@ -3889,7 +3896,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
 
         // Try and update the asset
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_AssetNotApproved(address)",
             address(reserve)
@@ -3915,7 +3922,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsLastObservationTimeInvalid(address,uint48,uint48,uint48)",
             address(reserve),
@@ -3944,7 +3951,7 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsMovingAverageDurationInvalid(address,uint32,uint32)",
             address(reserve),
@@ -3979,7 +3986,7 @@ contract PriceV2Test is Test {
         }
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsObservationZero(address,uint256)",
             address(reserve),
@@ -4007,7 +4014,7 @@ contract PriceV2Test is Test {
         observations[1] = 3e18;
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsInvalidObservationCount(address,uint256,uint256,uint256)",
             address(reserve),
@@ -4037,7 +4044,7 @@ contract PriceV2Test is Test {
         observations[1] = 3e18;
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsInvalidObservationCount(address,uint256,uint256,uint256)",
             address(reserve),
@@ -4065,7 +4072,7 @@ contract PriceV2Test is Test {
         uint256[] memory observations = new uint256[](1);
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsObservationZero(address,uint256)",
             address(reserve),
@@ -4092,7 +4099,7 @@ contract PriceV2Test is Test {
         uint256[] memory observations = new uint256[](1);
 
         // Update the asset's moving average
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
             "PRICE_ParamsObservationZero(address,uint256)",
             address(reserve),
@@ -4116,7 +4123,7 @@ contract PriceV2Test is Test {
         uint256[] memory observations = new uint256[](1);
         observations[0] = 2e18;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
@@ -4165,7 +4172,7 @@ contract PriceV2Test is Test {
         uint256[] memory expectedObservations = new uint256[](1);
         expectedObservations[0] = price_;
 
-        vm.startPrank(writer);
+        vm.startPrank(priceWriter);
 
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
