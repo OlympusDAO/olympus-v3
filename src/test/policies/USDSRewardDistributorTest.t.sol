@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {USDSRewardDistributor} from "policies/USDSRewardDistributor.sol";
 import {IRewardDistributor} from "policies/interfaces/IRewardDistributor.sol";
 import {Kernel, Keycode, Policy, toKeycode, Module, Actions} from "src/Kernel.sol";
@@ -13,36 +14,6 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-
-/// @notice Simple mock ERC4626 vault for testing
-contract MockERC4626 is MockERC20 {
-    ERC20 public immutable asset;
-
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint8 decimals_,
-        address asset_
-    ) MockERC20(name_, symbol_, decimals_) {
-        asset = ERC20(asset_);
-    }
-
-    function previewWithdraw(uint256 assets_) external pure returns (uint256) {
-        // 1:1 conversion for simplicity in tests
-        return assets_;
-    }
-
-    function withdraw(
-        uint256 assets_,
-        address receiver_,
-        address owner_
-    ) external returns (uint256 shares) {
-        // Simple 1:1 mock implementation
-        shares = assets_;
-        asset.transfer(receiver_, assets_);
-        _burn(owner_, shares);
-    }
-}
 
 contract USDSRewardDistributorTest is Test {
 
@@ -75,7 +46,7 @@ contract USDSRewardDistributorTest is Test {
 
         // Deploy mock tokens
         usds = new MockERC20("USDS", "USDS", 18);
-        sUSDS = new MockERC4626("Vault Token", "vToken", 18, address(usds));
+        sUSDS = new MockERC4626(usds, "Vault Token", "vToken");
 
         // Deploy Kernel
         kernel = new Kernel();
@@ -123,7 +94,9 @@ contract USDSRewardDistributorTest is Test {
         distributor.enable("");
 
         // Fund Treasury with sUSDS
-        sUSDS.mint(address(trsry), 1_000_000e18);
+        usds.mint(address(this), 1_000_000e18);
+        usds.approve(address(sUSDS), 1_000_000e18);
+        sUSDS.mint(1_000_000e18, address(trsry));
         // Fund Vault with USDS (for withdrawals)
         usds.mint(address(sUSDS), 1_000_000e18);
     }
@@ -250,7 +223,7 @@ contract USDSRewardDistributorTest is Test {
         distributor.claim(claimWeeks, amounts, proofs, true); // asVaultToken = true
 
         // Verify
-        assertEq(sUSDS.balanceOf(alice), amount); // 1:1 conversion in mock
+        assertEq(sUSDS.balanceOf(alice), sUSDS.previewWithdraw(amount));
         assertTrue(distributor.hasClaimed(alice, week));
     }
 
@@ -388,6 +361,6 @@ contract USDSRewardDistributorTest is Test {
         (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
 
         assertEq(claimable, amount);
-        assertEq(shares, amount); // 1:1 mock
+        assertEq(shares, sUSDS.previewWithdraw(amount));
     }
 }
