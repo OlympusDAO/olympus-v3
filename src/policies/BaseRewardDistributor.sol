@@ -216,6 +216,25 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
     }
 
+    /// @notice Verify merkle proof without reverting on failure
+    /// @dev    Returns false instead of reverting, useful for preview functions
+    /// @return isValid True if proof is valid and claimable, false otherwise
+    function _verifyProofSafe(
+        address user_,
+        uint256 week_,
+        uint256 amount_,
+        bytes32[] calldata proof_
+    ) internal view virtual returns (bool isValid) {
+        // Check if already claimed
+        if (hasClaimed[user_][week_]) return false;
+
+        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
+
+        // Verify merkle proof and return result
+        return MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf);
+    }
+
     /// @notice Verify merkle proof and mark week as claimed for user
     function _verifyAndMarkClaimed(
         address user_,

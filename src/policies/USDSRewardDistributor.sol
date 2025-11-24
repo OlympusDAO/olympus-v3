@@ -5,7 +5,6 @@ pragma solidity >=0.8.20;
 import {BaseRewardDistributor} from "./BaseRewardDistributor.sol";
 
 // Interfaces
-import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -49,6 +48,7 @@ contract USDSRewardDistributor is BaseRewardDistributor {
 
     /// @notice Preview the claimable rewards for a user without claiming
     /// @dev    This function does not modify state and allows users to verify their claims before submitting.
+    ///         Returns 0 amounts if no valid claims are found (merkle root not set or proof invalid).
     ///
     /// @param  user_           The user address to preview claims for
     /// @param  claimWeeks_     Array of week numbers to preview
@@ -62,19 +62,22 @@ contract USDSRewardDistributor is BaseRewardDistributor {
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
     ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
-        _validateClaimArrays(claimWeeks_, amounts_, proofs_);
+        // Validate array lengths, return 0 if invalid
+        if (claimWeeks_.length == 0 || claimWeeks_.length != amounts_.length || claimWeeks_.length != proofs_.length) {
+            return (0, 0);
+        }
 
         for (uint256 i = 0; i < claimWeeks_.length; ) {
             uint256 week = claimWeeks_[i];
             uint256 amount = amounts_[i];
 
-            // Verify merkle root is set for this week
-            if (weeklyMerkleRoots[week] == bytes32(0)) revert DRD_MerkleRootNotSet(week);
-
-            // Verify proof without marking as claimed
-            _verifyProof(user_, week, amount, proofs_[i]);
-
-            claimableAmount += amount;
+            // Skip weeks without merkle roots set
+            if (weeklyMerkleRoots[week] != bytes32(0)) {
+                // Verify proof safely, skip if invalid or already claimed
+                if (_verifyProofSafe(user_, week, amount, proofs_[i])) {
+                    claimableAmount += amount;
+                }
+            }
 
             unchecked {
                 ++i;

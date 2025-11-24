@@ -65,7 +65,7 @@ contract USDSRewardDistributorTest is Test {
 
     // ========== Test Constructor and State Variables ========== //
 
-    function test_constructor_initializes_correctly() public {
+    function test_constructor_initializes_correctly() public view {
         assertEq(address(distributor.REWARD_TOKEN_VAULT().asset()), address(usds));
         assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
         assertEq(distributor.START_TIMESTAMP(), startTimestamp);
@@ -161,27 +161,29 @@ contract USDSRewardDistributorTest is Test {
 
     // ========== Test PreviewClaim Function ========== //
 
-    function test_previewClaim_reverts_when_no_weeks_specified() public {
+    function test_previewClaim_returns_zero_when_no_weeks_specified() public view {
         address testUser = address(0xABCD);
         uint256[] memory claimWeeks = new uint256[](0);
         uint256[] memory amounts = new uint256[](0);
         bytes32[][] memory proofs = new bytes32[][](0);
 
-        vm.expectRevert(IRewardDistributor.DRD_NoWeeksSpecified.selector);
-        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        assertEq(claimableAmount, 0);
+        assertEq(vaultShares, 0);
     }
 
-    function test_previewClaim_reverts_when_array_lengths_mismatch() public {
+    function test_previewClaim_returns_zero_when_array_lengths_mismatch() public view {
         address testUser = address(0xABCD);
         uint256[] memory claimWeeks = new uint256[](2);
         uint256[] memory amounts = new uint256[](1); // Mismatched length
         bytes32[][] memory proofs = new bytes32[][](2);
 
-        vm.expectRevert(IRewardDistributor.DRD_ArrayLengthMismatch.selector);
-        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        assertEq(claimableAmount, 0);
+        assertEq(vaultShares, 0);
     }
 
-    function test_previewClaim_reverts_when_merkle_root_not_set() public {
+    function test_previewClaim_returns_zero_when_merkle_root_not_set() public view {
         address testUser = address(0xABCD);
         uint256[] memory claimWeeks = new uint256[](1);
         uint256[] memory amounts = new uint256[](1);
@@ -191,8 +193,9 @@ contract USDSRewardDistributorTest is Test {
         amounts[0] = 1000e18;
         proofs[0] = new bytes32[](1);
 
-        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, 0));
-        distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
+        assertEq(claimableAmount, 0);
+        assertEq(vaultShares, 0);
     }
 
     // ========== Test Claim Error Conditions ========== //
