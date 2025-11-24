@@ -102,9 +102,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     {
         Keycode trsryKeycode = toKeycode("TRSRY");
 
-        permissions = new Permissions[](2);
-        permissions[0] = Permissions(trsryKeycode, TRSRY.increaseWithdrawApproval.selector);
-        permissions[1] = Permissions(trsryKeycode, TRSRY.withdrawReserves.selector);
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(trsryKeycode, TRSRY.withdrawReserves.selector);
     }
 
     function VERSION() external pure virtual returns (uint8 major, uint8 minor) {
@@ -172,7 +171,11 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         bytes32[][] calldata proofs_
     ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
         // Validate array lengths, return 0 if invalid
-        if (claimWeeks_.length == 0 || claimWeeks_.length != amounts_.length || claimWeeks_.length != proofs_.length) {
+        if (
+            claimWeeks_.length == 0 ||
+            claimWeeks_.length != amounts_.length ||
+            claimWeeks_.length != proofs_.length
+        ) {
             return (0, 0);
         }
 
@@ -337,4 +340,3 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
             super.supportsInterface(interfaceId);
     }
 }
-
