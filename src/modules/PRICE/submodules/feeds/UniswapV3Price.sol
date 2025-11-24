@@ -8,8 +8,8 @@ import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.
 import {FullMath} from "libraries/FullMath.sol";
 
 // Uniswap V3
-import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 // Bophades
 import "modules/PRICE/PRICE.v2.sol";

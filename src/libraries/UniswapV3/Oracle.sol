@@ -2,9 +2,9 @@
 pragma solidity 0.8.15;
 
 // Uniswap V3
-import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
-import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";
+import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 // Standard libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";

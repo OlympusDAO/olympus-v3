@@ -2,9 +2,9 @@
 pragma solidity 0.8.15;
 
 // Uniswap V3
-import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
-import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
+import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+import {LiquidityAmounts} from "@uniswap-v3-periphery-1.4.2/libraries/LiquidityAmounts.sol";
 
 /// @title          UniswapV3Positions
 /// @notice         Helper functions for Uniswap V3 positions
