@@ -10,7 +10,7 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 import {FullMath} from "libraries/FullMath.sol";
-import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {UniswapV2PoolTokenPrice, IUniswapV2Pool} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";

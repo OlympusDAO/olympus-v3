@@ -6,7 +6,7 @@ import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.s
 
 // Libraries
 import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";
 import {FullMath} from "libraries/FullMath.sol";
 

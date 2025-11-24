@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import "modules/PRICE/PRICE.v2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 
 interface IUniswapV2Pool {
     function token0() external view returns (address);
