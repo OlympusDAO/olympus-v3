@@ -88,3 +88,15 @@ name = "surl"
 version = "1.0.0"
 git = "https://github.com/memester-xyz/surl.git"
 rev = "034c912ae9b5e707a5afd21f145b452ad8e800df"
+
+[[dependencies]]
+name = "uniswap-v3-core"
+version = "1.0.1"
+git = "https://github.com/Uniswap/v3-core.git"
+rev = "6562c52e8f75f0c10f9deaf44861847585fc8129"
+
+[[dependencies]]
+name = "uniswap-v3-periphery"
+version = "1.4.2"
+git = "https://github.com/Uniswap/v3-periphery.git"
+rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c"

@@ -47,3 +47,9 @@ Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
 safe-smart-account/=dependencies/safe-smart-account-1.4.1/contracts/
 
 solidity-http/=dependencies/solidity-http-0.0.6/src/
+
+@uniswap-v3-core-1.0.1/=dependencies/uniswap-v3-core-1.0.1/contracts/
+@uniswap/v3-core/contracts/=dependencies/uniswap-v3-core-1.0.1/contracts/
+
+@uniswap-v3-periphery-1.4.2/=dependencies/uniswap-v3-periphery-1.4.2/contracts/
+@uniswap/v3-periphery/contracts/=dependencies/uniswap-v3-periphery-1.4.2/contracts/
