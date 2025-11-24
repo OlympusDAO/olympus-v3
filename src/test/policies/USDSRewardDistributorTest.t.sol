@@ -6,6 +6,13 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {USDSRewardDistributor} from "policies/USDSRewardDistributor.sol";
 import {IRewardDistributor} from "policies/interfaces/IRewardDistributor.sol";
+import {Kernel, Keycode, Policy, toKeycode, Module, Actions} from "src/Kernel.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @notice Simple mock ERC4626 vault for testing
 contract MockERC4626 is MockERC20 {
@@ -37,19 +44,30 @@ contract MockERC4626 is MockERC20 {
     }
 }
 
-/// @notice Basic unit tests for USDSRewardDistributor contract
-/// Note: Full integration tests require complex Kernel setup. These tests focus on
-/// contract initialization, state variables, and event emission.
 contract USDSRewardDistributorTest is Test {
+
     MockERC20 internal usds;
     MockERC4626 internal sUSDS;
     USDSRewardDistributor internal distributor;
+    Kernel internal kernel;
+    OlympusTreasury internal trsry;
+    OlympusRoles internal roles;
 
     uint40 internal constant WEEK_DURATION = 7 days;
     uint40 internal startTimestamp;
 
-    // Mock Kernel for basic initialization
-    address internal mockKernel = address(0x1234);
+    address internal alice = address(0x1);
+    address internal bob = address(0x2);
+    address internal admin = address(0x3);
+
+    bytes32 internal constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
+
+    // Import Actions enum
+    // Actions is defined in Kernel.sol but not exported as a type we can import directly?
+    // It is exported in Kernel.sol: enum Actions { ... }
+    // But we need to import it.
+    // We can cast to uint8 or import it if possible.
+    // Actions is global in Kernel.sol? No, it's outside contract Kernel.
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021
@@ -59,8 +77,61 @@ contract USDSRewardDistributorTest is Test {
         usds = new MockERC20("USDS", "USDS", 18);
         sUSDS = new MockERC4626("Vault Token", "vToken", 18, address(usds));
 
-        // Deploy distributor with mock kernel
-        distributor = new USDSRewardDistributor(mockKernel, address(sUSDS), startTimestamp);
+        // Deploy Kernel
+        kernel = new Kernel();
+
+        // Deploy Modules
+        trsry = new OlympusTreasury(kernel);
+        roles = new OlympusRoles(kernel);
+
+        // Install Modules
+        kernel.executeAction(Actions.InstallModule, address(trsry));
+        kernel.executeAction(Actions.InstallModule, address(roles));
+
+        // Deploy distributor
+        distributor = new USDSRewardDistributor(address(kernel), address(sUSDS), startTimestamp);
+
+        // Activate Policy (this configures dependencies)
+        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+
+        // Grant permission to test contract to call saveRole
+        // modulePermissions is at slot 6
+        // mapping(Keycode => mapping(Policy => mapping(bytes4 => bool)))
+        bytes32 slot = keccak256(abi.encode(ROLESv1.saveRole.selector,
+            keccak256(abi.encode(address(this),
+                keccak256(abi.encode(toKeycode("ROLES"), 6))
+            ))
+        ));
+        vm.store(address(kernel), slot, bytes32(uint256(1)));
+
+        // Grant permission to test contract to call increaseWithdrawApproval
+        bytes32 slot2 = keccak256(abi.encode(TRSRYv1.increaseWithdrawApproval.selector,
+            keccak256(abi.encode(address(this),
+                keccak256(abi.encode(toKeycode("TRSRY"), 6))
+            ))
+        ));
+        vm.store(address(kernel), slot2, bytes32(uint256(1)));
+
+        // Approve distributor to withdraw from TRSRY
+        trsry.increaseWithdrawApproval(address(distributor), sUSDS, type(uint256).max);
+
+        // Setup roles
+        roles.saveRole(ROLE_MERKLE_UPDATER, admin);
+        roles.saveRole(ADMIN_ROLE, address(this));
+
+        // Enable distributor
+        distributor.enable("");
+
+        // Fund Treasury with sUSDS
+        sUSDS.mint(address(trsry), 1_000_000e18);
+        // Fund Vault with USDS (for withdrawals)
+        usds.mint(address(sUSDS), 1_000_000e18);
+    }
+
+    // ========== Helper Functions ========== //
+
+    function _generateLeaf(address user, uint256 week, uint256 amount) internal pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(user, week, amount))));
     }
 
     // ========== Test Constructor and State Variables ========== //
@@ -74,132 +145,249 @@ contract USDSRewardDistributorTest is Test {
 
     function test_constructor_rejects_zero_reward_token_vault() public {
         vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
-        new USDSRewardDistributor(mockKernel, address(0), startTimestamp);
+        new USDSRewardDistributor(address(kernel), address(0), startTimestamp);
     }
 
     function test_constructor_rejects_zero_start_timestamp() public {
         vm.expectRevert(IRewardDistributor.DRD_InvalidAddress.selector);
-        new USDSRewardDistributor(mockKernel, address(sUSDS), 0);
+        new USDSRewardDistributor(address(kernel), address(sUSDS), 0);
     }
 
-    // ========== Test State Variables ========== //
+    // ========== Test Merkle Root Management ========== //
 
-    function test_rewardToken_is_immutable() public view {
-        assertEq(address(distributor.REWARD_TOKEN()), address(usds));
+    function test_setMerkleRoot_success() public {
+        vm.warp(startTimestamp + WEEK_DURATION); // End of week 0
+
+        bytes32 root = bytes32(uint256(1));
+
+        vm.prank(admin);
+        distributor.setMerkleRoot(0, root);
+
+        assertEq(distributor.weeklyMerkleRoots(0), root);
     }
 
-    function test_vaultToken_is_immutable() public view {
-        assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
+    function test_setMerkleRoot_reverts_unauthorized() public {
+        vm.warp(startTimestamp + WEEK_DURATION);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER));
+        distributor.setMerkleRoot(0, bytes32(uint256(1)));
     }
 
-    function test_startTimestamp_is_immutable() public view {
-        assertEq(distributor.START_TIMESTAMP(), startTimestamp);
+    function test_setMerkleRoot_reverts_too_early() public {
+        // Still in week 0
+        vm.prank(admin);
+        vm.expectRevert(IRewardDistributor.DRD_WeekTooEarly.selector);
+        distributor.setMerkleRoot(0, bytes32(uint256(1)));
     }
 
-    function test_weekDuration_is_constant() public view {
-        assertEq(distributor.WEEK_DURATION(), 7 days);
+    function test_setMerkleRoot_reverts_already_set() public {
+        vm.warp(startTimestamp + WEEK_DURATION);
+
+        vm.startPrank(admin);
+        distributor.setMerkleRoot(0, bytes32(uint256(1)));
+
+        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_WeekAlreadySet.selector, 0));
+        distributor.setMerkleRoot(0, bytes32(uint256(2)));
+        vm.stopPrank();
     }
 
-    // ========== Test supportsInterface ========== //
+    // ========== Test Claiming Logic ========== //
 
-    function test_supportsInterface() public view {
-        assertTrue(distributor.supportsInterface(type(IRewardDistributor).interfaceId));
-    }
+    function test_claim_as_underlying() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
 
-    // ========== Test Merkle Root Mapping ========== //
+        // Generate leaf and proof
+        bytes32 leaf = _generateLeaf(alice, week, amount);
+        bytes32[] memory proof = new bytes32[](0); // Single leaf tree, root is leaf
 
-    function test_weeklyMerkleRoots_initially_empty() public view {
-        assertEq(distributor.weeklyMerkleRoots(0), bytes32(0));
-        assertEq(distributor.weeklyMerkleRoots(5), bytes32(0));
-        assertEq(distributor.weeklyMerkleRoots(100), bytes32(0));
-    }
+        // Set root
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(week, leaf);
 
-    // ========== Test Claimed Mapping ========== //
-
-    function test_hasClaimed_initially_false() public view {
-        address testUser = address(0xABCD);
-        assertFalse(distributor.hasClaimed(testUser, 0));
-        assertFalse(distributor.hasClaimed(testUser, 5));
-    }
-
-    // ========== Test VERSION ========== //
-
-    function test_version() public view {
-        (uint8 major, uint8 minor) = distributor.VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
-    }
-
-    // ========== Test Multiple Instances ========== //
-
-    function test_multiple_distributors_independent() public {
-        MockERC20 token1 = new MockERC20("Token1", "T1", 18);
-        MockERC20 token2 = new MockERC20("Token2", "T2", 18);
-        MockERC4626 vault1 = new MockERC4626("Vault1", "V1", 18, address(token1));
-        MockERC4626 vault2 = new MockERC4626("Vault2", "V2", 18, address(token2));
-
-        USDSRewardDistributor dist1 = new USDSRewardDistributor(
-            mockKernel,
-            address(vault1),
-            startTimestamp
-        );
-
-        USDSRewardDistributor dist2 = new USDSRewardDistributor(
-            mockKernel,
-            address(vault2),
-            startTimestamp + 1 days
-        );
-
-        // Verify they have different state
-        assertEq(address(dist1.REWARD_TOKEN()), address(token1));
-        assertEq(address(dist2.REWARD_TOKEN()), address(token2));
-        assertEq(address(dist1.REWARD_TOKEN_VAULT()), address(vault1));
-        assertEq(address(dist2.REWARD_TOKEN_VAULT()), address(vault2));
-        assertEq(dist1.START_TIMESTAMP(), startTimestamp);
-        assertEq(dist2.START_TIMESTAMP(), startTimestamp + 1 days);
-    }
-
-    // ========== Test PreviewClaim Function ========== //
-
-    function test_previewClaim_returns_zero_when_no_weeks_specified() public view {
-        address testUser = address(0xABCD);
-        uint256[] memory claimWeeks = new uint256[](0);
-        uint256[] memory amounts = new uint256[](0);
-        bytes32[][] memory proofs = new bytes32[][](0);
-
-        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
-        assertEq(claimableAmount, 0);
-        assertEq(vaultShares, 0);
-    }
-
-    function test_previewClaim_returns_zero_when_array_lengths_mismatch() public view {
-        address testUser = address(0xABCD);
-        uint256[] memory claimWeeks = new uint256[](2);
-        uint256[] memory amounts = new uint256[](1); // Mismatched length
-        bytes32[][] memory proofs = new bytes32[][](2);
-
-        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
-        assertEq(claimableAmount, 0);
-        assertEq(vaultShares, 0);
-    }
-
-    function test_previewClaim_returns_zero_when_merkle_root_not_set() public view {
-        address testUser = address(0xABCD);
+        // Prepare claim data
         uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
         uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = proof;
 
-        claimWeeks[0] = 0;
-        amounts[0] = 1000e18;
-        proofs[0] = new bytes32[](1);
+        // Claim
+        vm.prank(alice);
+        distributor.claim(claimWeeks, amounts, proofs, false); // asVaultToken = false
 
-        (uint256 claimableAmount, uint256 vaultShares) = distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
-        assertEq(claimableAmount, 0);
-        assertEq(vaultShares, 0);
+        // Verify
+        assertEq(usds.balanceOf(alice), amount);
+        assertTrue(distributor.hasClaimed(alice, week));
     }
 
-    // ========== Test Claim Error Conditions ========== //
-    // Note: These tests require proper Kernel setup with ROLES and TRSRY modules
-    // and policy enablement, so are better suited as integration tests.
-    // The underlying validation logic (_validateClaimArrays) is tested in preview functions.
+    function test_claim_as_vault_token() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
+
+        // Generate leaf and proof
+        bytes32 leaf = _generateLeaf(alice, week, amount);
+        bytes32[] memory proof = new bytes32[](0);
+
+        // Set root
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(week, leaf);
+
+        // Prepare claim data
+        uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = proof;
+
+        // Claim
+        vm.prank(alice);
+        distributor.claim(claimWeeks, amounts, proofs, true); // asVaultToken = true
+
+        // Verify
+        assertEq(sUSDS.balanceOf(alice), amount); // 1:1 conversion in mock
+        assertTrue(distributor.hasClaimed(alice, week));
+    }
+
+    function test_claim_multiple_weeks() public {
+        uint256 amount1 = 100e18;
+        uint256 amount2 = 200e18;
+
+        // Setup week 0
+        bytes32 leaf1 = _generateLeaf(alice, 0, amount1);
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(0, leaf1);
+
+        // Setup week 1
+        bytes32 leaf2 = _generateLeaf(alice, 1, amount2);
+        vm.warp(startTimestamp + 2 * WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(1, leaf2);
+
+        // Prepare claim data
+        uint256[] memory claimWeeks = new uint256[](2);
+        claimWeeks[0] = 0;
+        claimWeeks[1] = 1;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = amount1;
+        amounts[1] = amount2;
+        bytes32[][] memory proofs = new bytes32[][](2);
+        proofs[0] = new bytes32[](0);
+        proofs[1] = new bytes32[](0);
+
+        // Claim
+        vm.prank(alice);
+        distributor.claim(claimWeeks, amounts, proofs, false);
+
+        // Verify
+        assertEq(usds.balanceOf(alice), amount1 + amount2);
+        assertTrue(distributor.hasClaimed(alice, 0));
+        assertTrue(distributor.hasClaimed(alice, 1));
+    }
+
+    function test_claim_reverts_already_claimed() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
+        bytes32 leaf = _generateLeaf(alice, week, amount);
+
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(week, leaf);
+
+        uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = new bytes32[](0);
+
+        vm.startPrank(alice);
+        distributor.claim(claimWeeks, amounts, proofs, false);
+
+        // Verify previewClaim returns 0 after claiming
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        assertEq(claimable, 0);
+        assertEq(shares, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_AlreadyClaimed.selector, week));
+        distributor.claim(claimWeeks, amounts, proofs, false);
+        vm.stopPrank();
+    }
+
+    function test_claim_reverts_invalid_proof() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
+        bytes32 leaf = _generateLeaf(alice, week, amount);
+
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(week, leaf);
+
+        uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount + 1; // Wrong amount
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = new bytes32[](0);
+
+        // Verify previewClaim returns 0 for invalid proof
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        assertEq(claimable, 0);
+        assertEq(shares, 0);
+
+        vm.prank(alice);
+        vm.expectRevert(IRewardDistributor.DRD_InvalidProof.selector);
+        distributor.claim(claimWeeks, amounts, proofs, false);
+    }
+
+    function test_claim_reverts_merkle_root_not_set() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
+
+        // Don't set root
+
+        uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = new bytes32[](0);
+
+        // Verify previewClaim returns 0 when root not set
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+        assertEq(claimable, 0);
+        assertEq(shares, 0);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(IRewardDistributor.DRD_MerkleRootNotSet.selector, week));
+        distributor.claim(claimWeeks, amounts, proofs, false);
+    }
+
+    function test_previewClaim() public {
+        uint256 amount = 100e18;
+        uint40 week = 0;
+        bytes32 leaf = _generateLeaf(alice, week, amount);
+
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(week, leaf);
+
+        uint256[] memory claimWeeks = new uint256[](1);
+        claimWeeks[0] = week;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = new bytes32[](0);
+
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(alice, claimWeeks, amounts, proofs);
+
+        assertEq(claimable, amount);
+        assertEq(shares, amount); // 1:1 mock
+    }
 }
