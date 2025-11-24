@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
@@ -36,6 +38,12 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice The TRSRY module
     TRSRYv1 internal TRSRY;
 
+    /// @notice The reward token
+    IERC20 public immutable REWARD_TOKEN;
+
+    /// @notice The reward token vault (e.g., sUSDS for USDS rewards)
+    IERC4626 public immutable REWARD_TOKEN_VAULT;
+
     /// @notice Mapping from week number => merkle root
     /// @dev    Week 0 is the first distribution week
     mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
@@ -55,10 +63,18 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== CONSTRUCTOR ========== //
 
-    /// @param kernel_          The Kernel address
-    /// @param startTimestamp_  The timestamp when week 0 begins (typically midnight UTC of start date)
-    constructor(address kernel_, uint256 startTimestamp_) Policy(Kernel(kernel_)) {
+    /// @param kernel_              The Kernel address
+    /// @param rewardTokenVault_    The ERC4626 vault token
+    /// @param startTimestamp_      The timestamp when week 0 begins (typically midnight UTC of start date)
+    constructor(
+        address kernel_,
+        address rewardTokenVault_,
+        uint256 startTimestamp_
+    ) Policy(Kernel(kernel_)) {
+        if (rewardTokenVault_ == address(0)) revert DRD_InvalidAddress();
         if (startTimestamp_ == 0) revert DRD_InvalidAddress();
+        REWARD_TOKEN = IERC20(IERC4626(rewardTokenVault_).asset());
+        REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
         START_TIMESTAMP = uint40(startTimestamp_);
         // Disabled by default by PolicyEnabler
     }
@@ -138,6 +154,50 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     }
 
     // ========== CLAIM FUNCTIONS ========== //
+
+    /// @notice Preview the claimable rewards for a user without claiming
+    /// @dev    This function does not modify state and allows users to verify their claims before submitting.
+    ///         Returns 0 amounts if no valid claims are found (merkle root not set or proof invalid).
+    ///
+    /// @param  user_           The user address to preview claims for
+    /// @param  claimWeeks_     Array of week numbers to preview
+    /// @param  amounts_        Array of amounts for each week (must match merkle leaves)
+    /// @param  proofs_         Array of merkle proofs, one per week
+    /// @return claimableAmount The total amount of reward token claimable
+    /// @return vaultShares     The amount of vault shares equivalent to the claimable amount
+    function previewClaim(
+        address user_,
+        uint256[] calldata claimWeeks_,
+        uint256[] calldata amounts_,
+        bytes32[][] calldata proofs_
+    ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
+        // Validate array lengths, return 0 if invalid
+        if (claimWeeks_.length == 0 || claimWeeks_.length != amounts_.length || claimWeeks_.length != proofs_.length) {
+            return (0, 0);
+        }
+
+        for (uint256 i = 0; i < claimWeeks_.length; ) {
+            uint256 week = claimWeeks_[i];
+            uint256 amount = amounts_[i];
+
+            // Skip weeks without merkle roots set
+            if (weeklyMerkleRoots[week] != bytes32(0)) {
+                // Verify proof safely, skip if invalid or already claimed
+                if (_verifyProofSafe(user_, week, amount, proofs_[i])) {
+                    claimableAmount += amount;
+                }
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Calculate equivalent vault shares
+        if (claimableAmount > 0) {
+            vaultShares = REWARD_TOKEN_VAULT.previewWithdraw(claimableAmount);
+        }
+    }
 
     /// @notice Claim rewards for one or more weeks in a single transaction
     /// @param  weeks_          Array of week numbers to claim
@@ -263,8 +323,9 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ) internal virtual;
 
     /// @notice Emit merkle root set event
-    /// @dev    Must be implemented by derived contracts to provide token address
-    function _emitMerkleRootSet(uint256 week_, bytes32 merkleRoot_) internal virtual;
+    function _emitMerkleRootSet(uint256 week_, bytes32 merkleRoot_) internal {
+        emit MerkleRootSet(week_, merkleRoot_, address(REWARD_TOKEN));
+    }
 
     // ========== ERC165 ========== //
 
