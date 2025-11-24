@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "src/modules/PRICE/PRICE.v2.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
+import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 contract MockPrice is PRICEv2 {
     mapping(address => uint256) internal prices;

@@ -5,7 +5,7 @@ import {Test, stdError} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockBalancerPool, MockBalancerStablePool, MockBalancerWeightedPool, MockBalancerComposableStablePool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";

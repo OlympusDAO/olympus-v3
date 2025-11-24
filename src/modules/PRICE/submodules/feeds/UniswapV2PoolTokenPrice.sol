@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "modules/PRICE/PRICE.v2.sol";
+import {Module} from "src/Kernel.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";

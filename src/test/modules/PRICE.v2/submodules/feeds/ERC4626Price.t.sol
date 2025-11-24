@@ -5,7 +5,7 @@ import {Test, stdError} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";

@@ -1,7 +1,9 @@
 /// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "modules/PRICE/PRICE.v2.sol";
+import {Module} from "src/Kernel.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 import {Deviation} from "libraries/Deviation.sol";
 

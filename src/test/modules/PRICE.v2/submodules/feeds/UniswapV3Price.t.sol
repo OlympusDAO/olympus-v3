@@ -22,7 +22,7 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 // Bophades
-import "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 

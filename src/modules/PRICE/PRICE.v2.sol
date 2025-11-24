@@ -1,7 +1,8 @@
 /// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Submodules.sol";
+import {Kernel, Keycode, toKeycode} from "src/Kernel.sol";
+import {ModuleWithSubmodules, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 
 /// @notice     Abstract Bophades module for price resolution
 /// @author     Oighty

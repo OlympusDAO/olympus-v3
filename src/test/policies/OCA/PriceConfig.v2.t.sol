@@ -8,9 +8,10 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import "src/Submodules.sol";
+import {Actions, fromKeycode, fromSubKeycode, Kernel, Keycode, Module, Permissions, SubKeycode, Submodule, toKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
-import {OlympusPricev2, PRICEv2, PriceSubmodule} from "modules/PRICE/OlympusPrice.v2.sol";
+import {PRICEv2, PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
+import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";

@@ -11,7 +11,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import "src/Kernel.sol";
+import {Kernel} from "src/Kernel.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 contract ChainlinkPriceFeedsTest is Test {

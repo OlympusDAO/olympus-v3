@@ -12,7 +12,9 @@ import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.s
 import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 // Bophades
-import "modules/PRICE/PRICE.v2.sol";
+import {Module} from "src/Kernel.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 /// @title      UniswapV3Price
 /// @author     0xJem
