@@ -140,19 +140,21 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     // ========== CLAIM FUNCTIONS ========== //
 
     /// @notice Claim rewards for one or more weeks in a single transaction
-    /// @param  weeks_      Array of week numbers to claim
-    /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
-    /// @param  proofs_     Array of merkle proofs, one per week
+    /// @param  weeks_          Array of week numbers to claim
+    /// @param  amounts_        Array of amounts for each week (must match merkle leaves)
+    /// @param  proofs_         Array of merkle proofs, one per week
+    /// @param  asVaultToken_   If true, claim as vault token (e.g., sUSDS); if false, unwrap to underlying token (e.g., USDS)
     function claim(
         uint256[] calldata weeks_,
         uint256[] calldata amounts_,
-        bytes32[][] calldata proofs_
+        bytes32[][] calldata proofs_,
+        bool asVaultToken_
     ) external virtual onlyEnabled {
         _validateClaimArrays(weeks_, amounts_, proofs_);
 
         uint256 totalAmount = _processClaims(msg.sender, weeks_, amounts_, proofs_);
 
-        _transferRewards(msg.sender, totalAmount, weeks_.length, false);
+        _transferRewards(msg.sender, totalAmount, weeks_.length, asVaultToken_);
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -233,12 +235,12 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @param  to_             Address to transfer rewards to
     /// @param  amount_         Amount to transfer
     /// @param  weekCount_      Number of weeks being claimed (for event)
-    /// @param  asVault_        If true, transfer as vault token; if false, unwrap first
+    /// @param  asVaultToken_   If true, transfer as vault token; if false, unwrap first
     function _transferRewards(
         address to_,
         uint256 amount_,
         uint256 weekCount_,
-        bool asVault_
+        bool asVaultToken_
     ) internal virtual;
 
     /// @notice Emit merkle root set event

@@ -45,26 +45,6 @@ contract USDSRewardDistributor is BaseRewardDistributor {
         REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
     }
 
-    // ========== CLAIM FUNCTIONS ========== //
-
-    /// @notice Claim rewards for one or more weeks as sUSDS vault tokens.
-    /// @dev    Claims rewards as sUSDS instead of unwrapping to USDS.
-    ///
-    /// @param  weeks_      Array of week numbers to claim
-    /// @param  amounts_    Array of amounts for each week (must match merkle leaves)
-    /// @param  proofs_     Array of merkle proofs, one per week
-    function claimAsVaultToken(
-        uint256[] calldata weeks_,
-        uint256[] calldata amounts_,
-        bytes32[][] calldata proofs_
-    ) external onlyEnabled {
-        _validateClaimArrays(weeks_, amounts_, proofs_);
-
-        uint256 totalAmount = _processClaims(msg.sender, weeks_, amounts_, proofs_);
-
-        _transferRewards(msg.sender, totalAmount, weeks_.length, true);
-    }
-
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Preview the claimable rewards for a user without claiming
@@ -115,14 +95,14 @@ contract USDSRewardDistributor is BaseRewardDistributor {
         address to_,
         uint256 amount_,
         uint256 weekCount_,
-        bool asVault_
+        bool asVaultToken_
     ) internal override {
         // Early return if no amount to transfer
         if (amount_ == 0) return;
 
         IERC4626 vault = IERC4626(address(REWARD_TOKEN_VAULT));
 
-        if (asVault_) {
+        if (asVaultToken_) {
             // Calculate how many vault shares represent the USDS amount
             uint256 vaultShares = vault.previewWithdraw(amount_);
 

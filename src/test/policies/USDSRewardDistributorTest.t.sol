@@ -195,7 +195,7 @@ contract USDSRewardDistributorTest is Test {
         distributor.previewClaim(testUser, claimWeeks, amounts, proofs);
     }
 
-    // ========== Test Claim and ClaimAsVaultToken Error Conditions ========== //
+    // ========== Test Claim Error Conditions ========== //
     // Note: These tests require proper Kernel setup with ROLES and TRSRY modules
     // and policy enablement, so are better suited as integration tests.
     // The underlying validation logic (_validateClaimArrays) is tested in preview functions.
