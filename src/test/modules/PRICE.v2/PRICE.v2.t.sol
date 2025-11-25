@@ -318,8 +318,10 @@ contract PriceV2Test is Test {
             // Therefore, we need a tick difference of 13_327_804_800 (if OHM is token0) or -13_327_804_800 (if OHM is token1)
             uint56 cumulativeValue = 1_000_000_000 + 13_327_804_800;
             int56[] memory tickCumulatives = new int56[](2);
+            /// forge-lint: disable-start(unsafe-typecast)
             tickCumulatives[0] = ohmFirst ? int56(1000000000) : -int56(1000000000);
             tickCumulatives[1] = ohmFirst ? int56(cumulativeValue) : -int56(cumulativeValue);
+            /// forge-lint: disable-end(unsafe-typecast)
             ohmEthUniV3Pool.setTickCumulatives(tickCumulatives);
         }
 
@@ -378,6 +380,7 @@ contract PriceV2Test is Test {
         int256 change; // percentage with two decimals
         for (uint256 i = numObs; i > 0; --i) {
             // Add current price to obs array
+            /// forge-lint: disable-next-line(unsafe-typecast)
             obs[i - 1] = uint256(fetchedPrice);
 
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
@@ -407,6 +410,7 @@ contract PriceV2Test is Test {
             address(onema), // address asset_
             true, // bool storeMovingAverage_ // track ONEMA MA
             true, // bool useMovingAverage_ // use MA in strategy
+            /// forge-lint: disable-next-line(unsafe-typecast)
             uint32(numObs_) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
             _makeRandomObservations(onema, feeds[0], nonce_, uint256(numObs_)), // uint256[] memory observations_
@@ -779,6 +783,7 @@ contract PriceV2Test is Test {
             assetData.strategy,
             (PRICEv2.Component)
         );
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(
             assetStrategy.selector,
@@ -787,12 +792,14 @@ contract PriceV2Test is Test {
         assertEq(assetStrategy.params, abi.encode(uint256(300)));
         PRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (PRICEv2.Component[]));
         assertEq(feeds.length, 3);
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(feeds[0].target), bytes20("PRICE.CHAINLINK"));
         assertEq(feeds[0].selector, ChainlinkPriceFeeds.getOneFeedPrice.selector);
         assertEq(
             feeds[0].params,
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
         );
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(feeds[1].target), bytes20("PRICE.CHAINLINK"));
         assertEq(feeds[1].selector, ChainlinkPriceFeeds.getTwoFeedPriceMul.selector);
         assertEq(
@@ -806,6 +813,7 @@ contract PriceV2Test is Test {
                 )
             )
         );
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(feeds[2].target), bytes20("PRICE.UNIV3"));
         assertEq(feeds[2].selector, UniswapV3Price.getTokenTWAP.selector);
         assertEq(
