@@ -25,12 +25,12 @@ contract ChainlinkPriceFeedsTest is Test {
     Kernel internal kernel;
     MockPrice internal mockPrice;
     ChainlinkPriceFeeds internal chainlinkSubmodule;
-    uint256 internal constant ohmEthPrice = 0.01 * 1e18; // 1 OHM = 0.01 ETH
-    uint256 internal constant daiEthPrice = 0.001 * 1e18; // 1 DAI = 0.001 ETH
-    uint256 internal constant ethDaiPrice = 1000 * 1e18; // 1 ETH = 1000 DAI
+    uint256 internal constant OHM_ETH_PRICE = 0.01 * 1e18; // 1 OHM = 0.01 ETH
+    uint256 internal constant DAI_ETH_PRICE = 0.001 * 1e18; // 1 DAI = 0.001 ETH
+    uint256 internal constant ETH_DAI_PRICE = 1000 * 1e18; // 1 ETH = 1000 DAI
 
     // 0.01 ETH/OHM and 0.001 ETH/DAI = 0.01 ETH/OHM * (1/0.001) DAI/ETH = 10 DAI/OHM
-    uint256 internal constant ohmDaiPrice = 10 * 1e18;
+    uint256 internal constant OHM_DAI_PRICE = 10 * 1e18;
 
     uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 50;
@@ -63,21 +63,21 @@ contract ChainlinkPriceFeedsTest is Test {
         {
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setTimestamp(block.timestamp);
-            ohmEthPriceFeed.setLatestAnswer(int256(ohmEthPrice));
+            ohmEthPriceFeed.setLatestAnswer(int256(OHM_ETH_PRICE));
             ohmEthPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             ohmEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
             ohmEthPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
 
             daiEthPriceFeed = new MockPriceFeed();
             daiEthPriceFeed.setTimestamp(block.timestamp);
-            daiEthPriceFeed.setLatestAnswer(int256(daiEthPrice));
+            daiEthPriceFeed.setLatestAnswer(int256(DAI_ETH_PRICE));
             daiEthPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             daiEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
             daiEthPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
 
             ethDaiPriceFeed = new MockPriceFeed();
             ethDaiPriceFeed.setTimestamp(block.timestamp);
-            ethDaiPriceFeed.setLatestAnswer(int256(ethDaiPrice));
+            ethDaiPriceFeed.setLatestAnswer(int256(ETH_DAI_PRICE));
             ethDaiPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             ethDaiPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
             ethDaiPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
@@ -108,7 +108,7 @@ contract ChainlinkPriceFeedsTest is Test {
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         uint256 priceInt = chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
-        assertEq(daiEthPrice, priceInt);
+        assertEq(DAI_ETH_PRICE, priceInt);
     }
 
     function test_getOneFeedPrice_revertsOnIncorrectFeedType() public {
@@ -188,7 +188,7 @@ contract ChainlinkPriceFeedsTest is Test {
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         uint256 priceInt = chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
-        assertEq(daiEthPrice, priceInt);
+        assertEq(DAI_ETH_PRICE, priceInt);
     }
 
     function test_getOneFeedPrice_revertsOnStaleRoundFuzz(uint256 timestamp_) public {
@@ -220,7 +220,7 @@ contract ChainlinkPriceFeedsTest is Test {
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         uint256 priceInt = chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
-        assertEq(daiEthPrice, priceInt);
+        assertEq(DAI_ETH_PRICE, priceInt);
     }
 
     function test_getOneFeedPrice_priceDecimalsFuzz(uint8 priceDecimals_) public {
@@ -251,7 +251,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
         daiEthPriceFeed.setDecimals(priceFeedDecimals);
         daiEthPriceFeed.setLatestAnswer(
-            int256(daiEthPrice.mulDiv(10 ** priceFeedDecimals, 10 ** PRICE_DECIMALS))
+            int256(DAI_ETH_PRICE.mulDiv(10 ** priceFeedDecimals, 10 ** PRICE_DECIMALS))
         );
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
@@ -291,7 +291,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsFirstFeedUndefined() public {
@@ -475,7 +475,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceDiv_revertsOnStaleFirstRoundTimestampFuzz(
@@ -531,7 +531,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceDiv_revertsOnStaleSecondRoundTimestampFuzz(
@@ -579,7 +579,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceDiv_secondRoundIdValid() public {
@@ -599,7 +599,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceDiv_fuzz(
@@ -616,11 +616,11 @@ contract ChainlinkPriceFeedsTest is Test {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         ohmEthPriceFeed.setLatestAnswer(
-            int256(ohmEthPrice.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
+            int256(OHM_ETH_PRICE.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
         );
         ohmEthPriceFeed.setDecimals(priceFeedOneDecimals);
         daiEthPriceFeed.setLatestAnswer(
-            int256(daiEthPrice.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
+            int256(DAI_ETH_PRICE.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
         );
         daiEthPriceFeed.setDecimals(priceFeedTwoDecimals);
 
@@ -680,11 +680,11 @@ contract ChainlinkPriceFeedsTest is Test {
         );
 
         ohmEthPriceFeed.setLatestAnswer(
-            int256(ohmEthPrice.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
+            int256(OHM_ETH_PRICE.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
         );
         ohmEthPriceFeed.setDecimals(priceFeedOneDecimals);
         daiEthPriceFeed.setLatestAnswer(
-            int256(daiEthPrice.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
+            int256(DAI_ETH_PRICE.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
         );
         daiEthPriceFeed.setDecimals(priceFeedTwoDecimals);
 
@@ -758,7 +758,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsFirstFeedUndefined() public {
@@ -942,7 +942,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceMul_revertsOnStaleFirstRoundFuzz(uint256 timestamp_) public {
@@ -996,7 +996,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceMul_revertsOnStaleSecondRoundFuzz(uint256 timestamp_) public {
@@ -1042,7 +1042,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceMul_secondRoundIdValid() public {
@@ -1062,7 +1062,7 @@ contract ChainlinkPriceFeedsTest is Test {
             params
         );
 
-        assertEq(priceInt, ohmDaiPrice);
+        assertEq(priceInt, OHM_DAI_PRICE);
     }
 
     function test_getTwoFeedPriceMul_priceDecimalsFuzz(uint8 priceDecimals_) public {
@@ -1091,11 +1091,11 @@ contract ChainlinkPriceFeedsTest is Test {
         );
 
         ohmEthPriceFeed.setLatestAnswer(
-            int256(ohmEthPrice.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
+            int256(OHM_ETH_PRICE.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
         );
         ohmEthPriceFeed.setDecimals(priceFeedOneDecimals);
         ethDaiPriceFeed.setLatestAnswer(
-            int256(ethDaiPrice.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
+            int256(ETH_DAI_PRICE.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
         );
         ethDaiPriceFeed.setDecimals(priceFeedTwoDecimals);
 
@@ -1128,11 +1128,11 @@ contract ChainlinkPriceFeedsTest is Test {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         ohmEthPriceFeed.setLatestAnswer(
-            int256(ohmEthPrice.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
+            int256(OHM_ETH_PRICE.mulDiv(10 ** priceFeedOneDecimals, 10 ** PRICE_DECIMALS))
         );
         ohmEthPriceFeed.setDecimals(priceFeedOneDecimals);
         ethDaiPriceFeed.setLatestAnswer(
-            int256(ethDaiPrice.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
+            int256(ETH_DAI_PRICE.mulDiv(10 ** priceFeedTwoDecimals, 10 ** PRICE_DECIMALS))
         );
         ethDaiPriceFeed.setDecimals(priceFeedTwoDecimals);
 
