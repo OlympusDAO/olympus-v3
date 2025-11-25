@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
 
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import "modules/PRICE/PRICE.v2.sol";
+import {PRICEv2, Submodule, SubKeycode} from "modules/PRICE/PRICE.v2.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles

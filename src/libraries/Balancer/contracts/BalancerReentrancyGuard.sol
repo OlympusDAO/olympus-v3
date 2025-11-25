@@ -6,7 +6,7 @@
 
 pragma solidity >=0.7.0 <0.9.0;
 
-import "src/libraries/Balancer/contracts/BalancerErrors.sol";
+import {Errors, _require} from "src/libraries/Balancer/contracts/BalancerErrors.sol";
 
 /**
  * @dev Contract module that helps prevent reentrant calls to a function.

@@ -14,8 +14,8 @@
 
 pragma solidity >=0.7.0 <0.9.0;
 
-import "src/libraries/Balancer/contracts/BalancerErrors.sol";
-import "src/libraries/Balancer/interfaces/IVault.sol";
+import {Errors, _require} from "src/libraries/Balancer/contracts/BalancerErrors.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 library VaultReentrancyLib {
     /**

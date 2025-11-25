@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
+import {Keycode, Module, fromKeycode, ensureContract} from "src/Kernel.sol";
 
 //============================================================================================//
 //                                        GLOBAL TYPES                                        //

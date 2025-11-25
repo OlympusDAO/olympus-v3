@@ -14,8 +14,9 @@
 
 pragma solidity ^0.8.15;
 
-import "./FixedPoint.sol";
-import "./Math.sol";
+import {FixedPoint} from "./FixedPoint.sol";
+import {Math} from "./Math.sol";
+import {Errors, _revert} from "src/libraries/Balancer/contracts/BalancerErrors.sol";
 
 // These functions start with an underscore, as if they were part of a contract and not a library. At some point this
 // should be fixed. Additionally, some variables have non mixed case names (e.g. P_D) that relate to the mathematical

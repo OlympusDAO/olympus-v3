@@ -8,7 +8,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {StableMath} from "src/libraries/Balancer/math/StableMath.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
-import {IBasePool} from "src/libraries/Balancer/interfaces/IBasePool.sol";
 import {IWeightedPool} from "src/libraries/Balancer/interfaces/IWeightedPool.sol";
 import {IStablePool} from "src/libraries/Balancer/interfaces/IStablePool.sol";
 import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
