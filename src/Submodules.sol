@@ -204,9 +204,13 @@ abstract contract Submodule {
         parent = parent_;
     }
 
+    function _onlyParent() internal view {
+        if (msg.sender != address(parent)) revert Submodule_OnlyParent(msg.sender);
+    }
+
     /// @notice Modifier to restrict functions to be called only by parent module.
     modifier onlyParent() {
-        if (msg.sender != address(parent)) revert Submodule_OnlyParent(msg.sender);
+        _onlyParent();
         _;
     }
 
