@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode} from "src/Submodules.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 /// @title      OlympusPriceV2
 /// @author     Oighty
@@ -772,7 +773,8 @@ contract OlympusPricev2 is PRICEv2 {
                     observationFrequency
                 );
 
-            uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
+            // If this overflows, it will revert. Safe as this function is only used when configuring assets.
+            uint16 numObservations = SafeCast.encodeUInt16(movingAverageDuration_ / observationFrequency);
             if (observations_.length != numObservations || numObservations < 2)
                 revert PRICE_ParamsInvalidObservationCount(
                     asset_,
