@@ -4,9 +4,6 @@ pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
-// Policies
-import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
-
 // External
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
@@ -45,10 +42,10 @@ contract USDSRewardDistributorWithdrawalApproval is BatchScriptV2 {
         console2.log("1. Granting withdrawal approval for sUSDS");
         addToBatch(
             treasuryCustodian,
-            abi.encodeWithSelector(
-                TreasuryCustodian.grantWithdrawerApproval.selector,
+            abi.encodeWithSignature(
+                "grantWithdrawerApproval(address,address,uint256)",
                 usdsRewardDistributor,
-                ERC20(sUsds),
+                sUsds,
                 INITIAL_WITHDRAWAL_APPROVAL
             )
         );
