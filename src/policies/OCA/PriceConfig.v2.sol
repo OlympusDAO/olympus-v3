@@ -57,14 +57,35 @@ contract PriceConfigV2 is Policy, RolesConsumer {
 
         requests = new Permissions[](8);
         // PRICE Permissions
-        requests[0] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
-        requests[1] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
-        requests[2] = Permissions(PRICE_KEYCODE, PRICE.updateAssetPriceFeeds.selector);
-        requests[3] = Permissions(PRICE_KEYCODE, PRICE.updateAssetPriceStrategy.selector);
-        requests[4] = Permissions(PRICE_KEYCODE, PRICE.updateAssetMovingAverage.selector);
-        requests[5] = Permissions(PRICE_KEYCODE, PRICE.installSubmodule.selector);
-        requests[6] = Permissions(PRICE_KEYCODE, PRICE.upgradeSubmodule.selector);
-        requests[7] = Permissions(PRICE_KEYCODE, PRICE.execOnSubmodule.selector);
+        requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
+        requests[1] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.removeAsset.selector
+        });
+        requests[2] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetPriceFeeds.selector
+        });
+        requests[3] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetPriceStrategy.selector
+        });
+        requests[4] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetMovingAverage.selector
+        });
+        requests[5] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.installSubmodule.selector
+        });
+        requests[6] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.upgradeSubmodule.selector
+        });
+        requests[7] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.execOnSubmodule.selector
+        });
     }
 
     /// @notice     Returns the current version of the policy
