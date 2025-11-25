@@ -47,7 +47,7 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc Module
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
         major = 2;
         minor = 0;
     }
