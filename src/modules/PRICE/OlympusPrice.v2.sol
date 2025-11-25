@@ -585,9 +585,11 @@ contract OlympusPricev2 is PRICEv2 {
                 revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
 
             // Confirm that the feed is not a duplicate by checking the hash against hashes of previous feeds in the array
+            /// forge-lint: disable-start(asm-keccak256)
             bytes32 _hash = keccak256(
                 abi.encode(feeds_[i].target, feeds_[i].selector, feeds_[i].params)
             );
+            /// forge-lint: disable-end(asm-keccak256)
 
             for (uint256 j; j < i; ) {
                 if (_hash == hashes[j]) revert PRICE_DuplicatePriceFeed(asset_, i);
