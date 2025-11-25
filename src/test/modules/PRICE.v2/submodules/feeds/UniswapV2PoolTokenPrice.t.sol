@@ -46,8 +46,8 @@ contract UniswapV2PoolTokenPriceTest is Test {
         uint256(POOL_RESERVES_WETH).mulDiv(10 ** PRICE_DECIMALS, 10 ** WETH_DECIMALS);
 
     uint256 internal POOL_PRICE_EXPECTED =
-        (((((uint256(POOL_RESERVES_USDC) * 1e18) / 1e6) * USDC_PRICE) / 1e18) +
-            (((POOL_RESERVES_WETH) * WETH_PRICE) / 1e18)).mulDiv(1e18, POOL_TOTAL_SUPPLY);
+        (uint256(POOL_RESERVES_USDC).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18) +
+            uint256(POOL_RESERVES_WETH).mulDiv(WETH_PRICE, 1e18)).mulDiv(1e18, POOL_TOTAL_SUPPLY);
 
     // https://cmichel.io/pricing-lp-tokens/
     uint256 internal POOL_FAIR_PRICE_EXPECTED =

@@ -52,12 +52,16 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
     // ((base reserves / base weight) / (destination reserves / destination weight)) * base rate
     // = 1660.2643102434 * 10^18
-    uint256 internal constant WETH_RATE =
-        (((USDC_BALANCE * 1e12 * 1e18) / USDC_WEIGHT) * USDC_PRICE) /
-            ((WETH_BALANCE * 1e18) / WETH_WEIGHT);
-    uint256 internal constant USDC_RATE =
-        (((WETH_BALANCE * 1e18) / WETH_WEIGHT) * WETH_PRICE) /
-            ((USDC_BALANCE * 1e12 * 1e18) / USDC_WEIGHT);
+    uint256 internal WETH_RATE =
+        USDC_BALANCE.mulDiv(1e12 * 1e18, USDC_WEIGHT).mulDiv(
+            USDC_PRICE,
+            WETH_BALANCE.mulDiv(1e18, WETH_WEIGHT)
+        );
+    uint256 internal USDC_RATE =
+        WETH_BALANCE.mulDiv(1e18, WETH_WEIGHT).mulDiv(
+            WETH_PRICE,
+            USDC_BALANCE.mulDiv(1e12 * 1e18, USDC_WEIGHT)
+        );
 
     uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 50;
@@ -520,8 +524,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
             params
         );
 
-        uint256 usdcRate = (((WETH_BALANCE * 1e18) / WETH_WEIGHT) * WETH_PRICE) /
-            (((USDC_BALANCE / 2) * 1e12 * 1e18) / stablecoinWeight);
+        uint256 usdcRate = WETH_BALANCE.mulDiv(1e18, WETH_WEIGHT).mulDiv(WETH_PRICE, USDC_BALANCE.mulDiv(1e12 * 1e18 / 2, stablecoinWeight));
 
         assertEq(price, usdcRate);
     }
