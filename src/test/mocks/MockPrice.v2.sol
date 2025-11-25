@@ -15,8 +15,8 @@ contract MockPrice is PRICEv2 {
 
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
         timestamp = uint48(block.timestamp);
-        observationFrequency = observationFrequency_;
-        decimals = decimals_;
+        _observationFrequency = observationFrequency_;
+        _decimals = decimals_;
     }
 
     // ========== KERNEL FUNCTIONS ========== //
@@ -129,11 +129,11 @@ contract MockPrice is PRICEv2 {
         if (basePrice == 0) revert PRICE_PriceZero(base_);
 
         // Return asset price / base price
-        return ((assetPrice * 10 ** decimals) / basePrice, timestamp);
+        return ((assetPrice * 10 ** _decimals) / basePrice, timestamp);
     }
 
     function setPriceDecimals(uint8 decimals_) public {
-        decimals = decimals_;
+        _decimals = decimals_;
     }
 
     // Required by interface, but not implemented

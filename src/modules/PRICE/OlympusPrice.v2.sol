@@ -35,8 +35,8 @@ contract OlympusPricev2 is PRICEv2 {
         if (observationFrequency_ == 0)
             revert PRICE_ObservationFrequencyInvalid(observationFrequency_);
 
-        decimals = decimals_;
-        observationFrequency = observationFrequency_;
+        _decimals = decimals_;
+        _observationFrequency = observationFrequency_;
     }
 
     // ========== KERNEL FUNCTIONS ========== //
@@ -165,12 +165,12 @@ contract OlympusPricev2 is PRICEv2 {
         uint256[] memory prices = asset.useMovingAverage && includeMovingAverage_
             ? new uint256[](numFeeds + 1)
             : new uint256[](numFeeds);
-        uint8 _decimals = decimals; // cache in memory to save gas
+        uint8 __decimals = _decimals; // cache in memory to save gas
         bool successAllFeeds = true;
         for (uint256 i; i < numFeeds; ) {
             (bool success_, bytes memory data_) = address(_getSubmoduleIfInstalled(feeds[i].target))
                 .staticcall(
-                    abi.encodeWithSelector(feeds[i].selector, asset_, _decimals, feeds[i].params)
+                    abi.encodeWithSelector(feeds[i].selector, asset_, __decimals, feeds[i].params)
                 );
 
             // Store price if successful, otherwise leave as zero
@@ -195,7 +195,7 @@ contract OlympusPricev2 is PRICEv2 {
         if (asset.useMovingAverage && includeMovingAverage_) {
             // Check if the moving average is stale
             // If the observation frequency has passed (including in the current block), it is stale and should be updated
-            if (asset.lastObservationTime + observationFrequency <= block.timestamp)
+            if (asset.lastObservationTime + _observationFrequency <= block.timestamp)
                 revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
 
             prices[numFeeds] = asset.cumulativeObs / asset.numObservations;
@@ -291,7 +291,7 @@ contract OlympusPricev2 is PRICEv2 {
         }
 
         // Calculate the price of the asset in the base and return
-        return (assetPrice * 10 ** decimals) / basePrice;
+        return (assetPrice * 10 ** _decimals) / basePrice;
     }
 
     /// @inheritdoc IPRICEv2
@@ -324,7 +324,7 @@ contract OlympusPricev2 is PRICEv2 {
         }
 
         // Calculate the price of the asset in the base and return
-        return (assetPrice * 10 ** decimals) / basePrice;
+        return (assetPrice * 10 ** _decimals) / basePrice;
     }
 
     /// @inheritdoc IPRICEv2
@@ -343,7 +343,7 @@ contract OlympusPricev2 is PRICEv2 {
         uint48 updatedAt = assetTime < baseTime ? assetTime : baseTime;
 
         // Calculate the price of the asset in the base
-        uint256 price = (assetPrice * 10 ** decimals) / basePrice;
+        uint256 price = (assetPrice * 10 ** _decimals) / basePrice;
 
         return (price, updatedAt);
     }
@@ -769,16 +769,19 @@ contract OlympusPricev2 is PRICEv2 {
 
         if (storeMovingAverage_) {
             // If storing a moving average, validate params
-            if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
+            if (
+                movingAverageDuration_ == 0 ||
+                uint48(movingAverageDuration_) % _observationFrequency != 0
+            )
                 revert PRICE_ParamsMovingAverageDurationInvalid(
                     asset_,
                     movingAverageDuration_,
-                    observationFrequency
+                    _observationFrequency
                 );
 
             // If this overflows, it will revert. Safe as this function is only used when configuring assets.
             uint16 numObservations = SafeCast.encodeUInt16(
-                movingAverageDuration_ / observationFrequency
+                uint48(movingAverageDuration_) / _observationFrequency
             );
             if (observations_.length != numObservations || numObservations < 2)
                 revert PRICE_ParamsInvalidObservationCount(

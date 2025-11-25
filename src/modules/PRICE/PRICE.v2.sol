@@ -12,16 +12,28 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2 {
     // ========== STATIC VARIABLES ========== //
 
     /// @notice     The frequency of price observations (in seconds)
-    uint32 public observationFrequency;
+    uint48 internal _observationFrequency;
 
     /// @notice     The number of decimals to used in output values
-    uint8 public decimals;
+    uint8 internal _decimals;
 
     /// @notice     The addresses of tracked assets
     address[] public assets;
 
     /// @notice     Maps asset addresses to configuration data
     mapping(address => Asset) internal _assetData;
+
+    // ========== VIEW FUNCTIONS ========== //
+
+    /// @inheritdoc IPRICEv2
+    function observationFrequency() external view virtual override returns (uint48) {
+        return _observationFrequency;
+    }
+
+    /// @inheritdoc IPRICEv2
+    function decimals() external view virtual override returns (uint8) {
+        return _decimals;
+    }
 }
 
 abstract contract PriceSubmodule is Submodule {
