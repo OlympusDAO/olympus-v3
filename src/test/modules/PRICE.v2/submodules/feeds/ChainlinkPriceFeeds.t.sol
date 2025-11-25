@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test, stdError} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
+import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
