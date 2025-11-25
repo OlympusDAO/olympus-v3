@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
 import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
@@ -214,3 +215,4 @@ contract PriceConfigV2 is Policy, RolesConsumer {
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

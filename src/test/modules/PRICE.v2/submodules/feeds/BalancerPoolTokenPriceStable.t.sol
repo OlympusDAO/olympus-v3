@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -863,3 +864,4 @@ contract BalancerPoolTokenPriceStableTest is Test {
         assertEq(price, BALANCER_POOL_RATE.mulDiv(minimumPrice, 10 ** BALANCER_POOL_DECIMALS));
     }
 }
+/// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

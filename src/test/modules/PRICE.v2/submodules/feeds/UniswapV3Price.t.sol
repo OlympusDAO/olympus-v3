@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
 // Uniswap V3
@@ -814,3 +815,4 @@ contract UniswapV3PriceTest is Test {
         assertGt(price, 0);
     }
 }
+/// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

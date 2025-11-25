@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
+// solhint-disable one-contract-per-file
+/// forge-lint: disable-start(mixed-case-function)
 
 import {Keycode, Module, fromKeycode, ensureContract} from "src/Kernel.sol";
 
@@ -225,3 +227,4 @@ abstract contract Submodule {
     /// @dev    MUST BE GATED BY onlyParent. Used to encompass any initialization or upgrade logic.
     function INIT() external virtual onlyParent {}
 }
+/// forge-lint: disable-end(mixed-case-function)

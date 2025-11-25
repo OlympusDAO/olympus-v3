@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
@@ -1205,3 +1206,4 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), priceDecimals, params);
     }
 }
+/// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

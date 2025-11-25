@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
@@ -371,3 +372,4 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         return lookupTokenUsdPrice;
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

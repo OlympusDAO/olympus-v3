@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity ^0.8.15;
 
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
@@ -202,3 +203,4 @@ contract MockPrice is PRICEv2 {
         }
     }
 }
+/// forge-lint: disable-end(mixed-case-function)

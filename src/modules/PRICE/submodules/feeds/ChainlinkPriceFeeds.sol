@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
@@ -356,3 +357,4 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         return priceResult;
     }
 }
+/// forge-lint: disable-end(mixed-case-function)

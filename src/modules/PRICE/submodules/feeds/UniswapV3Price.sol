@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -301,3 +302,4 @@ contract UniswapV3Price is PriceSubmodule {
         return (quoteToken, quoteTokenDecimals, lookupTokenDecimals);
     }
 }
+/// forge-lint: disable-end(mixed-case-function)
