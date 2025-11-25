@@ -63,6 +63,7 @@ contract ChainlinkPriceFeedsTest is Test {
         {
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setTimestamp(block.timestamp);
+            /// forge-lint: disable-next-line(unsafe-typecast)
             ohmEthPriceFeed.setLatestAnswer(int256(OHM_ETH_PRICE));
             ohmEthPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             ohmEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
@@ -70,6 +71,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
             daiEthPriceFeed = new MockPriceFeed();
             daiEthPriceFeed.setTimestamp(block.timestamp);
+            /// forge-lint: disable-next-line(unsafe-typecast)
             daiEthPriceFeed.setLatestAnswer(int256(DAI_ETH_PRICE));
             daiEthPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             daiEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
@@ -77,6 +79,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
             ethDaiPriceFeed = new MockPriceFeed();
             ethDaiPriceFeed.setTimestamp(block.timestamp);
+            /// forge-lint: disable-next-line(unsafe-typecast)
             ethDaiPriceFeed.setLatestAnswer(int256(ETH_DAI_PRICE));
             ethDaiPriceFeed.setDecimals(PRICE_FEED_DECIMALS);
             ethDaiPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
