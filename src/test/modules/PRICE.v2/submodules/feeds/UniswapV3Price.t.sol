@@ -397,6 +397,7 @@ contract UniswapV3PriceTest is Test {
         bytes memory err = abi.encodeWithSelector(
             OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
+            /// forge-lint: disable-next-line(unsafe-typecast)
             (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
             MIN_TICK,
             MAX_TICK
@@ -434,8 +435,10 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         // Calculate the expected TWAP price
+        /// forge-lint: disable-next-line(unsafe-typecast)
         int56 timeWeightedTick = (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS));
         // Adjust for negative rounding
+        /// forge-lint: disable-next-line(unsafe-typecast)
         if (tick1 < tick0 && (tick1 - tick0) % int56(int32(OBSERVATION_SECONDS)) != 0) {
             timeWeightedTick--;
         }
