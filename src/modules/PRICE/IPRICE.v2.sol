@@ -109,7 +109,7 @@ interface IPRICEv2 {
     error PRICE_ParamsMovingAverageDurationInvalid(
         address asset_,
         uint32 movingAverageDuration_,
-        uint32 observationFrequency_
+        uint48 observationFrequency_
     );
 
     /// @notice                     The provided observation value is zero
@@ -228,7 +228,7 @@ interface IPRICEv2 {
     }
 
     /// @notice     The frequency of price observations (in seconds)
-    function observationFrequency() external view returns (uint32);
+    function observationFrequency() external view returns (uint48);
 
     /// @notice     The number of decimals to used in output values
     function decimals() external view returns (uint8);
