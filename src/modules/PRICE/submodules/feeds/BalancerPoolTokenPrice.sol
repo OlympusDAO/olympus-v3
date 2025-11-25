@@ -658,7 +658,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                  */
                 try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
                     uint256 currentPrice,
-                    uint48 timestamp
+                    uint48
                 ) {
                     destinationTokenIndex = i;
                     destinationTokenPrice = currentPrice;
@@ -786,7 +786,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                  */
                 try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
                     uint256 currentPrice,
-                    uint48 timestamp
+                    uint48
                 ) {
                     destinationTokenIndex = i;
                     destinationTokenPrice = currentPrice;

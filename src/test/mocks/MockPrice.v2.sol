@@ -67,7 +67,7 @@ contract MockPrice is PRICEv2 {
         return price;
     }
 
-    function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
+    function getPrice(address asset_, uint48) external view override returns (uint256) {
         (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
         return price;
     }
@@ -101,7 +101,7 @@ contract MockPrice is PRICEv2 {
     function getPriceIn(
         address asset_,
         address base_,
-        uint48 maxAge_
+        uint48
     ) external view override returns (uint256) {
         (uint256 price, ) = getPriceIn(asset_, base_, Variant.CURRENT);
         return price;
@@ -155,7 +155,7 @@ contract MockPrice is PRICEv2 {
             });
     }
 
-    function isAssetApproved(address asset_) external view override returns (bool) {
+    function isAssetApproved(address) external view override returns (bool) {
         return true;
     }
 
