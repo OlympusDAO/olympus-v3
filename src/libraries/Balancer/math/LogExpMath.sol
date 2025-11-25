@@ -11,7 +11,7 @@
 // WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 // COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+/// forge-lint: disable-start(divide-before-multiply,mixed-case-variable)
 pragma solidity ^0.8.15;
 
 import {Errors, _require} from "src/libraries/Balancer/contracts/BalancerErrors.sol";
@@ -515,3 +515,4 @@ library LogExpMath {
         return seriesSum * 2;
     }
 }
+/// forge-lint: disable-end(divide-before-multiply,mixed-case-variable)
