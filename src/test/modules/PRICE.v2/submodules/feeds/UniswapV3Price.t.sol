@@ -140,7 +140,7 @@ contract UniswapV3PriceTest is Test {
     //  [X] Correctly calculates the TWAP
     //  [X] Correctly handles different output decimals
 
-    function test_getTokenTWAP_success_token0() public {
+    function test_getTokenTWAP_success_token0() public view {
         bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
 
@@ -723,7 +723,7 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, uint256(1004412).mulDiv(10 ** priceDecimals, 10 ** 6));
     }
 
-    function test_getTokenPrice_success_token0() public {
+    function test_getTokenPrice_success_token0() public view {
         bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
 

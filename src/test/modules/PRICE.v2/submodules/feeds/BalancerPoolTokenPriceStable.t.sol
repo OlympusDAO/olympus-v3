@@ -176,7 +176,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         vm.expectRevert(err);
     }
 
-    function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal view returns (uint256) {
+    function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal pure returns (uint256) {
         uint256 rate = BALANCER_POOL_RATE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS); // outputDecimals_
         uint256 baseTokenPrice = (
             B_80BAL_20WETH_BALANCE_PRICE_EXPECTED < AURA_BAL_PRICE_EXPECTED
@@ -194,7 +194,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         uint8 actualDecimals,
         uint8 decimals,
         uint256 delta
-    ) internal {
+    ) internal pure {
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedActual = actual.mulDiv(10 ** decimals, 10 ** actualDecimals);
         uint256 truncatedExpected = expected.mulDiv(10 ** decimals, 10 ** expectedDecimals);
@@ -204,7 +204,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
     // ========= TOKEN PRICE ========= //
 
-    function test_getTokenPriceFromStablePool_success() public {
+    function test_getTokenPriceFromStablePool_success() public view {
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
         uint256 price = balancerSubmodule.getTokenPriceFromStablePool(
             AURA_BAL,

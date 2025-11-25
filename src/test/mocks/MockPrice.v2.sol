@@ -156,11 +156,11 @@ contract MockPrice is PRICEv2 {
             });
     }
 
-    function isAssetApproved(address) external view override returns (bool) {
+    function isAssetApproved(address) external pure override returns (bool) {
         return true;
     }
 
-    function storePrice(address asset_) external override {
+    function storePrice(address asset_) external view override {
         getPrice(asset_, Variant.CURRENT);
     }
 

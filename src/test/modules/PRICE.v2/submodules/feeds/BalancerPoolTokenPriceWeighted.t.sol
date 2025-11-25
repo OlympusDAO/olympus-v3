@@ -295,7 +295,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
     }
 
-    function test_getTokenPriceFromWeightedPool_priceDecimalsSame() public {
+    function test_getTokenPriceFromWeightedPool_priceDecimalsSame() public view {
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
             WETH,

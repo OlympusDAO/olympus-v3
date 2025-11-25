@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
 import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
@@ -52,40 +53,31 @@ contract MockUniswapV2Pool is IUniswapV2Pair {
         return _totalSupply;
     }
 
-    function swap(
-        uint256 amount0Out,
-        uint256 amount1Out,
-        address to,
-        bytes calldata data
-    ) external override {
+    function swap(uint256, uint256, address, bytes calldata) external pure override {
         revert("Not implemented");
     }
 
-    function mint(address to) external override returns (uint256 liquidity) {
+    function mint(address) external pure override returns (uint256) {
         revert("Not implemented");
     }
 
-    function sync() external override {
+    function sync() external pure override {
         revert("Not implemented");
     }
 
-    function approve(address spender, uint256 value) external override returns (bool) {
+    function approve(address, uint256) external pure override returns (bool) {
         revert("Not implemented");
     }
 
-    function transfer(address to, uint256 value) external override returns (bool) {
+    function transfer(address, uint256) external pure override returns (bool) {
         revert("Not implemented");
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 value
-    ) external override returns (bool) {
+    function transferFrom(address, address, uint256) external pure override returns (bool) {
         revert("Not implemented");
     }
 
-    function DOMAIN_SEPARATOR() external view override returns (bytes32) {
+    function DOMAIN_SEPARATOR() external pure override returns (bytes32) {
         revert("Not implemented");
     }
 
@@ -101,27 +93,28 @@ contract MockUniswapV2Pool is IUniswapV2Pair {
         revert("Mock Uniswap V2 Pool");
     }
 
-    function nonces(address owner) external view override returns (uint256) {
+    function nonces(address) external pure override returns (uint256) {
         revert("Not implemented");
     }
 
     function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external override {
+        address,
+        address,
+        uint256,
+        uint256,
+        uint8,
+        bytes32,
+        bytes32
+    ) external pure override {
         revert("Not implemented");
     }
 
-    function balanceOf(address owner) external view override returns (uint256) {
+    function balanceOf(address) external pure override returns (uint256) {
         revert("Not implemented");
     }
 
-    function allowance(address owner, address spender) external view override returns (uint256) {
+    function allowance(address, address) external pure override returns (uint256) {
         revert("Not implemented");
     }
 }
+/// forge-lint: disable-end(mixed-case-function)

@@ -144,7 +144,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         uint8 actualDecimals,
         uint8 decimals,
         uint256 delta
-    ) internal {
+    ) internal pure {
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedActual = actual.mulDiv(10 ** decimals, 10 ** actualDecimals);
         uint256 truncatedExpected = expected.mulDiv(10 ** decimals, 10 ** expectedDecimals);
@@ -205,7 +205,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getPoolTokenPrice_success() public {
+    function test_getPoolTokenPrice_success() public view {
         bytes memory params = encodePoolParams(mockPool);
         uint256 price = uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
 

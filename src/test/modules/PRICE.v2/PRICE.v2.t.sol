@@ -707,7 +707,7 @@ contract PriceV2Test is Test {
 
     // =========  getAssets  ========= //
 
-    function test_getAssets_zero() public {
+    function test_getAssets_zero() public view {
         // Get assets from price module and check that they match
         address[] memory assets = price.getAssets();
         assertEq(assets.length, 0);
