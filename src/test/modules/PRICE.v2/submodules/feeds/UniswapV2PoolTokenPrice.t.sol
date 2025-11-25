@@ -11,9 +11,10 @@ import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
+import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {UniswapV2PoolTokenPrice, IUniswapV2Pool} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
+import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract UniswapV2PoolTokenPriceTest is Test {
@@ -118,7 +119,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         mockPrice.setPrice(asset_, price_);
     }
 
-    function encodePoolParams(IUniswapV2Pool pool) internal pure returns (bytes memory params) {
+    function encodePoolParams(IUniswapV2Pair pool) internal pure returns (bytes memory params) {
         return abi.encode(pool);
     }
 
@@ -162,7 +163,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
+        bytes memory params = encodePoolParams(IUniswapV2Pair(address(0)));
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
@@ -424,7 +425,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
+        bytes memory params = encodePoolParams(IUniswapV2Pair(address(0)));
         uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
     }
 

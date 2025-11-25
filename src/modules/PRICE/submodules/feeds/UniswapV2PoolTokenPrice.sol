@@ -7,21 +7,7 @@ import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
-
-interface IUniswapV2Pool {
-    function token0() external view returns (address);
-
-    function token1() external view returns (address);
-
-    function getReserves()
-        external
-        view
-        returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
-
-    function decimals() external pure returns (uint8);
-
-    function totalSupply() external view returns (uint256);
-}
+import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 /// @title      UniswapV2PoolTokenPrice
 /// @author     0xJem
@@ -40,7 +26,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ///
     /// @param pool    Address of the UniswapV2 pool
     struct UniswapV2PoolParams {
-        IUniswapV2Pool pool;
+        IUniswapV2Pair pool;
     }
 
     // ========== ERRORS ========== //
@@ -136,7 +122,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ///
     /// @param pool_        UniswapV2 pool
     /// @return             Array of length 2 containing token addresses
-    function _getTokens(IUniswapV2Pool pool_) internal view returns (address[] memory) {
+    function _getTokens(IUniswapV2Pair pool_) internal view returns (address[] memory) {
         address[] memory tokens = new address[](2);
         tokens[0] = pool_.token0();
         tokens[1] = pool_.token1();
@@ -149,7 +135,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ///
     /// @param pool_        UniswapV2 pool
     /// @return             Reserves of the pool in their native decimals
-    function _getReserves(IUniswapV2Pool pool_) internal view returns (uint112[] memory) {
+    function _getReserves(IUniswapV2Pair pool_) internal view returns (uint112[] memory) {
         try pool_.getReserves() returns (uint112 token0Reserves, uint112 token1Reserves, uint32) {
             uint112[] memory balances = new uint112[](2);
             balances[0] = token0Reserves;
@@ -205,14 +191,14 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         uint256 k; // outputDecimals_
         uint256 poolSupply; // outputDecimals_
         {
-            IUniswapV2Pool pool;
+            IUniswapV2Pair pool;
             {
                 // Decode params
                 UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
                 if (address(params.pool) == address(0))
                     revert UniswapV2_ParamsPoolInvalid(0, address(params.pool));
 
-                pool = IUniswapV2Pool(params.pool);
+                pool = IUniswapV2Pair(params.pool);
             }
 
             // Get balances
@@ -315,13 +301,13 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_, MAX_DECIMALS);
 
         // Decode params
-        IUniswapV2Pool pool;
+        IUniswapV2Pair pool;
         {
             UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
             if (address(params.pool) == address(0))
                 revert UniswapV2_ParamsPoolInvalid(0, address(params.pool));
 
-            pool = IUniswapV2Pool(params.pool);
+            pool = IUniswapV2Pair(params.pool);
         }
 
         uint112[] memory balances_;
