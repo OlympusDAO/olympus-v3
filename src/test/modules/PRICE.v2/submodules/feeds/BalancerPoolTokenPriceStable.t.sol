@@ -12,7 +12,7 @@ import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {BalancerPoolTokenPrice, IStablePool, IVault} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {BalancerPoolTokenPrice, IStablePool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceStableTest is Test {

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test, stdError} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
+import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel} from "src/Kernel.sol";
@@ -12,7 +11,6 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract ERC4626Test is Test {

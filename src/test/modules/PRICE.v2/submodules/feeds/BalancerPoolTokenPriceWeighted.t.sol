@@ -14,7 +14,7 @@ import {LogExpMath} from "libraries/Balancer/math/LogExpMath.sol";
 import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {BalancerPoolTokenPrice, IWeightedPool, IVault} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {BalancerPoolTokenPrice, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceWeightedTest is Test {
