@@ -261,14 +261,38 @@ contract PriceConfigTest is Test {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
-        expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
-        expectedPerms[1] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
-        expectedPerms[2] = Permissions(PRICE_KEYCODE, PRICE.updateAssetPriceFeeds.selector);
-        expectedPerms[3] = Permissions(PRICE_KEYCODE, PRICE.updateAssetPriceStrategy.selector);
-        expectedPerms[4] = Permissions(PRICE_KEYCODE, PRICE.updateAssetMovingAverage.selector);
-        expectedPerms[5] = Permissions(PRICE_KEYCODE, PRICE.installSubmodule.selector);
-        expectedPerms[6] = Permissions(PRICE_KEYCODE, PRICE.upgradeSubmodule.selector);
-        expectedPerms[7] = Permissions(PRICE_KEYCODE, PRICE.execOnSubmodule.selector);
+        expectedPerms[0] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.addAsset.selector
+        });
+        expectedPerms[1] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.removeAsset.selector
+        });
+        expectedPerms[2] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetPriceFeeds.selector
+        });
+        expectedPerms[3] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetPriceStrategy.selector
+        });
+        expectedPerms[4] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.updateAssetMovingAverage.selector
+        });
+        expectedPerms[5] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.installSubmodule.selector
+        });
+        expectedPerms[6] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.upgradeSubmodule.selector
+        });
+        expectedPerms[7] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.execOnSubmodule.selector
+        });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
         assertEq(perms.length, expectedPerms.length);

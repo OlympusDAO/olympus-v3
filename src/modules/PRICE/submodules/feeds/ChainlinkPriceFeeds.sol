@@ -170,7 +170,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 uint256 updatedAt,
                 uint80
             ) {
-                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt);
+                roundData = FeedRoundData({
+                    roundId: roundId,
+                    priceInt: priceInt,
+                    startedAt: startedAt,
+                    updatedAt: updatedAt
+                });
             } catch (bytes memory) {
                 revert Chainlink_FeedInvalid(address(feed_));
             }
