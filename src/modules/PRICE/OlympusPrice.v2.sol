@@ -774,7 +774,9 @@ contract OlympusPricev2 is PRICEv2 {
                 );
 
             // If this overflows, it will revert. Safe as this function is only used when configuring assets.
-            uint16 numObservations = SafeCast.encodeUInt16(movingAverageDuration_ / observationFrequency);
+            uint16 numObservations = SafeCast.encodeUInt16(
+                movingAverageDuration_ / observationFrequency
+            );
             if (observations_.length != numObservations || numObservations < 2)
                 revert PRICE_ParamsInvalidObservationCount(
                     asset_,
