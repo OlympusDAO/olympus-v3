@@ -12,6 +12,7 @@ import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {BalancerPoolTokenPrice, IStablePool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceStableTest is Test {
@@ -570,7 +571,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         mockAssetPrice(B_80BAL_20WETH, 0);
 
         // A revert in the base token price will be passed up, as that prevents calculation of the pool token price
-        expectRevert_asset(PRICEv2.PRICE_PriceZero.selector, B_80BAL_20WETH);
+        expectRevert_asset(IPRICEv2.PRICE_PriceZero.selector, B_80BAL_20WETH);
 
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
         balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);

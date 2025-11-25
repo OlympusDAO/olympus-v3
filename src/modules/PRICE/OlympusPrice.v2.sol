@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode} from "src/Submodules.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 /// @title      OlympusPriceV2
@@ -59,24 +60,24 @@ contract OlympusPricev2 is PRICEv2 {
 
     // ========== ASSET INFORMATION ========== //
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     function getAssets() external view override returns (address[] memory) {
         return assets;
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     function getAssetData(address asset_) external view override returns (Asset memory) {
         return _assetData[asset_];
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     function isAssetApproved(address asset_) external view override returns (bool) {
         return _assetData[asset_].approved;
     }
 
     // ========== ASSET PRICES ========== //
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
     ///
     /// @dev        Will revert if:
@@ -93,14 +94,14 @@ contract OlympusPricev2 is PRICEv2 {
         return price;
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
     /// @dev        - The max age is >= the block timestamp
     function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ >= uint48(block.timestamp)) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
+        if (maxAge_ >= uint48(block.timestamp)) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
         // Try to use the last price, must be updated more recently than maxAge
         // getPrice checks if asset is approved
@@ -112,7 +113,7 @@ contract OlympusPricev2 is PRICEv2 {
         return price;
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
@@ -273,7 +274,7 @@ contract OlympusPricev2 is PRICEv2 {
         return (movingAverage, asset.lastObservationTime);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
     function getPriceIn(address asset_, address base_) external view override returns (uint256) {
         // Get the last price of each asset (getPrice checks if asset is approved)
@@ -293,7 +294,7 @@ contract OlympusPricev2 is PRICEv2 {
         return (assetPrice * 10 ** decimals) / basePrice;
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - `base_` is not approved
@@ -306,8 +307,8 @@ contract OlympusPricev2 is PRICEv2 {
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ == 0) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
-        if (maxAge_ >= uint48(block.timestamp)) revert PRICEv2.PRICE_ParamsMaxAgeInvalid(maxAge_);
+        if (maxAge_ == 0) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
+        if (maxAge_ >= uint48(block.timestamp)) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
         // Get the last price of each asset (getPrice checks if asset is approved)
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
@@ -326,7 +327,7 @@ contract OlympusPricev2 is PRICEv2 {
         return (assetPrice * 10 ** decimals) / basePrice;
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     function getPriceIn(
         address asset_,
         address base_,
@@ -347,7 +348,7 @@ contract OlympusPricev2 is PRICEv2 {
         return (price, updatedAt);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Get the current price using `_getCurrentPrice()`
     /// @dev        - Store the price in the asset's observation array at the index corresponding to the asset's value of `nextObsIndex`
@@ -385,7 +386,7 @@ contract OlympusPricev2 is PRICEv2 {
         emit PriceStored(asset_, price, currentTime);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
@@ -411,7 +412,7 @@ contract OlympusPricev2 is PRICEv2 {
 
     // ========== ASSET MANAGEMENT ========== //
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Performs basic checks on the parameters
     /// @dev        - Sets the price strategy using `_updateAssetPriceStrategy()`
@@ -488,7 +489,7 @@ contract OlympusPricev2 is PRICEv2 {
         emit AssetAdded(asset_);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - The caller is not permissioned
@@ -516,7 +517,7 @@ contract OlympusPricev2 is PRICEv2 {
         emit AssetRemoved(asset_);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Performs basic checks on the parameters
     /// @dev        - Sets the price feeds using `_updateAssetPriceFeeds()`
@@ -608,7 +609,7 @@ contract OlympusPricev2 is PRICEv2 {
         _assetData[asset_].feeds = abi.encode(feeds_);
     }
 
-    /// @inheritdoc PRICEv2
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Performs basic checks on the parameters
     /// @dev        - Sets the price strategy using `_updateAssetPriceStrategy()`
@@ -685,7 +686,7 @@ contract OlympusPricev2 is PRICEv2 {
         _assetData[asset_].useMovingAverage = useMovingAverage_;
     }
 
-    /// @inheritdoc                     PRICEv2
+    /// @inheritdoc                     IPRICEv2
     /// @dev                            Implements the following logic:
     /// @dev                            - Performs basic checks on the parameters
     /// @dev                            - Sets the moving average data using `_updateAssetMovingAverage()`

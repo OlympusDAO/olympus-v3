@@ -11,6 +11,7 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract ERC4626Test is Test {
@@ -223,7 +224,7 @@ contract ERC4626Test is Test {
         mockAssetPrice(address(dai), 0);
 
         // Call the function
-        vm.expectRevert(abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, address(dai)));
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(dai)));
         submodule.getPriceFromUnderlying(address(sDai), PRICE_DECIMALS, "");
     }
 

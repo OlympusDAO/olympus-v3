@@ -13,6 +13,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {LogExpMath} from "libraries/Balancer/math/LogExpMath.sol";
 
 import {BalancerPoolTokenPrice, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceWeightedTest is Test {
@@ -653,7 +654,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         mockAssetPrice(USDC, 0);
 
         // A revert in any of the underlying token prices will be passed up, as that prevents calculation of the pool token price
-        expectRevert_asset(PRICEv2.PRICE_PriceZero.selector, USDC);
+        expectRevert_asset(IPRICEv2.PRICE_PriceZero.selector, USDC);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);

@@ -2,6 +2,8 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
@@ -15,7 +17,7 @@ import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary
 // Bophades
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 
 /// @title      UniswapV3Price
 /// @author     0xJem
@@ -146,7 +148,7 @@ contract UniswapV3Price is PriceSubmodule {
         // Get the price of {quoteToken} in USD
         // Decimals: outputDecimals_
         // PRICE will revert if the price cannot be determined or is 0.
-        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
+        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, IPRICEv2.Variant.CURRENT);
 
         // Calculate final price in USD
         // Decimals: outputDecimals_
@@ -197,7 +199,7 @@ contract UniswapV3Price is PriceSubmodule {
         // Get the price of {quoteToken} in USD
         // Decimals: outputDecimals_
         // PRICE will revert if the price cannot be determined or is 0.
-        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
+        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, IPRICEv2.Variant.CURRENT);
 
         // Calculate final price in USD
         // Decimals: outputDecimals_

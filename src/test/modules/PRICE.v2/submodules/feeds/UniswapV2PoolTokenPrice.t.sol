@@ -14,6 +14,7 @@ import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
 import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract UniswapV2PoolTokenPriceTest is Test {
@@ -123,7 +124,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
     }
 
     function expectRevert_PriceZero(address asset_) internal {
-        bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, asset_);
+        bytes memory err = abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, asset_);
         vm.expectRevert(err);
     }
 

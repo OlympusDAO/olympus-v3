@@ -3,6 +3,7 @@
 pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -128,7 +129,7 @@ contract ERC4626Price is PriceSubmodule {
         // Scale: output decimals
         (uint256 underlyingPrice, ) = PRICEv2(_PRICE()).getPrice(
             underlying,
-            PRICEv2.Variant.CURRENT
+            IPRICEv2.Variant.CURRENT
         );
 
         // Calculate the price of the asset

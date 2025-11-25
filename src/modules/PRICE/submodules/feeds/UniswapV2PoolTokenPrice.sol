@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -258,8 +259,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
             // PRICE will revert if the price cannot be determined or is 0.
             // If ANY price cannot be determined, then the LP token value cannot be determined. So we don't catch the error.
-            (uint256 price0_, ) = PRICE.getPrice(token0, PRICEv2.Variant.CURRENT);
-            (uint256 price1_, ) = PRICE.getPrice(token1, PRICEv2.Variant.CURRENT);
+            (uint256 price0_, ) = PRICE.getPrice(token0, IPRICEv2.Variant.CURRENT);
+            (uint256 price1_, ) = PRICE.getPrice(token1, IPRICEv2.Variant.CURRENT);
 
             price0 = price0_;
             price1 = price1_;
@@ -343,7 +344,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             destinationTokenIndex = 1 - lookupTokenIndex;
             (uint256 destinationTokenPrice_, ) = _PRICE().getPrice(
                 tokens_[destinationTokenIndex],
-                PRICEv2.Variant.CURRENT
+                IPRICEv2.Variant.CURRENT
             );
             destinationTokenPrice = destinationTokenPrice_;
         }

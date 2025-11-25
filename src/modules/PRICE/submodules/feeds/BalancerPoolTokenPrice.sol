@@ -5,7 +5,8 @@ pragma solidity 0.8.15;
 
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {StableMath} from "src/libraries/Balancer/math/StableMath.sol";
@@ -284,7 +285,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
              * As the value of the pool token is reliant on the price of every underlying token,
              * the revert from PRICE is not caught.
              */
-            (uint256 price_, ) = _PRICE().getPrice(token_, PRICEv2.Variant.CURRENT); // Scale: `outputDecimals_`
+            (uint256 price_, ) = _PRICE().getPrice(token_, IPRICEv2.Variant.CURRENT); // Scale: `outputDecimals_`
 
             price = price_.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, 10 ** outputDecimals_);
         }
@@ -531,7 +532,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                  * As the value of the pool token is reliant on the price of every underlying token,
                  * the revert from PRICE is not caught.
                  */
-                (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
+                (uint256 price_, ) = _PRICE().getPrice(token, IPRICEv2.Variant.CURRENT); // outputDecimals_
 
                 if (minimumPrice == 0) {
                     minimumPrice = price_;
@@ -658,7 +659,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                  *
                  * We catch this, so that other candidate tokens can be tested.
                  */
-                try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
+                try _PRICE().getPrice(currentToken, IPRICEv2.Variant.CURRENT) returns (
                     uint256 currentPrice,
                     uint48
                 ) {
@@ -786,7 +787,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                  *
                  * We catch this, so that other candidate tokens can be tested.
                  */
-                try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
+                try _PRICE().getPrice(currentToken, IPRICEv2.Variant.CURRENT) returns (
                     uint256 currentPrice,
                     uint48
                 ) {

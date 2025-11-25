@@ -11,6 +11,7 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2, PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -27,27 +28,27 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // PRICEv2 Configuration
 // [X] addAssetPrice
 //     [X] only "priceconfig_policy" role can call
-//     [X] inputs to PRICEv2.addAsset are correct
+//     [X] inputs to IPRICEv2.addAsset are correct
 // [X] removeAssetPrice
 //     [X] only "priceconfig_policy" role can call
-//     [X] inputs to PRICEv2.removeAsset are correct
+//     [X] inputs to IPRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
 //     [X] only "priceconfig_policy" role can call
-//     [X] inputs to PRICEv2.updateAssetPriceFeeds are correct
+//     [X] inputs to IPRICEv2.updateAssetPriceFeeds are correct
 // [X] updateAssetPriceStrategy
 //     [X] only "priceconfig_policy" role can call
-//     [X] inputs to PRICEv2.updateAssetPriceStrategy are correct
+//     [X] inputs to IPRICEv2.updateAssetPriceStrategy are correct
 // [X] updateAssetMovingAverage
 //     [X] only "priceconfig_policy" role can call
-//     [X] inputs to PRICEv2.updateAssetMovingAverage are correct
+//     [X] inputs to IPRICEv2.updateAssetMovingAverage are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
 //     [X] only "priceconfig_admin" role can call
-//     [X] inputs to PRICEv2.installSubmodule are correct
+//     [X] inputs to IPRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only "priceconfig_admin" role can call
-//     [X] inputs to PRICEv2.upgradeSubmodule are correct
+//     [X] inputs to IPRICEv2.upgradeSubmodule are correct
 
 type Category is bytes32;
 type CategoryGroup is bytes32;
@@ -172,7 +173,7 @@ contract PriceConfigTest is Test {
 
     function _makeObservations(
         MockERC20 asset,
-        PRICEv2.Component memory feed,
+        IPRICEv2.Component memory feed,
         uint256 numObs
     ) internal view returns (uint256[] memory) {
         // Get current price from feed
@@ -203,19 +204,19 @@ contract PriceConfigTest is Test {
 
     function _addBaseAssets() internal {
         // OHM
-        PRICEv2.Component memory strat = PRICEv2.Component(
+        IPRICEv2.Component memory strat = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
-        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
-        feeds[0] = PRICEv2.Component(
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
         );
-        feeds[1] = PRICEv2.Component(
+        feeds[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
@@ -308,19 +309,19 @@ contract PriceConfigTest is Test {
         vm.assume(user_ != policy);
 
         // Setup data to add asset
-        PRICEv2.Component memory strategyComponent = PRICEv2.Component(
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
-        PRICEv2.Component[] memory feedComponents = new PRICEv2.Component[](2);
-        feedComponents[0] = PRICEv2.Component(
+        IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](2);
+        feedComponents[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
         );
-        feedComponents[1] = PRICEv2.Component(
+        feedComponents[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
@@ -355,7 +356,7 @@ contract PriceConfigTest is Test {
         );
 
         // Confirm asset was not added
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
 
         // Try to add asset to PRICEv2 with policy account, expect success
@@ -374,19 +375,19 @@ contract PriceConfigTest is Test {
 
     function test_addAssetPrice_correctData() public {
         // Setup data to add asset
-        PRICEv2.Component memory strategyComponent = PRICEv2.Component(
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
-        PRICEv2.Component[] memory feedComponents = new PRICEv2.Component[](2);
-        feedComponents[0] = PRICEv2.Component(
+        IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](2);
+        feedComponents[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
         );
-        feedComponents[1] = PRICEv2.Component(
+        feedComponents[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
@@ -403,7 +404,7 @@ contract PriceConfigTest is Test {
         uint256[] memory obs = _makeObservations(ohm, feedComponents[0], 15);
 
         // Confirm asset is not approved yet and data is not set
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
         assertEq(asset.storeMovingAverage, false);
         assertEq(asset.useMovingAverage, false);
@@ -455,7 +456,7 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm asset is approved
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
         // Try to remove asset from PRICEv2 with non-policy account, expect revert
@@ -485,7 +486,7 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm asset is approved
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
         // Remove asset from PRICEv2 using policy account
@@ -514,12 +515,12 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm current has two feeds
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        PRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (PRICEv2.Component[]));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
         // Setup data to update feeds
-        PRICEv2.Component[] memory newFeeds = new PRICEv2.Component[](1);
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
         newFeeds[0] = feeds[0];
 
         // Try to update feeds for asset on PRICEv2 with non-policy account, expect revert
@@ -533,7 +534,7 @@ contract PriceConfigTest is Test {
 
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
-        feeds = abi.decode(asset.feeds, (PRICEv2.Component[]));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
         // Try to update feeds for asset on PRICEv2 with policy account, expect success
@@ -542,7 +543,7 @@ contract PriceConfigTest is Test {
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
-        feeds = abi.decode(asset.feeds, (PRICEv2.Component[]));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 1);
     }
 
@@ -551,12 +552,12 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm current has two feeds
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        PRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (PRICEv2.Component[]));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
         // Setup data to update feeds
-        PRICEv2.Component[] memory newFeeds = new PRICEv2.Component[](1);
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
         newFeeds[0] = feeds[0];
 
         // Update feeds
@@ -565,7 +566,7 @@ contract PriceConfigTest is Test {
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
-        feeds = abi.decode(asset.feeds, (PRICEv2.Component[]));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 1);
         assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(newFeeds[0].target));
         assertEq(feeds[0].selector, newFeeds[0].selector);
@@ -579,15 +580,15 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        PRICEv2.Component memory strat = abi.decode(asset.strategy, (PRICEv2.Component));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
 
         // Setup data to update strategy
         MockStrategy newStrategy = new MockStrategy(PRICE);
-        PRICEv2.Component memory newStrat = PRICEv2.Component(
+        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
             newStrategy.SUBKEYCODE(),
             newStrategy.getOnePrice.selector,
             abi.encode(1)
@@ -606,7 +607,7 @@ contract PriceConfigTest is Test {
 
         // Confirm strategy was not updated
         asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (PRICEv2.Component));
+        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
@@ -618,7 +619,7 @@ contract PriceConfigTest is Test {
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (PRICEv2.Component));
+        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
         assertEq(fromSubKeycode(strat.target), fromSubKeycode(newStrat.target));
         assertEq(strat.selector, newStrat.selector);
         assertEq(strat.params, newStrat.params);
@@ -630,8 +631,8 @@ contract PriceConfigTest is Test {
         _addBaseAssets();
 
         // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        PRICEv2.Component memory strat = abi.decode(asset.strategy, (PRICEv2.Component));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
@@ -639,7 +640,7 @@ contract PriceConfigTest is Test {
 
         // Setup data to update strategy
         MockStrategy newStrategy = new MockStrategy(PRICE);
-        PRICEv2.Component memory newStrat = PRICEv2.Component(
+        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
             newStrategy.SUBKEYCODE(),
             newStrategy.getOnePrice.selector,
             abi.encode(1)
@@ -653,7 +654,7 @@ contract PriceConfigTest is Test {
 
         // Confirm strategy was updated
         asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (PRICEv2.Component));
+        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
         assertEq(fromSubKeycode(strat.target), fromSubKeycode(newStrat.target));
         assertEq(strat.selector, newStrat.selector);
         assertEq(strat.params, newStrat.params);
@@ -670,7 +671,7 @@ contract PriceConfigTest is Test {
         vm.prank(policy);
         priceConfig.updateAssetPriceStrategy(
             address(ohm),
-            PRICEv2.Component(
+            IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0)
@@ -679,7 +680,7 @@ contract PriceConfigTest is Test {
         );
 
         // Confirm that ohm currently stores a moving average
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.storeMovingAverage, true);
 
         // Try to update moving average for asset on PRICEv2 with non-policy account, expect revert
@@ -720,14 +721,14 @@ contract PriceConfigTest is Test {
         // Add a new asset to PRICEv2 that doesn't have a moving average
         MockERC20 fohm = new MockERC20("Fake OHM", "FOHM", 9);
 
-        PRICEv2.Component memory strategyComponent = PRICEv2.Component(
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
-        PRICEv2.Component[] memory feedComponents = new PRICEv2.Component[](1);
-        feedComponents[0] = PRICEv2.Component(
+        IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](1);
+        feedComponents[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
@@ -746,7 +747,7 @@ contract PriceConfigTest is Test {
         );
 
         // Confirm that fohm currently does not store a moving average and other data is zero
-        PRICEv2.Asset memory asset = PRICE.getAssetData(address(fohm));
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(fohm));
         assertEq(asset.storeMovingAverage, false);
         assertEq(asset.movingAverageDuration, uint32(0));
         assertEq(asset.nextObsIndex, uint16(0));

@@ -22,6 +22,7 @@ import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 // Bophades
 import {Kernel} from "src/Kernel.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract UniswapV3PriceTest is Test {
@@ -115,7 +116,7 @@ contract UniswapV3PriceTest is Test {
     }
 
     function expectRevert_PriceZero(address asset_) internal {
-        bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, asset_);
+        bytes memory err = abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, asset_);
         vm.expectRevert(err);
     }
 
