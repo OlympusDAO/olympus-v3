@@ -526,7 +526,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         uint256 usdcRate = WETH_BALANCE.mulDiv(1e18, WETH_WEIGHT).mulDiv(
             WETH_PRICE,
-            USDC_BALANCE.mulDiv((1e12 * 1e18) / 2, stablecoinWeight)
+            USDC_BALANCE.mulDiv(1, 2).mulDiv(1e12 * 1e18, stablecoinWeight)
         );
 
         assertEq(price, usdcRate);
