@@ -3964,10 +3964,10 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(priceWriter);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_ParamsMovingAverageDurationInvalid(address,uint32,uint32)",
+            "PRICE_ParamsMovingAverageDurationInvalid(address,uint32,uint48)",
             address(reserve),
             uint32(9 hours),
-            uint32(8 hours)
+            uint48(8 hours)
         );
         vm.expectRevert(err);
 
