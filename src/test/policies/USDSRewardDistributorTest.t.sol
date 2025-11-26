@@ -273,7 +273,7 @@ contract USDSRewardDistributorTest is Test {
         assertTrue(distributor.hasClaimed(alice, 1));
     }
 
-    function test_claim_reverts_already_claimed() public {
+    function test_claim_skips_already_claimed() public {
         uint256 amount = 100e18;
         uint40 week = 0;
         bytes32 leaf = _generateLeaf(alice, week, amount);
@@ -302,14 +302,76 @@ contract USDSRewardDistributorTest is Test {
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
-                week
-            )
-        );
+        // Record balance before second claim attempt
+        uint256 balanceBefore = usds.balanceOf(alice);
+
+        // Second claim should skip already-claimed week without reverting
         distributor.claim(claimWeeks, amounts, proofs, false);
+
+        // Verify no additional tokens were transferred
+        assertEq(usds.balanceOf(alice), balanceBefore);
         vm.stopPrank();
+    }
+
+    function test_claim_skips_already_claimed_in_batch() public {
+        uint256 amount1 = 100e18;
+        uint256 amount2 = 200e18;
+        uint256 amount3 = 300e18;
+
+        // Setup week 0
+        bytes32 leaf1 = _generateLeaf(alice, 0, amount1);
+        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(0, leaf1);
+
+        // Setup week 1
+        bytes32 leaf2 = _generateLeaf(alice, 1, amount2);
+        vm.warp(startTimestamp + 2 * WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(1, leaf2);
+
+        // Setup week 2
+        bytes32 leaf3 = _generateLeaf(alice, 2, amount3);
+        vm.warp(startTimestamp + 3 * WEEK_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(2, leaf3);
+
+        // Claim week 1 first
+        uint256[] memory claimWeeks1 = new uint256[](1);
+        claimWeeks1[0] = 1;
+        uint256[] memory amounts1 = new uint256[](1);
+        amounts1[0] = amount2;
+        bytes32[][] memory proofs1 = new bytes32[][](1);
+        proofs1[0] = new bytes32[](0);
+
+        vm.prank(alice);
+        distributor.claim(claimWeeks1, amounts1, proofs1, false);
+
+        assertEq(usds.balanceOf(alice), amount2);
+        assertTrue(distributor.hasClaimed(alice, 1));
+
+        // Now try to claim all three weeks (0, 1, 2) - should skip week 1
+        uint256[] memory claimWeeks = new uint256[](3);
+        claimWeeks[0] = 0;
+        claimWeeks[1] = 1; // Already claimed
+        claimWeeks[2] = 2;
+        uint256[] memory amounts = new uint256[](3);
+        amounts[0] = amount1;
+        amounts[1] = amount2;
+        amounts[2] = amount3;
+        bytes32[][] memory proofs = new bytes32[][](3);
+        proofs[0] = new bytes32[](0);
+        proofs[1] = new bytes32[](0);
+        proofs[2] = new bytes32[](0);
+
+        vm.prank(alice);
+        distributor.claim(claimWeeks, amounts, proofs, false);
+
+        // Should only receive amount1 + amount3 (week 1 was skipped)
+        assertEq(usds.balanceOf(alice), amount1 + amount2 + amount3);
+        assertTrue(distributor.hasClaimed(alice, 0));
+        assertTrue(distributor.hasClaimed(alice, 1));
+        assertTrue(distributor.hasClaimed(alice, 2));
     }
 
     function test_claim_reverts_invalid_proof() public {

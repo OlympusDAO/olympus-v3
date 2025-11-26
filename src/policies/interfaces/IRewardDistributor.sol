@@ -50,11 +50,6 @@ interface IRewardDistributor is IERC165 {
     /// @param  week            The week in question
     error RewardDistributor_WeekAlreadySet(uint256 week);
 
-    /// @notice Emitted when rewards for a given week have already been claimed
-    ///
-    /// @param  week            The week in question
-    error RewardDistributor_AlreadyClaimed(uint256 week);
-
     /// @notice Emitted when an invalid Merkle proof is submitted
     error RewardDistributor_InvalidProof();
 

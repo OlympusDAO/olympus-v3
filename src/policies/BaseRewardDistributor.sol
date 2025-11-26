@@ -255,6 +255,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
             uint256 week = weeks_[i];
             uint256 amount = amounts_[i];
 
+            // Skip if already claimed
+            if (hasClaimed[user_][week]) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
+
             // Verify merkle root is set for this week
             if (weeklyMerkleRoots[week] == bytes32(0))
                 revert RewardDistributor_MerkleRootNotSet(week);
@@ -282,9 +290,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal view virtual {
-        // Check if already claimed
-        if (hasClaimed[user_][week_]) revert RewardDistributor_AlreadyClaimed(week_);
-
         // Construct the leaf node: keccak256(abi.encode(user, week, amount))
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
 
