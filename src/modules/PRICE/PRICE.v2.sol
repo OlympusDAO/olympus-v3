@@ -1,6 +1,6 @@
 /// SPDX-License-Identifier: AGPL-3.0
 // solhint-disable one-contract-per-file
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Keycode, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, Submodule} from "src/Submodules.sol";

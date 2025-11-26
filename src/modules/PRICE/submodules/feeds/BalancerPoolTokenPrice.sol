@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 // solhint-disable immutable-vars-naming
 /// forge-lint: disable-start(mixed-case-function,screaming-snake-case-immutable)
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
