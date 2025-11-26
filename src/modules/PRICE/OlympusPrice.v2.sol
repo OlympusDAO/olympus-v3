@@ -1,5 +1,5 @@
 /// SPDX-License-Identifier: AGPL-3.0
-/// forge-lint: disable-start(mixed-case-function)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
@@ -845,4 +845,4 @@ contract OlympusPricev2 is PRICEv2 {
         }
     }
 }
-/// forge-lint: disable-end(mixed-case-function)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
