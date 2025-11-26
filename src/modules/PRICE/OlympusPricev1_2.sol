@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// solhint-disable contract-name-camelcase
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
