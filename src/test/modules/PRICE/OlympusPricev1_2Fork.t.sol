@@ -22,11 +22,14 @@ import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
 import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
-import {IHeart} from "src/policies/interfaces/IHeart.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 contract OlympusPricev1_2ForkTest is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
+    using FullMath for uint256;
 
     // Constants
     uint256 internal constant FORK_BLOCK = 23831097 + 1;
@@ -36,20 +39,24 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant ROLES_ADMIN = 0xb216d714d91eeC4F7120a732c11428857C659eC8;
     address public constant EMISSION_MANAGER = 0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff;
     address public constant YIELD_REPO = 0x271e35a8555a62F6bA76508E85dfD76D580B0692;
-    address public constant CHAINLINK_OHM_ETH = 0x9a72298ae3886221820B1c878d12D872087D3a23;
-    address public constant CHAINLINK_ETH_USD = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address public constant CONVERTIBLE_DEPOSIT_AUCTIONEER =
+        0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
     address public constant CONVERTIBLE_DEPOSIT_ACTIVATOR =
         0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E;
+
+    uint256 internal constant OHM_USD_PRICE = 20e18;
 
     // System contracts
     Kernel public kernel;
     PRICEv1 public oldPrice;
     OlympusPricev1_2 public price;
-    IHeart public heart;
+    OlympusHeart public heart;
     EmissionManager public emissionManager;
     YieldRepurchaseFacility public yrf;
+    ConvertibleDepositAuctioneer public cdAuctioneer;
     RolesAdmin public rolesAdmin;
+    MockPriceFeed public ohmUsdPriceFeed;
 
     // Submodules
     ChainlinkPriceFeeds public chainlinkPrice;
@@ -61,11 +68,13 @@ contract OlympusPricev1_2ForkTest is Test {
     address public priceWriterV2;
     address public kernelExecutor;
 
-    // Events
-    event MinimumTargetPriceChanged(uint256 minimumTargetPrice_);
-
-    // TODO use mock price feeds
-    // TODO complete assertions
+    event MarketCreated(
+        uint256 indexed id,
+        address indexed payoutToken,
+        address indexed quoteToken,
+        uint48 vesting,
+        uint256 initialPrice
+    );
 
     function setUp() public {
         // Fork mainnet at block 23831097
@@ -115,9 +124,15 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.stopPrank();
 
         // Get Heart, EmissionManager, YRF
-        heart = IHeart(HEART);
+        heart = OlympusHeart(HEART);
         emissionManager = EmissionManager(EMISSION_MANAGER);
+        cdAuctioneer = ConvertibleDepositAuctioneer(CONVERTIBLE_DEPOSIT_AUCTIONEER);
         yrf = YieldRepurchaseFacility(YIELD_REPO);
+
+        // Approve the EmissionManager as callback on BondFixedTermAuctioneer
+        vm.startPrank(0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969);
+        emissionManager.bondAuctioneer().setCallbackAuthStatus(EMISSION_MANAGER, true);
+        vm.stopPrank();
 
         // Get observation frequency from old PRICE module
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
@@ -135,11 +150,6 @@ contract OlympusPricev1_2ForkTest is Test {
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
         strategy = new SimplePriceFeedStrategy(price);
-
-        // Check the epoch of the YRF
-        console2.log("YRF epoch", yrf.epoch());
-
-        // TODO synchronise so that the YRF and EM epochs are the same
 
         // Upgrade PRICE module to v1.2
         vm.startPrank(kernelExecutor);
@@ -159,6 +169,9 @@ contract OlympusPricev1_2ForkTest is Test {
         price.installSubmodule(strategy);
         vm.stopPrank();
 
+        ohmUsdPriceFeed = new MockPriceFeed();
+        ohmUsdPriceFeed.setDecimals(8);
+
         // Configure OHM asset with MA tracking and OHM-ETH/ETH-USD feeds
         _configureOhmAsset();
     }
@@ -166,35 +179,30 @@ contract OlympusPricev1_2ForkTest is Test {
     // ========== HELPER FUNCTIONS ========== //
 
     function _configureOhmAsset() internal {
+        // Configure the OHM price feed
+        ohmUsdPriceFeed.setLatestAnswer(int256(OHM_USD_PRICE.mulDiv(1e8, 1e18))); // Convert to 8 decimals
+        ohmUsdPriceFeed.setTimestamp(block.timestamp);
+        ohmUsdPriceFeed.setRoundId(1);
+        ohmUsdPriceFeed.setAnsweredInRound(1);
+
         vm.startPrank(priceWriterV2);
 
-        // Configure OHM with two feeds: OHM-ETH and ETH-USD (multiplied together)
-        ChainlinkPriceFeeds.TwoFeedParams memory ohmEthUsdParams = ChainlinkPriceFeeds
-            .TwoFeedParams(
-                AggregatorV2V3Interface(CHAINLINK_OHM_ETH),
-                uint48(24 hours),
-                AggregatorV2V3Interface(CHAINLINK_ETH_USD),
-                uint48(24 hours)
-            );
+        // Configure OHM with one feed
+        ChainlinkPriceFeeds.OneFeedParams memory ohmUsdParams = ChainlinkPriceFeeds.OneFeedParams(
+            ohmUsdPriceFeed,
+            uint48(24 hours)
+        );
 
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
-            abi.encode(ohmEthUsdParams)
-        );
-
-        // Create initial observations for moving average
-        // Get current price to use as initial observations
-        uint256 currentPrice = chainlinkPrice.getTwoFeedPriceMul(
-            OHM,
-            18,
-            abi.encode(ohmEthUsdParams)
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmUsdParams)
         );
 
         uint256[] memory observations = new uint256[](90); // 30 days / 8 hours = 90 observations
         for (uint256 i = 0; i < 90; i++) {
-            observations[i] = currentPrice;
+            observations[i] = OHM_USD_PRICE;
         }
 
         price.addAsset(
@@ -211,75 +219,212 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.stopPrank();
     }
 
+    function _warpToNextHeartbeat() internal {
+        // Warp to the next heartbeat timestamp
+        vm.warp(heart.lastBeat() + heart.frequency());
+    }
+
+    modifier warpToNextHeartbeat() {
+        _warpToNextHeartbeat();
+        _;
+    }
+
+    modifier beat() {
+        heart.beat();
+
+        console2.log("EM epoch", emissionManager.beatCounter());
+        console2.log("YRF epoch", yrf.epoch());
+        console2.log("CDA auctionResultsNextIndex", cdAuctioneer.getAuctionResultsNextIndex());
+        _;
+    }
+
+    modifier givenOhmPrice(uint256 price_) {
+        ohmUsdPriceFeed.setLatestAnswer(int256(price_));
+        ohmUsdPriceFeed.setTimestamp(block.timestamp);
+        _;
+    }
+
+    modifier givenAuctionTrackingPeriod(uint8 period_) {
+        vm.prank(TIMELOCK);
+        cdAuctioneer.setAuctionTrackingPeriod(period_);
+        _;
+    }
+
+    modifier givenBondMarketCapacityScalar(uint256 scalar_) {
+        vm.prank(TIMELOCK);
+        emissionManager.setBondMarketCapacityScalar(scalar_);
+        _;
+    }
+
     // ========== TESTS ========== //
 
     // ========== HEARTBEAT INTEGRATION ========== //
 
     // when the heartbeat is called
-    //  [ ] the OHM moving average is updated
-    //  [ ] the EmissionManager premium is accurate
-    function test_beat() public {
+    //  [X] the OHM moving average is updated
+    //  [X] the EmissionManager premium is uses the price feed
+    function test_beat() public givenOhmPrice(24e8) {
         // Get initial state
-        uint256 ohmPriceBefore = price.getCurrentPrice();
-        uint256 ohmMABefore = price.getMovingAverage();
         uint48 lastObsTimeBefore = price.lastObservationTime();
-
-        // Get EmissionManager state before
-        uint256 emPremiumBefore = emissionManager.getPremium();
-        (uint256 emPremiumCalc, uint256 emEmissionRate, uint256 emEmission) = emissionManager
-            .getNextEmission();
+        uint256 ohmMABefore = price.getMovingAverage();
 
         // Warp forward by observation frequency
-        uint48 observationFreq = price.observationFrequency();
-        vm.warp(block.timestamp + observationFreq);
+        _warpToNextHeartbeat();
 
         // Call heartbeat
+        // YRF epoch: 5
+        // EM epoch: 1
         heart.beat();
 
         // Verify PRICE moving average was updated
         uint48 lastObsTimeAfter = price.lastObservationTime();
-        assertEq(lastObsTimeAfter, uint48(block.timestamp));
-        assertGt(lastObsTimeAfter, lastObsTimeBefore);
+        assertEq(
+            lastObsTimeAfter,
+            uint48(block.timestamp),
+            "Last observation time should be updated"
+        );
+        assertGt(lastObsTimeAfter, lastObsTimeBefore, "Last observation time should be updated");
 
         // Verify moving average was updated
+        // Higher as the OHM price is higher
         uint256 ohmMAAfter = price.getMovingAverage();
-        assertGt(ohmMAAfter, 0);
+        assertGt(ohmMAAfter, ohmMABefore, "Moving average should be updated");
 
-        // Verify EmissionManager can still access prices
-        uint256 emPremiumAfter = emissionManager.getPremium();
-        assertGe(emPremiumAfter, 0); // Premium can be 0 if price is below backing
+        // Verify that the EmissionManager premium is accurate
+        // Price is set to 24e18 (PRICE returns 18 decimals)
+        // Backing is set to 11690000000000000000 by the ConvertibleDepositActivator
+        //
+        // Premium = price * 10^18 / backing (rounded down) - 1e18
+        //         = 24e18 * 10^18 / 11690000000000000000 - 1e18
+        //         = 2053036783575705731 - 1e18
+        //         = 1053036783575705731
+        uint256 emPremium = emissionManager.getPremium();
 
-        // Verify YRF can access prices
-        uint256 yrfReserveBalance = yrf.getReserveBalance();
-        assertGt(yrfReserveBalance, 0);
+        assertEq(emPremium, 1053036783575705731, "Premium incorrect");
     }
 
-    // when the heartbeat launches YRF and EM markets
-    //  [ ] the OHM moving average is updated
-    //  [ ] the YRF market is created with the current price
-    //  [ ] the EM market is created with the current price
-    function test_beat_givenMarkets() public {
-        uint256[] memory movingAverages = new uint256[](5);
+    // when the EM reaches the 0 epoch
+    //  when the price in the current block is below 50% premium
+    //   [X] the CD auction is disabled
 
-        // Perform multiple heartbeats
-        uint48 observationFreq = price.observationFrequency();
-        for (uint256 i = 0; i < 5; i++) {
-            vm.warp(block.timestamp + observationFreq);
-            heart.beat();
+    function test_emissionManager_givenEpochZero_belowPremium()
+        public
+        givenOhmPrice(24e8) // Above 50% premium
+        warpToNextHeartbeat
+        beat // Epoch 1
+        warpToNextHeartbeat
+        beat // Epoch 2
+        givenOhmPrice(17e8) // Below 50% premium
+        warpToNextHeartbeat
+        beat // Epoch 0
+    {
+        // Verify that the CD auction target is 0 (disabled)
+        assertEq(cdAuctioneer.getAuctionParameters().target, 0, "CD auction target should be 0");
+    }
 
-            movingAverages[i] = price.getMovingAverage();
-        }
+    //  when the price in the current block is above 50% premium
+    //   [X] the CD auction min price uses the current price
 
-        // Verify moving averages are being tracked
-        for (uint256 i = 0; i < 5; i++) {
-            assertGt(movingAverages[i], 0);
-        }
+    function test_emissionManager_givenEpochZero_abovePremium()
+        public
+        givenOhmPrice(24e8) // Above 50% premium
+        warpToNextHeartbeat
+        beat // Epoch 1
+        warpToNextHeartbeat
+        beat // Epoch 2
+        givenOhmPrice(24e8) // Above 50% premium
+        warpToNextHeartbeat
+        beat // Epoch 0
+    {
+        // Calculate the expected min price
+        uint256 expectedMinPrice = emissionManager.getMinPriceFor(24e18);
 
-        // Verify EmissionManager calculations remain consistent
-        uint256 emPremium = emissionManager.getPremium();
-        (uint256 emPremiumCalc, uint256 emEmissionRate, uint256 emEmission) = emissionManager
-            .getNextEmission();
-        assertGe(emPremium, 0); // Premium can be 0 if price is below backing
+        assertEq(
+            cdAuctioneer.getAuctionParameters().minPrice,
+            expectedMinPrice,
+            "CD auction min price should be the expected min price"
+        );
+        // No need to test the target, as the premium has already been tested
+    }
+
+    //  when the end of the auction tracking period is reached
+    //   [X] the EM market is created with the current price
+
+    function test_emissionManager_endOfAuctionTrackingPeriod()
+        public
+        givenAuctionTrackingPeriod(2)
+        givenBondMarketCapacityScalar(1e18)
+        givenOhmPrice(24e8)
+        warpToNextHeartbeat
+        beat // Epoch 1
+        warpToNextHeartbeat
+        beat // Epoch 2
+        givenOhmPrice(24e8)
+        warpToNextHeartbeat
+        beat // Epoch 0, auction results next index is 1
+        warpToNextHeartbeat
+        beat // Epoch 1
+        warpToNextHeartbeat
+        beat // Epoch 2
+        givenOhmPrice(24e8)
+        warpToNextHeartbeat
+    {
+        uint256 expectedInitialPrice = 24e36; // Bond market scaling
+        uint256 expectedMarketId = 625 + 1;
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit MarketCreated(
+            expectedMarketId,
+            address(OHM),
+            address(emissionManager.reserve()),
+            uint48(0),
+            expectedInitialPrice
+        );
+
+        // Beat
+        // Epoch 0, auction results next index is 0
+        heart.beat();
+
+        // Verify
+        assertEq(
+            emissionManager.activeMarketId(),
+            expectedMarketId,
+            "Active market ID should be the expected market ID"
+        );
+    }
+
+    // when the heartbeat launches a YRF market
+    //  [X] the YRF market is created with the price from the price feed
+
+    function test_yieldRepurchaseFacility()
+        public
+        givenOhmPrice(24e8) // Above 50% premium
+        warpToNextHeartbeat
+        beat // YRF epoch 5
+        warpToNextHeartbeat
+    {
+        // Calculate the expected initial price
+        // From YRF._createMarket()
+        // 10 ** (18 * 2) / ((24e18 * 97) / 100)
+        // = 42955326460481099
+        // Adjusted by 1e17 for bond market scaling
+        uint256 expectedInitialPrice = 42955326460481099 * 1e17;
+        uint256 expectedMarketId = 623 + 1;
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit MarketCreated(
+            expectedMarketId,
+            address(emissionManager.reserve()),
+            address(OHM),
+            uint48(0),
+            expectedInitialPrice
+        );
+
+        // Beat
+        // Epoch 6
+        heart.beat();
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
