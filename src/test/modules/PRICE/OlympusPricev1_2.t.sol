@@ -3,16 +3,21 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
+// Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Bophades
 import {Actions, Kernel} from "src/Kernel.sol";
 import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {toSubKeycode} from "src/Submodules.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";

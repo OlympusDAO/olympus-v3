@@ -2,11 +2,14 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Bophades
+
 import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
 import {SubKeycode, Submodule} from "src/Submodules.sol";
-
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 /// @notice     Policy to configure PRICEv2

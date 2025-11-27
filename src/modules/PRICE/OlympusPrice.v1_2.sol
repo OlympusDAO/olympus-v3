@@ -3,9 +3,12 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
-import {Kernel, Module} from "src/Kernel.sol";
+// Interfaces
 import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Bophades
+import {Kernel, Module} from "src/Kernel.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 

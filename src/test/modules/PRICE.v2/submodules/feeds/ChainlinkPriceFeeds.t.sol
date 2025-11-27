@@ -2,17 +2,24 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
+// Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+
+// Interfaces
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
 
-import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+// Bophades
 import {Kernel} from "src/Kernel.sol";
-import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;

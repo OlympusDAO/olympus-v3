@@ -2,14 +2,19 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
+
+// Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+
+// Bophades
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
-import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
-import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 /// @title      UniswapV2PoolTokenPrice
 /// @author     0xJem

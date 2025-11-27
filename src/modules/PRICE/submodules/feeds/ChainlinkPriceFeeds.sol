@@ -2,11 +2,16 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
+// Interfaces
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+
+// Libraries
+import {FullMath} from "libraries/FullMath.sol";
+
+// Bophades
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {FullMath} from "libraries/FullMath.sol";
 
 /// @title      ChainlinkPriceFeeds
 /// @author     0xJem

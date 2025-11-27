@@ -2,11 +2,14 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
+// Libraries
+import {QuickSort} from "libraries/QuickSort.sol";
+import {Deviation} from "libraries/Deviation.sol";
+
+// Bophades
 import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
-import {QuickSort} from "libraries/QuickSort.sol";
-import {Deviation} from "libraries/Deviation.sol";
 
 /// @title      SimplePriceFeedStrategy
 /// @author     0xJem

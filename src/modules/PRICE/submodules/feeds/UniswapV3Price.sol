@@ -2,16 +2,14 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
+// Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 
 // Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 import {FullMath} from "libraries/FullMath.sol";
-
-// Uniswap V3
-import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 // Bophades

@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {Kernel} from "src/Kernel.sol";
+// Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
-import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
 import {Math} from "src/libraries/Balancer/math/Math.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
+
+// Bophades
+import {Kernel} from "src/Kernel.sol";
+import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
 contract SimplePriceFeedStrategyTest is Test {
     using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;

@@ -3,19 +3,26 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {Kernel} from "src/Kernel.sol";
+// Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
-import {FullMath} from "libraries/FullMath.sol";
-import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
+
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
+// Libraries
+import {FullMath} from "libraries/FullMath.sol";
+import {FixedPointMathLib} from "@solmate-6.2.0/utils/FixedPointMathLib.sol";
+
+// Bophades
+import {Kernel} from "src/Kernel.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 contract UniswapV2PoolTokenPriceTest is Test {
     using FullMath for uint256;

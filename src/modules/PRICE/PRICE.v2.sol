@@ -2,9 +2,12 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.15;
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Bophades
 import {Keycode, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, Submodule} from "src/Submodules.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 /// @notice     Abstract Bophades module for price resolution
 /// @author     Oighty

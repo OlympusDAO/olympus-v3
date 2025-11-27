@@ -2,13 +2,6 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
-// Uniswap V3
-import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
-
-// Libraries
-import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {FullMath} from "libraries/FullMath.sol";
-
 // Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
@@ -19,11 +12,17 @@ import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
+// Interfaces
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
+import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {FullMath} from "libraries/FullMath.sol";
+
 // Bophades
 import {Kernel} from "src/Kernel.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract UniswapV3PriceTest is Test {
     using FullMath for uint256;

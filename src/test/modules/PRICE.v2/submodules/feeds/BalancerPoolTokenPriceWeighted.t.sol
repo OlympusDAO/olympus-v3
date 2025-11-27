@@ -2,18 +2,25 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {Kernel} from "src/Kernel.sol";
+// Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockBalancerPool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
+
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
 import {LogExpMath} from "libraries/Balancer/math/LogExpMath.sol";
 
+// Bophades
+import {Kernel} from "src/Kernel.sol";
 import {BalancerPoolTokenPrice, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 contract BalancerPoolTokenPriceWeightedTest is Test {
     using FullMath for uint256;

@@ -2,13 +2,18 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
-import {Module} from "src/Kernel.sol";
+// Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+
+// Bophades
+import {Module} from "src/Kernel.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 /// @title      ERC4626Price
 /// @author     0xJem
