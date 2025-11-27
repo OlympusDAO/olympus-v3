@@ -6,6 +6,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 // Bophades
 import {Kernel, Module} from "src/Kernel.sol";
@@ -165,6 +166,13 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         returns (uint48)
     {
         return _observationFrequency;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IPRICEv1).interfaceId ||
+            interfaceId == type(IPRICEv2).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

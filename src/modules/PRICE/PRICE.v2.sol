@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 // Bophades
 import {Keycode, toKeycode} from "src/Kernel.sol";
@@ -36,6 +37,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2 {
     /// @inheritdoc IPRICEv2
     function decimals() external view virtual override returns (uint8) {
         return _decimals;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId || interfaceId == type(IPRICEv2).interfaceId;
     }
 }
 

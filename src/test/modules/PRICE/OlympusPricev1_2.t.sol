@@ -12,7 +12,12 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 // Interfaces
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Bophades
 import {Actions, Kernel} from "src/Kernel.sol";
@@ -904,6 +909,14 @@ contract OlympusPricev1_2Test is Test {
         vm.expectRevert(err);
 
         price.changeObservationFrequency(uint48(8 hours));
+    }
+
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(price));
+
+        assertEq(price.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
+        assertEq(price.supportsInterface(type(IPRICEv1).interfaceId), true, "IPRICEv1 mismatch");
+        assertEq(price.supportsInterface(type(IPRICEv2).interfaceId), true, "IPRICEv2 mismatch");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)

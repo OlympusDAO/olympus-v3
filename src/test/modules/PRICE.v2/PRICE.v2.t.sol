@@ -4,20 +4,29 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
+// Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {FullMath} from "libraries/FullMath.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+
+// Libraries
+import {FullMath} from "libraries/FullMath.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
+
+// Bophades
 import {Actions, Kernel} from "src/Kernel.sol";
 import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
@@ -4215,6 +4224,13 @@ contract PriceV2Test is Test {
         assertEq(receivedAsset.cumulativeObs, 0); // Not tracked
         assertEq(receivedAsset.obs, expectedObservations);
         assertEq(receivedAsset.obs.length, 1);
+    }
+
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(price));
+
+        assertEq(price.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
+        assertEq(price.supportsInterface(type(IPRICEv2).interfaceId), true, "IPRICEv2 mismatch");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)
