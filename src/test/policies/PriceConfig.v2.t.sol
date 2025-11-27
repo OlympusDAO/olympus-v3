@@ -4,16 +4,21 @@
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
+// Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
+// Interfaces
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigv2} from "policies/PriceConfig.v2.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -85,7 +90,7 @@ contract MockUpgradedSubmodulePrice is PriceSubmodule {
     }
 }
 
-contract PriceConfigTest is Test {
+contract PriceConfigv2Test is Test {
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveUsdPriceFeed;
