@@ -122,11 +122,6 @@ interface IRewardDistributor is IERC165 {
     /// @return The timestamp when epoch 0 starts
     function EPOCH_START_DATE() external view returns (uint40);
 
-    /// @notice Returns the duration of an epoch in seconds
-    ///
-    /// @return The length of an epoch
-    function EPOCH_DURATION() external view returns (uint256);
-
     /// @notice Returns the Merkle root for a given epoch
     ///
     /// @param  epochStartDate  The epoch start date to get the Merkle root for

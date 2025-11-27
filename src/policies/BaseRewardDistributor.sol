@@ -29,9 +29,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Role that can update merkle roots
     bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
 
-    /// @notice Minimum duration between epoch advances
-    uint256 public constant EPOCH_DURATION = 7 days;
-
     /// @notice The TRSRY module
     TRSRYv1 internal TRSRY;
 

@@ -118,7 +118,6 @@ contract USDSRewardDistributorTest is Test {
         assertEq(address(distributor.REWARD_TOKEN_VAULT().asset()), address(usds));
         assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
         assertEq(distributor.EPOCH_START_DATE(), startTimestamp);
-        assertEq(distributor.EPOCH_DURATION(), EPOCH_DURATION);
     }
 
     function test_constructor_rejects_zero_reward_token_vault() public {
