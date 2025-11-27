@@ -29,8 +29,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Role that can update merkle roots
     bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
 
-    /// @notice Minimum duration between week advances
-    uint256 public constant WEEK_DURATION = 7 days;
+    /// @notice Minimum duration between epoch advances
+    uint256 public constant EPOCH_DURATION = 7 days;
 
     /// @notice The TRSRY module
     TRSRYv1 internal TRSRY;
@@ -41,15 +41,17 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice The reward token vault
     IERC4626 public immutable REWARD_TOKEN_VAULT;
 
-    /// @notice Mapping from week number => merkle root
-    /// @dev    Week 0 is the first distribution week
-    mapping(uint256 week => bytes32 merkleRoot) public weeklyMerkleRoots;
+    /// @notice Mapping from epochStartDate => merkle root
+    mapping(uint256 epochStartDate => bytes32 merkleRoot) public epochMerkleRoots;
 
-    /// @notice Mapping from user address => week number => claimed status
-    mapping(address user => mapping(uint256 week => bool claimed)) public hasClaimed;
+    /// @notice Mapping from user address => epochStartDate => claimed status
+    mapping(address user => mapping(uint256 epochStartDate => bool claimed)) public hasClaimed;
 
-    /// @notice Timestamp when week 0 begins
-    uint40 public immutable START_TIMESTAMP;
+    /// @notice Last epoch start date for which a merkle root was set
+    uint40 public lastEpochStartDate;
+
+    /// @notice Timestamp when epoch 0 begins
+    uint40 public immutable EPOCH_START_DATE;
 
     // ========== MODIFIERS ========== //
 
@@ -64,17 +66,18 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ///
     /// @param  kernel_             The Kernel address
     /// @param  rewardTokenVault_   The ERC4626 vault token
-    /// @param  startTimestamp_     The timestamp when week 0 begins (midnight UTC of start date)
+    /// @param  epochStartDate_     The timestamp when epoch 0 begins (midnight UTC of start date)
     constructor(
         address kernel_,
         address rewardTokenVault_,
-        uint256 startTimestamp_
+        uint256 epochStartDate_
     ) Policy(Kernel(kernel_)) {
         if (rewardTokenVault_ == address(0)) revert RewardDistributor_InvalidAddress();
-        if (startTimestamp_ == 0) revert RewardDistributor_InvalidAddress();
+        if (epochStartDate_ == 0) revert RewardDistributor_InvalidAddress();
+        _validateEpochStartOfDay(epochStartDate_);
         REWARD_TOKEN = IERC20(IERC4626(rewardTokenVault_).asset());
         REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
-        START_TIMESTAMP = uint40(startTimestamp_);
+        EPOCH_START_DATE = uint40(epochStartDate_);
         // Disabled by default by PolicyEnabler
     }
 
@@ -113,43 +116,50 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== MERKLE ROOT MANAGEMENT ========== //
 
-    /// @notice Set the Merkle root for a week
+    /// @notice Set the Merkle root for an epoch
     /// @dev    - Only callable by the ROLE_MERKLE_UPDATER role
-    ///         - Weeks can be set in any order
-    ///         - Calls are only allowed when the week deadline has been reached
+    ///         - Epochs can be set in any order
+    ///         - Epoch start date must be at least 1 day after the last epoch start date
+    ///         - Epoch start date must be at the exact beginning of a day (midnight UTC)
     ///         - Merkle tree cannot be updated once set
     ///
-    /// @param  week_           The week number being set
-    /// @param  merkleRoot_     The Merkle root for the week's distribution
-    /// @return weekEndTime     The timestamp when the week ends
+    /// @param  epochStartDate_ The epoch start date (timestamp) being set
+    /// @param  merkleRoot_     The Merkle root for the epoch's distribution
+    /// @return epochStartDate  The epoch start date that was set
     function setMerkleRoot(
-        uint40 week_,
+        uint40 epochStartDate_,
         bytes32 merkleRoot_
     )
         external
         virtual
         onlyAuthorized(ROLE_MERKLE_UPDATER)
         onlyEnabled
-        returns (uint256 weekEndTime)
+        returns (uint256 epochStartDate)
     {
         // Validate input
         if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidProof();
 
-        // Ensure the week hasn't already been set
-        if (weeklyMerkleRoots[week_] != bytes32(0)) revert RewardDistributor_WeekAlreadySet(week_);
+        // Ensure the epoch hasn't already been set
+        if (epochMerkleRoots[epochStartDate_] != bytes32(0))
+            revert RewardDistributor_EpochAlreadySet(epochStartDate_);
 
-        // Calculate when this week should end based on start timestamp and week number
-        weekEndTime = START_TIMESTAMP + (week_ + 1) * WEEK_DURATION;
+        // Validate epochStartDate is at the exact beginning of a day (midnight UTC)
+        _validateEpochStartOfDay(epochStartDate_);
 
-        // Ensure the current time has reached or passed the week deadline
-        if (block.timestamp < weekEndTime) {
-            revert RewardDistributor_WeekTooEarly();
+        // Validate epochStartDate is at least 1 day after lastEpochStartDate
+        if (lastEpochStartDate != 0 && epochStartDate_ < lastEpochStartDate + 1 days) {
+            revert RewardDistributor_EpochTooEarly();
         }
 
-        // Set the merkle root for this week
-        weeklyMerkleRoots[week_] = merkleRoot_;
+        // Set the merkle root for this epoch
+        epochMerkleRoots[epochStartDate_] = merkleRoot_;
 
-        _emitMerkleRootSet(week_, merkleRoot_);
+        // Update lastEpochStartDate
+        lastEpochStartDate = epochStartDate_;
+
+        epochStartDate = epochStartDate_;
+
+        _emitMerkleRootSet(epochStartDate_, merkleRoot_);
     }
 
     // ========== CLAIM FUNCTIONS ========== //
@@ -157,35 +167,35 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Preview the claimable rewards for a user without claiming
     /// @dev    Returns 0 amounts if no valid claims are found (Merkle root not set or proof invalid)
     ///
-    /// @param  user_               The user address to preview claims for
-    /// @param  claimWeeks_         Array of week numbers to preview
-    /// @param  amounts_            Array of amounts for each week (must match Merkle leaves)
-    /// @param  proofs_             Array of Merkle proofs, one per week
-    /// @return claimableAmount     The total amount of reward token claimable
-    /// @return vaultShares         The amount of vault shares equivalent to the claimable amount
+    /// @param  user_                   The user address to preview claims for
+    /// @param  claimEpochStartDates_   Array of epoch start dates to preview
+    /// @param  amounts_                Array of amounts for each epoch (must match Merkle leaves)
+    /// @param  proofs_                 Array of Merkle proofs, one per epoch
+    /// @return claimableAmount         The total amount of reward token claimable
+    /// @return vaultShares             The amount of vault shares equivalent to the claimable amount
     function previewClaim(
         address user_,
-        uint256[] calldata claimWeeks_,
+        uint256[] calldata claimEpochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
     ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
         // Validate array lengths, return 0 if invalid
         if (
-            claimWeeks_.length == 0 ||
-            claimWeeks_.length != amounts_.length ||
-            claimWeeks_.length != proofs_.length
+            claimEpochStartDates_.length == 0 ||
+            claimEpochStartDates_.length != amounts_.length ||
+            claimEpochStartDates_.length != proofs_.length
         ) {
             return (0, 0);
         }
 
-        for (uint256 i = 0; i < claimWeeks_.length; ) {
-            uint256 week = claimWeeks_[i];
+        for (uint256 i = 0; i < claimEpochStartDates_.length; ) {
+            uint256 epochStartDate = claimEpochStartDates_[i];
             uint256 amount = amounts_[i];
 
-            // Skip weeks without merkle roots set
-            if (weeklyMerkleRoots[week] != bytes32(0)) {
+            // Skip epochs without merkle roots set
+            if (epochMerkleRoots[epochStartDate] != bytes32(0)) {
                 // Verify proof safely, skip if invalid or already claimed
-                if (_verifyProofSafe(user_, week, amount, proofs_[i])) {
+                if (_verifyProofSafe(user_, epochStartDate, amount, proofs_[i])) {
                     claimableAmount += amount;
                 }
             }
@@ -201,74 +211,83 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
     }
 
-    /// @notice Claim rewards for one or more weeks in a single transaction
+    /// @notice Claim rewards for one or more epochs in a single transaction
     ///
-    /// @param  weeks_          Array of week numbers to claim
-    /// @param  amounts_        Array of amounts for each week (must match Merkle leaves)
-    /// @param  proofs_         Array of Merkle proofs, one per week
-    /// @param  asVaultToken_   If true, claim as vault token; if false, unwrap to underlying token
+    /// @param  epochStartDates_    Array of epoch start dates to claim
+    /// @param  amounts_            Array of amounts for each epoch (must match Merkle leaves)
+    /// @param  proofs_             Array of Merkle proofs, one per epoch
+    /// @param  asVaultToken_       If true, claim as vault token; if false, unwrap to underlying token
     function claim(
-        uint256[] calldata weeks_,
+        uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_,
         bool asVaultToken_
     ) external virtual onlyEnabled {
-        _validateClaimArrays(weeks_, amounts_, proofs_);
+        _validateClaimArrays(epochStartDates_, amounts_, proofs_);
 
-        uint256 totalAmount = _processClaims(msg.sender, weeks_, amounts_, proofs_);
+        uint256 totalAmount = _processClaims(msg.sender, epochStartDates_, amounts_, proofs_);
 
-        _transferRewards(msg.sender, totalAmount, weeks_.length, asVaultToken_);
+        _transferRewards(msg.sender, totalAmount, epochStartDates_.length, asVaultToken_);
     }
 
     // ========== INTERNAL HELPERS ========== //
 
+    /// @notice Validate that an epoch start date is at the exact beginning of a day (midnight UTC)
+    ///
+    /// @param  epochStartDate_ The epoch start date to validate
+    function _validateEpochStartOfDay(uint256 epochStartDate_) internal pure {
+        if (epochStartDate_ % 1 days != 0) revert RewardDistributor_EpochNotStartOfDay();
+    }
+
     /// @notice Validate claim input arrays
     ///
-    /// @param  weeks_          Array of week numbers to claim
-    /// @param  amounts_        Array of amounts for each week
-    /// @param  proofs_         Array of Merkle proofs, one per week
+    /// @param  epochStartDates_    Array of epoch start dates to claim
+    /// @param  amounts_            Array of amounts for each epoch
+    /// @param  proofs_             Array of Merkle proofs, one per epoch
     function _validateClaimArrays(
-        uint256[] calldata weeks_,
+        uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
     ) internal pure {
-        if (weeks_.length == 0) revert RewardDistributor_NoWeeksSpecified();
-        if (weeks_.length != amounts_.length || weeks_.length != proofs_.length) {
+        if (epochStartDates_.length == 0) revert RewardDistributor_NoEpochsSpecified();
+        if (
+            epochStartDates_.length != amounts_.length || epochStartDates_.length != proofs_.length
+        ) {
             revert RewardDistributor_ArrayLengthMismatch();
         }
     }
 
     /// @notice Process claims and return total amount
     ///
-    /// @param  user_           The user address claiming rewards
-    /// @param  weeks_          Array of week numbers to claim
-    /// @param  amounts_        Array of amounts for each week
-    /// @param  proofs_         Array of Merkle proofs, one per week
-    /// @return totalAmount     The total amount claimed across all weeks
+    /// @param  user_               The user address claiming rewards
+    /// @param  epochStartDates_    Array of epoch start dates to claim
+    /// @param  amounts_            Array of amounts for each epoch
+    /// @param  proofs_             Array of Merkle proofs, one per epoch
+    /// @return totalAmount         The total amount claimed across all epochs
     function _processClaims(
         address user_,
-        uint256[] calldata weeks_,
+        uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
     ) internal returns (uint256 totalAmount) {
-        for (uint256 i = 0; i < weeks_.length; ) {
-            uint256 week = weeks_[i];
+        for (uint256 i = 0; i < epochStartDates_.length; ) {
+            uint256 epochStartDate = epochStartDates_[i];
             uint256 amount = amounts_[i];
 
             // Skip if already claimed
-            if (hasClaimed[user_][week]) {
+            if (hasClaimed[user_][epochStartDate]) {
                 unchecked {
                     ++i;
                 }
                 continue;
             }
 
-            // Verify merkle root is set for this week
-            if (weeklyMerkleRoots[week] == bytes32(0))
-                revert RewardDistributor_MerkleRootNotSet(week);
+            // Verify merkle root is set for this epoch
+            if (epochMerkleRoots[epochStartDate] == bytes32(0))
+                revert RewardDistributor_MerkleRootNotSet(epochStartDate);
 
             // Verify and mark as claimed
-            _verifyAndMarkClaimed(user_, week, amount, proofs_[i]);
+            _verifyAndMarkClaimed(user_, epochStartDate, amount, proofs_[i]);
 
             totalAmount += amount;
 
@@ -281,20 +300,22 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Verify Merkle proof without modifying state
     ///
     /// @param  user_           The user address
-    /// @param  week_           The week number
+    /// @param  epochStartDate_ The epoch start date
     /// @param  amount_         The amount to verify
     /// @param  proof_          The Merkle proof
     function _verifyProof(
         address user_,
-        uint256 week_,
+        uint256 epochStartDate_,
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal view virtual {
-        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
+        // Construct the leaf node: keccak256(abi.encode(user, epochStartDate, amount))
+        bytes32 leaf = keccak256(
+            bytes.concat(keccak256(abi.encode(user_, epochStartDate_, amount_)))
+        );
 
         // Verify Merkle proof
-        if (!MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf)) {
+        if (!MerkleProof.verify(proof_, epochMerkleRoots[epochStartDate_], leaf)) {
             revert RewardDistributor_InvalidProof();
         }
     }
@@ -302,43 +323,45 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Verify Merkle proof without reverting on failure
     ///
     /// @param  user_           The user address
-    /// @param  week_           The week number
+    /// @param  epochStartDate_ The epoch start date
     /// @param  amount_         The amount to verify
     /// @param  proof_          The Merkle proof
     /// @return isValid         True if proof is valid and claimable, false otherwise
     function _verifyProofSafe(
         address user_,
-        uint256 week_,
+        uint256 epochStartDate_,
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal view virtual returns (bool isValid) {
         // Check if already claimed
-        if (hasClaimed[user_][week_]) return false;
+        if (hasClaimed[user_][epochStartDate_]) return false;
 
-        // Construct the leaf node: keccak256(abi.encode(user, week, amount))
-        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user_, week_, amount_))));
+        // Construct the leaf node: keccak256(abi.encode(user, epochStartDate, amount))
+        bytes32 leaf = keccak256(
+            bytes.concat(keccak256(abi.encode(user_, epochStartDate_, amount_)))
+        );
 
         // Verify Merkle proof and return result
-        return MerkleProof.verify(proof_, weeklyMerkleRoots[week_], leaf);
+        return MerkleProof.verify(proof_, epochMerkleRoots[epochStartDate_], leaf);
     }
 
-    /// @notice Verify Merkle proof and mark week as claimed for user
+    /// @notice Verify Merkle proof and mark epoch as claimed for user
     ///
     /// @param  user_           The user address
-    /// @param  week_           The week number
+    /// @param  epochStartDate_ The epoch start date
     /// @param  amount_         The amount to verify
     /// @param  proof_          The Merkle proof
     function _verifyAndMarkClaimed(
         address user_,
-        uint256 week_,
+        uint256 epochStartDate_,
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal virtual {
         // Verify proof first
-        _verifyProof(user_, week_, amount_, proof_);
+        _verifyProof(user_, epochStartDate_, amount_, proof_);
 
         // Mark as claimed
-        hasClaimed[user_][week_] = true;
+        hasClaimed[user_][epochStartDate_] = true;
     }
 
     /// @notice Internal function to transfer rewards from treasury
@@ -346,21 +369,21 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ///
     /// @param  to_             Address to transfer rewards to
     /// @param  amount_         Amount to transfer
-    /// @param  weekCount_      Number of weeks being claimed (for event)
+    /// @param  epochCount_     Number of epochs being claimed (for event)
     /// @param  asVaultToken_   If true, transfer as vault token; if false, unwrap first
     function _transferRewards(
         address to_,
         uint256 amount_,
-        uint256 weekCount_,
+        uint256 epochCount_,
         bool asVaultToken_
     ) internal virtual;
 
     /// @notice Emit Merkle root set event
     ///
-    /// @param  week_           The week number
+    /// @param  epochStartDate_ The epoch start date
     /// @param  merkleRoot_     The Merkle root
-    function _emitMerkleRootSet(uint256 week_, bytes32 merkleRoot_) internal {
-        emit MerkleRootSet(week_, merkleRoot_, address(REWARD_TOKEN));
+    function _emitMerkleRootSet(uint256 epochStartDate_, bytes32 merkleRoot_) internal {
+        emit MerkleRootSet(epochStartDate_, merkleRoot_, address(REWARD_TOKEN));
     }
 
     // ========== ERC165 ========== //

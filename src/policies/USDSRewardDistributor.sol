@@ -22,12 +22,12 @@ contract USDSRewardDistributor is BaseRewardDistributor {
     ///
     /// @param  kernel_             The Kernel address
     /// @param  rewardTokenVault_   The ERC4626 vault token (sUSDS)
-    /// @param  startTimestamp_     The timestamp when week 0 begins (midnight UTC of start date)
+    /// @param  epochStartDate_     The timestamp when epoch 0 begins (midnight UTC of start date)
     constructor(
         address kernel_,
         address rewardTokenVault_,
-        uint256 startTimestamp_
-    ) BaseRewardDistributor(kernel_, rewardTokenVault_, startTimestamp_) {}
+        uint256 epochStartDate_
+    ) BaseRewardDistributor(kernel_, rewardTokenVault_, epochStartDate_) {}
 
     // ========== INTERNAL OVERRIDES ========== //
 
@@ -43,12 +43,12 @@ contract USDSRewardDistributor is BaseRewardDistributor {
     ///
     /// @param  to_             Address to transfer rewards to
     /// @param  amount_         Amount of USDS to transfer (or equivalent sUSDS)
-    /// @param  weekCount_      Number of weeks being claimed (for event)
+    /// @param  epochCount_     Number of epochs being claimed (for event)
     /// @param  asVaultToken_   If true, transfer as sUSDS; if false, unwrap to USDS
     function _transferRewards(
         address to_,
         uint256 amount_,
-        uint256 weekCount_,
+        uint256 epochCount_,
         bool asVaultToken_
     ) internal override {
         // Early return if no amount to transfer
@@ -70,7 +70,7 @@ contract USDSRewardDistributor is BaseRewardDistributor {
                 amount_,
                 vaultShares,
                 address(REWARD_TOKEN_VAULT),
-                weekCount_
+                epochCount_
             );
         } else {
             // Calculate how much vault shares is needed to withdraw the exact USDS amount
@@ -90,8 +90,8 @@ contract USDSRewardDistributor is BaseRewardDistributor {
                 ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(address(TRSRY), leftoverShares);
             }
 
-            // Emit rewards claimed event with week count
-            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), weekCount_);
+            // Emit rewards claimed event with epoch count
+            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), epochCount_);
         }
     }
 }

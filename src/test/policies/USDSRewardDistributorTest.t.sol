@@ -23,7 +23,7 @@ contract USDSRewardDistributorTest is Test {
     OlympusTreasury internal trsry;
     OlympusRoles internal roles;
 
-    uint40 internal constant WEEK_DURATION = 7 days;
+    uint40 internal constant EPOCH_DURATION = 7 days;
     uint40 internal startTimestamp;
 
     address internal alice = address(0x1);
@@ -106,10 +106,10 @@ contract USDSRewardDistributorTest is Test {
 
     function _generateLeaf(
         address user,
-        uint256 week,
+        uint256 epochStartDate,
         uint256 amount
     ) internal pure returns (bytes32) {
-        return keccak256(bytes.concat(keccak256(abi.encode(user, week, amount))));
+        return keccak256(bytes.concat(keccak256(abi.encode(user, epochStartDate, amount))));
     }
 
     // ========== Test Constructor and State Variables ========== //
@@ -117,8 +117,8 @@ contract USDSRewardDistributorTest is Test {
     function test_constructor_initializes_correctly() public view {
         assertEq(address(distributor.REWARD_TOKEN_VAULT().asset()), address(usds));
         assertEq(address(distributor.REWARD_TOKEN_VAULT()), address(sUSDS));
-        assertEq(distributor.START_TIMESTAMP(), startTimestamp);
-        assertEq(distributor.WEEK_DURATION(), WEEK_DURATION);
+        assertEq(distributor.EPOCH_START_DATE(), startTimestamp);
+        assertEq(distributor.EPOCH_DURATION(), EPOCH_DURATION);
     }
 
     function test_constructor_rejects_zero_reward_token_vault() public {
@@ -131,46 +131,69 @@ contract USDSRewardDistributorTest is Test {
         new USDSRewardDistributor(address(kernel), address(sUSDS), 0);
     }
 
+    function test_constructor_rejects_epoch_not_start_of_day() public {
+        uint256 notStartOfDay = startTimestamp + 12 hours; // Not at midnight
+        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochNotStartOfDay.selector);
+        new USDSRewardDistributor(address(kernel), address(sUSDS), notStartOfDay);
+    }
+
     // ========== Test Merkle Root Management ========== //
 
     function test_setMerkleRoot_success() public {
-        vm.warp(startTimestamp + WEEK_DURATION); // End of week 0
+        uint40 epochStartDate = startTimestamp; // First epoch at start timestamp
 
         bytes32 root = bytes32(uint256(1));
 
         vm.prank(admin);
-        distributor.setMerkleRoot(0, root);
+        distributor.setMerkleRoot(epochStartDate, root);
 
-        assertEq(distributor.weeklyMerkleRoots(0), root);
+        assertEq(distributor.epochMerkleRoots(epochStartDate), root);
+        assertEq(distributor.lastEpochStartDate(), epochStartDate);
     }
 
     function test_setMerkleRoot_reverts_unauthorized() public {
-        vm.warp(startTimestamp + WEEK_DURATION);
+        uint40 epochStartDate = startTimestamp;
 
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
         );
-        distributor.setMerkleRoot(0, bytes32(uint256(1)));
+        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
     }
 
     function test_setMerkleRoot_reverts_too_early() public {
-        // Still in week 0
+        uint40 firstEpochStartDate = startTimestamp;
+        uint40 secondEpochStartDate = startTimestamp - 1 days; // Earlier than first epoch
+
+        vm.startPrank(admin);
+        distributor.setMerkleRoot(firstEpochStartDate, bytes32(uint256(1)));
+
+        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
+        distributor.setMerkleRoot(secondEpochStartDate, bytes32(uint256(2)));
+        vm.stopPrank();
+    }
+
+    function test_setMerkleRoot_reverts_not_start_of_day() public {
+        uint40 epochStartDate = startTimestamp + 12 hours; // Not at start of day
+
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_WeekTooEarly.selector);
-        distributor.setMerkleRoot(0, bytes32(uint256(1)));
+        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochNotStartOfDay.selector);
+        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
     }
 
     function test_setMerkleRoot_reverts_already_set() public {
-        vm.warp(startTimestamp + WEEK_DURATION);
+        uint40 epochStartDate = startTimestamp;
 
         vm.startPrank(admin);
-        distributor.setMerkleRoot(0, bytes32(uint256(1)));
+        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IRewardDistributor.RewardDistributor_WeekAlreadySet.selector, 0)
+            abi.encodeWithSelector(
+                IRewardDistributor.RewardDistributor_EpochAlreadySet.selector,
+                epochStartDate
+            )
         );
-        distributor.setMerkleRoot(0, bytes32(uint256(2)));
+        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(2)));
         vm.stopPrank();
     }
 
@@ -178,20 +201,19 @@ contract USDSRewardDistributorTest is Test {
 
     function test_claim_as_underlying() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
+        uint40 epochStartDate = startTimestamp;
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, week, amount);
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
         bytes32[] memory proof = new bytes32[](0); // Single leaf tree, root is leaf
 
         // Set root
-        vm.warp(startTimestamp + WEEK_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(week, leaf);
+        distributor.setMerkleRoot(epochStartDate, leaf);
 
         // Prepare claim data
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -199,29 +221,28 @@ contract USDSRewardDistributorTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimWeeks, amounts, proofs, false); // asVaultToken = false
+        distributor.claim(claimEpochStartDates, amounts, proofs, false); // asVaultToken = false
 
         // Verify
         assertEq(usds.balanceOf(alice), amount);
-        assertTrue(distributor.hasClaimed(alice, week));
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
     }
 
     function test_claim_as_vault_token() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
+        uint40 epochStartDate = startTimestamp;
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, week, amount);
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
         bytes32[] memory proof = new bytes32[](0);
 
         // Set root
-        vm.warp(startTimestamp + WEEK_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(week, leaf);
+        distributor.setMerkleRoot(epochStartDate, leaf);
 
         // Prepare claim data
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -229,33 +250,33 @@ contract USDSRewardDistributorTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimWeeks, amounts, proofs, true); // asVaultToken = true
+        distributor.claim(claimEpochStartDates, amounts, proofs, true); // asVaultToken = true
 
         // Verify
         assertEq(sUSDS.balanceOf(alice), sUSDS.previewWithdraw(amount));
-        assertTrue(distributor.hasClaimed(alice, week));
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
     }
 
-    function test_claim_multiple_weeks() public {
+    function test_claim_multiple_epochs() public {
         uint256 amount1 = 100e18;
         uint256 amount2 = 200e18;
 
-        // Setup week 0
-        bytes32 leaf1 = _generateLeaf(alice, 0, amount1);
-        vm.warp(startTimestamp + WEEK_DURATION);
+        // Setup epoch 0
+        bytes32 leaf1 = _generateLeaf(alice, startTimestamp, amount1);
+        vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(0, leaf1);
+        distributor.setMerkleRoot(startTimestamp, leaf1);
 
-        // Setup week 1
-        bytes32 leaf2 = _generateLeaf(alice, 1, amount2);
-        vm.warp(startTimestamp + 2 * WEEK_DURATION);
+        // Setup epoch 1
+        bytes32 leaf2 = _generateLeaf(alice, startTimestamp + EPOCH_DURATION, amount2);
+        vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(1, leaf2);
+        distributor.setMerkleRoot(startTimestamp + EPOCH_DURATION, leaf2);
 
         // Prepare claim data
-        uint256[] memory claimWeeks = new uint256[](2);
-        claimWeeks[0] = 0;
-        claimWeeks[1] = 1;
+        uint256[] memory claimEpochStartDates = new uint256[](2);
+        claimEpochStartDates[0] = startTimestamp;
+        claimEpochStartDates[1] = startTimestamp + EPOCH_DURATION;
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = amount1;
         amounts[1] = amount2;
@@ -265,37 +286,37 @@ contract USDSRewardDistributorTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
         // Verify
         assertEq(usds.balanceOf(alice), amount1 + amount2);
-        assertTrue(distributor.hasClaimed(alice, 0));
-        assertTrue(distributor.hasClaimed(alice, 1));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
     }
 
     function test_claim_skips_already_claimed() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
-        bytes32 leaf = _generateLeaf(alice, week, amount);
+        uint40 epochStartDate = startTimestamp;
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
 
-        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(week, leaf);
+        distributor.setMerkleRoot(epochStartDate, leaf);
 
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = new bytes32[](0);
 
         vm.startPrank(alice);
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
         // Verify previewClaim returns 0 after claiming
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimWeeks,
+            claimEpochStartDates,
             amounts,
             proofs
         );
@@ -305,8 +326,8 @@ contract USDSRewardDistributorTest is Test {
         // Record balance before second claim attempt
         uint256 balanceBefore = usds.balanceOf(alice);
 
-        // Second claim should skip already-claimed week without reverting
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        // Second claim should skip already-claimed epoch without reverting
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
         // Verify no additional tokens were transferred
         assertEq(usds.balanceOf(alice), balanceBefore);
@@ -318,43 +339,43 @@ contract USDSRewardDistributorTest is Test {
         uint256 amount2 = 200e18;
         uint256 amount3 = 300e18;
 
-        // Setup week 0
-        bytes32 leaf1 = _generateLeaf(alice, 0, amount1);
-        vm.warp(startTimestamp + WEEK_DURATION);
+        // Setup epoch 0
+        bytes32 leaf1 = _generateLeaf(alice, startTimestamp, amount1);
+        vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(0, leaf1);
+        distributor.setMerkleRoot(startTimestamp, leaf1);
 
-        // Setup week 1
-        bytes32 leaf2 = _generateLeaf(alice, 1, amount2);
-        vm.warp(startTimestamp + 2 * WEEK_DURATION);
+        // Setup epoch 1
+        bytes32 leaf2 = _generateLeaf(alice, startTimestamp + EPOCH_DURATION, amount2);
+        vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(1, leaf2);
+        distributor.setMerkleRoot(startTimestamp + EPOCH_DURATION, leaf2);
 
-        // Setup week 2
-        bytes32 leaf3 = _generateLeaf(alice, 2, amount3);
-        vm.warp(startTimestamp + 3 * WEEK_DURATION);
+        // Setup epoch 2
+        bytes32 leaf3 = _generateLeaf(alice, startTimestamp + 2 * EPOCH_DURATION, amount3);
+        vm.warp(startTimestamp + 3 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(2, leaf3);
+        distributor.setMerkleRoot(startTimestamp + 2 * EPOCH_DURATION, leaf3);
 
-        // Claim week 1 first
-        uint256[] memory claimWeeks1 = new uint256[](1);
-        claimWeeks1[0] = 1;
+        // Claim epoch 1 first
+        uint256[] memory claimEpochStartDates1 = new uint256[](1);
+        claimEpochStartDates1[0] = startTimestamp + EPOCH_DURATION;
         uint256[] memory amounts1 = new uint256[](1);
         amounts1[0] = amount2;
         bytes32[][] memory proofs1 = new bytes32[][](1);
         proofs1[0] = new bytes32[](0);
 
         vm.prank(alice);
-        distributor.claim(claimWeeks1, amounts1, proofs1, false);
+        distributor.claim(claimEpochStartDates1, amounts1, proofs1, false);
 
         assertEq(usds.balanceOf(alice), amount2);
-        assertTrue(distributor.hasClaimed(alice, 1));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
 
-        // Now try to claim all three weeks (0, 1, 2) - should skip week 1
-        uint256[] memory claimWeeks = new uint256[](3);
-        claimWeeks[0] = 0;
-        claimWeeks[1] = 1; // Already claimed
-        claimWeeks[2] = 2;
+        // Now try to claim all three epochs (0, 1, 2) - should skip epoch 1
+        uint256[] memory claimEpochStartDates = new uint256[](3);
+        claimEpochStartDates[0] = startTimestamp;
+        claimEpochStartDates[1] = startTimestamp + EPOCH_DURATION; // Already claimed
+        claimEpochStartDates[2] = startTimestamp + 2 * EPOCH_DURATION;
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = amount1;
         amounts[1] = amount2;
@@ -365,26 +386,26 @@ contract USDSRewardDistributorTest is Test {
         proofs[2] = new bytes32[](0);
 
         vm.prank(alice);
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
-        // Should only receive amount1 + amount3 (week 1 was skipped)
+        // Should only receive amount1 + amount3 (epoch 1 was skipped)
         assertEq(usds.balanceOf(alice), amount1 + amount2 + amount3);
-        assertTrue(distributor.hasClaimed(alice, 0));
-        assertTrue(distributor.hasClaimed(alice, 1));
-        assertTrue(distributor.hasClaimed(alice, 2));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
+        assertTrue(distributor.hasClaimed(alice, startTimestamp + 2 * EPOCH_DURATION));
     }
 
     function test_claim_reverts_invalid_proof() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
-        bytes32 leaf = _generateLeaf(alice, week, amount);
+        uint40 epochStartDate = startTimestamp;
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
 
-        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(week, leaf);
+        distributor.setMerkleRoot(epochStartDate, leaf);
 
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount + 1; // Wrong amount
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -393,7 +414,7 @@ contract USDSRewardDistributorTest is Test {
         // Verify previewClaim returns 0 for invalid proof
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimWeeks,
+            claimEpochStartDates,
             amounts,
             proofs
         );
@@ -402,17 +423,17 @@ contract USDSRewardDistributorTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
     }
 
     function test_claim_reverts_merkle_root_not_set() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
+        uint40 epochStartDate = startTimestamp;
 
         // Don't set root
 
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -421,7 +442,7 @@ contract USDSRewardDistributorTest is Test {
         // Verify previewClaim returns 0 when root not set
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimWeeks,
+            claimEpochStartDates,
             amounts,
             proofs
         );
@@ -432,23 +453,23 @@ contract USDSRewardDistributorTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRewardDistributor.RewardDistributor_MerkleRootNotSet.selector,
-                week
+                epochStartDate
             )
         );
-        distributor.claim(claimWeeks, amounts, proofs, false);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
     }
 
     function test_previewClaim() public {
         uint256 amount = 100e18;
-        uint40 week = 0;
-        bytes32 leaf = _generateLeaf(alice, week, amount);
+        uint40 epochStartDate = startTimestamp;
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
 
-        vm.warp(startTimestamp + WEEK_DURATION);
+        vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(week, leaf);
+        distributor.setMerkleRoot(epochStartDate, leaf);
 
-        uint256[] memory claimWeeks = new uint256[](1);
-        claimWeeks[0] = week;
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -456,7 +477,7 @@ contract USDSRewardDistributorTest is Test {
 
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimWeeks,
+            claimEpochStartDates,
             amounts,
             proofs
         );
