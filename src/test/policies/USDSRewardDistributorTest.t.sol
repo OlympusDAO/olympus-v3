@@ -160,9 +160,21 @@ contract USDSRewardDistributorTest is Test {
         distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
     }
 
-    function test_setMerkleRoot_reverts_too_early() public {
+    function testFuzz_setMerkleRoot_reverts_too_early(uint40 secondEpochStartDate) public {
         uint40 firstEpochStartDate = startTimestamp;
-        uint40 secondEpochStartDate = startTimestamp - 1 days; // Earlier than first epoch
+
+        // Bound the fuzzed input to be:
+        // - At least 1 day (non-zero and reasonable)
+        // - Less than firstEpochStartDate + 1 days (to trigger the revert)
+        vm.assume(secondEpochStartDate > 0);
+        vm.assume(secondEpochStartDate < firstEpochStartDate + 1 days);
+
+        // Align to start of day (midnight UTC) to avoid EpochNotStartOfDay error
+        secondEpochStartDate = uint40((secondEpochStartDate / 1 days) * 1 days);
+
+        // Skip if the aligned value is zero or equal to firstEpochStartDate (already set)
+        vm.assume(secondEpochStartDate > 0);
+        vm.assume(secondEpochStartDate != firstEpochStartDate);
 
         vm.startPrank(admin);
         distributor.setMerkleRoot(firstEpochStartDate, bytes32(uint256(1)));
