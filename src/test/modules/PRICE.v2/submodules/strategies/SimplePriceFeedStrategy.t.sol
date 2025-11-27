@@ -92,7 +92,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getFirstNonZeroPrice(prices, "");
     }
 
-    function test_getFirstNonZeroPrice_pricesInvalid(uint8 len_) public {
+    function test_getFirstNonZeroPrice_pricesInvalid(uint8 len_) public view {
         uint8 len = uint8(bound(len_, 1, 10));
 
         uint256[] memory prices = new uint256[](len);
@@ -104,7 +104,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(returnedPrice, 0);
     }
 
-    function test_getFirstNonZeroPrice_success() public {
+    function test_getFirstNonZeroPrice_success() public view {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 1e18;
 
@@ -113,7 +113,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18);
     }
 
-    function testFuzz_getFirstNonZeroPrice_arrayLengthGreaterThanTwo(uint8 len) public {
+    function testFuzz_getFirstNonZeroPrice_arrayLengthGreaterThanTwo(uint8 len) public view {
         vm.assume(len > 2 && len <= 10);
         uint256[] memory prices = new uint256[](len);
         for (uint8 i; i < len; i++) {
@@ -125,7 +125,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18);
     }
 
-    function test_getFirstNonZeroPrice_validFirstPrice() public {
+    function test_getFirstNonZeroPrice_validFirstPrice() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 11e18;
         prices[1] = 10e18;
@@ -134,7 +134,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 11e18);
     }
 
-    function test_getFirstNonZeroPrice_invalidFirstPrice() public {
+    function test_getFirstNonZeroPrice_invalidFirstPrice() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 0;
         prices[1] = 10e18;
@@ -143,7 +143,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 10e18);
     }
 
-    function test_getFirstNonZeroPrice_invalidSecondPrice() public {
+    function test_getFirstNonZeroPrice_invalidSecondPrice() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 11e18;
         prices[1] = 0;
@@ -152,7 +152,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 11e18);
     }
 
-    function testFuzz_getFirstNonZeroPrice(uint256 firstPrice_, uint256 secondPrice_) public {
+    function testFuzz_getFirstNonZeroPrice(uint256 firstPrice_, uint256 secondPrice_) public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = firstPrice_;
         prices[1] = secondPrice_;
@@ -176,7 +176,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePrice(prices, "");
     }
 
-    function test_getAveragePrice_empty_fuzz(uint8 len_) public {
+    function test_getAveragePrice_empty_fuzz(uint8 len_) public view {
         uint8 len = uint8(bound(len_, 2, 10));
         uint256[] memory prices = new uint256[](len);
 
@@ -184,7 +184,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(returnedPrice, 0);
     }
 
-    function test_getAveragePrice_priceZeroFuzz(uint8 priceZeroIndex_) public {
+    function test_getAveragePrice_priceZeroFuzz(uint8 priceZeroIndex_) public view {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 2, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -202,7 +202,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(averagePrice, 1e18);
     }
 
-    function test_getAveragePrice_lengthEven() public {
+    function test_getAveragePrice_lengthEven() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1e18;
         prices[1] = 2e18;
@@ -212,7 +212,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 15 * 10 ** 17);
     }
 
-    function test_getAveragePrice_lengthOdd() public {
+    function test_getAveragePrice_lengthOdd() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1e18;
         prices[1] = 2e18;
@@ -223,7 +223,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 2e18);
     }
 
-    function test_getAveragePrice_lengthEven_priceZero() public {
+    function test_getAveragePrice_lengthEven_priceZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1e18;
         prices[1] = 2e18;
@@ -238,7 +238,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
     // =========  TESTS - MEDIAN ========= //
 
-    function test_getMedianPrice_priceZero_indexFuzz(uint8 priceZeroIndex_) public {
+    function test_getMedianPrice_priceZero_indexFuzz(uint8 priceZeroIndex_) public view {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 0, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -264,7 +264,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getMedianPrice(prices, "");
     }
 
-    function test_getMedianPrice_empty_fuzz(uint8 len_) public {
+    function test_getMedianPrice_empty_fuzz(uint8 len_) public view {
         uint8 len = uint8(bound(len_, 3, 10));
         uint256[] memory prices = new uint256[](len);
 
@@ -272,7 +272,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(returnedPrice, 0);
     }
 
-    function test_getMedianPrice_unsorted() public {
+    function test_getMedianPrice_unsorted() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 3 * 1e18;
         prices[1] = 1 * 1e18;
@@ -282,7 +282,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.2 * 1e18);
     }
 
-    function test_getMedianPrice_unsorted_priceZero() public {
+    function test_getMedianPrice_unsorted_priceZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 3 * 1e18;
         prices[1] = 1 * 1e18;
@@ -295,7 +295,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.2 * 1e18);
     }
 
-    function test_getMedianPrice_arrayLengthValid_priceDoubleZero() public {
+    function test_getMedianPrice_arrayLengthValid_priceDoubleZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 0;
@@ -307,7 +307,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18);
     }
 
-    function test_getMedianPrice_arrayLengthValid_priceSingleZero() public {
+    function test_getMedianPrice_arrayLengthValid_priceSingleZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 2 * 1e18;
@@ -319,7 +319,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
     }
 
-    function test_getMedianPrice_arrayLengthValid_priceSingleZero_indexZero() public {
+    function test_getMedianPrice_arrayLengthValid_priceSingleZero_indexZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
@@ -331,7 +331,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
     }
 
-    function test_getMedianPrice_lengthOdd() public {
+    function test_getMedianPrice_lengthOdd() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18;
@@ -341,7 +341,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.2 * 1e18);
     }
 
-    function test_getMedianPrice_lengthOdd_priceZero() public {
+    function test_getMedianPrice_lengthOdd_priceZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18;
@@ -354,7 +354,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.2 * 1e18);
     }
 
-    function test_getMedianPrice_lengthEven() public {
+    function test_getMedianPrice_lengthEven() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 4 * 1e18;
         prices[1] = 2 * 1e18;
@@ -365,7 +365,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (2 * 1e18 + 3 * 1e18) / 2);
     }
 
-    function test_getMedianPrice_lengthEven_priceZero() public {
+    function test_getMedianPrice_lengthEven_priceZero() public view {
         uint256[] memory prices = new uint256[](5);
         prices[0] = 4 * 1e18;
         prices[1] = 2 * 1e18;
@@ -398,7 +398,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getAveragePriceIfDeviation_empty_fuzz(uint8 len_) public {
+    function test_getAveragePriceIfDeviation_empty_fuzz(uint8 len_) public view {
         uint8 len = uint8(bound(len_, 2, 10));
 
         uint256[] memory prices = new uint256[](len);
@@ -410,7 +410,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(returnedPrice, 0);
     }
 
-    function test_getAveragePriceIfDeviation_arrayLengthTwo_singlePriceZero() public {
+    function test_getAveragePriceIfDeviation_arrayLengthTwo_singlePriceZero() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
@@ -424,7 +424,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(returnedPrice, 1e18);
     }
 
-    function test_getAveragePriceIfDeviation_priceZeroFuzz(uint8 priceZeroIndex_) public {
+    function test_getAveragePriceIfDeviation_priceZeroFuzz(uint8 priceZeroIndex_) public view {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 2, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -449,7 +449,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 priceOne_,
         uint256 priceTwo_,
         uint256 priceThree_
-    ) public {
+    ) public view {
         uint256 deviationBps = 100; // 1%
 
         uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
@@ -478,7 +478,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, expectedPrice);
     }
 
-    function test_getAveragePriceIfDeviation_threeItems_deviationIndexOne() public {
+    function test_getAveragePriceIfDeviation_threeItems_deviationIndexOne() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -488,7 +488,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.2 * 1e18 + 1.001 * 1e18) / 3);
     }
 
-    function test_getAveragePriceIfDeviation_threeItems_priceZeroTwice() public {
+    function test_getAveragePriceIfDeviation_threeItems_priceZeroTwice() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 0;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -500,7 +500,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.2 * 1e18);
     }
 
-    function test_getAveragePriceIfDeviation_threeItems_priceZero() public {
+    function test_getAveragePriceIfDeviation_threeItems_priceZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -512,7 +512,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.2 * 1e18) / 2);
     }
 
-    function test_getAveragePriceIfDeviation_fourItems_priceZero() public {
+    function test_getAveragePriceIfDeviation_fourItems_priceZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -525,7 +525,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.2 * 1e18 + 1.001 * 1e18) / 3);
     }
 
-    function test_getAveragePriceIfDeviation_threeItems_deviationIndexTwo() public {
+    function test_getAveragePriceIfDeviation_threeItems_deviationIndexTwo() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
@@ -535,7 +535,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.001 * 1e18 + 1.2 * 1e18) / 3);
     }
 
-    function test_getAveragePriceIfDeviation_twoItems() public {
+    function test_getAveragePriceIfDeviation_twoItems() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 2 * 1e18; // > 1% deviation
@@ -579,7 +579,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePriceIfDeviation(prices, abi.encode(""));
     }
 
-    function test_getAveragePriceIfDeviation_withoutDeviation() public {
+    function test_getAveragePriceIfDeviation_withoutDeviation() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation
@@ -599,7 +599,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getMedianPriceIfDeviation_priceZero_indexFuzz(uint8 priceZeroIndex_) public {
+    function test_getMedianPriceIfDeviation_priceZero_indexFuzz(uint8 priceZeroIndex_) public view {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 2, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -620,7 +620,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(medianPrice, 1e18);
     }
 
-    function test_getMedianPriceIfDeviation_empty_fuzz(uint8 len_) public {
+    function test_getMedianPriceIfDeviation_empty_fuzz(uint8 len_) public view {
         uint8 len = uint8(bound(len_, 3, 10));
         uint256[] memory prices = new uint256[](len);
 
@@ -633,7 +633,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(medianPrice, 0);
     }
 
-    function test_getMedianPriceIfDeviation_fourItems() public {
+    function test_getMedianPriceIfDeviation_fourItems() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -644,7 +644,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
-    function test_getMedianPriceIfDeviation_fiveItems_priceZero() public {
+    function test_getMedianPriceIfDeviation_fiveItems_priceZero() public view {
         uint256[] memory prices = new uint256[](5);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -662,7 +662,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 priceOne_,
         uint256 priceTwo_,
         uint256 priceThree_
-    ) public {
+    ) public view {
         uint256 deviationBps = 100; // 1%
 
         uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
@@ -700,7 +700,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, expectedPrice);
     }
 
-    function test_getMedianPriceIfDeviation_threeItems_deviationIndexOne() public {
+    function test_getMedianPriceIfDeviation_threeItems_deviationIndexOne() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -710,7 +710,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianPriceIfDeviation_threeItems_priceZero_deviation() public {
+    function test_getMedianPriceIfDeviation_threeItems_priceZero_deviation() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 0;
@@ -720,7 +720,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.2 * 1e18) / 2); // < 3 non-zero items and deviating, returns average
     }
 
-    function test_getMedianPriceIfDeviation_threeItems_priceZero() public {
+    function test_getMedianPriceIfDeviation_threeItems_priceZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 0;
@@ -730,7 +730,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero price
     }
 
-    function test_getMedianPriceIfDeviation_threeItems_priceZero_indexZero() public {
+    function test_getMedianPriceIfDeviation_threeItems_priceZero_indexZero() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
@@ -740,7 +740,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero price
     }
 
-    function test_getMedianPriceIfDeviation_fourItems_deviationIndexOne_priceZero() public {
+    function test_getMedianPriceIfDeviation_fourItems_deviationIndexOne_priceZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -753,7 +753,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianPriceIfDeviation_threeItems_deviationIndexTwo() public {
+    function test_getMedianPriceIfDeviation_threeItems_deviationIndexTwo() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
@@ -800,7 +800,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(deviationBps));
     }
 
-    function test_getMedianPriceIfDeviation_withoutDeviation() public {
+    function test_getMedianPriceIfDeviation_withoutDeviation() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation

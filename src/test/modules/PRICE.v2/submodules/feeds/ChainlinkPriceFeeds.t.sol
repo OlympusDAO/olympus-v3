@@ -114,7 +114,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
     // =========  ONE FEED TESTS ========= //
 
-    function test_getOneFeedPrice_success() public {
+    function test_getOneFeedPrice_success() public view {
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         uint256 priceInt = chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
@@ -233,7 +233,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(DAI_ETH_PRICE, priceInt);
     }
 
-    function test_getOneFeedPrice_priceDecimalsFuzz(uint8 priceDecimals_) public {
+    function test_getOneFeedPrice_priceDecimalsFuzz(uint8 priceDecimals_) public view {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
@@ -288,7 +288,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
     // =========  TWO FEED TESTS - DIV ========= //
 
-    function test_getTwoFeedPriceDiv_success() public {
+    function test_getTwoFeedPriceDiv_success() public view {
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
             UPDATE_THRESHOLD,
@@ -645,7 +645,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, 10 * 10 ** priceDecimals); // Expected price is 10, adjusted with decimals
     }
 
-    function test_getTwoFeedPriceDiv_priceDecimalsFuzz(uint8 priceDecimals_) public {
+    function test_getTwoFeedPriceDiv_priceDecimalsFuzz(uint8 priceDecimals_) public view {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         bytes memory params = encodeTwoFeedParams(
@@ -755,7 +755,7 @@ contract ChainlinkPriceFeedsTest is Test {
 
     // =========  TWO FEED TESTS - MUL ========= //
 
-    function test_getTwoFeedPriceMul_success() public {
+    function test_getTwoFeedPriceMul_success() public view {
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
             UPDATE_THRESHOLD,
@@ -1075,7 +1075,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, OHM_DAI_PRICE);
     }
 
-    function test_getTwoFeedPriceMul_priceDecimalsFuzz(uint8 priceDecimals_) public {
+    function test_getTwoFeedPriceMul_priceDecimalsFuzz(uint8 priceDecimals_) public view {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         bytes memory params = encodeTwoFeedParams(

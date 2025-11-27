@@ -67,7 +67,7 @@ contract MockStrategy is PriceSubmodule {
         minor = 0;
     }
 
-    function getOnePrice() external view returns (uint256) {
+    function getOnePrice() external pure returns (uint256) {
         return 1;
     }
 }
@@ -259,7 +259,7 @@ contract PriceConfigTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
