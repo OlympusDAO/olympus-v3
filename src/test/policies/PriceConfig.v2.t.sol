@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
-/// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
+/// forge-lint: disable-start(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
 // Test
@@ -14,6 +14,7 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
@@ -31,29 +32,37 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // PriceConfig Setup and Permissions
 // [X] configureDependencies
 // [X] requestPermissions
+// [X] disabled by default
 //
 // PRICEv2 Configuration
 // [X] addAssetPrice
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_policy" role can call
 //     [X] inputs to IPRICEv2.addAsset are correct
 // [X] removeAssetPrice
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_policy" role can call
 //     [X] inputs to IPRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_policy" role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceFeeds are correct
 // [X] updateAssetPriceStrategy
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_policy" role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceStrategy are correct
 // [X] updateAssetMovingAverage
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_policy" role can call
 //     [X] inputs to IPRICEv2.updateAssetMovingAverage are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_admin" role can call
 //     [X] inputs to IPRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
+//     [X] only when contract is enabled
 //     [X] only "priceconfig_admin" role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
 
@@ -166,13 +175,16 @@ contract PriceConfigv2Test is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Configure permissioned roles
+        rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("priceconfig_admin", admin);
         rolesAdmin.grantRole("priceconfig_policy", policy);
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
+        priceConfig.enable("");
         priceConfig.installSubmodule(chainlinkPrice);
         priceConfig.installSubmodule(strategy);
+        priceConfig.disable("");
         vm.stopPrank();
     }
 
@@ -251,6 +263,16 @@ contract PriceConfigv2Test is Test {
         );
     }
 
+    modifier givenEnabled() {
+        vm.prank(admin);
+        priceConfig.enable(abi.encode(""));
+        _;
+    }
+
+    function _expectRevertNotEnabled() internal {
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+    }
+
     /* ========== PriceConfig Setup and Permissions ========== */
 
     function test_configureDependencies() public {
@@ -310,9 +332,40 @@ contract PriceConfigv2Test is Test {
         }
     }
 
+    function test_constructor() public view {
+        assertEq(priceConfig.isEnabled(), false, "Disabled by default");
+    }
+
     /* ========== PRICEv2 Configuration ========== */
 
-    function testRevert_addAssetPrice_onlyPolicy(address user_) public {
+    function test_addAssetPrice_notEnabled_reverts() public {
+        // Prepare arguments
+        uint256[] memory obs = new uint256[](0);
+        IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](0);
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            abi.encode(0)
+        );
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(policy);
+        priceConfig.addAssetPrice(
+            address(ohm),
+            true,
+            true,
+            uint32(5 days),
+            uint48(block.timestamp),
+            obs,
+            strategyComponent,
+            feedComponents
+        );
+    }
+
+    function test_addAssetPrice_onlyPolicy_reverts(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Setup data to add asset
@@ -380,7 +433,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice_correctData() public {
+    function test_addAssetPrice() public givenEnabled {
         // Setup data to add asset
         IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -456,7 +509,15 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, abi.encode(feedComponents));
     }
 
-    function testRevert_removeAssetPrice_onlyPolicy(address user_) public {
+    function test_removeAssetPrice_notEnabled_reverts() public {
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(policy);
+        priceConfig.removeAssetPrice(address(ohm));
+    }
+
+    function test_removeAssetPrice_onlyPolicy_reverts(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Add base assets to PRICEv2
@@ -488,7 +549,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.approved, false);
     }
 
-    function test_removeAssetPrice() public {
+    function test_removeAssetPrice() public givenEnabled {
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -515,7 +576,19 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, bytes(""));
     }
 
-    function testRevert_updateAssetPriceFeeds_onlyPolicy(address user_) public {
+    function test_updateAssetPriceFeeds_notEnabled_reverts() public {
+        // Setup data to update feeds
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](0);
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Update feeds
+        vm.prank(policy);
+        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
+    }
+
+    function test_updateAssetPriceFeeds_onlyPolicy_reverts(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Add base assets to PRICEv2
@@ -554,7 +627,7 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds.length, 1);
     }
 
-    function test_updateAssetPriceFeeds() public {
+    function test_updateAssetPriceFeeds() public givenEnabled {
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -580,7 +653,23 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds[0].params, newFeeds[0].params);
     }
 
-    function testRevert_updateAssetPriceStrategy_onlyPolicy(address user_) public {
+    function test_updateAssetPriceStrategy_notEnabled_reverts() public {
+        // Prepare arguments
+        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
+            strategy.SUBKEYCODE(),
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            abi.encode(1)
+        );
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(policy);
+        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
+    }
+
+    function test_updateAssetPriceStrategy_onlyPolicy_reverts(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Add base assets to PRICEv2
@@ -633,7 +722,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.useMovingAverage, false);
     }
 
-    function test_updateAssetPriceStrategy() public {
+    function test_updateAssetPriceStrategy() public givenEnabled {
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -668,7 +757,25 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.useMovingAverage, false);
     }
 
-    function testRevert_updateAssetMovingAverage_onlyPolicy(address user_) public {
+    function test_updateAssetMovingAverage_notEnabled_reverts() public {
+        // Prepare arguments
+        uint256[] memory obs = new uint256[](0);
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(policy);
+        priceConfig.updateAssetMovingAverage(
+            address(ohm),
+            true,
+            uint32(5 days),
+            uint48(block.timestamp - 1),
+            obs
+        );
+    }
+
+    function test_updateAssetMovingAverage_onlyPolicy_reverts(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Add base assets to PRICEv2
@@ -724,7 +831,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.storeMovingAverage, false);
     }
 
-    function test_updateAssetMovingAverage_correctData() public {
+    function test_updateAssetMovingAverage() public givenEnabled {
         // Add a new asset to PRICEv2 that doesn't have a moving average
         MockERC20 fohm = new MockERC20("Fake OHM", "FOHM", 9);
 
@@ -791,7 +898,19 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICEv2 Submodule Installation/Upgrade ========== */
 
-    function testRevert_installSubmodule_onlyAdmin(address user_) public {
+    function test_installSubmodule_notEnabled_reverts() public {
+        // Create new submodule to install
+        MockStrategy newStrategy = new MockStrategy(PRICE);
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(admin);
+        priceConfig.installSubmodule(newStrategy);
+    }
+
+    function test_installSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
         vm.assume(user_ != admin);
 
         // Create new submodule to install
@@ -823,7 +942,7 @@ contract PriceConfigv2Test is Test {
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_installSubmodule() public {
+    function test_installSubmodule() public givenEnabled {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -840,7 +959,19 @@ contract PriceConfigv2Test is Test {
         assertEq(submodule, address(newStrategy));
     }
 
-    function testRevert_upgradeSubmodule_onlyAdmin(address user_) public {
+    function test_upgradeSubmodule_notEnabled_reverts() public {
+        // Create mock upgrade for chainlink submodule
+        MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(admin);
+        priceConfig.upgradeSubmodule(newChainlink);
+    }
+
+    function test_upgradeSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
         vm.assume(user_ != admin);
 
         // Create mock upgrade for chainlink submodule
@@ -881,7 +1012,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule() public {
+    function test_upgradeSubmodule() public givenEnabled {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -904,7 +1035,27 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_execOnSubmodule() public {
+    function test_execOnSubmodule_notEnabled_reverts() public {
+        // Perform an action on the submodule
+        uint256[] memory samplePrices = new uint256[](1);
+        samplePrices[0] = 11e18;
+
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(policy);
+        priceConfig.execOnSubmodule(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            abi.encodeWithSelector(
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                samplePrices,
+                bytes("")
+            )
+        );
+    }
+
+    function test_execOnSubmodule() public givenEnabled {
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
@@ -922,7 +1073,7 @@ contract PriceConfigv2Test is Test {
         // No error
     }
 
-    function test_execOnSubmodule_onlyPolicy(address user_) public {
+    function test_execOnSubmodule_onlyPolicy(address user_) public givenEnabled {
         vm.assume(user_ != policy);
 
         // Perform an action on the submodule
@@ -946,4 +1097,4 @@ contract PriceConfigv2Test is Test {
         );
     }
 }
-/// forge-lint: disable-end(mixed-case-variable,mixed-case-function)
+/// forge-lint: disable-end(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)

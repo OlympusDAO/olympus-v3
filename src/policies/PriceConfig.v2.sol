@@ -9,12 +9,13 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
 import {SubKeycode, Submodule} from "src/Submodules.sol";
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles
-contract PriceConfigv2 is Policy, RolesConsumer {
+contract PriceConfigv2 is Policy, PolicyEnabler {
     // DONE
     // [X] Policy setup
     // [X] Install/upgrade submodules
@@ -125,7 +126,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
         IPRICEv2.Component[] memory feeds_
-    ) external onlyRole("priceconfig_policy") {
+    ) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -140,7 +141,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
 
     /// @notice     Remove an asset from the PRICE module
     /// @dev        After removal, calls to PRICEv2 for the asset's price will revert
-    function removeAssetPrice(address asset_) external onlyRole("priceconfig_policy") {
+    function removeAssetPrice(address asset_) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.removeAsset(asset_);
     }
 
@@ -152,7 +153,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
     function updateAssetPriceFeeds(
         address asset_,
         IPRICEv2.Component[] memory feeds_
-    ) external onlyRole("priceconfig_policy") {
+    ) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceFeeds(asset_, feeds_);
     }
 
@@ -166,7 +167,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
         address asset_,
         IPRICEv2.Component memory strategy_,
         bool useMovingAverage_
-    ) external onlyRole("priceconfig_policy") {
+    ) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
     }
 
@@ -184,7 +185,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
         uint256[] memory observations_
-    ) external onlyRole("priceconfig_policy") {
+    ) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetMovingAverage(
             asset_,
             storeMovingAverage_,
@@ -199,14 +200,18 @@ contract PriceConfigv2 is Policy, RolesConsumer {
     //==================================================================================================//
 
     /// @notice Install a new submodule on the designated module
-    function installSubmodule(Submodule submodule_) external onlyRole("priceconfig_admin") {
+    function installSubmodule(
+        Submodule submodule_
+    ) external onlyEnabled onlyRole("priceconfig_admin") {
         PRICE.installSubmodule(submodule_);
     }
 
     /// @notice     Upgrade a submodule on the PRICE module
     /// @dev        The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
     /// @dev        otherwise use installSubmodule
-    function upgradeSubmodule(Submodule submodule_) external onlyRole("priceconfig_admin") {
+    function upgradeSubmodule(
+        Submodule submodule_
+    ) external onlyEnabled onlyRole("priceconfig_admin") {
         PRICE.upgradeSubmodule(submodule_);
     }
 
@@ -216,7 +221,7 @@ contract PriceConfigv2 is Policy, RolesConsumer {
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external onlyRole("priceconfig_policy") {
+    ) external onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
 }
