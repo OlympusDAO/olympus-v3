@@ -12,7 +12,7 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
-import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
+import {PriceConfigv2} from "policies/PriceConfig.v2.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
@@ -95,7 +95,7 @@ contract PriceConfigTest is Test {
     MockERC20 internal ohm;
 
     Kernel internal kernel;
-    PriceConfigV2 internal priceConfig;
+    PriceConfigv2 internal priceConfig;
     OlympusPricev2 internal PRICE;
     RolesAdmin internal rolesAdmin;
     OlympusRoles internal ROLES;
@@ -147,7 +147,7 @@ contract PriceConfigTest is Test {
         kernel = new Kernel();
         PRICE = new OlympusPricev2(kernel, DECIMALS, OBSERVATION_FREQUENCY);
         ROLES = new OlympusRoles(kernel);
-        priceConfig = new PriceConfigV2(kernel);
+        priceConfig = new PriceConfigv2(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Deploy submodules for PRICE

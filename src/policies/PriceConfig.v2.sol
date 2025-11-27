@@ -11,7 +11,7 @@ import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles
-contract PriceConfigV2 is Policy, RolesConsumer {
+contract PriceConfigv2 is Policy, RolesConsumer {
     // DONE
     // [X] Policy setup
     // [X] Install/upgrade submodules
