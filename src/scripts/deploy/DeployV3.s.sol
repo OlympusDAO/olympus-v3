@@ -768,7 +768,7 @@ contract DeployV3 is WithEnvironment {
         return (address(activator), "olympus.periphery");
     }
 
-    function deployUSDSRewardDistributor() public returns (address, string memory) {
+    function deployRewardDistributorUSDS() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");

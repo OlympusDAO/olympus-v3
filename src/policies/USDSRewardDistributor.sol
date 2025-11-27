@@ -12,7 +12,7 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 /// @title  USDS Reward Distributor
-/// @notice Merkle tree-based rewards distribution contract for USDS rewards
+/// @notice Merkle tree-based distribution contract for USDS rewards
 contract USDSRewardDistributor is BaseRewardDistributor {
     using TransferHelper for ERC20;
 
@@ -58,7 +58,7 @@ contract USDSRewardDistributor is BaseRewardDistributor {
 
         if (asVaultToken_) {
             // Calculate how many vault shares represent the USDS amount
-            uint256 vaultShares = vault.previewWithdraw(amount_);
+            uint256 vaultShares = vault.convertToShares(amount_);
 
             // Withdraw sUSDS from treasury and transfer directly to user
             TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), vaultShares);

@@ -20,7 +20,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice Abstract base contract for Merkle tree-based rewards distribution
 /// @dev    Architecture:
 ///         - Rewards are calculated off-chain
-///         - Backend generates weekly Merkle trees with accumulated rewards per user
+///         - Backend generates Merkle trees with accumulated rewards per user
 ///         - Merkle roots are posted on-chain by authorized role
 ///         - Users submit proofs to claim their rewards
 abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
@@ -70,10 +70,11 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         uint256 epochStartDate_
     ) Policy(Kernel(kernel_)) {
         if (rewardTokenVault_ == address(0)) revert RewardDistributor_InvalidAddress();
-        if (epochStartDate_ == 0) revert RewardDistributor_InvalidAddress();
+        if (epochStartDate_ == 0) revert RewardDistributor_EpochIsZero();
         _validateEpochStartOfDay(epochStartDate_);
         REWARD_TOKEN = IERC20(IERC4626(rewardTokenVault_).asset());
         REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
+        // Note: epochStartDate_ is truncated to uint40. Max uint40 is ~year 36812.
         EPOCH_START_DATE = uint40(epochStartDate_);
         // Disabled by default by PolicyEnabler
     }
@@ -102,7 +103,10 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         Keycode trsryKeycode = toKeycode("TRSRY");
 
         permissions = new Permissions[](1);
-        permissions[0] = Permissions(trsryKeycode, TRSRY.withdrawReserves.selector);
+        permissions[0] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
     }
 
     function VERSION() external pure virtual returns (uint8 major, uint8 minor) {
@@ -113,9 +117,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== MERKLE ROOT MANAGEMENT ========== //
 
-    /// @notice Set the Merkle root for an epoch
+    /// @notice Sets the Merkle root for an epoch
     /// @dev    - Only callable by the ROLE_MERKLE_UPDATER role
-    ///         - Epochs can be set in any order
     ///         - Epoch start date must be at least 1 day after the last epoch start date
     ///         - Epoch start date must be at the exact beginning of a day (midnight UTC)
     ///         - Merkle tree cannot be updated once set

@@ -73,6 +73,9 @@ interface IRewardDistributor is IERC165 {
     /// @notice Emitted when the epoch start date is not at the start of a day
     error RewardDistributor_EpochNotStartOfDay();
 
+    /// @notice Emitted when the epoch start date is zero
+    error RewardDistributor_EpochIsZero();
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice Set the Merkle root for a specific epoch

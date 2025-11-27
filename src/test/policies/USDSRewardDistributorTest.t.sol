@@ -3,16 +3,15 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {USDSRewardDistributor} from "policies/USDSRewardDistributor.sol";
 import {IRewardDistributor} from "policies/interfaces/IRewardDistributor.sol";
-import {Kernel, Keycode, Policy, toKeycode, Module, Actions} from "src/Kernel.sol";
+import {Kernel, toKeycode, Actions} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract USDSRewardDistributorTest is Test {
@@ -31,13 +30,6 @@ contract USDSRewardDistributorTest is Test {
     address internal admin = address(0x3);
 
     bytes32 internal constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
-
-    // Import Actions enum
-    // Actions is defined in Kernel.sol but not exported as a type we can import directly?
-    // It is exported in Kernel.sol: enum Actions { ... }
-    // But we need to import it.
-    // We can cast to uint8 or import it if possible.
-    // Actions is global in Kernel.sol? No, it's outside contract Kernel.
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021
@@ -126,7 +118,7 @@ contract USDSRewardDistributorTest is Test {
     }
 
     function test_constructor_rejects_zero_start_timestamp() public {
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochIsZero.selector);
         new USDSRewardDistributor(address(kernel), address(sUSDS), 0);
     }
 
@@ -150,10 +142,13 @@ contract USDSRewardDistributorTest is Test {
         assertEq(distributor.lastEpochStartDate(), epochStartDate);
     }
 
-    function test_setMerkleRoot_reverts_unauthorized() public {
+    function testFuzz_setMerkleRoot_reverts_unauthorized(address caller) public {
+        // Skip if caller has the merkle updater role
+        vm.assume(caller != admin);
+
         uint40 epochStartDate = startTimestamp;
 
-        vm.prank(alice);
+        vm.prank(caller);
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
         );
@@ -230,6 +225,16 @@ contract USDSRewardDistributorTest is Test {
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = proof;
 
+        // Verify previewClaim before claiming
+        (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
+            alice,
+            claimEpochStartDates,
+            amounts,
+            proofs
+        );
+        assertEq(previewAmount, amount);
+        assertEq(previewShares, sUSDS.previewWithdraw(amount));
+
         // Claim
         vm.prank(alice);
         distributor.claim(claimEpochStartDates, amounts, proofs, false); // asVaultToken = false
@@ -259,12 +264,22 @@ contract USDSRewardDistributorTest is Test {
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = proof;
 
+        // Verify previewClaim before claiming
+        (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
+            alice,
+            claimEpochStartDates,
+            amounts,
+            proofs
+        );
+        assertEq(previewAmount, amount);
+        assertEq(previewShares, sUSDS.previewWithdraw(amount));
+
         // Claim
         vm.prank(alice);
         distributor.claim(claimEpochStartDates, amounts, proofs, true); // asVaultToken = true
 
-        // Verify
-        assertEq(sUSDS.balanceOf(alice), sUSDS.previewWithdraw(amount));
+        // Verify (uses convertToShares which rounds down)
+        assertEq(sUSDS.balanceOf(alice), sUSDS.convertToShares(amount));
         assertTrue(distributor.hasClaimed(alice, epochStartDate));
     }
 
@@ -294,6 +309,16 @@ contract USDSRewardDistributorTest is Test {
         bytes32[][] memory proofs = new bytes32[][](2);
         proofs[0] = new bytes32[](0);
         proofs[1] = new bytes32[](0);
+
+        // Verify previewClaim before claiming
+        (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
+            alice,
+            claimEpochStartDates,
+            amounts,
+            proofs
+        );
+        assertEq(previewAmount, amount1 + amount2);
+        assertEq(previewShares, sUSDS.previewWithdraw(amount1 + amount2));
 
         // Claim
         vm.prank(alice);
@@ -399,7 +424,7 @@ contract USDSRewardDistributorTest is Test {
         vm.prank(alice);
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
-        // Should only receive amount1 + amount3 (epoch 1 was skipped)
+        // Total balance includes earlier claim (amount2) plus new claims (amount1 + amount3)
         assertEq(usds.balanceOf(alice), amount1 + amount2 + amount3);
         assertTrue(distributor.hasClaimed(alice, startTimestamp));
         assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
@@ -437,6 +462,52 @@ contract USDSRewardDistributorTest is Test {
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
     }
 
+    function test_claim_reverts_using_another_users_proof() public {
+        uint256 amount = 100e18;
+        uint40 epochStartDate = startTimestamp;
+
+        // Generate leaf for Alice
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32[] memory proof = new bytes32[](0); // Single leaf tree
+
+        vm.warp(startTimestamp + EPOCH_DURATION);
+        vm.prank(admin);
+        distributor.setMerkleRoot(epochStartDate, leaf);
+
+        // Prepare claim data using Alice's proof
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = proof;
+
+        // Verify previewClaim returns 0 for Bob using Alice's proof
+        (uint256 claimable, uint256 shares) = distributor.previewClaim(
+            bob,
+            claimEpochStartDates,
+            amounts,
+            proofs
+        );
+        assertEq(claimable, 0);
+        assertEq(shares, 0);
+
+        // Bob tries to claim using Alice's proof - should fail
+        vm.prank(bob);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+
+        // Verify Bob received nothing
+        assertEq(usds.balanceOf(bob), 0);
+        assertFalse(distributor.hasClaimed(bob, epochStartDate));
+
+        // Verify Alice can still claim with her proof
+        vm.prank(alice);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        assertEq(usds.balanceOf(alice), amount);
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+    }
+
     function test_claim_reverts_merkle_root_not_set() public {
         uint256 amount = 100e18;
         uint40 epochStartDate = startTimestamp;
@@ -470,30 +541,117 @@ contract USDSRewardDistributorTest is Test {
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
     }
 
-    function test_previewClaim() public {
-        uint256 amount = 100e18;
+    function test_claim_zero_rewards_succeeds() public {
+        uint256 amount = 0; // Zero rewards
         uint40 epochStartDate = startTimestamp;
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
 
-        vm.warp(startTimestamp + EPOCH_DURATION);
+        // Generate leaf for 0 rewards
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32[] memory proof = new bytes32[](0);
+
+        // Set root
         vm.prank(admin);
         distributor.setMerkleRoot(epochStartDate, leaf);
 
+        // Prepare claim data
         uint256[] memory claimEpochStartDates = new uint256[](1);
         claimEpochStartDates[0] = epochStartDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
-        proofs[0] = new bytes32[](0);
+        proofs[0] = proof;
 
-        (uint256 claimable, uint256 shares) = distributor.previewClaim(
-            alice,
-            claimEpochStartDates,
-            amounts,
-            proofs
-        );
+        // Claim should succeed even with 0 rewards
+        vm.prank(alice);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
 
-        assertEq(claimable, amount);
-        assertEq(shares, sUSDS.previewWithdraw(amount));
+        // Verify
+        assertEq(usds.balanceOf(alice), 0);
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+    }
+
+    // ========== Fuzz Tests for Yield Accrual ========== //
+
+    function testFuzz_claim_as_underlying_with_yield(
+        uint256 yieldAmount,
+        uint256 claimAmount
+    ) public {
+        // Bound inputs to reasonable ranges
+        claimAmount = bound(claimAmount, 1e18, 100_000e18);
+        yieldAmount = bound(yieldAmount, 0, 1_000_000e18);
+
+        uint40 epochStartDate = startTimestamp;
+
+        // Generate leaf and proof
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, claimAmount);
+        bytes32[] memory proof = new bytes32[](0);
+
+        // Set root
+        vm.prank(admin);
+        distributor.setMerkleRoot(epochStartDate, leaf);
+
+        // Simulate yield accruing to the vault by minting additional USDS
+        usds.mint(address(sUSDS), yieldAmount);
+
+        // Prepare claim data
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = claimAmount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = proof;
+
+        // Claim as underlying
+        vm.prank(alice);
+        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+
+        // Verify user receives exactly the claim amount (not more due to rounding)
+        assertEq(usds.balanceOf(alice), claimAmount);
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+    }
+
+    function testFuzz_claim_as_vault_token_with_yield(
+        uint256 yieldAmount,
+        uint256 claimAmount
+    ) public {
+        // Bound inputs to reasonable ranges
+        claimAmount = bound(claimAmount, 1e18, 100_000e18);
+        yieldAmount = bound(yieldAmount, 0, 1_000_000e18);
+
+        uint40 epochStartDate = startTimestamp;
+
+        // Generate leaf and proof
+        bytes32 leaf = _generateLeaf(alice, epochStartDate, claimAmount);
+        bytes32[] memory proof = new bytes32[](0);
+
+        // Set root
+        vm.prank(admin);
+        distributor.setMerkleRoot(epochStartDate, leaf);
+
+        // Simulate yield accruing to the vault by minting additional USDS
+        usds.mint(address(sUSDS), yieldAmount);
+
+        // Prepare claim data
+        uint256[] memory claimEpochStartDates = new uint256[](1);
+        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = claimAmount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = proof;
+
+        // Claim as vault token
+        vm.prank(alice);
+        distributor.claim(claimEpochStartDates, amounts, proofs, true);
+
+        // Get the shares received
+        uint256 sharesReceived = sUSDS.balanceOf(alice);
+
+        // Convert shares back to underlying value
+        uint256 underlyingValue = sUSDS.convertToAssets(sharesReceived);
+
+        // Verify user receives shares worth at most the claim amount (rounding down)
+        // Due to convertToShares rounding down, user should never get more than entitled
+        assertLe(underlyingValue, claimAmount, "User received more than entitled due to rounding");
+        assertTrue(distributor.hasClaimed(alice, epochStartDate));
     }
 }
