@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable max-states-count
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
@@ -15,7 +16,6 @@ import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract UniswapV2PoolTokenPriceTest is Test {
     using FullMath for uint256;
@@ -72,8 +72,8 @@ contract UniswapV2PoolTokenPriceTest is Test {
             (uint256(POOL_RESERVES_USDC) * 1e12 * 1e18)
         );
 
-    uint8 MIN_DECIMALS = 6;
-    uint8 MAX_DECIMALS = 26;
+    uint8 internal constant MIN_DECIMALS = 6;
+    uint8 internal constant MAX_DECIMALS = 26;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)

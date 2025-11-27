@@ -14,7 +14,6 @@ import {LogExpMath} from "libraries/Balancer/math/LogExpMath.sol";
 
 import {BalancerPoolTokenPrice, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceWeightedTest is Test {
     using FullMath for uint256;

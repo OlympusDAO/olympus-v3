@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
@@ -12,7 +14,7 @@ import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} f
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2, PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -27,6 +27,7 @@ import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDep
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
+// solhint-disable contract-name-camelcase
 contract OlympusPricev1_2ForkTest is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
     using FullMath for uint256;
@@ -239,6 +240,7 @@ contract OlympusPricev1_2ForkTest is Test {
     }
 
     modifier givenOhmPrice(uint256 price_) {
+        /// forge-lint: disable-next-line(unsafe-typecast)
         ohmUsdPriceFeed.setLatestAnswer(int256(price_));
         ohmUsdPriceFeed.setTimestamp(block.timestamp);
         _;
@@ -427,4 +429,4 @@ contract OlympusPricev1_2ForkTest is Test {
         heart.beat();
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)

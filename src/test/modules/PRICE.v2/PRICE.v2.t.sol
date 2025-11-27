@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable max-states-count
+// solhint-disable custom-errors
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
 pragma solidity >=0.8.0;
 
@@ -16,7 +18,6 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";

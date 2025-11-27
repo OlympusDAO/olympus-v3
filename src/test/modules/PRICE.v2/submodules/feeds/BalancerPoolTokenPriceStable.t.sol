@@ -13,7 +13,6 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {BalancerPoolTokenPrice, IStablePool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract BalancerPoolTokenPriceStableTest is Test {
     using FullMath for uint256;

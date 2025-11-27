@@ -12,7 +12,6 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 contract ERC4626Test is Test {
     using FullMath for uint256;
