@@ -13,7 +13,7 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {toSubKeycode} from "src/Submodules.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPricev1_2.sol";
+import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
