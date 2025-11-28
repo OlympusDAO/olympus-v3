@@ -54,10 +54,10 @@ contract USDSRewardDistributorProposal is GovernorBravoProposal {
 
     function _build(Addresses addresses) internal override {
         address usdsRewardDistributor = addresses.getAddress(
-            "olympus-policy-usds-reward-distributor"
+            "olympus-policy-usdsrewarddistributor"
         );
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
-        address distributorMS = addresses.getAddress("olympus-multisig-distributor");
+        address distributorMS = addresses.getAddress("olympus-multisig-reward_distributor");
 
         // 1. Activate USDSRewardDistributor policy
         _pushAction(
@@ -102,9 +102,9 @@ contract USDSRewardDistributorProposal is GovernorBravoProposal {
     function _validate(Addresses addresses, address) internal view override {
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         address usdsRewardDistributor = addresses.getAddress(
-            "olympus-policy-usds-reward-distributor"
+            "olympus-policy-usdsrewarddistributor"
         );
-        address distributorMS = addresses.getAddress("olympus-multisig-distributor");
+        address distributorMS = addresses.getAddress("olympus-multisig-reward_distributor");
 
         // Validate policy is active
         require(
