@@ -4,6 +4,8 @@ pragma solidity 0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 // Bophades
 
@@ -15,7 +17,7 @@ import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles
-contract PriceConfigv2 is Policy, PolicyEnabler {
+contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     // DONE
     // [X] Policy setup
     // [X] Install/upgrade submodules
@@ -95,9 +97,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler {
         });
     }
 
-    /// @notice     Returns the current version of the policy
-    /// @dev        This is useful for distinguishing between different versions of the policy
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
+    /// @inheritdoc IPriceConfigv2
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 2;
         minor = 0;
     }
@@ -106,17 +107,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler {
     //                                      PRICE MANAGEMENT                                            //
     //==================================================================================================//
 
-    /// @notice                         Configure a new asset on the PRICE module
-    /// @dev                            See PRICEv2 for more details on caching behavior when no moving average is stored and component interface
-    ///
-    /// @param asset_                   The address of the asset to add
-    /// @param storeMovingAverage_      Whether to store the moving average for this asset
-    /// @param useMovingAverage_        Whether to use the moving average as part of the price resolution strategy for this asset
-    /// @param movingAverageDuration_   The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
-    /// @param lastObservationTime_     The timestamp of the last observation
-    /// @param observations_            The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
-    /// @param strategy_                The price resolution strategy to use for this asset
-    /// @param feeds_                   The array of price feeds to use for this asset
+    /// @inheritdoc IPriceConfigv2
     function addAssetPrice(
         address asset_,
         bool storeMovingAverage_,
@@ -126,7 +117,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler {
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
         IPRICEv2.Component[] memory feeds_
-    ) external onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -139,53 +130,38 @@ contract PriceConfigv2 is Policy, PolicyEnabler {
         );
     }
 
-    /// @notice     Remove an asset from the PRICE module
-    /// @dev        After removal, calls to PRICEv2 for the asset's price will revert
-    function removeAssetPrice(address asset_) external onlyEnabled onlyRole("priceconfig_policy") {
+    /// @inheritdoc IPriceConfigv2
+    function removeAssetPrice(
+        address asset_
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.removeAsset(asset_);
     }
 
-    /// @notice         Update the price feeds for an asset on the PRICE module
-    /// @dev            See PRICEv2 for more details on the Component struct
-    ///
-    /// @param asset_   The address of the asset to update
-    /// @param feeds_   The array of price feeds to use for this asset
+    /// @inheritdoc IPriceConfigv2
     function updateAssetPriceFeeds(
         address asset_,
         IPRICEv2.Component[] memory feeds_
-    ) external onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceFeeds(asset_, feeds_);
     }
 
-    /// @notice                     Update the price resolution strategy for an asset on the PRICE module
-    /// @dev                        See PRICEv2 for more details on the Component struct
-    ///
-    /// @param asset_               The address of the asset to update
-    /// @param strategy_            The price resolution strategy to use for this asset
-    /// @param useMovingAverage_    Whether to use the moving average as part of the price resolution strategy for this asset - moving average must be stored to use
+    /// @inheritdoc IPriceConfigv2
     function updateAssetPriceStrategy(
         address asset_,
         IPRICEv2.Component memory strategy_,
         bool useMovingAverage_
-    ) external onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
     }
 
-    /// @notice                         Update the moving average data for an asset on the PRICE module
-    /// @dev                            See PRICEv2 for more details on the caching behavior when no moving average is stored and component interface
-    ///
-    /// @param asset_                   The address of the asset to update
-    /// @param storeMovingAverage_      Whether to store the moving average for this asset - cannot remove moving average if being used by strategy (change strategy first)
-    /// @param movingAverageDuration_   The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
-    /// @param lastObservationTime_     The timestamp of the last observation
-    /// @param observations_            The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
+    /// @inheritdoc IPriceConfigv2
     function updateAssetMovingAverage(
         address asset_,
         bool storeMovingAverage_,
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
         uint256[] memory observations_
-    ) external onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.updateAssetMovingAverage(
             asset_,
             storeMovingAverage_,
@@ -199,30 +175,35 @@ contract PriceConfigv2 is Policy, PolicyEnabler {
     //                                      SUBMODULE MANAGEMENT                                        //
     //==================================================================================================//
 
-    /// @notice Install a new submodule on the designated module
+    /// @inheritdoc IPriceConfigv2
     function installSubmodule(
-        Submodule submodule_
-    ) external onlyEnabled onlyRole("priceconfig_admin") {
-        PRICE.installSubmodule(submodule_);
+        address submodule_
+    ) external override onlyEnabled onlyRole("priceconfig_admin") {
+        PRICE.installSubmodule(Submodule(submodule_));
     }
 
-    /// @notice     Upgrade a submodule on the PRICE module
-    /// @dev        The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
-    /// @dev        otherwise use installSubmodule
+    /// @inheritdoc IPriceConfigv2
     function upgradeSubmodule(
-        Submodule submodule_
-    ) external onlyEnabled onlyRole("priceconfig_admin") {
-        PRICE.upgradeSubmodule(submodule_);
+        address submodule_
+    ) external override onlyEnabled onlyRole("priceconfig_admin") {
+        PRICE.upgradeSubmodule(Submodule(submodule_));
     }
 
-    /// @notice Perform an action on a submodule
-    /// @dev    This function reverts if:
-    /// @dev    - PRICE.execOnSubmodule() reverts
+    /// @inheritdoc IPriceConfigv2
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyRole("priceconfig_policy") {
         PRICE.execOnSubmodule(subKeycode_, data_);
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IPriceConfigv2).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

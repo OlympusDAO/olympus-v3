@@ -14,7 +14,9 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
@@ -182,8 +184,8 @@ contract PriceConfigv2Test is Test {
         // Install base submodules on PRICE
         vm.startPrank(admin);
         priceConfig.enable("");
-        priceConfig.installSubmodule(chainlinkPrice);
-        priceConfig.installSubmodule(strategy);
+        priceConfig.installSubmodule(address(chainlinkPrice));
+        priceConfig.installSubmodule(address(strategy));
         priceConfig.disable("");
         vm.stopPrank();
     }
@@ -690,7 +692,7 @@ contract PriceConfigv2Test is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
 
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
@@ -742,7 +744,7 @@ contract PriceConfigv2Test is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
 
         // Update strategy for asset on PRICEv2 with policy account
         vm.prank(policy);
@@ -907,7 +909,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(admin);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
     }
 
     function test_installSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
@@ -927,7 +929,7 @@ contract PriceConfigv2Test is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -935,7 +937,7 @@ contract PriceConfigv2Test is Test {
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -952,7 +954,7 @@ contract PriceConfigv2Test is Test {
 
         // Install new submodule with admin account
         vm.prank(admin);
-        priceConfig.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(address(newStrategy));
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -968,7 +970,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(address(newChainlink));
     }
 
     function test_upgradeSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
@@ -991,7 +993,7 @@ contract PriceConfigv2Test is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        priceConfig.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -1002,7 +1004,7 @@ contract PriceConfigv2Test is Test {
 
         // Try to upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -1025,7 +1027,7 @@ contract PriceConfigv2Test is Test {
 
         // Upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -1095,6 +1097,12 @@ contract PriceConfigv2Test is Test {
                 bytes("")
             )
         );
+    }
+
+    function test_supportsInterface() public {
+        assertEq(priceConfig.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
+        assertEq(priceConfig.supportsInterface(type(IPriceConfigv2).interfaceId), true, "IPriceConfigv2 mismatch");
+        assertEq(priceConfig.supportsInterface(type(IEnabler).interfaceId), true, "IEnabler mismatch");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)
