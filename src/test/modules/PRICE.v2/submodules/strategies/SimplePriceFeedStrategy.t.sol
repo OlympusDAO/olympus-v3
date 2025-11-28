@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks

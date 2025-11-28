@@ -4,8 +4,8 @@
 pragma solidity ^0.8.20;
 
 // Test
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
+import {console2} from "@forge-std-1.9.6/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks
