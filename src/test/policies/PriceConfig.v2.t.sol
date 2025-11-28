@@ -61,11 +61,11 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_admin" role can call
+//     [X] only ROLE_PRICE_CONFIG_ADMIN role can call
 //     [X] inputs to IPRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_admin" role can call
+//     [X] only ROLE_PRICE_CONFIG_ADMIN role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
 
 type Category is bytes32;
@@ -125,6 +125,10 @@ contract PriceConfigv2Test is Test {
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint8 internal constant DECIMALS = 18;
 
+    bytes32 internal constant ROLE_ADMIN = "admin";
+    bytes32 internal constant ROLE_PRICE_CONFIG_POLICY = "priceconfig_policy";
+    bytes32 internal constant ROLE_PRICE_CONFIG_ADMIN = "priceconfig_admin";
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
@@ -177,9 +181,9 @@ contract PriceConfigv2Test is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Configure permissioned roles
-        rolesAdmin.grantRole("admin", admin);
-        rolesAdmin.grantRole("priceconfig_admin", admin);
-        rolesAdmin.grantRole("priceconfig_policy", policy);
+        rolesAdmin.grantRole(ROLE_ADMIN, admin);
+        rolesAdmin.grantRole(ROLE_PRICE_CONFIG_ADMIN, admin);
+        rolesAdmin.grantRole(ROLE_PRICE_CONFIG_POLICY, policy);
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
@@ -211,6 +215,7 @@ contract PriceConfigv2Test is Test {
         int256 change; // percentage with two decimals
         for (uint256 i = numObs; i > 0; --i) {
             // Add current price to obs array
+            /// forge-lint: disable-next-line(unsafe-typecast)
             obs[i - 1] = uint256(fetchedPrice);
 
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
@@ -402,7 +407,7 @@ contract PriceConfigv2Test is Test {
         // Try to add asset to PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -532,7 +537,7 @@ contract PriceConfigv2Test is Test {
         // Try to remove asset from PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -608,7 +613,7 @@ contract PriceConfigv2Test is Test {
         // Try to update feeds for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -680,6 +685,7 @@ contract PriceConfigv2Test is Test {
         // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
@@ -697,7 +703,7 @@ contract PriceConfigv2Test is Test {
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -706,6 +712,7 @@ contract PriceConfigv2Test is Test {
         // Confirm strategy was not updated
         asset = PRICE.getAssetData(address(ohm));
         strat = abi.decode(asset.strategy, (IPRICEv2.Component));
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
@@ -731,6 +738,7 @@ contract PriceConfigv2Test is Test {
         // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
+        /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
         assertEq(strat.params, abi.encode(0));
@@ -802,7 +810,7 @@ contract PriceConfigv2Test is Test {
         // Try to update moving average for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -925,7 +933,7 @@ contract PriceConfigv2Test is Test {
         // Try to install submodule with non-admin account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_admin")
+            ROLE_PRICE_CONFIG_ADMIN
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -989,7 +997,7 @@ contract PriceConfigv2Test is Test {
         // Try to upgrade chainlink submodule with non-admin account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_admin")
+            ROLE_PRICE_CONFIG_ADMIN
         );
         vm.expectRevert(err);
         vm.prank(user_);
@@ -1084,7 +1092,7 @@ contract PriceConfigv2Test is Test {
 
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("priceconfig_policy")
+            ROLE_PRICE_CONFIG_POLICY
         );
         vm.expectRevert(err);
 
