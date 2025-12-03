@@ -203,6 +203,15 @@ contract USDSRewardDistributorTest is Test {
         vm.stopPrank();
     }
 
+    function test_setMerkleRoot_reverts_epoch_before_epoch_start_date() public {
+        // Try to set a merkle root for an epoch before EPOCH_START_DATE
+        uint40 epochStartDate = startTimestamp - 1 days; // One day before EPOCH_START_DATE
+
+        vm.prank(admin);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
+        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
+    }
+
     // ========== Test Claiming Logic ========== //
 
     function test_claim_as_underlying() public {

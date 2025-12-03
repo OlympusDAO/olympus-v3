@@ -45,36 +45,39 @@ interface IRewardDistributor is IERC165 {
 
     // ========== ERRORS ========== //
 
-    /// @notice Emitted when the Merkle root for an epoch is already set
+    /// @notice Thrown when the Merkle root for an epoch is already set
     ///
     /// @param  epochStartDate  The epoch start date in question
     error RewardDistributor_EpochAlreadySet(uint256 epochStartDate);
 
-    /// @notice Emitted when an invalid Merkle proof is submitted
+    /// @notice Thrown when an invalid Merkle proof is submitted
     error RewardDistributor_InvalidProof();
 
-    /// @notice Emitted when no epochs are specified for a claim
+    /// @notice Thrown when no epochs are specified for a claim
     error RewardDistributor_NoEpochsSpecified();
 
-    /// @notice Emitted when a Merkle root has not been set for a given epoch
+    /// @notice Thrown when a Merkle root has not been set for a given epoch
     ///
     /// @param  epochStartDate  The epoch start date missing a Merkle root
     error RewardDistributor_MerkleRootNotSet(uint256 epochStartDate);
 
-    /// @notice Emitted when provided arrays are not the same length
+    /// @notice Thrown when provided arrays are not the same length
     error RewardDistributor_ArrayLengthMismatch();
 
-    /// @notice Emitted when an invalid address is provided
+    /// @notice Thrown when an invalid address is provided
     error RewardDistributor_InvalidAddress();
 
-    /// @notice Emitted when setting a Merkle root before required time has elapsed
+    /// @notice Thrown when setting a Merkle root before required time has elapsed
     error RewardDistributor_EpochTooEarly();
 
-    /// @notice Emitted when the epoch start date is not at the start of a day
+    /// @notice Thrown when the epoch start date is not at the start of a day
     error RewardDistributor_EpochNotStartOfDay();
 
-    /// @notice Emitted when the epoch start date is zero
+    /// @notice Thrown when the epoch start date is zero
     error RewardDistributor_EpochIsZero();
+
+    /// @notice Thrown when no rewards are claimable
+    error RewardDistributor_NothingToClaim();
 
     // ========== ADMIN FUNCTIONS ========== //
 

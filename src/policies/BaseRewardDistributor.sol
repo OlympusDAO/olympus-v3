@@ -146,6 +146,10 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Validate epochStartDate is at the exact beginning of a day (midnight UTC)
         _validateEpochStartOfDay(epochStartDate_);
 
+        if (epochStartDate_ < EPOCH_START_DATE) {
+            revert RewardDistributor_EpochTooEarly();
+        }
+
         // Validate epochStartDate is at least 1 day after lastEpochStartDate
         if (lastEpochStartDate != 0 && epochStartDate_ < lastEpochStartDate + 1 days) {
             revert RewardDistributor_EpochTooEarly();
@@ -226,6 +230,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         _validateClaimArrays(epochStartDates_, amounts_, proofs_);
 
         uint256 totalAmount = _processClaims(msg.sender, epochStartDates_, amounts_, proofs_);
+
+        if (totalAmount == 0) revert RewardDistributor_NothingToClaim();
 
         _transferRewards(msg.sender, totalAmount, epochStartDates_.length, asVaultToken_);
     }

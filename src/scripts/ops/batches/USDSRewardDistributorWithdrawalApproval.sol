@@ -5,8 +5,6 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // External
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 /// @notice Grants withdrawal approval to USDSRewardDistributor for sUSDS
