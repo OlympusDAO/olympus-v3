@@ -17,13 +17,21 @@ abstract contract PeripheryEnabler is IEnabler {
 
     // ========= MODIFIERS ========= //
 
-    modifier onlyEnabled() {
+    function _onlyEnabled() internal view {
         if (!isEnabled) revert NotEnabled();
+    }
+
+    modifier onlyEnabled() {
+        _onlyEnabled();
         _;
     }
 
-    modifier onlyDisabled() {
+    function _onlyDisabled() internal view {
         if (isEnabled) revert NotDisabled();
+    }
+
+    modifier onlyDisabled() {
+        _onlyDisabled();
         _;
     }
 
@@ -92,6 +100,8 @@ abstract contract PeripheryEnabler is IEnabler {
     // ========= ERC165 ========= //
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return interfaceId == type(IEnabler).interfaceId;
+        return
+            interfaceId == bytes4(0x01ffc9a7) || // ERC-165
+            interfaceId == type(IEnabler).interfaceId;
     }
 }

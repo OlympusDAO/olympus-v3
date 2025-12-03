@@ -19,7 +19,7 @@ contract MockVault {
     }
 
     function joinPool(
-        bytes32 poolId,
+        bytes32,
         address sender,
         address recipient,
         JoinPoolRequest calldata request
@@ -30,7 +30,7 @@ contract MockVault {
     }
 
     function exitPool(
-        bytes32 poolId,
+        bytes32,
         address sender,
         address recipient,
         ExitPoolRequest calldata request
@@ -48,7 +48,7 @@ contract MockVault {
     }
 
     function getPoolTokens(
-        bytes32 poolId
+        bytes32
     ) external view returns (address[] memory, uint256[] memory, uint256) {
         address[] memory tokens = new address[](2);
         tokens[0] = token0;
@@ -90,7 +90,7 @@ contract MockBalancerVault is MockVault {
     }
 
     function joinPool(
-        bytes32 poolId,
+        bytes32,
         address sender,
         address recipient,
         JoinPoolRequest calldata request
@@ -101,7 +101,7 @@ contract MockBalancerVault is MockVault {
     }
 
     function exitPool(
-        bytes32 poolId,
+        bytes32,
         address sender,
         address recipient,
         ExitPoolRequest calldata request

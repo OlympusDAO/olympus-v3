@@ -7,3 +7,5 @@ bytes32 constant EMERGENCY_ROLE = "emergency";
 bytes32 constant ADMIN_ROLE = "admin";
 /// @dev Managerial access, e.g. managing specific protocol parameters. Typically assigned to a multisig/council.
 bytes32 constant MANAGER_ROLE = "manager";
+/// @dev Heart role, e.g. performing periodic tasks.
+bytes32 constant HEART_ROLE = "heart";

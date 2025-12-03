@@ -1,0 +1,638 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.20;
+
+import {DepositManagerTest} from "./DepositManagerTest.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+
+contract DepositManagerDepositTest is DepositManagerTest {
+    // ========== EVENTS ========== //
+
+    event AssetDeposited(
+        address indexed asset,
+        address indexed depositor,
+        address indexed operator,
+        uint256 amount,
+        uint256 shares
+    );
+
+    // ========== TESTS ========== //
+
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_givenPolicyIsDisabled_reverts() public {
+        _expectRevertNotEnabled();
+
+        vm.prank(ADMIN);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the caller does not have the deposit operator role
+    //  [X] it reverts
+
+    function test_whenCallerIsNotDepositOperator_reverts(
+        address caller_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
+        vm.assume(caller_ != DEPOSIT_OPERATOR);
+
+        _expectRevertNotDepositOperator();
+
+        vm.prank(caller_);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the asset period does not exist
+    //  given the asset vault is set
+    //   [X] it reverts
+    //  [X] it reverts
+
+    function test_givenAssetPeriodDoesNotExist_givenAssetVaultIsSet_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    function test_givenAssetPeriodDoesNotExist_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _expectRevertInvalidConfiguration(iAsset, DEPOSIT_PERIOD);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the asset period is disabled
+    //  [X] it reverts
+
+    function test_givenAssetPeriodIsDisabled_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenAssetPeriodIsDisabled
+    {
+        _expectRevertAssetPeriodDisabled(iAsset, DEPOSIT_PERIOD);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the depositor address is the zero address
+    //  [X] it reverts
+
+    function test_whenDepositorAddressIsZeroAddress_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        vm.expectRevert("TRANSFER_FROM_FAILED");
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: address(0),
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the deposit amount is 0
+    //  [X] it reverts
+
+    function test_whenDepositAmountIsZero_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        vm.expectRevert("ZERO_SHARES");
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 0,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the deposit amount is below the minimum deposit
+    //  [X] it reverts
+
+    function test_whenDepositAmountIsBelowMinimum_reverts(
+        uint256 minimumDeposit_,
+        uint256 depositAmount_
+    ) public givenIsEnabled givenFacilityNameIsSetDefault {
+        minimumDeposit_ = bound(minimumDeposit_, 2, type(uint128).max);
+        depositAmount_ = bound(depositAmount_, 1, minimumDeposit_ - 1);
+
+        // Add asset with minimum deposit requirement
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, iVault, type(uint256).max, minimumDeposit_);
+
+        // Add asset period
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_MinimumDepositNotMet.selector,
+                address(iAsset),
+                depositAmount_,
+                minimumDeposit_
+            )
+        );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: depositAmount_,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the depositor has not approved the contract to spend the asset
+    //  [X] it reverts
+
+    function test_givenDepositorHasNotApprovedSpendingAsset_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        // Expect revert
+        _expectRevertERC20InsufficientAllowance();
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the depositor does not have sufficient asset balance
+    //  [X] it reverts
+
+    function test_givenDepositorDoesNotHaveSufficientAssetBalance_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT + 1)
+    {
+        // Expect revert
+        _expectRevertERC20InsufficientBalance();
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT + 1,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the asset is fee-on-transfer
+    //  [X] it reverts
+
+    function test_givenAssetIsFeeOnTransfer_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+    {
+        // Create a fee-on-transfer asset
+        address feeRecipient = makeAddr("feeRecipient");
+        MockERC20FeeOnTransfer asset = new MockERC20FeeOnTransfer(
+            "Fee On Transfer",
+            "FOT",
+            feeRecipient
+        );
+
+        // Configure the asset vault
+        vm.prank(ADMIN);
+        depositManager.addAsset(IERC20(address(asset)), IERC4626(address(0)), type(uint256).max, 0);
+
+        // Configure deposit
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(IERC20(address(asset)), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        // Mint the asset to the depositor
+        vm.prank(ADMIN);
+        asset.mint(DEPOSITOR, MINT_AMOUNT);
+
+        // Approve spending of the asset
+        vm.prank(DEPOSITOR);
+        asset.approve(address(depositManager), MINT_AMOUNT);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: IERC20(address(asset)),
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the asset's deposit cap is zero
+    //  [X] it reverts
+
+    function test_givenAssetDepositCapIsZero_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenAssetDepositCapIsSet(0)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(0, 0);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given the asset configuration has the vault set to the zero address
+    //  given the existing deposit amount is greater than the deposit cap
+    //   [X] it reverts
+
+    function test_givenAssetIsAddedWithZeroAddress_givenTotalAssetsAreGreaterThanDepositCap_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAddedWithZeroAddress
+        givenAssetDepositCapIsSet(101e18)
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(previousAssetLiabilities, 101e18);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
+    //  [X] the returned shares are the deposited amount
+    //  [X] the asset is stored in the contract
+    //  [X] the operator shares are updated with the deposited amount
+    //  [X] the wrapped receipt tokens are not minted to the depositor
+    //  [X] the receipt tokens are minted to the depositor
+
+    function test_givenAssetIsAddedWithZeroAddress(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1e18, MINT_AMOUNT);
+
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AssetDeposited(address(iAsset), DEPOSITOR, DEPOSIT_OPERATOR, amount_, amount_);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+
+        // Assert
+        _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
+        _assertAssetBalance(amount_, amount_, actualAmount, true);
+        _assertReceiptToken(amount_, 0, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - amount_);
+    }
+
+    // when shouldWrap is true
+    //  given the receipt token has not been wrapped
+    //   [X] it creates the wrapped token contract
+    //   [X] the wrapped receipt tokens are minted to the depositor
+    //   [X] the receipt tokens are not minted to the depositor
+
+    function test_whenShouldWrapIsTrue_givenReceiptTokenHasNotBeenWrapped()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        uint256 amount = 1e18;
+        uint256 expectedShares = vault.previewDeposit(amount);
+        uint256 expectedAssets = _getExpectedActualAssets(amount);
+
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount,
+                shouldWrap: true
+            })
+        );
+
+        // Assert
+        _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
+        _assertAssetBalance(expectedShares, expectedAssets, actualAmount, true);
+        _assertReceiptToken(0, expectedAssets, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - expectedAssets);
+    }
+
+    //  [X] the wrapped receipt tokens are minted to the depositor
+    //  [X] the receipt tokens are not minted to the depositor
+    // given there is an existing deposit
+    //  [X] the operator shares are correct
+    //  [X] the asset liabilities are correct
+
+    function test_whenShouldWrapIsTrue_givenReceiptTokenHasBeenWrapped()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(10e18, true)
+    {
+        uint256 amount = 1e18;
+        uint256 expectedShares = vault.previewDeposit(amount);
+        uint256 expectedAssets = _getExpectedActualAssets(amount);
+
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount,
+                shouldWrap: true
+            })
+        );
+
+        // Assert
+        _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
+        _assertAssetBalance(expectedShares, expectedAssets, actualAmount, true);
+        _assertReceiptToken(0, expectedAssets, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - 10e18 - expectedAssets);
+    }
+
+    // given the existing deposit amount is greater than the deposit cap
+    //  [X] it reverts
+
+    function test_givenTotalAssetsAreGreaterThanDepositCap_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetDepositCapIsSet(101e18)
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenDepositorHasAsset(MINT_AMOUNT)
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Expect revert
+        _expectRevertDepositCapExceeded(previousAssetLiabilities, 101e18);
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // when the amount is less than one share
+    //  [X] it reverts
+
+    function test_whenAmountLessThanOneShare_reverts(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        // Earn yield
+        asset.mint(address(vault), 10e18);
+
+        // Calculate amount
+        uint256 oneShareInAssets = vault.previewMint(1);
+        amount_ = bound(amount_, 1, oneShareInAssets - 1);
+
+        // Expect revert
+        vm.expectRevert("ZERO_SHARES");
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // [X] the returned shares are the deposited amount (in terms of vault shares)
+    // [X] the asset is deposited into the vault
+    // [X] the operator shares are increased by the deposited amount (in terms of vault shares)
+    // [X] the wrapped receipt tokens are not minted to the depositor
+    // [X] the receipt tokens are minted to the depositor
+    // [X] the asset liabilities are increased by the deposited amount
+
+    function test_success(
+        uint256 amount_
+    )
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        amount_ = bound(amount_, 1e18, MINT_AMOUNT);
+
+        // Determine expected amounts
+        uint256 expectedShares = vault.previewDeposit(amount_);
+        uint256 expectedAssets = _getExpectedActualAssets(amount_);
+
+        uint256 expectedReceiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit AssetDeposited(
+            address(iAsset),
+            DEPOSITOR,
+            DEPOSIT_OPERATOR,
+            expectedAssets,
+            expectedShares
+        );
+
+        // Deposit
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, uint256 actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+
+        // Assert
+        _assertReceiptTokenId(expectedReceiptTokenId, receiptTokenId);
+        _assertAssetBalance(expectedShares, expectedAssets, actualAmount, true);
+        _assertReceiptToken(expectedAssets, 0, true, true);
+        _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - expectedAssets);
+    }
+}

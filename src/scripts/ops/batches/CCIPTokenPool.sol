@@ -12,7 +12,7 @@ import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol"
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {TokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPolicyEnabler} from "src/policies/interfaces/utils/IPolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
 
@@ -105,7 +105,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
             // On non-canonical chains (currently), the "admin" role (required for enabling the policy) is set to the DAO MS
             console2.log("Non-Canonical chain: Enabling TokenPool policy");
-            addToBatch(tokenPool, abi.encodeWithSelector(IPolicyEnabler.enable.selector, ""));
+            addToBatch(tokenPool, abi.encodeWithSelector(IEnabler.enable.selector, ""));
         }
         // Canonical chain has a non-privileged LockReleaseTokenPool contract
         // It cannot facilitate any bridging operations until remote chains are configured

@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {ICCIPTokenPool} from "src/policies/interfaces/ICCIPTokenPool.sol";
 
@@ -221,11 +221,11 @@ contract CCIPBurnMintTokenPoolTest is Test {
     }
 
     function _expectRevertNotEnabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _expectRevertNotDisabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotDisabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
     }
 
     function _expectRevertNotAdmin() internal {
