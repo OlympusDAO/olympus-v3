@@ -105,9 +105,9 @@ The `shutdown()` function takes an array of tokens that will be transferred into
 
 The [Heart policy](../../src/policies/Heart.sol) can be shut down using the following:
 
-- Function: `deactivate()`
-- Required role: `heart_admin` (DAO MS, OCG Timelock)
-- Address: `0xf7602c0421c283a2fc113172ebdf64c30f21654d`
+- Function: `disable()`
+- Required role: `emergency` (OCG Timelock, Emergency MS)
+- Address: `0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB`
 - [ABI](abis/heart.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
 
 ## Bond Manager

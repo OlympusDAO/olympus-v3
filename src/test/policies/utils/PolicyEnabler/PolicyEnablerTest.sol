@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+/// forge-lint: disable-start(unwrapped-modifier-logic)
+pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -116,3 +117,4 @@ contract PolicyEnablerTest is Test {
         );
     }
 }
+/// forge-lint: disable-end(unwrapped-modifier-logic)

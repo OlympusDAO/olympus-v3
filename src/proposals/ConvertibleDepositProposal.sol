@@ -1,0 +1,817 @@
+// SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
+// solhint-disable one-contract-per-file
+// solhint-disable custom-errors
+pragma solidity >=0.8.20;
+
+// OCG Proposal Simulator
+import {Addresses} from "proposal-sim/addresses/Addresses.sol";
+import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
+
+// Script
+import {ProposalScript} from "src/proposals/ProposalScript.sol";
+
+// Contracts
+import {Kernel, Policy} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacility.sol";
+import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
+import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
+import {EmissionManager} from "src/policies/EmissionManager.sol";
+
+import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+
+/// @notice Combined proposal that enables and configures the Convertible Deposit system
+contract ConvertibleDepositProposal is GovernorBravoProposal {
+    Kernel internal _kernel;
+
+    // ========== CONSTANTS ========== //
+
+    string internal constant CDF_NAME = "cdf";
+
+    // Asset configuration
+    uint256 internal constant USDS_MAX_CAPACITY = 1_000_000e18; // 1M USDS
+    uint256 internal constant USDS_MIN_DEPOSIT = 1e18; // 1 USDS
+
+    // Deposit periods (in months)
+    uint8 internal constant PERIOD_1M = 1;
+    uint8 internal constant PERIOD_2M = 2;
+    uint8 internal constant PERIOD_3M = 3;
+
+    // Reclaim rate (in basis points)
+    uint16 internal constant RECLAIM_RATE = 90e2; // 90%
+
+    // ConvertibleDepositAuctioneer initial parameters
+    uint256 internal constant CDA_INITIAL_TARGET = 0;
+    uint256 internal constant CDA_INITIAL_TICK_SIZE = 0;
+    uint256 internal constant CDA_INITIAL_MIN_PRICE = 0;
+    uint24 internal constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075; // 0.75% increase
+    uint8 internal constant CDA_AUCTION_TRACKING_PERIOD = 7; // 7 days
+
+    // EmissionManager parameters
+    uint256 internal constant EM_BASE_EMISSIONS_RATE = 200000; // 0.02%/day
+    uint256 internal constant EM_MINIMUM_PREMIUM = 5e17; // 50% premium
+    uint256 internal constant EM_BACKING = 11690000000000000000; // 11.69 USDS/OHM
+    uint256 internal constant EM_TICK_SIZE = 150e9; // 150 OHM
+    uint256 internal constant EM_MIN_PRICE_SCALAR = 12e17; // 120% min price multiplier
+    uint256 internal constant EM_BOND_MARKET_CAPACITY_SCALAR = 0; // 0% bond market capacity scalar, bond market is disabled
+    uint48 internal constant EM_RESTART_TIMEFRAME = 950400; // 11 days
+
+    // ========== PROPOSAL ========== //
+
+    function id() public pure override returns (uint256) {
+        return 12;
+    }
+
+    function name() public pure override returns (string memory) {
+        return "Convertible Deposits - Activation";
+    }
+
+    function description() public pure override returns (string memory) {
+        return
+            string.concat(
+                _getHeaderSection(),
+                _getContractsSection(),
+                _getResourcesAndPrerequisitesSection(),
+                _getProposalStepsSection(),
+                _getConclusionSection()
+            );
+    }
+
+    /// @dev Returns the header and summary section of the proposal description
+    function _getHeaderSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "# Convertible Deposits\n\n",
+                "This proposal activates and configures the Convertible Deposit system.\n\n",
+                "## Summary\n\n",
+                "This proposal has five main components:\n\n",
+                "1. Grant appropriate roles to contracts\n",
+                "2. Activate Convertible Deposit system contracts\n",
+                "3. Configure USDS as the deposit asset with different deposit periods (1m, 2m, 3m)\n",
+                "4. Configure the auction and emissions parameters\n",
+                "5. Configure periodic tasks\n\n"
+            );
+    }
+
+    /// @dev Returns the affected contracts section of the proposal description
+    function _getContractsSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Affected Contracts\n\n",
+                "- Heart policy (existing - 1.6)\n",
+                "- EmissionManager policy (existing - 1.1)\n",
+                "- ReserveMigrator policy (existing)\n",
+                "- Operator policy (existing - 1.5)\n",
+                "- YieldRepurchaseFacility policy (existing - 1.2)\n",
+                "- Heart policy (new - 1.7)\n",
+                "- DepositManager policy (new - 1.0)\n",
+                "- ConvertibleDepositFacility policy (new - 1.0)\n",
+                "- ConvertibleDepositAuctioneer policy (new - 1.0)\n",
+                "- DepositRedemptionVault policy (new - 1.0)\n",
+                "- ReserveWrapper policy (new - 1.0)\n",
+                "- EmissionManager policy (new - 1.2)\n\n"
+            );
+    }
+
+    /// @dev Returns the resources and prerequisites section of the proposal description
+    function _getResourcesAndPrerequisitesSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Resources\n\n",
+                "- [View the report for audit 1 (Guardian)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-09_Convertible_Deposits-Guardian.pdf)\n",
+                "- [View the report for audit 2 (Trust)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2025-10_Convertible_Deposits-Trust.pdf)\n",
+                "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/29)\n\n",
+                "## Pre-requisites\n\n",
+                "- Old Heart policy has been deactivated in the kernel\n",
+                "- Old EmissionManager policy has been deactivated in the kernel\n",
+                "- DEPOS module has been installed in the kernel\n",
+                "- All new policies have been activated in the kernel\n\n"
+            );
+    }
+
+    /// @dev Returns the proposal steps section of the proposal description
+    function _getProposalStepsSection() private pure returns (string memory) {
+        return
+            string.concat(
+                _getProposalStepsPhase1and2(),
+                _getProposalStepsPhase3Part1(),
+                _getProposalStepsPhase3Part2()
+            );
+    }
+
+    /// @dev Returns Phase 1 and 2 of the proposal steps
+    function _getProposalStepsPhase1and2() private pure returns (string memory) {
+        return
+            string.concat(
+                "## Proposal Steps\n\n",
+                "### Phase 1: Cleanup Previous Policies\n\n",
+                "1a. Revoke the `heart` role from the old Heart policy\n",
+                "1b. Disable the old Heart policy\n",
+                "1c. Disable the old EmissionManager policy\n\n",
+                "### Phase 2: Grant Roles to New Policies\n\n",
+                "2. Grant the `manager` role to the DAO MS\n",
+                "3. Grant the `em_manager` role to the DAO MS\n",
+                "4. Grant the `deposit_operator` role to ConvertibleDepositFacility\n",
+                "5. Grant the `cd_auctioneer` role to ConvertibleDepositAuctioneer\n",
+                "6. Grant the `cd_emissionmanager` role to EmissionManager\n",
+                "7. Grant the `heart` role to Heart contract\n\n",
+                "### Phase 3: Execute Activator Contract\n\n",
+                "8. Grant temporary `admin` role to ConvertibleDepositActivator contract\n"
+            );
+    }
+
+    /// @dev Returns the first part of Phase 3 steps
+    function _getProposalStepsPhase3Part1() private pure returns (string memory) {
+        return
+            string.concat(
+                "9. Execute ConvertibleDepositActivator.activate() which performs:\n",
+                "   - Enable DepositManager contract\n",
+                "   - Set operator name on DepositManager for ConvertibleDepositFacility\n",
+                "   - Enable ConvertibleDepositFacility contract\n",
+                "   - Authorize ConvertibleDepositFacility in DepositRedemptionVault\n",
+                "   - Authorize DepositRedemptionVault in ConvertibleDepositFacility\n",
+                "   - Enable DepositRedemptionVault contract\n",
+                "   - Configure USDS in DepositManager (1M USDS capacity, 1 USDS minimum)\n",
+                "   - Add USDS deposit periods: 1m, 2m, 3m (90% reclaim rate each)\n"
+            );
+    }
+
+    /// @dev Returns the second part of Phase 3 steps
+    function _getProposalStepsPhase3Part2() private pure returns (string memory) {
+        return
+            string.concat(
+                "   - Enable deposit periods in ConvertibleDepositAuctioneer\n",
+                "   - Enable ConvertibleDepositAuctioneer with initial parameters (disabled auction)\n",
+                "   - Enable EmissionManager with initial parameters\n",
+                "   - Enable ReserveWrapper contract\n",
+                "   - Add ConvertibleDepositFacility as the first periodic task\n",
+                "   - Add ReserveMigrator.migrate() as second periodic task\n",
+                "   - Add ReserveWrapper as third periodic task\n",
+                "   - Add Operator.operate() as fourth periodic task\n",
+                "   - Add YieldRepurchaseFacility.endEpoch() as fifth periodic task\n",
+                "   - Add EmissionManager as six periodic task\n",
+                "   - Enable Heart contract\n"
+            );
+    }
+
+    /// @dev Returns the conclusion section of the proposal description
+    function _getConclusionSection() private pure returns (string memory) {
+        return
+            string.concat(
+                "10. Revoke `admin` role from ConvertibleDepositActivator contract\n\n",
+                "## Result\n\n",
+                "After execution, the Convertible Deposit system will be fully operational with USDS assets configured for 1, 2, and 3 month deposit periods.\n"
+            );
+    }
+
+    // No deploy actions needed
+    function _deploy(Addresses addresses, address) internal override {
+        // Cache the kernel address in state
+        _kernel = Kernel(addresses.getAddress("olympus-kernel"));
+    }
+
+    function _afterDeploy(Addresses addresses, address deployer) internal override {}
+
+    // Sets up actions for the proposal
+    function _build(Addresses addresses) internal override {
+        address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
+
+        // Pre-requisites:
+        // - Previous Heart and EmissionManager have not been deactivated from the kernel
+        // - All required modules and policies have been installed and activated in the kernel
+        // - DEPOS module has been installed in the kernel
+        // - All deposit-related policies have been activated
+
+        // ========== PHASE 1: CLEAN UP PREVIOUS POLICIES ========== //
+
+        {
+            address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
+
+            // 1a. Revoke "heart" role from old Heart contract
+            _pushAction(
+                rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("heart"), heartOld),
+                "Revoke heart role from old Heart policy"
+            );
+
+            // 1b. Disable the old Heart policy
+            _pushAction(
+                heartOld,
+                abi.encodeWithSignature("deactivate()"),
+                "Disable old Heart policy"
+            );
+        }
+
+        {
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
+
+            // 1c. Disable the old EmissionManager policy
+            _pushAction(
+                emissionManagerOld,
+                abi.encodeWithSignature("shutdown()"),
+                "Disable old EmissionManager policy"
+            );
+        }
+
+        // ========== PHASE 2: GRANT ROLES TO NEW POLICIES ========== //
+
+        // 2. Grant "manager" role to DAO MS
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            _pushAction(
+                rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("manager"), daoMS),
+                "Grant manager role to DAO MS"
+            );
+        }
+
+        // 3. Grant "em_manager" role to DAO MS
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            _pushAction(
+                rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("em_manager"), daoMS),
+                "Grant em_manager role to DAO MS"
+            );
+        }
+
+        // 4. Grant "deposit_operator" role to ConvertibleDepositFacility
+        {
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    bytes32("deposit_operator"),
+                    cdFacility
+                ),
+                "Grant deposit_operator role to ConvertibleDepositFacility"
+            );
+        }
+
+        // 5. Grant "cd_auctioneer" role to ConvertibleDepositAuctioneer
+        {
+            address cdAuctioneer = addresses.getAddress(
+                "olympus-policy-convertible-deposit-auctioneer-1_0"
+            );
+
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    bytes32("cd_auctioneer"),
+                    cdAuctioneer
+                ),
+                "Grant cd_auctioneer role to ConvertibleDepositAuctioneer"
+            );
+        }
+
+        // 6. Grant "cd_emissionmanager" role to EmissionManager
+        {
+            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
+
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    bytes32("cd_emissionmanager"),
+                    emissionManager
+                ),
+                "Grant cd_emissionmanager role to EmissionManager"
+            );
+        }
+
+        // 7. Grant "heart" role to Heart contract
+        {
+            address heart = addresses.getAddress("olympus-policy-heart-1_7");
+
+            _pushAction(
+                rolesAdmin,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("heart"), heart),
+                "Grant heart role to Heart contract"
+            );
+        }
+
+        // ========== PHASE 3: EXECUTE ACTIVATOR CONTRACT ========== //
+
+        address activator = addresses.getAddress("olympus-periphery-convertible-deposit-activator");
+
+        // 8. Grant "admin" role (temporarily) to Activator contract
+        _pushAction(
+            rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("admin"), activator),
+            "Grant admin role to temporary activator contract"
+        );
+
+        // 9. Run activator
+        _pushAction(
+            activator,
+            abi.encodeWithSelector(ConvertibleDepositActivator.activate.selector),
+            "Call temporary activator contract"
+        );
+
+        // 10. Revoke "admin" role from Activator contract
+        _pushAction(
+            rolesAdmin,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, bytes32("admin"), activator),
+            "Revoke admin role from temporary activator contract"
+        );
+    }
+
+    // Executes the proposal actions.
+    function _run(Addresses addresses, address) internal override {
+        // Simulates actions on TimelockController
+        _simulateActions(
+            address(_kernel),
+            addresses.getAddress("olympus-governor"),
+            addresses.getAddress("olympus-legacy-gohm"),
+            addresses.getAddress("proposer")
+        );
+    }
+
+    // Validates the post-execution state.
+    function _validate(Addresses addresses, address) internal view override {
+        // Load the contract addresses
+        ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
+
+        // solhint-disable custom-errors
+
+        // ========== PHASE 1 VALIDATIONS ========== //
+
+        {
+            // 1. Validate that the "heart" role is revoked from the old Heart policy
+            address heartOld = addresses.getAddress("olympus-policy-heart-1_6");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(heartOld, bytes32("heart")) == false,
+                "Old Heart policy still has the heart role"
+            );
+
+            // 1a. Validate that the old Heart policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            require(IHeart_v1_6(heartOld).active() == false, "Old Heart policy is not disabled");
+
+            // 1b. Validate that the old EmissionManager policy is disabled
+            // It is not deactivated, as that requires the DAO MS
+            address emissionManagerOld = addresses.getAddress("olympus-policy-emissionmanager");
+            require(
+                IEmissionManager_v1_1(emissionManagerOld).locallyActive() == false,
+                "Old EmissionManager policy is not disabled"
+            );
+        }
+
+        // ========== PHASE 2 VALIDATIONS ========== //
+
+        // 2. Validate that DAO MS has "manager" role
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(daoMS, bytes32("manager")) == true,
+                "DAO MS does not have the manager role"
+            );
+        }
+
+        // 3. Validate that DAO MS has "em_manager" role
+        {
+            address daoMS = addresses.getAddress("olympus-multisig-dao");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(daoMS, bytes32("em_manager")) == true,
+                "DAO MS does not have the em_manager role"
+            );
+        }
+
+        // 4. Validate that ConvertibleDepositFacility has "deposit_operator" role
+        {
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(cdFacility, bytes32("deposit_operator")) == true,
+                "ConvertibleDepositFacility does not have the deposit_operator role"
+            );
+        }
+
+        // 5. Validate that ConvertibleDepositAuctioneer has "cd_auctioneer" role
+        {
+            address cdAuctioneer = addresses.getAddress(
+                "olympus-policy-convertible-deposit-auctioneer-1_0"
+            );
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(cdAuctioneer, bytes32("cd_auctioneer")) == true,
+                "ConvertibleDepositAuctioneer does not have the cd_auctioneer role"
+            );
+        }
+
+        // 6. Validate that EmissionManager has "cd_emissionmanager" role
+        {
+            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(emissionManager, bytes32("cd_emissionmanager")) == true,
+                "EmissionManager does not have the cd_emissionmanager role"
+            );
+        }
+
+        // 7. Validate that Heart has the "heart" role
+        {
+            address heart = addresses.getAddress("olympus-policy-heart-1_7");
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(heart, bytes32("heart")) == true,
+                "Heart does not have the heart role"
+            );
+        }
+
+        // ========== ACTIVATOR VALIDATIONS ========== //
+        // Validate all the work done by the ConvertibleDepositActivator
+
+        // Contract enablement validations
+        {
+            address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+            address depositRedemptionVault = addresses.getAddress(
+                "olympus-policy-deposit-redemption-vault-1_0"
+            );
+
+            require(IEnabler(depositManager).isEnabled() == true, "DepositManager is not enabled");
+
+            require(
+                /// forge-lint: disable-next-line(asm-keccak256)
+                keccak256(bytes(IDepositManager(depositManager).getOperatorName(cdFacility))) ==
+                    keccak256(bytes(CDF_NAME)),
+                "DepositManager operator name for ConvertibleDepositFacility is incorrect"
+            );
+
+            require(
+                IEnabler(cdFacility).isEnabled() == true,
+                "ConvertibleDepositFacility is not enabled"
+            );
+
+            require(
+                IDepositRedemptionVault(depositRedemptionVault).isAuthorizedFacility(cdFacility) ==
+                    true,
+                "ConvertibleDepositFacility is not an authorized facility with DepositRedemptionVault"
+            );
+
+            require(
+                IDepositFacility(cdFacility).isAuthorizedOperator(depositRedemptionVault) == true,
+                "DepositRedemptionVault is not an authorized operator with ConvertibleDepositFacility"
+            );
+
+            require(
+                IEnabler(depositRedemptionVault).isEnabled() == true,
+                "DepositRedemptionVault is not enabled"
+            );
+        }
+
+        // Asset configuration validations
+        {
+            address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
+            address usds = addresses.getAddress("external-tokens-USDS");
+            address sUsds = addresses.getAddress("external-tokens-sUSDS");
+
+            IAssetManager.AssetConfiguration memory assetConfig = IAssetManager(depositManager)
+                .getAssetConfiguration(IERC20(usds));
+            require(
+                assetConfig.vault == sUsds,
+                "USDS is not configured correctly in DepositManager"
+            );
+            require(
+                assetConfig.depositCap == USDS_MAX_CAPACITY,
+                "USDS capacity is not set correctly"
+            );
+            require(
+                assetConfig.minimumDeposit == USDS_MIN_DEPOSIT,
+                "USDS minimum deposit is not set correctly"
+            );
+        }
+
+        // Validate USDS deposit periods
+        {
+            address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
+            address usds = addresses.getAddress("external-tokens-USDS");
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+
+            IDepositManager.AssetPeriod memory assetPeriod1M = IDepositManager(depositManager)
+                .getAssetPeriod(IERC20(usds), PERIOD_1M, cdFacility);
+            require(
+                assetPeriod1M.operator == cdFacility,
+                "USDS-1m period facility is not set correctly"
+            );
+            require(
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_1M) ==
+                    RECLAIM_RATE,
+                "USDS-1m period reclaim rate is not set correctly"
+            );
+
+            IDepositManager.AssetPeriod memory assetPeriod2M = IDepositManager(depositManager)
+                .getAssetPeriod(IERC20(usds), PERIOD_2M, cdFacility);
+            require(
+                assetPeriod2M.operator == cdFacility,
+                "USDS-2m period facility is not set correctly"
+            );
+            require(
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_2M) ==
+                    RECLAIM_RATE,
+                "USDS-2m period reclaim rate is not set correctly"
+            );
+
+            IDepositManager.AssetPeriod memory assetPeriod3M = IDepositManager(depositManager)
+                .getAssetPeriod(IERC20(usds), PERIOD_3M, cdFacility);
+            require(
+                assetPeriod3M.operator == cdFacility,
+                "USDS-3m period facility is not set correctly"
+            );
+            require(
+                IDepositFacility(cdFacility).getAssetPeriodReclaimRate(IERC20(usds), PERIOD_3M) ==
+                    RECLAIM_RATE,
+                "USDS-3m period reclaim rate is not set correctly"
+            );
+        }
+
+        // Validate auction system
+        {
+            address cdAuctioneer = addresses.getAddress(
+                "olympus-policy-convertible-deposit-auctioneer-1_0"
+            );
+
+            // Deposit periods
+            (bool period1MEnabled, ) = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .isDepositPeriodEnabled(PERIOD_1M);
+            require(
+                period1MEnabled == true,
+                "USDS-1m period is not enabled in ConvertibleDepositAuctioneer"
+            );
+
+            (bool period2MEnabled, ) = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .isDepositPeriodEnabled(PERIOD_2M);
+            require(
+                period2MEnabled == true,
+                "USDS-2m period is not enabled in ConvertibleDepositAuctioneer"
+            );
+
+            (bool period3MEnabled, ) = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .isDepositPeriodEnabled(PERIOD_3M);
+            require(
+                period3MEnabled == true,
+                "USDS-3m period is not enabled in ConvertibleDepositAuctioneer"
+            );
+
+            // Initial auction parameters
+            IConvertibleDepositAuctioneer.AuctionParameters
+                memory auctionParams = IConvertibleDepositAuctioneer(cdAuctioneer)
+                    .getAuctionParameters();
+            require(
+                auctionParams.target == CDA_INITIAL_TARGET,
+                "Initial target is not CDA_INITIAL_TARGET"
+            );
+            require(
+                auctionParams.tickSize == CDA_INITIAL_TICK_SIZE,
+                "Initial tick size is not CDA_INITIAL_TICK_SIZE"
+            );
+            require(
+                auctionParams.minPrice == CDA_INITIAL_MIN_PRICE,
+                "Initial min price is not CDA_INITIAL_MIN_PRICE"
+            );
+
+            // Auction configuration
+            uint256 tickStep = IConvertibleDepositAuctioneer(cdAuctioneer).getTickStep();
+            require(
+                tickStep == CDA_INITIAL_TICK_STEP_MULTIPLIER,
+                "Initial tick step is not CDA_INITIAL_TICK_STEP_MULTIPLIER"
+            );
+            uint256 trackingPeriod = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .getAuctionTrackingPeriod();
+            require(
+                trackingPeriod == CDA_AUCTION_TRACKING_PERIOD,
+                "Initial auction tracking period is not CDA_AUCTION_TRACKING_PERIOD"
+            );
+
+            require(
+                IEnabler(cdAuctioneer).isEnabled() == true,
+                "ConvertibleDepositAuctioneer is not enabled"
+            );
+        }
+
+        // Validate EmissionManager
+        {
+            EmissionManager emissionManager = EmissionManager(
+                addresses.getAddress("olympus-policy-emissionmanager-1_2")
+            );
+
+            require(
+                emissionManager.baseEmissionRate() == EM_BASE_EMISSIONS_RATE,
+                "Initial base emissions rate is not EM_BASE_EMISSIONS_RATE"
+            );
+            require(
+                emissionManager.minimumPremium() == EM_MINIMUM_PREMIUM,
+                "Initial minimum premium is not EM_MINIMUM_PREMIUM"
+            );
+            require(emissionManager.backing() == EM_BACKING, "Initial backing is not EM_BACKING");
+            require(
+                emissionManager.tickSize() == EM_TICK_SIZE,
+                "Initial tick size is not EM_TICK_SIZE"
+            );
+            require(
+                emissionManager.minPriceScalar() == EM_MIN_PRICE_SCALAR,
+                "Initial min price scalar is not EM_MIN_PRICE_SCALAR"
+            );
+            require(
+                emissionManager.bondMarketCapacityScalar() == EM_BOND_MARKET_CAPACITY_SCALAR,
+                "Initial bond market capacity scalar is not EM_BOND_MARKET_CAPACITY_SCALAR"
+            );
+            require(
+                emissionManager.restartTimeframe() == EM_RESTART_TIMEFRAME,
+                "Initial restart timeframe is not EM_RESTART_TIMEFRAME"
+            );
+
+            require(
+                IEnabler(emissionManager).isEnabled() == true,
+                "EmissionManager is not enabled"
+            );
+        }
+
+        // Validate periodic tasks
+        {
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+            address heart = addresses.getAddress("olympus-policy-heart-1_7");
+            address reserveWrapper = addresses.getAddress("olympus-policy-reserve-wrapper-1_0");
+            address reserveMigrator = addresses.getAddress("olympus-policy-reserve-migrator-1_0");
+            address operator = addresses.getAddress("olympus-policy-operator-1_5");
+            address yieldRepo = addresses.getAddress("olympus-policy-yieldrepurchasefacility-1_2");
+            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
+
+            require(IEnabler(reserveWrapper).isEnabled() == true, "ReserveWrapper is not enabled");
+
+            require(
+                IPeriodicTaskManager(heart).getPeriodicTaskCount() == 6,
+                "Heart does not have the expected number of periodic tasks"
+            );
+
+            (address[] memory periodicTasks, ) = IPeriodicTaskManager(heart).getPeriodicTasks();
+            require(
+                periodicTasks[0] == cdFacility,
+                "ConvertibleDepositFacility is not the first periodic task"
+            );
+            require(
+                periodicTasks[1] == reserveMigrator,
+                "ReserveMigrator is not the second periodic task"
+            );
+            require(
+                periodicTasks[2] == reserveWrapper,
+                "ReserveWrapper is not the third periodic task"
+            );
+            require(periodicTasks[3] == operator, "Operator is not the fourth periodic task");
+            require(
+                periodicTasks[4] == yieldRepo,
+                "YieldRepurchaseFacility is not the fifth periodic task"
+            );
+            require(
+                periodicTasks[5] == emissionManager,
+                "EmissionManager is not the sixth periodic task"
+            );
+
+            require(IEnabler(heart).isEnabled() == true, "Heart is not enabled");
+        }
+
+        // Validate that all policies are active
+        {
+            address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
+            address cdFacility = addresses.getAddress(
+                "olympus-policy-convertible-deposit-facility-1_0"
+            );
+            address cdAuctioneer = addresses.getAddress(
+                "olympus-policy-convertible-deposit-auctioneer-1_0"
+            );
+            address depositRedemptionVault = addresses.getAddress(
+                "olympus-policy-deposit-redemption-vault-1_0"
+            );
+            address reserveWrapper = addresses.getAddress("olympus-policy-reserve-wrapper-1_0");
+            address heart = addresses.getAddress("olympus-policy-heart-1_7");
+            address emissionManager = addresses.getAddress("olympus-policy-emissionmanager-1_2");
+
+            require(
+                Policy(depositManager).isActive() == true,
+                "DepositManager policy is not active"
+            );
+            require(
+                Policy(cdFacility).isActive() == true,
+                "ConvertibleDepositFacility policy is not active"
+            );
+            require(
+                Policy(cdAuctioneer).isActive() == true,
+                "ConvertibleDepositAuctioneer policy is not active"
+            );
+            require(
+                Policy(depositRedemptionVault).isActive() == true,
+                "DepositRedemptionVault policy is not active"
+            );
+            require(
+                Policy(reserveWrapper).isActive() == true,
+                "ReserveWrapper policy is not active"
+            );
+            require(Policy(heart).isActive() == true, "Heart policy is not active");
+            require(
+                Policy(emissionManager).isActive() == true,
+                "EmissionManager policy is not active"
+            );
+        }
+
+        // ========== ACTIVATOR CLEANUP ========== //
+        {
+            address activator = addresses.getAddress(
+                "olympus-periphery-convertible-deposit-activator"
+            );
+
+            // Validate that the activator is marked as activated (and hence disabled)
+            require(
+                ConvertibleDepositActivator(activator).isActivated() == true,
+                "Activator is not marked as activated"
+            );
+
+            // Validate that the activator does not have the "admin" role
+            require(
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                roles.hasRole(activator, bytes32("admin")) == false,
+                "Activator should not have the admin role"
+            );
+        }
+    }
+}
+
+// solhint-disable-next-line contract-name-camelcase
+contract ConvertibleDepositProposalScript is ProposalScript {
+    constructor() ProposalScript(new ConvertibleDepositProposal()) {}
+}
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

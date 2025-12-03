@@ -3,7 +3,7 @@ pragma solidity >=0.8.15;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
-import {ADMIN_ROLE, EMERGENCY_ROLE} from "./RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE} from "./RoleDefinitions.sol";
 
 abstract contract PolicyAdmin is RolesConsumer {
     error NotAuthorised();
@@ -11,6 +11,12 @@ abstract contract PolicyAdmin is RolesConsumer {
     /// @notice Modifier that reverts if the caller does not have the emergency or admin role
     modifier onlyEmergencyOrAdminRole() {
         if (!_isEmergency(msg.sender) && !_isAdmin(msg.sender)) revert NotAuthorised();
+        _;
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the manager or admin role
+    modifier onlyManagerOrAdminRole() {
+        if (!_isManager(msg.sender) && !_isAdmin(msg.sender)) revert NotAuthorised();
         _;
     }
 
@@ -23,6 +29,12 @@ abstract contract PolicyAdmin is RolesConsumer {
     /// @notice Modifier that reverts if the caller does not have the emergency role
     modifier onlyEmergencyRole() {
         if (!_isEmergency(msg.sender)) revert ROLESv1.ROLES_RequireRole(EMERGENCY_ROLE);
+        _;
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the manager role
+    modifier onlyManagerRole() {
+        if (!_isManager(msg.sender)) revert ROLESv1.ROLES_RequireRole(MANAGER_ROLE);
         _;
     }
 
@@ -40,5 +52,13 @@ abstract contract PolicyAdmin is RolesConsumer {
     /// @return true if the account has the emergency role, false otherwise
     function _isEmergency(address account_) internal view returns (bool) {
         return ROLES.hasRole(account_, EMERGENCY_ROLE);
+    }
+
+    /// @notice Check if an account has the manager role
+    ///
+    /// @param  account_ The account to check
+    /// @return true if the account has the manager role, false otherwise
+    function _isManager(address account_) internal view returns (bool) {
+        return ROLES.hasRole(account_, MANAGER_ROLE);
     }
 }

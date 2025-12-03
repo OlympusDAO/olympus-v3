@@ -1,0 +1,13 @@
+{
+    "functions": [
+        {
+            "args": {
+                "latestAnswer": "6792253500000000",
+                "priceFeedName": "external.chainlink.ohmEthPriceFeed",
+                "roundId": "36893488147419104269",
+                "timestamp": "1762510377"
+            },
+            "name": "configurePriceFeed"
+        }
+    ]
+}

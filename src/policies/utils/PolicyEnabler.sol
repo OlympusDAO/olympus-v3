@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "./PolicyAdmin.sol";
 
 /// @title  PolicyEnabler
@@ -13,33 +14,31 @@ import {PolicyAdmin} from "./PolicyAdmin.sol";
 ///         The following are optional:
 ///         - Override the `_enable()` and `_disable()` functions if custom logic and/or parameters are needed for the enable/disable functions.
 ///           - For example, `enable()` could be called with initialisation data that is decoded, validated and assigned in `_enable()`.
-abstract contract PolicyEnabler is PolicyAdmin {
+abstract contract PolicyEnabler is IEnabler, PolicyAdmin {
     // ===== STATE VARIABLES ===== //
 
     /// @notice Whether the policy functionality is enabled
     bool public isEnabled;
 
-    // ===== ERRORS ===== //
-
-    error NotDisabled();
-    error NotEnabled();
-
-    // ===== EVENTS ===== //
-
-    event Disabled();
-    event Enabled();
-
     // ===== MODIFIERS ===== //
+
+    function _onlyEnabled() internal view {
+        if (!isEnabled) revert NotEnabled();
+    }
 
     /// @notice Modifier that reverts if the policy is not enabled
     modifier onlyEnabled() {
-        if (!isEnabled) revert NotEnabled();
+        _onlyEnabled();
         _;
+    }
+
+    function _onlyDisabled() internal view {
+        if (isEnabled) revert NotDisabled();
     }
 
     /// @notice Modifier that reverts if the policy is enabled
     modifier onlyDisabled() {
-        if (isEnabled) revert NotDisabled();
+        _onlyDisabled();
         _;
     }
 
@@ -108,4 +107,12 @@ abstract contract PolicyEnabler is PolicyAdmin {
     /// @param  disableData_ Custom data that can be used by the implementation. The format of this data is
     ///         left to the discretion of the implementation.
     function _disable(bytes calldata disableData_) internal virtual {}
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return
+            interfaceId == bytes4(0x01ffc9a7) || // ERC-165
+            interfaceId == type(IEnabler).interfaceId;
+    }
 }
