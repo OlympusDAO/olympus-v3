@@ -24,7 +24,7 @@ contract MockAuraBooster is IAuraBooster {
         pools.push(pool_);
     }
 
-    function deposit(uint256 pid_, uint256 amount_, bool stake_) external returns (bool) {
+    function deposit(uint256 pid_, uint256 amount_, bool) external returns (bool) {
         address pool = pools[pid_];
         address token = MockAuraRewardPool(pool).depositToken();
 
@@ -114,7 +114,7 @@ contract MockAuraRewardPool is IAuraRewardPool {
 contract MockAuraMiningLib is IAuraMiningLib {
     constructor() {}
 
-    function convertCrvToCvx(uint256 amount_) external view returns (uint256) {
+    function convertCrvToCvx(uint256 amount_) external pure returns (uint256) {
         return amount_;
     }
 }
@@ -160,7 +160,7 @@ contract MockAuraVirtualRewardPool is IRewards {
         return _rewardToken;
     }
 
-    function rewardRate() external view override returns (uint256) {
+    function rewardRate() external pure override returns (uint256) {
         return 1e18;
     }
 }

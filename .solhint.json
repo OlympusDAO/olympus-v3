@@ -8,7 +8,7 @@
         "func-visibility": ["warn", {"ignoreConstructors": true}],
         "no-console": "off",
         "no-empty-blocks": "off",
-        "no-global-import": "off",
+        "no-global-import": "warn",
         "no-inline-assembly": "off",
         "not-rely-on-time": "off",
         "quotes": ["warn", "double"],

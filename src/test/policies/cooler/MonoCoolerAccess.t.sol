@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {MonoCoolerBaseTest} from "./MonoCoolerBase.t.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 contract MonoCoolerAccessTest is MonoCoolerBaseTest {

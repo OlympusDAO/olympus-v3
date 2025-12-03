@@ -1,0 +1,11 @@
+{
+    "functions": [
+        {
+            "args": {
+                "maxCapacity": 500000000000000000000000,
+                "minDeposit": 100000000000000000000
+            },
+            "name": "ConfigureUSDS"
+        }
+    ]
+}

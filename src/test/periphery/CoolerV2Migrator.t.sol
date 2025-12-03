@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {MonoCoolerBaseTest} from "../policies/cooler/MonoCoolerBase.t.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 import {Clearinghouse} from "src/policies/Clearinghouse.sol";
 import {Cooler} from "src/external/cooler/Cooler.sol";
@@ -23,6 +22,7 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // solhint-disable max-states-count
 contract CoolerV2MigratorTest is MonoCoolerBaseTest {
@@ -473,7 +473,7 @@ contract CoolerV2MigratorTest is MonoCoolerBaseTest {
     // ========= ASSERTIONS ========= //
 
     function _expectRevert_disabled() internal {
-        vm.expectRevert(abi.encodeWithSelector(PolicyEnabler.NotEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
     function _assertTokenBalances(

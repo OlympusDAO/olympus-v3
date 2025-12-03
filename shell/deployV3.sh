@@ -4,9 +4,9 @@
 #
 # Usage:
 # ./deployV3.sh
-#   --account <cast wallet>
+#   --account <cast wallet> OR --ledger <mnemonic-index>
 #   --sequence <sequence-file>
-#   --chain <chain-name>
+#   --chain <chain-name> (e.g. mainnet, base, or provide a custom RPC URL)
 #   [--broadcast <false>]
 #   [--verify <false>]
 #   [--resume <false>]
@@ -36,7 +36,6 @@ RESUME=${resume:-false}
 echo ""
 echo "Validating arguments"
 validate_text "$sequence" "No deployment sequence specified or it does not exist. Provide the relative path after the --sequence flag."
-validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
 validate_text "$chain" "No chain specified. Specify the chain after the --chain flag."
 
 # Validate environment variables
@@ -45,7 +44,6 @@ echo "Validating environment variables"
 
 echo ""
 echo "Summary:"
-echo "  Deploying from account: $account"
 echo "  Deployment sequence: $sequence"
 echo "  Chain: $chain"
 
@@ -54,15 +52,18 @@ source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
 set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
 set_resume_flag $RESUME
-set_account_address $account
+validate_and_set_account "$account" "$ledger"
 
 # Deploy using script
 echo ""
 echo "Running forge script"
+echo "NOTE: If verification of any contract fails during deployment, you can verify them"
+echo "      individually using: ./shell/verify_etherscan.sh --address <address> --metadata <metadata-file>"
 FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3 \
     --sig "deploy(string)()" $sequence \
     --rpc-url $chain \
-    --account $account \
+    $ACCOUNT_FLAG \
+    $LEDGER_FLAGS \
     --slow \
     -vvv \
     --sender $ACCOUNT_ADDRESS \

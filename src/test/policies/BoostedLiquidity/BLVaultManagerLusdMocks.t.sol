@@ -674,7 +674,7 @@ contract BLVaultManagerLusdTest is Test {
     /// [X]  getRewardTokens
     ///     [X]  returns correct reward token array
 
-    function testCorrectness_getRewardTokens() public {
+    function testCorrectness_getRewardTokens() public view {
         address[] memory tokens = vaultManager.getRewardTokens();
 
         assertEq(tokens.length, 2);
@@ -705,13 +705,13 @@ contract BLVaultManagerLusdTest is Test {
     ///     [X]  returns correct reward rate for extra rewards
     ///     [X]  returns 0 reward rate for other tokens
 
-    function testCorrectness_getRewardRate_bal() public {
+    function testCorrectness_getRewardRate_bal() public view {
         uint256 rate = vaultManager.getRewardRate(address(bal));
 
         assertEq(rate, 1e18);
     }
 
-    function testCorrectness_getRewardRate_aura() public {
+    function testCorrectness_getRewardRate_aura() public view {
         uint256 rate = vaultManager.getRewardRate(address(aura));
 
         // Same as the BAL rate, due to the implementation of MockAuraMiningLib
@@ -733,7 +733,7 @@ contract BLVaultManagerLusdTest is Test {
         assertEq(rate, 1e18);
     }
 
-    function testCorrectness_getRewardRate_otherToken() public {
+    function testCorrectness_getRewardRate_otherToken() public view {
         uint256 rate = vaultManager.getRewardRate(address(lusd));
 
         assertEq(rate, 0);
@@ -1034,7 +1034,7 @@ contract BLVaultManagerLusdTest is Test {
 
         // Check state after
         (, uint48 ohmEthUpdateThreshold) = vaultManager.ohmEthPriceFeed();
-        (, uint48 ethUsdUpdateThreshold) = vaultManager.ethUsdPriceFeed();
+        // (, uint48 ethUsdUpdateThreshold) = vaultManager.ethUsdPriceFeed();
         (, uint48 lusdUsdUpdateThreshold) = vaultManager.lusdUsdPriceFeed();
 
         assertEq(ohmEthUpdateThreshold, ohmPriceThreshold_);
