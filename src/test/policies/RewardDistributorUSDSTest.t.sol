@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {USDSRewardDistributor} from "policies/USDSRewardDistributor.sol";
+import {RewardDistributorUSDS} from "policies/RewardDistributorUSDS.sol";
 import {IRewardDistributor} from "policies/interfaces/IRewardDistributor.sol";
 import {Kernel, toKeycode, Actions} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -14,10 +14,10 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-contract USDSRewardDistributorTest is Test {
+contract RewardDistributorUSDSTest is Test {
     MockERC20 internal usds;
     MockERC4626 internal sUSDS;
-    USDSRewardDistributor internal distributor;
+    RewardDistributorUSDS internal distributor;
     Kernel internal kernel;
     OlympusTreasury internal trsry;
     OlympusRoles internal roles;
@@ -51,7 +51,7 @@ contract USDSRewardDistributorTest is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy distributor
-        distributor = new USDSRewardDistributor(address(kernel), address(sUSDS), startTimestamp);
+        distributor = new RewardDistributorUSDS(address(kernel), address(sUSDS), startTimestamp);
 
         // Activate Policy (this configures dependencies)
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
@@ -114,18 +114,18 @@ contract USDSRewardDistributorTest is Test {
 
     function test_constructor_rejects_zero_reward_token_vault() public {
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
-        new USDSRewardDistributor(address(kernel), address(0), startTimestamp);
+        new RewardDistributorUSDS(address(kernel), address(0), startTimestamp);
     }
 
     function test_constructor_rejects_zero_start_timestamp() public {
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochIsZero.selector);
-        new USDSRewardDistributor(address(kernel), address(sUSDS), 0);
+        new RewardDistributorUSDS(address(kernel), address(sUSDS), 0);
     }
 
     function test_constructor_rejects_epoch_not_start_of_day() public {
         uint256 notStartOfDay = startTimestamp + 12 hours; // Not at midnight
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochNotStartOfDay.selector);
-        new USDSRewardDistributor(address(kernel), address(sUSDS), notStartOfDay);
+        new RewardDistributorUSDS(address(kernel), address(sUSDS), notStartOfDay);
     }
 
     // ========== Test Merkle Root Management ========== //
@@ -339,7 +339,7 @@ contract USDSRewardDistributorTest is Test {
         assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
     }
 
-    function test_claim_skips_already_claimed() public {
+    function test_claim_reverts_when_already_claimed() public {
         uint256 amount = 100e18;
         uint40 epochStartDate = startTimestamp;
         bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
@@ -368,14 +368,9 @@ contract USDSRewardDistributorTest is Test {
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
-        // Record balance before second claim attempt
-        uint256 balanceBefore = usds.balanceOf(alice);
-
-        // Second claim should skip already-claimed epoch without reverting
+        // Second claim should revert since there's nothing to claim
+        vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
-
-        // Verify no additional tokens were transferred
-        assertEq(usds.balanceOf(alice), balanceBefore);
         vm.stopPrank();
     }
 
@@ -550,7 +545,7 @@ contract USDSRewardDistributorTest is Test {
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
     }
 
-    function test_claim_zero_rewards_succeeds() public {
+    function test_claim_zero_rewards_reverts() public {
         uint256 amount = 0; // Zero rewards
         uint40 epochStartDate = startTimestamp;
 
@@ -570,13 +565,10 @@ contract USDSRewardDistributorTest is Test {
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = proof;
 
-        // Claim should succeed even with 0 rewards
+        // Claim should revert with 0 rewards
         vm.prank(alice);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
         distributor.claim(claimEpochStartDates, amounts, proofs, false);
-
-        // Verify
-        assertEq(usds.balanceOf(alice), 0);
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
     }
 
     // ========== Fuzz Tests for Yield Accrual ========== //

@@ -14,7 +14,7 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {USDSRewardDistributor} from "src/policies/USDSRewardDistributor.sol";
+import {RewardDistributorUSDS} from "src/policies/RewardDistributorUSDS.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @notice Proposal to activate the USDSRewardDistributor
@@ -121,8 +121,8 @@ contract USDSRewardDistributorProposal is GovernorBravoProposal {
 
         // Validate policy is enabled
         require(
-            USDSRewardDistributor(usdsRewardDistributor).isEnabled(),
-            "USDSRewardDistributor is not enabled"
+            RewardDistributorUSDS(usdsRewardDistributor).isEnabled(),
+            "RewardDistributorUSDS is not enabled"
         );
     }
 }

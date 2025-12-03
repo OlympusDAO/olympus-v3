@@ -27,7 +27,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
-import {USDSRewardDistributor} from "src/policies/USDSRewardDistributor.sol";
+import {RewardDistributorUSDS} from "src/policies/RewardDistributorUSDS.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
@@ -788,7 +788,7 @@ contract DeployV3 is WithEnvironment {
 
         // Deploy
         vm.broadcast();
-        USDSRewardDistributor distributor = new USDSRewardDistributor(
+        RewardDistributorUSDS distributor = new RewardDistributorUSDS(
             kernel,
             rewardTokenVault,
             startTimestamp

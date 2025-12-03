@@ -95,16 +95,18 @@ interface IRewardDistributor is IERC165 {
 
     /// @notice Claim rewards for specified epochs
     ///
-    /// @param  epochStartDates_ The list of epoch start dates being claimed for
-    /// @param  amounts_        The claimable amounts corresponding to the epochs
-    /// @param  proofs_         Merkle proofs corresponding to each epoch
-    /// @param  asVaultToken_   Whether to receive rewards as vault token or as the underlying
+    /// @param  epochStartDates_    The list of epoch start dates being claimed for
+    /// @param  amounts_            The claimable amounts corresponding to the epochs
+    /// @param  proofs_             Merkle proofs corresponding to each epoch
+    /// @param  asVaultToken_       Whether to receive rewards as vault token or as the underlying
+    /// @return rewardToken         The address of the token transferred (vault token if asVaultToken_, otherwise underlying)
+    /// @return tokensTransferred   The amount of tokens transferred (vault shares if asVaultToken_, otherwise underlying)
     function claim(
         uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_,
         bool asVaultToken_
-    ) external;
+    ) external returns (address rewardToken, uint256 tokensTransferred);
 
     // ========== VIEW FUNCTIONS ========== //
 

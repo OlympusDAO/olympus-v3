@@ -13,7 +13,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 /// @title  USDS Reward Distributor
 /// @notice Merkle tree-based distribution contract for USDS rewards
-contract USDSRewardDistributor is BaseRewardDistributor {
+contract RewardDistributorUSDS is BaseRewardDistributor {
     using TransferHelper for ERC20;
 
     // ========== CONSTRUCTOR ========== //
@@ -41,18 +41,20 @@ contract USDSRewardDistributor is BaseRewardDistributor {
     ///         This function will revert if:
     ///         - The amount is zero (handled by early return)
     ///
-    /// @param  to_             Address to transfer rewards to
-    /// @param  amount_         Amount of USDS to transfer (or equivalent sUSDS)
-    /// @param  epochCount_     Number of epochs being claimed (for event)
-    /// @param  asVaultToken_   If true, transfer as sUSDS; if false, unwrap to USDS
+    /// @param  to_                 Address to transfer rewards to
+    /// @param  amount_             Amount of USDS to transfer (or equivalent sUSDS)
+    /// @param  epochCount_         Number of epochs being claimed (for event)
+    /// @param  asVaultToken_       If true, transfer as sUSDS; if false, unwrap to USDS
+    /// @return rewardToken         The address of the token transferred (sUSDS if `asVaultToken_`, otherwise USDS)
+    /// @return tokensTransferred   The amount of tokens transferred (sUSDS shares if `asVaultToken_`, otherwise USDS)
     function _transferRewards(
         address to_,
         uint256 amount_,
         uint256 epochCount_,
         bool asVaultToken_
-    ) internal override {
+    ) internal override returns (address rewardToken, uint256 tokensTransferred) {
         // Early return if no amount to transfer
-        if (amount_ == 0) return;
+        if (amount_ == 0) return (address(0), 0);
 
         IERC4626 vault = IERC4626(address(REWARD_TOKEN_VAULT));
 
@@ -72,6 +74,9 @@ contract USDSRewardDistributor is BaseRewardDistributor {
                 address(REWARD_TOKEN_VAULT),
                 epochCount_
             );
+
+            rewardToken = address(REWARD_TOKEN_VAULT);
+            tokensTransferred = vaultShares;
         } else {
             // Calculate how much vault shares is needed to withdraw the exact USDS amount
             uint256 sharesNeeded = vault.previewWithdraw(amount_);
@@ -92,6 +97,9 @@ contract USDSRewardDistributor is BaseRewardDistributor {
 
             // Emit rewards claimed event with epoch count
             emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), epochCount_);
+
+            rewardToken = address(REWARD_TOKEN);
+            tokensTransferred = amount_;
         }
     }
 }

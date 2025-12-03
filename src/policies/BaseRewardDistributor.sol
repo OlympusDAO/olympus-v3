@@ -221,19 +221,26 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @param  amounts_            Array of amounts for each epoch (must match Merkle leaves)
     /// @param  proofs_             Array of Merkle proofs, one per epoch
     /// @param  asVaultToken_       If true, claim as vault token; if false, unwrap to underlying token
+    /// @return rewardToken         The address of the token transferred (vault token if `asVaultToken_`, otherwise underlying)
+    /// @return tokensTransferred   The amount of tokens transferred (vault shares if `asVaultToken_`, otherwise underlying)
     function claim(
         uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_,
         bool asVaultToken_
-    ) external virtual onlyEnabled {
+    ) external virtual onlyEnabled returns (address rewardToken, uint256 tokensTransferred) {
         _validateClaimArrays(epochStartDates_, amounts_, proofs_);
 
         uint256 totalAmount = _processClaims(msg.sender, epochStartDates_, amounts_, proofs_);
 
         if (totalAmount == 0) revert RewardDistributor_NothingToClaim();
 
-        _transferRewards(msg.sender, totalAmount, epochStartDates_.length, asVaultToken_);
+        (rewardToken, tokensTransferred) = _transferRewards(
+            msg.sender,
+            totalAmount,
+            epochStartDates_.length,
+            asVaultToken_
+        );
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -373,16 +380,18 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Internal function to transfer rewards from treasury
     /// @dev    Must be implemented by derived contracts
     ///
-    /// @param  to_             Address to transfer rewards to
-    /// @param  amount_         Amount to transfer
-    /// @param  epochCount_     Number of epochs being claimed (for event)
-    /// @param  asVaultToken_   If true, transfer as vault token; if false, unwrap first
+    /// @param  to_                 Address to transfer rewards to
+    /// @param  amount_             Amount to transfer
+    /// @param  epochCount_         Number of epochs being claimed (for event)
+    /// @param  asVaultToken_       If true, transfer as vault token; if false, unwrap first
+    /// @return rewardToken         The address of the token transferred (vault token if `asVaultToken_`, otherwise underlying)
+    /// @return tokensTransferred   The amount of tokens transferred (vault shares if `asVaultToken_`, otherwise underlying)
     function _transferRewards(
         address to_,
         uint256 amount_,
         uint256 epochCount_,
         bool asVaultToken_
-    ) internal virtual;
+    ) internal virtual returns (address rewardToken, uint256 tokensTransferred);
 
     /// @notice Emit Merkle root set event
     ///
