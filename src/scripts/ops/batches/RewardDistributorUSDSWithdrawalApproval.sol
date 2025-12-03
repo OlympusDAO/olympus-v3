@@ -10,7 +10,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 /// @notice Grants withdrawal approval to USDSRewardDistributor for sUSDS
 /// @dev    This script grants the USDSRewardDistributor policy permission to withdraw
 ///         sUSDS from the Treasury via TreasuryCustodian to distribute as rewards
-contract USDSRewardDistributorWithdrawalApproval is BatchScriptV2 {
+contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
     // Initial withdrawal approval
     uint256 internal constant INITIAL_WITHDRAWAL_APPROVAL = 10_000e18; // 10k sUSDS
 

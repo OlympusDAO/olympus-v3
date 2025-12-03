@@ -18,7 +18,7 @@ import {RewardDistributorUSDS} from "src/policies/RewardDistributorUSDS.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @notice Proposal to activate the USDSRewardDistributor
-contract USDSRewardDistributorProposal is GovernorBravoProposal {
+contract RewardDistributorProposalUSDS is GovernorBravoProposal {
     Kernel internal _kernel;
 
     function id() public pure override returns (uint256) {
@@ -128,5 +128,5 @@ contract USDSRewardDistributorProposal is GovernorBravoProposal {
 }
 
 contract USDSRewardDistributorProposalScript is ProposalScript {
-    constructor() ProposalScript(new USDSRewardDistributorProposal()) {}
+    constructor() ProposalScript(new RewardDistributorProposalUSDS()) {}
 }
