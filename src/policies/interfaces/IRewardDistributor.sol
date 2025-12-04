@@ -8,10 +8,11 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 interface IRewardDistributor is IERC165 {
     // ========== EVENTS ========== //
 
-    /// @notice Emitted when a new Merkle root is set for an epoch
+    /// @notice Emitted when a Merkle root is set for a completed epoch
+    /// @dev    The `epochStartDate` is the START of the epoch whose rewards are being finalized
     ///
-    /// @param  epochStartDate  The epoch start date for which the Merkle root is set
-    /// @param  merkleRoot      The Merkle root for that epoch's distribution
+    /// @param  epochStartDate  The start of the completed epoch
+    /// @param  merkleRoot      The Merkle root containing accumulated rewards for that epoch
     /// @param  rewardToken     The address of the reward token
     event MerkleRootSet(uint256 indexed epochStartDate, bytes32 merkleRoot, address rewardToken);
 
