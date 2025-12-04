@@ -1108,9 +1108,21 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_supportsInterface() public {
-        assertEq(priceConfig.supportsInterface(type(IERC165).interfaceId), true, "IERC165 mismatch");
-        assertEq(priceConfig.supportsInterface(type(IPriceConfigv2).interfaceId), true, "IPriceConfigv2 mismatch");
-        assertEq(priceConfig.supportsInterface(type(IEnabler).interfaceId), true, "IEnabler mismatch");
+        assertEq(
+            priceConfig.supportsInterface(type(IERC165).interfaceId),
+            true,
+            "IERC165 mismatch"
+        );
+        assertEq(
+            priceConfig.supportsInterface(type(IPriceConfigv2).interfaceId),
+            true,
+            "IPriceConfigv2 mismatch"
+        );
+        assertEq(
+            priceConfig.supportsInterface(type(IEnabler).interfaceId),
+            true,
+            "IEnabler mismatch"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function,unwrapped-modifier-logic)
