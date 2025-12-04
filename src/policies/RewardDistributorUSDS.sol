@@ -43,14 +43,14 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
     ///
     /// @param  to_                 Address to transfer rewards to
     /// @param  amount_             Amount of USDS to transfer (or equivalent sUSDS)
-    /// @param  epochCount_         Number of epochs being claimed (for event)
+    /// @param  epochStartDates_    Array of epoch start dates that were claimed (for event)
     /// @param  asVaultToken_       If true, transfer as sUSDS; if false, unwrap to USDS
     /// @return rewardToken         The address of the token transferred (sUSDS if `asVaultToken_`, otherwise USDS)
     /// @return tokensTransferred   The amount of tokens transferred (sUSDS shares if `asVaultToken_`, otherwise USDS)
     function _transferRewards(
         address to_,
         uint256 amount_,
-        uint256 epochCount_,
+        uint256[] memory epochStartDates_,
         bool asVaultToken_
     ) internal override returns (address rewardToken, uint256 tokensTransferred) {
         // Early return if no amount to transfer
@@ -63,6 +63,7 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
             uint256 vaultShares = vault.convertToShares(amount_);
 
             // Withdraw sUSDS from treasury and transfer directly to user
+            // Note: Requires treasury withdrawal approval for sUSDS to be in place.
             TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), vaultShares);
             ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(to_, vaultShares);
 
@@ -72,7 +73,7 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
                 amount_,
                 vaultShares,
                 address(REWARD_TOKEN_VAULT),
-                epochCount_
+                epochStartDates_
             );
 
             rewardToken = address(REWARD_TOKEN_VAULT);
@@ -82,6 +83,7 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
             uint256 sharesNeeded = vault.previewWithdraw(amount_);
 
             // Withdraw sUSDS from treasury
+            // Note: Requires treasury withdrawal approval for sUSDS to be in place.
             TRSRY.withdrawReserves(address(this), ERC20(address(REWARD_TOKEN_VAULT)), sharesNeeded);
 
             // Withdraw USDS from the vault and transfer to user
@@ -95,8 +97,8 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
                 ERC20(address(REWARD_TOKEN_VAULT)).safeTransfer(address(TRSRY), leftoverShares);
             }
 
-            // Emit rewards claimed event with epoch count
-            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), epochCount_);
+            // Emit rewards claimed event
+            emit RewardsClaimed(to_, amount_, address(REWARD_TOKEN), epochStartDates_);
 
             rewardToken = address(REWARD_TOKEN);
             tokensTransferred = amount_;

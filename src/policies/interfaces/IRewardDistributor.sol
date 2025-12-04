@@ -20,12 +20,12 @@ interface IRewardDistributor is IERC165 {
     /// @param  user            The address of the user claiming rewards
     /// @param  totalAmount     The total amount of rewards claimed
     /// @param  rewardToken     The address of the reward token
-    /// @param  epochCount      The number of epochs claimed for
+    /// @param  epochStartDates The epoch start dates claimed for
     event RewardsClaimed(
         address indexed user,
         uint256 totalAmount,
         address rewardToken,
-        uint256 epochCount
+        uint256[] epochStartDates
     );
 
     /// @notice Emitted when rewards are claimed as vault tokens
@@ -34,13 +34,13 @@ interface IRewardDistributor is IERC165 {
     /// @param  rewardAmount    The total amount of underlying rewards
     /// @param  vaultShares     The amount of vault shares issued to the user
     /// @param  vaultToken      The address of the vault token
-    /// @param  epochCount      The number of epochs claimed for
+    /// @param  epochStartDates The epoch start dates claimed for
     event RewardsClaimedAsVaultToken(
         address indexed user,
         uint256 rewardAmount,
         uint256 vaultShares,
         address vaultToken,
-        uint256 epochCount
+        uint256[] epochStartDates
     );
 
     // ========== ERRORS ========== //
@@ -85,11 +85,10 @@ interface IRewardDistributor is IERC165 {
     ///
     /// @param  epochStartDate_ The epoch start date to set the Merkle root for
     /// @param  merkleRoot_     The Merkle root to be set
-    /// @return epochStartDate  The epoch start date at which the root was set
     function setMerkleRoot(
         uint40 epochStartDate_,
         bytes32 merkleRoot_
-    ) external returns (uint256 epochStartDate);
+    ) external;
 
     // ========== USER FUNCTIONS ========== //
 

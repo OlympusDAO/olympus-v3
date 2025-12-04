@@ -76,6 +76,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
         // Note: epochStartDate_ is truncated to uint40. Max uint40 is ~year 36812.
         EPOCH_START_DATE = uint40(epochStartDate_);
+        lastEpochStartDate = EPOCH_START_DATE - 1 days;
         // Disabled by default by PolicyEnabler
     }
 
@@ -125,7 +126,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ///
     /// @param  epochStartDate_ The epoch start date (timestamp) being set
     /// @param  merkleRoot_     The Merkle root for the epoch's distribution
-    /// @return epochStartDate  The epoch start date that was set
     function setMerkleRoot(
         uint40 epochStartDate_,
         bytes32 merkleRoot_
@@ -134,7 +134,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         virtual
         onlyAuthorized(ROLE_MERKLE_UPDATER)
         onlyEnabled
-        returns (uint256 epochStartDate)
     {
         // Validate input
         if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidProof();
@@ -151,7 +150,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
 
         // Validate epochStartDate is at least 1 day after lastEpochStartDate
-        if (lastEpochStartDate != 0 && epochStartDate_ < lastEpochStartDate + 1 days) {
+        if (epochStartDate_ < lastEpochStartDate + 1 days) {
             revert RewardDistributor_EpochTooEarly();
         }
 
@@ -160,8 +159,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
         // Update lastEpochStartDate
         lastEpochStartDate = epochStartDate_;
-
-        epochStartDate = epochStartDate_;
 
         _emitMerkleRootSet(epochStartDate_, merkleRoot_);
     }
@@ -231,14 +228,19 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ) external virtual onlyEnabled returns (address rewardToken, uint256 tokensTransferred) {
         _validateClaimArrays(epochStartDates_, amounts_, proofs_);
 
-        uint256 totalAmount = _processClaims(msg.sender, epochStartDates_, amounts_, proofs_);
+        (uint256 totalAmount, uint256[] memory claimedEpochStartDates) = _processClaims(
+            msg.sender,
+            epochStartDates_,
+            amounts_,
+            proofs_
+        );
 
         if (totalAmount == 0) revert RewardDistributor_NothingToClaim();
 
         (rewardToken, tokensTransferred) = _transferRewards(
             msg.sender,
             totalAmount,
-            epochStartDates_.length,
+            claimedEpochStartDates,
             asVaultToken_
         );
     }
@@ -270,19 +272,24 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
     }
 
-    /// @notice Process claims and return total amount
+    /// @notice Process claims and return total amount and claimed epoch start dates
     ///
-    /// @param  user_               The user address claiming rewards
-    /// @param  epochStartDates_    Array of epoch start dates to claim
-    /// @param  amounts_            Array of amounts for each epoch
-    /// @param  proofs_             Array of Merkle proofs, one per epoch
-    /// @return totalAmount         The total amount claimed across all epochs
+    /// @param  user_                   The user address claiming rewards
+    /// @param  epochStartDates_        Array of epoch start dates to claim
+    /// @param  amounts_                Array of amounts for each epoch
+    /// @param  proofs_                 Array of Merkle proofs, one per epoch
+    /// @return totalAmount             The total amount claimed across all epochs
+    /// @return claimedEpochStartDates  Array of epoch start dates that were actually claimed
     function _processClaims(
         address user_,
         uint256[] calldata epochStartDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
-    ) internal returns (uint256 totalAmount) {
+    ) internal returns (uint256 totalAmount, uint256[] memory claimedEpochStartDates) {
+        // Allocate max possible size, will trim later
+        uint256[] memory tempClaimedDates = new uint256[](epochStartDates_.length);
+        uint256 claimedCount = 0;
+
         for (uint256 i = 0; i < epochStartDates_.length; ) {
             uint256 epochStartDate = epochStartDates_[i];
             uint256 amount = amounts_[i];
@@ -303,9 +310,18 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
             _verifyAndMarkClaimed(user_, epochStartDate, amount, proofs_[i]);
 
             totalAmount += amount;
-
+            tempClaimedDates[claimedCount] = epochStartDate;
             unchecked {
+                ++claimedCount;
                 ++i;
+            }
+        }
+
+        claimedEpochStartDates = new uint256[](claimedCount);
+        for (uint256 j = 0; j < claimedCount; ) {
+            claimedEpochStartDates[j] = tempClaimedDates[j];
+            unchecked {
+                ++j;
             }
         }
     }
@@ -382,14 +398,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ///
     /// @param  to_                 Address to transfer rewards to
     /// @param  amount_             Amount to transfer
-    /// @param  epochCount_         Number of epochs being claimed (for event)
+    /// @param  epochStartDates_    Array of epoch start dates that were claimed (for event)
     /// @param  asVaultToken_       If true, transfer as vault token; if false, unwrap first
     /// @return rewardToken         The address of the token transferred (vault token if `asVaultToken_`, otherwise underlying)
     /// @return tokensTransferred   The amount of tokens transferred (vault shares if `asVaultToken_`, otherwise underlying)
     function _transferRewards(
         address to_,
         uint256 amount_,
-        uint256 epochCount_,
+        uint256[] memory epochStartDates_,
         bool asVaultToken_
     ) internal virtual returns (address rewardToken, uint256 tokensTransferred);
 
