@@ -6,7 +6,15 @@ The Olympus protocol currently relies on two price feeds, Chainlink OHM-ETH and 
 
 ## Objective
 
-Replace the existing PRICE v1 module with a backwards-compatible PRICE v2 module that can support multiple price feeds per asset, and strategies to resolve the price from the multiple price feeds. This will increase resilience in adverse conditions.
+Re-configure price resolution in the protocol to utilise multiple price feeds when determining the price feed of OHM.
+
+## Implementation
+
+- Replace the existing PRICE v1 module with the PRICE v2 module
+    - The PRICE v2 module was audited twice as part of the larger RBS v2 project in 2023.
+    - Only the PRICE v2 module (and its submodules) would be included in this rollout. The TRSRY v1.1 upgrade, SPPLY module and Appraiser policy (which calculates metrics, similar to the subgraph) are not included.
+    - The Operator, YieldRepurchaseFacility and EmissionManager policies rely on the PRICE v1 module interface in order to determine the price of OHM. The v2 module will maintain backwards-compatibility with the v1 interface, so that existing policies do not need to be updated.
+- The upgrade will allow assets to be configured with multiple price feeds, and strategies to resolve the price from the multiple price feeds. This will increase resilience in adverse conditions.
 
 ## Assets
 
