@@ -23,7 +23,7 @@ contract RewardDistributorUSDSTest is Test {
     OlympusRoles internal roles;
 
     uint40 internal constant EPOCH_DURATION = 7 days;
-    uint40 internal startTimestamp;
+    uint40 internal startTimestamp; // Midnight UTC (00:00:00)
 
     address internal alice = address(0x1);
     address internal bob = address(0x2);
@@ -50,7 +50,7 @@ contract RewardDistributorUSDSTest is Test {
         kernel.executeAction(Actions.InstallModule, address(trsry));
         kernel.executeAction(Actions.InstallModule, address(roles));
 
-        // Deploy distributor
+        // Deploy distributor with startTimestamp (midnight UTC)
         distributor = new RewardDistributorUSDS(address(kernel), address(sUSDS), startTimestamp);
 
         // Activate Policy (this configures dependencies)
@@ -98,10 +98,15 @@ contract RewardDistributorUSDSTest is Test {
 
     function _generateLeaf(
         address user,
-        uint256 epochStartDate,
+        uint256 epochEndDate,
         uint256 amount
     ) internal pure returns (bytes32) {
-        return keccak256(bytes.concat(keccak256(abi.encode(user, epochStartDate, amount))));
+        return keccak256(bytes.concat(keccak256(abi.encode(user, epochEndDate, amount))));
+    }
+
+    /// @notice Helper to get the first epoch end date (23:59:59 UTC of start day)
+    function _firstEpochEndDate() internal view returns (uint40) {
+        return startTimestamp + 1 days - 1;
     }
 
     // ========== Test Constructor and State Variables ========== //
@@ -124,111 +129,162 @@ contract RewardDistributorUSDSTest is Test {
 
     function test_constructor_rejects_epoch_not_start_of_day() public {
         uint256 notStartOfDay = startTimestamp + 12 hours; // Not at midnight
-        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochNotStartOfDay.selector);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
         new RewardDistributorUSDS(address(kernel), address(sUSDS), notStartOfDay);
     }
 
     // ========== Test Merkle Root Management ========== //
 
-    function test_setMerkleRoot_success() public {
-        uint40 epochStartDate = startTimestamp; // First epoch at start timestamp
+    function test_endEpoch_success() public {
+        uint40 epochEndDate = _firstEpochEndDate(); // 23:59:59 UTC of first day
 
         bytes32 root = bytes32(uint256(1));
 
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, root);
+        distributor.endEpoch(epochEndDate, root);
 
-        assertEq(distributor.epochMerkleRoots(epochStartDate), root);
-        assertEq(distributor.lastEpochStartDate(), epochStartDate);
+        assertEq(distributor.epochMerkleRoots(epochEndDate), root);
+        assertEq(distributor.lastEpochEndDate(), epochEndDate);
     }
 
-    function testFuzz_setMerkleRoot_reverts_unauthorized(address caller) public {
+    function testFuzz_endEpoch_success_any_valid_epoch(uint8 n) public {
+        // Bound n to reasonable range (1 to 100 epochs)
+        vm.assume(n >= 1 && n <= 100);
+
+        // Calculate valid epoch end date: startTimestamp + n * 1 days - 1
+        // This gives us 23:59:59 UTC of day n
+        uint40 epochEndDate = startTimestamp + uint40(n) * 1 days - 1;
+
+        bytes32 root = bytes32(uint256(n));
+
+        vm.prank(admin);
+        distributor.endEpoch(epochEndDate, root);
+
+        assertEq(distributor.epochMerkleRoots(epochEndDate), root);
+        assertEq(distributor.lastEpochEndDate(), epochEndDate);
+    }
+
+    function test_endEpoch_multiple_epochs_sequential() public {
+        uint40 epoch1EndDate = _firstEpochEndDate();
+        uint40 epoch2EndDate = epoch1EndDate + 1 days;
+        uint40 epoch3EndDate = epoch2EndDate + 1 days;
+
+        bytes32 root1 = bytes32(uint256(1));
+        bytes32 root2 = bytes32(uint256(2));
+        bytes32 root3 = bytes32(uint256(3));
+
+        vm.startPrank(admin);
+
+        // End epoch 1
+        distributor.endEpoch(epoch1EndDate, root1);
+        assertEq(distributor.epochMerkleRoots(epoch1EndDate), root1);
+        assertEq(distributor.lastEpochEndDate(), epoch1EndDate);
+
+        // End epoch 2
+        distributor.endEpoch(epoch2EndDate, root2);
+        assertEq(distributor.epochMerkleRoots(epoch2EndDate), root2);
+        assertEq(distributor.lastEpochEndDate(), epoch2EndDate);
+
+        // End epoch 3
+        distributor.endEpoch(epoch3EndDate, root3);
+        assertEq(distributor.epochMerkleRoots(epoch3EndDate), root3);
+        assertEq(distributor.lastEpochEndDate(), epoch3EndDate);
+
+        vm.stopPrank();
+
+        // Verify all roots are still set correctly
+        assertEq(distributor.epochMerkleRoots(epoch1EndDate), root1);
+        assertEq(distributor.epochMerkleRoots(epoch2EndDate), root2);
+        assertEq(distributor.epochMerkleRoots(epoch3EndDate), root3);
+    }
+
+    function testFuzz_endEpoch_reverts_unauthorized(address caller) public {
         // Skip if caller has the merkle updater role
         vm.assume(caller != admin);
 
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         vm.prank(caller);
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
         );
-        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
     }
 
-    function testFuzz_setMerkleRoot_reverts_too_early(uint40 secondEpochStartDate) public {
-        uint40 firstEpochStartDate = startTimestamp;
+    function testFuzz_endEpoch_reverts_too_early(uint40 secondEpochEndDate) public {
+        uint40 firstEpochEndDate = _firstEpochEndDate();
 
         // Bound the fuzzed input to be:
-        // - At least 1 day (non-zero and reasonable)
-        // - Less than firstEpochStartDate + 1 days (to trigger the revert)
-        vm.assume(secondEpochStartDate > 0);
-        vm.assume(secondEpochStartDate < firstEpochStartDate + 1 days);
+        // - At least 1 second (non-zero and reasonable)
+        // - Less than firstEpochEndDate + 1 days (to trigger the revert)
+        vm.assume(secondEpochEndDate > 0);
+        vm.assume(secondEpochEndDate < firstEpochEndDate + 1 days);
 
-        // Align to start of day (midnight UTC) to avoid EpochNotStartOfDay error
-        secondEpochStartDate = uint40((secondEpochStartDate / 1 days) * 1 days);
+        // Align to end of day (23:59:59 UTC) to avoid InvalidEpochTimestamp error
+        secondEpochEndDate = uint40((secondEpochEndDate / 1 days) * 1 days + 1 days - 1);
 
-        // Skip if the aligned value is zero or equal to firstEpochStartDate (already set)
-        vm.assume(secondEpochStartDate > 0);
-        vm.assume(secondEpochStartDate != firstEpochStartDate);
+        // Skip if the aligned value equals firstEpochEndDate (already set)
+        vm.assume(secondEpochEndDate != firstEpochEndDate);
 
         vm.startPrank(admin);
-        distributor.setMerkleRoot(firstEpochStartDate, bytes32(uint256(1)));
+        distributor.endEpoch(firstEpochEndDate, bytes32(uint256(1)));
 
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
-        distributor.setMerkleRoot(secondEpochStartDate, bytes32(uint256(2)));
+        distributor.endEpoch(secondEpochEndDate, bytes32(uint256(2)));
         vm.stopPrank();
     }
 
-    function test_setMerkleRoot_reverts_not_start_of_day() public {
-        uint40 epochStartDate = startTimestamp + 12 hours; // Not at start of day
+    function test_endEpoch_reverts_not_end_of_day() public {
+        uint40 epochEndDate = startTimestamp + 12 hours; // Not at end of day
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochNotStartOfDay.selector);
-        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
     }
 
-    function test_setMerkleRoot_reverts_already_set() public {
-        uint40 epochStartDate = startTimestamp;
+    function test_endEpoch_reverts_already_set() public {
+        uint40 epochEndDate = _firstEpochEndDate();
 
         vm.startPrank(admin);
-        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRewardDistributor.RewardDistributor_EpochAlreadySet.selector,
-                epochStartDate
+                epochEndDate
             )
         );
-        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(2)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(2)));
         vm.stopPrank();
     }
 
-    function test_setMerkleRoot_reverts_epoch_before_epoch_start_date() public {
-        // Try to set a merkle root for an epoch before EPOCH_START_DATE
-        uint40 epochStartDate = startTimestamp - 1 days; // One day before EPOCH_START_DATE
+    function test_endEpoch_reverts_epoch_before_first_valid_epoch() public {
+        // The first valid epoch end date is EPOCH_START_DATE + 1 days - 1
+        // Try to end an epoch before that (23:59:59 of day before EPOCH_START_DATE)
+        uint40 epochEndDate = startTimestamp - 1; // 23:59:59 UTC of day before
 
         vm.prank(admin);
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
-        distributor.setMerkleRoot(epochStartDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
     }
 
     // ========== Test Claiming Logic ========== //
 
     function test_claim_as_underlying() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
         bytes32[] memory proof = new bytes32[](0); // Single leaf tree, root is leaf
 
         // Set root
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -237,7 +293,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim before claiming
         (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -246,28 +302,28 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false); // asVaultToken = false
+        distributor.claim(epochEndDates, amounts, proofs, false); // asVaultToken = false
 
         // Verify
         assertEq(usds.balanceOf(alice), amount);
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+        assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
 
     function test_claim_as_vault_token() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
         bytes32[] memory proof = new bytes32[](0);
 
         // Set root
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -276,7 +332,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim before claiming
         (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -285,33 +341,36 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, true); // asVaultToken = true
+        distributor.claim(epochEndDates, amounts, proofs, true); // asVaultToken = true
 
         // Verify (uses convertToShares which rounds down)
         assertEq(sUSDS.balanceOf(alice), sUSDS.convertToShares(amount));
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+        assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
 
     function test_claim_multiple_epochs() public {
         uint256 amount1 = 100e18;
         uint256 amount2 = 200e18;
 
-        // Setup epoch 0
-        bytes32 leaf1 = _generateLeaf(alice, startTimestamp, amount1);
+        uint40 epoch0EndDate = _firstEpochEndDate();
+        uint40 epoch1EndDate = epoch0EndDate + EPOCH_DURATION;
+
+        // Setup first epoch
+        bytes32 leaf1 = _generateLeaf(alice, epoch0EndDate, amount1);
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(startTimestamp, leaf1);
+        distributor.endEpoch(epoch0EndDate, leaf1);
 
         // Setup epoch 1
-        bytes32 leaf2 = _generateLeaf(alice, startTimestamp + EPOCH_DURATION, amount2);
+        bytes32 leaf2 = _generateLeaf(alice, epoch1EndDate, amount2);
         vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(startTimestamp + EPOCH_DURATION, leaf2);
+        distributor.endEpoch(epoch1EndDate, leaf2);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](2);
-        claimEpochStartDates[0] = startTimestamp;
-        claimEpochStartDates[1] = startTimestamp + EPOCH_DURATION;
+        uint256[] memory epochEndDates = new uint256[](2);
+        epochEndDates[0] = epoch0EndDate;
+        epochEndDates[1] = epoch1EndDate;
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = amount1;
         amounts[1] = amount2;
@@ -322,7 +381,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim before claiming
         (uint256 previewAmount, uint256 previewShares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -331,37 +390,37 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
 
         // Verify
         assertEq(usds.balanceOf(alice), amount1 + amount2);
-        assertTrue(distributor.hasClaimed(alice, startTimestamp));
-        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
+        assertTrue(distributor.hasClaimed(alice, epoch0EndDate));
+        assertTrue(distributor.hasClaimed(alice, epoch1EndDate));
     }
 
     function test_claim_reverts_when_already_claimed() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        uint40 epochEndDate = _firstEpochEndDate();
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = new bytes32[](0);
 
         vm.startPrank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
 
         // Verify previewClaim returns 0 after claiming
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -370,82 +429,87 @@ contract RewardDistributorUSDSTest is Test {
 
         // Second claim should revert since there's nothing to claim
         vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
         vm.stopPrank();
     }
 
     function test_claim_skips_already_claimed_in_batch() public {
-        uint256 amount1 = 100e18;
-        uint256 amount2 = 200e18;
-        uint256 amount3 = 300e18;
+        uint40 epoch0EndDate = _firstEpochEndDate();
 
-        // Setup epoch 0
-        bytes32 leaf1 = _generateLeaf(alice, startTimestamp, amount1);
+        // Setup first epoch (100e18)
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(startTimestamp, leaf1);
+        distributor.endEpoch(epoch0EndDate, _generateLeaf(alice, epoch0EndDate, 100e18));
 
-        // Setup epoch 1
-        bytes32 leaf2 = _generateLeaf(alice, startTimestamp + EPOCH_DURATION, amount2);
+        // Setup epoch 1 (200e18)
         vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(startTimestamp + EPOCH_DURATION, leaf2);
+        distributor.endEpoch(
+            epoch0EndDate + EPOCH_DURATION,
+            _generateLeaf(alice, epoch0EndDate + EPOCH_DURATION, 200e18)
+        );
 
-        // Setup epoch 2
-        bytes32 leaf3 = _generateLeaf(alice, startTimestamp + 2 * EPOCH_DURATION, amount3);
+        // Setup epoch 2 (300e18)
         vm.warp(startTimestamp + 3 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(startTimestamp + 2 * EPOCH_DURATION, leaf3);
+        distributor.endEpoch(
+            epoch0EndDate + 2 * EPOCH_DURATION,
+            _generateLeaf(alice, epoch0EndDate + 2 * EPOCH_DURATION, 300e18)
+        );
 
         // Claim epoch 1 first
-        uint256[] memory claimEpochStartDates1 = new uint256[](1);
-        claimEpochStartDates1[0] = startTimestamp + EPOCH_DURATION;
-        uint256[] memory amounts1 = new uint256[](1);
-        amounts1[0] = amount2;
-        bytes32[][] memory proofs1 = new bytes32[][](1);
-        proofs1[0] = new bytes32[](0);
+        {
+            uint256[] memory epochEndDates1 = new uint256[](1);
+            epochEndDates1[0] = epoch0EndDate + EPOCH_DURATION;
+            uint256[] memory amounts1 = new uint256[](1);
+            amounts1[0] = 200e18;
+            bytes32[][] memory proofs1 = new bytes32[][](1);
+            proofs1[0] = new bytes32[](0);
 
-        vm.prank(alice);
-        distributor.claim(claimEpochStartDates1, amounts1, proofs1, false);
+            vm.prank(alice);
+            distributor.claim(epochEndDates1, amounts1, proofs1, false);
+        }
 
-        assertEq(usds.balanceOf(alice), amount2);
-        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
+        assertEq(usds.balanceOf(alice), 200e18);
+        assertTrue(distributor.hasClaimed(alice, epoch0EndDate + EPOCH_DURATION));
 
         // Now try to claim all three epochs (0, 1, 2) - should skip epoch 1
-        uint256[] memory claimEpochStartDates = new uint256[](3);
-        claimEpochStartDates[0] = startTimestamp;
-        claimEpochStartDates[1] = startTimestamp + EPOCH_DURATION; // Already claimed
-        claimEpochStartDates[2] = startTimestamp + 2 * EPOCH_DURATION;
-        uint256[] memory amounts = new uint256[](3);
-        amounts[0] = amount1;
-        amounts[1] = amount2;
-        amounts[2] = amount3;
-        bytes32[][] memory proofs = new bytes32[][](3);
-        proofs[0] = new bytes32[](0);
-        proofs[1] = new bytes32[](0);
-        proofs[2] = new bytes32[](0);
+        {
+            uint256[] memory epochEndDates = new uint256[](3);
+            epochEndDates[0] = epoch0EndDate;
+            epochEndDates[1] = epoch0EndDate + EPOCH_DURATION; // Already claimed
+            epochEndDates[2] = epoch0EndDate + 2 * EPOCH_DURATION;
+            uint256[] memory amounts = new uint256[](3);
+            amounts[0] = 100e18;
+            amounts[1] = 200e18;
+            amounts[2] = 300e18;
+            bytes32[][] memory proofs = new bytes32[][](3);
+            proofs[0] = new bytes32[](0);
+            proofs[1] = new bytes32[](0);
+            proofs[2] = new bytes32[](0);
 
-        vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+            vm.prank(alice);
+            distributor.claim(epochEndDates, amounts, proofs, false);
+        }
 
-        // Total balance includes earlier claim (amount2) plus new claims (amount1 + amount3)
-        assertEq(usds.balanceOf(alice), amount1 + amount2 + amount3);
-        assertTrue(distributor.hasClaimed(alice, startTimestamp));
-        assertTrue(distributor.hasClaimed(alice, startTimestamp + EPOCH_DURATION));
-        assertTrue(distributor.hasClaimed(alice, startTimestamp + 2 * EPOCH_DURATION));
+        // Total balance includes earlier claim (200e18) plus new claims (100e18 + 300e18)
+        assertEq(usds.balanceOf(alice), 600e18);
+        assertTrue(distributor.hasClaimed(alice, epoch0EndDate));
+        assertTrue(distributor.hasClaimed(alice, epoch0EndDate + EPOCH_DURATION));
+        assertTrue(distributor.hasClaimed(alice, epoch0EndDate + 2 * EPOCH_DURATION));
     }
 
     function test_claim_reverts_invalid_proof() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        uint40 epochEndDate = _firstEpochEndDate();
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount + 1; // Wrong amount
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -454,7 +518,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim returns 0 for invalid proof
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -463,24 +527,24 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
     }
 
     function test_claim_reverts_using_another_users_proof() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf for Alice
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
         bytes32[] memory proof = new bytes32[](0); // Single leaf tree
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Prepare claim data using Alice's proof
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -489,7 +553,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim returns 0 for Bob using Alice's proof
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             bob,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -499,27 +563,27 @@ contract RewardDistributorUSDSTest is Test {
         // Bob tries to claim using Alice's proof - should fail
         vm.prank(bob);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
 
         // Verify Bob received nothing
         assertEq(usds.balanceOf(bob), 0);
-        assertFalse(distributor.hasClaimed(bob, epochStartDate));
+        assertFalse(distributor.hasClaimed(bob, epochEndDate));
 
         // Verify Alice can still claim with her proof
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
         assertEq(usds.balanceOf(alice), amount);
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+        assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
 
     function test_claim_reverts_merkle_root_not_set() public {
         uint256 amount = 100e18;
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Don't set root
 
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -528,7 +592,7 @@ contract RewardDistributorUSDSTest is Test {
         // Verify previewClaim returns 0 when root not set
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
             alice,
-            claimEpochStartDates,
+            epochEndDates,
             amounts,
             proofs
         );
@@ -539,27 +603,27 @@ contract RewardDistributorUSDSTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IRewardDistributor.RewardDistributor_MerkleRootNotSet.selector,
-                epochStartDate
+                epochEndDate
             )
         );
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
     }
 
     function test_claim_zero_rewards_reverts() public {
         uint256 amount = 0; // Zero rewards
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf for 0 rewards
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, amount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
         bytes32[] memory proof = new bytes32[](0);
 
         // Set root
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -568,7 +632,7 @@ contract RewardDistributorUSDSTest is Test {
         // Claim should revert with 0 rewards
         vm.prank(alice);
         vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
     }
 
     // ========== Fuzz Tests for Yield Accrual ========== //
@@ -581,22 +645,22 @@ contract RewardDistributorUSDSTest is Test {
         claimAmount = bound(claimAmount, 1e18, 100_000e18);
         yieldAmount = bound(yieldAmount, 0, 1_000_000e18);
 
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, claimAmount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, claimAmount);
         bytes32[] memory proof = new bytes32[](0);
 
         // Set root
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Simulate yield accruing to the vault by minting additional USDS
         usds.mint(address(sUSDS), yieldAmount);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = claimAmount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -604,11 +668,11 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim as underlying
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, false);
 
         // Verify user receives exactly the claim amount (not more due to rounding)
         assertEq(usds.balanceOf(alice), claimAmount);
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+        assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
 
     function testFuzz_claim_as_vault_token_with_yield(
@@ -619,22 +683,22 @@ contract RewardDistributorUSDSTest is Test {
         claimAmount = bound(claimAmount, 1e18, 100_000e18);
         yieldAmount = bound(yieldAmount, 0, 1_000_000e18);
 
-        uint40 epochStartDate = startTimestamp;
+        uint40 epochEndDate = _firstEpochEndDate();
 
         // Generate leaf and proof
-        bytes32 leaf = _generateLeaf(alice, epochStartDate, claimAmount);
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, claimAmount);
         bytes32[] memory proof = new bytes32[](0);
 
         // Set root
         vm.prank(admin);
-        distributor.setMerkleRoot(epochStartDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf);
 
         // Simulate yield accruing to the vault by minting additional USDS
         usds.mint(address(sUSDS), yieldAmount);
 
         // Prepare claim data
-        uint256[] memory claimEpochStartDates = new uint256[](1);
-        claimEpochStartDates[0] = epochStartDate;
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = claimAmount;
         bytes32[][] memory proofs = new bytes32[][](1);
@@ -642,7 +706,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim as vault token
         vm.prank(alice);
-        distributor.claim(claimEpochStartDates, amounts, proofs, true);
+        distributor.claim(epochEndDates, amounts, proofs, true);
 
         // Get the shares received
         uint256 sharesReceived = sUSDS.balanceOf(alice);
@@ -653,6 +717,6 @@ contract RewardDistributorUSDSTest is Test {
         // Verify user receives shares worth at most the claim amount (rounding down)
         // Due to convertToShares rounding down, user should never get more than entitled
         assertLe(underlyingValue, claimAmount, "User received more than entitled due to rounding");
-        assertTrue(distributor.hasClaimed(alice, epochStartDate));
+        assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
 }

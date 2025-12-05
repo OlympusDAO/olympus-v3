@@ -7,14 +7,16 @@ import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 // External
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-/// @notice Grants withdrawal approval to USDSRewardDistributor for sUSDS
-/// @dev    This script grants the USDSRewardDistributor policy permission to withdraw
+/// @notice Grants withdrawal approval to RewardDistributorUSDS for sUSDS
+/// @dev    This script grants the RewardDistributorUSDS policy permission to withdraw
 ///         sUSDS from the Treasury via TreasuryCustodian to distribute as rewards
 contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
-    // Initial withdrawal approval
-    uint256 internal constant INITIAL_WITHDRAWAL_APPROVAL = 10_000e18; // 10k sUSDS
-
-    /// @notice Grant withdrawal approval to USDSRewardDistributor
+    /// @notice Grant withdrawal approval to RewardDistributorUSDS
+    /// @dev    Requires args file with:
+    ///         - treasuryCustodian: address of TreasuryCustodian policy
+    ///         - rewardDistributor: address of RewardDistributorUSDS policy
+    ///         - sUsds: address of sUSDS token
+    ///         - approvalAmount: uint256 approval amount in wei
     function grantApproval(
         bool useDaoMS_,
         bool signOnly_,
@@ -22,19 +24,17 @@ contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
-        _validateArgsFileEmpty(argsFile_);
-
-        address treasuryCustodian = _envAddressNotZero("olympus.policies.TreasuryCustodian");
-        address usdsRewardDistributor = _envAddressNotZero(
-            "olympus.policies.USDSRewardDistributor"
-        );
-        address sUsds = _envAddressNotZero("external.tokens.sUSDS");
+        // Read values from args file
+        address treasuryCustodian = _readBatchArgAddress("grantApproval", "treasuryCustodian");
+        address rewardDistributor = _readBatchArgAddress("grantApproval", "rewardDistributor");
+        address sUsds = _readBatchArgAddress("grantApproval", "sUsds");
+        uint256 approvalAmount = _readBatchArgUint256("grantApproval", "approvalAmount");
 
         console2.log("=== Granting USDS Reward Distributor Withdrawal Approval ===");
         console2.log("TreasuryCustodian:", treasuryCustodian);
-        console2.log("USDSRewardDistributor:", usdsRewardDistributor);
+        console2.log("RewardDistributorUSDS:", rewardDistributor);
         console2.log("sUSDS:", sUsds);
-        console2.log("Approval Amount:", INITIAL_WITHDRAWAL_APPROVAL);
+        console2.log("Approval Amount:", approvalAmount);
 
         // Grant withdrawer approval via TreasuryCustodian
         console2.log("1. Granting withdrawal approval for sUSDS");
@@ -42,9 +42,9 @@ contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
             treasuryCustodian,
             abi.encodeWithSignature(
                 "grantWithdrawerApproval(address,address,uint256)",
-                usdsRewardDistributor,
+                rewardDistributor,
                 sUsds,
-                INITIAL_WITHDRAWAL_APPROVAL
+                approvalAmount
             )
         );
 

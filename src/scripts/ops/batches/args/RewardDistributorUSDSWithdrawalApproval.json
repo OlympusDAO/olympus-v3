@@ -1,0 +1,13 @@
+{
+    "functions": [
+        {
+            "args": {
+                "approvalAmount": 10000000000000000000000,
+                "rewardDistributor": "0x0000000000000000000000000000000000000000",
+                "sUsds": "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+                "treasuryCustodian": "0xC9518AC915e46D707585116451Dc19c164513Ccf"
+            },
+            "name": "grantApproval"
+        }
+    ]
+}
