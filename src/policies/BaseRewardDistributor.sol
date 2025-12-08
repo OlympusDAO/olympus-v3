@@ -295,12 +295,9 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
             uint256 epochEndDate = epochEndDates_[i];
             uint256 amount = amounts_[i];
 
-            // Skip if already claimed
+            // Revert if already claimed
             if (hasClaimed[user_][epochEndDate]) {
-                unchecked {
-                    ++i;
-                }
-                continue;
+                revert RewardDistributor_AlreadyClaimed(epochEndDate);
             }
 
             // Verify merkle root is set for this epoch

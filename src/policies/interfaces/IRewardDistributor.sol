@@ -68,6 +68,11 @@ interface IRewardDistributor is IERC165 {
     /// @notice Thrown when no rewards are claimable
     error RewardDistributor_NothingToClaim();
 
+    /// @notice Thrown when a user tries to claim rewards for an epoch they have already claimed
+    ///
+    /// @param  epochEndDate    The epoch end date that was already claimed
+    error RewardDistributor_AlreadyClaimed(uint256 epochEndDate);
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice End an epoch and set its Merkle root
