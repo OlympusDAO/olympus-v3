@@ -226,14 +226,14 @@ contract MorphoOracleFactory is Policy, PolicyEnabler, IMorphoOracleFactory {
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IMorphoOracleFactory
-    function enableCreation() external override onlyOracleManagerOrManagerOrAdminRole {
+    function enableCreation() external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
         if (isCreationEnabled) revert MorphoOracleFactory_CreationAlreadyEnabled();
         isCreationEnabled = true;
         emit CreationEnabled();
     }
 
     /// @inheritdoc IMorphoOracleFactory
-    function disableCreation() external override onlyOracleManagerOrManagerOrAdminRole {
+    function disableCreation() external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
         if (!isCreationEnabled) revert MorphoOracleFactory_CreationAlreadyDisabled();
         isCreationEnabled = false;
         emit CreationDisabled();
