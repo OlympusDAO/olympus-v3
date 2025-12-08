@@ -66,5 +66,39 @@ contract MorphoOracleFactoryDisableCreationTest is MorphoOracleFactoryTest {
 
         assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
     }
+
+    // when the caller has the oracle_manager role
+    //  [X] it succeeds
+
+    function test_whenCallerHasOracleManagerRole() public givenFactoryIsEnabled {
+        vm.prank(oracleManager);
+        factory.disableCreation();
+
+        assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    // when the caller has the manager role
+    //  [X] it succeeds
+
+    function test_whenCallerHasManagerRole() public givenFactoryIsEnabled {
+        vm.prank(manager);
+        factory.disableCreation();
+    }
+
+    // when the caller has the admin role
+    //  [X] it succeeds
+
+    function test_whenCallerHasAdminRole() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        factory.disableCreation();
+    }
+
+    // when the caller has the emergency role
+    //  [X] it succeeds
+
+    function test_whenCallerHasEmergencyRole() public givenFactoryIsEnabled {
+        vm.prank(emergency);
+        factory.disableCreation();
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

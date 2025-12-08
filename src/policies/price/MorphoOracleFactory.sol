@@ -118,9 +118,27 @@ contract MorphoOracleFactory is Policy, PolicyEnabler, IMorphoOracleFactory {
         }
     }
 
+    /// @notice Checks if the caller has the oracle_manager, manager, admin, or emergency role
+    function _onlyOracleManagerOrManagerOrAdminOrEmergencyRole() internal view {
+        if (
+            !ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) &&
+            !_isManager(msg.sender) &&
+            !_isAdmin(msg.sender) &&
+            !_isEmergency(msg.sender)
+        ) {
+            revert NotAuthorised();
+        }
+    }
+
     /// @notice Modifier that reverts if the caller does not have the oracle_manager, manager, or admin role
     modifier onlyOracleManagerOrManagerOrAdminRole() {
         _onlyOracleManagerOrManagerOrAdminRole();
+        _;
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the oracle_manager, manager, admin, or emergency role
+    modifier onlyOracleManagerOrManagerOrAdminOrEmergencyRole() {
+        _onlyOracleManagerOrManagerOrAdminOrEmergencyRole();
         _;
     }
 
@@ -233,7 +251,12 @@ contract MorphoOracleFactory is Policy, PolicyEnabler, IMorphoOracleFactory {
     }
 
     /// @inheritdoc IMorphoOracleFactory
-    function disableCreation() external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
+    function disableCreation()
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrManagerOrAdminOrEmergencyRole
+    {
         if (!isCreationEnabled) revert MorphoOracleFactory_CreationAlreadyDisabled();
         isCreationEnabled = false;
         emit CreationDisabled();
@@ -265,7 +288,7 @@ contract MorphoOracleFactory is Policy, PolicyEnabler, IMorphoOracleFactory {
     ///             - The oracle is already disabled
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
+    ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminOrEmergencyRole {
         if (!isOracle[oracle_]) revert MorphoOracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) revert MorphoOracleFactory_OracleAlreadyDisabled(oracle_);
 
