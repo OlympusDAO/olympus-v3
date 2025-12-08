@@ -427,13 +427,18 @@ contract RewardDistributorUSDSTest is Test {
         assertEq(claimable, 0);
         assertEq(shares, 0);
 
-        // Second claim should revert since there's nothing to claim
-        vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
+        // Second claim should revert with AlreadyClaimed error
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                epochEndDate
+            )
+        );
         distributor.claim(epochEndDates, amounts, proofs, false);
         vm.stopPrank();
     }
 
-    function test_claim_skips_already_claimed_in_batch() public {
+    function test_claim_reverts_already_claimed_in_batch() public {
         uint40 epoch0EndDate = _firstEpochEndDate();
 
         // Setup first epoch (100e18)
@@ -473,7 +478,7 @@ contract RewardDistributorUSDSTest is Test {
         assertEq(usds.balanceOf(alice), 200e18);
         assertTrue(distributor.hasClaimed(alice, epoch0EndDate + EPOCH_DURATION));
 
-        // Now try to claim all three epochs (0, 1, 2) - should skip epoch 1
+        // Now try to claim all three epochs (0, 1, 2) - should revert on epoch 1
         {
             uint256[] memory epochEndDates = new uint256[](3);
             epochEndDates[0] = epoch0EndDate;
@@ -489,14 +494,21 @@ contract RewardDistributorUSDSTest is Test {
             proofs[2] = new bytes32[](0);
 
             vm.prank(alice);
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                    epoch0EndDate + EPOCH_DURATION
+                )
+            );
             distributor.claim(epochEndDates, amounts, proofs, false);
         }
 
-        // Total balance includes earlier claim (200e18) plus new claims (100e18 + 300e18)
-        assertEq(usds.balanceOf(alice), 600e18);
-        assertTrue(distributor.hasClaimed(alice, epoch0EndDate));
+        // Balance should remain unchanged (only the first claim of 200e18)
+        assertEq(usds.balanceOf(alice), 200e18);
+        // Only epoch 1 should be claimed
+        assertFalse(distributor.hasClaimed(alice, epoch0EndDate));
         assertTrue(distributor.hasClaimed(alice, epoch0EndDate + EPOCH_DURATION));
-        assertTrue(distributor.hasClaimed(alice, epoch0EndDate + 2 * EPOCH_DURATION));
+        assertFalse(distributor.hasClaimed(alice, epoch0EndDate + 2 * EPOCH_DURATION));
     }
 
     function test_claim_reverts_invalid_proof() public {
