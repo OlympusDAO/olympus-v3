@@ -686,6 +686,20 @@ contract RewardDistributorUSDSTest is Test {
         distributor.claim(epochEndDates, amounts, proofs, false);
     }
 
+    function test_endEpoch_zero_rewards_merkle_root_succeeds() public {
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        // Generate leaf for 0 rewards
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, 0);
+
+        // Should succeed - setting root is valid even for zero rewards
+        vm.prank(admin);
+        distributor.endEpoch(epochEndDate, leaf);
+
+        assertEq(distributor.epochMerkleRoots(epochEndDate), leaf);
+        assertEq(distributor.lastEpochEndDate(), epochEndDate);
+    }
+
     // ========== Fuzz Tests for Yield Accrual ========== //
 
     function testFuzz_claim_as_underlying_with_yield(
