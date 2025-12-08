@@ -511,6 +511,45 @@ contract RewardDistributorUSDSTest is Test {
         assertFalse(distributor.hasClaimed(alice, epoch0EndDate + 2 * EPOCH_DURATION));
     }
 
+    function test_claim_reverts_duplicate_epoch_in_same_call() public {
+        uint256 amount = 100e18;
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        // Generate leaf and proof
+        bytes32 leaf = _generateLeaf(alice, epochEndDate, amount);
+        bytes32[] memory proof = new bytes32[](0);
+
+        // Set root
+        vm.prank(admin);
+        distributor.endEpoch(epochEndDate, leaf);
+
+        // Prepare claim data with duplicate epoch
+        uint256[] memory epochEndDates = new uint256[](2);
+        epochEndDates[0] = epochEndDate;
+        epochEndDates[1] = epochEndDate; // Duplicate!
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = amount;
+        amounts[1] = amount;
+        bytes32[][] memory proofs = new bytes32[][](2);
+        proofs[0] = proof;
+        proofs[1] = proof;
+
+        // Should revert with AlreadyClaimed on the second occurrence
+        // (the first occurrence marks it as claimed within the same tx)
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                epochEndDate
+            )
+        );
+        distributor.claim(epochEndDates, amounts, proofs, false);
+
+        // Verify nothing was claimed (tx reverted)
+        assertEq(usds.balanceOf(alice), 0);
+        assertFalse(distributor.hasClaimed(alice, epochEndDate));
+    }
+
     function test_claim_reverts_invalid_proof() public {
         uint256 amount = 100e18;
         uint40 epochEndDate = _firstEpochEndDate();
