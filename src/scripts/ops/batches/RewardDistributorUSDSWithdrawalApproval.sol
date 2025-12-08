@@ -13,9 +13,6 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
     /// @notice Grant withdrawal approval to RewardDistributorUSDS
     /// @dev    Requires args file with:
-    ///         - treasuryCustodian: address of TreasuryCustodian policy
-    ///         - rewardDistributor: address of RewardDistributorUSDS policy
-    ///         - sUsds: address of sUSDS token
     ///         - approvalAmount: uint256 approval amount in wei
     function grantApproval(
         bool useDaoMS_,
@@ -24,10 +21,12 @@ contract RewardDistributorUSDSWithdrawalApproval is BatchScriptV2 {
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
-        // Read values from args file
-        address treasuryCustodian = _readBatchArgAddress("grantApproval", "treasuryCustodian");
-        address rewardDistributor = _readBatchArgAddress("grantApproval", "rewardDistributor");
-        address sUsds = _readBatchArgAddress("grantApproval", "sUsds");
+        // Read addresses from env.json
+        address treasuryCustodian = _envAddressNotZero("olympus.policies.TreasuryCustodian");
+        address rewardDistributor = _envAddressNotZero("olympus.policies.RewardDistributorUSDS");
+        address sUsds = _envAddressNotZero("external.tokens.sUSDS");
+
+        // Read approval amount from args file
         uint256 approvalAmount = _readBatchArgUint256("grantApproval", "approvalAmount");
 
         console2.log("=== Granting USDS Reward Distributor Withdrawal Approval ===");
