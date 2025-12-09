@@ -1,7 +1,7 @@
 {
     "sequence": [
         {
-            "name": "USDSRewardDistributor",
+            "name": "RewardDistributorUSDS",
             "args": {
                 "startTimestamp": 1764547200
             }

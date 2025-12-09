@@ -776,12 +776,12 @@ contract DeployV3 is WithEnvironment {
 
         // Input parameters
         uint256 startTimestamp = _readDeploymentArgUint256(
-            "USDSRewardDistributor",
+            "RewardDistributorUSDS",
             "startTimestamp"
         );
 
         // Log parameters
-        console2.log("USDSRewardDistributor parameters:");
+        console2.log("RewardDistributorUSDS parameters:");
         console2.log("  kernel", kernel);
         console2.log("  rewardTokenVault", rewardTokenVault);
         console2.log("  startTimestamp", startTimestamp);
