@@ -5,7 +5,7 @@ pragma solidity >=0.8.15;
 import {Kernel, Actions, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
@@ -66,7 +66,7 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_UnsupportedPRICEVersion.selector,
+                IOracleFactory.OracleFactory_UnsupportedPRICEVersion.selector,
                 1,
                 1
             )
@@ -92,9 +92,7 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         newKernel.executeAction(Actions.ActivatePolicy, address(newRolesAdmin));
 
         // Expect revert
-        vm.expectRevert(
-            IMorphoOracleFactory.MorphoOracleFactory_PRICEInterfaceNotSupported.selector
-        );
+        vm.expectRevert(IOracleFactory.OracleFactory_PRICEInterfaceNotSupported.selector);
 
         newKernel.executeAction(Actions.ActivatePolicy, address(newFactory));
     }

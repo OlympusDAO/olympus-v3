@@ -4,12 +4,13 @@ pragma solidity >=0.8.15;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
+import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
 contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
@@ -26,7 +27,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(caller_);
-        factory.createOracle(address(collateralToken), address(loanToken));
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
     }
 
     // when factory is disabled
@@ -36,7 +37,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken));
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
     }
 
     // when creation is disabled
@@ -47,10 +48,10 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         givenFactoryIsEnabled
         givenCreationIsDisabled
     {
-        vm.expectRevert(IMorphoOracleFactory.MorphoOracleFactory_CreationDisabled.selector);
+        vm.expectRevert(IOracleFactory.OracleFactory_CreationDisabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken));
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
     }
 
     // when collateral token is zero address
@@ -58,14 +59,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
     function test_whenCollateralTokenIsZeroAddress_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_InvalidToken.selector,
-                address(0)
-            )
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
         );
 
         vm.prank(admin);
-        factory.createOracle(address(0), address(loanToken));
+        factory.createOracle(address(0), address(loanToken), bytes(""));
     }
 
     // when collateral token is not a contract
@@ -75,14 +73,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         address nonContract = makeAddr("NON_CONTRACT");
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_InvalidToken.selector,
-                nonContract
-            )
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
         );
 
         vm.prank(admin);
-        factory.createOracle(nonContract, address(loanToken));
+        factory.createOracle(nonContract, address(loanToken), bytes(""));
     }
 
     // when loan token is zero address
@@ -90,14 +85,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
     function test_whenLoanTokenIsZeroAddress_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_InvalidToken.selector,
-                address(0)
-            )
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(0));
+        factory.createOracle(address(collateralToken), address(0), bytes(""));
     }
 
     // when loan token is not a contract
@@ -107,14 +99,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         address nonContract = makeAddr("NON_CONTRACT");
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_InvalidToken.selector,
-                nonContract
-            )
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), nonContract);
+        factory.createOracle(address(collateralToken), nonContract, bytes(""));
     }
 
     // when collateral token is not in PRICE module
@@ -129,7 +118,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(newToken), address(loanToken));
+        factory.createOracle(address(newToken), address(loanToken), bytes(""));
     }
 
     // when loan token is not in PRICE module
@@ -144,7 +133,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(newToken));
+        factory.createOracle(address(collateralToken), address(newToken), bytes(""));
     }
 
     // when oracle already exists
@@ -153,19 +142,19 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     function test_whenOracleAlreadyExists_reverts() public givenFactoryIsEnabled {
         // Create first oracle
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken));
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
 
         // Try to create duplicate
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_OracleAlreadyExists.selector,
+                IOracleFactory.OracleFactory_OracleAlreadyExists.selector,
                 address(collateralToken),
                 address(loanToken)
             )
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken));
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
     }
 
     // when token decimals cause overflow
@@ -184,14 +173,14 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_TokenDecimalsOutOfBounds.selector,
+                MorphoOracleFactory.MorphoOracleFactory_TokenDecimalsOutOfBounds.selector,
                 address(lowDecimalsToken),
                 address(highDecimalsToken)
             )
         );
 
         vm.prank(admin);
-        factory.createOracle(address(lowDecimalsToken), address(highDecimalsToken));
+        factory.createOracle(address(lowDecimalsToken), address(highDecimalsToken), bytes(""));
     }
 
     // when token decimals are valid
@@ -206,17 +195,21 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
     function test_success() public givenFactoryIsEnabled {
         vm.expectEmit(false, false, false, false);
-        emit IMorphoOracleFactory.OracleCreated(
+        emit IOracleFactory.OracleCreated(
             address(0), // Will be set to actual oracle address
             address(collateralToken),
             address(loanToken)
         );
 
         vm.expectEmit(false, false, false, false);
-        emit IMorphoOracleFactory.OracleEnabled(address(0)); // Will match any address
+        emit IOracleFactory.OracleEnabled(address(0)); // Will match any address
 
         vm.prank(admin);
-        address oracle = factory.createOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            bytes("")
+        );
 
         // Verify oracle is deployed
         assertNotEq(oracle, address(0), "Oracle should be deployed");
@@ -297,7 +290,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         _setPRICEPrices(address(loan18), 1e18);
 
         vm.prank(admin);
-        address oracle = factory.createOracle(address(col6), address(loan18));
+        address oracle = factory.createOracle(address(col6), address(loan18), bytes(""));
 
         // Verify scale factor calculation
         // Scale factor = 10^(36 + loanDecimals - collateralDecimals)
@@ -315,7 +308,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
     function test_whenCallerHasOracleManagerRole() public givenFactoryIsEnabled {
         vm.prank(oracleManager);
-        address oracle = factory.createOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            bytes("")
+        );
 
         // Verify oracle is deployed
         assertNotEq(oracle, address(0), "Oracle should be deployed");
@@ -333,7 +330,11 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
     function test_whenCallerHasManagerRole() public givenFactoryIsEnabled {
         vm.prank(manager);
-        address oracle = factory.createOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            bytes("")
+        );
 
         // Verify oracle is deployed
         assertNotEq(oracle, address(0), "Oracle should be deployed");

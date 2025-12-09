@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-/// @title  IMorphoOracleFactory
+/// @title  IOracleFactory
 /// @author OlympusDAO
-/// @notice Interface for a Morpho oracle factory
-interface IMorphoOracleFactory {
+/// @notice Oracle-agnostic interface for oracle factories
+interface IOracleFactory {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a new oracle is created
@@ -37,49 +37,43 @@ interface IMorphoOracleFactory {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a token address is invalid (zero address or not a contract)
-    error MorphoOracleFactory_InvalidToken(address token);
+    error OracleFactory_InvalidToken(address token);
 
     /// @notice Thrown when PRICE module version is not supported (must be v1.2+ or v2+)
-    error MorphoOracleFactory_UnsupportedPRICEVersion(uint8 major, uint8 minor);
+    error OracleFactory_UnsupportedPRICEVersion(uint8 major, uint8 minor);
 
     /// @notice Thrown when PRICE module does not support IPRICEv2 interface
-    error MorphoOracleFactory_PRICEInterfaceNotSupported();
+    error OracleFactory_PRICEInterfaceNotSupported();
 
     /// @notice Thrown when oracle creation is disabled
-    error MorphoOracleFactory_CreationDisabled();
+    error OracleFactory_CreationDisabled();
 
     /// @notice Thrown when trying to create an oracle that already exists
     ///
     /// @param  collateralToken The collateral token address
     /// @param  loanToken       The loan token address
-    error MorphoOracleFactory_OracleAlreadyExists(address collateralToken, address loanToken);
+    error OracleFactory_OracleAlreadyExists(address collateralToken, address loanToken);
 
     /// @notice Thrown when creation is already enabled
-    error MorphoOracleFactory_CreationAlreadyEnabled();
+    error OracleFactory_CreationAlreadyEnabled();
 
     /// @notice Thrown when creation is already disabled
-    error MorphoOracleFactory_CreationAlreadyDisabled();
+    error OracleFactory_CreationAlreadyDisabled();
 
     /// @notice Thrown when an invalid oracle address is provided
     ///
     /// @param  oracle The invalid oracle address
-    error MorphoOracleFactory_InvalidOracle(address oracle);
+    error OracleFactory_InvalidOracle(address oracle);
 
     /// @notice Thrown when an oracle is already enabled
     ///
     /// @param  oracle The already enabled oracle address
-    error MorphoOracleFactory_OracleAlreadyEnabled(address oracle);
+    error OracleFactory_OracleAlreadyEnabled(address oracle);
 
     /// @notice Thrown when an oracle is already disabled
     ///
     /// @param  oracle The already disabled oracle address
-    error MorphoOracleFactory_OracleAlreadyDisabled(address oracle);
-
-    /// @notice Thrown when token decimals result in invalid scale factor (overflow or negative)
-    ///
-    /// @param  collateralToken The collateral token address
-    /// @param  loanToken       The loan token address
-    error MorphoOracleFactory_TokenDecimalsOutOfBounds(address collateralToken, address loanToken);
+    error OracleFactory_OracleAlreadyDisabled(address oracle);
 
     // ========== STATE FUNCTIONS ========== //
 
@@ -94,10 +88,12 @@ interface IMorphoOracleFactory {
     ///
     /// @param  collateralToken_    The collateral token address
     /// @param  loanToken_          The loan token address
+    /// @param  customParams_       Service-specific custom parameters (can be empty)
     /// @return oracle              The address of the created oracle
     function createOracle(
         address collateralToken_,
-        address loanToken_
+        address loanToken_,
+        bytes calldata customParams_
     ) external returns (address oracle);
 
     /// @notice Gets the oracle address for a collateral/loan token pair

@@ -3,7 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
@@ -56,7 +56,7 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_InvalidOracle.selector,
+                IOracleFactory.OracleFactory_InvalidOracle.selector,
                 nonExistentOracle
             )
         );
@@ -78,7 +78,7 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMorphoOracleFactory.MorphoOracleFactory_OracleAlreadyDisabled.selector,
+                IOracleFactory.OracleFactory_OracleAlreadyDisabled.selector,
                 oracle
             )
         );
@@ -95,7 +95,7 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
         address oracle = factory.getOracle(address(collateralToken), address(loanToken));
 
         vm.expectEmit(true, false, false, false);
-        emit IMorphoOracleFactory.OracleDisabled(oracle);
+        emit IOracleFactory.OracleDisabled(oracle);
 
         vm.prank(admin);
         factory.disableOracle(oracle);

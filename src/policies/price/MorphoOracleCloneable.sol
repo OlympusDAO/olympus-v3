@@ -6,7 +6,7 @@ pragma solidity >=0.8.15;
 import {IOracle} from "src/interfaces/morpho/IOracle.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 
 // Libraries
@@ -36,8 +36,8 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     /// @notice The factory address
     ///
     /// @return The factory address stored in immutable args
-    function factory() public pure returns (IMorphoOracleFactory) {
-        return IMorphoOracleFactory(_getArgAddress(0x00));
+    function factory() public pure returns (IOracleFactory) {
+        return IOracleFactory(_getArgAddress(0x00));
     }
 
     /// @notice The collateral token address
@@ -83,7 +83,7 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     ///             If the factory is disabled or PRICE is unset, this function will revert.
     function price() external view override returns (uint256) {
         // Check if oracle is enabled via factory
-        IMorphoOracleFactory factory_ = factory();
+        IOracleFactory factory_ = factory();
         if (!factory_.isOracleEnabled(address(this))) {
             revert MorphoOracle_NotEnabled();
         }

@@ -3,7 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
@@ -11,13 +11,13 @@ contract MorphoOracleFactorySupportsInterfaceTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
 
     // supportsInterface
-    // when interface is IMorphoOracleFactory
+    // when interface is IOracleFactory
     //  [X] it returns true
 
-    function test_whenInterfaceIsIMorphoOracleFactory() public view {
+    function test_whenInterfaceIsIOracleFactory() public view {
         assertTrue(
-            factory.supportsInterface(type(IMorphoOracleFactory).interfaceId),
-            "Should return true for IMorphoOracleFactory interface"
+            factory.supportsInterface(type(IOracleFactory).interfaceId),
+            "Should return true for IOracleFactory interface"
         );
     }
 

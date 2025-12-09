@@ -114,7 +114,11 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Create the oracle with the new collateral token
         vm.prank(admin);
-        address newOracle = factory.createOracle(address(newCollateralToken), address(loanToken));
+        address newOracle = factory.createOracle(
+            address(newCollateralToken),
+            address(loanToken),
+            bytes("")
+        );
 
         // oracle.price() returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals, but native is 9 decimals)
@@ -163,7 +167,11 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Create the oracle with the new loan token
         vm.prank(admin);
-        address newOracle = factory.createOracle(address(collateralToken), address(newLoanToken));
+        address newOracle = factory.createOracle(
+            address(collateralToken),
+            address(newLoanToken),
+            bytes("")
+        );
 
         // oracle.price() returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)

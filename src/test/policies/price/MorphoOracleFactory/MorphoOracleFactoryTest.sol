@@ -93,7 +93,7 @@ contract MorphoOracleFactoryTest is Test {
         address loanToken_
     ) internal returns (address oracle) {
         vm.prank(admin);
-        oracle = factory.createOracle(collateralToken_, loanToken_);
+        oracle = factory.createOracle(collateralToken_, loanToken_, bytes(""));
     }
 
     /// @notice Enables the factory

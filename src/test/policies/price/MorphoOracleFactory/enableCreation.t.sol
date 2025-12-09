@@ -3,7 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
-import {IMorphoOracleFactory} from "src/policies/interfaces/price/IMorphoOracleFactory.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
@@ -43,7 +43,7 @@ contract MorphoOracleFactoryEnableCreationTest is MorphoOracleFactoryTest {
         givenCreationIsDisabled
         givenCreationIsEnabled
     {
-        vm.expectRevert(IMorphoOracleFactory.MorphoOracleFactory_CreationAlreadyEnabled.selector);
+        vm.expectRevert(IOracleFactory.OracleFactory_CreationAlreadyEnabled.selector);
 
         vm.prank(admin);
         factory.enableCreation();
@@ -55,7 +55,7 @@ contract MorphoOracleFactoryEnableCreationTest is MorphoOracleFactoryTest {
 
     function test_success() public givenFactoryIsEnabled givenCreationIsDisabled {
         vm.expectEmit(false, false, false, false);
-        emit IMorphoOracleFactory.CreationEnabled();
+        emit IOracleFactory.CreationEnabled();
 
         vm.prank(admin);
         factory.enableCreation();
