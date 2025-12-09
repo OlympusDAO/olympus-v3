@@ -25,4 +25,8 @@ interface IMorphoOracle is IOracle {
     /// @notice The scale factor for the oracle
     /// @return uint256 The scale factor
     function scaleFactor() external pure returns (uint256);
+
+    /// @notice The name of the oracle
+    /// @return string The name
+    function name() external pure returns (string memory);
 }

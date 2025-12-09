@@ -276,6 +276,13 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             address(factory),
             "Factory should be stored in oracle"
         );
+
+        // Verify name is stored in oracle
+        assertEq(
+            oracleContract.name(),
+            "COL/LOAN Morpho Oracle",
+            "Name should be stored in oracle"
+        );
     }
 
     function test_whenTokenDecimalsAreValid_calculatesScaleFactorWithDifferentDecimals()

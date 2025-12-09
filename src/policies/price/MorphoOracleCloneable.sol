@@ -12,6 +12,7 @@ import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {String} from "src/libraries/String.sol";
 
 /// @title  MorphoOracleCloneable
 /// @author OlympusDAO
@@ -28,6 +29,7 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     // 0x14: collateral token address (20 bytes)
     // 0x28: loan token address (20 bytes)
     // 0x3C: scale factor (32 bytes)
+    // 0x5C: name (32 bytes)
 
     // ========== IMMUTABLE ARGS GETTERS ========== //
 
@@ -57,6 +59,13 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     /// @return uint256 The scale factor stored in immutable args
     function scaleFactor() public pure returns (uint256) {
         return _getArgUint256(0x3C);
+    }
+
+    /// @notice The name of the oracle
+    ///
+    /// @return string The name stored in immutable args
+    function name() public pure returns (string memory) {
+        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x5C))));
     }
 
     // ========== MORPHO ORACLE INTERFACE ========== //

@@ -198,13 +198,21 @@ contract MorphoOracleFactory is Policy, PolicyEnabler, IMorphoOracleFactory {
         /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 scaleFactor = 10 ** uint256(exponent);
 
+        // Compose name from token symbols: "collateral/loan Morpho Oracle"
+        string memory collateralSymbol = ERC20(collateralToken_).symbol();
+        string memory loanSymbol = ERC20(loanToken_).symbol();
+        bytes32 oracleName = bytes32(
+            abi.encodePacked(collateralSymbol, "/", loanSymbol, " Morpho Oracle")
+        );
+
         // Create clone with immutable args
-        // Layout: factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | scaleFactor (32 bytes)
+        // Layout: factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | scaleFactor (32 bytes) | name (32 bytes)
         bytes memory oracleData = abi.encodePacked(
             address(this), // factory address
             collateralToken_, // collateral token address
             loanToken_, // loan token address
-            scaleFactor // scale factor
+            scaleFactor, // scale factor
+            oracleName // name
         );
 
         oracle = address(ORACLE_IMPLEMENTATION).clone(oracleData);

@@ -49,5 +49,12 @@ contract MorphoOracleCloneableImmutableArgsTest is MorphoOracleCloneableTest {
 
         assertEq(oracle.scaleFactor(), expectedScaleFactor, "Should return correct scale factor");
     }
+
+    // name
+    //  [X] it returns name from immutable args
+
+    function test_name() public view {
+        assertEq(oracle.name(), "COL/LOAN Morpho Oracle", "Should return correct name");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
