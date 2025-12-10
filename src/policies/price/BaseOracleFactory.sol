@@ -6,6 +6,7 @@ pragma solidity >=0.8.15;
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
 import {Kernel, Policy, Keycode, toKeycode, Permissions, Module} from "src/Kernel.sol";
@@ -20,7 +21,7 @@ import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 /// @author OlympusDAO
 /// @notice Abstract base contract for oracle factories with common functionality
 /// @dev    Uses ClonesWithImmutableArgs for gas-efficient oracle deployment
-abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory {
+abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IVersioned {
     using ClonesWithImmutableArgs for address;
 
     // ========== STATE ========== //
@@ -94,11 +95,8 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory {
         requests = new Permissions[](0);
     }
 
-    /// @notice The version of the policy
-    ///
-    /// @return major   The major version of the policy
-    /// @return minor   The minor version of the policy
-    function VERSION() external pure virtual returns (uint8 major, uint8 minor) {
+    /// @inheritdoc IVersioned
+    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -316,6 +314,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory {
         return
             interfaceId_ == type(IOracleFactory).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
 }

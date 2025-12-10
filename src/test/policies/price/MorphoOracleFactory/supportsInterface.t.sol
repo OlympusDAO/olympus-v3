@@ -6,6 +6,7 @@ import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 contract MorphoOracleFactorySupportsInterfaceTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
@@ -38,6 +39,16 @@ contract MorphoOracleFactorySupportsInterfaceTest is MorphoOracleFactoryTest {
         assertTrue(
             factory.supportsInterface(type(IEnabler).interfaceId),
             "Should return true for IEnabler interface"
+        );
+    }
+
+    // when interface is IVersioned
+    //  [X] it returns true
+
+    function test_whenInterfaceIsIVersioned() public view {
+        assertTrue(
+            factory.supportsInterface(type(IVersioned).interfaceId),
+            "Should return true for IVersioned interface"
         );
     }
 
