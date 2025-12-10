@@ -62,9 +62,6 @@ contract MorphoOracleFactoryTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(factory));
 
-        // Configure factory dependencies
-        factory.configureDependencies();
-
         // Grant roles
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(MANAGER_ROLE, manager);

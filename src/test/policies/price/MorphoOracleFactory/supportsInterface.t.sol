@@ -2,65 +2,32 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+// Test
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
+
+// Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 contract MorphoOracleFactorySupportsInterfaceTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
 
-    // supportsInterface
-    // when interface is IOracleFactory
-    //  [X] it returns true
-
-    function test_whenInterfaceIsIOracleFactory() public view {
+    function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(factory));
         assertTrue(
             factory.supportsInterface(type(IOracleFactory).interfaceId),
-            "Should return true for IOracleFactory interface"
+            "IOracleFactory mismatch"
         );
-    }
-
-    // when interface is IERC165
-    //  [X] it returns true
-
-    function test_whenInterfaceIsIERC165() public view {
-        assertTrue(
-            factory.supportsInterface(type(IERC165).interfaceId),
-            "Should return true for IERC165 interface"
-        );
-    }
-
-    // when interface is IEnabler (from PolicyEnabler)
-    //  [X] it returns true
-
-    function test_whenInterfaceIsIEnabler() public view {
-        assertTrue(
-            factory.supportsInterface(type(IEnabler).interfaceId),
-            "Should return true for IEnabler interface"
-        );
-    }
-
-    // when interface is IVersioned
-    //  [X] it returns true
-
-    function test_whenInterfaceIsIVersioned() public view {
-        assertTrue(
-            factory.supportsInterface(type(IVersioned).interfaceId),
-            "Should return true for IVersioned interface"
-        );
-    }
-
-    // when interface is not supported
-    //  [X] it returns false
-
-    function test_whenInterfaceIsNotSupported() public view {
-        bytes4 invalidInterface = bytes4(0x12345678);
-
+        assertTrue(factory.supportsInterface(type(IERC165).interfaceId), "IERC165 mismatch");
+        assertTrue(factory.supportsInterface(type(IEnabler).interfaceId), "IEnabler mismatch");
+        assertTrue(factory.supportsInterface(type(IVersioned).interfaceId), "IVersioned mismatch");
         assertFalse(
-            factory.supportsInterface(invalidInterface),
-            "Should return false for unsupported interface"
+            factory.supportsInterface(type(IERC20).interfaceId),
+            "Should not support IERC20"
         );
     }
 }
