@@ -2762,7 +2762,7 @@ contract PriceV2Test is Test {
 
         uint256[] memory observations = new uint256[](2);
         observations[0] = 9e18;
-        observations[0] = 8e18;
+        observations[1] = 8e18;
 
         vm.startPrank(priceWriter);
 
