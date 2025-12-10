@@ -123,7 +123,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // oracle.price() returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals, but native is 9 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
-        // scaleFactor = 1e27 (36 + 18 - 9)
+        // scaleFactor = 1e45 (36 + loanDecimals - collateralDecimals = 36 + 18 - 9)
         // the price is 2e18 * 1e45 / 1e18 = 2e45
         uint256 expectedPrice = 2e45;
         uint256 actualPrice = IMorphoOracle(newOracle).price();
@@ -175,7 +175,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // oracle.price() returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
-        // loanPriceUsd = 1e18 (2 USD, 18 decimals, but native is 9 decimals)
+        // loanPriceUsd = 1e18 (1 USD, 18 decimals, but native is 9 decimals)
         // scaleFactor = 1e27 (36 + 9 - 18)
         // the price is 2e18 * 1e27 / 2e18 = 2e27
         uint256 expectedPrice = 2e27;
@@ -429,7 +429,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Initial setup: PRICE_DECIMALS = 18
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
-        // scaleFactor = 1e27 (36 + 18 - 9)
+        // scaleFactor = 1e27 (36 + loanDecimals - collateralDecimals = 36 + 9 - 18)
         // Expected price: 1e27 * 2e18 / 1e18 = 2e27
         uint256 expectedPrice = 2e27;
         uint256 initialPrice = IMorphoOracle(newOracle).price();
