@@ -6,6 +6,7 @@ import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 contract MockPrice is PRICEv2 {
+    mapping(address => bool) internal assetApproved;
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
     mapping(address => uint256[]) internal observations;
@@ -39,6 +40,7 @@ contract MockPrice is PRICEv2 {
     }
 
     function setPrice(address asset, uint256 price) public {
+        assetApproved[asset] = true;
         prices[asset] = price;
 
         // Add to the assets array
@@ -77,6 +79,9 @@ contract MockPrice is PRICEv2 {
         address asset_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
+        // Mimic PRICE's behaviour of reverting if the asset is not approved
+        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
+
         uint256 price;
         if (variant_ == Variant.CURRENT || variant_ == Variant.LAST) {
             price = prices[asset_];
