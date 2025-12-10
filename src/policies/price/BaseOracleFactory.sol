@@ -32,8 +32,8 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @notice The PRICE module decimals
     uint8 public PRICE_DECIMALS;
 
-    /// @notice Mapping from collateral token to loan token to oracle address
-    mapping(address collateralToken => mapping(address loanToken => address oracle))
+    /// @notice Mapping from base token to quote token to oracle address
+    mapping(address baseToken => mapping(address quoteToken => address oracle))
         internal _tokensToOracle;
 
     /// @notice Internal array of all deployed oracles
@@ -148,13 +148,13 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @dev    This function should perform service-specific validation, calculate parameters,
     ///         and encode the immutable args for the clone
     ///
-    /// @param  collateralToken_    The collateral token address
-    /// @param  loanToken_          The loan token address
-    /// @param  customParams_       Service-specific custom parameters (can be empty)
-    /// @return bytes               The encoded bytes for cloning
+    /// @param  baseToken_     The base token address
+    /// @param  quoteToken_    The quote token address
+    /// @param  customParams_  Service-specific custom parameters (can be empty)
+    /// @return bytes          The encoded bytes for cloning
     function _encodeOracleData(
-        address collateralToken_,
-        address loanToken_,
+        address baseToken_,
+        address quoteToken_,
         bytes calldata customParams_
     ) internal view virtual returns (bytes memory);
 
@@ -162,8 +162,8 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     /// @inheritdoc IOracleFactory
     function createOracle(
-        address collateralToken_,
-        address loanToken_,
+        address baseToken_,
+        address quoteToken_,
         bytes calldata customParams_
     ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole returns (address oracle) {
         // Check if creation is enabled
@@ -177,27 +177,27 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         }
 
         // Check if oracle already exists
-        if (_tokensToOracle[collateralToken_][loanToken_] != address(0)) {
-            revert OracleFactory_OracleAlreadyExists(collateralToken_, loanToken_);
+        if (_tokensToOracle[baseToken_][quoteToken_] != address(0)) {
+            revert OracleFactory_OracleAlreadyExists(baseToken_, quoteToken_);
         }
 
-        // Validate collateral token
-        if (collateralToken_ == address(0) || collateralToken_.code.length == 0) {
-            revert OracleFactory_InvalidToken(collateralToken_);
+        // Validate base token
+        if (baseToken_ == address(0) || baseToken_.code.length == 0) {
+            revert OracleFactory_InvalidToken(baseToken_);
         }
 
-        // Validate loan token
-        if (loanToken_ == address(0) || loanToken_.code.length == 0) {
-            revert OracleFactory_InvalidToken(loanToken_);
+        // Validate quote token
+        if (quoteToken_ == address(0) || quoteToken_.code.length == 0) {
+            revert OracleFactory_InvalidToken(quoteToken_);
         }
 
         // Validate tokens are configured in PRICE module
         // PRICE.getPrice() will revert if tokens are not approved or price feeds are not functioning
-        PRICE.getPrice(collateralToken_);
-        PRICE.getPrice(loanToken_);
+        PRICE.getPrice(baseToken_);
+        PRICE.getPrice(quoteToken_);
 
         // Get service-specific encoded data (includes validation, calculation, and encoding)
-        bytes memory oracleData = _encodeOracleData(collateralToken_, loanToken_, customParams_);
+        bytes memory oracleData = _encodeOracleData(baseToken_, quoteToken_, customParams_);
 
         // Get oracle implementation
         address implementation = _getOracleImplementation();
@@ -206,14 +206,14 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         oracle = implementation.clone(oracleData);
 
         // Update storage
-        _tokensToOracle[collateralToken_][loanToken_] = oracle;
+        _tokensToOracle[baseToken_][quoteToken_] = oracle;
         _oracles.push(oracle);
         isOracle[oracle] = true;
         _isOracleEnabled[oracle] = true;
 
         // Emit events
         // Note: New oracles are enabled by default, so we emit OracleEnabled event
-        emit OracleCreated(oracle, collateralToken_, loanToken_);
+        emit OracleCreated(oracle, baseToken_, quoteToken_);
         emit OracleEnabled(oracle);
 
         // Return the oracle address
@@ -222,10 +222,10 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     /// @inheritdoc IOracleFactory
     function getOracle(
-        address collateralToken_,
-        address loanToken_
+        address baseToken_,
+        address quoteToken_
     ) external view override returns (address oracle) {
-        oracle = _tokensToOracle[collateralToken_][loanToken_];
+        oracle = _tokensToOracle[baseToken_][quoteToken_];
     }
 
     /// @inheritdoc IOracleFactory

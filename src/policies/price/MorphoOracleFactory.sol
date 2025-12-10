@@ -56,11 +56,8 @@ contract MorphoOracleFactory is BaseOracleFactory {
     /// @inheritdoc BaseOracleFactory
     /// @notice Encodes Morpho-specific oracle data for cloning
     /// @dev    Performs Morpho-specific validation (decimals bounds check),
-    ///         calculates scale factor, generates oracle name, and encodes immutable args
-    ///
-    /// @param  collateralToken_    The collateral token address
-    /// @param  loanToken_          The loan token address
-    /// @return bytes               The encoded bytes for cloning
+    ///         calculates scale factor, generates oracle name, and encodes immutable args.
+    ///         Note: baseToken_ is used as collateralToken, quoteToken_ is used as loanToken.
     function _encodeOracleData(
         address collateralToken_,
         address loanToken_,

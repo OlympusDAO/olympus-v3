@@ -9,13 +9,13 @@ interface IOracleFactory {
 
     /// @notice Emitted when a new oracle is created
     ///
-    /// @param  oracle           The address of the created oracle
-    /// @param  collateralToken  The collateral token address
-    /// @param  loanToken        The loan token address
+    /// @param  oracle      The address of the created oracle
+    /// @param  baseToken   The base token address
+    /// @param  quoteToken  The quote token address
     event OracleCreated(
         address indexed oracle,
-        address indexed collateralToken,
-        address indexed loanToken
+        address indexed baseToken,
+        address indexed quoteToken
     );
 
     /// @notice Emitted when oracle creation is enabled
@@ -50,9 +50,9 @@ interface IOracleFactory {
 
     /// @notice Thrown when trying to create an oracle that already exists
     ///
-    /// @param  collateralToken The collateral token address
-    /// @param  loanToken       The loan token address
-    error OracleFactory_OracleAlreadyExists(address collateralToken, address loanToken);
+    /// @param  baseToken  The base token address
+    /// @param  quoteToken The quote token address
+    error OracleFactory_OracleAlreadyExists(address baseToken, address quoteToken);
 
     /// @notice Thrown when creation is already enabled
     error OracleFactory_CreationAlreadyEnabled();
@@ -84,26 +84,26 @@ interface IOracleFactory {
 
     // ========== FUNCTIONS ========== //
 
-    /// @notice Creates a new oracle for a collateral/loan token pair
+    /// @notice Creates a new oracle for a base/quote token pair
     ///
-    /// @param  collateralToken_    The collateral token address
-    /// @param  loanToken_          The loan token address
-    /// @param  customParams_       Service-specific custom parameters (can be empty)
-    /// @return oracle              The address of the created oracle
+    /// @param  baseToken_     The base token address
+    /// @param  quoteToken_    The quote token address
+    /// @param  customParams_  Service-specific custom parameters (can be empty)
+    /// @return oracle         The address of the created oracle
     function createOracle(
-        address collateralToken_,
-        address loanToken_,
+        address baseToken_,
+        address quoteToken_,
         bytes calldata customParams_
     ) external returns (address oracle);
 
-    /// @notice Gets the oracle address for a collateral/loan token pair
+    /// @notice Gets the oracle address for a base/quote token pair
     ///
-    /// @param  collateralToken_    The collateral token address
-    /// @param  loanToken_          The loan token address
-    /// @return oracle              The address of the oracle, or address(0) if not found
+    /// @param  baseToken_     The base token address
+    /// @param  quoteToken_    The quote token address
+    /// @return oracle         The address of the oracle, or address(0) if not found
     function getOracle(
-        address collateralToken_,
-        address loanToken_
+        address baseToken_,
+        address quoteToken_
     ) external view returns (address oracle);
 
     /// @notice Gets all deployed oracle addresses
