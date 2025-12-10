@@ -22,10 +22,8 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @notice         Function is deprecated in PRICEv1_2
     error PRICE_Deprecated();
 
-    /// @notice         Parameters are invalid
-    ///
-    /// @param reason_  The reason the parameter is invalid
-    error PRICE_InvalidParams(string reason_);
+    /// @notice         OHM address is invalid
+    error PRICE_InvalidOHM();
 
     // ========== STATE ========== //
 
@@ -52,10 +50,9 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         uint32 observationFrequency_,
         uint256 minimumTargetPrice_
     ) OlympusPricev2(kernel_, _DECIMALS, observationFrequency_) {
-        if (ohm_ == address(0)) revert PRICE_InvalidParams("OHM");
+        if (ohm_ == address(0)) revert PRICE_InvalidOHM();
 
         OHM = ohm_;
-
         minimumTargetPrice = minimumTargetPrice_;
         emit MinimumTargetPriceChanged(minimumTargetPrice_);
     }
@@ -97,9 +94,9 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @dev        Returns the target price of OHM.
     ///             Compatibility function for PRICEv1.
     function getTargetPrice() external view returns (uint256) {
-        // Call this contract's getMovingAverage function (defined below)
-        uint256 movingAvg = this.getMovingAverage();
-        return movingAvg > minimumTargetPrice ? movingAvg : minimumTargetPrice;
+        (uint256 movingAvg, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
+        uint256 min = minimumTargetPrice;
+        return movingAvg > min ? movingAvg : min;
     }
 
     /// @inheritdoc IPRICEv1

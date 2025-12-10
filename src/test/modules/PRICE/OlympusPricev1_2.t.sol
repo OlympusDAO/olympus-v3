@@ -345,10 +345,7 @@ contract OlympusPricev1_2Test is Test {
     // given the OHM address is zero
     //  [X] it reverts with PRICE_InvalidParams
     function test_constructor_givenOhmAddressIsZero_reverts() public {
-        bytes memory err = abi.encodeWithSelector(
-            OlympusPricev1_2.PRICE_InvalidParams.selector,
-            "OHM"
-        );
+        bytes memory err = abi.encodeWithSelector(OlympusPricev1_2.PRICE_InvalidOHM.selector);
         vm.expectRevert(err);
 
         new OlympusPricev1_2(kernel, address(0), OBSERVATION_FREQUENCY, MINIMUM_TARGET_PRICE);
