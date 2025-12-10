@@ -101,12 +101,13 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        - The max age is >= the block timestamp
     function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ >= uint48(block.timestamp)) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
+        uint48 currentTime = uint48(block.timestamp);
+        if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
         // Try to use the last price, must be updated more recently than maxAge
         // getPrice checks if asset is approved
         (uint256 price, uint48 timestamp) = getPrice(asset_, Variant.LAST);
-        if (timestamp >= uint48(block.timestamp) - maxAge_) return price;
+        if (timestamp >= currentTime - maxAge_) return price;
 
         // If last price is stale, use the current price
         (price, , ) = _getCurrentPrice(asset_, true);
@@ -285,10 +286,11 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Try to use the last prices, timestamp must be current
         // If stale, get current price
-        if (assetTime != uint48(block.timestamp)) {
+        uint48 currentTime = uint48(block.timestamp);
+        if (assetTime != currentTime) {
             (assetPrice, , ) = _getCurrentPrice(asset_, true);
         }
-        if (baseTime != uint48(block.timestamp)) {
+        if (baseTime != currentTime) {
             (basePrice, , ) = _getCurrentPrice(base_, true);
         }
 
@@ -309,8 +311,8 @@ contract OlympusPricev2 is PRICEv2 {
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Check that max age is valid
-        if (maxAge_ == 0) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-        if (maxAge_ >= uint48(block.timestamp)) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
+        uint48 currentTime = uint48(block.timestamp);
+        if (maxAge_ == 0 || maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
         // Get the last price of each asset (getPrice checks if asset is approved)
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
@@ -318,10 +320,11 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Try to use the last prices, timestamp must be no older than maxAge_
         // If stale, get current price
-        if (assetTime < uint48(block.timestamp) - maxAge_) {
+        uint48 cutoff = currentTime - maxAge_;
+        if (assetTime < cutoff) {
             (assetPrice, , ) = _getCurrentPrice(asset_, true);
         }
-        if (baseTime < uint48(block.timestamp) - maxAge_) {
+        if (baseTime < cutoff) {
             (basePrice, , ) = _getCurrentPrice(base_, true);
         }
 
