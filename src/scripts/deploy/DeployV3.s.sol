@@ -27,7 +27,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
-import {RewardDistributorUSDS} from "src/policies/RewardDistributorUSDS.sol";
+import {RewardDistributorUSDS} from "src/policies/rewards/RewardDistributorUSDS.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";

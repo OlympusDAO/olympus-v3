@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 // Base Contract
-import {BaseRewardDistributor} from "./BaseRewardDistributor.sol";
+import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.sol";
 
 // Interfaces
 import {IERC4626} from "src/interfaces/IERC4626.sol";
