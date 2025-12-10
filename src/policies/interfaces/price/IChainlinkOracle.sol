@@ -26,15 +26,15 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @notice The base token address
     ///
     /// @return address The base token address
-    function baseToken() external pure returns (address);
+    function baseToken() external view returns (address);
 
     /// @notice The quote token address
     ///
     /// @return address The quote token address
-    function quoteToken() external pure returns (address);
+    function quoteToken() external view returns (address);
 
     /// @notice The name of the oracle
     ///
     /// @return string The name
-    function name() external pure returns (string memory);
+    function name() external view returns (string memory);
 }
