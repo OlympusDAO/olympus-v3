@@ -16,17 +16,17 @@ interface IMorphoOracle is IOracle {
 
     /// @notice The collateral token address
     /// @return address The collateral token address
-    function collateralToken() external pure returns (address);
+    function collateralToken() external view returns (address);
 
     /// @notice The loan token address
     /// @return address The loan token address
-    function loanToken() external pure returns (address);
+    function loanToken() external view returns (address);
 
     /// @notice The scale factor for the oracle
     /// @return uint256 The scale factor
-    function scaleFactor() external pure returns (uint256);
+    function scaleFactor() external view returns (uint256);
 
     /// @notice The name of the oracle
     /// @return string The name
-    function name() external pure returns (string memory);
+    function name() external view returns (string memory);
 }
