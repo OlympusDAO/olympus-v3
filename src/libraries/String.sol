@@ -11,7 +11,7 @@ library String {
     }
 
     /// @notice Converts a bytes32 value to a string
-    /// @dev    Trims null characters from the end of the string
+    /// @dev    Extracts a null-terminated string from bytes32 (stops at the first null byte)
     ///
     /// @param  value_ The bytes32 value to convert to a string
     /// @return string The string representation of the bytes32 value
