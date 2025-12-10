@@ -10,6 +10,8 @@ contract MockPrice is PRICEv2 {
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
     mapping(address => uint256[]) internal observations;
+    mapping(address => uint256) internal lastStoredPrices;
+    mapping(address => uint48) internal lastStoredTimestamps;
     uint48 internal timestamp;
 
     address[] internal _assets;
@@ -83,10 +85,22 @@ contract MockPrice is PRICEv2 {
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
 
         uint256 price;
-        if (variant_ == Variant.CURRENT || variant_ == Variant.LAST) {
+        uint48 priceTimestamp;
+        if (variant_ == Variant.CURRENT) {
             price = prices[asset_];
+            priceTimestamp = timestamp;
+        } else if (variant_ == Variant.LAST) {
+            // Return last stored price, or 0 if never stored
+            if (lastStoredTimestamps[asset_] == 0) {
+                price = 0;
+                priceTimestamp = 0;
+            } else {
+                price = lastStoredPrices[asset_];
+                priceTimestamp = lastStoredTimestamps[asset_];
+            }
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             price = movingAverages[asset_];
+            priceTimestamp = timestamp;
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }
@@ -96,7 +110,7 @@ contract MockPrice is PRICEv2 {
             revert PRICE_PriceZero(asset_);
         }
 
-        return (price, timestamp);
+        return (price, priceTimestamp);
     }
 
     function getPriceIn(address asset_, address base_) external view override returns (uint256) {
@@ -120,12 +134,39 @@ contract MockPrice is PRICEv2 {
     ) public view override returns (uint256, uint48) {
         uint256 assetPrice;
         uint256 basePrice;
-        if (variant_ == Variant.CURRENT || variant_ == Variant.LAST) {
+        uint48 priceTimestamp;
+        if (variant_ == Variant.CURRENT) {
             assetPrice = prices[asset_];
             basePrice = prices[base_];
+            priceTimestamp = timestamp;
+        } else if (variant_ == Variant.LAST) {
+            // Return last stored prices, or 0 if never stored
+            if (lastStoredTimestamps[asset_] == 0) {
+                assetPrice = 0;
+            } else {
+                assetPrice = lastStoredPrices[asset_];
+            }
+            if (lastStoredTimestamps[base_] == 0) {
+                basePrice = 0;
+            } else {
+                basePrice = lastStoredPrices[base_];
+            }
+            // Use the earlier timestamp if they differ, or 0 if neither has been stored
+            uint48 assetTimestamp = lastStoredTimestamps[asset_];
+            uint48 baseTimestamp = lastStoredTimestamps[base_];
+            if (assetTimestamp == 0 && baseTimestamp == 0) {
+                priceTimestamp = 0;
+            } else if (assetTimestamp == 0) {
+                priceTimestamp = baseTimestamp;
+            } else if (baseTimestamp == 0) {
+                priceTimestamp = assetTimestamp;
+            } else {
+                priceTimestamp = assetTimestamp < baseTimestamp ? assetTimestamp : baseTimestamp;
+            }
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             assetPrice = movingAverages[asset_];
             basePrice = movingAverages[base_];
+            priceTimestamp = timestamp;
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }
@@ -134,7 +175,7 @@ contract MockPrice is PRICEv2 {
         if (basePrice == 0) revert PRICE_PriceZero(base_);
 
         // Return asset price / base price
-        return ((assetPrice * 10 ** _decimals) / basePrice, timestamp);
+        return ((assetPrice * 10 ** _decimals) / basePrice, priceTimestamp);
     }
 
     function setPriceDecimals(uint8 decimals_) public {
@@ -153,7 +194,9 @@ contract MockPrice is PRICEv2 {
                 movingAverageDuration: 30 days,
                 nextObsIndex: 0,
                 numObservations: 90,
-                lastObservationTime: uint48(block.timestamp),
+                lastObservationTime: lastStoredTimestamps[asset_] != 0
+                    ? lastStoredTimestamps[asset_]
+                    : uint48(block.timestamp),
                 cumulativeObs: 0,
                 obs: observations[asset_],
                 strategy: bytes(""),
@@ -165,8 +208,16 @@ contract MockPrice is PRICEv2 {
         return true;
     }
 
-    function storePrice(address asset_) external view override {
-        getPrice(asset_, Variant.CURRENT);
+    function storePrice(address asset_) external override {
+        // Get current price
+        (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
+
+        // Store the price and timestamp
+        lastStoredPrices[asset_] = price;
+        lastStoredTimestamps[asset_] = uint48(block.timestamp);
+
+        // Emit event to match PRICEv2 behavior
+        emit PriceStored(asset_, price, uint48(block.timestamp));
     }
 
     function addAsset(
