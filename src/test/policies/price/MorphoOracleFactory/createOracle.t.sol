@@ -114,7 +114,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         // Don't set price for this token
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(newToken))
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(newToken))
         );
 
         vm.prank(admin);
@@ -129,7 +129,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         // Don't set price for this token
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(newToken))
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(newToken))
         );
 
         vm.prank(admin);
