@@ -102,22 +102,17 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     // ========== ACCESS CONTROL ========== //
 
-    /// @notice Checks if the caller has the oracle_manager, manager, or admin role
-    function _onlyOracleManagerOrManagerOrAdminRole() internal view {
-        if (
-            !ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) &&
-            !_isManager(msg.sender) &&
-            !_isAdmin(msg.sender)
-        ) {
+    /// @notice Checks if the caller has the oracle_manager or admin role
+    function _onlyOracleManagerOrAdminRole() internal view {
+        if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
         }
     }
 
-    /// @notice Checks if the caller has the oracle_manager, manager, admin, or emergency role
-    function _onlyOracleManagerOrManagerOrAdminOrEmergencyRole() internal view {
+    /// @notice Checks if the caller has the oracle_manager, admin, or emergency role
+    function _onlyOracleManagerOrAdminOrEmergencyRole() internal view {
         if (
             !ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) &&
-            !_isManager(msg.sender) &&
             !_isAdmin(msg.sender) &&
             !_isEmergency(msg.sender)
         ) {
@@ -125,15 +120,15 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         }
     }
 
-    /// @notice Modifier that reverts if the caller does not have the oracle_manager, manager, or admin role
-    modifier onlyOracleManagerOrManagerOrAdminRole() {
-        _onlyOracleManagerOrManagerOrAdminRole();
+    /// @notice Modifier that reverts if the caller does not have the oracle_manager or admin role
+    modifier onlyOracleManagerOrAdminRole() {
+        _onlyOracleManagerOrAdminRole();
         _;
     }
 
-    /// @notice Modifier that reverts if the caller does not have the oracle_manager, manager, admin, or emergency role
-    modifier onlyOracleManagerOrManagerOrAdminOrEmergencyRole() {
-        _onlyOracleManagerOrManagerOrAdminOrEmergencyRole();
+    /// @notice Modifier that reverts if the caller does not have the oracle_manager, admin, or emergency role
+    modifier onlyOracleManagerOrAdminOrEmergencyRole() {
+        _onlyOracleManagerOrAdminOrEmergencyRole();
         _;
     }
 
@@ -165,7 +160,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         address baseToken_,
         address quoteToken_,
         bytes calldata customParams_
-    ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole returns (address oracle) {
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole returns (address oracle) {
         // Check if creation is enabled
         if (!isCreationEnabled) {
             revert OracleFactory_CreationDisabled();
@@ -241,8 +236,9 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IOracleFactory
-    function enableCreation() external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
+    function enableCreation() external override onlyEnabled onlyOracleManagerOrAdminRole {
         if (isCreationEnabled) revert OracleFactory_CreationAlreadyEnabled();
+
         isCreationEnabled = true;
         emit CreationEnabled();
     }
@@ -252,9 +248,10 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         external
         override
         onlyEnabled
-        onlyOracleManagerOrManagerOrAdminOrEmergencyRole
+        onlyOracleManagerOrAdminOrEmergencyRole
     {
         if (!isCreationEnabled) revert OracleFactory_CreationAlreadyDisabled();
+
         isCreationEnabled = false;
         emit CreationDisabled();
     }
@@ -269,7 +266,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     ///             - The oracle is already enabled
     function enableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
@@ -285,7 +282,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     ///             - The oracle is already disabled
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrManagerOrAdminOrEmergencyRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyDisabled(oracle_);
 

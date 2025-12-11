@@ -20,7 +20,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
         address caller_
     ) public givenFactoryIsEnabled {
-        vm.assume(caller_ != admin && caller_ != manager && caller_ != oracleManager);
+        vm.assume(caller_ != admin && caller_ != oracleManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
@@ -214,13 +214,13 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
     }
 
     // when called by manager
-    //  [X] it succeeds
+    //  [X] it reverts
 
-    function test_whenCalledByManager_succeeds() public givenFactoryIsEnabled {
+    function test_whenCalledByManager_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
         vm.prank(manager);
         address oracle = factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
-
-        assertNotEq(oracle, address(0), "Oracle address should not be zero");
     }
 
     // when called by oracle manager

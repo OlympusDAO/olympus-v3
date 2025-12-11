@@ -22,7 +22,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
         address caller_
     ) public givenFactoryIsEnabled {
-        vm.assume(caller_ != admin && caller_ != manager && caller_ != oracleManager);
+        vm.assume(caller_ != admin && caller_ != oracleManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
@@ -326,25 +326,15 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     }
 
     // when the caller has the manager role
-    //  [X] it succeeds
+    //  [X] it reverts
 
-    function test_whenCallerHasManagerRole() public givenFactoryIsEnabled {
+    function test_whenCallerHasManagerRole_reverts() public givenFactoryIsEnabled {
+        // Expect revert
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
+        // Call function
         vm.prank(manager);
-        address oracle = factory.createOracle(
-            address(collateralToken),
-            address(loanToken),
-            bytes("")
-        );
-
-        // Verify oracle is deployed
-        assertNotEq(oracle, address(0), "Oracle should be deployed");
-
-        // Verify oracle is stored in mapping
-        assertEq(
-            factory.getOracle(address(collateralToken), address(loanToken)),
-            oracle,
-            "Oracle should be stored in mapping"
-        );
+        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

@@ -10,18 +10,13 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 contract MorphoOracleFactoryDisableCreationTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
 
-    // when caller does not have the admin, manager, oracle_manager or emergency role
+    // when caller does not have the admin, oracle_manager or emergency role
     //  [X] it reverts with NotAuthorised
 
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
         address caller_
     ) public givenFactoryIsEnabled {
-        vm.assume(
-            caller_ != admin &&
-                caller_ != manager &&
-                caller_ != oracleManager &&
-                caller_ != emergency
-        );
+        vm.assume(caller_ != admin && caller_ != oracleManager && caller_ != emergency);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
@@ -78,9 +73,13 @@ contract MorphoOracleFactoryDisableCreationTest is MorphoOracleFactoryTest {
     }
 
     // when the caller has the manager role
-    //  [X] it succeeds
+    //  [X] it reverts
 
-    function test_whenCallerHasManagerRole() public givenFactoryIsEnabled {
+    function test_whenCallerHasManagerRole_reverts() public givenFactoryIsEnabled {
+        // Expect revert
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
+        // Call function
         vm.prank(manager);
         factory.disableCreation();
     }

@@ -10,7 +10,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
 
-    // when caller does not have the admin, manager, or oracle_manager role
+    // when caller does not have the admin or oracle_manager role
     //  [X] it reverts with NotAuthorised
 
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
@@ -18,7 +18,7 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     ) public givenFactoryIsEnabled givenOracleIsCreated givenOracleIsDisabled {
         address oracle = factory.getOracle(address(collateralToken), address(loanToken));
 
-        vm.assume(caller_ != admin && caller_ != manager && caller_ != oracleManager);
+        vm.assume(caller_ != admin && caller_ != oracleManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
@@ -120,9 +120,9 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     }
 
     // when the caller has the manager role
-    //  [X] it succeeds
+    //  [X] it reverts
 
-    function test_whenCallerHasManagerRole()
+    function test_whenCallerHasManagerRole_reverts()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -130,10 +130,12 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     {
         address oracle = factory.getOracle(address(collateralToken), address(loanToken));
 
+        // Expect revert
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
+        // Call function
         vm.prank(manager);
         factory.enableOracle(oracle);
-
-        assertTrue(factory.isOracleEnabled(oracle), "Oracle should be enabled");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
