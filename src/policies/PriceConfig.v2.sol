@@ -18,19 +18,6 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
 contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
-    // DONE
-    // [X] Policy setup
-    // [X] Install/upgrade submodules
-    // [X] Add asset to PRICEv2
-    // [X] Remove asset from PRICEv2
-    // [X] Update price feeds for asset on PRICEv2
-    // [X] Update price strategy for asset on PRICEv2
-    // [X] Update moving average data for asset on PRICEv2
-
-    // ========== ERRORS ========== //
-
-    // ========== EVENTS ========== //
-
     // ========== STATE ========== //
 
     bytes32 internal constant _PRICE_MANAGER_ROLE = "price_manager";
@@ -38,9 +25,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // Modules
     PRICEv2 public PRICE;
 
-    //============================================================================================//
-    //                                      POLICY SETUP                                          //
-    //============================================================================================//
+    // ========== POLICY SETUP ========== //
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
@@ -104,9 +89,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         return (2, 0);
     }
 
-    //==================================================================================================//
-    //                                      MODIFIERS                                                   //
-    //==================================================================================================//
+    // ========== MODIFIERS ========== //
 
     function _onlyPriceManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, _PRICE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
@@ -120,9 +103,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         _;
     }
 
-    //==================================================================================================//
-    //                                      PRICE MANAGEMENT                                            //
-    //==================================================================================================//
+    // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
     function addAssetPrice(
@@ -188,9 +169,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         );
     }
 
-    //==================================================================================================//
-    //                                      SUBMODULE MANAGEMENT                                        //
-    //==================================================================================================//
+    // ========== SUBMODULE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
     function installSubmodule(address submodule_) external override onlyEnabled onlyAdminRole {
