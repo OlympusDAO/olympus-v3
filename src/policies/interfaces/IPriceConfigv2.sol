@@ -95,13 +95,5 @@ interface IPriceConfigv2 {
     /// @param  subKeycode_ The SubKeycode of the submodule to call
     /// @param  data_       The calldata to send to the submodule
     function execOnSubmodule(SubKeycode subKeycode_, bytes calldata data_) external;
-
-    // ========================= //
-    // VERSION                   //
-    // ========================= //
-
-    /// @notice     Returns the current version of the policy
-    /// @dev        This is useful for distinguishing between different versions of the policy
-    function VERSION() external pure returns (uint8 major, uint8 minor);
 }
 /// forge-lint: disable-end(mixed-case-function)

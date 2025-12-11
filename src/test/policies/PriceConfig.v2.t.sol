@@ -7,6 +7,7 @@ pragma solidity >=0.8.0;
 // Test
 import {Test} from "@forge-std-1.9.6/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Mocks
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -18,6 +19,7 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
@@ -1121,6 +1123,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_supportsInterface() public view {
+        ERC165Helper.validateSupportsInterface(address(priceConfig));
         assertEq(
             priceConfig.supportsInterface(type(IERC165).interfaceId),
             true,
@@ -1135,6 +1138,11 @@ contract PriceConfigv2Test is Test {
             priceConfig.supportsInterface(type(IEnabler).interfaceId),
             true,
             "IEnabler mismatch"
+        );
+        assertEq(
+            priceConfig.supportsInterface(type(IVersioned).interfaceId),
+            true,
+            "IVersioned mismatch"
         );
     }
 }

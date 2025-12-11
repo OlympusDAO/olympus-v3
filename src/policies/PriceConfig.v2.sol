@@ -6,6 +6,7 @@ pragma solidity 0.8.15;
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
 
@@ -17,7 +18,7 @@ import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
-contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
+contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // DONE
     // [X] Policy setup
     // [X] Install/upgrade submodules
@@ -99,10 +100,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
         });
     }
 
-    /// @inheritdoc IPriceConfigv2
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        major = 2;
-        minor = 0;
+    /// @inheritdoc IVersioned
+    function VERSION() external pure override returns (uint8, uint8) {
+        return (2, 0);
     }
 
     //==================================================================================================//
@@ -217,6 +217,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IPriceConfigv2).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
