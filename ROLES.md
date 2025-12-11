@@ -39,7 +39,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
-| emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, enable/disable the contract |
+| emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
