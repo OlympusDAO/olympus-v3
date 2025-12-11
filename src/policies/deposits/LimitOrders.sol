@@ -339,24 +339,21 @@ contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
     // ========== YIELD FUNCTIONS ========== //
 
     /// @notice Calculate current accrued yield in USDS terms
-    function getAccruedYield() public view returns (uint256 yield) {
-        uint256 sUsdsBalance = SUSDS.balanceOf(address(this));
-        if (sUsdsBalance == 0) return 0;
-
-        uint256 currentValue = SUSDS.convertToAssets(sUsdsBalance);
-        
-        if (currentValue > totalUsdsOwed) {
-            yield = currentValue - totalUsdsOwed;
-        }
-
-        return yield;
+    function getAccruedYield() public view returns (uint256) {
+        return SUSDS.convertToAssets(getAccruedYieldShares());
     }
 
     /// @notice Calculate accrued yield in sUSDS shares
-    function getAccruedYieldShares() public view returns (uint256 shares) {
-        uint256 yield = getAccruedYield();
-        if (yield == 0) return 0;
-        return SUSDS.convertToShares(yield);
+    /// @dev    Uses previewWithdraw to safely account for rounding
+    function getAccruedYieldShares() public view returns (uint256) {
+        uint256 sUsdsBalance = SUSDS.balanceOf(address(this));
+
+        // previewWithdraw rounds UP, giving us the max shares needed to cover obligations
+        uint256 sharesRequired = SUSDS.previewWithdraw(totalUsdsOwed);
+
+        if (sUsdsBalance <= sharesRequired) return 0;
+
+        return sUsdsBalance - sharesRequired;
     }
 
     /// @notice Sweep all accrued yield to the yield recipient as sUSDS
@@ -374,21 +371,15 @@ contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Calculate incentive for a given fill amount
+    /// @notice Calculate incentive and incentive rate for a given fill amount
     function calculateIncentive(
         uint256 orderId_,
         uint256 fillAmount_
-    ) external view returns (uint256) {
+    ) external view returns (uint256 incentive, uint256 incentiveRate) {
         LimitOrder memory order = orders[orderId_];
-        if (order.depositBudget == 0) return 0;
-        return (fillAmount_ * order.incentiveBudget) / order.depositBudget;
-    }
-
-    /// @notice Get effective incentive rate in basis points
-    function getIncentiveRate(uint256 orderId_) external view returns (uint256) {
-        LimitOrder memory order = orders[orderId_];
-        if (order.depositBudget == 0) return 0;
-        return (order.incentiveBudget * 10_000) / order.depositBudget;
+        if (order.depositBudget == 0) return (0, 0);
+        incentive = (fillAmount_ * order.incentiveBudget) / order.depositBudget;
+        incentiveRate = (order.incentiveBudget * 10_000) / order.depositBudget;
     }
 
     /// @notice Check if an order can be filled at a given size
@@ -420,21 +411,11 @@ contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
         return (true, "", effectivePrice);
     }
 
-    /// @notice Get order details
-    function getOrder(uint256 orderId_) external view returns (LimitOrder memory) {
-        return orders[orderId_];
-    }
-
-    /// @notice Get remaining deposit budget
-    function getRemainingDeposit(uint256 orderId_) external view returns (uint256) {
+    /// @notice Get remaining deposit and incentive budgets for order
+    function getRemaining(uint256 orderId_) external view returns (uint256 deposit, uint256 incentive) {
         LimitOrder memory order = orders[orderId_];
-        return order.depositBudget - order.depositSpent;
-    }
-
-    /// @notice Get remaining incentive budget
-    function getRemainingIncentive(uint256 orderId_) external view returns (uint256) {
-        LimitOrder memory order = orders[orderId_];
-        return order.incentiveBudget - order.incentiveSpent;
+        deposit = order.depositBudget - order.depositSpent;
+        incentive = order.incentiveBudget - order.incentiveSpent;
     }
 
     /// @notice Get current execution price for a fill amount
@@ -450,8 +431,19 @@ contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
     /// @notice Find fillable orders for a deposit period
     /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
     function getFillableOrders(uint8 depositPeriod_) external view returns (uint256[] memory) {
+        return _getFillableOrders(depositPeriod_, 0, nextOrderId);
+    }
+
+    /// @notice Find fillable orders for a deposit period between given order IDs
+    /// @dev    For use if getFillableOrders(uint8 depositPeriod_) exceeds limit
+    /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
+    function getFillableOrders(uint8 depositPeriod_, uint256 index0, uint256 index1) external view returns (uint256[] memory) {
+        return _getFillableOrders(depositPeriod_, index0, index1);
+    }
+
+    function _getFillableOrders(uint8 depositPeriod_, uint256 index0, uint256 index1) internal view returns (uint256[] memory) {
         uint256 count = 0;
-        for (uint256 i = 0; i < nextOrderId; i++) {
+        for (uint256 i = index0; i < index1; i++) {
             if (_isOrderFillable(i, depositPeriod_)) {
                 count++;
             }
@@ -459,23 +451,13 @@ contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
 
         uint256[] memory fillable = new uint256[](count);
         uint256 index = 0;
-        for (uint256 i = 0; i < nextOrderId; i++) {
+        for (uint256 i = index0; i < index1; i++) {
             if (_isOrderFillable(i, depositPeriod_)) {
                 fillable[index++] = i;
             }
         }
 
         return fillable;
-    }
-
-    /// @notice Get total sUSDS balance held by contract
-    function getSUsdsBalance() external view returns (uint256) {
-        return SUSDS.balanceOf(address(this));
-    }
-
-    /// @notice Get current USDS value of sUSDS holdings
-    function getCurrentUsdsValue() external view returns (uint256) {
-        return SUSDS.convertToAssets(SUSDS.balanceOf(address(this)));
     }
 
     function _isOrderFillable(
