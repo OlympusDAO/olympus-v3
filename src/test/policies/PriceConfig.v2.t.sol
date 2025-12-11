@@ -17,6 +17,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
@@ -39,34 +40,37 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // PRICEv2 Configuration
 // [X] addAssetPrice
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_policy" role can call
+//     [X] only admin or price_manager role can call
 //     [X] inputs to IPRICEv2.addAsset are correct
 // [X] removeAssetPrice
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_policy" role can call
+//     [X] only admin or price_manager role can call
 //     [X] inputs to IPRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_policy" role can call
+//     [X] only admin or price_manager role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceFeeds are correct
 // [X] updateAssetPriceStrategy
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_policy" role can call
+//     [X] only admin or price_manager role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceStrategy are correct
 // [X] updateAssetMovingAverage
 //     [X] only when contract is enabled
-//     [X] only "priceconfig_policy" role can call
+//     [X] only admin or price_manager role can call
 //     [X] inputs to IPRICEv2.updateAssetMovingAverage are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
 //     [X] only when contract is enabled
-//     [X] only ROLE_PRICE_CONFIG_ADMIN role can call
+//     [X] only admin role can call
 //     [X] inputs to IPRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only when contract is enabled
-//     [X] only ROLE_PRICE_CONFIG_ADMIN role can call
+//     [X] only admin role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
+// [X] execOnSubmodule
+//     [X] only when contract is enabled
+//     [X] only admin or price_manager role can call
 
 type Category is bytes32;
 type CategoryGroup is bytes32;
@@ -119,24 +123,26 @@ contract PriceConfigv2Test is Test {
     SimplePriceFeedStrategy internal strategy;
 
     address internal admin;
-    address internal policy;
+    address internal priceManager;
+    address internal emergency;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint8 internal constant DECIMALS = 18;
 
     bytes32 internal constant ROLE_ADMIN = "admin";
-    bytes32 internal constant ROLE_PRICE_CONFIG_POLICY = "priceconfig_policy";
-    bytes32 internal constant ROLE_PRICE_CONFIG_ADMIN = "priceconfig_admin";
+    bytes32 internal constant ROLE_PRICE_MANAGER = "price_manager";
+    bytes32 internal constant ROLE_EMERGENCY = "emergency";
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
         // Create accounts
         UserFactory userFactory = new UserFactory();
-        address[] memory users = userFactory.create(2);
+        address[] memory users = userFactory.create(3);
         admin = users[0];
-        policy = users[1];
+        priceManager = users[1];
+        emergency = users[2];
 
         // Tokens
         ohm = new MockERC20("Olympus", "OHM", 9);
@@ -182,8 +188,8 @@ contract PriceConfigv2Test is Test {
 
         // Configure permissioned roles
         rolesAdmin.grantRole(ROLE_ADMIN, admin);
-        rolesAdmin.grantRole(ROLE_PRICE_CONFIG_ADMIN, admin);
-        rolesAdmin.grantRole(ROLE_PRICE_CONFIG_POLICY, policy);
+        rolesAdmin.grantRole(ROLE_PRICE_MANAGER, priceManager);
+        rolesAdmin.grantRole(ROLE_EMERGENCY, emergency);
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
@@ -257,7 +263,7 @@ contract PriceConfigv2Test is Test {
 
         uint256[] memory obs = _makeObservations(ohm, feeds[0], 15);
 
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.addAssetPrice(
             address(ohm),
             true,
@@ -359,7 +365,7 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Call function
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.addAssetPrice(
             address(ohm),
             true,
@@ -372,8 +378,8 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice_onlyPolicy_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_addAssetPrice_unauthorizedUser_reverts(address user_) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Setup data to add asset
         IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
@@ -404,12 +410,11 @@ contract PriceConfigv2Test is Test {
         // Get observation data to initialize moving average with
         uint256[] memory obs = _makeObservations(ohm, feedComponents[0], 15);
 
-        // Try to add asset to PRICEv2 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        // Try to add asset to PRICEv2 with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
+
+        // Call function
         vm.prank(user_);
         priceConfig.addAssetPrice(
             address(ohm),
@@ -426,8 +431,8 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
 
-        // Try to add asset to PRICEv2 with policy account, expect success
-        vm.prank(policy);
+        // Try to add asset to PRICEv2 with priceManager account, expect success
+        vm.prank(priceManager);
         priceConfig.addAssetPrice(
             address(ohm),
             true,
@@ -440,7 +445,10 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice() public givenEnabled {
+    function test_addAssetPrice(uint8 role_) public givenEnabled {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Setup data to add asset
         IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -484,8 +492,8 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.strategy, bytes(""));
         assertEq(asset.feeds, bytes(""));
 
-        // Add asset to PRICEv2 using policy account
-        vm.prank(policy);
+        // Add asset to PRICEv2 using authorized caller
+        vm.prank(caller);
         priceConfig.addAssetPrice(
             address(ohm),
             true,
@@ -520,12 +528,12 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Call function
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.removeAssetPrice(address(ohm));
     }
 
-    function test_removeAssetPrice_onlyPolicy_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_removeAssetPrice_unauthorizedUser_reverts(address user_) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
         _addBaseAssets();
@@ -534,12 +542,11 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Try to remove asset from PRICEv2 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        // Try to remove asset from PRICEv2 with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
+
+        // Call function
         vm.prank(user_);
         priceConfig.removeAssetPrice(address(ohm));
 
@@ -547,8 +554,8 @@ contract PriceConfigv2Test is Test {
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Try to remove asset from PRICEv2 with policy account, expect success
-        vm.prank(policy);
+        // Try to remove asset from PRICEv2 with priceManager account, expect success
+        vm.prank(priceManager);
         priceConfig.removeAssetPrice(address(ohm));
 
         // Confirm asset was removed
@@ -556,7 +563,10 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.approved, false);
     }
 
-    function test_removeAssetPrice() public givenEnabled {
+    function test_removeAssetPrice(uint8 role_) public givenEnabled {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -564,8 +574,8 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Remove asset from PRICEv2 using policy account
-        vm.prank(policy);
+        // Remove asset from PRICEv2 using authorized caller
+        vm.prank(caller);
         priceConfig.removeAssetPrice(address(ohm));
 
         // Confirm asset is not approved and all data deleted
@@ -591,12 +601,14 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Update feeds
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
     }
 
-    function test_updateAssetPriceFeeds_onlyPolicy_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_updateAssetPriceFeeds_unauthorizedUser_reverts(
+        address user_
+    ) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
         _addBaseAssets();
@@ -610,12 +622,11 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
         newFeeds[0] = feeds[0];
 
-        // Try to update feeds for asset on PRICEv2 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        // Try to update feeds for asset on PRICEv2 with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
+
+        // Call function
         vm.prank(user_);
         priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
@@ -624,8 +635,8 @@ contract PriceConfigv2Test is Test {
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
-        // Try to update feeds for asset on PRICEv2 with policy account, expect success
-        vm.prank(policy);
+        // Try to update feeds for asset on PRICEv2 with priceManager account, expect success
+        vm.prank(priceManager);
         priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
         // Confirm feeds were updated
@@ -634,7 +645,10 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds.length, 1);
     }
 
-    function test_updateAssetPriceFeeds() public givenEnabled {
+    function test_updateAssetPriceFeeds(uint8 role_) public givenEnabled {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -647,8 +661,8 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
         newFeeds[0] = feeds[0];
 
-        // Update feeds
-        vm.prank(policy);
+        // Update feeds using authorized caller
+        vm.prank(caller);
         priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
         // Confirm feeds were updated
@@ -672,12 +686,14 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Call function
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
     }
 
-    function test_updateAssetPriceStrategy_onlyPolicy_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_updateAssetPriceStrategy_unauthorizedUser_reverts(
+        address user_
+    ) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
         _addBaseAssets();
@@ -700,12 +716,11 @@ contract PriceConfigv2Test is Test {
         vm.prank(admin);
         priceConfig.installSubmodule(address(newStrategy));
 
-        // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        // Try to update strategy for asset on PRICEv2 with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
+
+        // Call function
         vm.prank(user_);
         priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
@@ -718,8 +733,8 @@ contract PriceConfigv2Test is Test {
         assertEq(strat.params, abi.encode(0));
         assertEq(asset.useMovingAverage, true);
 
-        // Try to update strategy for asset on PRICEv2 with policy account, expect success
-        vm.prank(policy);
+        // Try to update strategy for asset on PRICEv2 with priceManager account, expect success
+        vm.prank(priceManager);
         priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
         // Confirm feeds were updated
@@ -731,7 +746,10 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.useMovingAverage, false);
     }
 
-    function test_updateAssetPriceStrategy() public givenEnabled {
+    function test_updateAssetPriceStrategy(uint8 role_) public givenEnabled {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -754,8 +772,8 @@ contract PriceConfigv2Test is Test {
         vm.prank(admin);
         priceConfig.installSubmodule(address(newStrategy));
 
-        // Update strategy for asset on PRICEv2 with policy account
-        vm.prank(policy);
+        // Update strategy for asset on PRICEv2 with authorized caller
+        vm.prank(caller);
         priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
         // Confirm strategy was updated
@@ -775,7 +793,7 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Call function
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.updateAssetMovingAverage(
             address(ohm),
             true,
@@ -785,14 +803,16 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_updateAssetMovingAverage_onlyPolicy_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_updateAssetMovingAverage_unauthorizedUser_reverts(
+        address user_
+    ) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
         _addBaseAssets();
 
         // Update ohm strategy to not use a moving average so we can remove it later
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.updateAssetPriceStrategy(
             address(ohm),
             IPRICEv2.Component(
@@ -807,12 +827,11 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.storeMovingAverage, true);
 
-        // Try to update moving average for asset on PRICEv2 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        // Try to update moving average for asset on PRICEv2 with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
+
+        // Call function
         vm.prank(user_);
         priceConfig.updateAssetMovingAverage(
             address(ohm),
@@ -826,8 +845,8 @@ contract PriceConfigv2Test is Test {
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.storeMovingAverage, true);
 
-        // Try to update moving average for asset on PRICEv2 with policy account, expect success
-        vm.prank(policy);
+        // Try to update moving average for asset on PRICEv2 with priceManager account, expect success
+        vm.prank(priceManager);
         priceConfig.updateAssetMovingAverage(
             address(ohm),
             false,
@@ -858,7 +877,7 @@ contract PriceConfigv2Test is Test {
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
         );
 
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.addAssetPrice(
             address(fohm),
             false,
@@ -880,9 +899,9 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.cumulativeObs, uint256(0));
         assertEq(asset.obs.length, uint256(1)); // cached value
 
-        // Update moving average with policy account
+        // Update moving average with priceManager account
         uint256[] memory obs = _makeObservations(fohm, feedComponents[0], 15);
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.updateAssetMovingAverage(
             address(fohm),
             true,
@@ -920,7 +939,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.installSubmodule(address(newStrategy));
     }
 
-    function test_installSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
+    function test_installSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
         vm.assume(user_ != admin);
 
         // Create new submodule to install
@@ -931,10 +950,7 @@ contract PriceConfigv2Test is Test {
         assertEq(submodule, address(0));
 
         // Try to install submodule with non-admin account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_ADMIN
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", ROLE_ADMIN);
         vm.expectRevert(err);
         vm.prank(user_);
         priceConfig.installSubmodule(address(newStrategy));
@@ -981,7 +997,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.upgradeSubmodule(address(newChainlink));
     }
 
-    function test_upgradeSubmodule_onlyAdmin_reverts(address user_) public givenEnabled {
+    function test_upgradeSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
         vm.assume(user_ != admin);
 
         // Create mock upgrade for chainlink submodule
@@ -995,10 +1011,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
 
         // Try to upgrade chainlink submodule with non-admin account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_ADMIN
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", ROLE_ADMIN);
         vm.expectRevert(err);
         vm.prank(user_);
         priceConfig.upgradeSubmodule(address(newChainlink));
@@ -1054,7 +1067,7 @@ contract PriceConfigv2Test is Test {
         _expectRevertNotEnabled();
 
         // Call function
-        vm.prank(policy);
+        vm.prank(priceManager);
         priceConfig.execOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
@@ -1065,12 +1078,15 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_execOnSubmodule() public givenEnabled {
+    function test_execOnSubmodule(uint8 role_) public givenEnabled {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
 
-        vm.prank(policy);
+        vm.prank(caller);
         priceConfig.execOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
@@ -1083,17 +1099,14 @@ contract PriceConfigv2Test is Test {
         // No error
     }
 
-    function test_execOnSubmodule_onlyPolicy(address user_) public givenEnabled {
-        vm.assume(user_ != policy);
+    function test_execOnSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
 
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            ROLE_PRICE_CONFIG_POLICY
-        );
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
 
         vm.prank(user_);
@@ -1107,7 +1120,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_supportsInterface() public {
+    function test_supportsInterface() public view {
         assertEq(
             priceConfig.supportsInterface(type(IERC165).interfaceId),
             true,

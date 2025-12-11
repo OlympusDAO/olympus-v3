@@ -16,7 +16,7 @@ import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
-/// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles
+/// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
 contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     // DONE
     // [X] Policy setup
@@ -32,6 +32,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     // ========== EVENTS ========== //
 
     // ========== STATE ========== //
+
+    bytes32 internal constant _PRICE_MANAGER_ROLE = "price_manager";
 
     // Modules
     PRICEv2 public PRICE;
@@ -104,6 +106,22 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     }
 
     //==================================================================================================//
+    //                                      MODIFIERS                                                   //
+    //==================================================================================================//
+
+    function _onlyPriceManagerOrAdminRole() internal view {
+        if (!ROLES.hasRole(msg.sender, _PRICE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
+            revert NotAuthorised();
+        }
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the admin or price_manager role
+    modifier onlyPriceManagerOrAdminRole() {
+        _onlyPriceManagerOrAdminRole();
+        _;
+    }
+
+    //==================================================================================================//
     //                                      PRICE MANAGEMENT                                            //
     //==================================================================================================//
 
@@ -117,7 +135,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
         IPRICEv2.Component[] memory feeds_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -133,7 +151,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     /// @inheritdoc IPriceConfigv2
     function removeAssetPrice(
         address asset_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.removeAsset(asset_);
     }
 
@@ -141,7 +159,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     function updateAssetPriceFeeds(
         address asset_,
         IPRICEv2.Component[] memory feeds_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.updateAssetPriceFeeds(asset_, feeds_);
     }
 
@@ -150,7 +168,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
         address asset_,
         IPRICEv2.Component memory strategy_,
         bool useMovingAverage_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
     }
 
@@ -161,7 +179,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
         uint256[] memory observations_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.updateAssetMovingAverage(
             asset_,
             storeMovingAverage_,
@@ -176,16 +194,12 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     //==================================================================================================//
 
     /// @inheritdoc IPriceConfigv2
-    function installSubmodule(
-        address submodule_
-    ) external override onlyEnabled onlyRole("priceconfig_admin") {
+    function installSubmodule(address submodule_) external override onlyEnabled onlyAdminRole {
         PRICE.installSubmodule(Submodule(submodule_));
     }
 
     /// @inheritdoc IPriceConfigv2
-    function upgradeSubmodule(
-        address submodule_
-    ) external override onlyEnabled onlyRole("priceconfig_admin") {
+    function upgradeSubmodule(address submodule_) external override onlyEnabled onlyAdminRole {
         PRICE.upgradeSubmodule(Submodule(submodule_));
     }
 
@@ -193,7 +207,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2 {
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external override onlyEnabled onlyRole("priceconfig_policy") {
+    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
 

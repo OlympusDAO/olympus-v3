@@ -17,6 +17,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
+| admin | PriceConfig v2 | Install/upgrade/exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
@@ -40,6 +41,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
+| emergency | PriceConfig v2 | Disable contract |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
@@ -61,6 +63,7 @@ This document describes the roles that are used in the Olympus protocol.
 | oracle_manager | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | oracle_manager | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
+| price_manager | PriceConfig v2 | Exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 
