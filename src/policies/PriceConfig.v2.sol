@@ -9,7 +9,7 @@ import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
-import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
+import {Kernel, Keycode, toKeycode, Policy, Permissions, Module} from "src/Kernel.sol";
 import {SubKeycode, Submodule} from "src/Submodules.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
@@ -19,6 +19,9 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
 contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== STATE ========== //
+
+    bytes5 internal constant _PRICE_KEYCODE = "PRICE";
+    bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
     bytes32 internal constant _PRICE_MANAGER_ROLE = "price_manager";
 
@@ -32,19 +35,34 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("PRICE");
+        dependencies[0] = toKeycode(_ROLES_KEYCODE);
+        dependencies[1] = toKeycode(_PRICE_KEYCODE);
 
+        address priceModule = getModuleAddress(dependencies[1]);
+
+        // Require PRICE v1.2+ (major=1, minor>=2) or v2+ (major>=2)
+        // Cast to Module to access VERSION() function
+        (uint8 major, uint8 minor) = Module(priceModule).VERSION();
+        if (major == 1 && minor < 2)
+            revert IPriceConfigv2_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
+
+        // Verify the PRICE module supports IPRICEv2 interface
+        if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId))
+            revert IPriceConfigv2_UnsupportedModuleInterface(
+                _PRICE_KEYCODE,
+                type(IPRICEv2).interfaceId
+            );
+
+        // Set ROLES module (required by PolicyEnabler)
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        PRICE = PRICEv2(getModuleAddress(dependencies[1]));
 
-        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        // Set PRICE module
+        PRICE = PRICEv2(priceModule);
 
-        // Ensure Modules are using the expected major version.
-        // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([2, 1]);
-        if (PRICE_MAJOR != 2 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+        // Ensure ROLES module is using the expected major version
+        (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
+        if (rolesMajor != 1)
+            revert IPriceConfigv2_UnsupportedModuleVersion(_ROLES_KEYCODE, rolesMajor, rolesMinor);
     }
 
     /// @inheritdoc Policy

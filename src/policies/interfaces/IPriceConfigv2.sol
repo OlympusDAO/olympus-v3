@@ -8,6 +8,21 @@ import {SubKeycode} from "src/Submodules.sol";
 /// @notice     Interface for PriceConfigv2 policy
 /// @dev        Policy to configure PRICEv2
 interface IPriceConfigv2 {
+    // ========== ERRORS ========== //
+
+    /// @notice Thrown when module does not support interface
+    ///
+    /// @param  keycode     The keycode of the module
+    /// @param  interfaceId The interface identifier, as specified in ERC-165
+    error IPriceConfigv2_UnsupportedModuleInterface(bytes5 keycode, bytes4 interfaceId);
+
+    /// @notice Thrown when module version is not supported
+    ///
+    /// @param  keycode     The keycode of the module
+    /// @param  major       The major version of the module
+    /// @param  minor       The minor version of the module
+    error IPriceConfigv2_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
+
     // ========================= //
     // PRICE MANAGEMENT          //
     // ========================= //

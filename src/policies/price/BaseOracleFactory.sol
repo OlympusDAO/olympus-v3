@@ -26,6 +26,9 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     // ========== STATE ========== //
 
+    bytes5 internal constant _PRICE_KEYCODE = "PRICE";
+    bytes5 internal constant _ROLES_KEYCODE = "ROLES";
+
     /// @notice The PRICE module
     IPRICEv2 public PRICE;
 
@@ -65,28 +68,35 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("PRICE");
-        dependencies[1] = toKeycode("ROLES");
+        dependencies[0] = toKeycode(_PRICE_KEYCODE);
+        dependencies[1] = toKeycode(_ROLES_KEYCODE);
 
         address priceModule = getModuleAddress(dependencies[0]);
 
         // Require PRICE v1.2+ (major=1, minor>=2) or v2+ (major>=2)
         // Cast to Module to access VERSION() function
         (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major == 1 && minor < 2) {
-            revert OracleFactory_UnsupportedPRICEVersion(major, minor);
-        }
+        if (major == 1 && minor < 2)
+            revert OracleFactory_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
 
         // Verify the PRICE module supports IPRICEv2 interface
-        if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId)) {
-            revert OracleFactory_PRICEInterfaceNotSupported();
-        }
+        if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId))
+            revert OracleFactory_UnsupportedModuleInterface(
+                _PRICE_KEYCODE,
+                type(IPRICEv2).interfaceId
+            );
 
+        // Set PRICE module
         PRICE = IPRICEv2(priceModule);
         PRICE_DECIMALS = PRICE.decimals();
 
         // Set ROLES module (required by PolicyEnabler)
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        // Ensure ROLES module is using the expected major version
+        (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
+        if (rolesMajor != 1)
+            revert OracleFactory_UnsupportedModuleVersion(_ROLES_KEYCODE, rolesMajor, rolesMinor);
     }
 
     /// @inheritdoc Policy
@@ -164,11 +174,6 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         // Check if creation is enabled
         if (!isCreationEnabled) {
             revert OracleFactory_CreationDisabled();
-        }
-
-        // Validate PRICE module has been set
-        if (address(PRICE) == address(0)) {
-            revert OracleFactory_PRICEInterfaceNotSupported();
         }
 
         // Check if oracle already exists

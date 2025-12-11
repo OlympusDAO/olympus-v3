@@ -220,7 +220,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(manager);
-        address oracle = factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
     }
 
     // when called by oracle manager

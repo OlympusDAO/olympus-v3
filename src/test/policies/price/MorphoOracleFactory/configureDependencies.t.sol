@@ -9,6 +9,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 /// @notice Mock PRICE module that doesn't support IPRICEv2 interface
 contract MockPriceWithoutInterface is Module {
@@ -66,7 +67,8 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IOracleFactory.OracleFactory_UnsupportedPRICEVersion.selector,
+                IOracleFactory.OracleFactory_UnsupportedModuleVersion.selector,
+                bytes5("PRICE"),
                 1,
                 1
             )
@@ -92,7 +94,13 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         newKernel.executeAction(Actions.ActivatePolicy, address(newRolesAdmin));
 
         // Expect revert
-        vm.expectRevert(IOracleFactory.OracleFactory_PRICEInterfaceNotSupported.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_UnsupportedModuleInterface.selector,
+                bytes5("PRICE"),
+                type(IPRICEv2).interfaceId
+            )
+        );
 
         newKernel.executeAction(Actions.ActivatePolicy, address(newFactory));
     }

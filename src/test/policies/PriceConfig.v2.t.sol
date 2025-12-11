@@ -26,6 +26,7 @@ import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} f
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigv2} from "policies/PriceConfig.v2.sol";
 import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
+import {OlympusPricev1_2} from "modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -349,6 +350,26 @@ contract PriceConfigv2Test is Test {
 
     function test_constructor() public view {
         assertEq(priceConfig.isEnabled(), false, "Disabled by default");
+    }
+
+    function test_usingOlympusPricev1_2() public {
+        // Install OlympusPricev1_2
+        OlympusPricev1_2 newPrice = new OlympusPricev1_2(
+            kernel,
+            address(ohm),
+            OBSERVATION_FREQUENCY,
+            1e18
+        );
+
+        // Upgrade the module in the kernel
+        // This will cause PriceConfig v2 to use the new OlympusPricev1_2 module
+        kernel.executeAction(Actions.UpgradeModule, address(newPrice));
+
+        // Verify that the module version is correct
+        address priceModule = address(kernel.getModuleForKeycode(toKeycode("PRICE")));
+        (uint8 major, uint8 minor) = Module(priceModule).VERSION();
+        assertEq(major, 1, "Major version should be 1");
+        assertEq(minor, 2, "Minor version should be 2");
     }
 
     /* ========== PRICEv2 Configuration ========== */

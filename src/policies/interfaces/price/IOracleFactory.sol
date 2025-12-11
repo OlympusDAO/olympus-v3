@@ -37,13 +37,22 @@ interface IOracleFactory {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a token address is invalid (zero address or not a contract)
+    ///
+    /// @param  token The invalid token address
     error OracleFactory_InvalidToken(address token);
 
-    /// @notice Thrown when PRICE module version is not supported (must be v1.2+ or v2+)
-    error OracleFactory_UnsupportedPRICEVersion(uint8 major, uint8 minor);
+    /// @notice Thrown when module version is not supported
+    ///
+    /// @param  keycode     The keycode of the module
+    /// @param  major       The major version of the module
+    /// @param  minor       The minor version of the module
+    error OracleFactory_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
-    /// @notice Thrown when PRICE module does not support IPRICEv2 interface
-    error OracleFactory_PRICEInterfaceNotSupported();
+    /// @notice Thrown when module does not support interface
+    ///
+    /// @param  keycode     The keycode of the module
+    /// @param  interfaceId The interface identifier, as specified in ERC-165
+    error OracleFactory_UnsupportedModuleInterface(bytes5 keycode, bytes4 interfaceId);
 
     /// @notice Thrown when oracle creation is disabled
     error OracleFactory_CreationDisabled();
