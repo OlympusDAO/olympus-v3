@@ -68,6 +68,7 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         vm.expectRevert(
             abi.encodeWithSelector(
                 IOracleFactory.OracleFactory_UnsupportedModuleVersion.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes5("PRICE"),
                 1,
                 1
@@ -97,6 +98,7 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         vm.expectRevert(
             abi.encodeWithSelector(
                 IOracleFactory.OracleFactory_UnsupportedModuleInterface.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
                 bytes5("PRICE"),
                 type(IPRICEv2).interfaceId
             )
