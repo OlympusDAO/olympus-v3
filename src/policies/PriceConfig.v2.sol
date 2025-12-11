@@ -9,12 +9,11 @@ import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
-
 import {Kernel, Keycode, toKeycode, Policy, Permissions} from "src/Kernel.sol";
 import {SubKeycode, Submodule} from "src/Submodules.sol";
-import {ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
-import {PolicyEnabler} from "policies/utils/PolicyEnabler.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
