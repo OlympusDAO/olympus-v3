@@ -51,7 +51,7 @@ import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRe
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor/Distributor.sol";

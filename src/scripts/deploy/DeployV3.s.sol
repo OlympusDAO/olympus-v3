@@ -33,7 +33,7 @@ import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVau
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
-import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // OCG Activator contracts

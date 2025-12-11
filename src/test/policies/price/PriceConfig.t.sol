@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
+import {console2 as console} from "@forge-std-1.9.6/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {MockERC20, ERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import "src/Kernel.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
+import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {Kernel, Actions, Keycode, toKeycode, fromKeycode, Permissions} from "src/Kernel.sol";
 
 contract PriceConfigTest is Test {
     using FullMath for uint256;

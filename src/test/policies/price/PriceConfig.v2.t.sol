@@ -6,12 +6,12 @@ pragma solidity >=0.8.0;
 
 // Test
 import {Test} from "@forge-std-1.9.6/Test.sol";
-import {UserFactory} from "test/lib/UserFactory.sol";
+import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Mocks
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
@@ -24,14 +24,14 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
 import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
-import {PriceConfigv2} from "policies/PriceConfig.v2.sol";
+import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
-import {OlympusPricev1_2} from "modules/PRICE/OlympusPrice.v1_2.sol";
-import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
+import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
 // Tests for PriceConfig v1.0.0
 //

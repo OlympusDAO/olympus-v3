@@ -36,7 +36,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
