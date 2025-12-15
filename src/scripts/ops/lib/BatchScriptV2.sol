@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -301,6 +301,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     function _loadArgs(string memory argsFilePath_) internal {
         if (bytes(argsFilePath_).length > 0) {
             console2.log("Loading arguments from", argsFilePath_);
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             _argsFile = vm.readFile(argsFilePath_);
         }
     }
@@ -384,4 +385,4 @@ abstract contract BatchScriptV2 is WithEnvironment {
             _argsFile.readUintArray(string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_));
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
