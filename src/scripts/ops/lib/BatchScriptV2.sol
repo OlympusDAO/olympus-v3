@@ -373,5 +373,15 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
             );
     }
+
+    function _readBatchArgUint256Array(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (uint256[] memory) {
+        // solhint-disable-next-line gas-custom-errors
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readUintArray(string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_));
+    }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
