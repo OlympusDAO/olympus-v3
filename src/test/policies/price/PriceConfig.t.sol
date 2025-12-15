@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.0;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
-import {console2 as console} from "@forge-std-1.9.6/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {MockERC20, ERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
@@ -127,14 +127,29 @@ contract PriceConfigTest is Test {
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](5);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
-        expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
-        expectedPerms[1] = Permissions(PRICE_KEYCODE, PRICE.changeMovingAverageDuration.selector);
-        expectedPerms[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
-        expectedPerms[3] = Permissions(PRICE_KEYCODE, PRICE.changeUpdateThresholds.selector);
-        expectedPerms[4] = Permissions(PRICE_KEYCODE, PRICE.changeMinimumTargetPrice.selector);
+        expectedPerms[0] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.initialize.selector
+        });
+        expectedPerms[1] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.changeMovingAverageDuration.selector
+        });
+        expectedPerms[2] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.changeObservationFrequency.selector
+        });
+        expectedPerms[3] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.changeUpdateThresholds.selector
+        });
+        expectedPerms[4] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.changeMinimumTargetPrice.selector
+        });
         Permissions[] memory perms = priceConfig.requestPermissions();
         // Check: permission storage
         assertEq(perms.length, expectedPerms.length);
@@ -177,6 +192,7 @@ contract PriceConfigTest is Test {
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
 
             /// Get the current PRICE from the PRICE module and store in the observations array
+            /// forge-lint: disable-next-line(unsafe-typecast)
             observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
@@ -213,7 +229,7 @@ contract PriceConfigTest is Test {
         assertEq(PRICE.lastObservationTime(), block.timestamp);
     }
 
-    function testCorrectness_noObservationsBeforeInitialized() public {
+    function testCorrectness_noObservationsBeforeInitialized() public view {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(PRICE.numObservations());
         uint256 zero = uint256(0);
@@ -340,6 +356,7 @@ contract PriceConfigTest is Test {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             bytes32("price_admin")
         );
 
@@ -362,3 +379,4 @@ contract PriceConfigTest is Test {
         priceConfig.changeUpdateThresholds(uint48(12 hours), uint48(12 hours));
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
