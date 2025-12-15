@@ -894,8 +894,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         uint16 maxBorrowPercentage = SafeCast.encodeUInt16(maxBorrowPercentageDesired);
 
         if (currentAnnualInterestRate != annualInterestRate) {
-            console2.log("Annual Interest Rate changed:", currentAnnualInterestRate);
-            console2.log("->", annualInterestRate);
+            console2.log("Annual Interest Rate changed:");
+            console2.log("orig: ", currentAnnualInterestRate);
+            console2.log("new:  ", annualInterestRate);
             addToBatch(
                 depositRedemptionVault,
                 abi.encodeWithSelector(
@@ -910,8 +911,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         }
 
         if (currentMaxBorrowPercentage != maxBorrowPercentage) {
-            console2.log("Max Borrow Percentage changed:", currentMaxBorrowPercentage);
-            console2.log("->", maxBorrowPercentage);
+            console2.log("Max Borrow Percentage changed:");
+            console2.log("orig: ", currentMaxBorrowPercentage);
+            console2.log("new:  ", maxBorrowPercentage);
             addToBatch(
                 depositRedemptionVault,
                 abi.encodeWithSelector(
@@ -948,8 +950,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
             if (currentReclaimRate != desiredReclaimRate) {
                 console2.log("Reclaim Rate for period", period);
-                console2.log("changed:", currentReclaimRate);
-                console2.log("->", desiredReclaimRate);
+                console2.log("orig: ", currentReclaimRate);
+                console2.log("new:  ", desiredReclaimRate);
                 addToBatch(
                     convertibleDepositFacility,
                     abi.encodeWithSelector(
@@ -976,8 +978,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         uint256 currentBaseEmissionsRate = EmissionManager(emissionManager).baseEmissionRate();
 
         if (currentMinPriceScalar != minPriceScalarDesired) {
-            console2.log("Min Price Scalar changed:", currentMinPriceScalar);
-            console2.log("->", minPriceScalarDesired);
+            console2.log("Min Price Scalar changed:");
+            console2.log("orig: ", currentMinPriceScalar);
+            console2.log("new:  ", minPriceScalarDesired);
             addToBatch(
                 emissionManager,
                 abi.encodeWithSelector(
@@ -990,8 +993,9 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
         }
 
         if (currentBaseEmissionsRate != baseEmissionsRateDesired) {
-            console2.log("Base Emissions Rate changed:", currentBaseEmissionsRate);
-            console2.log("->", baseEmissionsRateDesired);
+            console2.log("Base Emissions Rate changed:");
+            console2.log("orig: ", currentBaseEmissionsRate);
+            console2.log("new:  ", baseEmissionsRateDesired);
             uint256 changeNeeded;
             bool shouldAdd;
             if (baseEmissionsRateDesired > currentBaseEmissionsRate) {
@@ -1003,8 +1007,8 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
             }
             addToBatch(
                 emissionManager,
-                abi.encodeWithSignature(
-                    "changeBaseRate(uint256,uint48,bool)",
+                abi.encodeWithSelector(
+                    EmissionManager.changeBaseRate.selector,
                     changeNeeded,
                     uint48(1), // Next heartbeat
                     shouldAdd
