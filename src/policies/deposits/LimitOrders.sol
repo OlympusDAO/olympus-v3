@@ -7,33 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
-
-interface ICDAuctioneer {
-    struct Tick {
-        uint256 price;
-        uint256 capacity;
-        uint48 lastUpdate;
-    }
-
-    function previewBid(
-        uint8 depositPeriod,
-        uint256 bidAmount
-    ) external view returns (uint256 ohmOut);
-
-    function bid(
-        uint8 depositPeriod,
-        uint256 depositAmount,
-        uint256 minOhmOut,
-        bool wrapPosition,
-        bool wrapReceipt
-    ) external returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, uint256 actualAmount);
-
-    function getCurrentTick(uint8 depositPeriod) external view returns (Tick memory);
-
-    function isDepositPeriodEnabled(uint8 depositPeriod) external view returns (bool isEnabled, bool isPendingEnabled);
-
-    function getMinimumBid() external view returns (uint256);
-}
+import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
 /// @title  CDAuctioneer Limit Orders
 /// @notice Enables limit order functionality for the Convertible Deposit Auctioneer
@@ -88,7 +62,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== IMMUTABLES ========== //
 
-    ICDAuctioneer public immutable CD_AUCTIONEER;
+    IConvertibleDepositAuctioneer public immutable CD_AUCTIONEER;
     ERC20 public immutable USDS;
     ERC4626 public immutable SUSDS;
     ERC721 public immutable POSITION_NFT;
@@ -143,7 +117,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (yieldRecipient_ == address(0)) revert InvalidParam("yieldRecipient");
         if (depositPeriods_.length != receiptTokens_.length) revert ArrayLengthMismatch();
 
-        CD_AUCTIONEER = ICDAuctioneer(cdAuctioneer_);
+        CD_AUCTIONEER = IConvertibleDepositAuctioneer(cdAuctioneer_);
         USDS = ERC20(usds_);
         SUSDS = ERC4626(sUsds_);
         POSITION_NFT = ERC721(positionNft_);
