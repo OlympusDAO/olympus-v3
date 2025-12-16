@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.20;
 
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -39,7 +39,7 @@ interface ICDAuctioneer {
 /// @notice Enables limit order functionality for the Convertible Deposit Auctioneer
 /// @dev    Users create orders specifying max price, MEV bots fill when price is favorable.
 ///         User deposits are held in sUSDS to generate yield, which accrues to a configurable recipient.
-contract CDAuctioneerLimitOrders is ReentrancyGuard, Ownable {
+contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     using SafeERC20 for ERC20;
 
     // ========== ERRORS ========== //
