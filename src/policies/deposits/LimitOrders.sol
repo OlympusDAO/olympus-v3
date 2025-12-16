@@ -375,11 +375,19 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== VIEW FUNCTIONS ========== //
 
+    function previewFillOrder(
+        uint256 orderId_, 
+        uint256 fillAmount_
+    ) external view returns (bool canFill, string memory reason, uint256 effectivePrice, uint256 incentive) {
+        (canFill, reason, effectivePrice) = canFillOrder(orderId_, fillAmount_);
+        (incentive,) = calculateIncentive(orderId_, fillAmount_);
+    }
+
     /// @notice Calculate incentive and incentive rate for a given fill amount
     function calculateIncentive(
         uint256 orderId_,
         uint256 fillAmount_
-    ) external view returns (uint256 incentive, uint256 incentiveRate) {
+    ) public view returns (uint256 incentive, uint256 incentiveRate) {
         LimitOrder memory order = orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
         incentive = (fillAmount_ * order.incentiveBudget) / order.depositBudget;
@@ -390,7 +398,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     function canFillOrder(
         uint256 orderId_,
         uint256 fillAmount_
-    ) external view returns (bool canFill, string memory reason, uint256 effectivePrice) {
+    ) public view returns (bool canFill, string memory reason, uint256 effectivePrice) {
         LimitOrder memory order = orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
