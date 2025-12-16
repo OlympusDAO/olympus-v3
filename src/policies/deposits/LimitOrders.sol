@@ -281,7 +281,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         // Approve and execute bid
         USDS.approve(address(CD_AUCTIONEER), fillAmount_);
 
-        (uint256 ohmOut, uint256 positionId, , ) = CD_AUCTIONEER.bid(
+        (uint256 ohmOut, uint256 positionId, , uint256 actualAmount) = CD_AUCTIONEER.bid(
             order.depositPeriod,
             fillAmount_,
             expectedOhmOut,
@@ -294,9 +294,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
         // Transfer receipt tokens to order owner
         ERC20 receiptToken = receiptTokens[order.depositPeriod];
-        uint256 receiptBalance = receiptToken.balanceOf(address(this));
-        if (receiptBalance > 0) {
-            receiptToken.safeTransfer(order.owner, receiptBalance);
+        if (actualAmount > 0) {
+            receiptToken.safeTransfer(order.owner, actualAmount);
         }
 
         // Transfer incentive to filler
