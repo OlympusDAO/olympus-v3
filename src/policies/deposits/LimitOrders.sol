@@ -52,7 +52,6 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     error NotOrderOwner();
     error DepositPeriodNotEnabled();
     error ReceiptTokenNotConfigured();
-    error NoYieldToSweep();
     error ArrayLengthMismatch();
     error ZeroOhmOut();
 
@@ -365,7 +364,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     /// @return shares The amount of sUSDS swept
     function sweepYield() external nonReentrant returns (uint256 shares) {
         shares = getAccruedYieldShares();
-        if (shares == 0) revert NoYieldToSweep();
+        if (shares == 0) return 0;
 
         ERC20(address(SUSDS)).safeTransfer(yieldRecipient, shares);
 
