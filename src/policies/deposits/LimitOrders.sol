@@ -326,8 +326,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
 
-        uint256 remainingDeposit = order.depositBudget - order.depositSpent;
-        uint256 remainingIncentive = order.incentiveBudget - order.incentiveSpent;
+        // Ternaries to ensure against underflow when cancelling
+        uint256 remainingDeposit = order.depositBudget > order.depositSpent ? order.depositBudget - order.depositSpent : 0;
+        uint256 remainingIncentive = order.incentiveBudget > order.incentiveSpent ? order.incentiveBudget - order.incentiveSpent : 0;
         uint256 totalRemaining = remainingDeposit + remainingIncentive;
 
         order.active = false;
