@@ -303,6 +303,11 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
             USDS.safeTransfer(msg.sender, incentive);
         }
 
+        uint256 remainingBalance = USDS.balanceOf(address(this));
+        if (remainingBalance > 0) {
+            sUSDS.deposit(remainingAmount, address(this));
+        }
+
         emit OrderFilled(
             orderId_, 
             msg.sender, 
