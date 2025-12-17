@@ -78,6 +78,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     /// @notice Limit orders by ID
     mapping(uint256 orderId => LimitOrder order) public orders;
 
+    /// @notice Limit order IDs by user
+    mapping(address => uint256[]) public ordersForUser;
+
     /// @notice Next order ID to be assigned
     uint256 public nextOrderId;
 
@@ -178,6 +181,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         totalUsdsOwed += totalDeposit;
 
         orderId = nextOrderId++;
+
+        ordersForUser[msg.sender].push(orderId);
 
         orders[orderId] = LimitOrder({
             owner: msg.sender,
