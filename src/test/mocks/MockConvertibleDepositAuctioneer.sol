@@ -86,9 +86,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         positionId = nextPositionId;
         ++nextPositionId;
         // Call mint function on position NFT (assuming it has a mint(address) function)
-        (success, ) = positionNFT.call(
-            abi.encodeWithSignature("mint(address)", address(this))
-        );
+        (success, ) = positionNFT.call(abi.encodeWithSignature("mint(address)", address(this)));
         require(success, "Position NFT mint failed");
         // Transfer to caller
         ERC721(positionNFT).transferFrom(address(this), msg.sender, positionId);
@@ -108,19 +106,11 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     }
 
     function getPreviousTick(uint8) external view override returns (Tick memory tick) {
-        tick = Tick({
-            price: mockPrice,
-            capacity: 1000000e18,
-            lastUpdate: uint48(block.timestamp)
-        });
+        tick = Tick({price: mockPrice, capacity: 1000000e18, lastUpdate: uint48(block.timestamp)});
     }
 
     function getCurrentTick(uint8) external view override returns (Tick memory tick) {
-        tick = Tick({
-            price: mockPrice,
-            capacity: 1000000e18,
-            lastUpdate: uint48(block.timestamp)
-        });
+        tick = Tick({price: mockPrice, capacity: 1000000e18, lastUpdate: uint48(block.timestamp)});
     }
 
     function getCurrentTickSize() external view override returns (uint256) {

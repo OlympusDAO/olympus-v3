@@ -40,11 +40,17 @@ contract MockSUSDS is ERC4626 {
         return (totalSupply() * exchangeRate) / 1e18;
     }
 
-    function _convertToShares(uint256 assets, Math.Rounding) internal view override returns (uint256) {
+    function _convertToShares(
+        uint256 assets,
+        Math.Rounding
+    ) internal view override returns (uint256) {
         return (assets * 1e18) / exchangeRate;
     }
 
-    function _convertToAssets(uint256 shares, Math.Rounding) internal view override returns (uint256) {
+    function _convertToAssets(
+        uint256 shares,
+        Math.Rounding
+    ) internal view override returns (uint256) {
         return (shares * exchangeRate) / 1e18;
     }
 }
@@ -151,10 +157,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(
             PERIOD_3,
-            10_000e18,  // depositBudget
-            50e18,      // incentiveBudget
-            35e18,      // maxPrice
-            1_000e18    // minFillSize
+            10_000e18, // depositBudget
+            50e18, // incentiveBudget
+            35e18, // maxPrice
+            1_000e18 // minFillSize
         );
 
         assertEq(orderId, 0);
@@ -189,25 +195,36 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     function test_createOrder_revert_zeroDeposit() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget")
+        );
         limitOrders.createOrder(PERIOD_3, 0, 50e18, 35e18, 1_000e18);
     }
 
     function test_createOrder_revert_zeroMaxPrice() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice")
+        );
         limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 0, 1_000e18);
     }
 
     function test_createOrder_revert_zeroMinFill() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize")
+        );
         limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 0);
     }
 
     function test_createOrder_revert_minFillExceedsDeposit() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize > depositBudget"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDAuctioneerLimitOrders.InvalidParam.selector,
+                "minFillSize > depositBudget"
+            )
+        );
         limitOrders.createOrder(PERIOD_3, 1_000e18, 50e18, 35e18, 2_000e18);
     }
 
@@ -215,7 +232,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setMinimumBid(500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize < auctioneer minimum"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDAuctioneerLimitOrders.InvalidParam.selector,
+                "minFillSize < auctioneer minimum"
+            )
+        );
         limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 100e18);
     }
 
@@ -313,7 +335,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, 5_000e18); // Capped to max
-        assertEq(order.incentiveSpent, 25e18);  // All incentive paid
+        assertEq(order.incentiveSpent, 25e18); // All incentive paid
     }
 
     function test_fillOrder_belowMinFillAllowedIfFinalFill() public {
@@ -533,7 +555,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     function test_setYieldRecipient_revert_zeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "yieldRecipient"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "yieldRecipient")
+        );
         limitOrders.setYieldRecipient(address(0));
     }
 
@@ -552,7 +576,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
 
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(orderId, 1_000e18);
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
 
         assertTrue(canFill);
         assertEq(bytes(reason).length, 0);
@@ -563,7 +590,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 25e18, 1_000e18);
 
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(orderId, 1_000e18);
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
 
         assertFalse(canFill);
         assertEq(reason, "Price above max");
@@ -577,7 +607,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
 
-        (bool canFill, string memory reason,) = limitOrders.canFillOrder(orderId, 1_000e18);
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
 
         assertFalse(canFill);
         assertEq(reason, "Order not active");
@@ -697,7 +727,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler2);
         limitOrders.fillOrder(orderId, 3_000e18);
 
-        assertEq(usds.balanceOf(filler), 10e18);  // 2000 * 50 / 10000
+        assertEq(usds.balanceOf(filler), 10e18); // 2000 * 50 / 10000
         assertEq(usds.balanceOf(filler2), 15e18); // 3000 * 50 / 10000
     }
 
@@ -763,7 +793,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
         assertEq(orderAfter.depositBudget, 5_000e18);
         assertEq(orderAfter.incentiveBudget, 25e18);
-        assertEq(orderAfter.depositSpent, 0);  // Reset!
+        assertEq(orderAfter.depositSpent, 0); // Reset!
         assertEq(orderAfter.incentiveSpent, 0); // Reset!
         assertEq(orderAfter.maxPrice, 32e18);
 
@@ -841,7 +871,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget")
+        );
         limitOrders.changeOrder(orderId, 0, 50e18, 35e18, 500e18);
     }
 
@@ -850,7 +882,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice")
+        );
         limitOrders.changeOrder(orderId, 10_000e18, 50e18, 0, 500e18);
     }
 
@@ -859,7 +893,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize"));
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize")
+        );
         limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 0);
     }
 
@@ -868,7 +904,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize > depositBudget"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDAuctioneerLimitOrders.InvalidParam.selector,
+                "minFillSize > depositBudget"
+            )
+        );
         limitOrders.changeOrder(orderId, 1_000e18, 50e18, 35e18, 2_000e18);
     }
 
@@ -879,7 +920,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize < auctioneer minimum"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDAuctioneerLimitOrders.InvalidParam.selector,
+                "minFillSize < auctioneer minimum"
+            )
+        );
         limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 100e18);
     }
 

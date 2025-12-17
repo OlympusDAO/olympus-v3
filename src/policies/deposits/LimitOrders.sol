@@ -181,7 +181,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (!isEnabled) revert DepositPeriodNotEnabled();
 
         uint256 auctioneerMinBid = CD_AUCTIONEER.getMinimumBid();
-        if (minFillSize_ < auctioneerMinBid) revert InvalidParam("minFillSize < auctioneer minimum");
+        if (minFillSize_ < auctioneerMinBid)
+            revert InvalidParam("minFillSize < auctioneer minimum");
 
         uint256 totalDeposit = depositBudget_ + incentiveBudget_;
         USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
@@ -241,12 +242,13 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (newMaxPrice_ == 0) revert InvalidParam("maxPrice");
         if (newMinFillSize_ == 0) revert InvalidParam("minFillSize");
         if (newMinFillSize_ > newDepositBudget_) revert InvalidParam("minFillSize > depositBudget");
-        if (newMinFillSize_ < CD_AUCTIONEER.getMinimumBid()) revert InvalidParam("minFillSize < auctioneer minimum");
+        if (newMinFillSize_ < CD_AUCTIONEER.getMinimumBid())
+            revert InvalidParam("minFillSize < auctioneer minimum");
 
         // Calculate old remaining (what's left to work with)
-        uint256 oldRemaining = (order.depositBudget - order.depositSpent) 
-                            + (order.incentiveBudget - order.incentiveSpent);
-        
+        uint256 oldRemaining = (order.depositBudget - order.depositSpent) +
+            (order.incentiveBudget - order.incentiveSpent);
+
         uint256 newTotal = newDepositBudget_ + newIncentiveBudget_;
 
         if (newTotal > oldRemaining) {
@@ -270,7 +272,13 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         order.maxPrice = newMaxPrice_;
         order.minFillSize = newMinFillSize_;
 
-        emit OrderChanged(orderId_, newDepositBudget_, newIncentiveBudget_, newMaxPrice_, newMinFillSize_);
+        emit OrderChanged(
+            orderId_,
+            newDepositBudget_,
+            newIncentiveBudget_,
+            newMaxPrice_,
+            newMinFillSize_
+        );
     }
 
     /// @notice Fill a limit order (called by MEV bots)
@@ -350,14 +358,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
             SUSDS.deposit(remainingBalance, address(this));
         }
 
-        emit OrderFilled(
-            orderId_, 
-            msg.sender, 
-            fillAmount_, 
-            incentive, 
-            ohmOut, 
-            positionId
-        );
+        emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
     }
 
     /// @notice Cancel an active order and return remaining funds
@@ -369,8 +370,12 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (!order.active) revert OrderNotActive();
 
         // Ternaries to ensure against underflow when cancelling
-        uint256 remainingDeposit = order.depositBudget > order.depositSpent ? order.depositBudget - order.depositSpent : 0;
-        uint256 remainingIncentive = order.incentiveBudget > order.incentiveSpent ? order.incentiveBudget - order.incentiveSpent : 0;
+        uint256 remainingDeposit = order.depositBudget > order.depositSpent
+            ? order.depositBudget - order.depositSpent
+            : 0;
+        uint256 remainingIncentive = order.incentiveBudget > order.incentiveSpent
+            ? order.incentiveBudget - order.incentiveSpent
+            : 0;
         uint256 totalRemaining = remainingDeposit + remainingIncentive;
 
         order.active = false;
@@ -418,12 +423,20 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== VIEW FUNCTIONS ========== //
 
+    function getOrder(uint256 orderId_) external view returns (LimitOrder memory) {
+        return orders[orderId_];
+    }
+
     function previewFillOrder(
-        uint256 orderId_, 
+        uint256 orderId_,
         uint256 fillAmount_
-    ) external view returns (bool canFill, string memory reason, uint256 effectivePrice, uint256 incentive) {
+    )
+        external
+        view
+        returns (bool canFill, string memory reason, uint256 effectivePrice, uint256 incentive)
+    {
         (canFill, reason, effectivePrice) = canFillOrder(orderId_, fillAmount_);
-        (incentive,) = calculateIncentive(orderId_, fillAmount_);
+        (incentive, ) = calculateIncentive(orderId_, fillAmount_);
     }
 
     /// @notice Calculate incentive and incentive rate for a given fill amount
@@ -467,7 +480,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     }
 
     /// @notice Get remaining deposit and incentive budgets for order
-    function getRemaining(uint256 orderId_) external view returns (uint256 deposit, uint256 incentive) {
+    function getRemaining(
+        uint256 orderId_
+    ) external view returns (uint256 deposit, uint256 incentive) {
         LimitOrder memory order = orders[orderId_];
         deposit = order.depositBudget - order.depositSpent;
         incentive = order.incentiveBudget - order.incentiveSpent;
@@ -492,11 +507,19 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     /// @notice Find fillable orders for a deposit period between given order IDs
     /// @dev    For use if getFillableOrders(uint8 depositPeriod_) exceeds limit
     /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
-    function getFillableOrders(uint8 depositPeriod_, uint256 index0, uint256 index1) external view returns (uint256[] memory) {
+    function getFillableOrders(
+        uint8 depositPeriod_,
+        uint256 index0,
+        uint256 index1
+    ) external view returns (uint256[] memory) {
         return _getFillableOrders(depositPeriod_, index0, index1);
     }
 
-    function _getFillableOrders(uint8 depositPeriod_, uint256 index0, uint256 index1) internal view returns (uint256[] memory) {
+    function _getFillableOrders(
+        uint8 depositPeriod_,
+        uint256 index0,
+        uint256 index1
+    ) internal view returns (uint256[] memory) {
         uint256 count = 0;
         for (uint256 i = index0; i < index1; i++) {
             if (_isOrderFillable(i, depositPeriod_)) {
@@ -515,20 +538,17 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         return fillable;
     }
 
-    function _isOrderFillable(
-        uint256 orderId_,
-        uint8 depositPeriod_
-    ) internal view returns (bool) {
+    function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
         LimitOrder memory order = orders[orderId_];
 
         if (!order.active) return false;
         if (order.depositPeriod != depositPeriod_) return false;
-        
+
         uint256 remainingDeposit = order.depositBudget - order.depositSpent;
         if (remainingDeposit == 0) return false;
 
-        uint256 checkAmount = remainingDeposit > order.minFillSize 
-            ? order.minFillSize 
+        uint256 checkAmount = remainingDeposit > order.minFillSize
+            ? order.minFillSize
             : remainingDeposit;
 
         uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(depositPeriod_, checkAmount);
