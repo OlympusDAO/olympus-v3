@@ -776,4 +776,197 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(usds.balanceOf(filler), 10e18);  // 2000 * 50 / 10000
         assertEq(usds.balanceOf(filler2), 15e18); // 3000 * 50 / 10000
     }
+
+    // ========== CHANGE ORDER TESTS ========== //
+
+    function test_changeOrder_increaseBudgets() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 500e18);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 10_000e18);
+        assertEq(order.incentiveBudget, 50e18);
+        assertEq(order.depositSpent, 0);
+        assertEq(order.incentiveSpent, 0);
+
+        // Alice paid additional 5025
+        assertEq(aliceBalanceBefore - usds.balanceOf(alice), 5_025e18);
+    }
+
+    function test_changeOrder_decreaseBudgets() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 5_000e18, 25e18, 35e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 5_000e18);
+        assertEq(order.incentiveBudget, 25e18);
+
+        // Alice received 5025 back
+        assertEq(usds.balanceOf(alice) - aliceBalanceBefore, 5_025e18);
+    }
+
+    function test_changeOrder_afterPartialFill_resetsSpent() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        // Partial fill: spends 3000 deposit + 15 incentive
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 3_000e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        assertEq(orderBefore.depositSpent, 3_000e18);
+        assertEq(orderBefore.incentiveSpent, 15e18);
+
+        // Remaining: 7000 + 35 = 7035
+        // New total: 5000 + 25 = 5025
+        // User receives: 7035 - 5025 = 2010
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 5_000e18, 25e18, 32e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        assertEq(orderAfter.depositBudget, 5_000e18);
+        assertEq(orderAfter.incentiveBudget, 25e18);
+        assertEq(orderAfter.depositSpent, 0);  // Reset!
+        assertEq(orderAfter.incentiveSpent, 0); // Reset!
+        assertEq(orderAfter.maxPrice, 32e18);
+
+        assertEq(usds.balanceOf(alice) - aliceBalanceBefore, 2_010e18);
+    }
+
+    function test_changeOrder_afterPartialFill_canChangeIncentiveRateFreely() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 100e18, 35e18, 500e18); // 1% rate
+
+        // Fill half
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 5_000e18); // Pays 50 incentive
+
+        // Remaining: 5000 + 50 = 5050
+        // Can now set 0.1% rate - no problem since spent is reset
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 5_000e18, 5e18, 35e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 5_000e18);
+        assertEq(order.incentiveBudget, 5e18);
+        assertEq(order.depositSpent, 0);
+        assertEq(order.incentiveSpent, 0);
+
+        // User received excess: 5050 - 5005 = 45
+    }
+
+    function test_changeOrder_sameValues_noTransfer() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 500e18);
+
+        assertEq(usds.balanceOf(alice), aliceBalanceBefore);
+    }
+
+    function test_changeOrder_onlyMaxPrice() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 40e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.maxPrice, 40e18);
+    }
+
+    function test_changeOrder_revert_notOwner() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(bob);
+        vm.expectRevert(CDAuctioneerLimitOrders.NotOrderOwner.selector);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 40e18, 500e18);
+    }
+
+    function test_changeOrder_revert_orderNotActive() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        vm.prank(alice);
+        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 40e18, 500e18);
+    }
+
+    function test_changeOrder_revert_zeroDeposit() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget"));
+        limitOrders.changeOrder(orderId, 0, 50e18, 35e18, 500e18);
+    }
+
+    function test_changeOrder_revert_zeroMaxPrice() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice"));
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 0, 500e18);
+    }
+
+    function test_changeOrder_revert_zeroMinFill() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize"));
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 0);
+    }
+
+    function test_changeOrder_revert_minFillExceedsDeposit() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize > depositBudget"));
+        limitOrders.changeOrder(orderId, 1_000e18, 50e18, 35e18, 2_000e18);
+    }
+
+    function test_changeOrder_revert_minFillBelowAuctioneerMin() public {
+        cdAuctioneer.setMinimumBid(500e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize < auctioneer minimum"));
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 100e18);
+    }
+
+    function test_changeOrder_zeroIncentive() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 0, 35e18, 500e18);
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.incentiveBudget, 0);
+    }
 }

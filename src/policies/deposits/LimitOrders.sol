@@ -50,6 +50,14 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 positionId
     );
 
+    event OrderChanged(
+        uint256 indexed orderId,
+        uint256 depositBudget,
+        uint256 incentiveBudget,
+        uint256 maxPrice,
+        uint256 minFillSize
+    );
+
     event OrderCancelled(uint256 indexed orderId, uint256 usdsReturned);
 
     event YieldSwept(address indexed recipient, uint256 sUsdsAmount);
@@ -207,6 +215,62 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         );
 
         return orderId;
+    }
+
+    /// @notice Modify an existing limit order (resets spent amounts)
+    /// @dev    Functionally equivalent to cancel + create but preserves order ID
+    /// @param  orderId_            The ID of the order to modify
+    /// @param  newDepositBudget_   New deposit budget
+    /// @param  newIncentiveBudget_ New incentive budget
+    /// @param  newMaxPrice_        New max price
+    /// @param  newMinFillSize_     New min fill size
+    function changeOrder(
+        uint256 orderId_,
+        uint256 newDepositBudget_,
+        uint256 newIncentiveBudget_,
+        uint256 newMaxPrice_,
+        uint256 newMinFillSize_
+    ) external nonReentrant {
+        LimitOrder storage order = orders[orderId_];
+
+        if (order.owner != msg.sender) revert NotOrderOwner();
+        if (!order.active) revert OrderNotActive();
+
+        // Validate new params (same as createOrder)
+        if (newDepositBudget_ == 0) revert InvalidParam("depositBudget");
+        if (newMaxPrice_ == 0) revert InvalidParam("maxPrice");
+        if (newMinFillSize_ == 0) revert InvalidParam("minFillSize");
+        if (newMinFillSize_ > newDepositBudget_) revert InvalidParam("minFillSize > depositBudget");
+        if (newMinFillSize_ < CD_AUCTIONEER.getMinimumBid()) revert InvalidParam("minFillSize < auctioneer minimum");
+
+        // Calculate old remaining (what's left to work with)
+        uint256 oldRemaining = (order.depositBudget - order.depositSpent) 
+                            + (order.incentiveBudget - order.incentiveSpent);
+        
+        uint256 newTotal = newDepositBudget_ + newIncentiveBudget_;
+
+        if (newTotal > oldRemaining) {
+            // Need more funds from user
+            uint256 increase = newTotal - oldRemaining;
+            totalUsdsOwed += increase;
+            USDS.safeTransferFrom(msg.sender, address(this), increase);
+            SUSDS.deposit(increase, address(this));
+        } else if (newTotal < oldRemaining) {
+            // Return excess to user
+            uint256 decrease = oldRemaining - newTotal;
+            totalUsdsOwed -= decrease;
+            SUSDS.withdraw(decrease, msg.sender, address(this));
+        }
+
+        // Reset order with fresh values
+        order.depositBudget = newDepositBudget_;
+        order.incentiveBudget = newIncentiveBudget_;
+        order.depositSpent = 0;
+        order.incentiveSpent = 0;
+        order.maxPrice = newMaxPrice_;
+        order.minFillSize = newMinFillSize_;
+
+        emit OrderChanged(orderId_, newDepositBudget_, newIncentiveBudget_, newMaxPrice_, newMinFillSize_);
     }
 
     /// @notice Fill a limit order (called by MEV bots)
