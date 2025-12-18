@@ -311,10 +311,13 @@ contract CDAuctioneerLimitOrdersTest is Test {
     // given the auctioneer despoit period has been enabled
     //  [ ] it creates an order with the new deposit period
 
+    // TODO fuzz tests
+
     // ========== FILL ORDER TESTS ========== //
 
     // when order is active and price is below max
     //  [X] it fills order successfully
+    //  [ ] it reduces the USDS owed by the amount of deposit and incentive spent
     function test_fillOrder_success() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
@@ -338,6 +341,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // when order is active and price is below max
     //  [X] it handles multiple fills correctly
+    //  [ ] it reduces the USDS owed by the amount of deposit and incentive spent
     function test_fillOrder_multipleFills() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
@@ -365,6 +369,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // when the remaining deposit is less than the fill amount
     //  [X] it caps fill to remaining deposit
+    //  [ ] it reduces the USDS owed by the amount of deposit and incentive spent
     function test_fillOrder_capToRemainingDeposit() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 1_000e18);
@@ -382,6 +387,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  when the fill amount completes the order
     //   when the remaining deposit is less than the minFillSize
     //    [X] it allows fill below minFillSize if final fill
+    //    [ ] it reduces the USDS owed by the amount of deposit and incentive spent
     function test_fillOrder_belowMinFillAllowedIfFinalFill() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 2_500e18, 25e18, 35e18, 1_000e18);
@@ -400,6 +406,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     //   [X] it gives final fill all remaining incentive
+    //   [ ] the deposit spent is the total deposit budget
+    //   [ ] the incentive spent is the total incentive budget
+    //   [ ] the USDS owed is 0
     function test_fillOrder_finalFillGetsAllRemainingIncentive() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
@@ -438,6 +447,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // when minFillSize equals remaining deposit
     //  [X] it allows fill
+    //  [ ] the deposit spent is the fill amount
+    //  [ ] it reduces the USDS owed by the amount of deposit and incentive spent
     function test_fillOrder_exactMinFillEqualsRemaining() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 1_000e18, 5e18, 35e18, 1_000e18);
@@ -534,10 +545,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
+    // TODO fuzz OHM out from CD auctioneer
+    // TODO fuzz incentive amount
+    // TODO fuzz fill amount
+    // TODO fuzz vault rate
+    // TODO fuzz final fill
+    // TODO fuzz multiple orders, final fill
+
     // ========== CANCEL ORDER TESTS ========== //
 
     // when order is active and not filled
-    //  [X] it cancels order and refunds full amount
+    //  [X] it cancels order
+    //  [X] it refunds the amount of deposit and incentive budgets
+    //  [ ] it reduces the USDS owed by the full amount of deposit and incentive budgets
     function test_cancelOrder_success() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
@@ -556,7 +576,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // when order is active and partially filled
-    //  [X] it cancels order and refunds remaining amount
+    //  [X] it cancels order
+    //  [X] it refunds the remaining amount of deposit and incentive budgets
+    //  [ ] it reduces the USDS owed by the remaining amount of deposit and incentive budgets
     function test_cancelOrder_afterPartialFill() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
@@ -759,6 +781,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(reason, "Order not active");
     }
 
+    // TODO shift canFillOrder tests to fillOrder tests
+
     // calculateIncentive
     //  [X] it calculates incentive and rate correctly
     function test_calculateIncentive() public {
@@ -769,6 +793,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(incentive, 10e18); // 2000 * 50 / 10000
         assertEq(rate, 50); // 50 bps = 0.5%
     }
+
+    // TODO shift calculateIncentive tests to fillOrder tests
 
     // TODO fuzz test
 
@@ -820,7 +846,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // changeOrder
     // when increasing the deposit and incentive budgets
-    //  [X] it increases budgets and charges user
+    //  [X] it transfers additional budget from the user
+    //  [X] it increases budgets
+    //  [ ] it increases the USDS owed by the additional budget
     function test_changeOrder_increaseBudgets() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 500e18);
@@ -841,7 +869,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // when decreasing the deposit and incentive budgets
-    //  [X] it decreases budgets and refunds user
+    //  [X] it decreases budgets
+    //  [ ] it refunds the additional budget to the user
+    //  [ ] it reduces the USDS owed by the additional budget
     function test_changeOrder_decreaseBudgets() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
@@ -860,8 +890,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // given there has been a partial fill
-    //  when changing the deposit and incentive budgets
+    //  when decreasing the deposit and incentive budgets
     //   [X] it resets spent amounts
+    //   [ ] it refunds the additional budget to the user
+    //   [ ] it reduces the USDS owed by the additional budget
     function test_changeOrder_afterPartialFill_resetsSpent() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
@@ -893,6 +925,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(usds.balanceOf(alice) - aliceBalanceBefore, 2_010e18);
     }
 
+    //  when increasing the deposit and incentive budgets
+    //   [ ] it transfers additional budget from the user
+    //   [ ] it increases budgets
+    //   [ ] it increases the USDS owed by the additional budget
+
     //  [X] it allows changing incentive rate freely
     function test_changeOrder_afterPartialFill_canChangeIncentiveRateFreely() public {
         vm.prank(alice);
@@ -916,8 +953,20 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // User received excess: 5050 - 5005 = 45
     }
 
-    // when changing to same values
-    //  [X] it makes no transfer
+    // when the budget is the same
+    //  given there has been a partial fill
+    //   [ ] it changes the max price
+    //   [ ] it changes the min fill size
+    //   [ ] it makes no transfer
+    //   [ ] it resets the spent amounts
+    //  when only the maxPrice is changed
+    //   [ ] it changes the max price
+    //   [ ] it makes no transfer
+    //   [ ] it resets the spent amounts
+    //  when only the minFillSize is changed
+    //   [ ] it changes the min fill size
+    //   [ ] it makes no transfer
+    //   [ ] it resets the spent amounts
     function test_changeOrder_sameValues_noTransfer() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
@@ -943,6 +992,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(order.maxPrice, 40e18);
         // TODO check other values
     }
+
+    // when the order has been completely filled
+    //  [ ] it reverts
 
     // when caller is not order owner
     //  [X] it reverts
