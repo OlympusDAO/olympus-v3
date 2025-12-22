@@ -12,6 +12,9 @@ import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDe
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
+// Interfaces
+import {IERC721Errors} from "@openzeppelin-5.3.0/interfaces/draft-IERC6093.sol";
+
 // Libraries
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
@@ -539,7 +542,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // Expect revert
         vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "recipient")
+            abi.encodeWithSelector(IERC721Errors.ERC721InvalidReceiver.selector, address(newOwner))
         );
 
         vm.prank(address(newOwner));

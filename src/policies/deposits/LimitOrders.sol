@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.20;
 
+// Interfaces
+import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+
+// Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin-5.3.0/access/Ownable.sol";
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
 import {ERC4626} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC4626.sol";
-import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {ERC721Utils} from "@openzeppelin-5.3.0/token/ERC721/utils/ERC721Utils.sol";
 
 /// @title  CDAuctioneer Limit Orders
 /// @notice Enables limit order functionality for the Convertible Deposit Auctioneer
@@ -245,6 +249,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
         (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
         if (!isEnabled) revert DepositPeriodNotEnabled();
+
+        // Verify that the caller/owner can receive ERC721 tokens
+        ERC721Utils.checkOnERC721Received(msg.sender, address(this), msg.sender, 0, "");
 
         uint256 auctioneerMinBid = CD_AUCTIONEER.getMinimumBid();
         if (minFillSize_ < auctioneerMinBid)
