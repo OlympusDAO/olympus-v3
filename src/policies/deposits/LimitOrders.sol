@@ -155,6 +155,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     // ========== ORDER MANAGEMENT ========== //
 
     /// @notice Create a new limit order
+    ///
     /// @param  depositPeriod_   The deposit period for the CD position
     /// @param  depositBudget_   USDS budget for bids
     /// @param  incentiveBudget_ USDS budget for filler incentives (paid proportionally)
@@ -281,7 +282,34 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         );
     }
 
-    /// @notice Fill a limit order (called by MEV bots)
+    /// @notice Calculate capped fill amount and incentive for an order
+    ///
+    /// @param  order_           The limit order
+    /// @param  fillAmount_      The requested fill amount
+    /// @return cappedFill       The fill amount capped to remaining deposit
+    /// @return incentive        The incentive amount (with final fill handling)
+    /// @return remainingDeposit The remaining deposit budget
+    function _calculateFillAndIncentive(
+        LimitOrder memory order_,
+        uint256 fillAmount_
+    ) internal pure returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
+        remainingDeposit = order_.depositBudget - order_.depositSpent;
+
+        // Cap fill to remaining deposit budget
+        cappedFill = fillAmount_ > remainingDeposit ? remainingDeposit : fillAmount_;
+
+        // Calculate proportional incentive
+        // Final fill gets all remaining incentive (avoids rounding dust)
+        uint256 remainingIncentive = order_.incentiveBudget - order_.incentiveSpent;
+        if (cappedFill == remainingDeposit) {
+            incentive = remainingIncentive;
+        } else {
+            incentive = (cappedFill * order_.incentiveBudget) / order_.depositBudget;
+        }
+    }
+
+    /// @notice Fill a limit order
+    ///
     /// @param  orderId_    The ID of the order to fill
     /// @param  fillAmount_ The amount of USDS to use for the bid
     function fillOrder(uint256 orderId_, uint256 fillAmount_) external nonReentrant {
@@ -289,27 +317,15 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
         if (!order.active) revert OrderNotActive();
 
-        uint256 remainingDeposit = order.depositBudget - order.depositSpent;
-        if (remainingDeposit == 0) revert OrderFullySpent();
+        uint256 remainingDeposit;
+        uint256 incentive;
+        (fillAmount_, incentive, remainingDeposit) = _calculateFillAndIncentive(order, fillAmount_);
 
-        // Cap fill to remaining deposit budget
-        if (fillAmount_ > remainingDeposit) {
-            fillAmount_ = remainingDeposit;
-        }
+        if (remainingDeposit == 0) revert OrderFullySpent();
 
         // Check min fill (unless this is the final fill)
         if (remainingDeposit > order.minFillSize && fillAmount_ < order.minFillSize) {
             revert FillBelowMinimum();
-        }
-
-        // Calculate proportional incentive
-        // Final fill gets all remaining incentive (avoids rounding dust)
-        uint256 remainingIncentive = order.incentiveBudget - order.incentiveSpent;
-        uint256 incentive;
-        if (fillAmount_ == remainingDeposit) {
-            incentive = remainingIncentive;
-        } else {
-            incentive = (fillAmount_ * order.incentiveBudget) / order.depositBudget;
         }
 
         // Check execution price via previewBid
@@ -359,9 +375,12 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         }
 
         emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
+
+        // TODO add outputs
     }
 
     /// @notice Cancel an active order and return remaining funds
+    ///
     /// @param  orderId_ The ID of the order to cancel
     function cancelOrder(uint256 orderId_) external nonReentrant {
         LimitOrder storage order = orders[orderId_];
@@ -391,12 +410,16 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     // ========== YIELD FUNCTIONS ========== //
 
     /// @notice Calculate current accrued yield in USDS terms
+    ///
+    /// @return uint256 The current accrued yield in USDS terms
     function getAccruedYield() public view returns (uint256) {
         return SUSDS.convertToAssets(getAccruedYieldShares());
     }
 
     /// @notice Calculate accrued yield in sUSDS shares
     /// @dev    Uses previewWithdraw to safely account for rounding
+    ///
+    /// @return uint256 The current accrued yield in sUSDS terms
     function getAccruedYieldShares() public view returns (uint256) {
         uint256 sUsdsBalance = SUSDS.balanceOf(address(this));
 
@@ -409,7 +432,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     }
 
     /// @notice Sweep all accrued yield to the yield recipient as sUSDS
-    /// @return shares The amount of sUSDS swept
+    ///
+    /// @return shares The amount of sUSDS swept to the yield recipient
     function sweepYield() external nonReentrant returns (uint256 shares) {
         shares = getAccruedYieldShares();
         if (shares == 0) return 0;
@@ -423,10 +447,22 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== VIEW FUNCTIONS ========== //
 
+    /// @notice Get a limit order by ID
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @return LimitOrder The limit order
     function getOrder(uint256 orderId_) external view returns (LimitOrder memory) {
         return orders[orderId_];
     }
 
+    /// @notice Preview a fill order
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @param  fillAmount_ The amount of USDS to use for the bid
+    /// @return canFill Whether the order can be filled
+    /// @return reason The reason the order cannot be filled
+    /// @return effectivePrice The effective price of the fill
+    /// @return incentive The incentive amount for the fill
     function previewFillOrder(
         uint256 orderId_,
         uint256 fillAmount_
@@ -440,17 +476,29 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     }
 
     /// @notice Calculate incentive and incentive rate for a given fill amount
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @param  fillAmount_ The amount of USDS to use for the bid
+    /// @return incentive The incentive amount for the fill
+    /// @return incentiveRate The incentive rate for the fill
     function calculateIncentive(
         uint256 orderId_,
         uint256 fillAmount_
     ) public view returns (uint256 incentive, uint256 incentiveRate) {
         LimitOrder memory order = orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
-        incentive = (fillAmount_ * order.incentiveBudget) / order.depositBudget;
+
+        (, incentive, ) = _calculateFillAndIncentive(order, fillAmount_);
         incentiveRate = (order.incentiveBudget * 10_000) / order.depositBudget;
     }
 
     /// @notice Check if an order can be filled at a given size
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @param  fillAmount_ The amount of USDS to use for the bid
+    /// @return canFill Whether the order can be filled
+    /// @return reason The reason the order cannot be filled
+    /// @return effectivePrice The effective price of the fill
     function canFillOrder(
         uint256 orderId_,
         uint256 fillAmount_
@@ -480,6 +528,10 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     }
 
     /// @notice Get remaining deposit and incentive budgets for order
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @return deposit The remaining deposit budget
+    /// @return incentive The remaining incentive budget
     function getRemaining(
         uint256 orderId_
     ) external view returns (uint256 deposit, uint256 incentive) {
@@ -489,6 +541,10 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     }
 
     /// @notice Get current execution price for a fill amount
+    ///
+    /// @param  depositPeriod_ The deposit period
+    /// @param  fillAmount_ The amount of USDS to use for the bid
+    /// @return effectivePrice The effective price of the fill
     function getExecutionPrice(
         uint8 depositPeriod_,
         uint256 fillAmount_
@@ -500,6 +556,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     /// @notice Find fillable orders for a deposit period
     /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
+    ///
+    /// @param  depositPeriod_ The deposit period
+    /// @return uint256[] The IDs of the fillable orders
     function getFillableOrders(uint8 depositPeriod_) external view returns (uint256[] memory) {
         return _getFillableOrders(depositPeriod_, 0, nextOrderId);
     }
@@ -507,6 +566,11 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     /// @notice Find fillable orders for a deposit period between given order IDs
     /// @dev    For use if getFillableOrders(uint8 depositPeriod_) exceeds limit
     /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
+    ///
+    /// @param  depositPeriod_ The deposit period
+    /// @param  index0 The starting order ID
+    /// @param  index1 The ending order ID
+    /// @return uint256[] The IDs of the fillable orders
     function getFillableOrders(
         uint8 depositPeriod_,
         uint256 index0,
@@ -515,6 +579,14 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         return _getFillableOrders(depositPeriod_, index0, index1);
     }
 
+    /// @notice Find fillable orders for a deposit period between given order IDs
+    /// @dev    For use if getFillableOrders(uint8 depositPeriod_) exceeds limit
+    /// @dev    WARNING: Gas-intensive. Intended for off-chain use only.
+    ///
+    /// @param  depositPeriod_ The deposit period
+    /// @param  index0 The starting order ID
+    /// @param  index1 The ending order ID
+    /// @return uint256[] The IDs of the fillable orders
     function _getFillableOrders(
         uint8 depositPeriod_,
         uint256 index0,
@@ -538,6 +610,11 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         return fillable;
     }
 
+    /// @notice Check if an order is fillable
+    ///
+    /// @param  orderId_ The ID of the order
+    /// @param  depositPeriod_ The deposit period
+    /// @return bool Whether the order is fillable
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
         LimitOrder memory order = orders[orderId_];
 
@@ -562,6 +639,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== ERC721 RECEIVER ========== //
 
+    /// @notice ERC721 receiver function
+    ///
+    /// @return bytes4 The selector of the function
     function onERC721Received(
         address,
         address,
