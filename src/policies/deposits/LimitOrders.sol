@@ -377,41 +377,45 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     ///
     /// @param  orderId_    The ID of the order to fill
     /// @param  fillAmount_ The amount of USDS to use for the bid
-    function fillOrder(uint256 orderId_, uint256 fillAmount_) external nonReentrant {
+    /// @return uint256 The actual fill amount (may be capped to remaining deposit)
+    /// @return uint256 The incentive amount paid to the filler
+    /// @return uint256 The remaining deposit budget after the fill
+    function fillOrder(
+        uint256 orderId_,
+        uint256 fillAmount_
+    ) external nonReentrant returns (uint256, uint256, uint256) {
         LimitOrder storage order = orders[orderId_];
 
         if (!order.active) revert OrderNotActive();
 
-        uint256 remainingDeposit;
+        uint256 remainingDepositBefore;
         uint256 incentive;
-        (fillAmount_, incentive, remainingDeposit) = _calculateFillAndIncentive(order, fillAmount_);
+        (fillAmount_, incentive, remainingDepositBefore) = _calculateFillAndIncentive(
+            order,
+            fillAmount_
+        );
 
-        if (remainingDeposit == 0) revert OrderFullySpent();
+        if (remainingDepositBefore == 0) revert OrderFullySpent();
 
         // Check min fill (unless this is the final fill)
-        if (remainingDeposit > order.minFillSize && fillAmount_ < order.minFillSize) {
+        if (remainingDepositBefore > order.minFillSize && fillAmount_ < order.minFillSize) {
             revert FillBelowMinimum();
         }
 
         // Check execution price via previewBid
         uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(order.depositPeriod, fillAmount_);
         if (expectedOhmOut == 0) revert ZeroOhmOut();
+        if ((fillAmount_ * OHM_SCALE) / expectedOhmOut > order.maxPrice) revert PriceAboveMax();
 
-        uint256 effectivePrice = (fillAmount_ * OHM_SCALE) / expectedOhmOut;
-        if (effectivePrice > order.maxPrice) revert PriceAboveMax();
-
-        // Withdraw USDS from sUSDS
+        // Withdraw USDS from sUSDS and update accounting
         uint256 usdsNeeded = fillAmount_ + incentive;
         SUSDS.withdraw(usdsNeeded, address(this), address(this));
-
-        // Update accounting
         order.depositSpent += fillAmount_;
         order.incentiveSpent += incentive;
         totalUsdsOwed -= usdsNeeded;
 
         // Approve and execute bid
         USDS.approve(address(CD_AUCTIONEER), fillAmount_);
-
         (uint256 ohmOut, uint256 positionId, , uint256 actualAmount) = CD_AUCTIONEER.bid(
             order.depositPeriod,
             fillAmount_,
@@ -420,28 +424,21 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
             true
         );
 
-        // Transfer position NFT to order owner
+        // Transfer position NFT and receipt tokens to order owner
         POSITION_NFT.transferFrom(address(this), order.owner, positionId);
-
-        // Transfer receipt tokens to order owner
-        ERC20 receiptToken = receiptTokens[order.depositPeriod];
         if (actualAmount > 0) {
-            receiptToken.safeTransfer(order.owner, actualAmount);
+            receiptTokens[order.depositPeriod].safeTransfer(order.owner, actualAmount);
         }
 
-        // Transfer incentive to filler
-        if (incentive > 0) {
-            USDS.safeTransfer(msg.sender, incentive);
-        }
-
+        // Transfer incentive to filler and handle remaining balance
+        if (incentive > 0) USDS.safeTransfer(msg.sender, incentive);
         uint256 remainingBalance = USDS.balanceOf(address(this));
-        if (remainingBalance > 0) {
-            SUSDS.deposit(remainingBalance, address(this));
-        }
+        if (remainingBalance > 0) SUSDS.deposit(remainingBalance, address(this));
 
         emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
 
-        // TODO add outputs
+        // Calculate remaining deposit after fill and return
+        return (fillAmount_, incentive, remainingDepositBefore - fillAmount_);
     }
 
     /// @notice Cancel an active order and return remaining funds
@@ -452,6 +449,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
+        if (order.depositSpent == order.depositBudget) revert OrderFullySpent();
 
         // Ternaries to ensure against underflow when cancelling
         uint256 remainingDeposit = order.depositBudget > order.depositSpent

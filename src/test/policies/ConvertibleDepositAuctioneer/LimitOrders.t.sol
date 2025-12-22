@@ -757,29 +757,58 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, fillAmount),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount),
+                "Effective price should equal mock price"
+            );
+        }
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 50 / 10000)");
-        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount
+            );
+            assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 50 / 10000)");
+            assertEq(
+                incentiveRate,
+                DEFAULT_INCENTIVE_RATE,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // Fill order
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmount);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            fillAmount,
+            "Actual fill amount should equal requested fill amount"
+        );
+        assertEq(
+            returnedIncentive,
+            expectedIncentive,
+            "Returned incentive should be 5e18 (1000 * 50 / 10000)"
+        );
+        assertEq(
+            remainingDeposit,
+            DEFAULT_DEPOSIT_BUDGET - fillAmount,
+            "Remaining deposit should be deposit budget minus fill amount"
+        );
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -828,20 +857,49 @@ contract CDAuctioneerLimitOrdersTest is Test {
             );
 
         // Check canFillOrder returns true before first fill
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountOne);
-        assertTrue(canFill, "Order should be fillable before first fill");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountOne);
+            assertTrue(canFill, "Order should be fillable before first fill");
+        }
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmountOne
-        );
-        assertEq(incentive, expectedIncentiveOne, "Incentive should be 10e18 (2000 * 50 / 10000)");
-        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmountOne
+            );
+            assertEq(
+                incentive,
+                expectedIncentiveOne,
+                "Incentive should be 10e18 (2000 * 50 / 10000)"
+            );
+            assertEq(
+                incentiveRate,
+                DEFAULT_INCENTIVE_RATE,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // First fill
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmountOne);
+        (
+            uint256 actualFillAmountOne,
+            uint256 returnedIncentiveOne,
+            uint256 remainingDepositOne
+        ) = limitOrders.fillOrder(orderId, fillAmountOne);
+
+        // Check first fill return values
+        assertEq(actualFillAmountOne, fillAmountOne, "First fill amount should equal requested");
+        assertEq(
+            returnedIncentiveOne,
+            expectedIncentiveOne,
+            "First fill incentive should be 10e18"
+        );
+        assertEq(
+            remainingDepositOne,
+            DEFAULT_DEPOSIT_BUDGET - fillAmountOne,
+            "Remaining deposit after first fill should be correct"
+        );
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -857,17 +915,55 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check canFillOrder returns true before second fill
-        (canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
-        assertTrue(canFill, "Order should be fillable before second fill");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
+            assertTrue(canFill, "Order should be fillable before second fill");
+        }
 
         // Check incentive
-        (incentive, incentiveRate) = limitOrders.calculateIncentive(orderId, fillAmountTwo);
-        assertEq(incentive, expectedIncentiveTwo, "Incentive should be 15e18 (3000 * 50 / 10000)");
-        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmountTwo
+            );
+            assertEq(
+                incentive,
+                expectedIncentiveTwo,
+                "Incentive should be 15e18 (3000 * 50 / 10000)"
+            );
+            assertEq(
+                incentiveRate,
+                DEFAULT_INCENTIVE_RATE,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // Second fill
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmountTwo);
+        {
+            vm.prank(filler);
+            (
+                uint256 actualFillAmountTwo,
+                uint256 returnedIncentiveTwo,
+                uint256 remainingDepositTwo
+            ) = limitOrders.fillOrder(orderId, fillAmountTwo);
+
+            // Check second fill return values
+            assertEq(
+                actualFillAmountTwo,
+                fillAmountTwo,
+                "Second fill amount should equal requested"
+            );
+            assertEq(
+                returnedIncentiveTwo,
+                expectedIncentiveTwo,
+                "Second fill incentive should be 15e18"
+            );
+            assertEq(
+                remainingDepositTwo,
+                DEFAULT_DEPOSIT_BUDGET - fillAmountOne - fillAmountTwo,
+                "Remaining deposit after second fill should be correct"
+            );
+        }
 
         // Check order status
         order = limitOrders.getOrder(orderId);
@@ -914,20 +1010,49 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedIncentiveRate = 50; // 25 / 5000 = 0.5%
 
         // Check canFillOrder returns true (will cap to remaining)
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
-        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
+            assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        }
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount
+            );
+            assertEq(
+                incentive,
+                expectedIncentive,
+                "Incentive should be 25e18 (10000 * 50 / 10000)"
+            );
+            assertEq(
+                incentiveRate,
+                expectedIncentiveRate,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // Try to fill more than remaining
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmount);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            SMALL_DEPOSIT_BUDGET,
+            "Fill amount should be capped to remaining deposit"
+        );
+        assertEq(
+            returnedIncentive,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive should be all remaining (final fill)"
+        );
+        assertEq(remainingDeposit, 0, "Remaining deposit should be zero after final fill");
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -970,16 +1095,28 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedIncentiveRate = 50; // 25 / 5000 = 0.5%
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount_
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount_
+            );
+            assertEq(
+                incentive,
+                expectedIncentive,
+                "Incentive should be 25e18 (10000 * 50 / 10000)"
+            );
+            assertEq(
+                incentiveRate,
+                expectedIncentiveRate,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // Check canFillOrder returns true (will cap to remaining)
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
-        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
+            assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        }
 
         // Try to fill more than remaining
         vm.prank(filler);
@@ -1031,20 +1168,49 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET);
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount_
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount_
+            );
+            assertEq(
+                incentive,
+                expectedIncentive,
+                "Incentive should be 25e18 (10000 * 50 / 10000)"
+            );
+            assertEq(
+                incentiveRate,
+                expectedIncentiveRate,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // Check canFillOrder returns true (will cap to remaining)
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
-        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
+            assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+        }
 
         // Try to fill more than remaining
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmount_);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, fillAmount_);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            SMALL_DEPOSIT_BUDGET,
+            "Fill amount should be capped to remaining deposit"
+        );
+        assertEq(
+            returnedIncentive,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive should be all remaining (final fill)"
+        );
+        assertEq(remainingDeposit, 0, "Remaining deposit should be zero after final fill");
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -1087,7 +1253,25 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // First fill
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 2_000e18);
+        (
+            uint256 actualFillAmountOne,
+            uint256 returnedIncentiveOne,
+            uint256 remainingDepositOne
+        ) = limitOrders.fillOrder(orderId, 2_000e18);
+
+        // Check first fill return values
+        assertEq(actualFillAmountOne, 2_000e18, "First fill amount should equal requested");
+        uint256 expectedIncentiveOne = (2_000e18 * SMALL_INCENTIVE_BUDGET) / 2_500e18; // 20e18
+        assertEq(
+            returnedIncentiveOne,
+            expectedIncentiveOne,
+            "First fill incentive should be proportional"
+        );
+        assertEq(
+            remainingDepositOne,
+            500e18,
+            "Remaining deposit after first fill should be 500e18"
+        );
 
         // Calculate expected budget use
         uint256 fillAmountTwo = 500e18;
@@ -1095,21 +1279,34 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedIncentiveRate = 100; // 25 / 2500 = 1%
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmountTwo
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (500 * 25 / 2500)");
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 100 bps (1%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmountTwo
+            );
+            assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (500 * 25 / 2500)");
+            assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 100 bps (1%)");
+        }
 
         // Remaining is 500e18 which is below minFill of 1000e18
         // Should still be allowed as final fill
         // Check canFillOrder returns true for final fill below minFillSize
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
-        assertTrue(canFill, "Order should be fillable for final fill below minFillSize");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
+            assertTrue(canFill, "Order should be fillable for final fill below minFillSize");
+        }
 
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmountTwo);
+        (
+            uint256 actualFillAmountTwo,
+            uint256 returnedIncentiveTwo,
+            uint256 remainingDepositTwo
+        ) = limitOrders.fillOrder(orderId, fillAmountTwo);
+
+        // Check second fill return values
+        assertEq(actualFillAmountTwo, fillAmountTwo, "Second fill amount should equal requested");
+        assertEq(returnedIncentiveTwo, expectedIncentive, "Second fill incentive should be 5e18");
+        assertEq(remainingDepositTwo, 0, "Remaining deposit after second fill should be zero");
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -1153,9 +1350,25 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 9_000e18);
 
+        // Calculate expected incentive
+        uint256 expectedIncentiveTwo = 5e18; // 1000 * 5 / 10000 = 5
+
         // Final fill - should get all remaining incentive (avoids dust)
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 1_000e18);
+        (
+            uint256 actualFillAmountTwo,
+            uint256 returnedIncentiveTwo,
+            uint256 remainingDepositTwo
+        ) = limitOrders.fillOrder(orderId, 1_000e18);
+
+        // Check final fill return values
+        assertEq(actualFillAmountTwo, 1_000e18, "Final fill amount should equal requested");
+        assertEq(
+            returnedIncentiveTwo,
+            expectedIncentiveTwo,
+            "Final fill should get all remaining incentive"
+        );
+        assertEq(remainingDepositTwo, 0, "Remaining deposit after final fill should be zero");
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -1193,20 +1406,35 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedIncentiveRate = (incentiveBudget_ * 10_000) / DEFAULT_DEPOSIT_BUDGET;
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmountTwo
-        );
-        assertEq(
-            incentive,
-            remainingIncentive,
-            "Incentive should be the remaining incentive budget"
-        );
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate mismatch");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmountTwo
+            );
+            assertEq(
+                incentive,
+                remainingIncentive,
+                "Incentive should be the remaining incentive budget"
+            );
+            assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate mismatch");
+        }
 
         // Final fill - should get all remaining incentive (avoids dust)
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, fillAmountTwo);
+        (
+            uint256 actualFillAmountTwo,
+            uint256 returnedIncentiveTwo,
+            uint256 remainingDepositTwo
+        ) = limitOrders.fillOrder(orderId, fillAmountTwo);
+
+        // Check final fill return values
+        assertEq(actualFillAmountTwo, fillAmountTwo, "Final fill amount should equal requested");
+        assertEq(
+            returnedIncentiveTwo,
+            remainingIncentive,
+            "Final fill should get all remaining incentive"
+        );
+        assertEq(remainingDepositTwo, 0, "Remaining deposit after final fill should be zero");
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
@@ -1247,16 +1475,20 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 fillAmount = 1_000e18;
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount
-        );
-        assertEq(incentive, 0, "Incentive should be 0 (1000 * 0 / 10000)");
-        assertEq(incentiveRate, 0, "Incentive rate should be 0 bps (0%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount
+            );
+            assertEq(incentive, 0, "Incentive should be 0 (1000 * 0 / 10000)");
+            assertEq(incentiveRate, 0, "Incentive rate should be 0 bps (0%)");
+        }
 
         // Check canFillOrder returns true before fill
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
-        assertTrue(canFill, "Order should be fillable with zero incentive");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
+            assertTrue(canFill, "Order should be fillable with zero incentive");
+        }
 
         // Calculate expected values before fill
         uint256 remainingBudget = 9_000e18; // Remaining deposit (no incentive)
@@ -1295,18 +1527,29 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedIncentiveRate = 50; // 5 / 1000 = 0.5%
 
         // Check incentive
-        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
-            orderId,
-            fillAmount
-        );
-        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 5 / 1000)");
-        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                fillAmount
+            );
+            assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 5 / 1000)");
+            assertEq(
+                incentiveRate,
+                expectedIncentiveRate,
+                "Incentive rate should be 50 bps (0.5%)"
+            );
+        }
 
         // minFillSize == depositBudget == 1000
         // This should work as it's both the min and final fill
         // Check canFillOrder returns true
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
-        assertTrue(canFill, "Order should be fillable when minFillSize equals remaining deposit");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
+            assertTrue(
+                canFill,
+                "Order should be fillable when minFillSize equals remaining deposit"
+            );
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1339,8 +1582,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         address filler2 = makeAddr("filler2");
 
         // Check canFillOrder returns true before first fill
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 2_000e18);
-        assertTrue(canFill, "Order should be fillable before first fill");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, 2_000e18);
+            assertTrue(canFill, "Order should be fillable before first fill");
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 2_000e18);
@@ -1350,8 +1595,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedShares = sUsds.previewDeposit(remainingBudget);
 
         // Check canFillOrder returns true before second fill
-        (canFill, , ) = limitOrders.canFillOrder(orderId, 3_000e18);
-        assertTrue(canFill, "Order should be fillable before second fill");
+        {
+            (bool canFill, , ) = limitOrders.canFillOrder(orderId, 3_000e18);
+            assertTrue(canFill, "Order should be fillable before second fill");
+        }
 
         vm.prank(filler2);
         limitOrders.fillOrder(orderId, 3_000e18);
@@ -1388,9 +1635,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check canFillOrder returns false with reason before fill
-        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
-        assertFalse(canFill, "Order should not be fillable when not active");
-        assertEq(reason, "Order not active", "Reason should indicate order is not active");
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+            assertFalse(canFill, "Order should not be fillable when not active");
+            assertEq(reason, "Order not active", "Reason should indicate order is not active");
+        }
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
@@ -1413,9 +1662,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
 
         // Check canFillOrder returns false with reason after order is fully spent
-        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
-        assertFalse(canFill, "Order should not be fillable when fully spent");
-        assertEq(reason, "Order fully spent", "Reason should indicate order is fully spent");
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+            assertFalse(canFill, "Order should not be fillable when fully spent");
+            assertEq(reason, "Order fully spent", "Reason should indicate order is fully spent");
+        }
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.OrderFullySpent.selector);
@@ -1435,9 +1686,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check canFillOrder returns false with reason before fill
-        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 500e18);
-        assertFalse(canFill, "Order should not be fillable when fill amount is below minimum");
-        assertEq(reason, "Fill below minimum", "Reason should indicate fill is below minimum");
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 500e18);
+            assertFalse(canFill, "Order should not be fillable when fill amount is below minimum");
+            assertEq(reason, "Fill below minimum", "Reason should indicate fill is below minimum");
+        }
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.FillBelowMinimum.selector);
@@ -1459,17 +1712,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setMockPrice(MOCK_PRICE); // Current price is 30
 
         // Check canFillOrder returns false with reason before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            1_000e18
-        );
-        assertFalse(canFill, "Order should not be fillable when price is above max");
-        assertEq(reason, "Price above max", "Reason should indicate price is above max");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, 1_000e18),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                1_000e18
+            );
+            assertFalse(canFill, "Order should not be fillable when price is above max");
+            assertEq(reason, "Price above max", "Reason should indicate price is above max");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, 1_000e18),
+                "Effective price should equal mock price"
+            );
+        }
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.PriceAboveMax.selector);
@@ -1491,9 +1746,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setMinimumBid(5_000e18); // Raise minimum after order creation
 
         // Check canFillOrder returns false with reason before fill
-        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
-        assertFalse(canFill, "Order should not be fillable when OHM output is zero");
-        assertEq(reason, "Zero OHM output", "Reason should indicate zero OHM output");
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+            assertFalse(canFill, "Order should not be fillable when OHM output is zero");
+            assertEq(reason, "Zero OHM output", "Reason should indicate zero OHM output");
+        }
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.ZeroOhmOut.selector);
@@ -1519,17 +1776,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, fillAmount),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount),
+                "Effective price should equal mock price"
+            );
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1572,17 +1831,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, fillAmount),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount),
+                "Effective price should equal mock price"
+            );
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1625,17 +1886,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(fillAmount_ + expectedIncentive);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount_
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, fillAmount_),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount_
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount_),
+                "Effective price should equal mock price"
+            );
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount_);
@@ -1675,17 +1938,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
         _accrueYield(123e18);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount_
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, fillAmount_),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount_
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount_),
+                "Effective price should equal mock price"
+            );
+        }
 
         // Calculate expected budget use
         uint256 expectedIncentive = (fillAmount_ * DEFAULT_INCENTIVE_BUDGET) /
@@ -1736,17 +2001,19 @@ contract CDAuctioneerLimitOrdersTest is Test {
             sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
         // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            fillAmount
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(price_, fillAmount),
-            "Effective price should equal mock price"
-        );
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(price_, fillAmount),
+                "Effective price should equal mock price"
+            );
+        }
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -2026,7 +2293,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, DEFAULT_DEPOSIT_BUDGET);
 
         // Cancel order
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        vm.expectRevert(CDAuctioneerLimitOrders.OrderFullySpent.selector);
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
     }
