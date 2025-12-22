@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 // solhint-disable use-natspec
 // solhint-disable gas-small-strings
+// solhint-disable function-max-lines
+// solhint-disable gas-increment-by-one
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
@@ -1268,13 +1271,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // ========== CHANGE ORDER TESTS ========== //
 
-    // TODO check invariants
-
     // changeOrder
     // when increasing the deposit and incentive budgets
     //  [X] it transfers additional budget from the user
     //  [X] it increases budgets
-    //  [ ] it increases the USDS owed by the additional budget
+    //  [X] it increases the USDS owed by the additional budget
     function test_changeOrder_increaseBudgets() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 500e18);
@@ -1284,11 +1285,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 500e18);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
         assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
         assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
+        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(order.active, true, "Order should be active");
 
         // Alice paid additional 5025
         assertEq(
@@ -1296,12 +1301,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
             5_025e18,
             "Alice should pay additional 5_025e18"
         );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 10_050e18, "Total USDS owed should be increased");
     }
 
     // when decreasing the deposit and incentive budgets
     //  [X] it decreases budgets
-    //  [ ] it refunds the additional budget to the user
-    //  [ ] it reduces the USDS owed by the additional budget
+    //  [X] it refunds the additional budget to the user
+    //  [X] it reduces the USDS owed by the additional budget
     function test_changeOrder_decreaseBudgets() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
@@ -1311,9 +1319,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.changeOrder(orderId, 5_000e18, 25e18, 35e18, 500e18);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 5_000e18, "Deposit budget should be decreased to 5_000e18");
         assertEq(order.incentiveBudget, 25e18, "Incentive budget should be decreased to 25e18");
+        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
+        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(order.active, true, "Order should be active");
 
         // Alice received 5025 back
         assertEq(
@@ -1321,14 +1335,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
             5_025e18,
             "Alice should receive 5_025e18 refund"
         );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 5_025e18, "Total USDS owed should be decreased");
     }
 
     // given there has been a partial fill
-    //  when decreasing the deposit and incentive budgets
+    //  when decreasing the deposit and incentive budgets below the remaining budget
     //   [X] it resets spent amounts
-    //   [ ] it refunds the additional budget to the user
-    //   [ ] it reduces the USDS owed by the additional budget
-    function test_changeOrder_afterPartialFill_resetsSpent() public {
+    //   [X] it refunds the additional budget to the user
+    //   [X] it decreases budgets
+    //   [X] it reduces the USDS owed by the additional budget
+    function test_changeOrder_afterPartialFill_decreasedBudget() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
 
@@ -1336,6 +1354,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 3_000e18);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
         assertEq(
             orderBefore.depositSpent,
@@ -1357,6 +1376,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.changeOrder(orderId, 5_000e18, 25e18, 32e18, 500e18);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
         assertEq(
             orderAfter.depositBudget,
@@ -1371,18 +1391,166 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
         assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
         assertEq(orderAfter.maxPrice, 32e18, "Max price should be updated to 32e18");
+        assertEq(orderAfter.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(orderAfter.active, true, "Order should be active");
 
+        // User receives refund
         assertEq(
             usds.balanceOf(alice) - aliceBalanceBefore,
             2_010e18,
             "Alice should receive 2_010e18 refund (remaining - new total)"
         );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 5_025e18, "Total USDS owed should be decreased");
     }
 
-    //  when increasing the deposit and incentive budgets
-    //   [ ] it transfers additional budget from the user
-    //   [ ] it increases budgets
-    //   [ ] it increases the USDS owed by the additional budget
+    //  when increasing the deposit and incentive budgets above the remaining
+    //   [X] it resets spent amounts
+    //   [X] it transfers additional budget from the user
+    //   [X] it increases budgets
+    //   [X] it increases the USDS owed by the additional budget
+    function test_changeOrder_afterPartialFill_increasedBudget() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        // Partial fill: spends 3000 deposit + 15 incentive
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 3_000e18);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        assertEq(
+            orderBefore.depositSpent,
+            3_000e18,
+            "Before change: deposit spent should be 3_000e18"
+        );
+        assertEq(
+            orderBefore.incentiveSpent,
+            15e18,
+            "Before change: incentive spent should be 15e18"
+        );
+
+        // Remaining: 7000 + 35 = 7035
+        // New total: 11000 + 110 = 11110
+        // User spends: 11110 - 7035 = 4075
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 11_000e18, 110e18, 32e18, 500e18);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        assertEq(
+            orderAfter.depositBudget,
+            11_000e18,
+            "After change: deposit budget should be 11_000e18"
+        );
+        assertEq(
+            orderAfter.incentiveBudget,
+            110e18,
+            "After change: incentive budget should be 110e18"
+        );
+        assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
+        assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
+        assertEq(orderAfter.maxPrice, 32e18, "Max price should be updated to 32e18");
+        assertEq(orderAfter.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(orderAfter.active, true, "Order should be active");
+
+        // User spends additional
+        assertEq(
+            aliceBalanceBefore - usds.balanceOf(alice),
+            4075e18,
+            "Alice should pay additional 4075e18"
+        );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 11_110e18, "Total USDS owed should be increased");
+    }
+
+    //  when the total budget is the same as the remaining
+    //   [X] it resets spent amounts
+    //   [X] it does not transfer additional budget from the user
+    //   [X] it does not change budgets
+    //   [X] it does not change the USDS owed
+    function test_changeOrder_afterPartialFill_sameBudget(
+        uint256 newMaxPrice_,
+        uint256 newMinFillSize_
+    ) public {
+        newMaxPrice_ = bound(newMaxPrice_, 1, 100e18);
+        newMinFillSize_ = bound(newMinFillSize_, MIN_BID, 7_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        // Partial fill: spends 3000 deposit + 15 incentive
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 3_000e18);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        assertEq(
+            orderBefore.depositSpent,
+            3_000e18,
+            "Before change: deposit spent should be 3_000e18"
+        );
+        assertEq(
+            orderBefore.incentiveSpent,
+            15e18,
+            "Before change: incentive spent should be 15e18"
+        );
+
+        // Remaining: 7000 + 35 = 7035
+
+        // Invariant: USDS owed is original deposit + original incentive - spent amounts
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            7_000e18 + 35e18,
+            "Total USDS owed should be unchanged"
+        );
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 7_000e18, 35e18, newMaxPrice_, newMinFillSize_);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        assertEq(
+            orderAfter.depositBudget,
+            7_000e18,
+            "After change: deposit budget should be 7_000e18"
+        );
+        assertEq(
+            orderAfter.incentiveBudget,
+            35e18,
+            "After change: incentive budget should be 35e18"
+        );
+        assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
+        assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
+        assertEq(orderAfter.maxPrice, newMaxPrice_, "Max price should be updated to new value");
+        assertEq(
+            orderAfter.minFillSize,
+            newMinFillSize_,
+            "Min fill size should be updated to new value"
+        );
+        assertEq(orderAfter.active, true, "Order should be active");
+
+        // User does not spend additional
+        assertEq(
+            usds.balanceOf(alice),
+            aliceBalanceBefore,
+            "Alice should not spend additional funds"
+        );
+
+        // Invariant: USDS owed is original deposit + original incentive - spent amounts
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            7_000e18 + 35e18,
+            "Total USDS owed should be unchanged"
+        );
+    }
 
     //  [X] it allows changing incentive rate freely
     function test_changeOrder_afterPartialFill_canChangeIncentiveRateFreely() public {
@@ -1393,66 +1561,161 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 5_000e18); // Pays 50 incentive
 
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
         // Remaining: 5000 + 50 = 5050
         // Can now set 0.1% rate - no problem since spent is reset
         vm.prank(alice);
         limitOrders.changeOrder(orderId, 5_000e18, 5e18, 35e18, 500e18);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 5_000e18, "Deposit budget should be updated to 5_000e18");
         assertEq(order.incentiveBudget, 5e18, "Incentive budget should be updated to 5e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
         assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
+        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(order.active, true, "Order should be active");
 
         // User received excess: 5050 - 5005 = 45
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            45e18,
+            "Alice should receive 45e18 refund (remaining - new total)"
+        );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 5_005e18, "Total USDS owed should be decreased");
     }
 
     // when the budget is the same
-    //  given there has been a partial fill
-    //   [ ] it changes the max price
-    //   [ ] it changes the min fill size
-    //   [ ] it makes no transfer
-    //   [ ] it resets the spent amounts
     //  when only the maxPrice is changed
-    //   [ ] it changes the max price
-    //   [ ] it makes no transfer
-    //   [ ] it resets the spent amounts
-    //  when only the minFillSize is changed
-    //   [ ] it changes the min fill size
-    //   [ ] it makes no transfer
-    //   [ ] it resets the spent amounts
-    function test_changeOrder_sameValues_noTransfer() public {
+    //   [X] it changes the max price
+    //   [X] it makes no transfer
+    //   [X] it resets the spent amounts
+    function test_changeOrder_onlyMaxPrice(uint256 newMaxPrice_) public {
+        newMaxPrice_ = bound(newMaxPrice_, 1, 100e18);
+
         vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, MIN_BID);
 
         uint256 aliceBalanceBefore = usds.balanceOf(alice);
 
         vm.prank(alice);
-        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, 500e18);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, newMaxPrice_, MIN_BID);
 
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
+        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be unchanged");
+        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, newMaxPrice_, "Max price should be updated");
+        assertEq(order.minFillSize, MIN_BID, "Min fill size should be unchanged");
+        assertEq(order.active, true, "Order should be active");
+
+        // Check owner balance
         assertEq(
             usds.balanceOf(alice),
             aliceBalanceBefore,
             "Alice balance should not change when budgets are unchanged"
         );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            10_000e18 + 50e18,
+            "Total USDS owed should be unchanged"
+        );
     }
 
-    // when only changing maxPrice
-    //  [X] it updates maxPrice only
-    function test_changeOrder_onlyMaxPrice() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+    //  when only the minFillSize is changed
+    //   [X] it changes the min fill size
+    //   [X] it makes no transfer
+    //   [X] it resets the spent amounts
+    function test_changeOrder_onlyMinFillSize(uint256 newMinFillSize_) public {
+        uint256 depositBudget = 10_000e18;
+        newMinFillSize_ = bound(newMinFillSize_, MIN_BID, depositBudget);
 
         vm.prank(alice);
-        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 40e18, 500e18);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, depositBudget, 50e18, 35e18, 500e18);
 
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 35e18, newMinFillSize_);
+
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.maxPrice, 40e18, "Max price should be updated to 40e18");
-        // TODO check other values
+        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
+        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be unchanged");
+        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
+        assertEq(
+            order.minFillSize,
+            newMinFillSize_,
+            "Min fill size should be updated to new value"
+        );
+        assertEq(order.active, true, "Order should be active");
+
+        // Check owner balance
+        assertEq(
+            usds.balanceOf(alice),
+            aliceBalanceBefore,
+            "Alice balance should not change when budgets are unchanged"
+        );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            depositBudget + 50e18,
+            "Total USDS owed should be unchanged"
+        );
     }
 
     // when the order has been completely filled
-    //  [ ] it reverts
+    //  [X] it changes the budget
+    //  [X] it changes the min fill size
+    //  [X] it changes the max price
+    //  [X] it resets the spent amounts
+    //  [X] it transfers additional budget from the user
+    //  [X] it increases the USDS owed by the additional budget
+    function test_changeOrder_completelyFilled() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 500e18);
+
+        // Completely fill the order
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 5_000e18);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        // Change order
+        vm.prank(alice);
+        limitOrders.changeOrder(orderId, 10_000e18, 50e18, 32e18, 499e18);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
+        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
+        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 32e18, "Max price should be updated to 32e18");
+        assertEq(order.minFillSize, 499e18, "Min fill size should be updated to 499e18");
+        assertEq(order.active, true, "Order should be active");
+
+        // Alice paid additional 10050
+        assertEq(
+            aliceBalanceBefore - usds.balanceOf(alice),
+            10_050e18,
+            "Alice should pay additional 10_050e18"
+        );
+
+        // Invariant: USDS owed is new deposit + new incentive
+        assertEq(limitOrders.totalUsdsOwed(), 10_050e18, "Total USDS owed should be increased");
+    }
 
     // when caller is not order owner
     //  [X] it reverts
@@ -1553,16 +1816,35 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // when setting incentiveBudget to zero
-    //  [X] it updates successfully
+    //  [X] it decreases budgets
+    //  [X] it refunds the additional budget to the user
+    //  [X] it reduces the USDS owed by the additional budget
     function test_changeOrder_zeroIncentive() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 500e18);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
 
         vm.prank(alice);
         limitOrders.changeOrder(orderId, 10_000e18, 0, 35e18, 500e18);
 
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
         assertEq(order.incentiveBudget, 0, "Incentive budget should be updated to 0");
-        // TODO check other values
+        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
+        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
+        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
+        assertEq(order.active, true, "Order should be active");
+
+        // Alice returned 50e18 incentive
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            50e18,
+            "Alice should receive 50e18 incentive"
+        );
+
+        // Invariant: USDS owed is deposit + incentive
+        assertEq(limitOrders.totalUsdsOwed(), 10_000e18, "Total USDS owed should be decreased");
     }
 }
