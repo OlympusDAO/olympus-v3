@@ -903,6 +903,101 @@ contract CDAuctioneerLimitOrdersTest is Test {
         checkOrderInvariants(orderId, 5000e18 + 25e18, 5_000e18 + 25e18, filler, 25e18, 0);
     }
 
+    function test_fillOrder_capToRemainingDeposit_fuzz(uint256 fillAmount_) public {
+        fillAmount_ = bound(fillAmount_, SMALL_DEPOSIT_BUDGET, 10_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Check canFillOrder returns true (will cap to remaining)
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
+        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+
+        // Try to fill more than remaining
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount_);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(
+            order.depositSpent,
+            SMALL_DEPOSIT_BUDGET,
+            "Deposit spent should be capped to deposit budget"
+        ); // Capped to max
+        assertEq(
+            order.incentiveSpent,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive spent should equal incentive budget"
+        ); // All incentive paid
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            filler,
+            SMALL_INCENTIVE_BUDGET,
+            0
+        );
+    }
+
+    function test_fillOrder_capToRemainingDeposit_givenYield_fuzz(uint256 fillAmount_) public {
+        fillAmount_ = bound(fillAmount_, SMALL_DEPOSIT_BUDGET, 10_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Yield accrual
+        _accrueYield(123e18);
+
+        // Calculate expected budget use
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET);
+
+        // Check canFillOrder returns true (will cap to remaining)
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
+        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+
+        // Try to fill more than remaining
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount_);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(
+            order.depositSpent,
+            SMALL_DEPOSIT_BUDGET,
+            "Deposit spent should be capped to deposit budget"
+        ); // Capped to max
+        assertEq(
+            order.incentiveSpent,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive spent should equal incentive budget"
+        ); // All incentive paid
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            filler,
+            SMALL_INCENTIVE_BUDGET,
+            expectedShares
+        );
+    }
+
     // when there have been previous fills
     //  when the fill amount completes the order
     //   when the remaining deposit is less than the minFillSize
@@ -1483,10 +1578,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
             expectedShares
         );
     }
-
-    // TODO fuzz vault rate
-    // TODO fuzz final fill
-    // TODO fuzz multiple orders, final fill
 
     // ========== CANCEL ORDER TESTS ========== //
 
