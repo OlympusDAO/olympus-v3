@@ -1069,9 +1069,201 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
-    // TODO fuzz OHM out from CD auctioneer
-    // TODO fuzz incentive amount
-    // TODO fuzz fill amount
+    function test_fillOrder_incentiveBudgetFuzz(uint256 incentiveBudget_) public {
+        uint256 depositBudget = 10_000e18;
+        incentiveBudget_ = bound(incentiveBudget_, 0, 50_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            depositBudget,
+            incentiveBudget_,
+            35e18,
+            1_000e18
+        );
+
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            "Effective price should equal mock price"
+        );
+
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * incentiveBudget_) / depositBudget;
+        uint256 remainingBudget = depositBudget + incentiveBudget_ - fillAmount - expectedIncentive;
+        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            depositBudget + incentiveBudget_,
+            fillAmount + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
+    }
+
+    function test_fillOrder_depositBudgetFuzz(uint256 depositBudget_) public {
+        depositBudget_ = bound(depositBudget_, 1_000e18, 50_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, depositBudget_, 50e18, 35e18, 1_000e18);
+
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            "Effective price should equal mock price"
+        );
+
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * 50e18) / depositBudget_;
+        uint256 remainingBudget = depositBudget_ + 50e18 - fillAmount - expectedIncentive;
+        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            depositBudget_ + 50e18,
+            fillAmount + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
+    }
+
+    function test_fillOrder_fillAmountFuzz(uint256 fillAmount_) public {
+        fillAmount_ = bound(fillAmount_, 1_000e18, 10_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
+
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            fillAmount_
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, fillAmount_),
+            "Effective price should equal mock price"
+        );
+
+        // Calculate expected budget use
+        uint256 expectedIncentive = (fillAmount_ * 50e18) / 10_000e18;
+        uint256 remainingBudget = 10_000e18 + 50e18 - fillAmount_ - expectedIncentive;
+        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount_);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount_, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            10_000e18 + 50e18,
+            fillAmount_ + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
+    }
+
+    function test_fillOrder_priceFuzz(uint256 price_) public {
+        price_ = bound(price_, MOCK_PRICE, 50e18);
+        cdAuctioneer.setMockPrice(price_);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 50e18, 1_000e18);
+
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(price_, 1_000e18),
+            "Effective price should equal mock price"
+        );
+
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * 50e18) / 10_000e18;
+        uint256 remainingBudget = 10_000e18 + 50e18 - fillAmount - expectedIncentive;
+        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            10_000e18 + 50e18,
+            fillAmount + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
+    }
+
     // TODO fuzz vault rate
     // TODO fuzz final fill
     // TODO fuzz multiple orders, final fill
