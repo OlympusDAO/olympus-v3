@@ -2040,6 +2040,14 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    // when the auctioneer returns a different actual deposit amount
+    //  [ ] the incentive is calculated based on the actual deposit amount
+    //  [ ] the deposit spent is reduced by the actual deposit amount
+    //  [ ] the incentive spent is reduced by the actual incentive amount
+    //  [ ] the total USDS owed is reduced by the actual deposit amount
+    //  [ ] the actual deposit amount is returned
+    //  [ ] the actual incentive amount is returned
+
     // ========== CANCEL ORDER TESTS ========== //
 
     // when order is active and not filled
