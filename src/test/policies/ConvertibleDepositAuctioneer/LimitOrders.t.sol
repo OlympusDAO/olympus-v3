@@ -1584,7 +1584,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     // when order is active and not filled
     //  [X] it cancels order
     //  [X] it refunds the amount of deposit and incentive budgets
-    //  [ ] it reduces the USDS owed by the full amount of deposit and incentive budgets
+    //  [X] it reduces the USDS owed by the full amount of deposit and incentive budgets
     function test_cancelOrder_success() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(
@@ -1595,13 +1595,39 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Create a second order
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
         uint256 aliceBalanceBefore = usds.balanceOf(alice);
 
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
 
+        // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 0, "Deposit spent should be 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be 0");
         assertFalse(order.active, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the full amount of deposit and incentive budgets
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            "Total USDS owed should be the sum of the deposit and incentive budgets of the second order"
+        );
 
         // Alice should receive full refund
         assertEq(
@@ -1609,29 +1635,85 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
             "Alice should receive full refund of deposit + incentive budgets"
         );
+    }
 
-        // Check balances and invariants after cancellation (no fills, so incentiveSpent = 0)
-        // TODO add handling of USDS owed for cancelled order
-        checkOrderInvariants(
-            orderId,
+    function test_cancelOrder_givenYield(uint256 yieldAmount_) public {
+        yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Create a second order
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Yield accrual
+        _accrueYield(yieldAmount_);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 0, "Deposit spent should be 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be 0");
+        assertFalse(order.active, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the full amount of deposit and incentive budgets
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            "Total USDS owed should be the sum of the deposit and incentive budgets of the second order"
+        );
+
+        // Alice should receive full refund
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
             DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
-            0,
-            address(0),
-            0,
-            0
+            "Alice should receive full refund of deposit + incentive budgets"
         );
     }
 
     // when order is active and partially filled
     //  [X] it cancels order
     //  [X] it refunds the remaining amount of deposit and incentive budgets
-    //  [ ] it reduces the USDS owed by the remaining amount of deposit and incentive budgets
+    //  [X] it reduces the USDS owed by the remaining amount of deposit and incentive budgets
     function test_cancelOrder_afterPartialFill() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(
             PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
             DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Create a second order
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
             DEFAULT_MAX_PRICE,
             DEFAULT_MIN_FILL_SIZE
         );
@@ -1645,6 +1727,25 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
 
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 3_000e18, "Deposit spent should be 3_000e18");
+        assertEq(order.incentiveSpent, 15e18, "Incentive spent should be 15e18");
+        assertEq(order.active, false, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the remaining amount of deposit and incentive budgets
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            "Total USDS owed should be the sum of the deposit and incentive budgets of the second order"
+        );
+
         // Alice should receive remaining: 7000 deposit + 35 incentive
         uint256 expectedRefund = 7_000e18 + 35e18;
         assertEq(
@@ -1652,20 +1753,91 @@ contract CDAuctioneerLimitOrdersTest is Test {
             expectedRefund,
             "Alice should receive remaining deposit + incentive budgets after partial fill"
         );
+    }
 
-        // Partial fill: 3000 deposit spent, so 15e18 incentive spent (3000 * 50 / 10000)
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.incentiveSpent, 15e18, "Incentive spent should be 15e18 from partial fill");
+    function test_cancelOrder_afterPartialFill_givenYield(uint256 yieldAmount_) public {
+        yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
 
-        // Check balances and invariants after cancellation
-        checkOrderInvariants(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
-            3_000e18 + 15e18,
-            filler,
-            15e18,
-            0
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
         );
+
+        // Create a second order
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            SMALL_DEPOSIT_BUDGET,
+            SMALL_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Partial fill
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 3_000e18);
+
+        // Yield accrual
+        _accrueYield(yieldAmount_);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 3_000e18, "Deposit spent should be 3_000e18");
+        assertEq(order.incentiveSpent, 15e18, "Incentive spent should be 15e18");
+        assertEq(order.active, false, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the remaining amount of deposit and incentive budgets
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            "Total USDS owed should be the sum of the deposit and incentive budgets of the second order"
+        );
+
+        // Alice should receive remaining: 7000 deposit + 35 incentive
+        uint256 expectedRefund = 7_000e18 + 35e18;
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            expectedRefund,
+            "Alice should receive remaining deposit + incentive budgets after partial fill"
+        );
+    }
+
+    // when the order is completely filled
+    //  [X] it reverts
+
+    function test_cancelOrder_fullyFilled() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill order
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, DEFAULT_DEPOSIT_BUDGET);
+
+        // Cancel order
+        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
     }
 
     // when caller is not order owner
@@ -1704,8 +1876,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
         limitOrders.cancelOrder(orderId);
     }
-
-    // TODO Fuzz tests, ensure entire amount can be withdrawn
 
     // ========== YIELD TESTS ========== //
 
