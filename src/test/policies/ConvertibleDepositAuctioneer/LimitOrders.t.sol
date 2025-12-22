@@ -7,7 +7,7 @@
 pragma solidity >=0.8.20;
 
 // Test
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
@@ -21,14 +21,6 @@ import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
 import {Kernel} from "src/Kernel.sol";
 
 // ========== MOCKS ========== //
-
-contract MockReceiptToken is ERC20 {
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
 
 contract MockPositionNFT is ERC721 {
     uint256 public nextTokenId = 1;
@@ -48,8 +40,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
     CDAuctioneerLimitOrders public limitOrders;
     MockERC20 public usds;
     MockERC4626 public sUsds;
-    MockReceiptToken public receiptToken3;
-    MockReceiptToken public receiptToken6;
+    MockERC20 public receiptToken3;
+    MockERC20 public receiptToken6;
     MockPositionNFT public positionNFT;
     MockConvertibleDepositAuctioneer public cdAuctioneer;
     Kernel public kernel;
@@ -85,8 +77,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Deploy mocks
         usds = new MockERC20("USDS", "USDS", 18);
         sUsds = new MockERC4626(usds, "sUSDS", "sUSDS");
-        receiptToken3 = new MockReceiptToken("Receipt3", "RCT3");
-        receiptToken6 = new MockReceiptToken("Receipt6", "RCT6");
+        receiptToken3 = new MockERC20("Receipt3", "RCT3", 18);
+        receiptToken6 = new MockERC20("Receipt6", "RCT6", 18);
         positionNFT = new MockPositionNFT();
 
         // Deploy mock auctioneer
@@ -691,7 +683,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
             cdAuctioneer.setDepositPeriodEnabled(newPeriod, true);
 
             // Create the receipt token
-            MockReceiptToken newReceiptToken = new MockReceiptToken("Receipt12", "RCT12");
+            MockERC20 newReceiptToken = new MockERC20("Receipt12", "RCT12", 18);
 
             // Set receipt token on auctioneer
             cdAuctioneer.setReceiptToken(newPeriod, address(newReceiptToken));
