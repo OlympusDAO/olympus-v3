@@ -101,6 +101,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     uint8 public constant PERIOD_6 = 6;
 
     uint256 public constant MIN_BID = 100e18;
+    uint256 public constant MOCK_PRICE = 30e18;
 
     function setUp() public {
         // Deploy kernel
@@ -118,7 +119,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // Configure mock auctioneer
         cdAuctioneer.setMinimumBid(MIN_BID);
-        cdAuctioneer.setMockPrice(30e18);
+        cdAuctioneer.setMockPrice(MOCK_PRICE);
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_3, true);
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_6, true);
         cdAuctioneer.setReceiptToken(PERIOD_3, address(receiptToken3));
@@ -691,6 +692,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
 
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(effectivePrice, MOCK_PRICE, "Effective price should equal mock price");
+
         // Calculate expected values before fill
         uint256 remainingBudget = 9_000e18 + 45e18; // Remaining deposit + remaining incentive
         uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
@@ -717,6 +727,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
 
+        // Check canFillOrder returns true before first fill
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 2_000e18);
+        assertTrue(canFill, "Order should be fillable before first fill");
+
         // First fill
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 2_000e18);
@@ -733,6 +747,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Determine the expected shares after second fill
         uint256 remainingBudget = 5_000e18 + 25e18; // Remaining deposit + remaining incentive
         uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+
+        // Check canFillOrder returns true before second fill
+        (canFill, , ) = limitOrders.canFillOrder(orderId, 3_000e18);
+        assertTrue(canFill, "Order should be fillable before second fill");
 
         // Second fill
         vm.prank(filler);
@@ -768,6 +786,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 5_000e18, 25e18, 35e18, 1_000e18);
 
+        // Check canFillOrder returns true (will cap to remaining)
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 10_000e18);
+        assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+
         // Try to fill more than remaining
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 10_000e18);
@@ -796,6 +818,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // Remaining is 500e18 which is below minFill of 1000e18
         // Should still be allowed as final fill
+        // Check canFillOrder returns true for final fill below minFillSize
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 500e18);
+        assertTrue(canFill, "Order should be fillable for final fill below minFillSize");
+
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 500e18);
 
@@ -843,6 +869,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 0, 35e18, 1_000e18);
 
+        // Check canFillOrder returns true before fill
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        assertTrue(canFill, "Order should be fillable with zero incentive");
+
         // Calculate expected values before fill
         uint256 remainingBudget = 9_000e18; // Remaining deposit (no incentive)
         uint256 expectedShares = sUsds.previewDeposit(remainingBudget);
@@ -864,6 +894,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // minFillSize == depositBudget == 1000
         // This should work as it's both the min and final fill
+        // Check canFillOrder returns true
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        assertTrue(canFill, "Order should be fillable when minFillSize equals remaining deposit");
+
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 1_000e18);
 
@@ -888,12 +922,20 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         address filler2 = makeAddr("filler2");
 
+        // Check canFillOrder returns true before first fill
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 2_000e18);
+        assertTrue(canFill, "Order should be fillable before first fill");
+
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 2_000e18);
 
         // Calculate expected values before second fill
         uint256 remainingBudget = 5_000e18 + 25e18; // Remaining deposit + remaining incentive
         uint256 expectedShares = sUsds.previewDeposit(remainingBudget);
+
+        // Check canFillOrder returns true before second fill
+        (canFill, , ) = limitOrders.canFillOrder(orderId, 3_000e18);
+        assertTrue(canFill, "Order should be fillable before second fill");
 
         vm.prank(filler2);
         limitOrders.fillOrder(orderId, 3_000e18);
@@ -923,6 +965,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
 
+        // Check canFillOrder returns false with reason before fill
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        assertFalse(canFill, "Order should not be fillable when not active");
+        assertEq(reason, "Order not active", "Reason should indicate order is not active");
+
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
@@ -937,6 +984,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 1_000e18);
 
+        // Check canFillOrder returns false with reason after order is fully spent
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        assertFalse(canFill, "Order should not be fillable when fully spent");
+        assertEq(reason, "Order fully spent", "Reason should indicate order is fully spent");
+
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.OrderFullySpent.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
@@ -947,6 +999,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
     function test_fillOrder_revert_fillBelowMinimum() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
+
+        // Check canFillOrder returns false with reason before fill
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 500e18);
+        assertFalse(canFill, "Order should not be fillable when fill amount is below minimum");
+        assertEq(reason, "Fill below minimum", "Reason should indicate fill is below minimum");
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.FillBelowMinimum.selector);
@@ -959,7 +1016,16 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 25e18, 1_000e18); // maxPrice = 25
 
-        cdAuctioneer.setMockPrice(30e18); // Current price is 30
+        cdAuctioneer.setMockPrice(MOCK_PRICE); // Current price is 30
+
+        // Check canFillOrder returns false with reason before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            1_000e18
+        );
+        assertFalse(canFill, "Order should not be fillable when price is above max");
+        assertEq(reason, "Price above max", "Reason should indicate price is above max");
+        assertEq(effectivePrice, MOCK_PRICE, "Effective price should equal mock price");
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.PriceAboveMax.selector);
@@ -973,6 +1039,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
 
         cdAuctioneer.setMinimumBid(5_000e18); // Raise minimum after order creation
+
+        // Check canFillOrder returns false with reason before fill
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        assertFalse(canFill, "Order should not be fillable when OHM output is zero");
+        assertEq(reason, "Zero OHM output", "Reason should indicate zero OHM output");
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.ZeroOhmOut.selector);
@@ -1209,56 +1280,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // ========== VIEW FUNCTION TESTS ========== //
-
-    // canFillOrder
-    // when order can be filled
-    //  [X] it returns true with correct price
-    function test_canFillOrder_success() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
-
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            1_000e18
-        );
-
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(effectivePrice, 30e18, "Effective price should equal mock price"); // Mock price
-    }
-
-    // when price is above max
-    //  [X] it returns false with reason
-    function test_canFillOrder_priceAboveMax() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 25e18, 1_000e18);
-
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            1_000e18
-        );
-
-        assertFalse(canFill, "Order should not be fillable when price is above max");
-        assertEq(reason, "Price above max", "Reason should indicate price is above max");
-        assertEq(effectivePrice, 30e18, "Effective price should equal mock price");
-    }
-
-    // when order is not active
-    //  [X] it returns false with reason
-    function test_canFillOrder_orderNotActive() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 1_000e18);
-
-        vm.prank(alice);
-        limitOrders.cancelOrder(orderId);
-
-        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
-
-        assertFalse(canFill, "Order should not be fillable when not active");
-        assertEq(reason, "Order not active", "Reason should indicate order is not active");
-    }
-
-    // TODO shift canFillOrder tests to fillOrder tests
 
     // calculateIncentive
     //  [X] it calculates incentive and rate correctly
