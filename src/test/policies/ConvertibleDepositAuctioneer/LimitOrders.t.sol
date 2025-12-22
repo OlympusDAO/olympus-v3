@@ -63,6 +63,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     uint256 public constant DEFAULT_INCENTIVE_BUDGET = 50e18;
     uint256 public constant DEFAULT_MAX_PRICE = 35e18;
     uint256 public constant DEFAULT_MIN_FILL_SIZE = 1_000e18;
+    uint256 public constant DEFAULT_INCENTIVE_RATE = 50; // 50 / 10000 = 0.5%
 
     // Alternative order parameters (for variety in tests)
     uint256 public constant SMALL_DEPOSIT_BUDGET = 5_000e18;
@@ -749,25 +750,34 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
-        // Check canFillOrder returns true before fill
-        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
-            orderId,
-            1_000e18
-        );
-        assertTrue(canFill, "Order should be fillable");
-        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(
-            effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, 1_000e18),
-            "Effective price should equal mock price"
-        );
-
         // Calculate expected values before fill
         uint256 fillAmount = 1000e18;
         uint256 expectedIncentive = 5e18; // 1000 * 50 / 10000 = 5
         uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
             sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            fillAmount
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, fillAmount),
+            "Effective price should equal mock price"
+        );
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 50 / 10000)");
+        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
+
+        // Fill order
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
 
@@ -809,9 +819,9 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // Calculate expected values before first fill
         uint256 fillAmountOne = 2_000e18;
-        uint256 expectedIncentiveOne = 10e18;
+        uint256 expectedIncentiveOne = 10e18; // 2000 * 50 / 10000 = 10
         uint256 fillAmountTwo = 3_000e18;
-        uint256 expectedIncentiveTwo = 15e18;
+        uint256 expectedIncentiveTwo = 15e18; // 3000 * 50 / 10000 = 15
         uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
             sUsds.previewWithdraw(
                 fillAmountOne + expectedIncentiveOne + fillAmountTwo + expectedIncentiveTwo
@@ -820,6 +830,14 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Check canFillOrder returns true before first fill
         (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountOne);
         assertTrue(canFill, "Order should be fillable before first fill");
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmountOne
+        );
+        assertEq(incentive, expectedIncentiveOne, "Incentive should be 10e18 (2000 * 50 / 10000)");
+        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
 
         // First fill
         vm.prank(filler);
@@ -841,6 +859,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Check canFillOrder returns true before second fill
         (canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
         assertTrue(canFill, "Order should be fillable before second fill");
+
+        // Check incentive
+        (incentive, incentiveRate) = limitOrders.calculateIncentive(orderId, fillAmountTwo);
+        assertEq(incentive, expectedIncentiveTwo, "Incentive should be 15e18 (3000 * 50 / 10000)");
+        assertEq(incentiveRate, DEFAULT_INCENTIVE_RATE, "Incentive rate should be 50 bps (0.5%)");
 
         // Second fill
         vm.prank(filler);
@@ -886,21 +909,48 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        uint256 fillAmount = 10_000e18; // Will cap to remaining deposit
+        uint256 expectedIncentive = 25e18; // 5000 * 25 / 5000 = 25
+        uint256 expectedIncentiveRate = 50; // 25 / 5000 = 0.5%
+
         // Check canFillOrder returns true (will cap to remaining)
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 10_000e18);
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
         assertTrue(canFill, "Order should be fillable even when fill amount exceeds remaining");
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
 
         // Try to fill more than remaining
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 10_000e18);
+        limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositSpent, 5_000e18, "Deposit spent should be capped to deposit budget"); // Capped to max
-        assertEq(order.incentiveSpent, 25e18, "Incentive spent should equal incentive budget"); // All incentive paid
+        assertEq(
+            order.depositSpent,
+            SMALL_DEPOSIT_BUDGET,
+            "Deposit spent should be capped to deposit budget"
+        ); // Capped to max
+        assertEq(
+            order.incentiveSpent,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive spent should equal incentive budget"
+        ); // All incentive paid
 
         // Check balances and invariants after fill
-        checkOrderInvariants(orderId, 5000e18 + 25e18, 5_000e18 + 25e18, filler, 25e18, 0);
+        checkOrderInvariants(
+            orderId,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
+            filler,
+            SMALL_INCENTIVE_BUDGET,
+            0
+        );
     }
 
     function test_fillOrder_capToRemainingDeposit_fuzz(uint256 fillAmount_) public {
@@ -914,6 +964,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MAX_PRICE,
             DEFAULT_MIN_FILL_SIZE
         );
+
+        // Calculate expected budget use
+        uint256 expectedIncentive = 25e18; // 5000 * 25 / 5000 = 25
+        uint256 expectedIncentiveRate = 50; // 25 / 5000 = 0.5%
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount_
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
 
         // Check canFillOrder returns true (will cap to remaining)
         (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
@@ -963,8 +1025,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
         _accrueYield(123e18);
 
         // Calculate expected budget use
+        uint256 expectedIncentive = 25e18; // 500 * 25 / 5000 = 25
+        uint256 expectedIncentiveRate = 50; // 25 / 5000 = 0.5%
         uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
             sUsds.previewWithdraw(SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET);
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount_
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 25e18 (10000 * 50 / 10000)");
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
 
         // Check canFillOrder returns true (will cap to remaining)
         (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount_);
@@ -1017,26 +1089,50 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 2_000e18);
 
+        // Calculate expected budget use
+        uint256 fillAmountTwo = 500e18;
+        uint256 expectedIncentive = 5e18; // 500 * 25 / 2500 = 5
+        uint256 expectedIncentiveRate = 100; // 25 / 2500 = 1%
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmountTwo
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (500 * 25 / 2500)");
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 100 bps (1%)");
+
         // Remaining is 500e18 which is below minFill of 1000e18
         // Should still be allowed as final fill
         // Check canFillOrder returns true for final fill below minFillSize
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 500e18);
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
         assertTrue(canFill, "Order should be fillable for final fill below minFillSize");
 
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 500e18);
+        limitOrders.fillOrder(orderId, fillAmountTwo);
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
-            2_500e18,
+            2500e18,
             "Deposit spent should equal full deposit budget after final fill"
         );
-        assertEq(order.incentiveSpent, 25e18, "Incentive spent should equal incentive budget");
+        assertEq(
+            order.incentiveSpent,
+            SMALL_INCENTIVE_BUDGET,
+            "Incentive spent should equal incentive budget"
+        );
 
         // Check balances and invariants after final fill
-        checkOrderInvariants(orderId, 2500e18 + 25e18, 2_500e18 + 25e18, filler, 25e18, 0);
+        checkOrderInvariants(
+            orderId,
+            2500e18 + SMALL_INCENTIVE_BUDGET,
+            2500e18 + SMALL_INCENTIVE_BUDGET,
+            filler,
+            SMALL_INCENTIVE_BUDGET,
+            0
+        );
     }
 
     //   [X] it gives final fill all remaining incentive
@@ -1070,6 +1166,72 @@ contract CDAuctioneerLimitOrdersTest is Test {
         checkOrderInvariants(orderId, 10_000e18 + 50e18, 10_000e18 + 50e18, filler, 50e18, 0);
     }
 
+    function test_fillOrder_finalFillGetsAllRemainingIncentive_fuzz(
+        uint256 incentiveBudget_
+    ) public {
+        incentiveBudget_ = bound(incentiveBudget_, 1, DEFAULT_INCENTIVE_BUDGET);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            incentiveBudget_,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill most of the order
+        uint256 fillAmountOne = 9_000e18;
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmountOne);
+
+        // Determine the remaining incentive budget
+        uint256 fillAmountTwo = DEFAULT_DEPOSIT_BUDGET - fillAmountOne;
+        uint256 remainingIncentive = incentiveBudget_ -
+            (fillAmountOne * incentiveBudget_) /
+            DEFAULT_DEPOSIT_BUDGET;
+        uint256 expectedIncentiveRate = (incentiveBudget_ * 10_000) / DEFAULT_DEPOSIT_BUDGET;
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmountTwo
+        );
+        assertEq(
+            incentive,
+            remainingIncentive,
+            "Incentive should be the remaining incentive budget"
+        );
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate mismatch");
+
+        // Final fill - should get all remaining incentive (avoids dust)
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmountTwo);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(
+            order.depositSpent,
+            DEFAULT_DEPOSIT_BUDGET,
+            "Deposit spent should equal full deposit budget"
+        );
+        assertEq(
+            order.incentiveSpent,
+            incentiveBudget_,
+            "Incentive spent should equal full incentive budget"
+        );
+
+        // Check balances and invariants after final fill
+        checkOrderInvariants(
+            orderId,
+            DEFAULT_DEPOSIT_BUDGET + incentiveBudget_,
+            DEFAULT_DEPOSIT_BUDGET + incentiveBudget_,
+            filler,
+            incentiveBudget_,
+            0
+        );
+    }
+
     // when filling order with zero incentive
     //  [X] it fills without paying incentive
     function test_fillOrder_zeroIncentive() public {
@@ -1082,8 +1244,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        uint256 fillAmount = 1_000e18;
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount
+        );
+        assertEq(incentive, 0, "Incentive should be 0 (1000 * 0 / 10000)");
+        assertEq(incentiveRate, 0, "Incentive rate should be 0 bps (0%)");
+
         // Check canFillOrder returns true before fill
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
         assertTrue(canFill, "Order should be fillable with zero incentive");
 
         // Calculate expected values before fill
@@ -1091,10 +1263,17 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 expectedShares = sUsds.previewDeposit(remainingBudget);
 
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 1_000e18);
+        limitOrders.fillOrder(orderId, fillAmount);
 
         // Check balances and invariants after fill
-        checkOrderInvariants(orderId, 10_000e18, 1_000e18, filler, 0, expectedShares);
+        checkOrderInvariants(
+            orderId,
+            DEFAULT_DEPOSIT_BUDGET,
+            fillAmount,
+            filler,
+            0,
+            expectedShares
+        );
     }
 
     // when minFillSize equals remaining deposit
@@ -1111,20 +1290,32 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = 5e18; // 1000 * 5 / 1000 = 5
+        uint256 expectedIncentiveRate = 50; // 5 / 1000 = 0.5%
+
+        // Check incentive
+        (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+            orderId,
+            fillAmount
+        );
+        assertEq(incentive, expectedIncentive, "Incentive should be 5e18 (1000 * 5 / 1000)");
+        assertEq(incentiveRate, expectedIncentiveRate, "Incentive rate should be 50 bps (0.5%)");
+
         // minFillSize == depositBudget == 1000
         // This should work as it's both the min and final fill
         // Check canFillOrder returns true
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 1_000e18);
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmount);
         assertTrue(canFill, "Order should be fillable when minFillSize equals remaining deposit");
 
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 1_000e18);
+        limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
-            1_000e18,
+            fillAmount,
             "Deposit spent should equal fill amount when minFillSize equals deposit budget"
         );
         assertEq(order.incentiveSpent, 5e18, "Incentive spent should equal incentive budget");
@@ -2267,27 +2458,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // ========== VIEW FUNCTION TESTS ========== //
-
-    // calculateIncentive
-    //  [X] it calculates incentive and rate correctly
-    function test_calculateIncentive() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            DEFAULT_MIN_FILL_SIZE
-        );
-
-        (uint256 incentive, uint256 rate) = limitOrders.calculateIncentive(orderId, 2_000e18);
-        assertEq(incentive, 10e18, "Incentive should be 10e18 (2000 * 50 / 10000)"); // 2000 * 50 / 10000
-        assertEq(rate, 50, "Rate should be 50 bps (0.5%)"); // 50 bps = 0.5%
-    }
-
-    // TODO shift calculateIncentive tests to fillOrder tests
-
-    // TODO fuzz test
 
     // getRemaining
     //  [X] it returns correct remaining deposit and incentive
