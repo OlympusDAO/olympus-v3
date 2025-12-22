@@ -1618,8 +1618,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // ========== YIELD TESTS ========== //
 
+    function _assertSolvent() internal view {
+        uint256 totalUsdsOwed = limitOrders.totalUsdsOwed();
+        uint256 usdsOwedShares = sUsds.previewWithdraw(totalUsdsOwed);
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        assertGe(sUsdsBalance, usdsOwedShares, "Contract should be solvent");
+    }
+
     // when yield has accrued
     //  [X] it sweeps yield successfully
+    //  [X] it transfers sUSDS shares to recipient
+    //  [X] it does not transfer USDS to recipient
+    //  [X] the contract remains solvent
     function test_sweepYield_success() public {
         vm.prank(alice);
         limitOrders.createOrder(
@@ -1636,56 +1646,46 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Calculate expected yield
         uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
         uint256 usdsOwedShares = sUsds.previewWithdraw(limitOrders.totalUsdsOwed());
-        uint256 expectedYield = sUsds.previewRedeem(sUsdsBalance - usdsOwedShares);
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
 
+        // Check preview functions
         uint256 yield = limitOrders.getAccruedYield();
         assertEq(yield, expectedYield, "Yield should equal expected yield");
 
-        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
 
+        // Perform sweep
         limitOrders.sweepYield();
 
-        assertGt(
-            sUsds.balanceOf(yieldRecipient),
-            recipientSharesBefore,
-            "Yield recipient should receive shares after sweep"
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
         );
-
-        // TODO assert solvent
-    }
-
-    // when yield has accrued
-    //  [X] it transfers shares to recipient
-    function test_sweepYield_transfersShares() public {
-        vm.prank(alice);
-        limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            DEFAULT_MIN_FILL_SIZE
-        );
-
-        // Yield accrual
-        _accrueYield(123e18);
-
-        uint256 expectedShares = limitOrders.getAccruedYieldShares();
-
-        uint256 shares = limitOrders.sweepYield();
-
-        assertEq(shares, expectedShares, "Swept shares should equal expected accrued yield shares");
         assertEq(
             sUsds.balanceOf(yieldRecipient),
-            shares,
-            "Yield recipient should have received the swept shares"
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
         );
 
-        // TODO assert solvent
+        _assertSolvent();
     }
 
     // when no yield has accrued
     //  [X] it returns zero shares
-    function test_sweepYield_revert_noYield() public {
+    //  [X] it does not transfer sUSDS to recipient
+    //  [X] it does not transfer USDS to recipient
+    //  [X] the contract remains solvent
+    function test_sweepYield_noYield() public {
         vm.prank(alice);
         limitOrders.createOrder(
             PERIOD_3,
@@ -1695,15 +1695,40 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
+        uint256 yield = limitOrders.getAccruedYield();
+        assertEq(yield, 0, "Yield should be 0 when no yield has accrued");
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(yieldShares, 0, "Yield shares should be 0 when no yield has accrued");
+
+        // Perform sweep
         uint256 shares = limitOrders.sweepYield();
         assertEq(shares, 0, "Swept shares should be 0 when no yield has accrued");
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore,
+            "sUSDS balance of yield recipient should be unchanged"
+        );
+
+        _assertSolvent();
     }
 
-    // TODO fuzz tests
-
-    // when yield has accrued after partial fills
-    //  [X] it calculates yield correctly
-    function test_getAccruedYield_afterFills() public {
+    // when there has been a partial fill
+    //  [X] it sweeps yield successfully
+    //  [X] it transfers sUSDS shares to recipient
+    //  [X] it does not transfer USDS to recipient
+    //  [X] the contract remains solvent
+    function test_sweepYield_partialFill() public {
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(
             PERIOD_3,
@@ -1720,9 +1745,216 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Yield accrual
         _accrueYield(123e18);
 
-        // Yield should be calculated on remaining balance
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = sUsds.previewWithdraw(limitOrders.totalUsdsOwed());
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
         uint256 yield = limitOrders.getAccruedYield();
-        assertGt(yield, 0, "Yield should be greater than 0 after exchange rate increase");
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
+
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
+
+        // Perform sweep
+        uint256 shares = limitOrders.sweepYield();
+        assertEq(shares, expectedYieldShares, "Swept shares should equal expected yield shares");
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
+        );
+
+        _assertSolvent();
+    }
+
+    function test_sweepYield_partialFill_fuzz(uint256 yieldAmount_) public {
+        yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill half
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 5_000e18);
+
+        // Yield accrual
+        _accrueYield(yieldAmount_);
+
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = sUsds.previewWithdraw(limitOrders.totalUsdsOwed());
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
+        uint256 yield = limitOrders.getAccruedYield();
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
+
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
+
+        // Perform sweep
+        uint256 shares = limitOrders.sweepYield();
+        assertEq(shares, expectedYieldShares, "Swept shares should equal expected yield shares");
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
+        );
+
+        _assertSolvent();
+    }
+
+    // when all orders have been filled
+    //  [X] it sweeps yield successfully
+    //  [X] it transfers sUSDS shares to recipient
+    //  [X] it does not transfer USDS to recipient
+    //  [X] the contract remains solvent
+    function test_sweepYield_allOrdersFilled() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill all orders
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 10_000e18);
+
+        // Yield accrual
+        _accrueYield(123e18);
+
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = 0; // No USDS owed when all orders have been filled
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
+        uint256 yield = limitOrders.getAccruedYield();
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
+
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
+
+        // Perform sweep
+        uint256 shares = limitOrders.sweepYield();
+        assertEq(shares, expectedYieldShares, "Swept shares should equal expected yield shares");
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
+        );
+
+        _assertSolvent();
+    }
+
+    function test_sweepYield_allOrdersFilled_fuzz(uint256 yieldAmount_) public {
+        yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill all orders
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 10_000e18);
+
+        // Yield accrual
+        _accrueYield(yieldAmount_);
+
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = 0; // No USDS owed when all orders have been filled
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
+        uint256 yield = limitOrders.getAccruedYield();
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
+
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
+
+        // Perform sweep
+        uint256 shares = limitOrders.sweepYield();
+        assertEq(shares, expectedYieldShares, "Swept shares should equal expected yield shares");
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
+        );
+
+        _assertSolvent();
     }
 
     // ========== ADMIN TESTS ========== //
