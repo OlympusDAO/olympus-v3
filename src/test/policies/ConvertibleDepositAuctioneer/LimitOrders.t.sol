@@ -6,58 +6,21 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.20;
 
+// Test
 import {Test} from "forge-std/Test.sol";
+import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+
+// Libraries
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
-import {ERC4626} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC4626.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 
+// Bophades
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
-import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
 import {Kernel} from "src/Kernel.sol";
 
 // ========== MOCKS ========== //
-
-contract MockUSDS is ERC20 {
-    constructor() ERC20("USDS", "USDS") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-
-    function decimals() public pure override returns (uint8) {
-        return 18;
-    }
-}
-
-contract MockSUSDS is ERC4626 {
-    uint256 public exchangeRate = 1e18; // 1:1 initially
-
-    constructor(IERC20 asset_) ERC4626(asset_) ERC20("sUSDS", "sUSDS") {}
-
-    function setExchangeRate(uint256 rate_) external {
-        exchangeRate = rate_;
-    }
-
-    function totalAssets() public view override returns (uint256) {
-        return (totalSupply() * exchangeRate) / 1e18;
-    }
-
-    function _convertToShares(
-        uint256 assets,
-        Math.Rounding
-    ) internal view override returns (uint256) {
-        return (assets * 1e18) / exchangeRate;
-    }
-
-    function _convertToAssets(
-        uint256 shares,
-        Math.Rounding
-    ) internal view override returns (uint256) {
-        return (shares * exchangeRate) / 1e18;
-    }
-}
 
 contract MockReceiptToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
@@ -83,8 +46,8 @@ contract MockPositionNFT is ERC721 {
 
 contract CDAuctioneerLimitOrdersTest is Test {
     CDAuctioneerLimitOrders public limitOrders;
-    MockUSDS public usds;
-    MockSUSDS public sUsds;
+    MockERC20 public usds;
+    MockERC4626 public sUsds;
     MockReceiptToken public receiptToken3;
     MockReceiptToken public receiptToken6;
     MockPositionNFT public positionNFT;
@@ -120,8 +83,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         kernel = new Kernel();
 
         // Deploy mocks
-        usds = new MockUSDS();
-        sUsds = new MockSUSDS(IERC20(address(usds)));
+        usds = new MockERC20("USDS", "USDS", 18);
+        sUsds = new MockERC4626(usds, "sUSDS", "sUSDS");
         receiptToken3 = new MockReceiptToken("Receipt3", "RCT3");
         receiptToken6 = new MockReceiptToken("Receipt6", "RCT6");
         positionNFT = new MockPositionNFT();
@@ -168,9 +131,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         vm.prank(bob);
         usds.approve(address(limitOrders), type(uint256).max);
+
+        // Initial deposit into sUSDS
+        usds.mint(address(this), 1000e18);
+        usds.approve(address(sUsds), 1000e18);
+        sUsds.deposit(1000e18, address(this));
     }
 
     // ========== HELPER FUNCTIONS ========== //
+
+    function _accrueYield(uint256 amount_) internal {
+        usds.mint(address(sUsds), amount_);
+    }
 
     struct OrderParams {
         uint256 id;
@@ -570,7 +542,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it reverts
     function test_createOrder_revert_recipientCannotReceiveERC721() public {
         // Create a contract that cannot receive ERC721 tokens
-        MockUSDS newOwner = new MockUSDS();
+        MockERC20 newOwner = new MockERC20("New Owner", "NEW", 18);
 
         // Expect revert
         vm.expectRevert(
@@ -799,22 +771,35 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Calculate expected values before fill
-        uint256 remainingBudget = 9_000e18 + 45e18; // Remaining deposit + remaining incentive
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+        uint256 fillAmount = 1000e18;
+        uint256 expectedIncentive = 5e18; // 1000 * 50 / 10000 = 5
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount + expectedIncentive);
 
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 1_000e18);
+        limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositSpent, 1000e18, "Deposit spent should equal fill amount");
-        assertEq(order.incentiveSpent, 5e18, "Incentive spent should be 5e18 (1000 * 50 / 10000)"); // 1000 * 50 / 10000 = 5
+        assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
+        assertEq(
+            order.incentiveSpent,
+            expectedIncentive,
+            "Incentive spent should be 5e18 (1000 * 50 / 10000)"
+        );
 
         // Check alice received NFT
         assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
 
         // Check balances and invariants after fill
-        checkOrderInvariants(orderId, 10_050e18, 1000e18 + 5e18, filler, 5e18, expectedShares);
+        checkOrderInvariants(
+            orderId,
+            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            fillAmount + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
     }
 
     // when order is active and price is below max
@@ -830,43 +815,57 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Calculate expected values before first fill
+        uint256 fillAmountOne = 2_000e18;
+        uint256 expectedIncentiveOne = 10e18;
+        uint256 fillAmountTwo = 3_000e18;
+        uint256 expectedIncentiveTwo = 15e18;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(
+                fillAmountOne + expectedIncentiveOne + fillAmountTwo + expectedIncentiveTwo
+            );
+
         // Check canFillOrder returns true before first fill
-        (bool canFill, , ) = limitOrders.canFillOrder(orderId, 2_000e18);
+        (bool canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountOne);
         assertTrue(canFill, "Order should be fillable before first fill");
 
         // First fill
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 2_000e18);
+        limitOrders.fillOrder(orderId, fillAmountOne);
 
         // Check order status
         CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
-            2_000e18,
+            fillAmountOne,
             "After first fill, deposit spent should be 2_000e18"
         );
-        assertEq(order.incentiveSpent, 10e18, "After first fill, incentive spent should be 10e18");
-
-        // Determine the expected shares after second fill
-        uint256 remainingBudget = 5_000e18 + 25e18; // Remaining deposit + remaining incentive
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+        assertEq(
+            order.incentiveSpent,
+            expectedIncentiveOne,
+            "After first fill, incentive spent should be 10e18"
+        );
 
         // Check canFillOrder returns true before second fill
-        (canFill, , ) = limitOrders.canFillOrder(orderId, 3_000e18);
+        (canFill, , ) = limitOrders.canFillOrder(orderId, fillAmountTwo);
         assertTrue(canFill, "Order should be fillable before second fill");
 
         // Second fill
         vm.prank(filler);
-        limitOrders.fillOrder(orderId, 3_000e18);
+        limitOrders.fillOrder(orderId, fillAmountTwo);
 
         // Check order status
         order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
-            5_000e18,
+            fillAmountOne + fillAmountTwo,
             "After second fill, deposit spent should be 5_000e18"
         );
-        assertEq(order.incentiveSpent, 25e18, "After second fill, incentive spent should be 25e18");
+        assertEq(
+            order.incentiveSpent,
+            expectedIncentiveOne + expectedIncentiveTwo,
+            "After second fill, incentive spent should be 25e18"
+        );
 
         // Check alice received 2 NFTs
         assertEq(positionNFT.balanceOf(alice), 2, "Alice should own 2 NFTs after two fills");
@@ -874,10 +873,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Check balances and invariants after fills
         checkOrderInvariants(
             orderId,
-            10000e18 + 50e18,
-            5_000e18 + 25e18,
+            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            fillAmountOne + fillAmountTwo + expectedIncentiveOne + expectedIncentiveTwo,
             filler,
-            25e18,
+            expectedIncentiveOne + expectedIncentiveTwo,
             expectedShares
         );
     }
@@ -1235,27 +1234,24 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Calculate expected values before fill
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * incentiveBudget_) / DEFAULT_DEPOSIT_BUDGET;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount + expectedIncentive);
+
         // Check canFillOrder returns true before fill
         (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
             orderId,
-            1_000e18
+            fillAmount
         );
         assertTrue(canFill, "Order should be fillable");
         assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
         assertEq(
             effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            _getEffectivePrice(MOCK_PRICE, fillAmount),
             "Effective price should equal mock price"
         );
-
-        // Calculate expected budget use
-        uint256 fillAmount = 1_000e18;
-        uint256 expectedIncentive = (fillAmount * incentiveBudget_) / DEFAULT_DEPOSIT_BUDGET;
-        uint256 remainingBudget = DEFAULT_DEPOSIT_BUDGET +
-            incentiveBudget_ -
-            fillAmount -
-            expectedIncentive;
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1291,27 +1287,24 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * DEFAULT_INCENTIVE_BUDGET) / depositBudget_;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount + expectedIncentive);
+
         // Check canFillOrder returns true before fill
         (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
             orderId,
-            1_000e18
+            fillAmount
         );
         assertTrue(canFill, "Order should be fillable");
         assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
         assertEq(
             effectivePrice,
-            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            _getEffectivePrice(MOCK_PRICE, fillAmount),
             "Effective price should equal mock price"
         );
-
-        // Calculate expected budget use
-        uint256 fillAmount = 1_000e18;
-        uint256 expectedIncentive = (fillAmount * DEFAULT_INCENTIVE_BUDGET) / depositBudget_;
-        uint256 remainingBudget = depositBudget_ +
-            DEFAULT_INCENTIVE_BUDGET -
-            fillAmount -
-            expectedIncentive;
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1347,6 +1340,62 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Calculate expected budget use
+        uint256 expectedIncentive = (fillAmount_ * DEFAULT_INCENTIVE_BUDGET) /
+            DEFAULT_DEPOSIT_BUDGET;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount_ + expectedIncentive);
+
+        // Check canFillOrder returns true before fill
+        (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+            orderId,
+            fillAmount_
+        );
+        assertTrue(canFill, "Order should be fillable");
+        assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, fillAmount_),
+            "Effective price should equal mock price"
+        );
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, fillAmount_);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount_, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            fillAmount_ + expectedIncentive,
+            filler,
+            expectedIncentive,
+            expectedShares
+        );
+    }
+
+    function test_fillOrder_givenYield_fillAmountFuzz(uint256 fillAmount_) public {
+        fillAmount_ = bound(fillAmount_, 1_000e18, 10_000e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Yield accrual
+        _accrueYield(123e18);
+
         // Check canFillOrder returns true before fill
         (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
             orderId,
@@ -1363,11 +1412,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Calculate expected budget use
         uint256 expectedIncentive = (fillAmount_ * DEFAULT_INCENTIVE_BUDGET) /
             DEFAULT_DEPOSIT_BUDGET;
-        uint256 remainingBudget = DEFAULT_DEPOSIT_BUDGET +
-            DEFAULT_INCENTIVE_BUDGET -
-            fillAmount_ -
-            expectedIncentive;
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount_ + expectedIncentive);
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount_);
@@ -1404,28 +1450,25 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * DEFAULT_INCENTIVE_BUDGET) /
+            DEFAULT_DEPOSIT_BUDGET;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount + expectedIncentive);
+
         // Check canFillOrder returns true before fill
         (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
             orderId,
-            1_000e18
+            fillAmount
         );
         assertTrue(canFill, "Order should be fillable");
         assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
         assertEq(
             effectivePrice,
-            _getEffectivePrice(price_, 1_000e18),
+            _getEffectivePrice(price_, fillAmount),
             "Effective price should equal mock price"
         );
-
-        // Calculate expected budget use
-        uint256 fillAmount = 1_000e18;
-        uint256 expectedIncentive = (fillAmount * DEFAULT_INCENTIVE_BUDGET) /
-            DEFAULT_DEPOSIT_BUDGET;
-        uint256 remainingBudget = DEFAULT_DEPOSIT_BUDGET +
-            DEFAULT_INCENTIVE_BUDGET -
-            fillAmount -
-            expectedIncentive;
-        uint256 expectedShares = sUsds.previewWithdraw(remainingBudget);
 
         vm.prank(filler);
         limitOrders.fillOrder(orderId, fillAmount);
@@ -1595,16 +1638,16 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
-        // Simulate yield by increasing exchange rate
-        sUsds.setExchangeRate(1.1e18); // 10% yield
+        // Yield accrual
+        _accrueYield(123e18);
+
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = sUsds.previewWithdraw(limitOrders.totalUsdsOwed());
+        uint256 expectedYield = sUsds.previewRedeem(sUsdsBalance - usdsOwedShares);
 
         uint256 yield = limitOrders.getAccruedYield();
-        assertApproxEqRel(
-            yield,
-            1_005e18,
-            0.01e18,
-            "Accrued yield should be approximately 10% of 10_050"
-        ); // ~10% of 10_050
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
 
         uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
 
@@ -1631,7 +1674,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_MIN_FILL_SIZE
         );
 
-        sUsds.setExchangeRate(1.1e18);
+        // Yield accrual
+        _accrueYield(123e18);
 
         uint256 expectedShares = limitOrders.getAccruedYieldShares();
 
@@ -1681,8 +1725,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(filler);
         limitOrders.fillOrder(orderId, 5_000e18);
 
-        // Simulate yield
-        sUsds.setExchangeRate(1.1e18);
+        // Yield accrual
+        _accrueYield(123e18);
 
         // Yield should be calculated on remaining balance
         uint256 yield = limitOrders.getAccruedYield();
