@@ -604,7 +604,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, 100e18);
     }
 
-    // when depositPeriod is not enabled
+    // when depositPeriod is not enabled in the auctioneer
     //  [X] it reverts
     function test_createOrder_revert_depositPeriodDisabled() public {
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_3, false);
@@ -622,11 +622,65 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.createOrder(12, 10_000e18, 50e18, 35e18, 1_000e18);
     }
 
-    // given the auctioneer deposit period has been disabled
-    //  [ ] it reverts
-
     // given the auctioneer despoit period has been enabled
-    //  [ ] it creates an order with the new deposit period
+    //  [X] it creates an order with the new deposit period
+    function test_createOrder_depositPeriodEnabled() public {
+        uint256 depositBudget = 10_000e18;
+        uint256 incentiveBudget = 50e18;
+        uint256 maxPrice = 35e18;
+        uint256 minFillSize = 1_000e18;
+
+        uint256 expectedShares = sUsds.previewDeposit(depositBudget + incentiveBudget);
+
+        // Create and enable a new deposit period
+        uint8 newPeriod = 12;
+        {
+            // Enable on the auctioneer
+            cdAuctioneer.setDepositPeriodEnabled(newPeriod, true);
+
+            // Create the receipt token
+            MockReceiptToken newReceiptToken = new MockReceiptToken("Receipt12", "RCT12");
+
+            // Set receipt token on auctioneer
+            cdAuctioneer.setReceiptToken(newPeriod, address(newReceiptToken));
+        }
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            newPeriod,
+            depositBudget, // depositBudget
+            incentiveBudget, // incentiveBudget
+            maxPrice, // maxPrice
+            minFillSize // minFillSize
+        );
+
+        assertEq(orderId, 0, "First order should have ID 0");
+
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.owner, alice, "Order owner should be alice");
+        assertEq(order.depositPeriod, newPeriod, "Order deposit period should be newPeriod");
+        assertEq(order.depositBudget, depositBudget, "Order deposit budget should match input");
+        assertEq(
+            order.incentiveBudget,
+            incentiveBudget,
+            "Order incentive budget should match input"
+        );
+        assertEq(order.depositSpent, 0, "Order deposit spent should be 0 initially");
+        assertEq(order.incentiveSpent, 0, "Order incentive spent should be 0 initially");
+        assertEq(order.maxPrice, maxPrice, "Order max price should match input");
+        assertEq(order.minFillSize, minFillSize, "Order min fill size should match input");
+        assertTrue(order.active, "Order should be active");
+
+        // Check balances and invariants
+        checkOrderInvariants(
+            orderId,
+            depositBudget + incentiveBudget,
+            0,
+            address(0),
+            0,
+            expectedShares
+        );
+    }
 
     // ========== FILL ORDER TESTS ========== //
 
