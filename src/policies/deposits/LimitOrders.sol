@@ -18,19 +18,47 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== ERRORS ========== //
 
+    /// @notice Used when a function parameter is invalid
     error InvalidParam(string param);
+
+    /// @notice Used when an order is not active
     error OrderNotActive();
+
+    /// @notice Used when an order is fully spent
     error OrderFullySpent();
+
+    /// @notice Used when a fill amount is below the minimum fill size
     error FillBelowMinimum();
+
+    /// @notice Used when a fill amount is above the maximum price
     error PriceAboveMax();
+
+    /// @notice Used when the caller is not the order owner
     error NotOrderOwner();
+
+    /// @notice Used when a deposit period is not enabled
     error DepositPeriodNotEnabled();
+
+    /// @notice Used when a receipt token is not configured
     error ReceiptTokenNotConfigured();
+
+    /// @notice Used when an array length mismatch is detected
     error ArrayLengthMismatch();
+
+    /// @notice Used when the previewBid function returns zero OHM output
     error ZeroOhmOut();
 
     // ========== EVENTS ========== //
 
+    /// @notice Emitted when a new order is created
+    ///
+    /// @param  orderId The ID of the created order
+    /// @param  owner The owner of the order
+    /// @param  depositPeriod The deposit period for the CD position
+    /// @param  depositBudget The USDS budget for bids
+    /// @param  incentiveBudget The USDS budget for filler incentives (paid proportionally)
+    /// @param  maxPrice The maximum execution price (USDS per OHM)
+    /// @param  minFillSize The minimum USDS per fill (except final fill)
     event OrderCreated(
         uint256 indexed orderId,
         address indexed owner,
@@ -41,6 +69,14 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 minFillSize
     );
 
+    /// @notice Emitted when an order is filled
+    ///
+    /// @param  orderId The ID of the filled order
+    /// @param  filler The address of the filler
+    /// @param  fillAmount The amount of USDS used for the bid
+    /// @param  incentivePaid The amount of USDS paid as incentive
+    /// @param  ohmOut The amount of OHM output
+    /// @param  positionId The ID of the filled position
     event OrderFilled(
         uint256 indexed orderId,
         address indexed filler,
@@ -50,6 +86,13 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 positionId
     );
 
+    /// @notice Emitted when an order is changed
+    ///
+    /// @param  orderId The ID of the changed order
+    /// @param  depositBudget The new USDS budget for bids
+    /// @param  incentiveBudget The new USDS budget for filler incentives (paid proportionally)
+    /// @param  maxPrice The new maximum execution price (USDS per OHM)
+    /// @param  minFillSize The new minimum USDS per fill (except final fill)
     event OrderChanged(
         uint256 indexed orderId,
         uint256 depositBudget,
@@ -58,10 +101,21 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 minFillSize
     );
 
+    /// @notice Emitted when an order is cancelled
+    ///
+    /// @param  orderId The ID of the cancelled order
+    /// @param  usdsReturned The amount of USDS returned to the order owner
     event OrderCancelled(uint256 indexed orderId, uint256 usdsReturned);
 
+    /// @notice Emitted when yield is swept
+    ///
+    /// @param  recipient The address of the recipient
+    /// @param  sUsdsAmount The amount of sUSDS swept
     event YieldSwept(address indexed recipient, uint256 sUsdsAmount);
 
+    /// @notice Emitted when the yield recipient is updated
+    ///
+    /// @param  newRecipient The new address of the recipient
     event YieldRecipientUpdated(address indexed newRecipient);
 
     // ========== CONSTANTS ========== //
@@ -70,9 +124,20 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
 
     // ========== IMMUTABLES ========== //
 
+    /// @notice The Convertible Deposit Auctioneer contract
+    /// @dev    This variable is immutable
     IConvertibleDepositAuctioneer public immutable CD_AUCTIONEER;
+
+    /// @notice The USDS contract
+    /// @dev    This variable is immutable
     ERC20 public immutable USDS;
+
+    /// @notice The sUSDS contract
+    /// @dev    This variable is immutable
     ERC4626 public immutable SUSDS;
+
+    /// @notice The Position NFT contract
+    /// @dev    This variable is immutable
     ERC721 public immutable POSITION_NFT;
 
     // ========== STATE ========== //
