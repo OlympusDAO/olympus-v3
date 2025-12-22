@@ -221,6 +221,17 @@ contract CDAuctioneerLimitOrdersTest is Test {
         return (depositBudget, incentiveBudget, depositSpent, incentiveSpent);
     }
 
+    /// @notice Get effective price for a fill amount
+    /// @dev    This is needed as there will be rounding that affects the effective price
+    function _getEffectivePrice(
+        uint256 price_,
+        uint256 fillAmount_
+    ) internal view returns (uint256) {
+        uint256 ohmOut = (fillAmount_ * 1e9) / price_;
+        if (ohmOut == 0) return 0;
+        return (fillAmount_ * 1e9) / ohmOut;
+    }
+
     /// @notice Checks balances and invariants for orders
     /// @param orderOne_ Order one parameters (id, total, spent)
     /// @param orderTwo_ Order two parameters (id, total, spent) - use id=type(uint256).max to skip
@@ -699,7 +710,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
         assertTrue(canFill, "Order should be fillable");
         assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
-        assertEq(effectivePrice, MOCK_PRICE, "Effective price should equal mock price");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            "Effective price should equal mock price"
+        );
 
         // Calculate expected values before fill
         uint256 remainingBudget = 9_000e18 + 45e18; // Remaining deposit + remaining incentive
@@ -1025,7 +1040,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
         assertFalse(canFill, "Order should not be fillable when price is above max");
         assertEq(reason, "Price above max", "Reason should indicate price is above max");
-        assertEq(effectivePrice, MOCK_PRICE, "Effective price should equal mock price");
+        assertEq(
+            effectivePrice,
+            _getEffectivePrice(MOCK_PRICE, 1_000e18),
+            "Effective price should equal mock price"
+        );
 
         vm.prank(filler);
         vm.expectRevert(CDAuctioneerLimitOrders.PriceAboveMax.selector);
