@@ -22,6 +22,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     uint256 public minPrice;
     uint256 public tickSizeBase;
     uint256 public minimumBid;
+    uint256 public actualAmountDifference;
 
     // Additional state for testing
     uint256 public mockPrice = 30e18; // 30 USDS per OHM
@@ -73,12 +74,14 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         ohmOut = (depositAmount_ * OHM_SCALE) / mockPrice;
         require(ohmOut >= minOhmOut_, "Slippage");
 
+        actualAmount = depositAmount_ - actualAmountDifference;
+
         // Mint receipt token (assumed to be configured for this period)
         address receiptTokenAddr = receiptTokens[depositPeriod_];
         receiptTokenId = depositPeriod_;
         // Call mint function on receipt token (assuming it has a mint(address, uint256) function)
         (bool success, ) = receiptTokenAddr.call(
-            abi.encodeWithSignature("mint(address,uint256)", msg.sender, depositAmount_)
+            abi.encodeWithSignature("mint(address,uint256)", msg.sender, actualAmount)
         );
         require(success, "Receipt token mint failed");
 
@@ -90,8 +93,6 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         require(success, "Position NFT mint failed");
         // Transfer to caller
         ERC721(positionNFT).transferFrom(address(this), msg.sender, positionId);
-
-        actualAmount = depositAmount_;
 
         return (ohmOut, positionId, receiptTokenId, actualAmount);
     }
@@ -247,6 +248,10 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     /// @notice Set position NFT for testing
     function setPositionNFT(address positionNFT_) external {
         positionNFT = positionNFT_;
+    }
+
+    function setActualAmountDifference(uint256 difference_) external {
+        actualAmountDifference = difference_;
     }
 }
 /// forge-lint: disable-end(screaming-snake-case-immutable)

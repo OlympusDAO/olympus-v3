@@ -144,12 +144,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 id;
         uint256 total;
         uint256 spent;
+        uint256 receiptTokenBalance;
     }
 
     function _checkOrderInvariants(
-        uint256 orderId_,
-        uint256 orderTotal_,
-        uint256 orderSpent_
+        OrderParams memory orderParams_
     )
         internal
         returns (
@@ -159,7 +158,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
             uint256 incentiveSpent
         )
     {
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId_);
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderParams_.id);
 
         // Accumulate totals
         depositBudget = order.depositBudget;
@@ -173,28 +172,36 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Check per-order invariant: depositBudget + incentiveBudget = orderTotal_
         assertEq(
             order.depositBudget + order.incentiveBudget,
-            orderTotal_,
+            orderParams_.total,
             "Invariant: depositBudget + incentiveBudget should equal expected order total"
         );
 
         // Check per-order invariant: depositSpent = owner balance of receipt token
-        assertEq(
-            receiptToken.balanceOf(order.owner),
-            order.depositSpent,
-            "Invariant: depositSpent should equal owner's receipt token balance"
-        );
+        if (orderParams_.receiptTokenBalance == type(uint256).max) {
+            assertEq(
+                receiptToken.balanceOf(order.owner),
+                order.depositSpent,
+                "Invariant: owner's receipt token balance should equal depositSpent"
+            );
+        } else {
+            assertEq(
+                receiptToken.balanceOf(order.owner),
+                orderParams_.receiptTokenBalance,
+                "Invariant: owner's receipt token balance should equal expected receipt token balance"
+            );
+        }
 
         // Check per-order invariant: orderSpent = depositSpent + incentiveSpent
         assertEq(
             order.depositSpent + order.incentiveSpent,
-            orderSpent_,
+            orderParams_.spent,
             "Invariant: orderSpent should equal depositSpent + incentiveSpent"
         );
 
         // Check per-order invariant: order total - order spent = depositBudget + incentiveBudget - depositSpent - incentiveSpent
         assertEq(
             order.depositBudget + order.incentiveBudget - order.depositSpent - order.incentiveSpent,
-            orderTotal_ - orderSpent_,
+            orderParams_.total - orderParams_.spent,
             "Invariant: order total - order spent should equal depositBudget + incentiveBudget - depositSpent - incentiveSpent"
         );
 
@@ -238,7 +245,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
                 uint256 orderOneIncentiveBudget,
                 uint256 orderOneDepositSpent,
                 uint256 orderOneIncentiveSpent
-            ) = _checkOrderInvariants(orderOne_.id, orderOne_.total, orderOne_.spent);
+            ) = _checkOrderInvariants(orderOne_);
             totalDepositBudget += orderOneDepositBudget;
             totalIncentiveBudget += orderOneIncentiveBudget;
             totalDepositSpent += orderOneDepositSpent;
@@ -251,7 +258,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
                 uint256 orderTwoIncentiveBudget,
                 uint256 orderTwoDepositSpent,
                 uint256 orderTwoIncentiveSpent
-            ) = _checkOrderInvariants(orderTwo_.id, orderTwo_.total, orderTwo_.spent);
+            ) = _checkOrderInvariants(orderTwo_);
             totalDepositBudget += orderTwoDepositBudget;
             totalIncentiveBudget += orderTwoIncentiveBudget;
             totalDepositSpent += orderTwoDepositSpent;
@@ -341,9 +348,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
             OrderParams({
                 id: orderOneId_,
                 total: expectedOrderOneTotal_,
-                spent: expectedOrderOneSpent_
+                spent: expectedOrderOneSpent_,
+                receiptTokenBalance: type(uint256).max
             }),
-            OrderParams({id: type(uint256).max, total: 0, spent: 0}),
+            OrderParams({
+                id: type(uint256).max,
+                total: 0,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
             fillers,
             expectedFillerBalances,
             expectedShares_
@@ -472,8 +485,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
         address[] memory fillers = new address[](2);
         uint256[] memory expectedFillerBalances = new uint256[](2);
         checkOrdersInvariants(
-            OrderParams({id: orderId1, total: 5_025e18, spent: 0}),
-            OrderParams({id: orderId2, total: 3_015e18, spent: 0}),
+            OrderParams({
+                id: orderId1,
+                total: 5_025e18,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
+            OrderParams({
+                id: orderId2,
+                total: 3_015e18,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
             fillers,
             expectedFillerBalances,
             expectedShares
@@ -504,8 +527,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
         address[] memory fillers = new address[](2);
         uint256[] memory expectedFillerBalances = new uint256[](2);
         checkOrdersInvariants(
-            OrderParams({id: aliceOrder, total: 5_000e18 + 25e18, spent: 0}),
-            OrderParams({id: bobOrder, total: 3_000e18 + 15e18, spent: 0}),
+            OrderParams({
+                id: aliceOrder,
+                total: 5_000e18 + 25e18,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
+            OrderParams({
+                id: bobOrder,
+                total: 3_000e18 + 15e18,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
             fillers,
             expectedFillerBalances,
             expectedShares
@@ -1614,8 +1647,18 @@ contract CDAuctioneerLimitOrdersTest is Test {
         expectedFillerBalances[0] = 10e18;
         expectedFillerBalances[1] = 15e18;
         checkOrdersInvariants(
-            OrderParams({id: orderId, total: 10_000e18 + 50e18, spent: 5000e18 + 25e18}),
-            OrderParams({id: type(uint256).max, total: 0, spent: 0}),
+            OrderParams({
+                id: orderId,
+                total: 10_000e18 + 50e18,
+                spent: 5000e18 + 25e18,
+                receiptTokenBalance: type(uint256).max
+            }),
+            OrderParams({
+                id: type(uint256).max,
+                total: 0,
+                spent: 0,
+                receiptTokenBalance: type(uint256).max
+            }),
             fillers,
             expectedFillerBalances,
             expectedShares
@@ -2041,12 +2084,109 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // when the auctioneer returns a different actual deposit amount
-    //  [ ] the incentive is calculated based on the actual deposit amount
-    //  [ ] the deposit spent is reduced by the actual deposit amount
-    //  [ ] the incentive spent is reduced by the actual incentive amount
-    //  [ ] the total USDS owed is reduced by the actual deposit amount
-    //  [ ] the actual deposit amount is returned
-    //  [ ] the actual incentive amount is returned
+    //  [X] the incentive is calculated based on the actual deposit amount
+    //  [X] the deposit spent is reduced by the actual deposit amount
+    //  [X] the incentive spent is reduced by the actual incentive amount
+    //  [X] the total USDS owed is reduced by the actual deposit amount
+    //  [X] the actual deposit amount is returned
+    //  [X] the actual incentive amount is returned
+    function test_fillOrder_givenDifferentActualAmount(uint256 actualAmountDifference_) public {
+        actualAmountDifference_ = bound(actualAmountDifference_, 0, 100);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Set a slight difference in the actual amount
+        cdAuctioneer.setActualAmountDifference(actualAmountDifference_);
+
+        // Accrue yield
+        _accrueYield(123e18);
+
+        // Calculate expected budget use
+        uint256 fillAmount = 1_000e18;
+        uint256 expectedIncentive = (fillAmount * DEFAULT_INCENTIVE_BUDGET) /
+            DEFAULT_DEPOSIT_BUDGET;
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(fillAmount + expectedIncentive);
+
+        // Check canFillOrder returns true before fill
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                fillAmount
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, fillAmount),
+                "Effective price should equal mock price"
+            );
+        }
+
+        vm.prank(filler);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, fillAmount);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            fillAmount,
+            "Actual fill amount should equal requested fill amount"
+        );
+        assertEq(
+            returnedIncentive,
+            expectedIncentive,
+            "Returned incentive should equal expected incentive"
+        );
+        assertEq(
+            remainingDeposit,
+            DEFAULT_DEPOSIT_BUDGET - fillAmount,
+            "Remaining deposit should equal deposit budget minus fill amount"
+        );
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        {
+            address[] memory fillers = new address[](1);
+            fillers[0] = filler;
+            uint256[] memory expectedFillerBalances = new uint256[](1);
+            expectedFillerBalances[0] = expectedIncentive;
+            checkOrdersInvariants(
+                OrderParams({
+                    id: 0,
+                    total: DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+                    spent: fillAmount + expectedIncentive,
+                    receiptTokenBalance: fillAmount - actualAmountDifference_
+                }),
+                OrderParams({
+                    id: type(uint256).max,
+                    total: 0,
+                    spent: 0,
+                    receiptTokenBalance: type(uint256).max
+                }),
+                fillers,
+                expectedFillerBalances,
+                expectedShares
+            );
+        }
+    }
 
     // ========== CANCEL ORDER TESTS ========== //
 
