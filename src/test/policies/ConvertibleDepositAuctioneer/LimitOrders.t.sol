@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-variable)
 // solhint-disable use-natspec
 // solhint-disable gas-small-strings
 // solhint-disable function-max-lines
@@ -22,6 +23,7 @@ import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
 
 // Bophades
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
+import {ILimitOrders} from "src/policies/interfaces/deposits/ILimitOrders.sol";
 import {Kernel} from "src/Kernel.sol";
 
 // ========== MOCKS ========== //
@@ -177,7 +179,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
             uint256 incentiveSpent
         )
     {
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderParams_.id);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderParams_.id);
 
         // Accumulate totals
         depositBudget = order.depositBudget;
@@ -402,7 +404,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         assertEq(orderId, 0, "First order should have ID 0");
 
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.owner, alice, "Order owner should be alice");
         assertEq(order.depositPeriod, PERIOD_3, "Order deposit period should be PERIOD_3");
         assertEq(
@@ -436,6 +438,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    // TODO ordersForUser
+
     function test_createOrder_fuzz(
         uint256 depositBudget,
         uint256 incentiveBudget,
@@ -461,7 +465,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         assertEq(orderId, 0, "First order should have ID 0");
 
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.owner, alice, "Order owner should be alice");
         assertEq(order.depositPeriod, PERIOD_3, "Order deposit period should be PERIOD_3");
         assertEq(order.depositBudget, depositBudget, "Order deposit budget should match input");
@@ -537,8 +541,8 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(bobOrder, 1, "Bob's order should have ID 1");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory aliceOrderData = limitOrders.getOrder(aliceOrder);
-        CDAuctioneerLimitOrders.LimitOrder memory bobOrderData = limitOrders.getOrder(bobOrder);
+        ILimitOrders.LimitOrder memory aliceOrderData = limitOrders.getOrder(aliceOrder);
+        ILimitOrders.LimitOrder memory bobOrderData = limitOrders.getOrder(bobOrder);
         assertEq(aliceOrderData.owner, alice, "Alice's order owner should be alice");
         assertEq(bobOrderData.owner, bob, "Bob's order owner should be bob");
 
@@ -579,7 +583,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.incentiveBudget, 0, "Order incentive budget should be 0");
 
         // Check balances and invariants
@@ -612,7 +616,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     function test_createOrder_revert_zeroDeposit() public {
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget")
+            abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "depositBudget")
         );
         limitOrders.createOrder(
             PERIOD_3,
@@ -627,9 +631,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it reverts
     function test_createOrder_revert_zeroMaxPrice() public {
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice")
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "maxPrice"));
         limitOrders.createOrder(
             PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
@@ -643,9 +645,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it reverts
     function test_createOrder_revert_zeroMinFill() public {
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize")
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "minFillSize"));
         limitOrders.createOrder(
             PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
@@ -661,7 +661,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDAuctioneerLimitOrders.InvalidParam.selector,
+                ILimitOrders.InvalidParam.selector,
                 "minFillSize > depositBudget"
             )
         );
@@ -682,7 +682,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDAuctioneerLimitOrders.InvalidParam.selector,
+                ILimitOrders.InvalidParam.selector,
                 "minFillSize < auctioneer minimum"
             )
         );
@@ -701,7 +701,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_3, false);
 
         vm.prank(alice);
-        vm.expectRevert(CDAuctioneerLimitOrders.DepositPeriodNotEnabled.selector);
+        vm.expectRevert(ILimitOrders.DepositPeriodNotEnabled.selector);
         limitOrders.createOrder(
             PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
@@ -715,7 +715,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it reverts
     function test_createOrder_revert_receiptTokenNotConfigured() public {
         vm.prank(alice);
-        vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
+        vm.expectRevert(ILimitOrders.ReceiptTokenNotConfigured.selector);
         limitOrders.createOrder(
             12,
             DEFAULT_DEPOSIT_BUDGET,
@@ -817,7 +817,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
         assertEq(
             order.incentiveSpent,
@@ -908,7 +908,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             fillAmountOne,
@@ -1061,7 +1061,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(remainingDeposit, 0, "Remaining deposit should be zero after final fill");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             SMALL_DEPOSIT_BUDGET,
@@ -1129,7 +1129,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount_);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             SMALL_DEPOSIT_BUDGET,
@@ -1219,7 +1219,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(remainingDeposit, 0, "Remaining deposit should be zero after final fill");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             SMALL_DEPOSIT_BUDGET,
@@ -1315,7 +1315,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(remainingDepositTwo, 0, "Remaining deposit after second fill should be zero");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             2500e18,
@@ -1377,7 +1377,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(remainingDepositTwo, 0, "Remaining deposit after final fill should be zero");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, 10_000e18, "Deposit spent should equal full deposit budget");
         assertEq(order.incentiveSpent, 50e18, "Incentive spent should equal full incentive budget");
 
@@ -1443,7 +1443,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(remainingDepositTwo, 0, "Remaining deposit after final fill should be zero");
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             DEFAULT_DEPOSIT_BUDGET,
@@ -1561,7 +1561,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(
             order.depositSpent,
             fillAmount,
@@ -1658,7 +1658,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         vm.prank(filler);
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        vm.expectRevert(ILimitOrders.OrderNotActive.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
@@ -1685,7 +1685,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         vm.prank(filler);
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderFullySpent.selector);
+        vm.expectRevert(ILimitOrders.OrderFullySpent.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
@@ -1709,7 +1709,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         vm.prank(filler);
-        vm.expectRevert(CDAuctioneerLimitOrders.FillBelowMinimum.selector);
+        vm.expectRevert(ILimitOrders.FillBelowMinimum.selector);
         limitOrders.fillOrder(orderId, 500e18);
     }
 
@@ -1743,7 +1743,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         vm.prank(filler);
-        vm.expectRevert(CDAuctioneerLimitOrders.PriceAboveMax.selector);
+        vm.expectRevert(ILimitOrders.PriceAboveMax.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
@@ -1769,7 +1769,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         vm.prank(filler);
-        vm.expectRevert(CDAuctioneerLimitOrders.ZeroOhmOut.selector);
+        vm.expectRevert(ILimitOrders.ZeroOhmOut.selector);
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
@@ -1840,7 +1840,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         }
 
         // Expect revert
-        vm.expectRevert(CDAuctioneerLimitOrders.DepositPeriodNotEnabled.selector);
+        vm.expectRevert(ILimitOrders.DepositPeriodNotEnabled.selector);
 
         // Call function
         vm.prank(filler);
@@ -1884,7 +1884,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -1939,7 +1939,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -1994,7 +1994,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount_);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount_, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -2052,7 +2052,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount_);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount_, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -2109,7 +2109,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, fillAmount);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -2199,7 +2199,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositSpent, fillAmount, "Deposit spent should equal fill amount");
         assertEq(order.incentiveSpent, expectedIncentive, "Incentive spent mismatch");
 
@@ -2264,7 +2264,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -2321,7 +2321,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -2381,7 +2381,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -2443,7 +2443,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -2488,7 +2488,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, DEFAULT_DEPOSIT_BUDGET);
 
         // Cancel order
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderFullySpent.selector);
+        vm.expectRevert(ILimitOrders.OrderFullySpent.selector);
         vm.prank(alice);
         limitOrders.cancelOrder(orderId);
     }
@@ -2506,7 +2506,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         vm.prank(bob);
-        vm.expectRevert(CDAuctioneerLimitOrders.NotOrderOwner.selector);
+        vm.expectRevert(ILimitOrders.NotOrderOwner.selector);
         limitOrders.cancelOrder(orderId);
     }
 
@@ -2526,7 +2526,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         vm.prank(alice);
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        vm.expectRevert(ILimitOrders.OrderNotActive.selector);
         limitOrders.cancelOrder(orderId);
     }
 
@@ -2554,7 +2554,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -2601,7 +2601,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -3024,7 +3024,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     function test_setYieldRecipient_revert_zeroAddress() public {
         vm.prank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "yieldRecipient")
+            abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "yieldRecipient")
         );
         limitOrders.setYieldRecipient(address(0));
     }
@@ -3048,7 +3048,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setReceiptToken(PERIOD_12, address(receiptToken12));
 
         vm.expectEmit(true, true, false, false);
-        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_12, address(receiptToken12));
+        emit ILimitOrders.DepositPeriodAdded(PERIOD_12, address(receiptToken12));
 
         vm.prank(owner);
         limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
@@ -3087,7 +3087,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     function test_addDepositPeriod_revert_zeroDepositPeriod() public {
         vm.prank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositPeriod")
+            abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "depositPeriod")
         );
         limitOrders.addDepositPeriod(0, address(receiptToken12));
     }
@@ -3098,9 +3098,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, true);
 
         vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "receiptToken")
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "receiptToken"));
         limitOrders.addDepositPeriod(PERIOD_12, address(0));
     }
 
@@ -3110,7 +3108,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDAuctioneerLimitOrders.InvalidParam.selector,
+                ILimitOrders.InvalidParam.selector,
                 "depositPeriod already configured"
             )
         );
@@ -3123,7 +3121,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, false);
 
         vm.prank(owner);
-        vm.expectRevert(CDAuctioneerLimitOrders.DepositPeriodNotEnabled.selector);
+        vm.expectRevert(ILimitOrders.DepositPeriodNotEnabled.selector);
         limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
     }
 
@@ -3133,7 +3131,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it emits DepositPeriodRemoved event
     function test_removeDepositPeriod_success() public {
         vm.expectEmit(true, false, false, false);
-        emit CDAuctioneerLimitOrders.DepositPeriodRemoved(PERIOD_3);
+        emit ILimitOrders.DepositPeriodRemoved(PERIOD_3);
 
         vm.prank(owner);
         limitOrders.removeDepositPeriod(PERIOD_3);
@@ -3165,7 +3163,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it reverts
     function test_removeDepositPeriod_revert_notConfigured() public {
         vm.prank(owner);
-        vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
+        vm.expectRevert(ILimitOrders.ReceiptTokenNotConfigured.selector);
         limitOrders.removeDepositPeriod(PERIOD_12);
     }
 
@@ -3188,7 +3186,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.removeDepositPeriod(PERIOD_3);
 
         // Verify order still exists
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertTrue(order.active, "Order should still be active");
 
         // Verify that order cannot be filled
@@ -3204,7 +3202,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Expect revert
-        vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
+        vm.expectRevert(ILimitOrders.ReceiptTokenNotConfigured.selector);
 
         // Call function
         vm.prank(filler);
@@ -3227,7 +3225,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         // Re-add PERIOD_3
         vm.expectEmit(true, true, false, false);
-        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
+        emit ILimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
 
         vm.prank(owner);
         limitOrders.addDepositPeriod(PERIOD_3, address(receiptToken3));
@@ -3267,10 +3265,10 @@ contract CDAuctioneerLimitOrdersTest is Test {
         receiptTokens[1] = address(receiptToken6);
 
         vm.expectEmit(true, true, false, false);
-        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
+        emit ILimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
 
         vm.expectEmit(true, true, false, false);
-        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_6, address(receiptToken6));
+        emit ILimitOrders.DepositPeriodAdded(PERIOD_6, address(receiptToken6));
 
         new CDAuctioneerLimitOrders(
             owner,
@@ -3435,7 +3433,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
         assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -3481,7 +3479,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 5_000e18, "Deposit budget should be decreased to 5_000e18");
         assertEq(order.incentiveBudget, 25e18, "Incentive budget should be decreased to 25e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -3522,7 +3520,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 3_000e18);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
         assertEq(
             orderBefore.depositSpent,
             3_000e18,
@@ -3550,7 +3548,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
         assertEq(
             orderAfter.depositBudget,
             5_000e18,
@@ -3598,7 +3596,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 3_000e18);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
         assertEq(
             orderBefore.depositSpent,
             3_000e18,
@@ -3620,7 +3618,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.changeOrder(orderId, 11_000e18, 110e18, 32e18, SMALL_MIN_FILL_SIZE);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
         assertEq(
             orderAfter.depositBudget,
             11_000e18,
@@ -3674,7 +3672,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 3_000e18);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
         assertEq(
             orderBefore.depositSpent,
             3_000e18,
@@ -3701,7 +3699,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.changeOrder(orderId, 7_000e18, 35e18, newMaxPrice_, newMinFillSize_);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
         assertEq(
             orderAfter.depositBudget,
             7_000e18,
@@ -3766,7 +3764,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 5_000e18, "Deposit budget should be updated to 5_000e18");
         assertEq(order.incentiveBudget, 5e18, "Incentive budget should be updated to 5e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -3803,7 +3801,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.changeOrder(orderId, 10_000e18, 50e18, newMaxPrice_, MIN_BID);
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
         assertEq(order.incentiveBudget, 50e18, "Incentive budget should be unchanged");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -3855,7 +3853,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
@@ -3921,7 +3919,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         // Check order status
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
         assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -3954,7 +3952,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         vm.prank(bob);
-        vm.expectRevert(CDAuctioneerLimitOrders.NotOrderOwner.selector);
+        vm.expectRevert(ILimitOrders.NotOrderOwner.selector);
         limitOrders.changeOrder(
             orderId,
             DEFAULT_DEPOSIT_BUDGET,
@@ -3980,7 +3978,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
 
         vm.prank(alice);
-        vm.expectRevert(CDAuctioneerLimitOrders.OrderNotActive.selector);
+        vm.expectRevert(ILimitOrders.OrderNotActive.selector);
         limitOrders.changeOrder(
             orderId,
             DEFAULT_DEPOSIT_BUDGET,
@@ -4004,7 +4002,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositBudget")
+            abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "depositBudget")
         );
         limitOrders.changeOrder(
             orderId,
@@ -4028,9 +4026,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "maxPrice")
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "maxPrice"));
         limitOrders.changeOrder(
             orderId,
             DEFAULT_DEPOSIT_BUDGET,
@@ -4053,9 +4049,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "minFillSize")
-        );
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "minFillSize"));
         limitOrders.changeOrder(
             orderId,
             DEFAULT_DEPOSIT_BUDGET,
@@ -4080,7 +4074,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDAuctioneerLimitOrders.InvalidParam.selector,
+                ILimitOrders.InvalidParam.selector,
                 "minFillSize > depositBudget"
             )
         );
@@ -4110,7 +4104,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CDAuctioneerLimitOrders.InvalidParam.selector,
+                ILimitOrders.InvalidParam.selector,
                 "minFillSize < auctioneer minimum"
             )
         );
@@ -4148,7 +4142,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
             SMALL_MIN_FILL_SIZE
         );
 
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
         assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
         assertEq(order.incentiveBudget, 0, "Incentive budget should be updated to 0");
         assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
@@ -4168,3 +4162,4 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(limitOrders.totalUsdsOwed(), 10_000e18, "Total USDS owed should be decreased");
     }
 }
+/// forge-lint: disable-end(mixed-case-variable)

@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {ILimitOrders} from "../interfaces/deposits/ILimitOrders.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
@@ -19,121 +20,13 @@ import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 /// @dev    Users create orders specifying max price, MEV bots fill when price is favorable.
 ///         User deposits are held in sUSDS to generate yield, which accrues to a configurable recipient.
 /// @author Zeus
-contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, PeripheryEnabler {
+contract CDAuctioneerLimitOrders is
+    ILimitOrders,
+    ReentrancyGuardTransient,
+    Ownable,
+    PeripheryEnabler
+{
     using SafeERC20 for ERC20;
-
-    // ========== ERRORS ========== //
-
-    /// @notice Used when a function parameter is invalid
-    error InvalidParam(string param);
-
-    /// @notice Used when an order is not active
-    error OrderNotActive();
-
-    /// @notice Used when an order is fully spent
-    error OrderFullySpent();
-
-    /// @notice Used when a fill amount is below the minimum fill size
-    error FillBelowMinimum();
-
-    /// @notice Used when a fill amount is above the maximum price
-    error PriceAboveMax();
-
-    /// @notice Used when the caller is not the order owner
-    error NotOrderOwner();
-
-    /// @notice Used when a deposit period is not enabled
-    error DepositPeriodNotEnabled();
-
-    /// @notice Used when a receipt token is not configured
-    error ReceiptTokenNotConfigured();
-
-    /// @notice Used when an array length mismatch is detected
-    error ArrayLengthMismatch();
-
-    /// @notice Used when the previewBid function returns zero OHM output
-    error ZeroOhmOut();
-
-    // ========== EVENTS ========== //
-
-    /// @notice Emitted when a new order is created
-    ///
-    /// @param  orderId         The ID of the created order
-    /// @param  owner           The owner of the order
-    /// @param  depositPeriod   The deposit period for the CD position
-    /// @param  depositBudget   The USDS budget for bids
-    /// @param  incentiveBudget The USDS budget for filler incentives (paid proportionally)
-    /// @param  maxPrice        The maximum execution price (USDS per OHM)
-    /// @param  minFillSize     The minimum USDS per fill (except final fill)
-    event OrderCreated(
-        uint256 indexed orderId,
-        address indexed owner,
-        uint8 depositPeriod,
-        uint256 depositBudget,
-        uint256 incentiveBudget,
-        uint256 maxPrice,
-        uint256 minFillSize
-    );
-
-    /// @notice Emitted when an order is filled
-    ///
-    /// @param  orderId         The ID of the filled order
-    /// @param  filler          The address of the filler
-    /// @param  fillAmount      The amount of USDS used for the bid
-    /// @param  incentivePaid   The amount of USDS paid as incentive
-    /// @param  ohmOut          The amount of OHM output
-    /// @param  positionId      The ID of the filled position
-    event OrderFilled(
-        uint256 indexed orderId,
-        address indexed filler,
-        uint256 fillAmount,
-        uint256 incentivePaid,
-        uint256 ohmOut,
-        uint256 positionId
-    );
-
-    /// @notice Emitted when an order is changed
-    ///
-    /// @param  orderId         The ID of the changed order
-    /// @param  depositBudget   The new USDS budget for bids
-    /// @param  incentiveBudget The new USDS budget for filler incentives (paid proportionally)
-    /// @param  maxPrice        The new maximum execution price (USDS per OHM)
-    /// @param  minFillSize     The new minimum USDS per fill (except final fill)
-    event OrderChanged(
-        uint256 indexed orderId,
-        uint256 depositBudget,
-        uint256 incentiveBudget,
-        uint256 maxPrice,
-        uint256 minFillSize
-    );
-
-    /// @notice Emitted when an order is cancelled
-    ///
-    /// @param  orderId         The ID of the cancelled order
-    /// @param  usdsReturned    The amount of USDS returned to the order owner
-    event OrderCancelled(uint256 indexed orderId, uint256 usdsReturned);
-
-    /// @notice Emitted when yield is swept
-    ///
-    /// @param  recipient       The address of the recipient
-    /// @param  sUsdsAmount     The amount of sUSDS swept
-    event YieldSwept(address indexed recipient, uint256 sUsdsAmount);
-
-    /// @notice Emitted when the yield recipient is updated
-    ///
-    /// @param  newRecipient    The new address of the recipient
-    event YieldRecipientUpdated(address indexed newRecipient);
-
-    /// @notice Emitted when a deposit period and receipt token are added
-    ///
-    /// @param  depositPeriod   The deposit period that was added
-    /// @param  receiptToken    The receipt token address for the deposit period
-    event DepositPeriodAdded(uint8 indexed depositPeriod, address indexed receiptToken);
-
-    /// @notice Emitted when a deposit period and receipt token are removed
-    ///
-    /// @param  depositPeriod   The deposit period that was removed
-    event DepositPeriodRemoved(uint8 indexed depositPeriod);
 
     // ========== CONSTANTS ========== //
 
@@ -166,42 +59,16 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     mapping(uint8 depositPeriod => ERC20 receiptToken) public receiptTokens;
 
     /// @notice Limit orders by ID
-    mapping(uint256 orderId => LimitOrder order) public orders;
+    mapping(uint256 orderId => LimitOrder order) internal _orders;
 
     /// @notice Limit order IDs by user
-    mapping(address => uint256[]) public ordersForUser;
+    mapping(address => uint256[]) internal _ordersForUser;
 
     /// @notice Next order ID to be assigned
     uint256 public nextOrderId;
 
     /// @notice Total USDS owed to all order owners (principal tracking)
     uint256 public totalUsdsOwed;
-
-    // ========== STRUCTS ========== //
-
-    /// @notice Limit order struct
-    /// @dev    This struct is used to store limit order information
-    ///
-    /// @param  owner           The owner of the order
-    /// @param  depositPeriod   The deposit period for the CD position
-    /// @param  active          Whether the order is active
-    /// @param  depositBudget   The USDS budget for bids
-    /// @param  incentiveBudget The USDS budget for filler incentives (paid proportionally)
-    /// @param  depositSpent    The amount of USDS spent on the deposit
-    /// @param  incentiveSpent  The amount of USDS spent on the incentive
-    /// @param  maxPrice        The maximum execution price (USDS per OHM)
-    /// @param  minFillSize     The minimum USDS per fill (except final fill)
-    struct LimitOrder {
-        address owner;
-        uint8 depositPeriod;
-        bool active;
-        uint256 depositBudget;
-        uint256 incentiveBudget;
-        uint256 depositSpent;
-        uint256 incentiveSpent;
-        uint256 maxPrice;
-        uint256 minFillSize;
-    }
 
     // ========== CONSTRUCTOR ========== //
 
@@ -360,9 +227,9 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
 
         orderId = nextOrderId++;
 
-        ordersForUser[msg.sender].push(orderId);
+        _ordersForUser[msg.sender].push(orderId);
 
-        orders[orderId] = LimitOrder({
+        _orders[orderId] = LimitOrder({
             owner: msg.sender,
             depositPeriod: depositPeriod_,
             depositBudget: depositBudget_,
@@ -409,7 +276,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         uint256 newMaxPrice_,
         uint256 newMinFillSize_
     ) external nonReentrant onlyEnabled {
-        LimitOrder storage order = orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
@@ -504,7 +371,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         uint256 orderId_,
         uint256 fillAmount_
     ) external nonReentrant onlyEnabled returns (uint256, uint256, uint256) {
-        LimitOrder storage order = orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         if (!order.active) revert OrderNotActive();
 
@@ -586,7 +453,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     ///
     /// @param  orderId_ The ID of the order to cancel
     function cancelOrder(uint256 orderId_) external nonReentrant {
-        LimitOrder storage order = orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
@@ -656,7 +523,15 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     /// @param  orderId_    The ID of the order
     /// @return LimitOrder  The limit order
     function getOrder(uint256 orderId_) external view returns (LimitOrder memory) {
-        return orders[orderId_];
+        return _orders[orderId_];
+    }
+
+    /// @notice Get limit order IDs by user
+    ///
+    /// @param  user_       The address of the user
+    /// @return uint256[]   The IDs of the user's orders
+    function getOrdersForUser(address user_) external view returns (uint256[] memory) {
+        return _ordersForUser[user_];
     }
 
     /// @notice Preview a fill order
@@ -691,7 +566,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     ) public view returns (uint256 incentive, uint256 incentiveRate) {
         if (!isEnabled) return (0, 0);
 
-        LimitOrder memory order = orders[orderId_];
+        LimitOrder memory order = _orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
 
         (, incentive, ) = _calculateFillAndIncentive(order, fillAmount_);
@@ -711,7 +586,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     ) public view returns (bool canFill, string memory reason, uint256 effectivePrice) {
         if (!isEnabled) return (false, "Contract disabled", 0);
 
-        LimitOrder memory order = orders[orderId_];
+        LimitOrder memory order = _orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
 
@@ -754,7 +629,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     function getRemaining(
         uint256 orderId_
     ) external view returns (uint256 deposit, uint256 incentive) {
-        LimitOrder memory order = orders[orderId_];
+        LimitOrder memory order = _orders[orderId_];
         deposit = order.depositBudget - order.depositSpent;
         incentive = order.incentiveBudget - order.incentiveSpent;
     }
@@ -837,7 +712,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
         if (!isEnabled) return false;
 
-        LimitOrder memory order = orders[orderId_];
+        LimitOrder memory order = _orders[orderId_];
 
         if (!order.active) return false;
         if (order.depositPeriod != depositPeriod_) return false;
