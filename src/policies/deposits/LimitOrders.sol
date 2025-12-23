@@ -720,27 +720,22 @@ contract CDAuctioneerLimitOrders is
     /// @param  depositPeriod_  The deposit period
     /// @return bool            Whether the order is fillable
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
-        if (!isEnabled) return false;
-
         LimitOrder memory order = _orders[orderId_];
 
-        if (!order.active) return false;
+        // Early return if deposit period doesn't match
         if (order.depositPeriod != depositPeriod_) return false;
 
+        // Calculate the fill amount to check (minFillSize or remaining deposit, whichever is smaller)
         uint256 remainingDeposit = order.depositBudget - order.depositSpent;
-        if (remainingDeposit == 0) return false;
-
         uint256 checkAmount = remainingDeposit > order.minFillSize
             ? order.minFillSize
             : remainingDeposit;
 
-        uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(depositPeriod_, checkAmount);
-        if (expectedOhmOut == 0) return false;
-
-        uint256 effectivePrice = (checkAmount * OHM_SCALE) / expectedOhmOut;
-        if (effectivePrice > order.maxPrice) return false;
-
-        return true;
+        // Reuse canFillOrder to ensure consistency with fillOrder checks
+        // This includes: contract enabled, order active, deposit period enabled,
+        // receipt token configured, order not fully spent, min fill size, and price checks
+        (bool canFill, , ) = canFillOrder(orderId_, checkAmount);
+        return canFill;
     }
 
     // ========== ENABLER FUNCTIONS ========== //
