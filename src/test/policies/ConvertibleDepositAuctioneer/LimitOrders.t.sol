@@ -151,6 +151,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         OrderParams memory orderParams_
     )
         internal
+        view
         returns (
             uint256 depositBudget,
             uint256 incentiveBudget,
@@ -213,7 +214,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     function _getEffectivePrice(
         uint256 price_,
         uint256 fillAmount_
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         uint256 ohmOut = (fillAmount_ * 1e9) / price_;
         if (ohmOut == 0) return 0;
         return (fillAmount_ * 1e9) / ohmOut;
@@ -2829,6 +2830,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     // ========== ADMIN TESTS ========== //
 
+    // setYieldRecipient
     // when caller is owner
     //  [X] it sets yield recipient successfully
     function test_setYieldRecipient_success() public {
@@ -2864,6 +2866,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.setYieldRecipient(address(0));
     }
 
+    // transferOwnership
     // when caller is owner
     //  [X] it transfers ownership successfully
     function test_transferOwnership() public {
@@ -2940,7 +2943,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     // ========== ERC721 RECEIVER TEST ========== //
 
     // [X] it returns correct selector
-    function test_onERC721Received() public {
+    function test_onERC721Received() public view {
         bytes4 selector = limitOrders.onERC721Received(address(0), address(0), 0, "");
         assertEq(
             selector,
