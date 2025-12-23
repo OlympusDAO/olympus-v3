@@ -1,11 +1,11 @@
 {
     "sequence": [
         {
-            "name": "LimitOrders",
+            "name": "ConvertibleDepositAuctioneerLimitOrders",
             "args": {
                 "depositPeriods": [3],
                 "receiptTokens": [
-                    "0x03d95a2f9A29228ea6D0690f2d1Bcd15973d926F"
+                    "0x72dea8d4b3E27cB5d693b958C702561e7eC8f089"
                 ]
             }
         }

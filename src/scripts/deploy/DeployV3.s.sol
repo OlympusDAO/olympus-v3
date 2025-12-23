@@ -796,7 +796,10 @@ contract DeployV3 is WithEnvironment {
         return (address(activator), "olympus.periphery");
     }
 
-    function deployLimitOrders() public returns (address, string memory) {
+    function deployConvertibleDepositAuctioneerLimitOrders()
+        public
+        returns (address, string memory)
+    {
         // Dependencies
         console2.log("Checking dependencies");
         address owner = _getDeployer();
@@ -808,16 +811,16 @@ contract DeployV3 is WithEnvironment {
 
         // Read arrays from args
         uint8[] memory depositPeriods = _readDeploymentArgUint8Array(
-            "LimitOrders",
+            "ConvertibleDepositAuctioneerLimitOrders",
             "depositPeriods"
         );
         address[] memory receiptTokens = _readDeploymentArgAddressArray(
-            "LimitOrders",
+            "ConvertibleDepositAuctioneerLimitOrders",
             "receiptTokens"
         );
 
         // Log parameters
-        console2.log("LimitOrders parameters:");
+        console2.log("ConvertibleDepositAuctioneerLimitOrders parameters:");
         console2.log("  owner", owner);
         console2.log("  cdAuctioneer", cdAuctioneer);
         console2.log("  usds", usds);
