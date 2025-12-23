@@ -247,7 +247,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         address[] memory fillers_,
         uint256[] memory expectedFillerBalances_,
         uint256 expectedShares_
-    ) internal {
+    ) internal view {
         // Calculate totals across all orders
         uint256 totalDepositBudget;
         uint256 totalIncentiveBudget;
@@ -355,7 +355,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         address filler_,
         uint256 expectedFillerBalance_,
         uint256 expectedShares_
-    ) internal {
+    ) internal view {
         address[] memory fillers = new address[](1);
         fillers[0] = filler_;
         uint256[] memory expectedFillerBalances = new uint256[](1);
