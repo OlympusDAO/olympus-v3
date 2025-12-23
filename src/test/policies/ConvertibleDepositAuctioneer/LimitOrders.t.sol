@@ -1850,6 +1850,23 @@ contract CDAuctioneerLimitOrdersTest is Test {
         // Disable
         _disableContract();
 
+        // Check canFillOrder returns false with reason before fill
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+            assertFalse(canFill, "Order should not be fillable when contract is disabled");
+            assertEq(reason, "Contract disabled", "Reason should indicate contract is disabled");
+        }
+
+        // Check incentive
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(
+                orderId,
+                1_000e18
+            );
+            assertEq(incentive, 0, "Incentive should be 0");
+            assertEq(incentiveRate, 0, "Incentive rate should be 0");
+        }
+
         // Expect revert
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
@@ -2577,11 +2594,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertFalse(order.active, "Order should be inactive after cancellation");
 
         // USDS owed should be reduced by the full amount of deposit and incentive budgets
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            0,
-            "Total USDS owed should be 0"
-        );
+        assertEq(limitOrders.totalUsdsOwed(), 0, "Total USDS owed should be 0");
 
         // Alice should receive full refund
         assertEq(
@@ -3078,6 +3091,42 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         assertEq(fillable.length, 1, "Should return 1 fillable order for PERIOD_3");
         assertEq(fillable[0], 0, "Fillable order should be order ID 0");
+    }
+
+    // when the contract is disabled
+    //  [X] it returns empty array
+    function test_getFillableOrders_givenDisabled_returnsEmptyArray() public {
+        // Create multiple orders
+        vm.startPrank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        ); // Fillable
+        limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            LOWER_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        ); // Price too high
+        limitOrders.createOrder(
+            PERIOD_6,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        ); // Different period
+        vm.stopPrank();
+
+        // Disable
+        _disableContract();
+
+        // Get fillable orders
+        uint256[] memory fillable = limitOrders.getFillableOrders(PERIOD_3);
+        assertEq(fillable.length, 0, "Should return empty array when contract is disabled");
     }
 
     // ========== ERC721 RECEIVER TEST ========== //

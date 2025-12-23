@@ -604,6 +604,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         uint256 orderId_,
         uint256 fillAmount_
     ) public view returns (uint256 incentive, uint256 incentiveRate) {
+        if (!isEnabled) return (0, 0);
+
         LimitOrder memory order = orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
 
@@ -622,6 +624,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         uint256 orderId_,
         uint256 fillAmount_
     ) public view returns (bool canFill, string memory reason, uint256 effectivePrice) {
+        if (!isEnabled) return (false, "Contract disabled", 0);
+
         LimitOrder memory order = orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
@@ -735,6 +739,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     /// @param  depositPeriod_  The deposit period
     /// @return bool            Whether the order is fillable
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
+        if (!isEnabled) return false;
+
         LimitOrder memory order = orders[orderId_];
 
         if (!order.active) return false;
