@@ -2542,9 +2542,54 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 
     // when the contract is disabled
-    //  [ ] it cancels order
-    //  [ ] it refunds the amount of deposit and incentive budgets
-    //  [ ] it reduces the USDS owed by the full amount of deposit and incentive budgets
+    //  [X] it cancels order
+    //  [X] it refunds the amount of deposit and incentive budgets
+    //  [X] it reduces the USDS owed by the full amount of deposit and incentive budgets
+    function test_cancelOrder_givenDisabled() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        // Disable
+        _disableContract();
+
+        // Cancel the order
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 0, "Deposit spent should be 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be 0");
+        assertFalse(order.active, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the full amount of deposit and incentive budgets
+        assertEq(
+            limitOrders.totalUsdsOwed(),
+            0,
+            "Total USDS owed should be 0"
+        );
+
+        // Alice should receive full refund
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            "Alice should receive full refund of deposit + incentive budgets"
+        );
+    }
 
     // ========== YIELD TESTS ========== //
 
