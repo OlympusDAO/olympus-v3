@@ -172,23 +172,23 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     ///
     /// @param  owner           The owner of the order
     /// @param  depositPeriod   The deposit period for the CD position
+    /// @param  active          Whether the order is active
     /// @param  depositBudget   The USDS budget for bids
     /// @param  incentiveBudget The USDS budget for filler incentives (paid proportionally)
     /// @param  depositSpent    The amount of USDS spent on the deposit
     /// @param  incentiveSpent  The amount of USDS spent on the incentive
     /// @param  maxPrice        The maximum execution price (USDS per OHM)
     /// @param  minFillSize     The minimum USDS per fill (except final fill)
-    /// @param  active          Whether the order is active
     struct LimitOrder {
         address owner;
         uint8 depositPeriod;
+        bool active;
         uint256 depositBudget;
         uint256 incentiveBudget;
         uint256 depositSpent;
         uint256 incentiveSpent;
         uint256 maxPrice;
         uint256 minFillSize;
-        bool active;
     }
 
     // ========== CONSTRUCTOR ========== //
