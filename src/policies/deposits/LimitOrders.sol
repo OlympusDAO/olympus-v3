@@ -422,6 +422,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         totalUsdsOwed -= usdsNeeded;
 
         // Approve and execute bid
+        // The fill amount is the amount of USDS that will be used for the bid, and so is used for incentive and subsequent calculations.
+        // The actual amount is the quantity of receipt tokens that will be received.
         USDS.approve(address(CD_AUCTIONEER), fillAmount_);
         (uint256 ohmOut, uint256 positionId, , uint256 actualAmount) = CD_AUCTIONEER.bid(
             order.depositPeriod,
@@ -437,10 +439,12 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
             receiptTokens[order.depositPeriod].safeTransfer(order.owner, actualAmount);
         }
 
-        // Transfer incentive to filler and handle remaining balance
+        // Transfer incentive to filler
         if (incentive > 0) USDS.safeTransfer(msg.sender, incentive);
+        // Transfer any remaining USDS to sUSDS (but only if it would be >= 1 share)
         uint256 remainingBalance = USDS.balanceOf(address(this));
-        if (remainingBalance > 0) SUSDS.deposit(remainingBalance, address(this));
+        if (remainingBalance > 0 && SUSDS.previewDeposit(remainingBalance) > 0)
+            SUSDS.deposit(remainingBalance, address(this));
 
         emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
 
