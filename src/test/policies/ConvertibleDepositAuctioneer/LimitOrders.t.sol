@@ -436,9 +436,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
             0,
             expectedShares
         );
-    }
 
-    // TODO ordersForUser
+        // Check getOrdersForUser
+        uint256[] memory ordersForUser = limitOrders.getOrdersForUser(alice);
+        assertEq(ordersForUser.length, 1, "User should have 1 order");
+        assertEq(ordersForUser[0], orderId, "Order ID should match");
+    }
 
     function test_createOrder_fuzz(
         uint256 depositBudget,
@@ -524,6 +527,12 @@ contract CDAuctioneerLimitOrdersTest is Test {
             expectedFillerBalances,
             expectedShares
         );
+
+        // Check getOrdersForUser
+        uint256[] memory ordersForAlice = limitOrders.getOrdersForUser(alice);
+        assertEq(ordersForAlice.length, 2, "Alice should have 2 orders");
+        assertEq(ordersForAlice[0], orderId1, "Alice's order ID should match");
+        assertEq(ordersForAlice[1], orderId2, "Alice's order ID should match");
     }
 
     // when multiple users create orders
@@ -566,6 +575,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
             expectedFillerBalances,
             expectedShares
         );
+
+        // Check getOrdersForUser
+        uint256[] memory ordersForAlice = limitOrders.getOrdersForUser(alice);
+        assertEq(ordersForAlice.length, 1, "Alice should have 1 order");
+        assertEq(ordersForAlice[0], aliceOrder, "Alice's order ID should match");
+
+        uint256[] memory ordersForBob = limitOrders.getOrdersForUser(bob);
+        assertEq(ordersForBob.length, 1, "Bob should have 1 order");
+        assertEq(ordersForBob[0], bobOrder, "Bob's order ID should match");
     }
 
     // when the incentive budget is zero
