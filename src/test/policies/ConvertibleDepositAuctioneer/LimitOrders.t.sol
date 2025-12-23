@@ -1830,6 +1830,41 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
+    // when fill amount is zero
+    //  [X] it reverts with FillBelowMinimum
+    function test_fillOrder_revert_fillAmountZero() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Check canFillOrder returns false with reason before fill
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 0);
+            assertFalse(canFill, "Order should not be fillable when fill amount is zero");
+            assertEq(reason, "Fill below minimum", "Reason should indicate fill is below minimum");
+        }
+
+        // Check incentive calculation (should still work even with zero fill)
+        {
+            (uint256 incentive, uint256 incentiveRate) = limitOrders.calculateIncentive(orderId, 0);
+            assertEq(incentive, 0, "Incentive should be zero for zero fill amount");
+            assertEq(
+                incentiveRate,
+                DEFAULT_INCENTIVE_RATE,
+                "Incentive rate should still be 50 bps (0.5%)"
+            );
+        }
+
+        vm.prank(filler);
+        vm.expectRevert(ILimitOrders.FillBelowMinimum.selector);
+        limitOrders.fillOrder(orderId, 0);
+    }
+
     // when the contract is disabled
     //  [X] it reverts
     function test_fillOrder_givenDisabled_reverts() public {
