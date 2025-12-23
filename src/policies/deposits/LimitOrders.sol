@@ -124,6 +124,17 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     /// @param  newRecipient    The new address of the recipient
     event YieldRecipientUpdated(address indexed newRecipient);
 
+    /// @notice Emitted when a deposit period and receipt token are added
+    ///
+    /// @param  depositPeriod   The deposit period that was added
+    /// @param  receiptToken    The receipt token address for the deposit period
+    event DepositPeriodAdded(uint8 indexed depositPeriod, address indexed receiptToken);
+
+    /// @notice Emitted when a deposit period and receipt token are removed
+    ///
+    /// @param  depositPeriod   The deposit period that was removed
+    event DepositPeriodRemoved(uint8 indexed depositPeriod);
+
     // ========== CONSTANTS ========== //
 
     uint256 internal constant OHM_SCALE = 1e9;
@@ -220,6 +231,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         for (uint256 i = 0; i < depositPeriods_.length; i++) {
             if (receiptTokens_[i] == address(0)) revert InvalidParam("receiptToken");
             receiptTokens[depositPeriods_[i]] = ERC20(receiptTokens_[i]);
+            emit DepositPeriodAdded(depositPeriods_[i], receiptTokens_[i]);
         }
 
         USDS.approve(address(SUSDS), type(uint256).max);
@@ -236,6 +248,66 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         if (newRecipient_ == address(0)) revert InvalidParam("yieldRecipient");
         yieldRecipient = newRecipient_;
         emit YieldRecipientUpdated(newRecipient_);
+    }
+
+    /// @notice Add a new deposit period and associated receipt token
+    /// @dev    This function will revert if:
+    ///         - The contract is not enabled
+    ///         - The caller is not the owner
+    ///         - The deposit period is 0
+    ///         - The receipt token address is 0
+    ///         - The deposit period is already configured
+    ///         - The deposit period is not enabled in the auctioneer
+    ///
+    /// @param  depositPeriod_   The deposit period to add
+    /// @param  receiptToken_   The receipt token address for the deposit period
+    function addDepositPeriod(
+        uint8 depositPeriod_,
+        address receiptToken_
+    ) external onlyOwner onlyEnabled {
+        // Validate deposit period is not 0
+        if (depositPeriod_ == 0) revert InvalidParam("depositPeriod");
+
+        // Validate receipt token is not address(0)
+        if (receiptToken_ == address(0)) revert InvalidParam("receiptToken");
+
+        // Check for duplicate entry
+        if (address(receiptTokens[depositPeriod_]) != address(0)) {
+            revert InvalidParam("depositPeriod already configured");
+        }
+
+        // Check if deposit period is enabled in auctioneer
+        (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
+        if (!isEnabled) revert DepositPeriodNotEnabled();
+
+        // Set the receipt token
+        receiptTokens[depositPeriod_] = ERC20(receiptToken_);
+
+        // Emit event
+        emit DepositPeriodAdded(depositPeriod_, receiptToken_);
+    }
+
+    /// @notice Remove a deposit period and associated receipt token
+    /// @dev    This function will revert if:
+    ///         - The contract is not enabled
+    ///         - The caller is not the owner
+    ///         - The deposit period is not configured
+    ///
+    ///         Note: Active orders for this deposit period will fail to fill until the deposit period
+    ///         is re-added. Users can cancel their orders if needed.
+    ///
+    /// @param  depositPeriod_   The deposit period to remove
+    function removeDepositPeriod(uint8 depositPeriod_) external onlyOwner onlyEnabled {
+        // Check if deposit period is configured
+        if (address(receiptTokens[depositPeriod_]) == address(0)) {
+            revert ReceiptTokenNotConfigured();
+        }
+
+        // Remove the receipt token
+        delete receiptTokens[depositPeriod_];
+
+        // Emit event
+        emit DepositPeriodRemoved(depositPeriod_);
     }
 
     // ========== ORDER MANAGEMENT ========== //
@@ -418,6 +490,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
     ///         - The order is not active
     ///         - The order budget has been fully spent
     ///         - The fill amount is below the minimum fill size (unless this is the final fill)
+    ///         - The deposit period is not enabled
+    ///         - The receipt token is not configured
     ///         - The execution price is above the maximum price
     ///         - The previewBid function returns zero OHM output
     ///
@@ -447,6 +521,17 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         if (remainingDepositBefore > order.minFillSize && fillAmount_ < order.minFillSize) {
             revert FillBelowMinimum();
         }
+
+        // Check that the deposit period is enabled
+        {
+            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
+                order.depositPeriod
+            );
+            if (!isDepositPeriodEnabled) revert DepositPeriodNotEnabled();
+        }
+        // Check that the receipt token is still configured
+        if (address(receiptTokens[order.depositPeriod]) == address(0))
+            revert ReceiptTokenNotConfigured();
 
         // Check execution price via previewBid
         uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(order.depositPeriod, fillAmount_);
@@ -629,6 +714,17 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, Periphery
         LimitOrder memory order = orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
+
+        // Check that the deposit period is enabled
+        {
+            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
+                order.depositPeriod
+            );
+            if (!isDepositPeriodEnabled) return (false, "Deposit period not enabled", 0);
+        }
+        // Check that the receipt token is still configured
+        if (address(receiptTokens[order.depositPeriod]) == address(0))
+            return (false, "Receipt token not configured", 0);
 
         uint256 remainingDeposit = order.depositBudget - order.depositSpent;
         if (remainingDeposit == 0) return (false, "Order fully spent", 0);

@@ -67,6 +67,9 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         override
         returns (uint256 ohmOut, uint256 positionId, uint256 receiptTokenId, uint256 actualAmount)
     {
+        // Revert if deposit period is not enabled
+        if (!depositPeriodsEnabled[depositPeriod_]) revert("Deposit period not enabled");
+
         // Transfer deposit asset from caller (assumed to be non-zero)
         IERC20(_depositAsset).transferFrom(msg.sender, address(this), depositAmount_);
 

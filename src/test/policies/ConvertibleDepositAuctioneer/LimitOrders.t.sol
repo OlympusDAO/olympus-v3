@@ -46,6 +46,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     MockERC4626 public sUsds;
     MockERC20 public receiptToken3;
     MockERC20 public receiptToken6;
+    MockERC20 public receiptToken12;
     MockPositionNFT public positionNFT;
     MockConvertibleDepositAuctioneer public cdAuctioneer;
     Kernel public kernel;
@@ -58,6 +59,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
     uint8 public constant PERIOD_3 = 3;
     uint8 public constant PERIOD_6 = 6;
+    uint8 public constant PERIOD_12 = 12;
 
     uint256 public constant MIN_BID = 100e18;
     uint256 public constant MOCK_PRICE = 30e18;
@@ -84,6 +86,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         sUsds = new MockERC4626(usds, "sUSDS", "sUSDS");
         receiptToken3 = new MockERC20("Receipt3", "RCT3", 18);
         receiptToken6 = new MockERC20("Receipt6", "RCT6", 18);
+        receiptToken12 = new MockERC20("Receipt12", "RCT12", 18);
         positionNFT = new MockPositionNFT();
 
         // Deploy mock auctioneer
@@ -735,71 +738,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
             DEFAULT_INCENTIVE_BUDGET,
             DEFAULT_MAX_PRICE,
             DEFAULT_MIN_FILL_SIZE
-        );
-    }
-
-    // given the auctioneer despoit period has been enabled
-    //  [X] it creates an order with the new deposit period
-    function test_createOrder_depositPeriodEnabled() public {
-        uint256 expectedShares = sUsds.previewDeposit(
-            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET
-        );
-
-        // Create and enable a new deposit period
-        uint8 newPeriod = 12;
-        {
-            // Enable on the auctioneer
-            cdAuctioneer.setDepositPeriodEnabled(newPeriod, true);
-
-            // Create the receipt token
-            MockERC20 newReceiptToken = new MockERC20("Receipt12", "RCT12", 18);
-
-            // Set receipt token on auctioneer
-            cdAuctioneer.setReceiptToken(newPeriod, address(newReceiptToken));
-        }
-
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            newPeriod,
-            DEFAULT_DEPOSIT_BUDGET, // depositBudget
-            DEFAULT_INCENTIVE_BUDGET, // incentiveBudget
-            DEFAULT_MAX_PRICE, // maxPrice
-            DEFAULT_MIN_FILL_SIZE // minFillSize
-        );
-
-        assertEq(orderId, 0, "First order should have ID 0");
-
-        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.owner, alice, "Order owner should be alice");
-        assertEq(order.depositPeriod, newPeriod, "Order deposit period should be newPeriod");
-        assertEq(
-            order.depositBudget,
-            DEFAULT_DEPOSIT_BUDGET,
-            "Order deposit budget should match input"
-        );
-        assertEq(
-            order.incentiveBudget,
-            DEFAULT_INCENTIVE_BUDGET,
-            "Order incentive budget should match input"
-        );
-        assertEq(order.depositSpent, 0, "Order deposit spent should be 0 initially");
-        assertEq(order.incentiveSpent, 0, "Order incentive spent should be 0 initially");
-        assertEq(order.maxPrice, DEFAULT_MAX_PRICE, "Order max price should match input");
-        assertEq(
-            order.minFillSize,
-            DEFAULT_MIN_FILL_SIZE,
-            "Order min fill size should match input"
-        );
-        assertTrue(order.active, "Order should be active");
-
-        // Check balances and invariants
-        checkOrderInvariants(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
-            0,
-            address(0),
-            0,
-            expectedShares
         );
     }
 
@@ -1875,6 +1813,40 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
+    // given the deposit period has been disabled
+    //  [X] it reverts
+    function test_fillOrder_revert_depositPeriodDisabled() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Disable deposit period
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_3, false);
+
+        // Check canFillOrder returns false with reason before fill
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 1_000e18);
+            assertFalse(canFill, "Order should not be fillable when deposit period is disabled");
+            assertEq(
+                reason,
+                "Deposit period not enabled",
+                "Reason should indicate deposit period is not enabled"
+            );
+        }
+
+        // Expect revert
+        vm.expectRevert(CDAuctioneerLimitOrders.DepositPeriodNotEnabled.selector);
+
+        // Call function
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 1_000e18);
+    }
+
     function test_fillOrder_incentiveBudgetFuzz(uint256 incentiveBudget_) public {
         incentiveBudget_ = bound(incentiveBudget_, 0, 50_000e18);
 
@@ -2604,6 +2576,54 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    // given the deposit period has been removed
+    //  [X] the order is cancelled
+    //  [X] it refunds the amount of deposit and incentive budgets
+    //  [X] it reduces the USDS owed by the full amount of deposit and incentive budgets
+    function test_cancelOrder_givenDepositPeriodRemoved() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Remove the deposit period
+        vm.prank(owner);
+        limitOrders.removeDepositPeriod(PERIOD_3);
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        // Cancel the order
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        // Check order status
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            DEFAULT_INCENTIVE_BUDGET,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 0, "Deposit spent should be 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be 0");
+        assertFalse(order.active, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the full amount of deposit and incentive budgets
+        assertEq(limitOrders.totalUsdsOwed(), 0, "Total USDS owed should be 0");
+
+        // Alice should receive full refund
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            "Alice should receive full refund of deposit + incentive budgets"
+        );
+        _assertSolvent();
+    }
+
     // ========== YIELD TESTS ========== //
 
     function _assertSolvent() internal view {
@@ -3017,6 +3037,251 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.prank(owner);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         limitOrders.setYieldRecipient(newRecipient);
+    }
+
+    // addDepositPeriod
+    // when all parameters are valid
+    //  [X] it adds deposit period successfully
+    //  [X] it emits DepositPeriodAdded event
+    function test_addDepositPeriod_success() public {
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, true);
+        cdAuctioneer.setReceiptToken(PERIOD_12, address(receiptToken12));
+
+        vm.expectEmit(true, true, false, false);
+        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_12, address(receiptToken12));
+
+        vm.prank(owner);
+        limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
+
+        assertEq(
+            address(limitOrders.receiptTokens(PERIOD_12)),
+            address(receiptToken12),
+            "Receipt token should be set for PERIOD_12"
+        );
+    }
+
+    // when caller is not owner
+    //  [X] it reverts
+    function test_addDepositPeriod_revert_notOwner() public {
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, true);
+        cdAuctioneer.setReceiptToken(PERIOD_12, address(receiptToken12));
+
+        vm.prank(alice);
+        vm.expectRevert();
+        limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
+    }
+
+    // when contract is disabled
+    //  [X] it reverts
+    function test_addDepositPeriod_givenDisabled_reverts() public givenDisabled {
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, true);
+        cdAuctioneer.setReceiptToken(PERIOD_12, address(receiptToken12));
+
+        vm.prank(owner);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
+    }
+
+    // when depositPeriod is 0
+    //  [X] it reverts
+    function test_addDepositPeriod_revert_zeroDepositPeriod() public {
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "depositPeriod")
+        );
+        limitOrders.addDepositPeriod(0, address(receiptToken12));
+    }
+
+    // when receiptToken is address(0)
+    //  [X] it reverts
+    function test_addDepositPeriod_revert_zeroReceiptToken() public {
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, true);
+
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "receiptToken")
+        );
+        limitOrders.addDepositPeriod(PERIOD_12, address(0));
+    }
+
+    // when deposit period is already configured
+    //  [X] it reverts
+    function test_addDepositPeriod_revert_alreadyConfigured() public {
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CDAuctioneerLimitOrders.InvalidParam.selector,
+                "depositPeriod already configured"
+            )
+        );
+        limitOrders.addDepositPeriod(PERIOD_3, address(receiptToken3));
+    }
+
+    // when deposit period is not enabled in auctioneer
+    //  [X] it reverts
+    function test_addDepositPeriod_revert_notEnabledInAuctioneer() public {
+        cdAuctioneer.setDepositPeriodEnabled(PERIOD_12, false);
+
+        vm.prank(owner);
+        vm.expectRevert(CDAuctioneerLimitOrders.DepositPeriodNotEnabled.selector);
+        limitOrders.addDepositPeriod(PERIOD_12, address(receiptToken12));
+    }
+
+    // removeDepositPeriod
+    // when all parameters are valid
+    //  [X] it removes deposit period successfully
+    //  [X] it emits DepositPeriodRemoved event
+    function test_removeDepositPeriod_success() public {
+        vm.expectEmit(true, false, false, false);
+        emit CDAuctioneerLimitOrders.DepositPeriodRemoved(PERIOD_3);
+
+        vm.prank(owner);
+        limitOrders.removeDepositPeriod(PERIOD_3);
+
+        assertEq(
+            address(limitOrders.receiptTokens(PERIOD_3)),
+            address(0),
+            "Receipt token should be removed for PERIOD_3"
+        );
+    }
+
+    // when caller is not owner
+    //  [X] it reverts
+    function test_removeDepositPeriod_revert_notOwner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        limitOrders.removeDepositPeriod(PERIOD_3);
+    }
+
+    // when contract is disabled
+    //  [X] it reverts
+    function test_removeDepositPeriod_givenDisabled_reverts() public givenDisabled {
+        vm.prank(owner);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        limitOrders.removeDepositPeriod(PERIOD_3);
+    }
+
+    // when deposit period is not configured
+    //  [X] it reverts
+    function test_removeDepositPeriod_revert_notConfigured() public {
+        vm.prank(owner);
+        vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
+        limitOrders.removeDepositPeriod(PERIOD_12);
+    }
+
+    // when there are active orders for the deposit period
+    //  [X] it removes successfully (users can cancel orders)
+    //  [X] active orders fail to fill after removal
+    function test_removeDepositPeriod_withActiveOrders() public {
+        // Create an order for PERIOD_3
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Remove the deposit period
+        vm.prank(owner);
+        limitOrders.removeDepositPeriod(PERIOD_3);
+
+        // Verify order still exists
+        CDAuctioneerLimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertTrue(order.active, "Order should still be active");
+
+        // Verify that order cannot be filled
+        (bool canFill, string memory reason, ) = limitOrders.canFillOrder(
+            orderId,
+            DEFAULT_MIN_FILL_SIZE
+        );
+        assertFalse(canFill, "Order should not be fillable");
+        assertEq(
+            reason,
+            "Receipt token not configured",
+            "Reason should indicate receipt token is not configured"
+        );
+
+        // Expect revert
+        vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
+
+        // Call function
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, DEFAULT_MIN_FILL_SIZE);
+    }
+
+    // when deposit period is removed and re-added
+    //  [X] it allows creating and filling orders again
+    function test_removeAndReaddDepositPeriod() public {
+        // Remove PERIOD_3
+        vm.prank(owner);
+        limitOrders.removeDepositPeriod(PERIOD_3);
+
+        // Verify it's removed
+        assertEq(
+            address(limitOrders.receiptTokens(PERIOD_3)),
+            address(0),
+            "Receipt token should be removed"
+        );
+
+        // Re-add PERIOD_3
+        vm.expectEmit(true, true, false, false);
+        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
+
+        vm.prank(owner);
+        limitOrders.addDepositPeriod(PERIOD_3, address(receiptToken3));
+
+        // Verify it's added back
+        assertEq(
+            address(limitOrders.receiptTokens(PERIOD_3)),
+            address(receiptToken3),
+            "Receipt token should be added back"
+        );
+
+        // Create and fill an order to verify it works
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Fill the order
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, DEFAULT_MIN_FILL_SIZE);
+    }
+
+    // Constructor event emission
+    //  [X] it emits DepositPeriodAdded for each deposit period
+    function test_constructor_emitsDepositPeriodAdded() public {
+        // Deploy a new contract to test constructor events
+        uint8[] memory periods = new uint8[](2);
+        periods[0] = PERIOD_3;
+        periods[1] = PERIOD_6;
+
+        address[] memory receiptTokens = new address[](2);
+        receiptTokens[0] = address(receiptToken3);
+        receiptTokens[1] = address(receiptToken6);
+
+        vm.expectEmit(true, true, false, false);
+        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_3, address(receiptToken3));
+
+        vm.expectEmit(true, true, false, false);
+        emit CDAuctioneerLimitOrders.DepositPeriodAdded(PERIOD_6, address(receiptToken6));
+
+        new CDAuctioneerLimitOrders(
+            owner,
+            address(cdAuctioneer),
+            address(usds),
+            address(sUsds),
+            address(positionNFT),
+            yieldRecipient,
+            periods,
+            receiptTokens
+        );
     }
 
     // transferOwnership
