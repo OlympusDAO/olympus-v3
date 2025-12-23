@@ -395,7 +395,7 @@ contract CDAuctioneerLimitOrders is
         if (remainingDepositBefore == 0) revert OrderFullySpent();
 
         // Check min fill (unless this is the final fill)
-        if (remainingDepositBefore > order.minFillSize && fillAmount_ < order.minFillSize) {
+        if (remainingDepositBefore >= order.minFillSize && fillAmount_ < order.minFillSize) {
             revert FillBelowMinimum();
         }
 
@@ -616,7 +616,7 @@ contract CDAuctioneerLimitOrders is
 
         uint256 actualFill = fillAmount_ > remainingDeposit ? remainingDeposit : fillAmount_;
 
-        if (remainingDeposit > order.minFillSize && actualFill < order.minFillSize) {
+        if (remainingDeposit >= order.minFillSize && actualFill < order.minFillSize) {
             return (false, "Fill below minimum", 0);
         }
 

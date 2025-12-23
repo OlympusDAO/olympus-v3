@@ -1573,6 +1573,45 @@ contract CDAuctioneerLimitOrdersTest is Test {
         checkOrderInvariants(orderId, 1000e18 + 5e18, 1_000e18 + 5e18, filler, 5e18, 0);
     }
 
+    // when minFillSize equals depositBudget and fill amount is below minFillSize
+    //  [X] it reverts
+    function test_fillOrder_fillBelowMinimumWhenDepositEqualsMinFillSize() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            1_000e18, // depositBudget == minFillSize
+            5e18,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE // minFillSize == 1_000e18
+        );
+
+        // Check canFillOrder returns false with reason before fill
+        {
+            (bool canFill, string memory reason, ) = limitOrders.canFillOrder(orderId, 500e18);
+            assertFalse(
+                canFill,
+                "Order should not be fillable when fill amount is below minimum and depositBudget equals minFillSize"
+            );
+            assertEq(reason, "Fill below minimum", "Reason should indicate fill is below minimum");
+        }
+
+        vm.prank(filler);
+        vm.expectRevert(ILimitOrders.FillBelowMinimum.selector);
+        limitOrders.fillOrder(orderId, 500e18);
+
+        // Fill the order with the minimum fill size
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 1_000e18);
+
+        // Check order status
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, 1_000e18, "Deposit spent should equal fill amount");
+        assertEq(order.incentiveSpent, 5e18, "Incentive spent should equal incentive budget");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(orderId, 1000e18 + 5e18, 1_000e18 + 5e18, filler, 5e18, 0);
+    }
+
     // when different fillers fill same order
     //  [X] it distributes incentives correctly
     function test_fillOrder_differentFillers() public {
