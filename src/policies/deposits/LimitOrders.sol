@@ -99,9 +99,7 @@ contract CDAuctioneerLimitOrders is
         yieldRecipient = yieldRecipient_;
 
         for (uint256 i = 0; i < depositPeriods_.length; i++) {
-            if (receiptTokens_[i] == address(0)) revert InvalidParam("receiptToken");
-            receiptTokens[depositPeriods_[i]] = ERC20(receiptTokens_[i]);
-            emit DepositPeriodAdded(depositPeriods_[i], receiptTokens_[i]);
+            _addDepositPeriod(depositPeriods_[i], receiptTokens_[i]);
         }
 
         USDS.approve(address(SUSDS), type(uint256).max);
@@ -142,6 +140,19 @@ contract CDAuctioneerLimitOrders is
         uint8 depositPeriod_,
         address receiptToken_
     ) external onlyOwner onlyEnabled {
+        _addDepositPeriod(depositPeriod_, receiptToken_);
+    }
+
+    /// @notice Internal function to add a deposit period and associated receipt token
+    /// @dev    This function will revert if:
+    ///         - The deposit period is 0
+    ///         - The receipt token address is 0
+    ///         - The deposit period is already configured
+    ///         - The deposit period is not enabled in the auctioneer
+    ///
+    /// @param  depositPeriod_   The deposit period to add
+    /// @param  receiptToken_   The receipt token address for the deposit period
+    function _addDepositPeriod(uint8 depositPeriod_, address receiptToken_) internal {
         // Validate deposit period is not 0
         if (depositPeriod_ == 0) revert InvalidParam("depositPeriod");
 
