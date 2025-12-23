@@ -14,6 +14,7 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 // Interfaces
 import {IERC721Errors} from "@openzeppelin-5.3.0/interfaces/draft-IERC6093.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Libraries
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
@@ -132,9 +133,23 @@ contract CDAuctioneerLimitOrdersTest is Test {
         usds.mint(address(this), 1000e18);
         usds.approve(address(sUsds), 1000e18);
         sUsds.deposit(1000e18, address(this));
+
+        // Enable the contract
+        vm.prank(owner);
+        limitOrders.enable("");
     }
 
     // ========== HELPER FUNCTIONS ========== //
+
+    function _disableContract() internal {
+        vm.prank(owner);
+        limitOrders.disable("");
+    }
+
+    modifier givenDisabled() {
+        _disableContract();
+        _;
+    }
 
     function _accrueYield(uint256 amount_) internal {
         usds.mint(address(sUsds), amount_);
@@ -700,6 +715,22 @@ contract CDAuctioneerLimitOrdersTest is Test {
         vm.expectRevert(CDAuctioneerLimitOrders.ReceiptTokenNotConfigured.selector);
         limitOrders.createOrder(
             12,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+    }
+
+    // when the contract is disabled
+    //  [X] it reverts
+
+    function test_createOrder_givenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
             DEFAULT_INCENTIVE_BUDGET,
             DEFAULT_MAX_PRICE,
@@ -1804,6 +1835,29 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.fillOrder(orderId, 1_000e18);
     }
 
+    // when the contract is disabled
+    //  [X] it reverts
+    function test_fillOrder_givenDisabled_reverts() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Disable
+        _disableContract();
+
+        // Expect revert
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+
+        // Call function
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 1_000e18);
+    }
+
     function test_fillOrder_incentiveBudgetFuzz(uint256 incentiveBudget_) public {
         incentiveBudget_ = bound(incentiveBudget_, 0, 50_000e18);
 
@@ -2487,6 +2541,11 @@ contract CDAuctioneerLimitOrdersTest is Test {
         limitOrders.cancelOrder(orderId);
     }
 
+    // when the contract is disabled
+    //  [ ] it cancels order
+    //  [ ] it refunds the amount of deposit and incentive budgets
+    //  [ ] it reduces the USDS owed by the full amount of deposit and incentive budgets
+
     // ========== YIELD TESTS ========== //
 
     function _assertSolvent() internal view {
@@ -2828,6 +2887,32 @@ contract CDAuctioneerLimitOrdersTest is Test {
         _assertSolvent();
     }
 
+    // when the contract is disabled
+    //  [X] it reverts
+    function test_sweepYield_givenDisabled_reverts() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        vm.prank(filler);
+        limitOrders.fillOrder(orderId, 10_000e18);
+
+        // Disable
+        _disableContract();
+
+        // Expect revert
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+
+        // Call function
+        vm.prank(owner);
+        limitOrders.sweepYield();
+    }
+
     // ========== ADMIN TESTS ========== //
 
     // setYieldRecipient
@@ -2864,6 +2949,16 @@ contract CDAuctioneerLimitOrdersTest is Test {
             abi.encodeWithSelector(CDAuctioneerLimitOrders.InvalidParam.selector, "yieldRecipient")
         );
         limitOrders.setYieldRecipient(address(0));
+    }
+
+    // when the contract is disabled
+    //  [X] it reverts
+    function test_setYieldRecipient_givenDisabled_reverts() public givenDisabled {
+        address newRecipient = makeAddr("newRecipient");
+
+        vm.prank(owner);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        limitOrders.setYieldRecipient(newRecipient);
     }
 
     // transferOwnership

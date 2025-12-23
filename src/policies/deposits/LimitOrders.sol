@@ -12,12 +12,13 @@ import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
 import {ERC4626} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC4626.sol";
 import {ERC721Utils} from "@openzeppelin-5.3.0/token/ERC721/utils/ERC721Utils.sol";
+import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 
 /// @title  CDAuctioneer Limit Orders
 /// @notice Enables limit order functionality for the Convertible Deposit Auctioneer
 /// @dev    Users create orders specifying max price, MEV bots fill when price is favorable.
 ///         User deposits are held in sUSDS to generate yield, which accrues to a configurable recipient.
-contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
+contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, PeripheryEnabler {
     using SafeERC20 for ERC20;
 
     // ========== ERRORS ========== //
@@ -209,6 +210,8 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         }
 
         USDS.approve(address(SUSDS), type(uint256).max);
+
+        // Disabled by default
     }
 
     // ========== ADMIN ========== //
@@ -237,7 +240,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 incentiveBudget_,
         uint256 maxPrice_,
         uint256 minFillSize_
-    ) external nonReentrant returns (uint256 orderId) {
+    ) external nonReentrant onlyEnabled returns (uint256 orderId) {
         if (depositBudget_ == 0) revert InvalidParam("depositBudget");
         if (maxPrice_ == 0) revert InvalidParam("maxPrice");
         if (minFillSize_ == 0) revert InvalidParam("minFillSize");
@@ -304,7 +307,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         uint256 newIncentiveBudget_,
         uint256 newMaxPrice_,
         uint256 newMinFillSize_
-    ) external nonReentrant {
+    ) external nonReentrant onlyEnabled {
         LimitOrder storage order = orders[orderId_];
 
         if (order.owner != msg.sender) revert NotOrderOwner();
@@ -390,7 +393,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     function fillOrder(
         uint256 orderId_,
         uint256 fillAmount_
-    ) external nonReentrant returns (uint256, uint256, uint256) {
+    ) external nonReentrant onlyEnabled returns (uint256, uint256, uint256) {
         LimitOrder storage order = orders[orderId_];
 
         if (!order.active) revert OrderNotActive();
@@ -508,7 +511,7 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
     /// @notice Sweep all accrued yield to the yield recipient as sUSDS
     ///
     /// @return shares The amount of sUSDS swept to the yield recipient
-    function sweepYield() external nonReentrant returns (uint256 shares) {
+    function sweepYield() external nonReentrant onlyEnabled returns (uint256 shares) {
         shares = getAccruedYieldShares();
         if (shares == 0) return 0;
 
@@ -709,6 +712,26 @@ contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable {
         if (effectivePrice > order.maxPrice) return false;
 
         return true;
+    }
+
+    // ========== ENABLER FUNCTIONS ========== //
+
+    /// @inheritdoc PeripheryEnabler
+    /// @dev        Calls Ownable's _checkOwner()
+    function _onlyOwner() internal view override {
+        _checkOwner();
+    }
+
+    /// @inheritdoc PeripheryEnabler
+    /// @dev        No-op
+    function _enable(bytes calldata enableData_) internal override {
+        // No-op
+    }
+
+    /// @inheritdoc PeripheryEnabler
+    /// @dev        No-op
+    function _disable(bytes calldata disableData_) internal override {
+        // No-op
     }
 
     // ========== ERC721 RECEIVER ========== //
