@@ -18,6 +18,7 @@ import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 /// @notice Enables limit order functionality for the Convertible Deposit Auctioneer
 /// @dev    Users create orders specifying max price, MEV bots fill when price is favorable.
 ///         User deposits are held in sUSDS to generate yield, which accrues to a configurable recipient.
+/// @author Zeus
 contract CDAuctioneerLimitOrders is ReentrancyGuardTransient, Ownable, PeripheryEnabler {
     using SafeERC20 for ERC20;
 
