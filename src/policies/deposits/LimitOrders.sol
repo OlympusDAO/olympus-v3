@@ -4,6 +4,8 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {ILimitOrders} from "../interfaces/deposits/ILimitOrders.sol";
+import {IVersioned} from "../../interfaces/IVersioned.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
@@ -22,6 +24,7 @@ import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 /// @author Zeus
 contract CDAuctioneerLimitOrders is
     ILimitOrders,
+    IVersioned,
     ReentrancyGuardTransient,
     Ownable,
     PeripheryEnabler
@@ -104,6 +107,13 @@ contract CDAuctioneerLimitOrders is
         USDS.approve(address(SUSDS), type(uint256).max);
 
         // Disabled by default
+    }
+
+    /// @inheritdoc IVersioned
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+        return (major, minor);
     }
 
     // ========== ADMIN ========== //
@@ -765,5 +775,15 @@ contract CDAuctioneerLimitOrders is
         bytes calldata
     ) external pure returns (bytes4) {
         return this.onERC721Received.selector;
+    }
+
+    // ========== ERC165 ========== //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(ILimitOrders).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }
