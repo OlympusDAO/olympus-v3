@@ -144,8 +144,11 @@ contract LimitOrdersForkTest is Test {
         assertEq(uint256(order.depositPeriod), uint256(depositPeriod), "Deposit period mismatch");
         assertEq(order.depositBudget, depositBudget, "Deposit budget mismatch");
 
+        // Cache remaining deposit and incentive
+        (uint256 remainingDeposit, uint256 remainingIncentive) = limitOrders.getRemaining(orderId);
+
         // Fill order
-        uint256 fillAmount = depositBudget; // Fill the entire order
+        uint256 fillAmount = remainingDeposit; // Fill the entire order
         vm.prank(filler);
         (uint256 actualFill, uint256 incentive, uint256 remaining) = limitOrders.fillOrder(
             orderId,
@@ -163,17 +166,17 @@ contract LimitOrdersForkTest is Test {
 
         // Verify order was filled
         order = limitOrders.getOrder(orderId);
-        assertEq(order.depositSpent, depositBudget, "Deposit should be fully spent");
-        assertEq(order.incentiveSpent, incentiveBudget, "Incentive should be fully spent");
+        assertEq(order.depositSpent, remainingDeposit, "Deposit should be fully spent");
+        assertEq(order.incentiveSpent, remainingIncentive, "Incentive should be fully spent");
 
         // Verify filler received incentive
         uint256 fillerUsdsBalance = usds.balanceOf(filler);
         assertGe(fillerUsdsBalance, incentive, "Filler should receive incentive");
 
         // Verify user received position NFT and receipt tokens
-        (uint256 deposit, uint256 incentiveRemaining) = limitOrders.getRemaining(orderId);
-        assertEq(deposit, 0, "Deposit remaining should be zero");
-        assertEq(incentiveRemaining, 0, "Incentive remaining should be zero");
+        (remainingDeposit, remainingIncentive) = limitOrders.getRemaining(orderId);
+        assertEq(remainingDeposit, 0, "Deposit remaining should be zero");
+        assertEq(remainingIncentive, 0, "Incentive remaining should be zero");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
