@@ -472,7 +472,7 @@ contract CDAuctioneerLimitOrders is
     /// @notice Calculate current accrued yield in USDS terms
     ///
     /// @return uint256 The current accrued yield in USDS terms
-    function getAccruedYield() public view returns (uint256) {
+    function getAccruedYield() external view returns (uint256) {
         return SUSDS.convertToAssets(getAccruedYieldShares());
     }
 
