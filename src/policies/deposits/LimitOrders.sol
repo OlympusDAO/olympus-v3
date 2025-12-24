@@ -101,7 +101,8 @@ contract CDAuctioneerLimitOrders is
         if (sUsds_ == address(0)) revert InvalidParam("sUsds");
         if (positionNft_ == address(0)) revert InvalidParam("positionNft");
         if (yieldRecipient_ == address(0)) revert InvalidParam("yieldRecipient");
-        if (depositPeriods_.length != receiptTokens_.length) revert ArrayLengthMismatch();
+        uint256 len = depositPeriods_.length;
+        if (len != receiptTokens_.length) revert ArrayLengthMismatch();
 
         DEPOSIT_MANAGER = depositManager_;
         CD_AUCTIONEER = IConvertibleDepositAuctioneer(cdAuctioneer_);
@@ -110,7 +111,7 @@ contract CDAuctioneerLimitOrders is
         POSITION_NFT = ERC721(positionNft_);
         yieldRecipient = yieldRecipient_;
 
-        for (uint256 i = 0; i < depositPeriods_.length; i++) {
+        for (uint256 i = 0; i < len; i++) {
             _addDepositPeriod(depositPeriods_[i], receiptTokens_[i]);
         }
 
@@ -585,14 +586,13 @@ contract CDAuctioneerLimitOrders is
         if (!order.active) return (false, "Order not active", 0);
 
         // Check that the deposit period is enabled
+        uint8 depositPeriod = order.depositPeriod;
         {
-            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
-                order.depositPeriod
-            );
+            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod);
             if (!isDepositPeriodEnabled) return (false, "Deposit period not enabled", 0);
         }
         // Check that the receipt token is still configured
-        if (address(receiptTokens[order.depositPeriod]) == address(0))
+        if (address(receiptTokens[depositPeriod]) == address(0))
             return (false, "Receipt token not configured", 0);
 
         uint256 remainingDeposit = order.depositBudget - order.depositSpent;
@@ -604,7 +604,7 @@ contract CDAuctioneerLimitOrders is
             return (false, "Fill below minimum", 0);
         }
 
-        uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(order.depositPeriod, actualFill);
+        uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(depositPeriod, actualFill);
         if (expectedOhmOut == 0) return (false, "Zero OHM output", 0);
 
         effectivePrice = (actualFill * OHM_SCALE) / expectedOhmOut;
