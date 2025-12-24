@@ -455,15 +455,13 @@ contract CDAuctioneerLimitOrders is
 
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
-        if (order.depositSpent == order.depositBudget) revert OrderFullySpent();
+        uint256 depositBudget = order.depositBudget;
+        uint256 depositSpent = order.depositSpent;
+        if (depositSpent == depositBudget) revert OrderFullySpent();
 
-        // Ternaries to ensure against underflow when cancelling
-        uint256 remainingDeposit = order.depositBudget > order.depositSpent
-            ? order.depositBudget - order.depositSpent
-            : 0;
-        uint256 remainingIncentive = order.incentiveBudget > order.incentiveSpent
-            ? order.incentiveBudget - order.incentiveSpent
-            : 0;
+        // Calculate remaining amounts (saturating subtraction ensures no underflow when cancelling)
+        uint256 remainingDeposit = depositBudget.saturatingSub(depositSpent);
+        uint256 remainingIncentive = order.incentiveBudget.saturatingSub(order.incentiveSpent);
         uint256 totalRemaining = remainingDeposit + remainingIncentive;
 
         order.active = false;
@@ -495,9 +493,7 @@ contract CDAuctioneerLimitOrders is
         // previewWithdraw rounds UP, giving us the max shares needed to cover obligations
         uint256 sharesRequired = SUSDS.previewWithdraw(totalUsdsOwed);
 
-        if (sUsdsBalance <= sharesRequired) return 0;
-
-        return sUsdsBalance - sharesRequired;
+        return sUsdsBalance.saturatingSub(sharesRequired);
     }
 
     /// @notice Sweep all accrued yield to the yield recipient as sUSDS
