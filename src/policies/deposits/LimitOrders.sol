@@ -330,9 +330,9 @@ contract CDAuctioneerLimitOrders is
     /// @return incentive        The incentive amount (with final fill handling)
     /// @return remainingDeposit The remaining deposit budget
     function _calculateFillAndIncentive(
-        LimitOrder memory order_,
+        LimitOrder storage order_,
         uint256 fillAmount_
-    ) internal pure returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
+    ) internal view returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
         remainingDeposit = order_.depositBudget - order_.depositSpent;
 
         // Cap fill to remaining deposit budget
@@ -553,7 +553,7 @@ contract CDAuctioneerLimitOrders is
     ) public view returns (uint256 incentive, uint256 incentiveRate) {
         if (!isEnabled) return (0, 0);
 
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
 
         (, incentive, ) = _calculateFillAndIncentive(order, fillAmount_);
@@ -573,7 +573,7 @@ contract CDAuctioneerLimitOrders is
     ) public view returns (bool canFill, string memory reason, uint256 effectivePrice) {
         if (!isEnabled) return (false, "Contract disabled", 0);
 
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
 
@@ -696,7 +696,7 @@ contract CDAuctioneerLimitOrders is
     /// @param  depositPeriod_  The deposit period
     /// @return bool            Whether the order is fillable
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         // Early return if deposit period doesn't match
         if (order.depositPeriod != depositPeriod_) return false;
