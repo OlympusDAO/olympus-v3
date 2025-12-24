@@ -207,6 +207,41 @@ contract CDAuctioneerLimitOrders is
 
     // ========== ORDER MANAGEMENT ========== //
 
+    /// @notice Internal function to deposit USDS into sUSDS and adjust the deposit and incentive budgets
+    ///
+    /// @param  depositBudget_          USDS budget for bids
+    /// @param  incentiveBudget_        USDS budget for filler incentives (paid proportionally)
+    /// @return actualDepositBudget     The actual deposit budget (may be less than the input)
+    /// @return actualIncentiveBudget   The actual incentive budget (may be less than the input)
+    function _deposit(
+        uint256 depositBudget_,
+        uint256 incentiveBudget_
+    ) internal returns (uint256 actualDepositBudget, uint256 actualIncentiveBudget) {
+        uint256 actualDeposit;
+        {
+            // Pull from caller
+            uint256 totalDeposit = depositBudget_ + incentiveBudget_;
+            USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
+
+            // Deposit into sUSDS
+            uint256 depositedShares = SUSDS.deposit(totalDeposit, address(this));
+            actualDeposit = SUSDS.previewRedeem(depositedShares);
+        }
+
+        // Adjust the deposit and incentive budgets, based on the withdrawable amount
+        // If the amount withdrawable is less than the deposit budget, then the deposit budget is the actual deposit (and the incentive budget is 0)
+        if (actualDeposit <= depositBudget_) {
+            actualDepositBudget = actualDeposit;
+        }
+        // Otherwise, set the deposit budget to the input, and adjust the incentive budget to the difference
+        else {
+            actualDepositBudget = depositBudget_;
+            actualIncentiveBudget = actualDeposit - depositBudget_;
+        }
+
+        return (actualDepositBudget, actualIncentiveBudget);
+    }
+
     /// @notice Create a new limit order
     /// @dev    This function will revert if:
     ///         - The contract is not enabled
@@ -248,10 +283,11 @@ contract CDAuctioneerLimitOrders is
         if (minFillSize_ < auctioneerMinBid)
             revert InvalidParam("minFillSize < auctioneer minimum");
 
-        uint256 totalDeposit = depositBudget_ + incentiveBudget_;
-        USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
-        SUSDS.deposit(totalDeposit, address(this));
-        totalUsdsOwed += totalDeposit;
+        (uint256 actualDepositBudget, uint256 actualIncentiveBudget) = _deposit(
+            depositBudget_,
+            incentiveBudget_
+        );
+        totalUsdsOwed += actualDepositBudget + actualIncentiveBudget;
 
         orderId = nextOrderId++;
 
@@ -260,8 +296,8 @@ contract CDAuctioneerLimitOrders is
         _orders[orderId] = LimitOrder({
             owner: msg.sender,
             depositPeriod: depositPeriod_,
-            depositBudget: depositBudget_,
-            incentiveBudget: incentiveBudget_,
+            depositBudget: actualDepositBudget,
+            incentiveBudget: actualIncentiveBudget,
             depositSpent: 0,
             incentiveSpent: 0,
             maxPrice: maxPrice_,
@@ -273,8 +309,8 @@ contract CDAuctioneerLimitOrders is
             orderId,
             msg.sender,
             depositPeriod_,
-            depositBudget_,
-            incentiveBudget_,
+            actualDepositBudget,
+            actualIncentiveBudget,
             maxPrice_,
             minFillSize_
         );
