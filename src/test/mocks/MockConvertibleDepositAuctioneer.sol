@@ -2,12 +2,13 @@
 /// forge-lint: disable-start(screaming-snake-case-immutable)
 // solhint-disable custom-errors
 // solhint-disable immutable-vars-naming
-pragma solidity >=0.8.15;
+pragma solidity >=0.8.20;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ERC721} from "@openzeppelin-4.8.0/token/ERC721/ERC721.sol";
 
@@ -16,6 +17,7 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     int256[] internal _auctionResults;
 
     IERC20 internal immutable _depositAsset;
+    IDepositManager internal immutable _depositManager;
 
     uint256 public target;
     uint256 public tickSize;
@@ -36,7 +38,8 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
     address public positionNFT;
     uint256 public nextPositionId = 1;
 
-    constructor(Kernel kernel_, address depositAsset_) Policy(kernel_) {
+    constructor(Kernel kernel_, address depositManager_, address depositAsset_) Policy(kernel_) {
+        _depositManager = IDepositManager(depositManager_);
         _depositAsset = IERC20(depositAsset_);
     }
 
@@ -70,14 +73,22 @@ contract MockConvertibleDepositAuctioneer is IConvertibleDepositAuctioneer, Poli
         // Revert if deposit period is not enabled
         if (!depositPeriodsEnabled[depositPeriod_]) revert("Deposit period not enabled");
 
-        // Transfer deposit asset from caller (assumed to be non-zero)
-        IERC20(_depositAsset).transferFrom(msg.sender, address(this), depositAmount_);
-
         // Calculate OHM output
         ohmOut = (depositAmount_ * OHM_SCALE) / mockPrice;
         require(ohmOut >= minOhmOut_, "Slippage");
 
         actualAmount = depositAmount_ - actualAmountDifference;
+
+        // Deposit the amount into the deposit manager
+        _depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: _depositAsset,
+                depositPeriod: depositPeriod_,
+                depositor: msg.sender,
+                amount: depositAmount_,
+                shouldWrap: true
+            })
+        );
 
         // Mint receipt token (assumed to be configured for this period)
         address receiptTokenAddr = receiptTokens[depositPeriod_];

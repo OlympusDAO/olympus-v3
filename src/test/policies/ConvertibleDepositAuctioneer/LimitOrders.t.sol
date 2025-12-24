@@ -10,6 +10,7 @@ pragma solidity >=0.8.20;
 // Test
 import {Test} from "@forge-std-1.9.6/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
+import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -51,6 +52,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     MockERC20 public receiptToken12;
     MockPositionNFT public positionNFT;
     MockConvertibleDepositAuctioneer public cdAuctioneer;
+    MockDepositManager public depositManager;
     Kernel public kernel;
 
     address public owner = makeAddr("owner");
@@ -91,8 +93,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
         receiptToken12 = new MockERC20("Receipt12", "RCT12", 18);
         positionNFT = new MockPositionNFT();
 
+        // Deploy mock deposit manager
+        depositManager = new MockDepositManager(kernel, address(usds));
+
         // Deploy mock auctioneer
-        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(usds));
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(
+            kernel,
+            address(depositManager),
+            address(usds)
+        );
 
         // Configure mock auctioneer
         cdAuctioneer.setMinimumBid(MIN_BID);
@@ -114,6 +123,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         limitOrders = new CDAuctioneerLimitOrders(
             owner,
+            address(depositManager),
             address(cdAuctioneer),
             address(usds),
             address(sUsds),
@@ -3364,6 +3374,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         new CDAuctioneerLimitOrders(
             owner,
+            address(depositManager),
             address(cdAuctioneer),
             address(usds),
             address(sUsds),

@@ -314,7 +314,11 @@ contract EmissionManagerTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy the mock CD auctioneer
-            cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+            cdAuctioneer = new MockConvertibleDepositAuctioneer(
+                kernel,
+                address(0),
+                address(reserve)
+            );
 
             // Deploy the emission manager
             emissionManager = new EmissionManager(
@@ -838,7 +842,7 @@ contract EmissionManagerTest is Test {
         sReserve = new MockERC4626(reserve, "sNewReserve", "sNR");
 
         // Set up a new CDAuctioneer
-        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(0), address(reserve));
 
         // Set up an EmissionManager with a different deposit asset
         emissionManager = new EmissionManager(
@@ -3258,6 +3262,7 @@ contract EmissionManagerTest is Test {
     function test_setCDAuctionContract_differentAsset_reverts() public {
         MockConvertibleDepositAuctioneer newCDAuctioneer = new MockConvertibleDepositAuctioneer(
             kernel,
+            address(0),
             address(sReserve)
         );
 
