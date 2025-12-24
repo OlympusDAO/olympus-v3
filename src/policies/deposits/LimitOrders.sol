@@ -37,6 +37,10 @@ contract CDAuctioneerLimitOrders is
 
     // ========== IMMUTABLES ========== //
 
+    /// @notice The Deposit Manager contract
+    /// @dev    This variable is immutable
+    address public immutable DEPOSIT_MANAGER;
+
     /// @notice The Convertible Deposit Auctioneer contract
     /// @dev    This variable is immutable
     IConvertibleDepositAuctioneer public immutable CD_AUCTIONEER;
@@ -77,6 +81,7 @@ contract CDAuctioneerLimitOrders is
 
     constructor(
         address owner_,
+        address depositManager_,
         address cdAuctioneer_,
         address usds_,
         address sUsds_,
@@ -85,6 +90,7 @@ contract CDAuctioneerLimitOrders is
         uint8[] memory depositPeriods_,
         address[] memory receiptTokens_
     ) Ownable(owner_) {
+        if (depositManager_ == address(0)) revert InvalidParam("depositManager");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
         if (usds_ == address(0)) revert InvalidParam("usds");
         if (sUsds_ == address(0)) revert InvalidParam("sUsds");
@@ -92,6 +98,7 @@ contract CDAuctioneerLimitOrders is
         if (yieldRecipient_ == address(0)) revert InvalidParam("yieldRecipient");
         if (depositPeriods_.length != receiptTokens_.length) revert ArrayLengthMismatch();
 
+        DEPOSIT_MANAGER = depositManager_;
         CD_AUCTIONEER = IConvertibleDepositAuctioneer(cdAuctioneer_);
         USDS = ERC20(usds_);
         SUSDS = ERC4626(sUsds_);
@@ -436,7 +443,7 @@ contract CDAuctioneerLimitOrders is
         // Approve and execute bid
         // The fill amount is the amount of USDS that will be used for the bid, and so is used for incentive and subsequent calculations.
         // The actual amount is the quantity of receipt tokens that will be received.
-        USDS.approve(address(CD_AUCTIONEER), fillAmount_);
+        USDS.approve(address(DEPOSIT_MANAGER), fillAmount_);
         (uint256 ohmOut, uint256 positionId, , uint256 actualAmount) = CD_AUCTIONEER.bid(
             order.depositPeriod,
             fillAmount_,

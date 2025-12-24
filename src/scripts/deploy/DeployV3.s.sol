@@ -803,6 +803,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address owner = _getDeployer();
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
         address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
         address usds = _getAddressNotZero("external.tokens.USDS");
         address sUsds = _getAddressNotZero("external.tokens.sUSDS");
@@ -822,6 +823,7 @@ contract DeployV3 is WithEnvironment {
         // Log parameters
         console2.log("ConvertibleDepositAuctioneerLimitOrders parameters:");
         console2.log("  owner", owner);
+        console2.log("  depositManager", depositManager);
         console2.log("  cdAuctioneer", cdAuctioneer);
         console2.log("  usds", usds);
         console2.log("  sUsds", sUsds);
@@ -834,6 +836,7 @@ contract DeployV3 is WithEnvironment {
         vm.broadcast();
         CDAuctioneerLimitOrders limitOrders = new CDAuctioneerLimitOrders(
             owner,
+            depositManager,
             cdAuctioneer,
             usds,
             sUsds,
