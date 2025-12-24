@@ -76,21 +76,6 @@ interface ILimitOrders {
         uint256 positionId
     );
 
-    /// @notice Emitted when an order is changed
-    ///
-    /// @param  orderId         The ID of the changed order
-    /// @param  depositBudget   The new USDS budget for bids
-    /// @param  incentiveBudget The new USDS budget for filler incentives (paid proportionally)
-    /// @param  maxPrice        The new maximum execution price (USDS per OHM)
-    /// @param  minFillSize     The new minimum USDS per fill (except final fill)
-    event OrderChanged(
-        uint256 indexed orderId,
-        uint256 depositBudget,
-        uint256 incentiveBudget,
-        uint256 maxPrice,
-        uint256 minFillSize
-    );
-
     /// @notice Emitted when an order is cancelled
     ///
     /// @param  orderId         The ID of the cancelled order
@@ -212,29 +197,6 @@ interface ILimitOrders {
         uint256 maxPrice_,
         uint256 minFillSize_
     ) external returns (uint256 orderId);
-
-    /// @notice Modify an existing limit order (resets spent amounts)
-    /// @dev    Functionally equivalent to cancel + create but preserves order ID
-    ///
-    ///         This function will revert if:
-    ///         - The contract is not enabled
-    ///         - The caller is not the order owner
-    ///         - The order is not active
-    ///         - The new deposit budget, max price, or min fill size is invalid
-    ///         - The new min fill size is below the auctioneer minimum bid
-    ///
-    /// @param  orderId_            The ID of the order to modify
-    /// @param  newDepositBudget_   New deposit budget
-    /// @param  newIncentiveBudget_ New incentive budget
-    /// @param  newMaxPrice_        New max price
-    /// @param  newMinFillSize_     New min fill size
-    function changeOrder(
-        uint256 orderId_,
-        uint256 newDepositBudget_,
-        uint256 newIncentiveBudget_,
-        uint256 newMaxPrice_,
-        uint256 newMinFillSize_
-    ) external;
 
     /// @notice Fill a limit order
     /// @dev    This function will revert if:
