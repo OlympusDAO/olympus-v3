@@ -7,6 +7,7 @@ import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertible
 import {ILimitOrders} from "../interfaces/deposits/ILimitOrders.sol";
 import {IVersioned} from "../../interfaces/IVersioned.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC721Receiver} from "@openzeppelin-5.3.0/token/ERC721/IERC721Receiver.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
@@ -26,6 +27,7 @@ import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 contract CDAuctioneerLimitOrders is
     ILimitOrders,
     IVersioned,
+    IERC721Receiver,
     ReentrancyGuardTransient,
     Ownable,
     PeripheryEnabler
@@ -752,7 +754,7 @@ contract CDAuctioneerLimitOrders is
         address,
         uint256,
         bytes calldata
-    ) external pure returns (bytes4) {
+    ) external pure override returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
@@ -763,6 +765,7 @@ contract CDAuctioneerLimitOrders is
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(ILimitOrders).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
+            interfaceId == type(IERC721Receiver).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
