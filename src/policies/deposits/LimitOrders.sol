@@ -293,7 +293,9 @@ contract CDAuctioneerLimitOrders is
         );
         totalUsdsOwed += actualDepositBudget + actualIncentiveBudget;
 
-        orderId = nextOrderId++;
+        unchecked {
+            orderId = nextOrderId++;
+        }
 
         _ordersForUser[msg.sender].push(orderId);
 
@@ -333,7 +335,7 @@ contract CDAuctioneerLimitOrders is
         LimitOrder storage order_,
         uint256 fillAmount_
     ) internal view returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
-        remainingDeposit = order_.depositBudget - order_.depositSpent;
+            remainingDeposit = order_.depositBudget - order_.depositSpent;
 
         // Cap fill to remaining deposit budget
         cappedFill = fillAmount_ > remainingDeposit ? remainingDeposit : fillAmount_;
@@ -399,8 +401,8 @@ contract CDAuctioneerLimitOrders is
         // Withdraw USDS from sUSDS and update accounting
         uint256 usdsNeeded = fillAmount_ + incentive;
         SUSDS.withdraw(usdsNeeded, address(this), address(this));
-        order.depositSpent += fillAmount_;
-        order.incentiveSpent += incentive;
+            order.depositSpent += fillAmount_;
+            order.incentiveSpent += incentive;
         totalUsdsOwed -= usdsNeeded;
 
         // Approve and execute bid
@@ -431,7 +433,10 @@ contract CDAuctioneerLimitOrders is
         emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
 
         // Calculate remaining deposit after fill and return
-        return (fillAmount_, incentive, remainingDepositBefore - fillAmount_);
+        unchecked {
+            // No underflow: fillAmount_ is capped to remainingDepositBefore in _calculateFillAndIncentive
+            return (fillAmount_, incentive, remainingDepositBefore - fillAmount_);
+        }
     }
 
     /// @notice Cancel an active order and return remaining funds
