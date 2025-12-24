@@ -17,6 +17,7 @@ import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
 import {ERC4626} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC4626.sol";
 import {ERC721Utils} from "@openzeppelin-5.3.0/token/ERC721/utils/ERC721Utils.sol";
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 
 /// @title  CDAuctioneer Limit Orders
@@ -33,6 +34,7 @@ contract CDAuctioneerLimitOrders is
     PeripheryEnabler
 {
     using SafeERC20 for ERC20;
+    using Math for uint256;
 
     // ========== CONSTANTS ========== //
 
@@ -625,9 +627,9 @@ contract CDAuctioneerLimitOrders is
     function getRemaining(
         uint256 orderId_
     ) external view returns (uint256 deposit, uint256 incentive) {
-        LimitOrder memory order = _orders[orderId_];
-        deposit = order.depositBudget - order.depositSpent;
-        incentive = order.incentiveBudget - order.incentiveSpent;
+        LimitOrder storage order = _orders[orderId_];
+        deposit = order.depositBudget.saturatingSub(order.depositSpent);
+        incentive = order.incentiveBudget.saturatingSub(order.incentiveSpent);
     }
 
     /// @notice Get current execution price for a fill amount
