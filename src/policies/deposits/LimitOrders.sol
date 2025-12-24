@@ -178,8 +178,7 @@ contract CDAuctioneerLimitOrders is
         }
 
         // Check if deposit period is enabled in auctioneer
-        (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
-        if (!isEnabled) revert DepositPeriodNotEnabled();
+        _requireEnabledDepositPeriod(depositPeriod_);
 
         // Set the receipt token
         receiptTokens[depositPeriod_] = ERC20(receiptToken_);
@@ -279,8 +278,7 @@ contract CDAuctioneerLimitOrders is
             revert ReceiptTokenNotConfigured();
         }
 
-        (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
-        if (!isEnabled) revert DepositPeriodNotEnabled();
+        _requireEnabledDepositPeriod(depositPeriod_);
 
         // Verify that the caller/owner can receive ERC721 tokens
         ERC721Utils.checkOnERC721Received(msg.sender, address(this), msg.sender, 0, "");
@@ -388,13 +386,7 @@ contract CDAuctioneerLimitOrders is
             revert FillBelowMinimum();
         }
 
-        // Check that the deposit period is enabled
-        {
-            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
-                order.depositPeriod
-            );
-            if (!isDepositPeriodEnabled) revert DepositPeriodNotEnabled();
-        }
+        _requireEnabledDepositPeriod(order.depositPeriod);
         // Check that the receipt token is still configured
         if (address(receiptTokens[order.depositPeriod]) == address(0))
             revert ReceiptTokenNotConfigured();
@@ -720,6 +712,12 @@ contract CDAuctioneerLimitOrders is
         // receipt token configured, order not fully spent, min fill size, and price checks
         (bool canFill, , ) = canFillOrder(orderId_, checkAmount);
         return canFill;
+    }
+
+    // Requires that the deposit period be enabled in the auctioneer
+    function _requireEnabledDepositPeriod(uint8 depositPeriod_) private view {
+        (bool enabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
+        if (!enabled) revert DepositPeriodNotEnabled();
     }
 
     // ========== ENABLER FUNCTIONS ========== //
