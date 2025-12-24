@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Test
@@ -175,3 +176,4 @@ contract LimitOrdersForkTest is Test {
         assertEq(incentiveRemaining, 0, "Incentive remaining should be zero");
     }
 }
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
