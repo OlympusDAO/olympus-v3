@@ -672,17 +672,19 @@ contract CDAuctioneerLimitOrders is
         uint256 index0,
         uint256 index1
     ) internal view returns (uint256[] memory) {
+        bool[] memory isOrderFillable = new bool[](index1);
         uint256 count = 0;
         for (uint256 i = index0; i < index1; i++) {
-            if (_isOrderFillable(i, depositPeriod_)) {
-                count++;
+            isOrderFillable[i] = _isOrderFillable(i, depositPeriod_);
+            if (isOrderFillable[i]) {
+                ++count;
             }
         }
 
         uint256[] memory fillable = new uint256[](count);
         uint256 index = 0;
         for (uint256 i = index0; i < index1; i++) {
-            if (_isOrderFillable(i, depositPeriod_)) {
+            if (isOrderFillable[i]) {
                 fillable[index++] = i;
             }
         }
