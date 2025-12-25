@@ -418,7 +418,7 @@ contract CDAuctioneerLimitOrders is
         );
 
         // Transfer position NFT and receipt tokens to order owner
-        POSITION_NFT.transferFrom(address(this), order.owner, positionId);
+        POSITION_NFT.safeTransferFrom(address(this), order.owner, positionId);
         if (actualAmount > 0) {
             receiptTokens[order.depositPeriod].safeTransfer(order.owner, actualAmount);
         }
