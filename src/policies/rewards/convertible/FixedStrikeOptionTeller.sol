@@ -5,7 +5,6 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
 
 import {IFixedStrikeOptionTeller, IOptionTeller} from "src/policies/rewards/convertible/interfaces/IFixedStrikeOptionTeller.sol";
@@ -14,32 +13,19 @@ import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStri
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
-/// @title Fixed Strike Option Teller
-/// @notice Fixed Strike Option Teller Contract
-/// @dev Option Teller contracts handle the deployment, creation, and exercise of option tokens.
-///      Option Tokens are ERC20 tokens that represent the right to buy (call) or sell (put) a fixed
-///      amount of an asset (payout token) for an amount of another asset (quote token) between two
-///      timestamps (eligible and expiry). Option Tokens are denominated in units of the payout token
-///      and are created at a 1:1 ratio for the amount of payout tokens to buy or sell.
-///      The amount of quote tokens required to exercise (call) or collateralize (put) an option token
-///      is called the strike price. Strike prices are denominated in units of the quote token.
-///      The Fixed Strike Option Teller implementation creates option tokens that have a fixed strike
-///      price that is set at the time of creation.
-///
-///      In order to create option tokens, an issuer must deploy the specific token configuration on
-///      the teller, and then provide collateral to the teller to mint option tokens. The collateral is
-///      required to guarantee that the option tokens can be exercised. The collateral required depends on
-///      the option type. For call options, the collateral required is an amount of payout tokens equivalent
-///      to the amount of option tokens being minted. For put options, the collateral required is an amount
-///      of quote tokens equivalent to the amount of option tokens being minted multipled by the strike price.
-///      As the name "option" suggests, the holder of an option token has the right, but not the obligation,
-///      to exercise the option token within the eligible time window. If the option token is not exercised,
-///      the designated "receiver" of the option token exercise proceeds can reclaim the collateral after
-///      the expiry timestamp. If an option token is exercised, the holder receives the collateral and the
-///      receiver receives the exercise proceeds.
-///
-/// @author Bond Protocol
-contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGuard {
+// Bophades
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+
+contract FixedStrikeOptionTeller is
+    IFixedStrikeOptionTeller,
+    Policy,
+    PolicyEnabler,
+    ReentrancyGuard
+{
     using TransferHelper for ERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
@@ -70,6 +56,14 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         uint256 strikePrice
     );
 
+    // ========== CONSTANTS ========== //
+
+    /// @notice Role for deploying new token types
+    bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
+
+    /// @notice Role for minting tokens to users
+    bytes32 public constant ROLE_TELLER_MINTER = "convertible_minter";
+
     /* ========== STATE VARIABLES ========== */
 
     /// @notice Fee paid to protocol when options are exercised in basis points (3 decimal places).
@@ -93,11 +87,16 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
     /// @notice Whether the receiver of an option token has reclaimed the collateral
     mapping(FixedStrikeOptionToken => bool) public collateralClaimed;
 
+    /// @notice MINTR module for minting OHM
+    MINTRv1 public MINTR;
+
+    /// @notice TRSRY module for receiving USDS
+    TRSRYv1 public TRSRY;
+
     /* ========== CONSTRUCTOR ========== */
 
-    /// @param guardian_    Address of the guardian for Auth
-    /// @param authority_   Address of the authority for Auth
-    constructor(address guardian_, Authority authority_) Auth(guardian_, authority_) {
+    /// @param kernel_ The address of the Olympus kernel
+    constructor(address kernel_) Policy(Kernel(kernel_)) {
         // Explicitly setting protocol fee to zero initially
         protocolFee = 0;
 
@@ -108,6 +107,38 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         optionTokenImplementation = new FixedStrikeOptionToken();
     }
 
+    // ========== POLICY CONFIGURATION ========== //
+
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](3);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("MINTR");
+        dependencies[2] = toKeycode("TRSRY");
+
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
+        return dependencies;
+    }
+
+    /// @inheritdoc Policy
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory permissions)
+    {
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(toKeycode("MINTR"), MINTR.mintOhm.selector);
+        return permissions;
+    }
+
+    /// @notice Returns the version of this policy
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        return (1, 0);
+    }
+
     /* ========== CREATE OPTION TOKENS ========== */
 
     /// @inheritdoc IFixedStrikeOptionTeller
@@ -116,10 +147,16 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
-    ) external override nonReentrant returns (FixedStrikeOptionToken) {
+    )
+        external
+        override
+        onlyEnabled
+        onlyRole(ROLE_TELLER_ADMIN)
+        nonReentrant
+        returns (FixedStrikeOptionToken)
+    {
         // If eligible is zero, use current timestamp
         if (eligible_ == 0) eligible_ = uint48(block.timestamp);
 
@@ -143,7 +180,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             revert Teller_InvalidParams(0, abi.encodePacked(payoutToken_));
         if (address(quoteToken_) == address(0) || address(quoteToken_).code.length == 0)
             revert Teller_InvalidParams(1, abi.encodePacked(quoteToken_));
-        if (receiver_ == address(0)) revert Teller_InvalidParams(4, abi.encodePacked(receiver_));
 
         // Revert if strike price is zero or out of bounds
         uint8 quoteDecimals = quoteToken_.decimals();
@@ -160,7 +196,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken_,
             eligible_,
             expiry_,
-            receiver_,
             call_,
             strikePrice_
         );
@@ -174,7 +209,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
                 quoteToken_,
                 eligible_,
                 expiry_,
-                receiver_,
                 call_,
                 strikePrice_
             );
@@ -192,7 +226,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
                 quoteToken_,
                 eligible_,
                 expiry_,
-                receiver_,
+                address(TRSRY),
                 call_,
                 strikePrice_
             );
@@ -205,7 +239,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) internal returns (FixedStrikeOptionToken) {
@@ -233,7 +266,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
                         quoteToken_,
                         eligible_,
                         expiry_,
-                        receiver_,
+                        address(TRSRY),
                         call_,
                         address(this),
                         strikePrice_
@@ -246,7 +279,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
     function create(
         FixedStrikeOptionToken optionToken_,
         uint256 amount_
-    ) external override nonReentrant {
+    ) external override onlyEnabled onlyRole(ROLE_TELLER_MINTER) nonReentrant {
         // Load option parameters
         (
             uint8 decimals,
@@ -254,7 +287,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             ERC20 quoteToken,
             uint48 eligible,
             uint48 expiry,
-            address receiver,
+            ,
             bool call,
             uint256 strikePrice
         ) = optionToken_.getOptionParameters();
@@ -266,7 +299,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken,
             eligible,
             expiry,
-            receiver,
             call,
             strikePrice
         );
@@ -316,7 +348,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
     function exercise(
         FixedStrikeOptionToken optionToken_,
         uint256 amount_
-    ) external override nonReentrant {
+    ) external override onlyEnabled nonReentrant {
         // Load option parameters
         (
             uint8 decimals,
@@ -336,7 +368,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken,
             eligible,
             expiry,
-            receiver,
             call,
             strikePrice
         );
@@ -431,7 +462,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken,
             eligible,
             expiry,
-            receiver,
             call,
             strikePrice
         );
@@ -476,7 +506,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             ERC20 quoteToken,
             uint48 eligible,
             uint48 expiry,
-            address receiver,
+            ,
             bool call,
             uint256 strikePrice
         ) = optionToken_.getOptionParameters();
@@ -488,7 +518,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken,
             eligible,
             expiry,
-            receiver,
             call,
             strikePrice
         );
@@ -511,7 +540,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) public view returns (FixedStrikeOptionToken) {
@@ -526,7 +554,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
             quoteToken_,
             eligible,
             expiry,
-            receiver_,
             call_,
             strikePrice_
         );
@@ -545,7 +572,6 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) external pure returns (bytes32) {
@@ -555,15 +581,7 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         uint48 expiry = uint48(expiry_ / 1 days) * 1 days;
 
         return
-            _getOptionTokenHash(
-                payoutToken_,
-                quoteToken_,
-                eligible,
-                expiry,
-                receiver_,
-                call_,
-                strikePrice_
-            );
+            _getOptionTokenHash(payoutToken_, quoteToken_, eligible, expiry, call_, strikePrice_);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -573,21 +591,12 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) internal pure returns (bytes32) {
         return
             keccak256(
-                abi.encodePacked(
-                    payoutToken_,
-                    quoteToken_,
-                    eligible_,
-                    expiry_,
-                    receiver_,
-                    call_,
-                    strikePrice_
-                )
+                abi.encodePacked(payoutToken_, quoteToken_, eligible_, expiry_, call_, strikePrice_)
             );
     }
 
@@ -786,32 +795,34 @@ contract FixedStrikeOptionTeller is IFixedStrikeOptionTeller, Auth, ReentrancyGu
     /* ========== ADMIN & FEES ========== */
 
     /// @inheritdoc IOptionTeller
-    function setMinOptionDuration(uint48 duration_) external override requiresAuth {
+    function setMinOptionDuration(
+        uint48 duration_
+    ) external override onlyEnabled onlyRole(ROLE_TELLER_MINTER) {
         // Must be a minimum of 1 day due to timestamp rounding
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minOptionDuration = duration_;
     }
 
-    /// @inheritdoc IOptionTeller
-    function setProtocolFee(uint48 fee_) external override requiresAuth {
-        if (fee_ > 5e3) revert Teller_InvalidParams(0, abi.encodePacked(fee_)); // 5% max
-        protocolFee = fee_;
-    }
+    // /// @inheritdoc IOptionTeller
+    // function setProtocolFee(uint48 fee_) external override requiresAuth {
+    //     if (fee_ > 5e3) revert Teller_InvalidParams(0, abi.encodePacked(fee_)); // 5% max
+    //     protocolFee = fee_;
+    // }
 
-    /// @inheritdoc IOptionTeller
-    function claimFees(
-        ERC20[] memory tokens_,
-        address to_
-    ) external override nonReentrant requiresAuth {
-        uint256 len = tokens_.length;
-        for (uint256 i; i < len; ++i) {
-            ERC20 token = tokens_[i];
-            uint256 send = fees[token];
+    // /// @inheritdoc IOptionTeller
+    // function claimFees(
+    //     ERC20[] memory tokens_,
+    //     address to_
+    // ) external override nonReentrant requiresAuth {
+    //     uint256 len = tokens_.length;
+    //     for (uint256 i; i < len; ++i) {
+    //         ERC20 token = tokens_[i];
+    //         uint256 send = fees[token];
 
-            if (send != 0) {
-                fees[token] = 0;
-                token.safeTransfer(to_, send);
-            }
-        }
-    }
+    //         if (send != 0) {
+    //             fees[token] = 0;
+    //             token.safeTransfer(to_, send);
+    //         }
+    //     }
+    // }
 }

@@ -14,7 +14,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
     /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
     /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
     /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param receiver_    Address that will receive the proceeds when option tokens are exercised. Also the address that can claim collateral from unexercised options.
     /// @param call_        Whether the option token is a call (true) or a put (false)
     /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
     /// @return             Address of the ERC20 fixed strike option token being created
@@ -23,7 +22,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) external returns (FixedStrikeOptionToken);
@@ -64,7 +62,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
     /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
     /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
     /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param receiver_    Address that will receive the proceeds when option tokens are exercised. Also the address that can claim collateral from unexercised options.
     /// @param call_        Whether the option token is a call (true) or a put (false)
     /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
     /// @return token_      FixedStrikeOptionToken contract address
@@ -73,7 +70,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) external view returns (FixedStrikeOptionToken);
@@ -83,7 +79,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
     /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
     /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
     /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param receiver_    Address that will receive the proceeds when option tokens are exercised. Also the address that can claim collateral from unexercised options.
     /// @param call_        Whether the option token is a call (true) or a put (false)
     /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
     /// @return hash_       Hash ID of the fixed strike option token with these parameters
@@ -92,7 +87,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        address receiver_,
         bool call_,
         uint256 strikePrice_
     ) external view returns (bytes32);

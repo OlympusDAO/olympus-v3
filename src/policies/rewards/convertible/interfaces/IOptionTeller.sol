@@ -12,16 +12,16 @@ interface IOptionTeller {
     /// @param duration_ Minimum duration in seconds
     function setMinOptionDuration(uint48 duration_) external;
 
-    /// @notice         Set protocol fee
-    /// @notice         Access controlled
-    /// @param fee_     Protocol fee in basis points (3 decimal places)
-    function setProtocolFee(uint48 fee_) external;
+    // /// @notice         Set protocol fee
+    // /// @notice         Access controlled
+    // /// @param fee_     Protocol fee in basis points (3 decimal places)
+    // function setProtocolFee(uint48 fee_) external;
 
-    /// @notice         Claim fees accrued by protocol in the input tokens and sends them to the provided address
-    /// @notice         Access controlled
-    /// @param tokens_  Array of tokens to claim fees for
-    /// @param to_      Address to send fees to
-    function claimFees(ERC20[] memory tokens_, address to_) external;
+    // /// @notice         Claim fees accrued by protocol in the input tokens and sends them to the provided address
+    // /// @notice         Access controlled
+    // /// @param tokens_  Array of tokens to claim fees for
+    // /// @param to_      Address to send fees to
+    // function claimFees(ERC20[] memory tokens_, address to_) external;
 
     /// @notice         Minimum duration an option must be eligible for exercise for (in seconds)
     function minOptionDuration() external view returns (uint48);
