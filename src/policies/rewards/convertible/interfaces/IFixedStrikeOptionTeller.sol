@@ -4,8 +4,8 @@ pragma solidity >=0.8.0;
 // Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IOptionTeller} from "src/interfaces/IOptionTeller.sol";
-import {FixedStrikeOptionToken} from "src/fixed-strike/FixedStrikeOptionToken.sol";
+import {IOptionTeller} from "src/policies/rewards/convertible/interfaces/IOptionTeller.sol";
+import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
 
 interface IFixedStrikeOptionTeller is IOptionTeller {
     /// @notice             Deploy a new ERC20 fixed strike option token and return its address

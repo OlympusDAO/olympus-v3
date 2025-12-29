@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 // Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/FixedStrikeOptionToken-strike/FixedStrikeOptionTeller.sol`
 
-import {OptionToken, ERC20} from "src/bases/OptionToken.sol";
+import {OptionToken, ERC20} from "src/policies/rewards/convertible/bases/OptionToken.sol";
 
 /// @title Fixed Strike Option Token
 /// @notice Fixed Strike Option Token Contract (ERC-20 compatible)

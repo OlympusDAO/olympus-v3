@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 // Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol`
 
-import {Clone} from "src/lib/clones/Clone.sol";
+import {Clone} from "src/policies/rewards/convertible/lib/clones//Clone.sol";
 
 /// @notice Modern and gas efficient ERC20 implementation.
 /// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/tokens/ERC20.sol)

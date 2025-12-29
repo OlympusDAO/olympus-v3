@@ -6,13 +6,13 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
-import {ClonesWithImmutableArgs} from "src/lib/clones/ClonesWithImmutableArgs.sol";
+import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
 
-import {IFixedStrikeOptionTeller, IOptionTeller} from "src/interfaces/IFixedStrikeOptionTeller.sol";
-import {FixedStrikeOptionToken} from "src/fixed-strike/FixedStrikeOptionToken.sol";
+import {IFixedStrikeOptionTeller, IOptionTeller} from "src/policies/rewards/convertible/interfaces/IFixedStrikeOptionTeller.sol";
+import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
 
-import {TransferHelper} from "src/lib/TransferHelper.sol";
-import {FullMath} from "src/lib/FullMath.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 /// @title Fixed Strike Option Teller
 /// @notice Fixed Strike Option Teller Contract
