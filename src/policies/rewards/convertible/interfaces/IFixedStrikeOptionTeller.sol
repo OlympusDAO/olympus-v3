@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-// Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
+// Based on Bond Protocol's `IFixedStrikeOptionTeller`:
+// `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IOptionTeller} from "src/policies/rewards/convertible/interfaces/IOptionTeller.sol";
@@ -39,11 +40,6 @@ interface IFixedStrikeOptionTeller is IOptionTeller {
     /// @dev                 are burned and collateral sent back to receiver, but proceeds are not required.
     /// @dev                 This allows unwrapping option tokens that aren't used prior to expiry.
     function exercise(FixedStrikeOptionToken optionToken_, uint256 amount_) external;
-
-    /// @notice              Reclaim collateral from expired option tokens
-    /// @notice              Only callable by the option token receiver address
-    /// @param optionToken_  Fixed strike option token to reclaim collateral from
-    function reclaim(FixedStrikeOptionToken optionToken_) external;
 
     /* ========== VIEWS ========== */
 

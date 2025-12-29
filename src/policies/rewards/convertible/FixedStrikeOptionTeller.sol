@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.15;
 
-// Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
+// Based on Bond Protocol's `FixedStrikeOptionTeller`:
+// `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -32,19 +33,14 @@ contract FixedStrikeOptionTeller is
 
     /* ========== ERRORS ========== */
 
-    error Teller_NotAuthorized();
     error Teller_TokenDoesNotExist(bytes32 optionHash);
     error Teller_UnsupportedToken(address token);
     error Teller_InvalidParams(uint256 index, bytes value);
     error Teller_OptionExpired(uint48 expiry);
     error Teller_NotEligible(uint48 eligible);
-    error Teller_NotExpired(uint48 expiry);
-    error Teller_AlreadyReclaimed(FixedStrikeOptionToken optionToken);
-    error Teller_PriceOutOfBounds();
     error Teller_InvalidAmount();
 
     /* ========== EVENTS ========== */
-    event WroteOption(uint256 indexed id, address indexed referrer, uint256 amount, uint256 payout);
     event OptionTokenCreated(
         FixedStrikeOptionToken optionToken,
         ERC20 indexed payoutToken,
@@ -56,7 +52,7 @@ contract FixedStrikeOptionTeller is
         uint256 strikePrice
     );
 
-    // ========== CONSTANTS ========== //
+    // ========== CONSTANTS & IMMUTABLES ========== //
 
     /// @notice Role for deploying new token types
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
@@ -64,28 +60,10 @@ contract FixedStrikeOptionTeller is
     /// @notice Role for minting tokens to users
     bytes32 public constant ROLE_TELLER_MINTER = "convertible_minter";
 
-    /* ========== STATE VARIABLES ========== */
-
-    /// @notice Fee paid to protocol when options are exercised in basis points (3 decimal places).
-    uint48 public protocolFee;
-
-    /// @notice Base value used to scale fees. 1e5 = 100%
-    uint48 public constant FEE_DECIMALS = 1e5; // one percent equals 1000.
-
     /// @notice FixedStrikeOptionToken reference implementation (deployed on creation to clone from)
     FixedStrikeOptionToken public immutable optionTokenImplementation;
 
-    /// @notice Minimum duration an option must be eligible to exercise (in seconds)
-    uint48 public minOptionDuration;
-
-    /// @notice Fees earned by protocol, by token
-    mapping(ERC20 => uint256) public fees;
-
-    /// @notice Fixed strike option tokens (hash of parameters to address)
-    mapping(bytes32 => FixedStrikeOptionToken) public optionTokens;
-
-    /// @notice Whether the receiver of an option token has reclaimed the collateral
-    mapping(FixedStrikeOptionToken => bool) public collateralClaimed;
+    // ========== STATE VARIABLES ========== //
 
     /// @notice MINTR module for minting OHM
     MINTRv1 public MINTR;
@@ -93,13 +71,16 @@ contract FixedStrikeOptionTeller is
     /// @notice TRSRY module for receiving USDS
     TRSRYv1 public TRSRY;
 
+    /// @notice Minimum duration an option must be eligible to exercise (in seconds)
+    uint48 public minOptionDuration;
+
+    /// @notice Fixed strike option tokens (hash of parameters to address)
+    mapping(bytes32 => FixedStrikeOptionToken) public optionTokens;
+
     /* ========== CONSTRUCTOR ========== */
 
     /// @param kernel_ The address of the Olympus kernel
     constructor(address kernel_) Policy(Kernel(kernel_)) {
-        // Explicitly setting protocol fee to zero initially
-        protocolFee = 0;
-
         // Set minimum option duration initially to 1 day (the absolute minimum given timestamp rounding)
         minOptionDuration = uint48(1 days);
 
@@ -389,10 +370,6 @@ contract FixedStrikeOptionTeller is
             // If call, transfer in quote tokens equivalent to the amount of option tokens being exercised * strike price
             // If put, transfer in payout tokens equivalent to the amount of option tokens being exercised
             if (call) {
-                // Calculate protocol fee
-                uint256 fee = (quoteAmount * protocolFee) / FEE_DECIMALS;
-                fees[quoteToken] += fee;
-
                 // Transfer proceeds from user
                 // Check balances before and after transfer to ensure that the correct amount was transferred
                 // @audit this does enable potential malicious option tokens that can't be exercised
@@ -405,13 +382,9 @@ contract FixedStrikeOptionTeller is
                         revert Teller_UnsupportedToken(address(quoteToken));
                 }
 
-                // Transfer proceeds minus fee to receiver
-                quoteToken.safeTransfer(receiver, quoteAmount - fee);
+                // Transfer proceeds to receiver
+                quoteToken.safeTransfer(receiver, quoteAmount);
             } else {
-                // Calculate protocol fee (in payout tokens)
-                uint256 fee = (amount_ * protocolFee) / FEE_DECIMALS;
-                fees[payoutToken] += fee;
-
                 // Transfer proceeds from user
                 // Check balances before and after transfer to ensure that the correct amount was transferred
                 // @audit this does enable potential malicious option tokens that can't be exercised
@@ -424,8 +397,8 @@ contract FixedStrikeOptionTeller is
                         revert Teller_UnsupportedToken(address(payoutToken));
                 }
 
-                // Transfer proceeds minus fee to receiver
-                payoutToken.safeTransfer(receiver, amount_ - fee);
+                // Transfer proceeds to receiver
+                payoutToken.safeTransfer(receiver, amount_);
             }
         }
 
@@ -438,57 +411,6 @@ contract FixedStrikeOptionTeller is
         } else {
             // Transfer quote tokens to user
             quoteToken.safeTransfer(msg.sender, quoteAmount);
-        }
-    }
-
-    /// @inheritdoc IFixedStrikeOptionTeller
-    function reclaim(FixedStrikeOptionToken optionToken_) external override nonReentrant {
-        // Load option parameters
-        (
-            uint8 decimals,
-            ERC20 payoutToken,
-            ERC20 quoteToken,
-            uint48 eligible,
-            uint48 expiry,
-            address receiver,
-            bool call,
-            uint256 strikePrice
-        ) = optionToken_.getOptionParameters();
-
-        // Retrieve the internally stored option token with this configuration
-        // Reverts internally if token doesn't exist
-        FixedStrikeOptionToken optionToken = getOptionToken(
-            payoutToken,
-            quoteToken,
-            eligible,
-            expiry,
-            call,
-            strikePrice
-        );
-
-        // Revert if token does not match stored token
-        if (optionToken_ != optionToken) revert Teller_UnsupportedToken(address(optionToken_));
-
-        // Revert if not expired
-        if (uint48(block.timestamp) < expiry) revert Teller_NotExpired(expiry);
-
-        // Revert if caller is not receiver
-        if (msg.sender != receiver) revert Teller_NotAuthorized();
-
-        // Revert if collateral has already been reclaimed
-        if (collateralClaimed[optionToken]) revert Teller_AlreadyReclaimed(optionToken);
-
-        // Set collateral as reclaimed
-        collateralClaimed[optionToken] = true;
-
-        // Transfer remaining collateral to receiver
-        uint256 amount = optionToken.totalSupply();
-        if (call) {
-            payoutToken.safeTransfer(receiver, amount);
-        } else {
-            // Calculate amount of quote tokens equivalent to amount at strike price
-            uint256 quoteAmount = amount.mulDivUp(strikePrice, 10 ** decimals);
-            quoteToken.safeTransfer(receiver, quoteAmount);
         }
     }
 
@@ -802,27 +724,4 @@ contract FixedStrikeOptionTeller is
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minOptionDuration = duration_;
     }
-
-    // /// @inheritdoc IOptionTeller
-    // function setProtocolFee(uint48 fee_) external override requiresAuth {
-    //     if (fee_ > 5e3) revert Teller_InvalidParams(0, abi.encodePacked(fee_)); // 5% max
-    //     protocolFee = fee_;
-    // }
-
-    // /// @inheritdoc IOptionTeller
-    // function claimFees(
-    //     ERC20[] memory tokens_,
-    //     address to_
-    // ) external override nonReentrant requiresAuth {
-    //     uint256 len = tokens_.length;
-    //     for (uint256 i; i < len; ++i) {
-    //         ERC20 token = tokens_[i];
-    //         uint256 send = fees[token];
-
-    //         if (send != 0) {
-    //             fees[token] = 0;
-    //             token.safeTransfer(to_, send);
-    //         }
-    //     }
-    // }
 }
