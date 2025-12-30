@@ -345,7 +345,6 @@ contract MigratorForkTest is Test {
     OwnedERC20 public antiOHM;
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
-    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     uint256 public constant BLOCKS_NEEDED_FOR_QUEUE = 6000;
     uint256 public constant BLOCK_NUMBER = 24070000;
 
@@ -367,8 +366,11 @@ contract MigratorForkTest is Test {
         vm.prank(DAO_MS);
         treasury.queue(OlympusTreasury.MANAGING.RESERVETOKEN, address(antiOHM));
 
-        // Confirm that DAO MS is not a reward manager
-        assertFalse(treasury.isRewardManager(DAO_MS), "DAO MS should not be a reward manager");
+        // Confirm that DAO MS is not a reward depositor
+        assertFalse(
+            treasury.isReserveDepositor(DAO_MS),
+            "DAO MS should not be a reserve depositor"
+        );
 
         // Add DAO MS as a reserve depositor
         vm.prank(DAO_MS);
@@ -408,6 +410,7 @@ contract MigratorForkTest is Test {
         console2.log("OHMv1 oldSupply (9 dp):", migrator.oldSupply());
         console2.log("OHMv1 total supply (9 dp):", OHMv1.totalSupply());
         uint256 maxMintableOHM = migrator.oldSupply() - OHMv1.totalSupply();
+        console2.log("maxMintableOHM (9 dp):", maxMintableOHM);
 
         // 1e9 OHM = 21403507467877949 gOHM (18 dp)
         // 274831988545473 OHM can be converted into how much gOHM?
