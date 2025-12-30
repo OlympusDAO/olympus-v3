@@ -362,7 +362,11 @@ contract MigratorForkTest is Test {
     }
 
     function test_migrate() public {
+        console2.log("");
+        console2.log("====== Setting up treasury...");
+
         // Add antiOHM as a reserve token
+        console2.log("Adding antiOHM as a reserve token...");
         vm.prank(DAO_MS);
         treasury.queue(OlympusTreasury.MANAGING.RESERVETOKEN, address(antiOHM));
 
@@ -373,13 +377,16 @@ contract MigratorForkTest is Test {
         );
 
         // Add DAO MS as a reserve depositor
+        console2.log("Adding DAO MS as a reserve depositor...");
         vm.prank(DAO_MS);
         treasury.queue(OlympusTreasury.MANAGING.RESERVEDEPOSITOR, DAO_MS);
 
         // Warp forward to the timelock expiry
+        console2.log("Warpping forward to the timelock expiry...");
         vm.roll(BLOCK_NUMBER + BLOCKS_NEEDED_FOR_QUEUE + 1);
 
         // Toggle antiOHM as a reserve token
+        console2.log("Enabling antiOHM as a reserve token...");
         vm.prank(DAO_MS);
         treasury.toggle(OlympusTreasury.MANAGING.RESERVETOKEN, address(antiOHM), address(0));
 
@@ -387,14 +394,18 @@ contract MigratorForkTest is Test {
         assertTrue(treasury.isReserveToken(address(antiOHM)), "antiOHM should be a reserve token");
 
         // Toggle DAO MS as a reserve depositor
+        console2.log("Enabling DAO MS as a reserve depositor...");
         vm.prank(DAO_MS);
         treasury.toggle(OlympusTreasury.MANAGING.RESERVEDEPOSITOR, DAO_MS, address(0));
 
         // Verify that DAO MS is a reserve depositor
         assertTrue(treasury.isReserveDepositor(DAO_MS), "DAO MS should be a reserve depositor");
 
+        console2.log("");
+        console2.log("====== Minting OHM v1...");
+
         // Excess reserves is 65659757174924
-        console2.log("excess reserves (18 dp):", treasury.excessReserves());
+        console2.log("Treasury excess reserves (18 dp):", treasury.excessReserves());
 
         // OHM valuation of antiOHM is 1:1 in OHM decimals
         assertEq(
@@ -444,6 +455,9 @@ contract MigratorForkTest is Test {
         console2.log("OHM balance of DAO MS (9 dp):", OHMv1.balanceOf(DAO_MS));
         assertEq(OHMv1.balanceOf(DAO_MS), maxOHM, "DAO MS should have received 100 OHM");
 
+        console2.log("");
+        console2.log("====== Migrating OHM v1 to gOHM...");
+
         uint256 gOHMBalanceBefore = gOHM.balanceOf(DAO_MS);
         console2.log("gOHM balance of DAO MS before migration (18 dp):", gOHMBalanceBefore);
 
@@ -464,5 +478,11 @@ contract MigratorForkTest is Test {
 
         // gOHM balance of migrator
         console2.log("gOHM balance of migrator (18 dp):", gOHM.balanceOf(address(migrator)));
+
+        // OHM balance of DAO MS
+        console2.log("OHM balance of DAO MS (9 dp):", OHMv1.balanceOf(DAO_MS));
+
+        // antiOHM balance of DAO MS
+        console2.log("antiOHM balance of DAO MS (18 dp):", antiOHM.balanceOf(DAO_MS));
     }
 }
