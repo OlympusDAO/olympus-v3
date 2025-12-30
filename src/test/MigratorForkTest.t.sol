@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
+import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
+import {Ownable} from "@openzeppelin-5.3.0/access/Ownable.sol";
 
 interface OlympusERC20Token {
     event Approval(address indexed owner, address indexed spender, uint256 value);
@@ -310,11 +312,37 @@ interface OlympusTokenMigrator {
     function withdrawToken(address tokenAddress, uint256 amount, address recipient) external;
 }
 
+contract OwnedERC20 is ERC20, Ownable {
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address initialOwner_
+    ) ERC20(name_, symbol_) Ownable(initialOwner_) {}
+
+    /// @notice Mint tokens to the specified address
+    /// @dev    Only the owner can mint tokens
+    function mint(address to, uint256 amount) public virtual onlyOwner {
+        _mint(to, amount);
+    }
+
+    /// @notice Burn tokens from the specified address
+    function burn(address from, uint256 amount) public virtual {
+        // If the caller is not the token holder, spend the allowance (or revert)
+        if (from != msg.sender) {
+            _spendAllowance(from, msg.sender, amount);
+        }
+
+        // Burn the tokens
+        _burn(from, amount);
+    }
+}
+
 contract MigratorForkTest is Test {
     OlympusERC20Token public OHMv1;
     OlympusTreasury public treasury;
     OlympusTokenMigrator public migrator;
     IgOHM public gOHM;
+    OwnedERC20 public antiOHM;
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
@@ -324,13 +352,21 @@ contract MigratorForkTest is Test {
     function setUp() public {
         vm.createSelectFork("mainnet", BLOCK_NUMBER);
 
+        // Existing contracts
         OHMv1 = OlympusERC20Token(0x383518188C0C6d7730D91b2c03a03C837814a899);
         treasury = OlympusTreasury(0x31F8Cc382c9898b273eff4e0b7626a6987C846E8);
         migrator = OlympusTokenMigrator(0x184f3FAd8618a6F458C16bae63F70C426fE784B3);
         gOHM = IgOHM(0x0ab87046fBb341D058F17CBC4c1133F25a20a52f);
+
+        // Create a dummy token
+        antiOHM = new OwnedERC20("AntiOHM", "antiOHM", DAO_MS);
     }
 
     function test_migrate() public {
+        // Add antiOHM as a reserve token
+        vm.prank(DAO_MS);
+        treasury.queue(OlympusTreasury.MANAGING.RESERVETOKEN, address(antiOHM));
+
         // Confirm that DAO MS is not a reward manager
         assertFalse(treasury.isRewardManager(DAO_MS), "DAO MS should not be a reward manager");
 
@@ -340,6 +376,13 @@ contract MigratorForkTest is Test {
 
         // Warp forward to the timelock expiry
         vm.roll(BLOCK_NUMBER + BLOCKS_NEEDED_FOR_QUEUE + 1);
+
+        // Toggle antiOHM as a reserve token
+        vm.prank(DAO_MS);
+        treasury.toggle(OlympusTreasury.MANAGING.RESERVETOKEN, address(antiOHM), address(0));
+
+        // Verify that antiOHM is a reserve token
+        assertTrue(treasury.isReserveToken(address(antiOHM)), "antiOHM should be a reserve token");
 
         // Toggle DAO MS as a reserve depositor
         vm.prank(DAO_MS);
@@ -351,11 +394,11 @@ contract MigratorForkTest is Test {
         // Excess reserves is 65659757174924
         console2.log("excess reserves (18 dp):", treasury.excessReserves());
 
-        // OHM valuation of DAI is 1:1 in OHM decimals
+        // OHM valuation of antiOHM is 1:1 in OHM decimals
         assertEq(
-            treasury.valueOf(DAI, 1e18),
+            treasury.valueOf(address(antiOHM), 1e18),
             1e9,
-            "OHM valuation of DAI should be 1:1 in OHM decimals"
+            "OHM valuation of antiOHM should be 1:1 in OHM decimals"
         );
 
         // OHMv1 old supply is 553483798713734 (9 dp)
@@ -379,19 +422,20 @@ contract MigratorForkTest is Test {
         // 176481131518703773 * 1e9 / 21403507467877949
         // = 8245430417
         maxOHM += 8245430417;
-        uint256 maxDAI = maxOHM * 1e9;
+        uint256 maxAntiOHM = maxOHM * 1e9;
 
-        // Deal DAI to the DAO MS
-        deal(DAI, DAO_MS, maxDAI);
-        console2.log("maxDAI (18 dp):", maxDAI);
-
-        // Approve DAI for the DAO MS
+        // Mint antiOHM to the DAO MS
         vm.prank(DAO_MS);
-        IERC20(DAI).approve(address(treasury), maxDAI);
+        antiOHM.mint(DAO_MS, maxAntiOHM);
+        console2.log("maxAntiOHM (18 dp):", maxAntiOHM);
 
-        // Deposit DAI to the treasury
+        // Approve antiOHM for the DAO MS
         vm.prank(DAO_MS);
-        treasury.deposit(maxDAI, DAI, 0);
+        antiOHM.approve(address(treasury), maxAntiOHM);
+
+        // Deposit antiOHM to the treasury
+        vm.prank(DAO_MS);
+        treasury.deposit(maxAntiOHM, address(antiOHM), 0);
 
         // Verify that the DAO MS has received OHM
         console2.log("OHM balance of DAO MS (9 dp):", OHMv1.balanceOf(DAO_MS));
