@@ -1,89 +1,140 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.4;
 
 // Based on Bond Protocol's `IFixedStrikeOptionTeller`:
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IOptionTeller} from "src/policies/rewards/convertible/interfaces/IOptionTeller.sol";
 import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
 
-interface IFixedStrikeOptionTeller is IOptionTeller {
-    /// @notice             Deploy a new ERC20 fixed strike option token and return its address
-    /// @dev                If an option token already exists for the parameters, it returns that address
-    /// @param payoutToken_ ERC20 token that the purchaser will receive on execution
-    /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
-    /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
-    /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param call_        Whether the option token is a call (true) or a put (false)
-    /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
-    /// @return             Address of the ERC20 fixed strike option token being created
+interface IFixedStrikeOptionTeller {
+    /// @notice Emitted when a new convertible token is deployed.
+    event ConvertibleTokenCreated(
+        FixedStrikeOptionToken indexed token,
+        ERC20 indexed quoteToken,
+        uint48 eligible,
+        uint48 indexed expiry,
+        uint256 strikePrice
+    );
+
+    /// @notice Emitted when a convertible token is minted to a user.
+    event ConvertibleTokenMinted(
+        FixedStrikeOptionToken indexed token,
+        address indexed to,
+        uint256 amount
+    );
+
+    /// @notice Emitted when a convertible token is exercised.
+    event ConvertibleTokenExercised(
+        FixedStrikeOptionToken indexed token,
+        address indexed user,
+        uint256 amount,
+        uint256 quoteAmount
+    );
+
+    /// @notice Emitted when the reward distributor is set.
+    event RewardDistributorSet(address indexed rewardDistributor);
+
+    error Teller_InvalidParams(uint256 index, bytes value);
+
+    error Teller_TokenDoesNotExist(bytes32 tokenHash);
+
+    error Teller_UnsupportedToken(address token);
+
+    error Teller_TokenExpired(uint48 expiry);
+
+    error Teller_NotEligible(uint48 eligible);
+
+    error Teller_OnlyRewardDistributor();
+
+    /// @notice Deploys a new convertible token and returns its address.
+    /// @dev Only callable by the reward distributor.
+    ///      If a convertible token already exists for the parameters, it returns that address.
+    /// @param quoteToken_ The ERC20 token used that the purchaser will need to provide on exercise.
+    /// @param eligible_ The timestamp at which the convertible token can first be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
+    /// @return token The address of the convertible token being created.
     function deploy(
-        ERC20 payoutToken_,
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        bool call_,
         uint256 strikePrice_
-    ) external returns (FixedStrikeOptionToken);
+    ) external returns (FixedStrikeOptionToken token);
 
-    /// @notice              Deposit an ERC20 token and mint an ERC20 fixed strike option token
-    /// @param optionToken_  Fixed strike option token to mint
-    /// @param amount_       Amount of option tokens to mint (also the number of payout tokens required to be deposited)
-    function create(FixedStrikeOptionToken optionToken_, uint256 amount_) external;
+    /// @notice Mints convertible tokens to the `to`.
+    /// @dev Only callable by the reward distributor.
+    /// @param token_ The convertible token to mint.
+    /// @param to_ The recipient address.
+    /// @param amount_ The amount of tokens to mint.
+    function create(FixedStrikeOptionToken token_, address to_, uint256 amount_) external;
 
-    /// @notice              Exercise an ERC20 fixed strike option token. Provide required quote tokens and receive amount of payout tokens.
-    /// @param optionToken_  Fixed strike option token to exercise
-    /// @param amount_       Amount of option tokens to exercise (also the number of payout tokens to receive)
-    /// @dev                 Amount of quote tokens required to exercise is return from the exerciseCost() function
-    /// @dev                 If the calling address is the token receiver address, then the amount of option tokens
-    /// @dev                 are burned and collateral sent back to receiver, but proceeds are not required.
-    /// @dev                 This allows unwrapping option tokens that aren't used prior to expiry.
-    function exercise(FixedStrikeOptionToken optionToken_, uint256 amount_) external;
+    /// @notice Exercises a convertible token: provides required quote tokens and receives OHM.
+    /// @dev Burns convertible tokens and mints OHM to the caller.
+    ///      The `exerciseCost()` function is assumed to be used to get the amount of quote tokens required to exercise.
+    /// @param token_ The convertible token to exercise.
+    /// @param amount_ The amount of convertible tokens to exercise.
+    function exercise(FixedStrikeOptionToken token_, uint256 amount_) external;
 
-    /* ========== VIEWS ========== */
+    /// @notice Sets the minimum duration to exercise a convertible token.
+    /// @dev Only callable by addresses that have the convertible admin role.
+    ///      The absolute minimum is 1 day due to rounding of eligible and expiry timestamps.
+    /// @param duration_ The minimum duration in seconds.
+    function setMinDuration(uint48 duration_) external;
 
-    /// @notice              Get the cost to exercise an amount of fixed strike option tokens
-    /// @param optionToken_  Fixed strike option token to exercise
-    /// @param amount_       Amount of option tokens to exercise
-    /// @return token_       Token required to exercise (quoteToken for call, payoutToken for put)
-    /// @return cost_        Amount of token_ required to exercise
+    /// @notice Sets the address of the reward distributor responsible for deploying new convertible tokens and
+    ///         minting existing convertible tokens to users.
+    /// @dev Only callable by addresses that have the convertible admin role.
+    /// @param rewardDistributor_ The address of the reward distributor.
+    function setRewardDistributor(address rewardDistributor_) external;
+
+    /// @notice Calculates the cost to exercise an amount of convertible tokens.
+    /// @param token_ The convertible token to exercise.
+    /// @param amount_ The amount of the convertible token to exercise.
+    /// @return quoteToken The quote token required to exercise.
+    /// @return cost The amount of the convertible token required to exercise.
     function exerciseCost(
-        FixedStrikeOptionToken optionToken_,
+        FixedStrikeOptionToken token_,
         uint256 amount_
-    ) external view returns (ERC20, uint256);
+    ) external view returns (ERC20 quoteToken, uint256 cost);
 
-    /// @notice             Get the FixedStrikeOptionToken contract corresponding to the params, reverts if no token exists
-    /// @param payoutToken_ ERC20 token that the purchaser will receive on execution
-    /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
-    /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
-    /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param call_        Whether the option token is a call (true) or a put (false)
-    /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
-    /// @return token_      FixedStrikeOptionToken contract address
-    function getOptionToken(
-        ERC20 payoutToken_,
+    /// @notice Returns the address of a convertible token corresponding to specified parameters,
+    ///         reverts if no token exists.
+    /// @param quoteToken_ The ERC20 token used that the purchaser will need to provide on exercise.
+    /// @param eligible_ The timestamp at which the convertible token can first be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
+    /// @return token The address of the convertible token.
+    function getToken(
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        bool call_,
         uint256 strikePrice_
-    ) external view returns (FixedStrikeOptionToken);
+    ) external view returns (FixedStrikeOptionToken token);
 
-    /// @notice             Get the hash ID of the fixed strike option token with these parameters
-    /// @param payoutToken_ ERC20 token that the purchaser will receive on execution
-    /// @param quoteToken_  ERC20 token used that the purchaser will need to provide on execution
-    /// @param eligible_    Timestamp at which the option token can first be executed (gets rounded to nearest day)
-    /// @param expiry_      Timestamp at which the option token can no longer be executed (gets rounded to nearest day)
-    /// @param call_        Whether the option token is a call (true) or a put (false)
-    /// @param strikePrice_ Strike price of the option token (in units of quoteToken per payoutToken)
-    /// @return hash_       Hash ID of the fixed strike option token with these parameters
-    function getOptionTokenHash(
-        ERC20 payoutToken_,
+    /// @notice Returns the hash ID of a convertible token corresponding to specified parameters.
+    /// @param quoteToken_ The ERC20 token used that the purchaser will need to provide on exercise.
+    /// @param eligible_ The timestamp at which the convertible token can first be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
+    ///        (rounded to the nearest day in UTC).
+    /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
+    /// @return hash The hash ID of the convertible token.
+    function getTokenHash(
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        bool call_,
         uint256 strikePrice_
-    ) external view returns (bytes32);
+    ) external view returns (bytes32 hash);
+
+    /// @notice Returns the address of the reward distributor responsible for deploying new convertible tokens and
+    ///         minting existing convertible tokens to users.
+    function rewardDistributor() external view returns (address);
+
+    /// @notice Returns the minimum duration in seconds during which a convertible token must be eligible for exercise.
+    function minDuration() external view returns (uint48);
 }

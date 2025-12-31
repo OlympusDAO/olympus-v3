@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity >=0.8.30;
 
 // Based on Bond Protocol's `FixedStrikeOptionTeller`:
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 
-import {IFixedStrikeOptionTeller, IOptionTeller} from "src/policies/rewards/convertible/interfaces/IFixedStrikeOptionTeller.sol";
+import {IFixedStrikeOptionTeller} from "src/policies/rewards/convertible/interfaces/IFixedStrikeOptionTeller.sol";
 import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
 
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
@@ -25,67 +25,62 @@ contract FixedStrikeOptionTeller is
     IFixedStrikeOptionTeller,
     Policy,
     PolicyEnabler,
-    ReentrancyGuard
+    ReentrancyGuardTransient
 {
     using TransferHelper for ERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
 
-    /* ========== ERRORS ========== */
-
-    error Teller_TokenDoesNotExist(bytes32 optionHash);
-    error Teller_UnsupportedToken(address token);
-    error Teller_InvalidParams(uint256 index, bytes value);
-    error Teller_OptionExpired(uint48 expiry);
-    error Teller_NotEligible(uint48 eligible);
-    error Teller_InvalidAmount();
-
-    /* ========== EVENTS ========== */
-    event OptionTokenCreated(
-        FixedStrikeOptionToken optionToken,
-        ERC20 indexed payoutToken,
-        ERC20 quoteToken,
-        uint48 eligible,
-        uint48 indexed expiry,
-        address indexed receiver,
-        bool call,
-        uint256 strikePrice
-    );
-
     // ========== CONSTANTS & IMMUTABLES ========== //
 
-    /// @notice Role for deploying new token types
+    /// @notice The role for configuration
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
 
-    /// @notice Role for minting tokens to users
-    bytes32 public constant ROLE_TELLER_MINTER = "convertible_minter";
+    /// @notice The OHM token precision
+    uint256 private constant _OHM_PRECISION = 1e9;
 
-    /// @notice FixedStrikeOptionToken reference implementation (deployed on creation to clone from)
-    FixedStrikeOptionToken public immutable optionTokenImplementation;
+    /// @notice The reference implementation of `FixedStrikeOptionToken`, deployed upon creation for cloning
+    FixedStrikeOptionToken public immutable TOKEN_IMPLEMENTATION;
+
+    /// @notice The OHM token (the payout token)
+    ERC20 public immutable OHM;
+
+    /// @notice The OHM token decimals
+    uint8 private constant _OHM_DECIMALS = 9;
 
     // ========== STATE VARIABLES ========== //
 
-    /// @notice MINTR module for minting OHM
+    /// @notice Convertible tokens (hash of parameters to address)
+    mapping(bytes32 token_ => FixedStrikeOptionToken) public tokens;
+
+    /// @notice The minter module for minting OHM
     MINTRv1 public MINTR;
 
-    /// @notice TRSRY module for receiving USDS
+    /// @notice The treasury module for receiving quote tokens
     TRSRYv1 public TRSRY;
 
-    /// @notice Minimum duration an option must be eligible to exercise (in seconds)
-    uint48 public minOptionDuration;
+    /// @inheritdoc IFixedStrikeOptionTeller
+    address public override rewardDistributor;
 
-    /// @notice Fixed strike option tokens (hash of parameters to address)
-    mapping(bytes32 => FixedStrikeOptionToken) public optionTokens;
+    /// @inheritdoc IFixedStrikeOptionTeller
+    uint48 public override minDuration;
 
-    /* ========== CONSTRUCTOR ========== */
+    // ========== CONSTRUCTOR ========== //
 
     /// @param kernel_ The address of the Olympus kernel
-    constructor(address kernel_) Policy(Kernel(kernel_)) {
-        // Set minimum option duration initially to 1 day (the absolute minimum given timestamp rounding)
-        minOptionDuration = uint48(1 days);
+    /// @param ohm_ The address of the OHM token
+    constructor(address kernel_, address ohm_) Policy(Kernel(kernel_)) {
+        _requireNonzeroAddress(0, kernel_);
+        _requireNonzeroAddress(1, ohm_);
 
-        // Deploy option token implementation that clones proxy to
-        optionTokenImplementation = new FixedStrikeOptionToken();
+        // Deploy the token implementation for token cloning (deployments)
+        TOKEN_IMPLEMENTATION = new FixedStrikeOptionToken();
+
+        OHM = ERC20(ohm_);
+        if (OHM.decimals() != _OHM_DECIMALS) revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
+
+        // Set the minimum duration during which a convertible token must be eligible for exercise to 1 day initially
+        minDuration = uint48(1 days);
     }
 
     // ========== POLICY CONFIGURATION ========== //
@@ -120,217 +115,208 @@ contract FixedStrikeOptionTeller is
         return (1, 0);
     }
 
-    /* ========== CREATE OPTION TOKENS ========== */
+    // ========== TOKEN DEPLOYMENTS ========== //
 
     /// @inheritdoc IFixedStrikeOptionTeller
     function deploy(
-        ERC20 payoutToken_,
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        bool call_,
         uint256 strikePrice_
-    )
-        external
-        override
-        onlyEnabled
-        onlyRole(ROLE_TELLER_ADMIN)
-        nonReentrant
-        returns (FixedStrikeOptionToken)
-    {
-        // If eligible is zero, use current timestamp
+    ) external override onlyEnabled nonReentrant returns (FixedStrikeOptionToken) {
+        _requireRewardDistributor();
+
+        // If eligible is zero, use the current timestamp
         if (eligible_ == 0) eligible_ = uint48(block.timestamp);
 
-        // Eligible and Expiry are rounded to the nearest day at 0000 UTC (in seconds) since
-        // option tokens are only unique to a day, not a specific timestamp.
-        eligible_ = uint48(eligible_ / 1 days) * 1 days;
-        expiry_ = uint48(expiry_ / 1 days) * 1 days;
+        // Note: Convertible tokens are only unique to a day, not a specific timestamp
+        (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Revert if eligible is in the past, we do this to avoid duplicates tokens with the same parameters otherwise
         // Truncate block.timestamp to the nearest day for comparison
-        if (eligible_ < uint48(block.timestamp / 1 days) * 1 days)
-            revert Teller_InvalidParams(2, abi.encodePacked(eligible_));
+        if (eligible_ < _truncateToUTCDay(uint48(block.timestamp)))
+            revert Teller_InvalidParams(1, abi.encodePacked(eligible_));
 
         // Revert if the difference between eligible and expiry is less than min duration or eligible is after expiry
         // Don't need to check expiry against current timestamp since eligible is already checked
-        if (eligible_ > expiry_ || expiry_ - eligible_ < minOptionDuration)
-            revert Teller_InvalidParams(3, abi.encodePacked(expiry_));
+        if (eligible_ > expiry_ || expiry_ - eligible_ < minDuration)
+            revert Teller_InvalidParams(2, abi.encodePacked(expiry_));
 
-        // Revert if any addresses are zero or the tokens are not contracts
-        if (address(payoutToken_) == address(0) || address(payoutToken_).code.length == 0)
-            revert Teller_InvalidParams(0, abi.encodePacked(payoutToken_));
+        // Revert if the quote token address is the zero address or does not have a bytecode
         if (address(quoteToken_) == address(0) || address(quoteToken_).code.length == 0)
-            revert Teller_InvalidParams(1, abi.encodePacked(quoteToken_));
+            revert Teller_InvalidParams(0, abi.encodePacked(quoteToken_));
 
         // Revert if strike price is zero or out of bounds
         uint8 quoteDecimals = quoteToken_.decimals();
         int8 priceDecimals = _getPriceDecimals(strikePrice_, quoteDecimals);
-        // We check that the strike pirce is not zero and that the price decimals are not less than half the quote decimals to avoid precision loss
+        // We check that the strike price is not zero and that the price decimals are not less than
+        // half the quote decimals to avoid precision loss
         // For 18 decimal tokens, this means relative prices as low as 1e-9 are supported
         if (strikePrice_ == 0 || priceDecimals < -int8(quoteDecimals / 2))
-            revert Teller_InvalidParams(6, abi.encodePacked(strikePrice_));
+            revert Teller_InvalidParams(3, abi.encodePacked(strikePrice_));
 
-        // Create option token if one doesn't already exist
+        // Create the token if one doesn't already exist
         // Timestamps are truncated above to give canonical version of hash
-        bytes32 optionHash = _getOptionTokenHash(
-            payoutToken_,
-            quoteToken_,
-            eligible_,
-            expiry_,
-            call_,
-            strikePrice_
-        );
+        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        FixedStrikeOptionToken token = tokens[tokenHash];
 
-        FixedStrikeOptionToken optionToken = optionTokens[optionHash];
+        // If the token doesn't exist, deploy (clone) it
+        if (address(token) == address(0)) {
+            token = _deploy(quoteToken_, eligible_, expiry_, strikePrice_);
 
-        // If option token doesn't exist, deploy it
-        if (address(optionToken) == address(0)) {
-            optionToken = _deploy(
-                payoutToken_,
-                quoteToken_,
-                eligible_,
-                expiry_,
-                call_,
-                strikePrice_
-            );
+            // Set the domain separator for the token on creation to save gas on permit approvals
+            token.updateDomainSeparator();
 
-            // Set the domain separator for the option token on creation to save gas on permit approvals
-            optionToken.updateDomainSeparator();
+            // Store token
+            tokens[tokenHash] = token;
 
-            // Store option token against computed hash
-            optionTokens[optionHash] = optionToken;
-
-            // Emit event
-            emit OptionTokenCreated(
-                optionToken,
-                payoutToken_,
-                quoteToken_,
-                eligible_,
-                expiry_,
-                address(TRSRY),
-                call_,
-                strikePrice_
-            );
+            emit ConvertibleTokenCreated(token, quoteToken_, eligible_, expiry_, strikePrice_);
         }
-        return optionToken;
+        return token;
     }
 
     function _deploy(
-        ERC20 payoutToken_,
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
-        bool call_,
         uint256 strikePrice_
-    ) internal returns (FixedStrikeOptionToken) {
-        // All data has been validated prior to entering this function
-        // Option token does not exist yet
+    ) private returns (FixedStrikeOptionToken token) {
+        // Generate name and symbol
+        (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
 
-        // Get name and symbol for option token
-        (bytes32 name, bytes32 symbol) = _getNameAndSymbol(
-            payoutToken_,
-            quoteToken_,
-            expiry_,
-            call_,
-            strikePrice_
-        );
-
-        // Deploy option token
-        return
-            FixedStrikeOptionToken(
-                address(optionTokenImplementation).clone(
-                    abi.encodePacked(
-                        name,
-                        symbol,
-                        uint8(payoutToken_.decimals()),
-                        payoutToken_,
-                        quoteToken_,
-                        eligible_,
-                        expiry_,
-                        address(TRSRY),
-                        call_,
-                        address(this),
-                        strikePrice_
-                    )
+        // TODO: simplify this memory layout after implementing the convertible token.
+        // Deploy (clone) the token
+        token = FixedStrikeOptionToken(
+            address(TOKEN_IMPLEMENTATION).clone(
+                abi.encodePacked(
+                    name,
+                    symbol,
+                    uint8(OHM.decimals()),
+                    OHM,
+                    quoteToken_,
+                    eligible_,
+                    expiry_,
+                    address(TRSRY),
+                    true,
+                    address(this),
+                    strikePrice_
                 )
-            );
+            )
+        );
+        return token;
     }
+
+    // ========== TOKEN MINTING ========== //
 
     /// @inheritdoc IFixedStrikeOptionTeller
     function create(
-        FixedStrikeOptionToken optionToken_,
+        FixedStrikeOptionToken token_,
+        address to_,
         uint256 amount_
-    ) external override onlyEnabled onlyRole(ROLE_TELLER_MINTER) nonReentrant {
-        // Load option parameters
-        (
-            uint8 decimals,
-            ERC20 payoutToken,
-            ERC20 quoteToken,
-            uint48 eligible,
-            uint48 expiry,
-            ,
-            bool call,
-            uint256 strikePrice
-        ) = optionToken_.getOptionParameters();
+    ) external override onlyEnabled nonReentrant {
+        _requireRewardDistributor();
+        _requireNonzeroAddress(1, to_);
+        _requireNonzeroAmount(2, amount_);
+        (FixedStrikeOptionToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
+        require(expiry > uint48(block.timestamp), Teller_TokenExpired(expiry));
 
-        // Retrieve the internally stored option token with this configuration
-        // Reverts internally if token doesn't exist
-        FixedStrikeOptionToken optionToken = getOptionToken(
-            payoutToken,
-            quoteToken,
-            eligible,
-            expiry,
-            call,
-            strikePrice
-        );
-
-        // Revert if provided token address does not match stored token address
-        if (optionToken_ != optionToken) revert Teller_UnsupportedToken(address(optionToken_));
-
-        // Revert if expiry is in the past
-        if (uint256(expiry) <= block.timestamp) revert Teller_OptionExpired(expiry);
-
-        // Transfer in collateral
-        // If call option, transfer in payout tokens equivalent to the amount of option tokens being issued
-        // If put option, transfer in quote tokens equivalent to the amount of option tokens being issued * strike price
-        if (call) {
-            // Transfer payout tokens from user
-            // Check that amount received is not less than amount expected
-            // Handles edge cases like fee-on-transfer tokens (which are not supported)
-            uint256 startBalance = payoutToken.balanceOf(address(this));
-            payoutToken.safeTransferFrom(msg.sender, address(this), amount_);
-            uint256 endBalance = payoutToken.balanceOf(address(this));
-            if (endBalance < startBalance + amount_)
-                revert Teller_UnsupportedToken(address(payoutToken));
-        } else {
-            // Calculate amount of quote tokens required to mint
-            // We round up here to avoid issues with precision loss which could lead to loss of funds
-            // The rounding is small at normal values, but protects against purposefully small values
-            uint256 quoteAmount = amount_.mulDivUp(strikePrice, 10 ** decimals);
-            if (quoteAmount == 0) revert Teller_InvalidAmount();
-
-            // Transfer quote tokens from user
-            // Check that amount received is not less than amount expected
-            // Handles edge cases like fee-on-transfer tokens (which are not supported)
-            uint256 startBalance = quoteToken.balanceOf(address(this));
-            quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
-            uint256 endBalance = quoteToken.balanceOf(address(this));
-            if (endBalance < startBalance + quoteAmount)
-                revert Teller_UnsupportedToken(address(quoteToken));
-        }
-
-        // Mint new option tokens to sender
-        optionToken.mint(msg.sender, amount_);
+        token.mint(msg.sender, amount_);
+        emit ConvertibleTokenMinted(token_, to_, amount_);
     }
 
-    /* ========== EXERCISE OPTION TOKENS ========== */
+    // ========== TOKEN EXERCISE ========== //
 
     /// @inheritdoc IFixedStrikeOptionTeller
     function exercise(
-        FixedStrikeOptionToken optionToken_,
+        FixedStrikeOptionToken token_,
         uint256 amount_
     ) external override onlyEnabled nonReentrant {
-        // Load option parameters
+        _requireNonzeroAmount(1, amount_);
+        (
+            FixedStrikeOptionToken token,
+            ERC20 quoteToken,
+            uint48 eligible,
+            uint48 expiry,
+            uint256 price
+        ) = _requireExistingToken(token_);
+        // Validate that the convertible token is eligible to be exercised
+        if (uint48(block.timestamp) < eligible) revert Teller_NotEligible(eligible);
+        // Validate that the convertible token is not expired
+        if (uint48(block.timestamp) >= expiry) revert Teller_TokenExpired(expiry);
+
+        // Calculate amount of quote tokens equivalent to amount at price
+        uint256 quoteAmount = amount_.mulDivUp(price, _OHM_PRECISION);
+
+        // Transfer in quote tokens equivalent to the amount of convertible tokens being exercised * price
+        // Transfer proceeds from user
+        // Check balances before and after transfer to ensure that the correct amount was transferred
+        // @audit this does enable potential malicious convertible tokens that can't be exercised
+        // However, we view it as a "buyer beware" situation that can handled on the front-end
+        quoteToken.safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
+
+        // Burn convertible tokens
+        token.burn(msg.sender, amount_);
+
+        // Mint OHM to user
+        MINTR.mintOhm(msg.sender, amount_);
+
+        emit ConvertibleTokenExercised(token, msg.sender, amount_, quoteAmount);
+    }
+
+    // ========== VIEW FUNCTIONS ========== //
+
+    /// @inheritdoc IFixedStrikeOptionTeller
+    function exerciseCost(
+        FixedStrikeOptionToken token_,
+        uint256 amount_
+    ) external view override returns (ERC20, uint256) {
+        _requireNonzeroAmount(1, amount_);
+        (, ERC20 quoteToken, , , uint256 strikePrice) = _requireExistingToken(token_);
+
+        // Calculate and return the amount of quote tokens required to exercise
+        return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
+    }
+
+    /// @inheritdoc IFixedStrikeOptionTeller
+    function getToken(
+        ERC20 quoteToken_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) public view override returns (FixedStrikeOptionToken) {
+        (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
+
+        // Calculate a hash from the normalized inputs
+        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        FixedStrikeOptionToken token = tokens[tokenHash];
+
+        // Revert if the convertible token does not exist
+        if (address(token) == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
+
+        return token;
+    }
+
+    /// @inheritdoc IFixedStrikeOptionTeller
+    function getTokenHash(
+        ERC20 quoteToken_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) external pure override returns (bytes32) {
+        (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
+        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+    }
+
+    // ========== INTERNAL FUNCTIONS ========== //
+
+    function _requireRewardDistributor() internal view {
+        require(msg.sender == address(rewardDistributor), Teller_OnlyRewardDistributor());
+    }
+
+    function _requireExistingToken(
+        FixedStrikeOptionToken token_
+    ) internal view returns (FixedStrikeOptionToken, ERC20, uint48, uint48, uint256) {
+        // Load token parameters
         (
             uint8 decimals,
             ERC20 payoutToken,
@@ -340,194 +326,31 @@ contract FixedStrikeOptionTeller is
             address receiver,
             bool call,
             uint256 strikePrice
-        ) = optionToken_.getOptionParameters();
+        ) = token_.getOptionParameters();
 
-        // Retrieve the internally stored option token with this configuration
+        // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
-        FixedStrikeOptionToken optionToken = getOptionToken(
-            payoutToken,
-            quoteToken,
-            eligible,
-            expiry,
-            call,
-            strikePrice
-        );
+        FixedStrikeOptionToken token = getToken(quoteToken, eligible, expiry, strikePrice);
 
-        // Revert if token does not match stored token
-        if (optionToken_ != optionToken) revert Teller_UnsupportedToken(address(optionToken_));
+        // TODO: simplify these checks after implementing the convertible token.
+        // Revert if provided token address does not match stored token address or the returned parameters do not match
+        if (
+            address(token_) != address(token) ||
+            decimals != OHM.decimals() ||
+            address(payoutToken) != address(OHM) ||
+            receiver != address(TRSRY) ||
+            call != true
+        ) revert Teller_UnsupportedToken(address(token_));
 
-        // Validate that option token is eligible to be exercised
-        if (uint48(block.timestamp) < eligible) revert Teller_NotEligible(eligible);
-
-        // Validate that option token is not expired
-        if (uint48(block.timestamp) >= expiry) revert Teller_OptionExpired(expiry);
-
-        // Calculate amount of quote tokens equivalent to amount at strike price
-        uint256 quoteAmount = amount_.mulDivUp(strikePrice, 10 ** decimals);
-
-        // If not receiver, require payment
-        if (msg.sender != receiver) {
-            // If call, transfer in quote tokens equivalent to the amount of option tokens being exercised * strike price
-            // If put, transfer in payout tokens equivalent to the amount of option tokens being exercised
-            if (call) {
-                // Transfer proceeds from user
-                // Check balances before and after transfer to ensure that the correct amount was transferred
-                // @audit this does enable potential malicious option tokens that can't be exercised
-                // However, we view it as a "buyer beware" situation that can handled on the front-end
-                {
-                    uint256 startBalance = quoteToken.balanceOf(address(this));
-                    quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
-                    uint256 endBalance = quoteToken.balanceOf(address(this));
-                    if (endBalance < startBalance + quoteAmount)
-                        revert Teller_UnsupportedToken(address(quoteToken));
-                }
-
-                // Transfer proceeds to receiver
-                quoteToken.safeTransfer(receiver, quoteAmount);
-            } else {
-                // Transfer proceeds from user
-                // Check balances before and after transfer to ensure that the correct amount was transferred
-                // @audit this does enable potential malicious option tokens that can't be exercised
-                // However, we view it as a "buyer beware" situation that can handled on the front-end
-                {
-                    uint256 startBalance = payoutToken.balanceOf(address(this));
-                    payoutToken.safeTransferFrom(msg.sender, address(this), amount_);
-                    uint256 endBalance = payoutToken.balanceOf(address(this));
-                    if (endBalance < startBalance + amount_)
-                        revert Teller_UnsupportedToken(address(payoutToken));
-                }
-
-                // Transfer proceeds to receiver
-                payoutToken.safeTransfer(receiver, amount_);
-            }
-        }
-
-        // Burn option tokens
-        optionToken.burn(msg.sender, amount_);
-
-        if (call) {
-            // Transfer payout tokens to user
-            payoutToken.safeTransfer(msg.sender, amount_);
-        } else {
-            // Transfer quote tokens to user
-            quoteToken.safeTransfer(msg.sender, quoteAmount);
-        }
+        return (token, quoteToken, eligible, expiry, strikePrice);
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
-
-    /// @inheritdoc IFixedStrikeOptionTeller
-    function exerciseCost(
-        FixedStrikeOptionToken optionToken_,
-        uint256 amount_
-    ) external view returns (ERC20, uint256) {
-        // Load option parameters
-        (
-            uint8 decimals,
-            ERC20 payoutToken,
-            ERC20 quoteToken,
-            uint48 eligible,
-            uint48 expiry,
-            ,
-            bool call,
-            uint256 strikePrice
-        ) = optionToken_.getOptionParameters();
-
-        // Retrieve the internally stored option token with this configuration
-        // Reverts internally if token doesn't exist
-        FixedStrikeOptionToken optionToken = getOptionToken(
-            payoutToken,
-            quoteToken,
-            eligible,
-            expiry,
-            call,
-            strikePrice
-        );
-
-        // Revert if token does not match stored token
-        if (optionToken_ != optionToken) revert Teller_UnsupportedToken(address(optionToken_));
-
-        // If option is a call, calculate quote tokens required to exercise
-        // If option is a put, exercise cost is the same as the option token amount in payout tokens
-        if (call) {
-            return (quoteToken, amount_.mulDivUp(strikePrice, 10 ** decimals));
-        } else {
-            return (payoutToken, amount_);
-        }
-    }
-
-    /// @inheritdoc IFixedStrikeOptionTeller
-    function getOptionToken(
-        ERC20 payoutToken_,
-        ERC20 quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        bool call_,
-        uint256 strikePrice_
-    ) public view returns (FixedStrikeOptionToken) {
-        // Eligible and Expiry are rounded to the nearest day at 0000 UTC (in seconds) since
-        // option tokens are only unique to a day, not a specific timestamp.
-        uint48 eligible = uint48(eligible_ / 1 days) * 1 days;
-        uint48 expiry = uint48(expiry_ / 1 days) * 1 days;
-
-        // Calculate a hash from the normalized inputs
-        bytes32 optionHash = _getOptionTokenHash(
-            payoutToken_,
-            quoteToken_,
-            eligible,
-            expiry,
-            call_,
-            strikePrice_
-        );
-
-        FixedStrikeOptionToken optionToken = optionTokens[optionHash];
-
-        // Revert if token does not exist
-        if (address(optionToken) == address(0)) revert Teller_TokenDoesNotExist(optionHash);
-
-        return optionToken;
-    }
-
-    /// @inheritdoc IFixedStrikeOptionTeller
-    function getOptionTokenHash(
-        ERC20 payoutToken_,
-        ERC20 quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        bool call_,
-        uint256 strikePrice_
-    ) external pure returns (bytes32) {
-        // Eligible and Expiry are rounded to the nearest day at 0000 UTC (in seconds) since
-        // option tokens are only unique to a day, not a specific timestamp.
-        uint48 eligible = uint48(eligible_ / 1 days) * 1 days;
-        uint48 expiry = uint48(expiry_ / 1 days) * 1 days;
-
-        return
-            _getOptionTokenHash(payoutToken_, quoteToken_, eligible, expiry, call_, strikePrice_);
-    }
-
-    /* ========== INTERNAL FUNCTIONS ========== */
-
-    function _getOptionTokenHash(
-        ERC20 payoutToken_,
-        ERC20 quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        bool call_,
-        uint256 strikePrice_
-    ) internal pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encodePacked(payoutToken_, quoteToken_, eligible_, expiry_, call_, strikePrice_)
-            );
-    }
-
-    /// @notice Derive name and symbol of option token
+    // TODO: optimize this algorithm and packing.
+    // TODO: update comments.
+    /// @notice Derive name and symbol of the token
     function _getNameAndSymbol(
-        ERC20 payoutToken_,
         ERC20 quoteToken_,
         uint256 expiry_,
-        bool call_,
         uint256 strikePrice_
     ) internal view returns (bytes32, bytes32) {
         // Examples
@@ -539,8 +362,9 @@ contract FixedStrikeOptionTeller is
         // Name: "WETH/DAI P 1.054e+1 2100-01-01"
         // Symbol: "oWETH-21000101"
         //
-        // Note: Names are more specific than symbols, but none are guaranteed to be completely unique to a specific oToken.
-        // To ensure uniqueness, the option token address and hash identifier should be used.
+        // Note: Names are more specific than symbols, but none are guaranteed to be completely unique to
+        // a specific oToken.
+        // To ensure uniqueness, the convertible token address and hash identifier should be used.
 
         // Get the date format from the expiry timestamp.
         // Convert a number of days into a human-readable date, courtesy of BokkyPooBah.
@@ -572,20 +396,16 @@ contract FixedStrikeOptionTeller is
         }
 
         // Format token symbols
-        // Symbols longer than 5 characters are truncated, min length would be 1 if tokens have no symbols, max length is 11
+        // Symbols longer than 5 characters are truncated, min length would be 1 if tokens have no symbols,
+        // max length is 11
         bytes memory tokenSymbols;
-        bytes memory payoutSymbol;
         {
-            payoutSymbol = bytes(payoutToken_.symbol());
-            if (payoutSymbol.length > 5) payoutSymbol = abi.encodePacked(bytes5(payoutSymbol));
             bytes memory quoteSymbol = bytes(quoteToken_.symbol());
             if (quoteSymbol.length > 5) quoteSymbol = abi.encodePacked(bytes5(quoteSymbol));
 
-            tokenSymbols = abi.encodePacked(payoutSymbol, "/", quoteSymbol);
+            // TODO: confirm that this format is right.
+            tokenSymbols = abi.encodePacked("OHM/", quoteSymbol);
         }
-
-        // Format option type
-        bytes1 callPut = call_ ? bytes1("C") : bytes1("P");
 
         // Format strike price
         // Strike price is formatted as scientific notation to 3 significant figures
@@ -615,21 +435,10 @@ contract FixedStrikeOptionTeller is
         // Total is 15 bytes
 
         bytes32 name = bytes32(
-            abi.encodePacked(
-                tokenSymbols,
-                " ",
-                callPut,
-                " ",
-                strike,
-                " ",
-                yearStr,
-                monthStr,
-                dayStr
-            )
+            abi.encodePacked(tokenSymbols, " ", strike, " ", yearStr, monthStr, dayStr)
         );
-        bytes32 symbol = bytes32(
-            abi.encodePacked("o", payoutSymbol, "-", yearStr, monthStr, dayStr)
-        );
+        // TODO: decide what prefix should be used.
+        bytes32 symbol = bytes32(abi.encodePacked("cOHM-", yearStr, monthStr, dayStr));
 
         return (name, symbol);
     }
@@ -714,14 +523,54 @@ contract FixedStrikeOptionTeller is
         return string(bstr);
     }
 
-    /* ========== ADMIN & FEES ========== */
+    function _getTokenHash(
+        ERC20 quoteToken_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(quoteToken_, eligible_, expiry_, strikePrice_));
+    }
 
-    /// @inheritdoc IOptionTeller
-    function setMinOptionDuration(
+    // Truncates the timestamp to the nearest day at 0000 UTC (in seconds).
+    function _truncateToUTCDay(uint48 timestamp) internal pure returns (uint48) {
+        return uint48(timestamp / 1 days) * 1 days;
+    }
+
+    function _truncateBothToUTCDay(
+        uint48 eligible_,
+        uint48 expiry_
+    ) private pure returns (uint48, uint48) {
+        // Eligible and Expiry are rounded to the nearest day at 0000 UTC (in seconds) since
+        // convertible tokens are only unique to a day, not a specific timestamp.
+        return (_truncateToUTCDay(eligible_), _truncateToUTCDay(expiry_));
+    }
+
+    function _requireNonzeroAmount(uint256 index, uint256 a) private pure {
+        if (a == 0) revert Teller_InvalidParams(index, abi.encodePacked(a));
+    }
+
+    function _requireNonzeroAddress(uint256 index, address a) private pure {
+        if (a == address(0)) revert Teller_InvalidParams(index, abi.encodePacked(a));
+    }
+
+    // ========== ADMIN CONFIG ========== //
+
+    /// @inheritdoc IFixedStrikeOptionTeller
+    function setRewardDistributor(
+        address rewardDistributor_
+    ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {
+        _requireNonzeroAddress(0, rewardDistributor_);
+        rewardDistributor = rewardDistributor_;
+        emit RewardDistributorSet(rewardDistributor_);
+    }
+
+    /// @inheritdoc IFixedStrikeOptionTeller
+    function setMinDuration(
         uint48 duration_
-    ) external override onlyEnabled onlyRole(ROLE_TELLER_MINTER) {
-        // Must be a minimum of 1 day due to timestamp rounding
+    ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {
+        // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
-        minOptionDuration = duration_;
+        minDuration = duration_;
     }
 }
