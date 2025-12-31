@@ -220,7 +220,7 @@ contract ConvertibleOHMTeller is
         (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
         require(expiry > uint48(block.timestamp), Teller_TokenExpired(expiry));
 
-        token.mint(msg.sender, amount_);
+        token.mint(to_, amount_);
         emit ConvertibleTokenMinted(token_, to_, amount_);
     }
 
