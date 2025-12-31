@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
 // Forge
@@ -1925,3 +1926,4 @@ contract OlympusDeploy is Script {
 //         vm.stopBroadcast();
 //     }
 // }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
