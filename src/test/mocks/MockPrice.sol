@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity 0.8.15;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -97,3 +98,4 @@ contract MockPrice is Module {
         lastObservationTime = lastObservationTime_;
     }
 }
+/// forge-lint: disable-end(mixed-case-function)
