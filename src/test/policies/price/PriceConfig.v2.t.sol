@@ -43,23 +43,23 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 // PRICEv2 Configuration
 // [X] addAssetPrice
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.addAsset are correct
 // [X] removeAssetPrice
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceFeeds are correct
 // [X] updateAssetPriceStrategy
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.updateAssetPriceStrategy are correct
 // [X] updateAssetMovingAverage
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.updateAssetMovingAverage are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
@@ -73,7 +73,7 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
 // [X] execOnSubmodule
 //     [X] only when contract is enabled
-//     [X] only admin or price_manager role can call
+//     [X] only admin or price_admin role can call
 
 type Category is bytes32;
 type CategoryGroup is bytes32;
@@ -134,7 +134,7 @@ contract PriceConfigv2Test is Test {
     uint8 internal constant DECIMALS = 18;
 
     bytes32 internal constant ROLE_ADMIN = "admin";
-    bytes32 internal constant ROLE_PRICE_MANAGER = "price_manager";
+    bytes32 internal constant ROLE_PRICE_ADMIN = "price_admin";
     bytes32 internal constant ROLE_EMERGENCY = "emergency";
 
     function setUp() public {
@@ -191,7 +191,7 @@ contract PriceConfigv2Test is Test {
 
         // Configure permissioned roles
         rolesAdmin.grantRole(ROLE_ADMIN, admin);
-        rolesAdmin.grantRole(ROLE_PRICE_MANAGER, priceManager);
+        rolesAdmin.grantRole(ROLE_PRICE_ADMIN, priceManager);
         rolesAdmin.grantRole(ROLE_EMERGENCY, emergency);
 
         // Install base submodules on PRICE

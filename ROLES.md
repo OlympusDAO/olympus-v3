@@ -63,7 +63,7 @@ This document describes the roles that are used in the Olympus protocol.
 | oracle_manager | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | oracle_manager | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
-| price_manager | PriceConfig v2 | Exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration |
+| price_admin | PriceConfig v2 | Exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 

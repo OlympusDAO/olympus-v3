@@ -16,14 +16,14 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
-/// @dev        Some functions in this policy are gated to addresses with the "price_manager" or "admin" roles
+/// @dev        Some functions in this policy are gated to addresses with the "price_admin" or "admin" roles
 contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== STATE ========== //
 
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
-    bytes32 internal constant _PRICE_MANAGER_ROLE = "price_manager";
+    bytes32 internal constant _PRICE_ADMIN_ROLE = "price_admin";
 
     // Modules
     PRICEv2 public PRICE;
@@ -110,12 +110,12 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== MODIFIERS ========== //
 
     function _onlyPriceManagerOrAdminRole() internal view {
-        if (!ROLES.hasRole(msg.sender, _PRICE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
+        if (!ROLES.hasRole(msg.sender, _PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
         }
     }
 
-    /// @notice Modifier that reverts if the caller does not have the admin or price_manager role
+    /// @notice Modifier that reverts if the caller does not have the admin or price_admin role
     modifier onlyPriceManagerOrAdminRole() {
         _onlyPriceManagerOrAdminRole();
         _;
