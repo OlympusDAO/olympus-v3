@@ -5,12 +5,12 @@ pragma solidity >=0.8.4;
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
+import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 
-interface IFixedStrikeOptionTeller {
+interface IConvertibleOHMTeller {
     /// @notice Emitted when a new convertible token is deployed.
     event ConvertibleTokenCreated(
-        FixedStrikeOptionToken indexed token,
+        ConvertibleOHMToken indexed token,
         ERC20 indexed quoteToken,
         uint48 eligible,
         uint48 indexed expiry,
@@ -19,14 +19,14 @@ interface IFixedStrikeOptionTeller {
 
     /// @notice Emitted when a convertible token is minted to a user.
     event ConvertibleTokenMinted(
-        FixedStrikeOptionToken indexed token,
+        ConvertibleOHMToken indexed token,
         address indexed to,
         uint256 amount
     );
 
     /// @notice Emitted when a convertible token is exercised.
     event ConvertibleTokenExercised(
-        FixedStrikeOptionToken indexed token,
+        ConvertibleOHMToken indexed token,
         address indexed user,
         uint256 amount,
         uint256 quoteAmount
@@ -62,21 +62,21 @@ interface IFixedStrikeOptionTeller {
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external returns (FixedStrikeOptionToken token);
+    ) external returns (ConvertibleOHMToken token);
 
     /// @notice Mints convertible tokens to the `to`.
     /// @dev Only callable by the reward distributor.
     /// @param token_ The convertible token to mint.
     /// @param to_ The recipient address.
     /// @param amount_ The amount of tokens to mint.
-    function create(FixedStrikeOptionToken token_, address to_, uint256 amount_) external;
+    function create(ConvertibleOHMToken token_, address to_, uint256 amount_) external;
 
     /// @notice Exercises a convertible token: provides required quote tokens and receives OHM.
     /// @dev Burns convertible tokens and mints OHM to the caller.
     ///      The `exerciseCost()` function is assumed to be used to get the amount of quote tokens required to exercise.
     /// @param token_ The convertible token to exercise.
     /// @param amount_ The amount of convertible tokens to exercise.
-    function exercise(FixedStrikeOptionToken token_, uint256 amount_) external;
+    function exercise(ConvertibleOHMToken token_, uint256 amount_) external;
 
     /// @notice Sets the minimum duration to exercise a convertible token.
     /// @dev Only callable by addresses that have the convertible admin role.
@@ -96,7 +96,7 @@ interface IFixedStrikeOptionTeller {
     /// @return quoteToken The quote token required to exercise.
     /// @return cost The amount of the convertible token required to exercise.
     function exerciseCost(
-        FixedStrikeOptionToken token_,
+        ConvertibleOHMToken token_,
         uint256 amount_
     ) external view returns (ERC20 quoteToken, uint256 cost);
 
@@ -114,7 +114,7 @@ interface IFixedStrikeOptionTeller {
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external view returns (FixedStrikeOptionToken token);
+    ) external view returns (ConvertibleOHMToken token);
 
     /// @notice Returns the hash ID of a convertible token corresponding to specified parameters.
     /// @param quoteToken_ The ERC20 token used that the purchaser will need to provide on exercise.

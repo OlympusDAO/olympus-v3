@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.15;
 
-// Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/FixedStrikeOptionToken-strike/FixedStrikeOptionTeller.sol`
+// Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionToken.sol`
 
-import {OptionToken, ERC20} from "src/policies/rewards/convertible/bases/OptionToken.sol";
+import {ConvertibleToken, ERC20} from "src/policies/rewards/convertible/bases/ConvertibleToken.sol";
 
-/// @title Fixed Strike Option Token
-/// @notice Fixed Strike Option Token Contract (ERC-20 compatible)
+/// @title Convertible OHM Token
+/// @notice Convertible OHM Token Contract (ERC-20 compatible)
 ///
-/// @dev The Fixed Strike Option Token contract is issued by a
-///      Fixed Strike Option Token Teller to represent traditional
+/// @dev The Convertible OHM Token contract is issued by a
+///      Convertible OHM Teller to represent traditional
 ///      American-style options on the underlying token with a fixed strike price.
 ///
 ///      Call option tokens can be exercised for the underlying token 1:1
@@ -20,7 +20,7 @@ import {OptionToken, ERC20} from "src/policies/rewards/convertible/bases/OptionT
 ///      to save gas on deployment and is based on VestedERC20 (https://github.com/ZeframLou/vested-erc20)
 ///
 /// @author Bond Protocol
-contract FixedStrikeOptionToken is OptionToken {
+contract ConvertibleOHMToken is ConvertibleToken {
     /* ========== IMMUTABLE PARAMETERS ========== */
 
     /// @notice The strike price of the option

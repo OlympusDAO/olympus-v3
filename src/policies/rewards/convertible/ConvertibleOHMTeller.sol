@@ -8,8 +8,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 
-import {IFixedStrikeOptionTeller} from "src/policies/rewards/convertible/interfaces/IFixedStrikeOptionTeller.sol";
-import {FixedStrikeOptionToken} from "src/policies/rewards/convertible/FixedStrikeOptionToken.sol";
+import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -21,8 +21,8 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-contract FixedStrikeOptionTeller is
-    IFixedStrikeOptionTeller,
+contract ConvertibleOHMTeller is
+    IConvertibleOHMTeller,
     Policy,
     PolicyEnabler,
     ReentrancyGuardTransient
@@ -39,8 +39,8 @@ contract FixedStrikeOptionTeller is
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
 
-    /// @notice The reference implementation of `FixedStrikeOptionToken`, deployed upon creation for cloning
-    FixedStrikeOptionToken public immutable TOKEN_IMPLEMENTATION;
+    /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
+    ConvertibleOHMToken public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
     ERC20 public immutable OHM;
@@ -51,7 +51,7 @@ contract FixedStrikeOptionTeller is
     // ========== STATE VARIABLES ========== //
 
     /// @notice Convertible tokens (hash of parameters to address)
-    mapping(bytes32 token_ => FixedStrikeOptionToken) public tokens;
+    mapping(bytes32 token_ => ConvertibleOHMToken) public tokens;
 
     /// @notice The minter module for minting OHM
     MINTRv1 public MINTR;
@@ -59,10 +59,10 @@ contract FixedStrikeOptionTeller is
     /// @notice The treasury module for receiving quote tokens
     TRSRYv1 public TRSRY;
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     address public override rewardDistributor;
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     uint48 public override minDuration;
 
     // ========== CONSTRUCTOR ========== //
@@ -74,7 +74,7 @@ contract FixedStrikeOptionTeller is
         _requireNonzeroAddress(1, ohm_);
 
         // Deploy the token implementation for token cloning (deployments)
-        TOKEN_IMPLEMENTATION = new FixedStrikeOptionToken();
+        TOKEN_IMPLEMENTATION = new ConvertibleOHMToken();
 
         OHM = ERC20(ohm_);
         if (OHM.decimals() != _OHM_DECIMALS) revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
@@ -117,13 +117,13 @@ contract FixedStrikeOptionTeller is
 
     // ========== TOKEN DEPLOYMENTS ========== //
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function deploy(
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external override onlyEnabled nonReentrant returns (FixedStrikeOptionToken) {
+    ) external override onlyEnabled nonReentrant returns (ConvertibleOHMToken) {
         _requireRewardDistributor();
 
         // If eligible is zero, use the current timestamp
@@ -158,7 +158,7 @@ contract FixedStrikeOptionTeller is
         // Create the token if one doesn't already exist
         // Timestamps are truncated above to give canonical version of hash
         bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
-        FixedStrikeOptionToken token = tokens[tokenHash];
+        ConvertibleOHMToken token = tokens[tokenHash];
 
         // If the token doesn't exist, deploy (clone) it
         if (address(token) == address(0)) {
@@ -180,13 +180,13 @@ contract FixedStrikeOptionTeller is
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) private returns (FixedStrikeOptionToken token) {
+    ) private returns (ConvertibleOHMToken token) {
         // Generate name and symbol
         (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
 
         // TODO: simplify this memory layout after implementing the convertible token.
         // Deploy (clone) the token
-        token = FixedStrikeOptionToken(
+        token = ConvertibleOHMToken(
             address(TOKEN_IMPLEMENTATION).clone(
                 abi.encodePacked(
                     name,
@@ -208,16 +208,16 @@ contract FixedStrikeOptionTeller is
 
     // ========== TOKEN MINTING ========== //
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function create(
-        FixedStrikeOptionToken token_,
+        ConvertibleOHMToken token_,
         address to_,
         uint256 amount_
     ) external override onlyEnabled nonReentrant {
         _requireRewardDistributor();
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
-        (FixedStrikeOptionToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
+        (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
         require(expiry > uint48(block.timestamp), Teller_TokenExpired(expiry));
 
         token.mint(msg.sender, amount_);
@@ -226,14 +226,14 @@ contract FixedStrikeOptionTeller is
 
     // ========== TOKEN EXERCISE ========== //
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function exercise(
-        FixedStrikeOptionToken token_,
+        ConvertibleOHMToken token_,
         uint256 amount_
     ) external override onlyEnabled nonReentrant {
         _requireNonzeroAmount(1, amount_);
         (
-            FixedStrikeOptionToken token,
+            ConvertibleOHMToken token,
             ERC20 quoteToken,
             uint48 eligible,
             uint48 expiry,
@@ -265,9 +265,9 @@ contract FixedStrikeOptionTeller is
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function exerciseCost(
-        FixedStrikeOptionToken token_,
+        ConvertibleOHMToken token_,
         uint256 amount_
     ) external view override returns (ERC20, uint256) {
         _requireNonzeroAmount(1, amount_);
@@ -277,18 +277,18 @@ contract FixedStrikeOptionTeller is
         return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function getToken(
         ERC20 quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) public view override returns (FixedStrikeOptionToken) {
+    ) public view override returns (ConvertibleOHMToken) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Calculate a hash from the normalized inputs
         bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
-        FixedStrikeOptionToken token = tokens[tokenHash];
+        ConvertibleOHMToken token = tokens[tokenHash];
 
         // Revert if the convertible token does not exist
         if (address(token) == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
@@ -296,7 +296,7 @@ contract FixedStrikeOptionTeller is
         return token;
     }
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function getTokenHash(
         ERC20 quoteToken_,
         uint48 eligible_,
@@ -314,8 +314,8 @@ contract FixedStrikeOptionTeller is
     }
 
     function _requireExistingToken(
-        FixedStrikeOptionToken token_
-    ) internal view returns (FixedStrikeOptionToken, ERC20, uint48, uint48, uint256) {
+        ConvertibleOHMToken token_
+    ) internal view returns (ConvertibleOHMToken, ERC20, uint48, uint48, uint256) {
         // Load token parameters
         (
             uint8 decimals,
@@ -330,7 +330,7 @@ contract FixedStrikeOptionTeller is
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
-        FixedStrikeOptionToken token = getToken(quoteToken, eligible, expiry, strikePrice);
+        ConvertibleOHMToken token = getToken(quoteToken, eligible, expiry, strikePrice);
 
         // TODO: simplify these checks after implementing the convertible token.
         // Revert if provided token address does not match stored token address or the returned parameters do not match
@@ -556,7 +556,7 @@ contract FixedStrikeOptionTeller is
 
     // ========== ADMIN CONFIG ========== //
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function setRewardDistributor(
         address rewardDistributor_
     ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {
@@ -565,7 +565,7 @@ contract FixedStrikeOptionTeller is
         emit RewardDistributorSet(rewardDistributor_);
     }
 
-    /// @inheritdoc IFixedStrikeOptionTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(
         uint48 duration_
     ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {

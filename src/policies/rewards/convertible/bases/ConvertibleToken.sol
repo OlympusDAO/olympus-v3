@@ -25,7 +25,7 @@ import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20
 ///      to save gas on deployment and is based on VestedERC20 (https://github.com/ZeframLou/vested-erc20)
 ///
 /// @author Bond Protocol
-abstract contract OptionToken is CloneERC20 {
+abstract contract ConvertibleToken is CloneERC20 {
     /* ========== ERRORS ========== */
     error OptionToken_OnlyTeller();
 
