@@ -39,14 +39,14 @@ contract ConvertibleOHMTeller is
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
 
+    /// @notice The OHM token decimals
+    uint8 private constant _OHM_DECIMALS = 9;
+
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     ConvertibleOHMToken public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
     ERC20 public immutable OHM;
-
-    /// @notice The OHM token decimals
-    uint8 private constant _OHM_DECIMALS = 9;
 
     // ========== STATE VARIABLES ========== //
 
@@ -191,7 +191,7 @@ contract ConvertibleOHMTeller is
                 abi.encodePacked(
                     name,
                     symbol,
-                    uint8(OHM.decimals()),
+                    _OHM_DECIMALS,
                     OHM,
                     quoteToken_,
                     eligible_,
@@ -336,7 +336,7 @@ contract ConvertibleOHMTeller is
         // Revert if provided token address does not match stored token address or the returned parameters do not match
         if (
             address(token_) != address(token) ||
-            decimals != OHM.decimals() ||
+            decimals != _OHM_DECIMALS ||
             address(payoutToken) != address(OHM) ||
             receiver != address(TRSRY) ||
             call != true
