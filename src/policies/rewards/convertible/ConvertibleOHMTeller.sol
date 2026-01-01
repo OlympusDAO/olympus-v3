@@ -218,7 +218,7 @@ contract ConvertibleOHMTeller is
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
         (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
-        require(expiry > uint48(block.timestamp), Teller_TokenExpired(expiry));
+        if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
 
         token.mint(to_, amount_);
         emit ConvertibleTokenMinted(token_, to_, amount_);
@@ -310,7 +310,7 @@ contract ConvertibleOHMTeller is
     // ========== INTERNAL FUNCTIONS ========== //
 
     function _requireRewardDistributor() internal view {
-        require(msg.sender == address(rewardDistributor), Teller_OnlyRewardDistributor());
+        if (msg.sender != address(rewardDistributor)) revert Teller_OnlyRewardDistributor();
     }
 
     function _requireExistingToken(
