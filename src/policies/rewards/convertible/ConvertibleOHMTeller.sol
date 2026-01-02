@@ -43,7 +43,7 @@ contract ConvertibleOHMTeller is
     uint8 private constant _OHM_DECIMALS = 9;
 
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
-    ConvertibleOHMToken public immutable TOKEN_IMPLEMENTATION;
+    address public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
     ERC20 public immutable OHM;
@@ -73,8 +73,8 @@ contract ConvertibleOHMTeller is
         _requireNonzeroAddress(0, kernel_);
         _requireNonzeroAddress(1, ohm_);
 
-        // Deploy the token implementation for token cloning (deployments)
-        TOKEN_IMPLEMENTATION = new ConvertibleOHMToken();
+        // Deploy the token implementation for cloning (deployments)
+        TOKEN_IMPLEMENTATION = address(new ConvertibleOHMToken());
 
         OHM = ERC20(ohm_);
         if (OHM.decimals() != _OHM_DECIMALS) revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
@@ -162,7 +162,24 @@ contract ConvertibleOHMTeller is
 
         // If the token doesn't exist, deploy (clone) it
         if (address(token) == address(0)) {
-            token = _deploy(quoteToken_, eligible_, expiry_, strikePrice_);
+            // Generate name and symbol
+            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
+
+            // Deploy (clone) the token with immutable args
+            token = ConvertibleOHMToken(
+                TOKEN_IMPLEMENTATION.clone(
+                    abi.encodePacked(
+                        name, // 0x00: bytes32
+                        symbol, // 0x20: bytes32
+                        _OHM_DECIMALS, // 0x40: uint8
+                        quoteToken_, // 0x41: address
+                        eligible_, // 0x55: uint48
+                        expiry_, // 0x5b: uint48
+                        address(this), // 0x61: address
+                        strikePrice_ // 0x75: uint256
+                    )
+                )
+            );
 
             // Set the domain separator for the token on creation to save gas on permit approvals
             token.updateDomainSeparator();
@@ -172,37 +189,6 @@ contract ConvertibleOHMTeller is
 
             emit ConvertibleTokenCreated(token, quoteToken_, eligible_, expiry_, strikePrice_);
         }
-        return token;
-    }
-
-    function _deploy(
-        ERC20 quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        uint256 strikePrice_
-    ) private returns (ConvertibleOHMToken token) {
-        // Generate name and symbol
-        (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
-
-        // TODO: simplify this memory layout after implementing the convertible token.
-        // Deploy (clone) the token
-        token = ConvertibleOHMToken(
-            address(TOKEN_IMPLEMENTATION).clone(
-                abi.encodePacked(
-                    name,
-                    symbol,
-                    _OHM_DECIMALS,
-                    OHM,
-                    quoteToken_,
-                    eligible_,
-                    expiry_,
-                    address(TRSRY),
-                    true,
-                    address(this),
-                    strikePrice_
-                )
-            )
-        );
         return token;
     }
 
@@ -317,30 +303,15 @@ contract ConvertibleOHMTeller is
         ConvertibleOHMToken token_
     ) internal view returns (ConvertibleOHMToken, ERC20, uint48, uint48, uint256) {
         // Load token parameters
-        (
-            uint8 decimals,
-            ERC20 payoutToken,
-            ERC20 quoteToken,
-            uint48 eligible,
-            uint48 expiry,
-            address receiver,
-            bool call,
-            uint256 strikePrice
-        ) = token_.getOptionParameters();
+        (ERC20 quoteToken, uint48 eligible, uint48 expiry, uint256 strikePrice) = token_
+            .parameters();
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
         ConvertibleOHMToken token = getToken(quoteToken, eligible, expiry, strikePrice);
 
-        // TODO: simplify these checks after implementing the convertible token.
-        // Revert if provided token address does not match stored token address or the returned parameters do not match
-        if (
-            address(token_) != address(token) ||
-            decimals != _OHM_DECIMALS ||
-            address(payoutToken) != address(OHM) ||
-            receiver != address(TRSRY) ||
-            call != true
-        ) revert Teller_UnsupportedToken(address(token_));
+        // Revert if provided token address does not match stored token address
+        if (address(token_) != address(token)) revert Teller_UnsupportedToken(address(token_));
 
         return (token, quoteToken, eligible, expiry, strikePrice);
     }

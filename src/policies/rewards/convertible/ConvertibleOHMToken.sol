@@ -1,59 +1,100 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.30;
 
-// Copied from `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionToken.sol`
+// Based on Bond Protocol's `FixedStrikeOptionToken` and `OptionToken`:
+// `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionToken.sol`
+// `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/bases/OptionToken.sol`
 
-import {ConvertibleToken, ERC20} from "src/policies/rewards/convertible/bases/ConvertibleToken.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20.sol";
 
 /// @title Convertible OHM Token
-/// @notice Convertible OHM Token Contract (ERC-20 compatible)
-///
-/// @dev The Convertible OHM Token contract is issued by a
-///      Convertible OHM Teller to represent traditional
-///      American-style options on the underlying token with a fixed strike price.
-///
-///      Call option tokens can be exercised for the underlying token 1:1
-///      by paying the amount * strike price in the quote token
-///      at any time between the eligible and expiry timestamps.
-///
+/// @notice The ERC20-compatible token representing a call option on OHM with a fixed strike price.
 /// @dev This contract uses Clones (https://github.com/wighawag/clones-with-immutable-args)
-///      to save gas on deployment and is based on VestedERC20 (https://github.com/ZeframLou/vested-erc20)
+///      for gas-efficient deployment.
+///      Tokens can only be minted/burned by the Convertible OHM Teller that created them.
 ///
-/// @author Bond Protocol
-contract ConvertibleOHMToken is ConvertibleToken {
-    /* ========== IMMUTABLE PARAMETERS ========== */
+///      Tokens can be exercised 1:1 for OHM by paying (amount * strike price) in the quote token.
+///      Exercise is permitted any time between the eligible timestamp and the expiry timestamp.
+///
+///      Each token instance has immutable parameters.
+///      Memory layout of immutable args (total: 149 bytes / 0x95):
+///      [0x00:0x20]  name (bytes32)
+///      [0x20:0x40]  symbol (bytes32)
+///      [0x40:0x41]  decimals (uint8)
+///      [0x41:0x55]  quoteToken (address)
+///      [0x55:0x5b]  eligible (uint48)
+///      [0x5b:0x61]  expiry (uint48)
+///      [0x61:0x75]  teller (address)
+///      [0x75:0x95]  strikePrice (uint256)
+contract ConvertibleOHMToken is CloneERC20 {
+    // ========== ERRORS ========== //
 
-    /// @notice The strike price of the option
-    /// @return _strike The option strike price specified in the amount of quote tokens per underlying token
-    function strike() public pure returns (uint256 _strike) {
-        return _getArgUint256(0x9e);
+    error ConvertibleOHMToken_OnlyTeller();
+
+    // ========== IMMUTABLE PARAMETERS ========== //
+
+    // [0x00:0x20]  name (bytes32)
+    // [0x20:0x40]  symbol (bytes32)
+    // [0x40:0x41]  decimals (uint8)
+    uint8 private constant _QUOTE_TOKEN_OFFSET = 0x41;
+    uint8 private constant _ELIGIBLE_TIMESTAMP_OFFSET = 0x55;
+    uint8 private constant _EXPIRATION_TIMESTAMP_OFFSET = 0x5b;
+    uint8 private constant _TELLER_OFFSET = 0x61;
+    uint8 private constant _STRIKE_PRICE_OFFSET = 0x75;
+
+    // ========== VIEW FUNCTIONS FOR IMMUTABLE PARAMETERS ========== //
+
+    /// @notice Returns the token parameters: quote token, eligible timestamp, expiration timestamp, strike price.
+    function parameters() external pure returns (ERC20, uint48, uint48, uint256) {
+        return (quote(), eligible(), expiry(), strike());
     }
 
-    /* ========== VIEW ========== */
+    /// @notice Returns the address of the quote token that this convertible token is quoted in.
+    function quote() public pure returns (ERC20) {
+        return ERC20(_getArgAddress(_QUOTE_TOKEN_OFFSET));
+    }
 
-    /// @notice Get collection of option parameters in a single call
-    /// @return decimals_  The number of decimals for the option token (same as payout token)
-    /// @return payout_    The address of the payout token
-    /// @return quote_     The address of the quote token
-    /// @return eligible_  The option exercise eligibility timestamp
-    /// @return expiry_    The option exercise expiry timestamp
-    /// @return receiver_  The address of the receiver
-    /// @return call_      Whether the option is a call (true) or a put (false)
-    /// @return strike_    The option strike price specified in the amount of quote tokens per underlying token
-    function getOptionParameters()
-        external
-        pure
-        returns (
-            uint8 decimals_,
-            ERC20 payout_,
-            ERC20 quote_,
-            uint48 eligible_,
-            uint48 expiry_,
-            address receiver_,
-            bool call_,
-            uint256 strike_
-        )
-    {
-        return (decimals(), payout(), quote(), eligible(), expiry(), receiver(), call(), strike());
+    /// @notice Returns the timestamp when this convertible token can first be exercised.
+    function eligible() public pure returns (uint48) {
+        return _getArgUint48(_ELIGIBLE_TIMESTAMP_OFFSET);
+    }
+
+    /// @notice Returns the timestamp after which this convertible token can no longer be exercised.
+    function expiry() public pure returns (uint48) {
+        return _getArgUint48(_EXPIRATION_TIMESTAMP_OFFSET);
+    }
+
+    /// @notice Returns the address of the Convertible OHM Teller that created this convertible token.
+    function teller() public pure returns (address) {
+        return _getArgAddress(_TELLER_OFFSET);
+    }
+
+    /// @notice Returns the strike price specified in the amount of quote tokens per OHM.
+    function strike() public pure returns (uint256) {
+        return _getArgUint256(_STRIKE_PRICE_OFFSET);
+    }
+
+    // ========== MINT & BURN ========== //
+
+    modifier onlyTeller() {
+        if (msg.sender != teller()) revert ConvertibleOHMToken_OnlyTeller();
+        _;
+    }
+
+    /// @notice Mints convertible tokens.
+    /// @dev Only callable by the teller that created this token.
+    /// @param to_ The address to mint to.
+    /// @param amount_ The amount to mint.
+    function mint(address to_, uint256 amount_) external onlyTeller {
+        _mint(to_, amount_);
+    }
+
+    /// @notice Burns convertible tokens.
+    /// @dev Only callable by the teller that created this token.
+    /// @param from_ The address to burn from.
+    /// @param amount_ The amount to burn.
+    function burn(address from_, uint256 amount_) external onlyTeller {
+        _burn(from_, amount_);
     }
 }
