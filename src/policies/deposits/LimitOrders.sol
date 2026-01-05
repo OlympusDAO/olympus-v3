@@ -234,6 +234,9 @@ contract CDAuctioneerLimitOrders is
             // Deposit into sUSDS
             uint256 depositedShares = SUSDS.deposit(totalDeposit, address(this));
             actualDeposit = SUSDS.previewRedeem(depositedShares);
+
+            // Check that the withdrawable amount is not 0 (though this should never happen)
+            if (actualDeposit == 0) revert InvalidParam("zero withdrawable amount");
         }
 
         // Adjust the deposit and incentive budgets, based on the withdrawable amount
