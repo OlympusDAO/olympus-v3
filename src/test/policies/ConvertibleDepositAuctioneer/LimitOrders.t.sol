@@ -890,6 +890,33 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    // when the deposit would result in 0 being withdrawable
+    //  [X] it reverts
+    function test_createOrder_zeroWithdrawable_reverts(uint256 depositBudget) public {
+        // Bound the parameters
+        // The actual higher bounds may be higher, but these values guarantee a 0 withdrawable amount
+        depositBudget = bound(depositBudget, 1, 5);
+
+        // Accrue yield
+        _accrueYield(10000e18);
+
+        // Set the auctioneer minimum bid to 1
+        // Required for the minFillSize to be 1
+        cdAuctioneer.setMinimumBid(1);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "zero shares"));
+
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            depositBudget, // depositBudget
+            0, // incentiveBudget
+            DEFAULT_MAX_PRICE, // maxPrice
+            1 // minFillSize
+        );
+    }
+
     // ========== FILL ORDER TESTS ========== //
 
     // when order is active and price is below max

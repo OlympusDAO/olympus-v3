@@ -228,6 +228,9 @@ contract CDAuctioneerLimitOrders is
             uint256 totalDeposit = depositBudget_ + incentiveBudget_;
             USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
 
+            // Check that the deposit will result in a non-zero amount of shares
+            if (SUSDS.previewDeposit(totalDeposit) == 0) revert InvalidParam("zero shares");
+
             // Deposit into sUSDS
             uint256 depositedShares = SUSDS.deposit(totalDeposit, address(this));
             actualDeposit = SUSDS.previewRedeem(depositedShares);
