@@ -302,13 +302,13 @@ contract CDAuctioneerLimitOrders is
         _orders[orderId] = LimitOrder({
             owner: msg.sender,
             depositPeriod: depositPeriod_,
+            active: true,
             depositBudget: actualDepositBudget,
             incentiveBudget: actualIncentiveBudget,
             depositSpent: 0,
             incentiveSpent: 0,
             maxPrice: maxPrice_,
-            minFillSize: minFillSize_,
-            active: true
+            minFillSize: minFillSize_
         });
 
         emit OrderCreated(
