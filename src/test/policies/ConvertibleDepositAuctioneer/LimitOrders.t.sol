@@ -519,7 +519,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         depositBudget = bound(depositBudget, DEFAULT_MIN_FILL_SIZE, 50_000e18);
 
         // Accrue yield
-        _accrueYield(depositBudget);
+        _accrueYield(123e18);
 
         uint256 expectedShares = sUsds.previewDeposit(depositBudget);
         uint256 expectedWithdrawable = _getExpectedWithdrawable(depositBudget);
@@ -567,7 +567,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         uint256 incentiveBudget = DEFAULT_INCENTIVE_BUDGET;
 
         // Accrue yield
-        _accrueYield(depositBudget);
+        _accrueYield(123e18);
 
         uint256 expectedShares = sUsds.previewDeposit(depositBudget + incentiveBudget);
         uint256 expectedIncentiveBudget;
