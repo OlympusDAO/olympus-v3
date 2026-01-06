@@ -7,6 +7,11 @@ import {IPyth} from "interfaces/IPyth.sol";
 contract MockPyth is IPyth {
     mapping(bytes32 => Price) public s_prices;
 
+    // Errors copied from PythErrors.sol
+
+    error PriceFeedNotFound();
+    error StalePrice();
+
     function setPrice(
         bytes32 priceId,
         int64 price,
@@ -17,6 +22,7 @@ contract MockPyth is IPyth {
         s_prices[priceId] = Price({price: price, conf: conf, expo: expo, publishTime: publishTime});
     }
 
+    /// @dev Replicates the errors thrown by the Pyth contract
     function getPriceNoOlderThan(
         bytes32 priceId,
         uint256 age
@@ -25,12 +31,12 @@ contract MockPyth is IPyth {
 
         // Check if price exists
         if (priceData.publishTime == 0) {
-            revert("PriceFeedNotFound");
+            revert PriceFeedNotFound();
         }
 
         // Check if price is stale
         if (priceData.publishTime < block.timestamp - age) {
-            revert("StalePrice");
+            revert StalePrice();
         }
 
         return priceData;

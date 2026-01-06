@@ -307,18 +307,14 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the publish time is before the update threshold
-    //  [X] it reverts with Pyth_FeedPublishTimeStale
-    function test_getOneFeedPrice_revertsOnFeedPublishTimeStale() public {
+    //  [X] it reverts with StalePrice
+    function test_getOneFeedPrice_givenStalePrice_reverts() public {
         // Set publish time to be stale
         uint256 staleTime = block.timestamp - UPDATE_THRESHOLD - 1;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, staleTime);
 
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_FeedPublishTimeStale.selector,
-            address(pyth),
-            PRICE_ID_1,
-            staleTime,
-            block.timestamp - UPDATE_THRESHOLD
+            MockPyth.StalePrice.selector
         );
         vm.expectRevert(err);
 
@@ -331,9 +327,11 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
+    // TODO is this needed?
+
     // given the confidence interval exceeds the maximum (after conversion to Pyth scale)
     //  [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_revertsOnFeedConfidenceExcessive() public {
+    function test_getOneFeedPrice_maxConfidenceExceeded_reverts() public {
         // MAX_CONFIDENCE = 2e16 in output decimals (18)
         // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals, so it should pass
         // To exceed MAX_CONFIDENCE (2e16), we need conf * 10^10 > 2e16, so conf > 2e6
@@ -376,7 +374,9 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given expo is negative (expo = -8, outputDecimals = 18)
-    //  [X] it correctly converts the price by multiplying
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [X] it correctly converts the price
     function test_getOneFeedPrice_success_expoNegative() public view {
         // expo = -8, outputDecimals = 18, totalExponent = 10
         bytes memory params = encodeOneFeedParams(
@@ -397,7 +397,9 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given expo is positive (expo = 8, outputDecimals = 18)
-    //  [X] it correctly converts the price by multiplying
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [X] it correctly converts the price
     function test_getOneFeedPrice_success_expoPositive() public view {
         // expo = 8, outputDecimals = 18, totalExponent = 26
         bytes memory params = encodeOneFeedParams(
@@ -418,7 +420,9 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given expo is zero (expo = 0, outputDecimals = 18)
-    //  [X] it correctly converts the price by multiplying
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [X] it correctly converts the price
     function test_getOneFeedPrice_success_expoZero() public {
         // expo = 0, outputDecimals = 18, totalExponent = 18
         int64 price = 123456789;
@@ -437,7 +441,14 @@ contract PythPriceFeedsTest is Test {
         assertEq(priceInt, 123456789 * 10 ** 18, "Price should match expected value for zero expo");
     }
 
+    // given expo equals positive outputDecimals (expo = 18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
     // given expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
     //  [X] it returns the price without scaling
     function test_getOneFeedPrice_success_expoEqualsNegativeOutputDecimals() public {
         // expo = -18, outputDecimals = 18, totalExponent = 0
@@ -462,6 +473,8 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given expo is very negative (expo = -20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
     //  [X] it correctly converts the price by dividing
     function test_getOneFeedPrice_success_expoVeryNegative() public {
         // expo = -20, outputDecimals = 18, totalExponent = -2
@@ -482,6 +495,8 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given expo is very positive (expo = 20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
     //  [X] it correctly converts the price by multiplying
     function test_getOneFeedPrice_success_expoVeryPositive() public {
         // expo = 20, outputDecimals = 18, totalExponent = 38
@@ -504,6 +519,8 @@ contract PythPriceFeedsTest is Test {
             "Price should match expected value for very positive expo"
         );
     }
+
+    // TODO required?
 
     // given the confidence interval is below the maximum (after conversion)
     //  [X] it returns the correct price
@@ -576,7 +593,7 @@ contract PythPriceFeedsTest is Test {
         assertEq(priceInt, expected, "Divided price should match expected calculation");
     }
 
-    // given the first pyth contract address is zeros
+    // given the first pyth contract address is zero
     //  [X] it reverts with Pyth_ParamsPythInvalid
     function test_getTwoFeedPriceDiv_revertsOnParamsFirstFeedInvalid() public {
         bytes memory err = abi.encodeWithSelector(
@@ -760,7 +777,7 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    // given the first feed has invalid price (zero)
+    // given the first feed has invalid price (<= 0)
     //  [X] it reverts with Pyth_FeedPriceInvalid
     function test_getTwoFeedPriceDiv_revertsOnFirstFeedInvalid() public {
         // First feed has invalid price
@@ -787,7 +804,7 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    // given the second feed has invalid price (zero)
+    // given the second feed has invalid price (<= 0)
     //  [X] it reverts with Pyth_FeedPriceInvalid
     function test_getTwoFeedPriceDiv_revertsOnSecondFeedInvalid() public {
         // Second feed has invalid price
@@ -813,6 +830,94 @@ contract PythPriceFeedsTest is Test {
         );
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
+
+    // given the first feed publish time is < the threshold boundary
+    //  [ ] it reverts
+
+    // given the second feed publish time is < the threshold boundary
+    //  [ ] it reverts
+
+    // given the first feed expo + outputDecimals > BASE_10_MAX_EXPONENT
+    //  [ ] it reverts with Pyth_ExponentOutOfBounds
+
+    // given the first feed expo is negative (expo = -8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is positive (expo = 8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is zero (expo = 0, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo equals positive outputDecimals (expo = 18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is very negative (expo = -20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by dividing
+
+    // given the first feed expo is very positive (expo = 20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by multiplying
+
+    // given the first feed publish time is >= the threshold boundary
+    //  [ ] it returns the correct price
+
+    // given the second feed expo + outputDecimals > BASE_10_MAX_EXPONENT
+    //  [ ] it reverts with Pyth_ExponentOutOfBounds
+
+    // given the second feed expo is negative (expo = -8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is positive (expo = 8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is zero (expo = 0, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo equals positive outputDecimals (expo = 18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is very negative (expo = -20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by dividing
+
+    // given the second feed expo is very positive (expo = 20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by multiplying
+
+    // given the second feed publish time is >= the threshold boundary
+    //  [ ] it returns the correct price
 
     // =========  TWO FEED TESTS - MUL ========= //
 
@@ -861,5 +966,120 @@ contract PythPriceFeedsTest is Test {
         );
         pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
+
+    // given the second pyth contract address is zero
+    //  [ ] it reverts with Pyth_ParamsPythInvalid
+
+    // given the first price feed ID is zero
+    //  [ ] it reverts with Pyth_ParamsPriceFeedIdInvalid
+
+    // given the second price feed ID is zero
+    //  [ ] it reverts with Pyth_ParamsPriceFeedIdInvalid
+
+    // given the first update threshold is zero
+    //  [ ] it reverts with Pyth_ParamsUpdateThresholdInvalid
+
+    // given the second update threshold is zero
+    //  [ ] it reverts with Pyth_ParamsUpdateThresholdInvalid
+
+    // given the first max confidence is zero
+    //  [ ] it reverts with Pyth_ParamsMaxConfidenceInvalid
+
+    // given the second max confidence is zero
+    //  [ ] it reverts with Pyth_ParamsMaxConfidenceInvalid
+
+    // given the first feed has invalid price (<= 0)
+    //  [ ] it reverts with Pyth_FeedPriceInvalid
+
+    // given the second feed has invalid price (<= 0)
+    //  [ ] it reverts with Pyth_FeedPriceInvalid
+
+    // given the first feed publish time is < the threshold boundary
+    //  [ ] it reverts
+
+    // given the second feed publish time is < the threshold boundary
+    //  [ ] it reverts
+
+    // given the first feed expo + outputDecimals > BASE_10_MAX_EXPONENT
+    //  [ ] it reverts with Pyth_ExponentOutOfBounds
+
+    // given the first feed expo is negative (expo = -8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is positive (expo = 8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is zero (expo = 0, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo equals positive outputDecimals (expo = 18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the first feed expo is very negative (expo = -20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by dividing
+
+    // given the first feed expo is very positive (expo = 20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by multiplying
+
+    // given the first feed publish time is >= the threshold boundary
+    //  [ ] it returns the correct price
+
+    // given the second feed expo + outputDecimals > BASE_10_MAX_EXPONENT
+    //  [ ] it reverts with Pyth_ExponentOutOfBounds
+
+    // given the second feed expo is negative (expo = -8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is positive (expo = 8, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is zero (expo = 0, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo equals positive outputDecimals (expo = 18, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price
+
+    // given the second feed expo is very negative (expo = -20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by dividing
+
+    // given the second feed expo is very positive (expo = 20, outputDecimals = 18)
+    //  given the confidence interval is above the maximum
+    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //  [ ] it correctly converts the price by multiplying
+
+    // given the second feed publish time is >= the threshold boundary
+    //  [ ] it returns the correct price
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)
