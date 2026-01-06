@@ -148,10 +148,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the pyth contract address is zero
-    //  [X] it reverts with Pyth_ParamsFeedInvalid
+    //  [X] it reverts with Pyth_ParamsPythInvalid
     function test_getOneFeedPrice_revertsOnParamsFeedInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsFeedInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             0,
             address(0)
         );
@@ -577,10 +577,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the first pyth contract address is zeros
-    //  [X] it reverts with Pyth_ParamsFeedInvalid
+    //  [X] it reverts with Pyth_ParamsPythInvalid
     function test_getTwoFeedPriceDiv_revertsOnParamsFirstFeedInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsFeedInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             0,
             address(0)
         );
@@ -669,10 +669,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the second pyth contract address is zero
-    //  [X] it reverts with Pyth_ParamsFeedInvalid
+    //  [X] it reverts with Pyth_ParamsPythInvalid
     function test_getTwoFeedPriceDiv_revertsOnParamsSecondFeedInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsFeedInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             4,
             address(0)
         );
@@ -840,10 +840,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the first pyth contract address is zero
-    //  [X] it reverts with Pyth_ParamsFeedInvalid
+    //  [X] it reverts with Pyth_ParamsPythInvalid
     function test_getTwoFeedPriceMul_revertsOnParamsFirstFeedInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsFeedInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             0,
             address(0)
         );

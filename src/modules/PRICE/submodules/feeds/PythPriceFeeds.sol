@@ -65,7 +65,7 @@ contract PythPriceFeeds is PriceSubmodule {
     ///
     /// @param paramsIndex_     The index of the parameter
     /// @param feed_            The address of the Pyth contract
-    error Pyth_ParamsFeedInvalid(uint8 paramsIndex_, address feed_);
+    error Pyth_ParamsPythInvalid(uint8 paramsIndex_, address feed_);
 
     /// @notice                 A price feed ID specified in the parameters is invalid
     ///
@@ -298,7 +298,7 @@ contract PythPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
-        if (params.pyth == address(0)) revert Pyth_ParamsFeedInvalid(0, params.pyth);
+        if (params.pyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.pyth);
         if (params.priceFeedId == bytes32(0))
             revert Pyth_ParamsPriceFeedIdInvalid(1, params.priceFeedId);
         if (params.updateThreshold == 0)
@@ -335,14 +335,14 @@ contract PythPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
-        if (params.firstPyth == address(0)) revert Pyth_ParamsFeedInvalid(0, params.firstPyth);
+        if (params.firstPyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.firstPyth);
         if (params.firstPriceFeedId == bytes32(0))
             revert Pyth_ParamsPriceFeedIdInvalid(1, params.firstPriceFeedId);
         if (params.firstUpdateThreshold == 0)
             revert Pyth_ParamsUpdateThresholdInvalid(2, params.firstUpdateThreshold);
         if (params.firstMaxConfidence == 0)
             revert Pyth_ParamsMaxConfidenceInvalid(3, params.firstMaxConfidence);
-        if (params.secondPyth == address(0)) revert Pyth_ParamsFeedInvalid(4, params.secondPyth);
+        if (params.secondPyth == address(0)) revert Pyth_ParamsPythInvalid(4, params.secondPyth);
         if (params.secondPriceFeedId == bytes32(0))
             revert Pyth_ParamsPriceFeedIdInvalid(5, params.secondPriceFeedId);
         if (params.secondUpdateThreshold == 0)
@@ -390,14 +390,14 @@ contract PythPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
-        if (params.firstPyth == address(0)) revert Pyth_ParamsFeedInvalid(0, params.firstPyth);
+        if (params.firstPyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.firstPyth);
         if (params.firstPriceFeedId == bytes32(0))
             revert Pyth_ParamsPriceFeedIdInvalid(1, params.firstPriceFeedId);
         if (params.firstUpdateThreshold == 0)
             revert Pyth_ParamsUpdateThresholdInvalid(2, params.firstUpdateThreshold);
         if (params.firstMaxConfidence == 0)
             revert Pyth_ParamsMaxConfidenceInvalid(3, params.firstMaxConfidence);
-        if (params.secondPyth == address(0)) revert Pyth_ParamsFeedInvalid(4, params.secondPyth);
+        if (params.secondPyth == address(0)) revert Pyth_ParamsPythInvalid(4, params.secondPyth);
         if (params.secondPriceFeedId == bytes32(0))
             revert Pyth_ParamsPriceFeedIdInvalid(5, params.secondPriceFeedId);
         if (params.secondUpdateThreshold == 0)
