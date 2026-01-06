@@ -167,10 +167,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the price feed ID is zero
-    //  [X] it reverts with Pyth_ParamsPriceIdInvalid
-    function test_getOneFeedPrice_revertsOnParamsPriceIdInvalid() public {
+    //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
+    function test_getOneFeedPrice_revertsOnParamsPriceFeedIdInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsPriceIdInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             1,
             bytes32(0)
         );
@@ -600,10 +600,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the first price feed ID is zero
-    //  [X] it reverts with Pyth_ParamsPriceIdInvalid
+    //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
     function test_getTwoFeedPriceDiv_revertsOnParamsFirstPriceIdInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsPriceIdInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             1,
             bytes32(0)
         );
@@ -692,10 +692,10 @@ contract PythPriceFeedsTest is Test {
     }
 
     // given the second price feed ID is zero
-    //  [X] it reverts with Pyth_ParamsPriceIdInvalid
+    //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
     function test_getTwoFeedPriceDiv_revertsOnParamsSecondPriceIdInvalid() public {
         bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ParamsPriceIdInvalid.selector,
+            PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             5,
             bytes32(0)
         );
