@@ -313,55 +313,7 @@ contract PythPriceFeedsTest is Test {
         uint256 staleTime = block.timestamp - UPDATE_THRESHOLD - 1;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, staleTime);
 
-        bytes memory err = abi.encodeWithSelector(
-            MockPyth.StalePrice.selector
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeOneFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
-    }
-
-    // TODO is this needed?
-
-    // given the confidence interval exceeds the maximum (after conversion to Pyth scale)
-    //  [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_maxConfidenceExceeded_reverts() public {
-        // MAX_CONFIDENCE = 2e16 in output decimals (18)
-        // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals, so it should pass
-        // To exceed MAX_CONFIDENCE (2e16), we need conf * 10^10 > 2e16, so conf > 2e6
-        // Use conf = 3000000 (3e6) to ensure it exceeds the threshold
-        // 3e6 * 10^10 = 3e16 in output decimals, which exceeds MAX_CONFIDENCE of 2e16
-        uint64 highConf = 3000000; // 3e6
-        pyth.setPrice(PRICE_ID_1, PRICE_1, highConf, EXPO_1, block.timestamp);
-
-        // Calculate expected maxConfidence in Pyth scale using the same formula as the code
-        // confidenceExponent = expo - outputDecimals = -8 - 18 = -26
-        // Since it's negative: maxConfidence_.mulDiv(1, 10^26)
-        int256 confidenceExponent = int256(EXPO_1) - int256(uint256(PRICE_DECIMALS));
-        uint64 maxConfInPythScale;
-        if (confidenceExponent >= 0) {
-            maxConfInPythScale = SafeCast.encodeUInt64(
-                uint256(MAX_CONFIDENCE).mulDiv(10 ** uint256(confidenceExponent), 1)
-            );
-        } else {
-            maxConfInPythScale = SafeCast.encodeUInt64(
-                uint256(MAX_CONFIDENCE).mulDiv(1, 10 ** uint256(-confidenceExponent))
-            );
-        }
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_FeedConfidenceExcessive.selector,
-            address(pyth),
-            PRICE_ID_1,
-            highConf,
-            maxConfInPythScale
-        );
+        bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
         vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(
@@ -375,9 +327,41 @@ contract PythPriceFeedsTest is Test {
 
     // given expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
-    //   [ ] it reverts with Pyth_FeedConfidenceExcessive
+    //   [X] it reverts with Pyth_FeedConfidenceExcessive
+    function test_getOneFeedPrice_maxConfidenceExceeded_reverts(uint64 priceConfidence_) public {
+        // MAX_CONFIDENCE = 2e16 in output decimals (18)
+        // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals, so it should pass
+        // To exceed MAX_CONFIDENCE (2e16), we need conf * 10^10 > 2e16, so conf > 2e6
+        priceConfidence_ = uint64(bound(priceConfidence_, 2e6 + 1, type(uint64).max));
+
+        // Set the price data
+        pyth.setPrice(PRICE_ID_1, PRICE_1, priceConfidence_, EXPO_1, block.timestamp);
+
+        // Calculate the expected maxConfidence in Pyth scale
+        // EXPO_1 = -8, PRICE_DECIMALS = 18
+        // maxConfidence = 2e16 * 1 / 10^*(-8+18) = 2e16 * 1 / 10^10 = 2e6
+        uint64 maxConfInPythScale = 2e6;
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_FeedConfidenceExcessive.selector,
+            address(pyth),
+            PRICE_ID_1,
+            priceConfidence_,
+            maxConfInPythScale
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
     //  [X] it correctly converts the price
-    function test_getOneFeedPrice_success_expoNegative() public view {
+    function test_getOneFeedPrice_givenExpoNegative() public view {
         // expo = -8, outputDecimals = 18, totalExponent = 10
         bytes memory params = encodeOneFeedParams(
             address(pyth),
