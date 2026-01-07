@@ -1,30 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.30;
 
 // Interfaces
 import {IRewardDistributor} from "src/policies/interfaces/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
 
 // Bophades
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @title  Base Reward Distributor
-/// @notice Abstract base contract for Merkle tree-based rewards distribution
-/// @dev    Architecture:
-///         - Rewards are calculated off-chain
-///         - Backend generates Merkle trees with accumulated rewards per user
-///         - Merkle roots are posted on-chain by authorized role
-///         - Users submit proofs to claim their rewards
+/// @title Base Reward Distributor
+/// @notice Minimal abstract base contract for Merkle tree-based rewards distribution.
+/// @dev Architecture:
+///      - Provides internal building blocks for epoch and merkle management.
+///      - Derived contracts define their own public API.
+///      - No assumptions about reward token type.
 abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
-    // ========== STATE VARIABLES ========== //
+    // ========== CONSTANTS & IMMUTABLES ========== //
 
     /// @notice Role that can update merkle roots
     bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
@@ -32,17 +28,10 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Minimum epoch duration
     uint40 public constant MIN_EPOCH_DURATION = 1 days;
 
-    /// @notice The TRSRY module
-    TRSRYv1 internal TRSRY;
-
-    /// @notice The reward token
-    IERC20 public immutable REWARD_TOKEN;
-
-    /// @notice The reward token vault
-    IERC4626 public immutable REWARD_TOKEN_VAULT;
-
     /// @notice Timestamp when first epoch begins (00:00:00 UTC)
     uint40 public immutable EPOCH_START_DATE;
+
+    // ========== STATE VARIABLES ========== //
 
     /// @notice Mapping from epochEndDate => merkle root
     mapping(uint256 epochEndDate => bytes32 merkleRoot) public epochMerkleRoots;
@@ -65,18 +54,11 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Constructor
     ///
     /// @param  kernel_             The Kernel address
-    /// @param  rewardTokenVault_   The ERC4626 vault token
     /// @param  epochStartDate_     The timestamp when first epoch begins (00:00:00 UTC)
-    constructor(
-        address kernel_,
-        address rewardTokenVault_,
-        uint256 epochStartDate_
-    ) Policy(Kernel(kernel_)) {
-        if (rewardTokenVault_ == address(0)) revert RewardDistributor_InvalidAddress();
+    constructor(address kernel_, uint256 epochStartDate_) Policy(Kernel(kernel_)) {
         if (epochStartDate_ == 0) revert RewardDistributor_EpochIsZero();
         _validateEpochStartOfDay(epochStartDate_);
-        REWARD_TOKEN = IERC20(IERC4626(rewardTokenVault_).asset());
-        REWARD_TOKEN_VAULT = IERC4626(rewardTokenVault_);
+
         // Note: epochStartDate_ is truncated to uint40. Max uint40 is ~year 36812.
         EPOCH_START_DATE = uint40(epochStartDate_);
         // Initialize to 23:59:59 UTC of the day before EPOCH_START_DATE
@@ -85,35 +67,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Disabled by default by PolicyEnabler
     }
 
-    // ========== POLICY SETUP ========== //
-
-    /// @inheritdoc Policy
-    function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("ROLES");
-        dependencies[1] = toKeycode("TRSRY");
-
-        // ROLES is inherited from PolicyEnabler
-        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
-    }
-
-    /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        virtual
-        override
-        returns (Permissions[] memory permissions)
-    {
-        Keycode trsryKeycode = toKeycode("TRSRY");
-
-        permissions = new Permissions[](1);
-        permissions[0] = Permissions({
-            keycode: trsryKeycode,
-            funcSelector: TRSRY.withdrawReserves.selector
-        });
-    }
+    // ========== POLICY VERSION ========== //
 
     function VERSION() external pure virtual returns (uint8 major, uint8 minor) {
         major = 1;
@@ -121,20 +75,16 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         return (major, minor);
     }
 
-    // ========== MERKLE ROOT MANAGEMENT ========== //
+    // ========== INTERNAL EPOCH MANAGEMENT ========== //
 
-    /// @notice Ends an epoch and sets its Merkle root
-    /// @dev    - Only callable by the ROLE_MERKLE_UPDATER role
-    ///         - Epoch end date must be at least 1 day after the last epoch end date
-    ///         - Epoch end date must be at 23:59:59 UTC (end of day)
-    ///         - Merkle tree cannot be updated once set
+    /// @notice Sets a merkle root for an epoch.
+    /// @dev The core internal function that validates and updates state.
+    ///      Derived contracts call this from their public function at the end of an epoch,
+    ///      then add token-specific logic and events afterward.
     ///
-    /// @param  epochEndDate_   The epoch end date (23:59:59 UTC timestamp)
-    /// @param  merkleRoot_     The Merkle root for the epoch's distribution
-    function endEpoch(
-        uint40 epochEndDate_,
-        bytes32 merkleRoot_
-    ) external virtual onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled {
+    /// @param epochEndDate_ The epoch end date (23:59:59 UTC timestamp).
+    /// @param merkleRoot_ The Merkle root for the epoch's distribution.
+    function _setMerkleRoot(uint40 epochEndDate_, bytes32 merkleRoot_) internal virtual {
         // Validate input
         if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidProof();
 
@@ -156,89 +106,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Update lastEpochEndDate
         lastEpochEndDate = epochEndDate_;
 
-        _emitMerkleRootSet(epochEndDate_, merkleRoot_);
-    }
-
-    // ========== CLAIM FUNCTIONS ========== //
-
-    /// @notice Preview the claimable rewards for a user without claiming
-    /// @dev    Returns 0 amounts if no valid claims are found (Merkle root not set or proof invalid)
-    ///
-    /// @param  user_               The user address to preview claims for
-    /// @param  epochEndDates_      Array of epoch end dates to preview
-    /// @param  amounts_            Array of amounts for each epoch (must match Merkle leaves)
-    /// @param  proofs_             Array of Merkle proofs, one per epoch
-    /// @return claimableAmount     The total amount of reward token claimable
-    /// @return vaultShares         The amount of vault shares equivalent to the claimable amount
-    function previewClaim(
-        address user_,
-        uint256[] calldata epochEndDates_,
-        uint256[] calldata amounts_,
-        bytes32[][] calldata proofs_
-    ) external view returns (uint256 claimableAmount, uint256 vaultShares) {
-        // Validate array lengths, return 0 if invalid
-        if (
-            epochEndDates_.length == 0 ||
-            epochEndDates_.length != amounts_.length ||
-            epochEndDates_.length != proofs_.length
-        ) {
-            return (0, 0);
-        }
-
-        for (uint256 i = 0; i < epochEndDates_.length; ) {
-            uint256 epochEndDate = epochEndDates_[i];
-            uint256 amount = amounts_[i];
-
-            // Skip epochs without merkle roots set
-            if (epochMerkleRoots[epochEndDate] != bytes32(0)) {
-                // Verify proof safely, skip if invalid or already claimed
-                if (_verifyProofSafe(user_, epochEndDate, amount, proofs_[i])) {
-                    claimableAmount += amount;
-                }
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Calculate equivalent vault shares
-        if (claimableAmount > 0) {
-            vaultShares = REWARD_TOKEN_VAULT.previewWithdraw(claimableAmount);
-        }
-    }
-
-    /// @notice Claim rewards for one or more epochs in a single transaction
-    ///
-    /// @param  epochEndDates_      Array of epoch end dates to claim
-    /// @param  amounts_            Array of amounts for each epoch (must match Merkle leaves)
-    /// @param  proofs_             Array of Merkle proofs, one per epoch
-    /// @param  asVaultToken_       If true, claim as vault token; if false, unwrap to underlying token
-    /// @return rewardToken         The address of the token transferred (vault token if `asVaultToken_`, otherwise underlying)
-    /// @return tokensTransferred   The amount of tokens transferred (vault shares if `asVaultToken_`, otherwise underlying)
-    function claim(
-        uint256[] calldata epochEndDates_,
-        uint256[] calldata amounts_,
-        bytes32[][] calldata proofs_,
-        bool asVaultToken_
-    ) external virtual onlyEnabled returns (address rewardToken, uint256 tokensTransferred) {
-        _validateClaimArrays(epochEndDates_, amounts_, proofs_);
-
-        (uint256 totalAmount, uint256[] memory claimedEpochEndDates) = _processClaims(
-            msg.sender,
-            epochEndDates_,
-            amounts_,
-            proofs_
-        );
-
-        if (totalAmount == 0) revert RewardDistributor_NothingToClaim();
-
-        (rewardToken, tokensTransferred) = _transferRewards(
-            msg.sender,
-            totalAmount,
-            claimedEpochEndDates,
-            asVaultToken_
-        );
+        emit MerkleRootSet(epochEndDate_, merkleRoot_);
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -273,55 +141,20 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         }
     }
 
-    /// @notice Process claims and return total amount and claimed epoch end dates
+    // ========== INTERNAL MERKLE PROOF HELPERS ========== //
+
+    /// @notice Computes the leaf node for merkle verification.
     ///
-    /// @param  user_               The user address claiming rewards
-    /// @param  epochEndDates_      Array of epoch end dates to claim
-    /// @param  amounts_            Array of amounts for each epoch
-    /// @param  proofs_             Array of Merkle proofs, one per epoch
-    /// @return totalAmount         The total amount claimed across all epochs
-    /// @return claimedEpochEndDates Array of epoch end dates that were actually claimed
-    function _processClaims(
+    /// @param user_ The address of the user.
+    /// @param epochEndDate_ The epoch end date.
+    /// @param amount_ The amount.
+    /// @return The computed leaf hash.
+    function _computeLeaf(
         address user_,
-        uint256[] calldata epochEndDates_,
-        uint256[] calldata amounts_,
-        bytes32[][] calldata proofs_
-    ) internal returns (uint256 totalAmount, uint256[] memory claimedEpochEndDates) {
-        // Allocate max possible size, will trim later
-        uint256[] memory tempClaimedDates = new uint256[](epochEndDates_.length);
-        uint256 claimedCount = 0;
-
-        for (uint256 i = 0; i < epochEndDates_.length; ) {
-            uint256 epochEndDate = epochEndDates_[i];
-            uint256 amount = amounts_[i];
-
-            // Revert if already claimed
-            if (hasClaimed[user_][epochEndDate]) {
-                revert RewardDistributor_AlreadyClaimed(epochEndDate);
-            }
-
-            // Verify merkle root is set for this epoch
-            if (epochMerkleRoots[epochEndDate] == bytes32(0))
-                revert RewardDistributor_MerkleRootNotSet(epochEndDate);
-
-            // Verify and mark as claimed
-            _verifyAndMarkClaimed(user_, epochEndDate, amount, proofs_[i]);
-
-            totalAmount += amount;
-            tempClaimedDates[claimedCount] = epochEndDate;
-            unchecked {
-                ++claimedCount;
-                ++i;
-            }
-        }
-
-        claimedEpochEndDates = new uint256[](claimedCount);
-        for (uint256 j = 0; j < claimedCount; ) {
-            claimedEpochEndDates[j] = tempClaimedDates[j];
-            unchecked {
-                ++j;
-            }
-        }
+        uint256 epochEndDate_,
+        uint256 amount_
+    ) internal pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(user_, epochEndDate_, amount_))));
     }
 
     /// @notice Verify Merkle proof without modifying state
@@ -336,12 +169,8 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal view virtual {
-        // Construct the leaf node: keccak256(abi.encode(user, epochEndDate, amount))
-        bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(user_, epochEndDate_, amount_)))
-        );
+        bytes32 leaf = _computeLeaf(user_, epochEndDate_, amount_);
 
-        // Verify Merkle proof
         if (!MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf)) {
             revert RewardDistributor_InvalidProof();
         }
@@ -363,13 +192,27 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         // Check if already claimed
         if (hasClaimed[user_][epochEndDate_]) return false;
 
-        // Construct the leaf node: keccak256(abi.encode(user, epochEndDate, amount))
-        bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(user_, epochEndDate_, amount_)))
-        );
+        bytes32 leaf = _computeLeaf(user_, epochEndDate_, amount_);
 
-        // Verify Merkle proof and return result
         return MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf);
+    }
+
+    /// @notice Checks if a claim is valid without modifying state.
+    /// @dev Combines: merkle root exists + not claimed + valid proof.
+    ///
+    /// @param user_ The address of the user.
+    /// @param epochEndDate_ The epoch end date.
+    /// @param amount_ The amount to check.
+    /// @param proof_ The Merkle proof.
+    /// @return True if claim would succeed, false otherwise.
+    function _isClaimable(
+        address user_,
+        uint256 epochEndDate_,
+        uint256 amount_,
+        bytes32[] calldata proof_
+    ) internal view virtual returns (bool) {
+        if (epochMerkleRoots[epochEndDate_] == bytes32(0)) return false;
+        return _verifyProofSafe(user_, epochEndDate_, amount_, proof_);
     }
 
     /// @notice Verify Merkle proof and mark epoch as claimed for user
@@ -391,28 +234,28 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         hasClaimed[user_][epochEndDate_] = true;
     }
 
-    /// @notice Internal function to transfer rewards from treasury
-    /// @dev    Must be implemented by derived contracts
+    /// @notice Validates claim preconditions, verify proof, and mark as claimed.
+    /// @dev Combines common validation logic:
+    ///      1. Check not already claimed.
+    ///      2. Check merkle root is set.
+    ///      3. Verify proof and mark claimed.
     ///
-    /// @param  to_             Address to transfer rewards to
-    /// @param  amount_         Amount to transfer
-    /// @param  epochEndDates_  Array of epoch end dates that were claimed (for event)
-    /// @param  asVaultToken_   If true, transfer as vault token; if false, unwrap first
-    /// @return rewardToken     The address of the token transferred (vault token if `asVaultToken_`, otherwise underlying)
-    /// @return tokensTransferred The amount of tokens transferred (vault shares if `asVaultToken_`, otherwise underlying)
-    function _transferRewards(
-        address to_,
+    /// @param user_ The address of the user.
+    /// @param epochEndDate_ The epoch end date.
+    /// @param amount_ The amount to claim.
+    /// @param proof_ The Merkle proof.
+    function _validateAndMarkClaimed(
+        address user_,
+        uint256 epochEndDate_,
         uint256 amount_,
-        uint256[] memory epochEndDates_,
-        bool asVaultToken_
-    ) internal virtual returns (address rewardToken, uint256 tokensTransferred);
+        bytes32[] calldata proof_
+    ) internal virtual {
+        if (hasClaimed[user_][epochEndDate_])
+            revert RewardDistributor_AlreadyClaimed(epochEndDate_);
+        if (epochMerkleRoots[epochEndDate_] == bytes32(0))
+            revert RewardDistributor_MerkleRootNotSet(epochEndDate_);
 
-    /// @notice Emit Merkle root set event
-    ///
-    /// @param  epochEndDate_   The epoch end date
-    /// @param  merkleRoot_     The Merkle root
-    function _emitMerkleRootSet(uint256 epochEndDate_, bytes32 merkleRoot_) internal {
-        emit MerkleRootSet(epochEndDate_, merkleRoot_, address(REWARD_TOKEN));
+        _verifyAndMarkClaimed(user_, epochEndDate_, amount_, proof_);
     }
 
     // ========== ERC165 ========== //

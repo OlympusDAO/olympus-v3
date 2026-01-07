@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20;
 
 // Base Contract
-import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.sol";
+import {BaseVaultRewardDistributor} from "src/policies/rewards/BaseVaultRewardDistributor.sol";
 
 // Interfaces
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -13,7 +13,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 /// @title  USDS Reward Distributor
 /// @notice Merkle tree-based distribution contract for USDS rewards
-contract RewardDistributorUSDS is BaseRewardDistributor {
+contract RewardDistributorUSDS is BaseVaultRewardDistributor {
     using TransferHelper for ERC20;
 
     // ========== CONSTRUCTOR ========== //
@@ -27,11 +27,11 @@ contract RewardDistributorUSDS is BaseRewardDistributor {
         address kernel_,
         address rewardTokenVault_,
         uint256 epochStartDate_
-    ) BaseRewardDistributor(kernel_, rewardTokenVault_, epochStartDate_) {}
+    ) BaseVaultRewardDistributor(kernel_, rewardTokenVault_, epochStartDate_) {}
 
     // ========== INTERNAL OVERRIDES ========== //
 
-    /// @inheritdoc BaseRewardDistributor
+    /// @inheritdoc BaseVaultRewardDistributor
     /// @dev    This function performs the following:
     ///         - Withdraws sUSDS from the treasury
     ///         - If `asVaultToken_` is true, transfers sUSDS directly to the user
