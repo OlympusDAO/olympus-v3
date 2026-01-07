@@ -459,7 +459,7 @@ contract PythPriceFeedsTest is Test {
     }
 
     //  [X] it returns the price without scaling
-    function test_getOneFeedPrice_success_expoEqualsNegativeOutputDecimals() public {
+    function test_getOneFeedPrice_expoEqualsNegativeOutputDecimals() public {
         // expo = -18, outputDecimals = 18, totalExponent = 0
         int64 price = 123456789;
         int32 expo = -18;
@@ -514,7 +514,7 @@ contract PythPriceFeedsTest is Test {
     }
 
     //  [X] it correctly converts the price by dividing
-    function test_getOneFeedPrice_success_expoVeryNegative() public {
+    function test_getOneFeedPrice_expoVeryNegative() public {
         // expo = -20, outputDecimals = 18, totalExponent = -2
         int64 price = 100000000;
         int32 expo = -20;
@@ -532,16 +532,39 @@ contract PythPriceFeedsTest is Test {
         assertEq(priceInt, 1000000, "Price should match expected value for very negative expo");
     }
 
-    // TODO required?
-
-    // given the confidence interval is below the maximum (after conversion)
+    // given the confidence interval equals the maximum
     //  [X] it returns the correct price
-    function test_getOneFeedPrice_success_confidenceEqualsMaximum() public {
+    function test_getOneFeedPrice_confidenceEqualsMaximum() public {
         // Confidence interval equals maximum threshold
         // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals
         // MAX_CONFIDENCE = 2e16, so CONF_1 should pass
         // This test verifies that a confidence that is below the maximum passes
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+
+        assertEq(
+            priceInt,
+            EXPECTED_PRICE_1_18_DEC,
+            "Price should be valid when confidence is below maximum"
+        );
+    }
+
+    // given the confidence interval is below the maximum
+    //  [X] it correctly converts the price
+    function test_getOneFeedPrice_confidenceBelowMaximum(uint64 priceConfidence_) public {
+        // expo = -8, outputDecimals = 18
+        // confidenceExponent = 18 + (-8) = 10
+        // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
+        // Test with confidence below maximum threshold (1 <= confidence <= 2e6)
+        priceConfidence_ = uint64(bound(priceConfidence_, 1, 2e6));
+        pyth.setPrice(PRICE_ID_1, PRICE_1, priceConfidence_, EXPO_1, block.timestamp);
 
         bytes memory params = encodeOneFeedParams(
             address(pyth),
@@ -985,6 +1008,68 @@ contract PythPriceFeedsTest is Test {
         assertEq(priceInt, expected, "Price should match expected for negative expo first feed");
     }
 
+    //  given the confidence interval is at the maximum (boundary case)
+    //   [X] it correctly converts the price
+    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative_confidenceEqualsMaximum() public {
+        // expo = -8, outputDecimals = 18
+        // confidenceExponent = 18 + (-8) = 10
+        // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
+        // Test with confidence exactly at the maximum (2e6)
+        uint64 priceConfidence_ = 2e6;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, priceConfidence_, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+
+        uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(10 ** PRICE_DECIMALS, 500000000);
+        assertEq(
+            priceInt,
+            expected,
+            "Price should match expected when confidence equals maximum for negative expo first feed"
+        );
+    }
+
+    //  given the confidence interval is below the maximum
+    //   [X] it correctly converts the price
+    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative_confidenceBelowMaximum(
+        uint64 priceConfidence_
+    ) public {
+        // expo = -8, outputDecimals = 18
+        // confidenceExponent = 18 + (-8) = 10
+        // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
+        // Test with confidence below the maximum (1 <= confidence <= 2e6)
+        priceConfidence_ = uint64(bound(priceConfidence_, 1, 2e6));
+        pyth.setPrice(PRICE_ID_1, PRICE_1, priceConfidence_, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+
+        uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(10 ** PRICE_DECIMALS, 500000000);
+        assertEq(
+            priceInt,
+            expected,
+            "Price should match expected when confidence is below maximum for negative expo first feed"
+        );
+    }
+
     // given the first feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getTwoFeedPriceDiv_givenFirstFeedExpoPositive_reverts(int32 expo_) public {
@@ -1300,6 +1385,74 @@ contract PythPriceFeedsTest is Test {
             EXPECTED_PRICE_1_18_DEC
         );
         assertEq(priceInt, expected, "Price should match expected for negative expo second feed");
+    }
+
+    //  given the confidence interval is at the maximum (boundary case)
+    //   [X] it correctly converts the price
+    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative_confidenceEqualsMaximum() public {
+        // expo = -8, outputDecimals = 18
+        // confidenceExponent = 18 + (-8) = 10
+        // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
+        // Test with confidence exactly at the maximum (2e6)
+        uint64 priceConfidence_ = 2e6;
+        pyth.setPrice(PRICE_ID_3, PRICE_3, priceConfidence_, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+
+        uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(
+            10 ** PRICE_DECIMALS,
+            (500000000 * 10 ** PRICE_DECIMALS) / 1e8
+        );
+        assertEq(
+            priceInt,
+            expected,
+            "Price should match expected when confidence equals maximum for negative expo second feed"
+        );
+    }
+
+    //  given the confidence interval is below the maximum
+    //   [X] it correctly converts the price
+    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative_confidenceBelowMaximum(
+        uint64 priceConfidence_
+    ) public {
+        // expo = -8, outputDecimals = 18
+        // confidenceExponent = 18 + (-8) = 10
+        // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
+        // Test with confidence below the maximum (1 <= confidence <= 2e6)
+        priceConfidence_ = uint64(bound(priceConfidence_, 1, 2e6));
+        pyth.setPrice(PRICE_ID_3, PRICE_3, priceConfidence_, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+
+        uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(
+            10 ** PRICE_DECIMALS,
+            (500000000 * 10 ** PRICE_DECIMALS) / 1e8
+        );
+        assertEq(
+            priceInt,
+            expected,
+            "Price should match expected when confidence is below maximum for negative expo second feed"
+        );
     }
 
     // given the second feed expo is positive (expo > 0)
