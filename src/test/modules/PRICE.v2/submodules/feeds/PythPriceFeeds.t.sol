@@ -98,7 +98,7 @@ contract PythPriceFeedsTest is Test {
         address pyth_,
         bytes32 priceFeedId_,
         uint48 updateThreshold_,
-        uint64 maxConfidence_
+        uint256 maxConfidence_
     ) internal pure returns (bytes memory params) {
         return abi.encode(pyth_, priceFeedId_, updateThreshold_, maxConfidence_);
     }
@@ -107,11 +107,11 @@ contract PythPriceFeedsTest is Test {
         address firstPyth_,
         bytes32 firstPriceFeedId_,
         uint48 firstUpdateThreshold_,
-        uint64 firstMaxConfidence_,
+        uint256 firstMaxConfidence_,
         address secondPyth_,
         bytes32 secondPriceFeedId_,
         uint48 secondUpdateThreshold_,
-        uint64 secondMaxConfidence_
+        uint256 secondMaxConfidence_
     ) internal pure returns (bytes memory params) {
         return
             abi.encode(
@@ -382,7 +382,7 @@ contract PythPriceFeedsTest is Test {
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
         // maxConfidence = 1e19 -> maxConfidenceInPythScale = 1e19 / 1e18 = 10
-        uint64 maxConfidence = 1e19;
+        uint256 maxConfidence = 1e19;
         uint64 maxConfInPythScale = 10;
         priceConfidence_ = uint64(
             bound(priceConfidence_, maxConfInPythScale + 1, type(uint64).max)
@@ -1026,7 +1026,7 @@ contract PythPriceFeedsTest is Test {
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
         // maxConfidence = 1e19 -> maxConfidenceInPythScale = 1e19 / 1e18 = 10
-        uint64 maxConfidence = 1e19;
+        uint256 maxConfidence = 1e19;
         uint64 maxConfInPythScale = 10;
         priceConfidence_ = uint64(
             bound(priceConfidence_, maxConfInPythScale + 1, type(uint64).max)
@@ -1343,7 +1343,7 @@ contract PythPriceFeedsTest is Test {
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
         // maxConfidence = 1e19 -> maxConfidenceInPythScale = 1e19 / 1e18 = 10
-        uint64 maxConfidence = 1e19;
+        uint256 maxConfidence = 1e19;
         uint64 maxConfInPythScale = 10;
         priceConfidence_ = uint64(
             bound(priceConfidence_, maxConfInPythScale + 1, type(uint64).max)
@@ -2004,7 +2004,7 @@ contract PythPriceFeedsTest is Test {
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
         // maxConfidence = 1e19 -> maxConfidenceInPythScale = 1e19 / 1e18 = 10
-        uint64 maxConfidence = 1e19;
+        uint256 maxConfidence = 1e19;
         uint64 maxConfInPythScale = 10;
         priceConfidence_ = uint64(
             bound(priceConfidence_, maxConfInPythScale + 1, type(uint64).max)
@@ -2321,7 +2321,7 @@ contract PythPriceFeedsTest is Test {
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
         // maxConfidence = 1e19 -> maxConfidenceInPythScale = 1e19 / 1e18 = 10
-        uint64 maxConfidence = 1e19;
+        uint256 maxConfidence = 1e19;
         uint64 maxConfInPythScale = 10;
         priceConfidence_ = uint64(
             bound(priceConfidence_, maxConfInPythScale + 1, type(uint64).max)

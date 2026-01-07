@@ -34,7 +34,7 @@ contract PythPriceFeeds is PriceSubmodule {
         address pyth;
         bytes32 priceFeedId;
         uint48 updateThreshold;
-        uint64 maxConfidence;
+        uint256 maxConfidence;
     }
 
     /// @notice                         Parameters for two Pyth price feeds
@@ -51,11 +51,11 @@ contract PythPriceFeeds is PriceSubmodule {
         address firstPyth;
         bytes32 firstPriceFeedId;
         uint48 firstUpdateThreshold;
-        uint64 firstMaxConfidence;
+        uint256 firstMaxConfidence;
         address secondPyth;
         bytes32 secondPriceFeedId;
         uint48 secondUpdateThreshold;
-        uint64 secondMaxConfidence;
+        uint256 secondMaxConfidence;
     }
 
     // ========== ERRORS ========== //
@@ -84,7 +84,7 @@ contract PythPriceFeeds is PriceSubmodule {
     ///
     /// @param paramsIndex_     The index of the parameter
     /// @param maxConfidence_   The maximum confidence (in output decimals scale)
-    error Pyth_ParamsMaxConfidenceInvalid(uint8 paramsIndex_, uint64 maxConfidence_);
+    error Pyth_ParamsMaxConfidenceInvalid(uint8 paramsIndex_, uint256 maxConfidence_);
 
     /// @notice                 The price feed is invalid
     /// @dev                    This is triggered if the Pyth contract call reverts,
@@ -214,7 +214,7 @@ contract PythPriceFeeds is PriceSubmodule {
         address pyth_,
         bytes32 priceFeedId_,
         uint48 updateThreshold_,
-        uint64 maxConfidence_,
+        uint256 maxConfidence_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
         IPyth.Price memory priceData;
@@ -260,7 +260,7 @@ contract PythPriceFeeds is PriceSubmodule {
         //         = maxConfidence * 10^(expo - outputDecimals)
         // Note: Result is cast to uint64 since it's compared against priceData.conf (uint64)
         uint64 maxConfidenceInPythScale = SafeCast.encodeUInt64(
-            uint256(maxConfidence_).mulDiv(
+            maxConfidence_.mulDiv(
                 10 ** uint256(uint32(-priceData.expo)),
                 10 ** uint256(outputDecimals_)
             )
