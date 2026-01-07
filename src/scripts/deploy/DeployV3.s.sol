@@ -831,6 +831,10 @@ contract DeployV3 is WithEnvironment {
         console2.log("  yieldRecipient", yieldRecipient);
         console2.log("  depositPeriods count", depositPeriods.length);
         console2.log("  receiptTokens count", receiptTokens.length);
+        for (uint256 i; i < depositPeriods.length; i++) {
+            console2.log("  depositPeriod", depositPeriods[i]);
+            console2.log("  receiptToken", receiptTokens[i]);
+        }
 
         // Deploy
         vm.broadcast();
