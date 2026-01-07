@@ -802,7 +802,7 @@ contract DeployV3 is WithEnvironment {
     {
         // Dependencies
         console2.log("Checking dependencies");
-        address owner = _getDeployer();
+        address owner = _getAddressNotZero("olympus.multisig.dao");
         address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
         address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
         address usds = _getAddressNotZero("external.tokens.USDS");
