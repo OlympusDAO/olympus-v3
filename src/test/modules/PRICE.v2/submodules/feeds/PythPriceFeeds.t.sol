@@ -536,7 +536,9 @@ contract PythPriceFeedsTest is Test {
     //  [X] it returns the correct price
     function test_getOneFeedPrice_givenPublishTimeAboveThreshold(uint48 publishTime_) public {
         // Bound the publish time to a reasonable value
-        publishTime_ = uint48(bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp));
+        publishTime_ = uint48(
+            bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp)
+        );
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
 
         bytes memory params = encodeOneFeedParams(
@@ -842,7 +844,9 @@ contract PythPriceFeedsTest is Test {
 
     // given the second feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
-    function test_getTwoFeedPriceDiv_givenSecondFeedStalePrice_reverts(uint256 publishTime_) public {
+    function test_getTwoFeedPriceDiv_givenSecondFeedStalePrice_reverts(
+        uint256 publishTime_
+    ) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
         publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
@@ -903,7 +907,9 @@ contract PythPriceFeedsTest is Test {
 
     // given the first feed publish time is >= the threshold boundary
     //  [X] it returns the correct price
-    function test_getTwoFeedPriceDiv_givenFirstFeedPublishTimeAboveThreshold(uint256 publishTime_) public {
+    function test_getTwoFeedPriceDiv_givenFirstFeedPublishTimeAboveThreshold(
+        uint256 publishTime_
+    ) public {
         // Bound the publish time to a reasonable value
         publishTime_ = bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
@@ -922,7 +928,11 @@ contract PythPriceFeedsTest is Test {
         uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
 
         uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(10 ** PRICE_DECIMALS, 500000000);
-        assertEq(priceInt, expected, "Divided price should match expected when first feed at threshold");
+        assertEq(
+            priceInt,
+            expected,
+            "Divided price should match expected when first feed at threshold"
+        );
     }
 
     // given the second feed expo + outputDecimals > BASE_10_MAX_EXPONENT
@@ -965,7 +975,9 @@ contract PythPriceFeedsTest is Test {
 
     // given the second feed publish time is >= the threshold boundary
     //  [X] it returns the correct price
-    function test_getTwoFeedPriceDiv_givenSecondFeedPublishTimeAboveThreshold(uint256 publishTime_) public {
+    function test_getTwoFeedPriceDiv_givenSecondFeedPublishTimeAboveThreshold(
+        uint256 publishTime_
+    ) public {
         // Bound the publish time to a reasonable value
         publishTime_ = bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
@@ -984,7 +996,11 @@ contract PythPriceFeedsTest is Test {
         uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
 
         uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(10 ** PRICE_DECIMALS, 500000000);
-        assertEq(priceInt, expected, "Divided price should match expected when second feed at threshold");
+        assertEq(
+            priceInt,
+            expected,
+            "Divided price should match expected when second feed at threshold"
+        );
     }
 
     // =========  TWO FEED TESTS - MUL ========= //
@@ -1087,7 +1103,9 @@ contract PythPriceFeedsTest is Test {
 
     // given the second feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
-    function test_getTwoFeedPriceMul_givenSecondFeedStalePrice_reverts(uint256 publishTime_) public {
+    function test_getTwoFeedPriceMul_givenSecondFeedStalePrice_reverts(
+        uint256 publishTime_
+    ) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
         publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
