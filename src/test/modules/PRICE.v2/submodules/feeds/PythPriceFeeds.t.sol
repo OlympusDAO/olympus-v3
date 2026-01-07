@@ -13,6 +13,11 @@ import {MockPyth} from "src/test/mocks/MockPyth.sol";
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
+// Interfaces
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IPyth} from "src/interfaces/IPyth.sol";
+
 // Bophades
 import {Kernel} from "src/Kernel.sol";
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
@@ -227,6 +232,77 @@ contract PythPriceFeedsTest is Test {
 
         bytes memory params = encodeOneFeedParams(
             invalidPyth,
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given the pyth contract returns data with incorrect length
+    //  [X] it reverts with Pyth_FeedInvalid
+    function test_getOneFeedPrice_returnDataLengthInvalid_reverts() public {
+        address mockPyth = address(0xDEAD);
+
+        // Mock the call to succeed but return data with wrong length (not 128 bytes)
+        // The _PRICE_DATA_SIZE is 128 bytes, so we return something smaller
+        bytes memory wrongLengthData = abi.encode(uint256(1), uint256(2)); // Only 64 bytes
+
+        vm.mockCall(
+            mockPyth,
+            abi.encodeWithSelector(
+                IPyth.getPriceNoOlderThan.selector,
+                PRICE_ID_1,
+                uint256(UPDATE_THRESHOLD)
+            ),
+            wrongLengthData
+        );
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_FeedInvalid.selector,
+            mockPyth,
+            PRICE_ID_1
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeOneFeedParams(
+            mockPyth,
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+
+        vm.clearMockedCalls();
+    }
+
+    // given the pyth contract reverts with return data
+    //  [X] it bubbles up the revert
+    function test_getOneFeedPrice_pythRevertsWithData_bubblesUpRevert() public {
+        address mockPyth = address(0xBEEF);
+
+        // Create a custom error
+        bytes memory customError = abi.encodeWithSignature(
+            "CustomError(string)",
+            "Test revert message"
+        );
+
+        // Mock the call to revert with data
+        vm.mockCallRevert(
+            mockPyth,
+            abi.encodeWithSelector(
+                IPyth.getPriceNoOlderThan.selector,
+                PRICE_ID_1,
+                uint256(UPDATE_THRESHOLD)
+            ),
+            customError
+        );
+
+        // Expect the revert to bubble up
+        vm.expectRevert(customError);
+
+        bytes memory params = encodeOneFeedParams(
+            mockPyth,
             PRICE_ID_1,
             UPDATE_THRESHOLD,
             MAX_CONFIDENCE
@@ -605,6 +681,54 @@ contract PythPriceFeedsTest is Test {
         );
     }
 
+    // given the publish time equals exactly the update threshold boundary
+    //  [X] it returns the correct price
+    function test_getOneFeedPrice_publishTimeExactlyAtThreshold() public {
+        // Set publish time to exactly block.timestamp - UPDATE_THRESHOLD
+        // This tests the boundary condition: publishTime == blockTimestamp - updateThreshold
+        // The validation checks: publishTime < blockTimestamp - updateThreshold (strict <)
+        // So when publishTime == blockTimestamp - updateThreshold, it should pass
+        uint256 publishTime = block.timestamp - UPDATE_THRESHOLD;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+
+        assertEq(
+            priceInt,
+            EXPECTED_PRICE_1_18_DEC,
+            "Price should be valid when publish time exactly equals threshold boundary"
+        );
+    }
+
+    // given outputDecimals is different from default (18)
+    //  [X] it correctly converts prices to the specified output decimals
+    function test_getOneFeedPrice_outputDecimalsFuzz(uint8 outputDecimals_) public {
+        // Bound output decimals to reasonable range [8, 36] to avoid rounding issues and overflow
+        // Using >= 8 ensures we don't lose precision (expo = -8)
+        outputDecimals_ = uint8(bound(outputDecimals_, 8, 36));
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals_) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), outputDecimals_, params);
+
+        // expo = -8, price = 123456789, outputDecimals = outputDecimals_
+        // Conversion formula: price * 10^outputDecimals / 10^(-expo) = price * 10^outputDecimals / 10^8
+        // = 123456789 * 10^(outputDecimals_ - 8)
+        uint256 expected = uint256(uint64(PRICE_1)) * 10 ** (outputDecimals_ - 8);
+        assertEq(priceInt, expected, "Price should match expected for fuzzed output decimals");
+    }
+
     // =========  TWO FEED TESTS - DIV ========= //
 
     // given all parameters are valid for two feeds
@@ -628,6 +752,30 @@ contract PythPriceFeedsTest is Test {
         // (1234567890000000000 * 10^18) / 500000000 = 2469135780000000000000000000
         uint256 expected = EXPECTED_PRICE_1_18_DEC.mulDiv(10 ** PRICE_DECIMALS, 500000000);
         assertEq(priceInt, expected, "Divided price should match expected calculation");
+    }
+
+    // given the second feed denominator price converts to zero
+    //  [X] it returns zero without reverting
+    function test_getTwoFeedPriceDiv_denominatorPriceZero() public {
+        // Set up a very small price with a very negative expo that will round down to 0
+        int64 smallPrice = 1;
+        int32 veryNegativeExpo = -19;
+        pyth.setPrice(PRICE_ID_3, smallPrice, CONF_3, veryNegativeExpo, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+
+        // Should return 0 when denominator price converts to 0
+        assertEq(priceInt, 0, "Should return 0 when denominator price converts to 0");
     }
 
     // given the first pyth contract address is zero
@@ -1712,6 +1860,34 @@ contract PythPriceFeedsTest is Test {
         );
     }
 
+    // given outputDecimals is different from default (18) for two feeds division
+    //  [X] it correctly converts prices to the specified output decimals
+    function test_getTwoFeedPriceDiv_outputDecimalsFuzz(uint8 outputDecimals_) public {
+        // Bound output decimals to reasonable range [18, 36] to avoid overflow
+        outputDecimals_ = uint8(bound(outputDecimals_, 18, 36));
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals_) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals_) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), outputDecimals_, params);
+
+        // First: price = 123456789, expo = -8 -> converts to 123456789 * 10^(outputDecimals_ - 8)
+        uint256 firstPrice = uint256(uint64(PRICE_1)) * 10 ** (outputDecimals_ - 8);
+        // Second: price = 500000000, expo = -18 -> converts to 500000000 * 10^(outputDecimals_ - 18)
+        uint256 secondPrice = uint256(uint64(PRICE_3)) * 10 ** (outputDecimals_ - 18);
+        uint256 expected = firstPrice.mulDiv(10 ** outputDecimals_, secondPrice);
+        assertEq(priceInt, expected, "Price should match expected for fuzzed output decimals");
+    }
+
     // =========  TWO FEED TESTS - MUL ========= //
 
     // given all parameters are valid for two feeds
@@ -2688,6 +2864,60 @@ contract PythPriceFeedsTest is Test {
             expected,
             "Multiplied price should match expected when second feed at threshold"
         );
+    }
+
+    // given outputDecimals is different from default (18) for two feeds multiplication
+    //  [X] it correctly converts prices to the specified output decimals
+    function test_getTwoFeedPriceMul_outputDecimalsFuzz(uint8 outputDecimals_) public {
+        // Bound output decimals to reasonable range [18, 36] to avoid overflow
+        outputDecimals_ = uint8(bound(outputDecimals_, 18, 36));
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals_) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals_) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals_, params);
+
+        // First: price = 123456789, expo = -8 -> converts to 123456789 * 10^(outputDecimals_ - 8)
+        uint256 firstPrice = uint256(uint64(PRICE_1)) * 10 ** (outputDecimals_ - 8);
+        // Second: price = 500000000, expo = -18 -> converts to 500000000 * 10^(outputDecimals_ - 18)
+        uint256 secondPrice = uint256(uint64(PRICE_3)) * 10 ** (outputDecimals_ - 18);
+        uint256 expected = firstPrice.mulDiv(secondPrice, 10 ** outputDecimals_);
+        assertEq(priceInt, expected, "Price should match expected for fuzzed output decimals");
+    }
+
+    // =========  IERC165 FUNCTIONS ========= //
+
+    // given supportsInterface is called with IERC165 interface ID
+    //  [X] it returns true
+    function test_supportsInterface_IERC165_returnsTrue() public view {
+        bytes4 interfaceId = type(IERC165).interfaceId;
+        bool supported = pythSubmodule.supportsInterface(interfaceId);
+        assertTrue(supported, "Should support IERC165 interface");
+    }
+
+    // given supportsInterface is called with IVersioned interface ID
+    //  [X] it returns true
+    function test_supportsInterface_IVersioned_returnsTrue() public view {
+        bytes4 interfaceId = type(IVersioned).interfaceId;
+        bool supported = pythSubmodule.supportsInterface(interfaceId);
+        assertTrue(supported, "Should support IVersioned interface");
+    }
+
+    // given supportsInterface is called with an unsupported interface ID
+    //  [X] it returns false
+    function test_supportsInterface_unsupported_returnsFalse() public view {
+        bytes4 interfaceId = 0x12345678;
+        bool supported = pythSubmodule.supportsInterface(interfaceId);
+        assertFalse(supported, "Should not support unsupported interface");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)
