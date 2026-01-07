@@ -2,7 +2,7 @@
 pragma solidity >=0.8.4;
 
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {IRewardDistributor} from "src/policies/interfaces/IRewardDistributor.sol";
+import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 
 /// @title IRewardDistributorConvertible

@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.sol";
 
 // Interfaces
-import {IRewardDistributorConvertible} from "src/policies/interfaces/IRewardDistributorConvertible.sol";
+import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";

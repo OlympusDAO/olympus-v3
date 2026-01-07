@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {BaseRewardDistributor} from "./BaseRewardDistributor.sol";
 
 // Interfaces
-import {IVaultRewardDistributor} from "src/policies/interfaces/IVaultRewardDistributor.sol";
+import {IVaultRewardDistributor} from "src/policies/interfaces/rewards/IVaultRewardDistributor.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";

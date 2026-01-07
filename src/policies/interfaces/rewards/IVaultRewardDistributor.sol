@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.20;
 
-import {IRewardDistributor} from "./IRewardDistributor.sol";
+import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 
 /// @title IVaultRewardDistributor
 /// @notice Interface for ERC4626 vault-based reward distributors.
