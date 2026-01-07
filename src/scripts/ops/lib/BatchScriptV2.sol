@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -11,6 +11,9 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 import {Safe} from "@safe-utils-0.0.13/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {Kernel, toKeycode} from "src/Kernel.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
@@ -234,6 +237,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
         vm.stopPrank();
         console2.log("Batch simulation completed");
 
+        // Validate heart beat after batch execution
+        _validateHeartBeat();
+
         // If signOnly, get the signature and return
         if (_signOnly) {
             console2.log("signOnly is true, approve the request to sign the batch");
@@ -301,6 +307,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     function _loadArgs(string memory argsFilePath_) internal {
         if (bytes(argsFilePath_).length > 0) {
             console2.log("Loading arguments from", argsFilePath_);
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             _argsFile = vm.readFile(argsFilePath_);
         }
     }
@@ -373,5 +380,98 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
             );
     }
+
+    function _readBatchArgUint256Array(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (uint256[] memory) {
+        // solhint-disable-next-line gas-custom-errors
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readUintArray(string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_));
+    }
+
+    /// @notice Validate that heart beat will work after batch execution
+    /// @dev    Warps through a full 24-hour cycle (3 beats) and calls beat() to validate
+    ///         Temporarily increases price feed update thresholds to prevent stale feed errors
+    ///         Restores original timestamp and thresholds after validation to avoid signature issues
+    function _validateHeartBeat() internal {
+        address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
+        console2.log("\nValidating heart beat (full 24-hour cycle - 3 beats)");
+        console2.log("Heart address:", heart);
+
+        OlympusHeart heartContract = OlympusHeart(heart);
+        PRICEv1 priceModule = _getPriceModule(heartContract);
+        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfig");
+
+        uint256 originalTimestamp = block.timestamp;
+        uint48 originalOhmEthThreshold = priceModule.ohmEthUpdateThreshold();
+        uint48 originalReserveEthThreshold = priceModule.reserveEthUpdateThreshold();
+        uint48 lastBeat = uint48(heartContract.lastBeat());
+        uint48 frequency = heartContract.frequency();
+
+        console2.log("Last beat:", lastBeat, "Frequency:", frequency);
+        console2.log("Original thresholds - OHM/ETH:", originalOhmEthThreshold, "Reserve/ETH:", originalReserveEthThreshold);
+
+        // Temporarily increase thresholds to 2 days to cover time warp
+        uint48 tempThreshold = uint48(2 days);
+        console2.log("Temporarily increasing update thresholds to:", tempThreshold);
+        vm.prank(priceConfig);
+        priceModule.changeUpdateThresholds(tempThreshold, tempThreshold);
+
+        bool timeWarped = _executeHeartBeats(heartContract, lastBeat, frequency);
+
+        console2.log("\nAll heart beats validated successfully");
+        console2.log("Restoring original update thresholds");
+        vm.prank(priceConfig);
+        priceModule.changeUpdateThresholds(originalOhmEthThreshold, originalReserveEthThreshold);
+
+        if (timeWarped) {
+            console2.log("Restoring original timestamp:", originalTimestamp);
+            vm.warp(originalTimestamp);
+        }
+    }
+
+    /// @notice Get PRICE module from Heart and verify version is 1.0 or 1.1
+    /// @param heartContract_ Heart contract to get kernel from
+    /// @return priceModule PRICE module instance
+    function _getPriceModule(OlympusHeart heartContract_) internal view returns (PRICEv1) {
+        Kernel kernel = heartContract_.kernel();
+        PRICEv1 priceModule = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
+        (uint8 major, uint8 minor) = priceModule.VERSION();
+        if (major != 1 || (minor != 0 && minor != 1)) revert("PRICE must be v1.0 or v1.1");
+        console2.log("PRICE module version verified: v1.", uint256(minor));
+        return priceModule;
+    }
+
+    /// @notice Execute 3 heart beats for full 24-hour cycle validation
+    /// @param heartContract_ Heart contract to call beat() on
+    /// @param lastBeat_ Last beat timestamp
+    /// @param frequency_ Beat frequency
+    /// @return timeWarped_ Whether time was warped during validation
+    function _executeHeartBeats(OlympusHeart heartContract_, uint48 lastBeat_, uint48 frequency_) internal returns (bool timeWarped_) {
+        uint256 numBeats = 3;
+        uint48 lastBeat = lastBeat_;
+
+        for (uint256 i = 0; i < numBeats; ++i) {
+            uint48 nextBeat = lastBeat + frequency_;
+            uint48 currentTime = uint48(block.timestamp);
+
+            console2.log("\nBeat", i + 1, "of", numBeats);
+            console2.log("Current time:", currentTime, "Next beat time:", nextBeat);
+
+            if (currentTime < nextBeat) {
+                console2.log("Warping to next heartbeat timestamp");
+                vm.warp(nextBeat);
+                timeWarped_ = true;
+            }
+
+            console2.log("Calling heart.beat()");
+            heartContract_.beat();
+            console2.log("Heart beat", i + 1, "validation successful");
+
+            lastBeat = uint48(heartContract_.lastBeat());
+        }
+    }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)

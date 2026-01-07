@@ -14,6 +14,7 @@
 # [--nonce <nonce>]
 # [--broadcast <true|false>]
 # [--testnet <true|false>]
+# [--verbose <true|false>]
 # [--args <args-file>]
 # [--env <env-file>]
 
@@ -36,6 +37,7 @@ broadcast=${broadcast:-false}
 testnet=${testnet:-false}
 multisig=${multisig:-false}
 signonly=${signonly:-false}
+verbose=${verbose:-false}
 signature=${signature:-"0x"}
 ARGS_FILE=${args:-}
 
@@ -49,6 +51,7 @@ validate_boolean "$testnet" "Invalid value for --testnet. Must be true or false.
 validate_boolean "$broadcast" "Invalid value for --broadcast. Must be true or false."
 validate_boolean "$multisig" "Invalid value for --multisig. Must be true or false."
 validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
+validate_boolean "$verbose" "Invalid value for --verbose. Must be true or false."
 
 echo ""
 echo "Summary:"
@@ -60,6 +63,7 @@ echo "  Executing as multisig: $multisig"
 echo "  Sign only: $signonly"
 echo "  Testnet: $testnet"
 echo "  Broadcasting: $broadcast"
+echo "  Verbose: $verbose"
 if [ -n "$ARGS_FILE" ]; then
     echo "  Args file: $ARGS_FILE"
 else
@@ -104,8 +108,15 @@ export SAFE_NONCE=$nonce
 # Execute the batch
 export TESTNET=$testnet
 
+# Set verbosity level
+if [ "$verbose" == "true" ]; then
+    VERBOSITY="-vvvv"
+else
+    VERBOSITY="-vvv"
+fi
+
 # Build forge command
-FORGE_CMD="forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow -vvv"
+FORGE_CMD="forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow $VERBOSITY"
 
 # Add broadcast flag
 if [ "$broadcast" == "true" ]; then
