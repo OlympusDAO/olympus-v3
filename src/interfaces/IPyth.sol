@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity >=0.8.15;
 
+/// @title      IPyth
 /// @notice     Minimal interface for Pyth Network price feeds
 /// @dev        Based on Pyth Network's IPyth interface
 interface IPyth {

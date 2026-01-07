@@ -12,7 +12,6 @@ import {MockPyth} from "src/test/mocks/MockPyth.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
-import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {Kernel} from "src/Kernel.sol";
@@ -58,8 +57,6 @@ contract PythPriceFeedsTest is Test {
     // Set MAX_CONFIDENCE to 2e16 to allow CONF_1 but reject higher values
     uint64 internal constant MAX_CONFIDENCE = 20000000000000000; // 2 * 10^16 in 18 decimals
 
-    uint8 internal constant BASE_10_MAX_EXPONENT = 50;
-
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021
 
@@ -99,33 +96,33 @@ contract PythPriceFeedsTest is Test {
 
     function encodeOneFeedParams(
         address pyth_,
-        bytes32 priceFeedId,
-        uint48 updateThreshold,
-        uint64 maxConfidence
+        bytes32 priceFeedId_,
+        uint48 updateThreshold_,
+        uint64 maxConfidence_
     ) internal pure returns (bytes memory params) {
-        return abi.encode(pyth_, priceFeedId, updateThreshold, maxConfidence);
+        return abi.encode(pyth_, priceFeedId_, updateThreshold_, maxConfidence_);
     }
 
     function encodeTwoFeedParams(
-        address firstPyth,
-        bytes32 firstPriceFeedId,
-        uint48 firstUpdateThreshold,
-        uint64 firstMaxConfidence,
-        address secondPyth,
-        bytes32 secondPriceFeedId,
-        uint48 secondUpdateThreshold,
-        uint64 secondMaxConfidence
+        address firstPyth_,
+        bytes32 firstPriceFeedId_,
+        uint48 firstUpdateThreshold_,
+        uint64 firstMaxConfidence_,
+        address secondPyth_,
+        bytes32 secondPriceFeedId_,
+        uint48 secondUpdateThreshold_,
+        uint64 secondMaxConfidence_
     ) internal pure returns (bytes memory params) {
         return
             abi.encode(
-                firstPyth,
-                firstPriceFeedId,
-                firstUpdateThreshold,
-                firstMaxConfidence,
-                secondPyth,
-                secondPriceFeedId,
-                secondUpdateThreshold,
-                secondMaxConfidence
+                firstPyth_,
+                firstPriceFeedId_,
+                firstUpdateThreshold_,
+                firstMaxConfidence_,
+                secondPyth_,
+                secondPriceFeedId_,
+                secondUpdateThreshold_,
+                secondMaxConfidence_
             );
     }
 
@@ -215,39 +212,6 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
-    // given expo + outputDecimals > BASE_10_MAX_EXPONENT
-    //  [X] it reverts with Pyth_ExponentOutOfBounds
-    function test_getOneFeedPrice_exponentOutOfBounds_reverts(int32 expo_) public {
-        // Set expo such that expo + outputDecimals > BASE_10_MAX_EXPONENT
-        // expo must be > BASE_10_MAX_EXPONENT - outputDecimals = 50 - 18 = 32
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                int32(int8(BASE_10_MAX_EXPONENT) - int8(PRICE_DECIMALS) + 1),
-                type(int32).max
-            )
-        );
-        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, expo_, block.timestamp);
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ExponentOutOfBounds.selector,
-            address(pyth),
-            PRICE_ID_1,
-            expo_,
-            PRICE_DECIMALS,
-            BASE_10_MAX_EXPONENT
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeOneFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
-    }
-
     // given the pyth contract doesn't implement IPyth
     //  [X] it reverts with Pyth_FeedInvalid
     function test_getOneFeedPrice_pythContractInvalid_reverts() public {
@@ -293,11 +257,26 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
+    // given the price feed is not found
+    //  [X] it reverts with PriceFeedNotFound
+    function test_getOneFeedPrice_priceFeedNotFound_reverts() public {
+        bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
+        vm.expectRevert(err);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            bytes32(0x0000000000000000000000000000000000000000000000000000000000000001),
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
     // given the publish time is before the update threshold
     //  [X] it reverts with StalePrice
     function test_getOneFeedPrice_givenStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
-        publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
+        publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
 
         bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
@@ -370,16 +349,9 @@ contract PythPriceFeedsTest is Test {
     // given expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getOneFeedPrice_expoPositive_reverts(int32 expo_) public {
-        // Bound expo to be positive (> 0) but not so large it triggers ExponentOutOfBounds first
-        // expo + outputDecimals <= BASE_10_MAX_EXPONENT, so expo <= 50 - 18 = 32
-        // But we want to test positive expo, so expo in range [1, 32]
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                1,
-                int256(uint256(BASE_10_MAX_EXPONENT)) - int256(uint256(PRICE_DECIMALS))
-            )
-        );
+        // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
+        // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
+        expo_ = int32(bound(int256(expo_), 1, 32));
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, expo_, block.timestamp);
 
         bytes memory params = encodeOneFeedParams(
@@ -437,17 +409,17 @@ contract PythPriceFeedsTest is Test {
     }
 
     //  [X] it correctly converts the price
-    function test_getOneFeedPrice_success_expoZero() public {
+    function test_getOneFeedPrice_expoZero() public {
         // expo = 0, outputDecimals = 18, totalExponent = 18
         int64 price = 123456789;
         int32 expo = 0;
-        pyth.setPrice(PRICE_ID_1, price, CONF_1, expo, block.timestamp);
+        pyth.setPrice(PRICE_ID_1, price, 1, expo, block.timestamp);
 
         bytes memory params = encodeOneFeedParams(
             address(pyth),
             PRICE_ID_1,
             UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
+            type(uint64).max // Ensures confidence interval is below the maximum
         );
         uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
@@ -504,6 +476,7 @@ contract PythPriceFeedsTest is Test {
         // outputPrice = 123456789 (no scaling needed)
         assertEq(
             priceInt,
+            /// forge-lint: disable-next-line(unsafe-typecast)
             uint256(uint64(price)),
             "Price should match input value when expo equals negative outputDecimals"
         );
@@ -872,11 +845,49 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
+    // given the first price feed is not found
+    //  [X] it reverts with PriceFeedNotFound
+    function test_getTwoFeedPriceDiv_givenFirstFeedPriceFeedNotFound_reverts() public {
+        bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            bytes32(0x0000000000000000000000000000000000000000000000000000000000000001),
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given the second price feed is not found
+    //  [X] it reverts with PriceFeedNotFound
+    function test_getTwoFeedPriceDiv_givenSecondFeedPriceFeedNotFound_reverts() public {
+        bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            bytes32(0x0000000000000000000000000000000000000000000000000000000000000001),
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
     // given the first feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
     function test_getTwoFeedPriceDiv_givenFirstFeedStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
-        publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
+        publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
 
         bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
@@ -901,47 +912,10 @@ contract PythPriceFeedsTest is Test {
         uint256 publishTime_
     ) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
-        publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
+        publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
 
         bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE,
-            address(pyth),
-            PRICE_ID_3,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
-    }
-
-    // given the first feed expo + outputDecimals > BASE_10_MAX_EXPONENT
-    //  [X] it reverts with Pyth_ExponentOutOfBounds
-    function test_getTwoFeedPriceDiv_givenFirstFeedExponentOutOfBounds_reverts(int32 expo_) public {
-        // Set expo such that expo + outputDecimals > BASE_10_MAX_EXPONENT
-        // expo must be > BASE_10_MAX_EXPONENT - outputDecimals = 50 - 18 = 32
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                int32(int8(BASE_10_MAX_EXPONENT) - int8(PRICE_DECIMALS) + 1),
-                type(int32).max
-            )
-        );
-        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, expo_, block.timestamp);
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ExponentOutOfBounds.selector,
-            address(pyth),
-            PRICE_ID_1,
-            expo_,
-            PRICE_DECIMALS,
-            BASE_10_MAX_EXPONENT
-        );
         vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
@@ -1014,16 +988,9 @@ contract PythPriceFeedsTest is Test {
     // given the first feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getTwoFeedPriceDiv_givenFirstFeedExpoPositive_reverts(int32 expo_) public {
-        // Bound expo to be positive (> 0) but not so large it triggers ExponentOutOfBounds first
-        // expo + outputDecimals <= BASE_10_MAX_EXPONENT, so expo <= 50 - 18 = 32
-        // But we want to test positive expo, so expo in range [1, 32]
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                1,
-                int256(uint256(BASE_10_MAX_EXPONENT)) - int256(uint256(PRICE_DECIMALS))
-            )
-        );
+        // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
+        // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
+        expo_ = int32(bound(int256(expo_), 1, 32));
         int64 price = 100;
         pyth.setPrice(PRICE_ID_1, price, CONF_1, expo_, block.timestamp);
 
@@ -1094,13 +1061,13 @@ contract PythPriceFeedsTest is Test {
         // First feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
-        pyth.setPrice(PRICE_ID_1, price, 0, expo, block.timestamp);
+        pyth.setPrice(PRICE_ID_1, price, 1, expo, block.timestamp);
 
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
             PRICE_ID_1,
             UPDATE_THRESHOLD,
-            type(uint64).max,
+            type(uint64).max, // Ensures confidence interval is below the maximum
             address(pyth),
             PRICE_ID_3,
             UPDATE_THRESHOLD,
@@ -1275,45 +1242,6 @@ contract PythPriceFeedsTest is Test {
         );
     }
 
-    // given the second feed expo + outputDecimals > BASE_10_MAX_EXPONENT
-    //  [X] it reverts with Pyth_ExponentOutOfBounds
-    function test_getTwoFeedPriceDiv_givenSecondFeedExponentOutOfBounds_reverts(
-        int32 expo_
-    ) public {
-        // Set expo such that expo + outputDecimals > BASE_10_MAX_EXPONENT
-        // expo must be > BASE_10_MAX_EXPONENT - outputDecimals = 50 - 18 = 32
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                int32(int8(BASE_10_MAX_EXPONENT) - int8(PRICE_DECIMALS) + 1),
-                type(int32).max
-            )
-        );
-        pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, expo_, block.timestamp);
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ExponentOutOfBounds.selector,
-            address(pyth),
-            PRICE_ID_3,
-            expo_,
-            PRICE_DECIMALS,
-            BASE_10_MAX_EXPONENT
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE,
-            address(pyth),
-            PRICE_ID_3,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
-    }
-
     // given the second feed expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
@@ -1377,16 +1305,9 @@ contract PythPriceFeedsTest is Test {
     // given the second feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getTwoFeedPriceDiv_givenSecondFeedExpoPositive_reverts(int32 expo_) public {
-        // Bound expo to be positive (> 0) but not so large it triggers ExponentOutOfBounds first
-        // expo + outputDecimals <= BASE_10_MAX_EXPONENT, so expo <= 50 - 18 = 32
-        // But we want to test positive expo, so expo in range [1, 32]
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                1,
-                int256(uint256(BASE_10_MAX_EXPONENT)) - int256(uint256(PRICE_DECIMALS))
-            )
-        );
+        // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
+        // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
+        expo_ = int32(bound(int256(expo_), 1, 32));
         int64 price = 100;
         pyth.setPrice(PRICE_ID_3, price, CONF_1, expo_, block.timestamp);
 
@@ -1457,7 +1378,7 @@ contract PythPriceFeedsTest is Test {
         // Second feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
-        pyth.setPrice(PRICE_ID_3, price, 0, expo, block.timestamp);
+        pyth.setPrice(PRICE_ID_3, price, 1, expo, block.timestamp);
 
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
@@ -1467,7 +1388,7 @@ contract PythPriceFeedsTest is Test {
             address(pyth),
             PRICE_ID_3,
             UPDATE_THRESHOLD,
-            type(uint64).max
+            type(uint64).max // Ensures confidence interval is below the maximum
         );
         uint256 priceInt = pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
 
@@ -1901,11 +1822,49 @@ contract PythPriceFeedsTest is Test {
         pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
+    // given the first price feed is not found
+    //  [X] it reverts with PriceFeedNotFound
+    function test_getTwoFeedPriceMul_givenFirstFeedPriceFeedNotFound_reverts() public {
+        bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            bytes32(0x0000000000000000000000000000000000000000000000000000000000000001),
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given the second price feed is not found
+    //  [X] it reverts with PriceFeedNotFound
+    function test_getTwoFeedPriceMul_givenSecondFeedPriceFeedNotFound_reverts() public {
+        bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            bytes32(0x0000000000000000000000000000000000000000000000000000000000000001),
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
     // given the first feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
     function test_getTwoFeedPriceMul_givenFirstFeedStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
-        publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
+        publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
 
         bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
@@ -1930,47 +1889,10 @@ contract PythPriceFeedsTest is Test {
         uint256 publishTime_
     ) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
-        publishTime_ = bound(publishTime_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
+        publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
 
         bytes memory err = abi.encodeWithSelector(MockPyth.StalePrice.selector);
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE,
-            address(pyth),
-            PRICE_ID_3,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
-    }
-
-    // given the first feed expo + outputDecimals > BASE_10_MAX_EXPONENT
-    //  [X] it reverts with Pyth_ExponentOutOfBounds
-    function test_getTwoFeedPriceMul_givenFirstFeedExponentOutOfBounds_reverts(int32 expo_) public {
-        // Set expo such that expo + outputDecimals > BASE_10_MAX_EXPONENT
-        // expo must be > BASE_10_MAX_EXPONENT - outputDecimals = 50 - 18 = 32
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                int32(int8(BASE_10_MAX_EXPONENT) - int8(PRICE_DECIMALS) + 1),
-                type(int32).max
-            )
-        );
-        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, expo_, block.timestamp);
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ExponentOutOfBounds.selector,
-            address(pyth),
-            PRICE_ID_1,
-            expo_,
-            PRICE_DECIMALS,
-            BASE_10_MAX_EXPONENT
-        );
         vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
@@ -2044,16 +1966,9 @@ contract PythPriceFeedsTest is Test {
     // given the first feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getTwoFeedPriceMul_givenFirstFeedExpoPositive_reverts(int32 expo_) public {
-        // Bound expo to be positive (> 0) but not so large it triggers ExponentOutOfBounds first
-        // expo + outputDecimals <= BASE_10_MAX_EXPONENT, so expo <= 50 - 18 = 32
-        // But we want to test positive expo, so expo in range [1, 32]
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                1,
-                int256(uint256(BASE_10_MAX_EXPONENT)) - int256(uint256(PRICE_DECIMALS))
-            )
-        );
+        // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
+        // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
+        expo_ = int32(bound(int256(expo_), 1, 32));
         int64 price = 100;
         pyth.setPrice(PRICE_ID_1, price, CONF_1, expo_, block.timestamp);
 
@@ -2124,13 +2039,13 @@ contract PythPriceFeedsTest is Test {
         // First feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
-        pyth.setPrice(PRICE_ID_1, price, 0, expo, block.timestamp);
+        pyth.setPrice(PRICE_ID_1, price, 1, expo, block.timestamp);
 
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
             PRICE_ID_1,
             UPDATE_THRESHOLD,
-            type(uint64).max,
+            type(uint64).max, // Ensures confidence interval is below the maximum
             address(pyth),
             PRICE_ID_3,
             UPDATE_THRESHOLD,
@@ -2305,45 +2220,6 @@ contract PythPriceFeedsTest is Test {
         );
     }
 
-    // given the second feed expo + outputDecimals > BASE_10_MAX_EXPONENT
-    //  [X] it reverts with Pyth_ExponentOutOfBounds
-    function test_getTwoFeedPriceMul_givenSecondFeedExponentOutOfBounds_reverts(
-        int32 expo_
-    ) public {
-        // Set expo such that expo + outputDecimals > BASE_10_MAX_EXPONENT
-        // expo must be > BASE_10_MAX_EXPONENT - outputDecimals = 50 - 18 = 32
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                int32(int8(BASE_10_MAX_EXPONENT) - int8(PRICE_DECIMALS) + 1),
-                type(int32).max
-            )
-        );
-        pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, expo_, block.timestamp);
-
-        bytes memory err = abi.encodeWithSelector(
-            PythPriceFeeds.Pyth_ExponentOutOfBounds.selector,
-            address(pyth),
-            PRICE_ID_3,
-            expo_,
-            PRICE_DECIMALS,
-            BASE_10_MAX_EXPONENT
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE,
-            address(pyth),
-            PRICE_ID_3,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
-    }
-
     // given the second feed expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
@@ -2407,16 +2283,9 @@ contract PythPriceFeedsTest is Test {
     // given the second feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
     function test_getTwoFeedPriceMul_givenSecondFeedExpoPositive_reverts(int32 expo_) public {
-        // Bound expo to be positive (> 0) but not so large it triggers ExponentOutOfBounds first
-        // expo + outputDecimals <= BASE_10_MAX_EXPONENT, so expo <= 50 - 18 = 32
-        // But we want to test positive expo, so expo in range [1, 32]
-        expo_ = int32(
-            bound(
-                int256(expo_),
-                1,
-                int256(uint256(BASE_10_MAX_EXPONENT)) - int256(uint256(PRICE_DECIMALS))
-            )
-        );
+        // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
+        // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
+        expo_ = int32(bound(int256(expo_), 1, 32));
         int64 price = 100;
         pyth.setPrice(PRICE_ID_3, price, CONF_1, expo_, block.timestamp);
 
@@ -2487,7 +2356,7 @@ contract PythPriceFeedsTest is Test {
         // Second feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
-        pyth.setPrice(PRICE_ID_3, price, 0, expo, block.timestamp);
+        pyth.setPrice(PRICE_ID_3, price, 1, expo, block.timestamp);
 
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
@@ -2497,7 +2366,7 @@ contract PythPriceFeedsTest is Test {
             address(pyth),
             PRICE_ID_3,
             UPDATE_THRESHOLD,
-            type(uint64).max
+            type(uint64).max // Ensures confidence interval is below the maximum
         );
         uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
 

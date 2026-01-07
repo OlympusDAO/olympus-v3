@@ -22,8 +22,7 @@ import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 contract PythPriceFeeds is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
-    uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+    uint256 internal constant _PRICE_DATA_SIZE = 128;
 
     /// @notice                 Parameters for a single Pyth price feed
     ///
@@ -132,20 +131,13 @@ contract PythPriceFeeds is PriceSubmodule {
         uint64 maxConfidence_
     );
 
-    /// @notice                 The exponent calculation would result in an overflow
+    /// @notice                 The exponent from the price feed is positive, which results in loss of precision
+    /// @dev                    Positive expo values should not be accepted as they cause precision loss
     ///
     /// @param pyth_            The address of the Pyth contract
     /// @param priceFeedId_     The price feed ID
-    /// @param expo_            The exponent from the price feed
-    /// @param outputDecimals_  The number of decimals to return the price in
-    /// @param maxExponent_     The maximum exponent allowed
-    error Pyth_ExponentOutOfBounds(
-        address pyth_,
-        bytes32 priceFeedId_,
-        int32 expo_,
-        uint8 outputDecimals_,
-        uint8 maxExponent_
-    );
+    /// @param expo_            The exponent from the price feed (must be <= 0)
+    error Pyth_ExponentPositive(address pyth_, bytes32 priceFeedId_, int32 expo_);
 
     // ========== CONSTRUCTOR ========== //
 
@@ -186,9 +178,12 @@ contract PythPriceFeeds is PriceSubmodule {
         uint48 paramsUpdateThreshold,
         uint64 paramsMaxConfidence
     ) internal pure {
+        // Price must be positive
         if (priceData.price <= 0)
             revert Pyth_FeedPriceInvalid(pyth_, priceFeedId_, priceData.price);
 
+        // Publish time must be after the update threshold
+        // The Pyth contract reverts if the price is stale, but this serves as a backup
         if (priceData.publishTime < blockTimestamp - uint256(paramsUpdateThreshold))
             revert Pyth_FeedPublishTimeStale(
                 pyth_,
@@ -224,31 +219,54 @@ contract PythPriceFeeds is PriceSubmodule {
     ) internal view returns (uint256) {
         IPyth.Price memory priceData;
         {
-            try IPyth(pyth_).getPriceNoOlderThan(priceFeedId_, uint256(updateThreshold_)) returns (
-                IPyth.Price memory pythPrice
-            ) {
-                priceData = pythPrice;
-            } catch (bytes memory) {
+            // Encode function call: getPriceNoOlderThan(bytes32,uint256)
+            bytes memory callData = abi.encodeWithSelector(
+                IPyth.getPriceNoOlderThan.selector,
+                priceFeedId_,
+                uint256(updateThreshold_)
+            );
+
+            // Perform low-level static call (view function)
+            (bool success, bytes memory returnData) = pyth_.staticcall(callData);
+
+            if (!success) {
+                // If returnData is empty, it's a call failure (not a contract or function doesn't exist)
+                if (returnData.length == 0) {
+                    revert Pyth_FeedInvalid(pyth_, priceFeedId_);
+                }
+                // Otherwise, bubble up the revert from the function
+                assembly {
+                    revert(add(returnData, 0x20), mload(returnData))
+                }
+            }
+
+            // Validate return data length matches expected ABI-encoded IPyth.Price struct size
+            if (returnData.length != _PRICE_DATA_SIZE) {
                 revert Pyth_FeedInvalid(pyth_, priceFeedId_);
             }
+
+            // Decode the return data
+            priceData = abi.decode(returnData, (IPyth.Price));
+        }
+
+        // Although technically possible, a positive exponent has not been seen and would result in loss of precision
+        // Therefore, it is not supported
+        if (priceData.expo > 0) {
+            revert Pyth_ExponentPositive(pyth_, priceFeedId_, priceData.expo);
         }
 
         // Convert maxConfidence from output decimals scale to Pyth feed scale (10^expo)
         // Formula: maxConfidenceInPythScale = maxConfidence * 10^expo / 10^outputDecimals
         //         = maxConfidence * 10^(expo - outputDecimals)
         // Note: Result is cast to uint64 since it's compared against priceData.conf (uint64)
-        uint64 maxConfidenceInPythScale;
-        int256 confidenceExponent = int256(priceData.expo) - int256(uint256(outputDecimals_));
-        if (confidenceExponent >= 0) {
-            maxConfidenceInPythScale = SafeCast.encodeUInt64(
-                uint256(maxConfidence_).mulDiv(10 ** uint256(confidenceExponent), 1)
-            );
-        } else {
-            maxConfidenceInPythScale = SafeCast.encodeUInt64(
-                uint256(maxConfidence_).mulDiv(1, 10 ** uint256(-confidenceExponent))
-            );
-        }
+        uint64 maxConfidenceInPythScale = SafeCast.encodeUInt64(
+            uint256(maxConfidence_).mulDiv(
+                10 ** uint256(uint32(-priceData.expo)),
+                10 ** uint256(outputDecimals_)
+            )
+        );
 
+        // Validate raw values from the price feed
         _validatePriceFeedResult(
             pyth_,
             priceFeedId_,
@@ -258,28 +276,11 @@ contract PythPriceFeeds is PriceSubmodule {
             maxConfidenceInPythScale
         );
 
-        // Check exponent bounds: expo + outputDecimals <= BASE_10_MAX_EXPONENT
-        int256 totalExponent = int256(priceData.expo) + int256(uint256(outputDecimals_));
-        if (totalExponent > int256(uint256(BASE_10_MAX_EXPONENT))) {
-            revert Pyth_ExponentOutOfBounds(
-                pyth_,
-                priceFeedId_,
-                priceData.expo,
-                outputDecimals_,
-                BASE_10_MAX_EXPONENT
-            );
-        }
-
         uint256 price = uint256(int256(priceData.price));
 
-        // Convert price: outputPrice = price * 10^(expo + outputDecimals)
-        // If totalExponent >= 0: multiply by 10^totalExponent
-        // If totalExponent < 0: divide by 10^(-totalExponent)
-        if (totalExponent >= 0) {
-            return price.mulDiv(10 ** uint256(totalExponent), 1);
-        } else {
-            return price.mulDiv(1, 10 ** uint256(-totalExponent));
-        }
+        // Convert price to output decimals
+        // The PRICE module will handle the zero value
+        return price.mulDiv(10 ** uint256(outputDecimals_), 10 ** uint256(uint32(-priceData.expo)));
     }
 
     /// @notice                 Returns the price from a single Pyth feed, as specified in `params_`.
@@ -365,6 +366,10 @@ contract PythPriceFeeds is PriceSubmodule {
             params.secondMaxConfidence,
             outputDecimals_
         );
+
+        // If denominatorPrice is zero, do an early exit
+        // The PRICE module will handle the zero value
+        if (denominatorPrice == 0) return 0;
 
         // Convert to numerator/denominator price and return
         uint256 priceResult = numeratorPrice.mulDiv(10 ** outputDecimals_, denominatorPrice);
