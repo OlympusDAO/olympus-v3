@@ -19,7 +19,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given all parameters are valid for two feeds
     //  [X] it returns the correct divided price (first / second) in output decimals
-    function test_getTwoFeedPriceDiv_success() public view {
+    function test_success() public view {
         // First feed: 1.23456789 (expo=-8) = 1234567890000000000 in 18 decimals
         // Second feed: 0.0000000005 (expo=-18) = 500000000 in 18 decimals
         // Result: 1234567890000000000 / 500000000 = 2469135780
@@ -42,7 +42,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second feed denominator price converts to zero
     //  [X] it returns zero without reverting
-    function test_getTwoFeedPriceDiv_denominatorPriceZero() public {
+    function test_denominatorPriceZero() public {
         // Set up a very small price with a very negative expo that will round down to 0
         int64 smallPrice = 1;
         int32 veryNegativeExpo = -19;
@@ -66,7 +66,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first pyth contract address is zero
     //  [X] it reverts with Pyth_ParamsPythInvalid
-    function test_getTwoFeedPriceDiv_firstPythZero_reverts() public {
+    function test_firstPythZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             0,
@@ -89,7 +89,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first price feed ID is zero
     //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
-    function test_getTwoFeedPriceDiv_firstPriceFeedIdZero_reverts() public {
+    function test_firstPriceFeedIdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             1,
@@ -112,7 +112,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first update threshold is zero
     //  [X] it reverts with Pyth_ParamsUpdateThresholdInvalid
-    function test_getTwoFeedPriceDiv_firstUpdateThresholdZero_reverts() public {
+    function test_firstUpdateThresholdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsUpdateThresholdInvalid.selector,
             2,
@@ -135,7 +135,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first max confidence is zero
     //  [X] it reverts with Pyth_ParamsMaxConfidenceInvalid
-    function test_getTwoFeedPriceDiv_firstMaxConfidenceZero_reverts() public {
+    function test_firstMaxConfidenceZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsMaxConfidenceInvalid.selector,
             3,
@@ -158,7 +158,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second pyth contract address is zero
     //  [X] it reverts with Pyth_ParamsPythInvalid
-    function test_getTwoFeedPriceDiv_secondPythZero_reverts() public {
+    function test_secondPythZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             4,
@@ -181,7 +181,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second price feed ID is zero
     //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
-    function test_getTwoFeedPriceDiv_secondPriceFeedIdZero_reverts() public {
+    function test_secondPriceFeedIdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             5,
@@ -204,7 +204,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second update threshold is zero
     //  [X] it reverts with Pyth_ParamsUpdateThresholdInvalid
-    function test_getTwoFeedPriceDiv_secondUpdateThresholdZero_reverts() public {
+    function test_secondUpdateThresholdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsUpdateThresholdInvalid.selector,
             6,
@@ -227,7 +227,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second max confidence is zero
     //  [X] it reverts with Pyth_ParamsMaxConfidenceInvalid
-    function test_getTwoFeedPriceDiv_secondMaxConfidenceZero_reverts() public {
+    function test_secondMaxConfidenceZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsMaxConfidenceInvalid.selector,
             7,
@@ -250,7 +250,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first feed has invalid price (<= 0)
     //  [X] it reverts with Pyth_FeedPriceInvalid
-    function test_getTwoFeedPriceDiv_firstFeedPriceInvalid_reverts(int64 price_) public {
+    function test_firstFeedPriceInvalid_reverts(int64 price_) public {
         price_ = int64(bound(price_, type(int64).min, 0));
         pyth.setPrice(PRICE_ID_1, price_, CONF_1, EXPO_1, block.timestamp);
 
@@ -277,7 +277,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second feed has invalid price (<= 0)
     //  [X] it reverts with Pyth_FeedPriceInvalid
-    function test_getTwoFeedPriceDiv_secondFeedPriceInvalid_reverts(int64 price_) public {
+    function test_secondFeedPriceInvalid_reverts(int64 price_) public {
         price_ = int64(bound(price_, type(int64).min, 0));
         pyth.setPrice(PRICE_ID_3, price_, CONF_3, EXPO_3, block.timestamp);
 
@@ -304,7 +304,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first price feed is not found
     //  [X] it reverts with PriceFeedNotFound
-    function test_getTwoFeedPriceDiv_givenFirstFeedPriceFeedNotFound_reverts() public {
+    function test_givenFirstFeedPriceFeedNotFound_reverts() public {
         bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
         vm.expectRevert(err);
 
@@ -323,7 +323,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second price feed is not found
     //  [X] it reverts with PriceFeedNotFound
-    function test_getTwoFeedPriceDiv_givenSecondFeedPriceFeedNotFound_reverts() public {
+    function test_givenSecondFeedPriceFeedNotFound_reverts() public {
         bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
         vm.expectRevert(err);
 
@@ -342,7 +342,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
-    function test_getTwoFeedPriceDiv_givenFirstFeedStalePrice_reverts(uint256 publishTime_) public {
+    function test_givenFirstFeedStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
         publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
@@ -365,9 +365,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second feed publish time is < the threshold boundary
     //  [X] it reverts with StalePrice
-    function test_getTwoFeedPriceDiv_givenSecondFeedStalePrice_reverts(
-        uint256 publishTime_
-    ) public {
+    function test_givenSecondFeedStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
         publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
@@ -391,7 +389,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the first feed expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative_maxConfidenceExceeded_reverts(
+    function test_givenFirstFeedExpoNegative_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -8, outputDecimals = 18
@@ -423,7 +421,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative() public view {
+    function test_givenFirstFeedExpoNegative() public view {
         // First feed: expo = -8, price = 123456789 -> 1.23456789 in 18 decimals = 1234567890000000000
         // Second feed: expo = -18, price = 500000000 -> 500000000 in 18 decimals
         bytes memory params = encodeTwoFeedParams(
@@ -444,7 +442,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given the confidence interval is at the maximum (boundary case)
     //   [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative_confidenceEqualsMaximum() public {
+    function test_givenFirstFeedExpoNegative_confidenceEqualsMaximum() public {
         // expo = -8, outputDecimals = 18
         // confidenceExponent = 18 + (-8) = 10
         // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
@@ -474,7 +472,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given the confidence interval is below the maximum
     //   [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegative_confidenceBelowMaximum(
+    function test_givenFirstFeedExpoNegative_confidenceBelowMaximum(
         uint64 priceConfidence_
     ) public {
         // expo = -8, outputDecimals = 18
@@ -506,7 +504,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoPositive_reverts(int32 expo_) public {
+    function test_givenFirstFeedExpoPositive_reverts(int32 expo_) public {
         // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
         // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
         expo_ = int32(bound(int256(expo_), 1, 32));
@@ -538,7 +536,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the first feed expo is zero (expo = 0, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoZero_maxConfidenceExceeded_reverts(
+    function test_givenFirstFeedExpoZero_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = 0, outputDecimals = 18
@@ -576,7 +574,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoZero() public {
+    function test_givenFirstFeedExpoZero() public {
         // First feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
@@ -604,7 +602,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the first feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegativeEqualsOutputDecimals_maxConfidenceExceeded_reverts(
+    function test_givenFirstFeedExpoNegativeEqualsOutputDecimals_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -18, outputDecimals = 18
@@ -637,7 +635,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoNegativeEqualsOutputDecimals() public {
+    function test_givenFirstFeedExpoNegativeEqualsOutputDecimals() public {
         // First feed: expo = -18, price = 1e9 -> 1e9 (no scaling)
         int64 price = 1e9;
         int32 expo = -18;
@@ -669,7 +667,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the first feed expo is very negative (expo = -20, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoVeryNegative_maxConfidenceExceeded_reverts(
+    function test_givenFirstFeedExpoVeryNegative_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -20, outputDecimals = 18
@@ -702,7 +700,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price by dividing
-    function test_getTwoFeedPriceDiv_givenFirstFeedExpoVeryNegative() public {
+    function test_givenFirstFeedExpoVeryNegative() public {
         // First feed: expo = -20, price = 1e10 -> 1e10 / 10^2 = 1e8
         int64 price = 1e10;
         int32 expo = -20;
@@ -733,9 +731,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the first feed publish time is >= the threshold boundary
     //  [X] it returns the correct price
-    function test_getTwoFeedPriceDiv_givenFirstFeedPublishTimeAboveThreshold(
-        uint256 publishTime_
-    ) public {
+    function test_givenFirstFeedPublishTimeAboveThreshold(uint256 publishTime_) public {
         // Bound the publish time to a reasonable value
         publishTime_ = bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
@@ -764,7 +760,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the second feed expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative_maxConfidenceExceeded_reverts(
+    function test_givenSecondFeedExpoNegative_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -8, outputDecimals = 18
@@ -796,7 +792,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative() public {
+    function test_givenSecondFeedExpoNegative() public {
         // Second feed: expo = -8, price = 123456789 -> 1.23456789 in 18 decimals = 1234567890000000000
         pyth.setPrice(PRICE_ID_3, PRICE_1, CONF_1, EXPO_1, block.timestamp);
 
@@ -823,7 +819,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given the confidence interval is at the maximum (boundary case)
     //   [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative_confidenceEqualsMaximum() public {
+    function test_givenSecondFeedExpoNegative_confidenceEqualsMaximum() public {
         // expo = -8, outputDecimals = 18
         // confidenceExponent = 18 + (-8) = 10
         // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
@@ -856,7 +852,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given the confidence interval is below the maximum
     //   [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegative_confidenceBelowMaximum(
+    function test_givenSecondFeedExpoNegative_confidenceBelowMaximum(
         uint64 priceConfidence_
     ) public {
         // expo = -8, outputDecimals = 18
@@ -891,7 +887,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second feed expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoPositive_reverts(int32 expo_) public {
+    function test_givenSecondFeedExpoPositive_reverts(int32 expo_) public {
         // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
         // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
         expo_ = int32(bound(int256(expo_), 1, 32));
@@ -923,7 +919,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the second feed expo is zero (expo = 0, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoZero_maxConfidenceExceeded_reverts(
+    function test_givenSecondFeedExpoZero_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = 0, outputDecimals = 18
@@ -961,7 +957,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoZero() public {
+    function test_givenSecondFeedExpoZero() public {
         // Second feed: expo = 0, price = 100 -> 100 * 10^18
         int64 price = 100;
         int32 expo = 0;
@@ -989,7 +985,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the second feed expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegativeEqualsOutputDecimals_maxConfidenceExceeded_reverts(
+    function test_givenSecondFeedExpoNegativeEqualsOutputDecimals_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -18, outputDecimals = 18
@@ -1022,7 +1018,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoNegativeEqualsOutputDecimals() public {
+    function test_givenSecondFeedExpoNegativeEqualsOutputDecimals() public {
         // Second feed: expo = -18, price = 1e9 -> 1e9 (no scaling)
         int64 price = 1e9;
         int32 expo = -18;
@@ -1054,7 +1050,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given the second feed expo is very negative (expo = -20, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoVeryNegative_maxConfidenceExceeded_reverts(
+    function test_givenSecondFeedExpoVeryNegative_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -20, outputDecimals = 18
@@ -1087,7 +1083,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price by dividing
-    function test_getTwoFeedPriceDiv_givenSecondFeedExpoVeryNegative() public {
+    function test_givenSecondFeedExpoVeryNegative() public {
         // Second feed: expo = -20, price = 1e10 -> 1e10 / 10^2 = 1e8
         int64 price = 1e10;
         int32 expo = -20;
@@ -1118,9 +1114,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given the second feed publish time is >= the threshold boundary
     //  [X] it returns the correct price
-    function test_getTwoFeedPriceDiv_givenSecondFeedPublishTimeAboveThreshold(
-        uint256 publishTime_
-    ) public {
+    function test_givenSecondFeedPublishTimeAboveThreshold(uint256 publishTime_) public {
         // Bound the publish time to a reasonable value
         publishTime_ = bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp);
         pyth.setPrice(PRICE_ID_3, PRICE_3, CONF_3, EXPO_3, publishTime_);
@@ -1148,7 +1142,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     // given outputDecimals is >= the default (18)
     //  [X] it correctly converts prices to the specified output decimals
-    function test_getTwoFeedPriceDiv_outputDecimalsFuzz(uint8 outputDecimals_) public {
+    function test_outputDecimalsFuzz(uint8 outputDecimals_) public {
         // Bound output decimals to reasonable range [18, 36] to avoid overflow
         outputDecimals_ = uint8(bound(outputDecimals_, 18, 36));
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1179,7 +1173,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given outputDecimals is < the expo of price feed one
     //  given that price one is < 1
     //   [X] the price loses precision
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceOneExpo_priceLessThanOne() public {
+    function test_outputDecimalsLessThanPriceOneExpo_priceLessThanOne() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed one
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1212,9 +1206,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given that price one rounds down to 0
     //   [X] it returns zero
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceOneExpo_priceRoundsDownToZero()
-        public
-    {
+    function test_outputDecimalsLessThanPriceOneExpo_priceRoundsDownToZero() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed one
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1242,7 +1234,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] the price loses precision
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceOneExpo() public {
+    function test_outputDecimalsLessThanPriceOneExpo() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed one
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1275,7 +1267,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     // given outputDecimals is < the expo of price feed two
     //  given that price two is < 1
     //   [X] the price loses precision
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceTwoExpo_priceLessThanOne() public {
+    function test_outputDecimalsLessThanPriceTwoExpo_priceLessThanOne() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed two
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1308,9 +1300,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
 
     //  given that price two rounds down to 0
     //   [X] it returns zero
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceTwoExpo_priceRoundsDownToZero()
-        public
-    {
+    function test_outputDecimalsLessThanPriceTwoExpo_priceRoundsDownToZero() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed two
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
@@ -1341,7 +1331,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     //  [X] the price loses precision
-    function test_getTwoFeedPriceDiv_outputDecimalsLessThanPriceTwoExpo() public {
+    function test_outputDecimalsLessThanPriceTwoExpo() public {
         // Bound output decimals to 9, which is less than the expo (18) of price feed two
         uint8 outputDecimals = 9;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);

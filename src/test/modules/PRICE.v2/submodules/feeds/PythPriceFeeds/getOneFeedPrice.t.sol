@@ -17,7 +17,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given all parameters are valid
     //  [X] it returns the correct price in output decimals
-    function test_getOneFeedPrice_success() public view {
+    function test_success() public view {
         bytes memory params = encodeOneFeedParams(
             address(pyth),
             PRICE_ID_1,
@@ -35,7 +35,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the pyth contract address is zero
     //  [X] it reverts with Pyth_ParamsPythInvalid
-    function test_getOneFeedPrice_pythZero_reverts() public {
+    function test_pythZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPythInvalid.selector,
             0,
@@ -54,7 +54,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the price feed ID is zero
     //  [X] it reverts with Pyth_ParamsPriceFeedIdInvalid
-    function test_getOneFeedPrice_priceFeedIdZero_reverts() public {
+    function test_priceFeedIdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsPriceFeedIdInvalid.selector,
             1,
@@ -73,7 +73,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the update threshold is zero
     //  [X] it reverts with Pyth_ParamsUpdateThresholdInvalid
-    function test_getOneFeedPrice_updateThresholdZero_reverts() public {
+    function test_updateThresholdZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsUpdateThresholdInvalid.selector,
             2,
@@ -87,7 +87,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the max confidence is zero
     //  [X] it reverts with Pyth_ParamsMaxConfidenceInvalid
-    function test_getOneFeedPrice_maxConfidenceZero_reverts() public {
+    function test_maxConfidenceZero_reverts() public {
         bytes memory err = abi.encodeWithSelector(
             PythPriceFeeds.Pyth_ParamsMaxConfidenceInvalid.selector,
             3,
@@ -101,7 +101,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the pyth contract doesn't implement IPyth
     //  [X] it reverts with Pyth_FeedInvalid
-    function test_getOneFeedPrice_pythContractInvalid_reverts() public {
+    function test_pythContractInvalid_reverts() public {
         // Use a contract that doesn't implement IPyth
         address invalidPyth = address(0x1234);
 
@@ -123,7 +123,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the pyth contract returns data with incorrect length
     //  [X] it reverts with Pyth_FeedInvalid
-    function test_getOneFeedPrice_returnDataLengthInvalid_reverts() public {
+    function test_returnDataLengthInvalid_reverts() public {
         address mockPyth = address(0xDEAD);
 
         // Mock the call to succeed but return data with wrong length (not 128 bytes)
@@ -160,7 +160,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the pyth contract reverts with return data
     //  [X] it bubbles up the revert
-    function test_getOneFeedPrice_pythRevertsWithData_bubblesUpRevert() public {
+    function test_pythRevertsWithData_bubblesUpRevert() public {
         address mockPyth = address(0xBEEF);
 
         // Create a custom error
@@ -194,7 +194,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the price is <= 0
     //  [X] it reverts with Pyth_FeedPriceInvalid
-    function test_getOneFeedPrice_feedPriceInvalid_reverts(int64 price_) public {
+    function test_feedPriceInvalid_reverts(int64 price_) public {
         price_ = int64(bound(price_, type(int64).min, 0));
         pyth.setPrice(PRICE_ID_1, price_, CONF_1, EXPO_1, block.timestamp);
 
@@ -217,7 +217,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the price feed is not found
     //  [X] it reverts with PriceFeedNotFound
-    function test_getOneFeedPrice_priceFeedNotFound_reverts() public {
+    function test_priceFeedNotFound_reverts() public {
         bytes memory err = abi.encodeWithSelector(MockPyth.PriceFeedNotFound.selector);
         vm.expectRevert(err);
 
@@ -232,7 +232,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the publish time is before the update threshold
     //  [X] it reverts with StalePrice
-    function test_getOneFeedPrice_givenStalePrice_reverts(uint256 publishTime_) public {
+    function test_givenStalePrice_reverts(uint256 publishTime_) public {
         // Bound publish time to be stale (publishTime < block.timestamp - UPDATE_THRESHOLD)
         publishTime_ = bound(publishTime_, 1, block.timestamp - UPDATE_THRESHOLD - 1);
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, publishTime_);
@@ -252,7 +252,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // given expo is negative (expo = -8, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_maxConfidenceExceeded_reverts(uint64 priceConfidence_) public {
+    function test_maxConfidenceExceeded_reverts(uint64 priceConfidence_) public {
         // MAX_CONFIDENCE = 2e16 in output decimals (18)
         // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals, so it should pass
         // To exceed MAX_CONFIDENCE (2e16), we need conf * 10^10 > 2e16, so conf > 2e6
@@ -285,7 +285,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getOneFeedPrice_givenExpoNegative() public view {
+    function test_givenExpoNegative() public view {
         // expo = -8, outputDecimals = 18, totalExponent = 10
         bytes memory params = encodeOneFeedParams(
             address(pyth),
@@ -306,7 +306,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given expo is positive (expo > 0)
     //  [X] it reverts with Pyth_ExponentPositive
-    function test_getOneFeedPrice_expoPositive_reverts(int32 expo_) public {
+    function test_expoPositive_reverts(int32 expo_) public {
         // Bound expo to be positive (> 0) to test Pyth_ExponentPositive error
         // Keep expo within reasonable range [1, 32] to avoid overflow in calculations
         expo_ = int32(bound(int256(expo_), 1, 32));
@@ -333,9 +333,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // given expo is zero (expo = 0, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_expoZero_maxConfidenceExceeded_reverts(
-        uint64 priceConfidence_
-    ) public {
+    function test_expoZero_maxConfidenceExceeded_reverts(uint64 priceConfidence_) public {
         // expo = 0, outputDecimals = 18
         // confidenceExponent = 18 + 0 = 18
         // Use a higher maxConfidence to get a meaningful threshold
@@ -367,7 +365,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price
-    function test_getOneFeedPrice_expoZero() public {
+    function test_expoZero() public {
         // expo = 0, outputDecimals = 18, totalExponent = 18
         int64 price = 123456789;
         int32 expo = 0;
@@ -388,7 +386,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // given expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_expoEqualsNegativeOutputDecimals_maxConfidenceExceeded_reverts(
+    function test_expoEqualsNegativeOutputDecimals_maxConfidenceExceeded_reverts(
         uint64 priceConfidence_
     ) public {
         // expo = -18, outputDecimals = 18
@@ -417,7 +415,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     //  [X] it returns the price without scaling
-    function test_getOneFeedPrice_expoEqualsNegativeOutputDecimals() public {
+    function test_expoEqualsNegativeOutputDecimals() public {
         // expo = -18, outputDecimals = 18, totalExponent = 0
         int64 price = 123456789;
         int32 expo = -18;
@@ -443,9 +441,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // given expo is very negative (expo = -20, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
-    function test_getOneFeedPrice_expoVeryNegative_maxConfidenceExceeded_reverts(
-        uint64 priceConfidence_
-    ) public {
+    function test_expoVeryNegative_maxConfidenceExceeded_reverts(uint64 priceConfidence_) public {
         // expo = -20, outputDecimals = 18
         // confidenceExponent = 18 + (-20) = -2
         // maxConfidenceInPythScale = maxConfidence * 10^2 = 2e16 * 100 = 2e18
@@ -472,7 +468,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     //  [X] it correctly converts the price by dividing
-    function test_getOneFeedPrice_expoVeryNegative() public {
+    function test_expoVeryNegative() public {
         // expo = -20, outputDecimals = 18, totalExponent = -2
         int64 price = 100000000;
         int32 expo = -20;
@@ -492,7 +488,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the confidence interval is <= the maximum
     //  [X] it correctly converts the price
-    function test_getOneFeedPrice_confidenceBelowMaximum(uint64 priceConfidence_) public {
+    function test_confidenceBelowMaximum(uint64 priceConfidence_) public {
         // expo = -8, outputDecimals = 18
         // confidenceExponent = 18 + (-8) = 10
         // maxConfidenceInPythScale = maxConfidence / 10^10 = 2e16 / 1e10 = 2e6
@@ -517,7 +513,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the publish time is >= the threshold boundary
     //  [X] it returns the correct price
-    function test_getOneFeedPrice_givenPublishTimeAboveThreshold(uint48 publishTime_) public {
+    function test_givenPublishTimeAboveThreshold(uint48 publishTime_) public {
         // Bound the publish time to a reasonable value
         publishTime_ = uint48(
             bound(publishTime_, block.timestamp - UPDATE_THRESHOLD, block.timestamp)
@@ -541,7 +537,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given the publish time equals exactly the update threshold boundary
     //  [X] it returns the correct price
-    function test_getOneFeedPrice_publishTimeExactlyAtThreshold() public {
+    function test_publishTimeExactlyAtThreshold() public {
         // Set publish time to exactly block.timestamp - UPDATE_THRESHOLD
         // This tests the boundary condition: publishTime == blockTimestamp - updateThreshold
         // The validation checks: publishTime < blockTimestamp - updateThreshold (strict <)
@@ -566,7 +562,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     // given outputDecimals is different from default (18)
     //  [X] it correctly converts prices to the specified output decimals
-    function test_getOneFeedPrice_outputDecimalsFuzz(uint8 outputDecimals_) public {
+    function test_outputDecimalsFuzz(uint8 outputDecimals_) public {
         // Bound output decimals to reasonable range [8, 36] to avoid rounding issues and overflow
         // Using >= 8 ensures we don't lose precision (expo = -8)
         outputDecimals_ = uint8(bound(outputDecimals_, 8, 36));
@@ -591,7 +587,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // given outputDecimals is < the expo
     //  given the price is < 1
     //   [X] the price loses precision
-    function test_getOneFeedPrice_outputDecimalsLessThanExpo_priceLessThanOne() public {
+    function test_outputDecimalsLessThanExpo_priceLessThanOne() public {
         // Bound output decimals to 6, which is less than the expo (8)
         uint8 outputDecimals = 6;
         // Set the price to 23456789 (0.23456789 * 10^8)
@@ -613,7 +609,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
 
     //  given the price rounds down to 0
     //   [X] it returns zero
-    function test_getOneFeedPrice_outputDecimalsLessThanExpo_priceRoundsDownToZero() public {
+    function test_outputDecimalsLessThanExpo_priceRoundsDownToZero() public {
         // Bound output decimals to 6, which is less than the expo (8)
         uint8 outputDecimals = 6;
         // Set the price to 89 (0.00000089 * 10^8)
@@ -635,7 +631,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     //  [X] the price loses precision
-    function test_getOneFeedPrice_outputDecimalsLessThanExpo() public {
+    function test_outputDecimalsLessThanExpo() public {
         // Bound output decimals to 6, which is less than the expo (8)
         uint8 outputDecimals = 6;
         pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
