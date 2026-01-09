@@ -587,5 +587,71 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
         uint256 expected = uint256(uint64(PRICE_1)) * 10 ** (outputDecimals_ - 8);
         assertEq(priceInt, expected, "Price should match expected for fuzzed output decimals");
     }
+
+    // given outputDecimals is < the expo
+    //  given the price is < 1
+    //   [X] the price loses precision
+    function test_getOneFeedPrice_outputDecimalsLessThanExpo_priceLessThanOne() public {
+        // Bound output decimals to 6, which is less than the expo (8)
+        uint8 outputDecimals = 6;
+        // Set the price to 23456789 (0.23456789 * 10^8)
+        pyth.setPrice(PRICE_ID_1, 23456789, CONF_1, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), outputDecimals, params);
+
+        // expo = -8, price = 23456789 (0.23456789 * 10^8)
+        // outputDecimals = 6, price = 234567 (0.234567 * 10^6)
+        uint256 expected = 234567;
+        assertEq(priceInt, expected, "Price should lose precision");
+    }
+
+    //  given the price rounds down to 0
+    //   [X] it returns zero
+    function test_getOneFeedPrice_outputDecimalsLessThanExpo_priceRoundsDownToZero() public {
+        // Bound output decimals to 6, which is less than the expo (8)
+        uint8 outputDecimals = 6;
+        // Set the price to 89 (0.00000089 * 10^8)
+        // This will round down to 0 when converted to output decimals
+        pyth.setPrice(PRICE_ID_1, 89, CONF_1, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), outputDecimals, params);
+
+        // expo = -8, price = 89 (0.00000089 * 10^8)
+        // outputDecimals = 6, price = 0 (89 * 10^6 / 10^8 is less than 1)
+        uint256 expected = 0;
+        assertEq(priceInt, expected, "Price should round down to zero");
+    }
+
+    //  [X] the price loses precision
+    function test_getOneFeedPrice_outputDecimalsLessThanExpo() public {
+        // Bound output decimals to 6, which is less than the expo (8)
+        uint8 outputDecimals = 6;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), outputDecimals, params);
+
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 6, price = 1234567 (1.234567 * 10^6)
+        uint256 expected = 1234567;
+        assertEq(priceInt, expected, "Price should lose precision");
+    }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

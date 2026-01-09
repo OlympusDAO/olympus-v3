@@ -996,7 +996,7 @@ contract PythPriceFeedsGetTwoFeedPriceMulTest is PythPriceFeedsTest {
         );
     }
 
-    // given outputDecimals is different from default (18) for two feeds multiplication
+    // given outputDecimals is different from default (18)
     //  [X] it correctly converts prices to the specified output decimals
     function test_getTwoFeedPriceMul_outputDecimalsFuzz(uint8 outputDecimals_) public {
         // Bound output decimals to reasonable range [18, 36] to avoid overflow
@@ -1024,6 +1024,201 @@ contract PythPriceFeedsGetTwoFeedPriceMulTest is PythPriceFeedsTest {
         uint256 secondPrice = uint256(uint64(PRICE_3)) * 10 ** (outputDecimals_ - 18);
         uint256 expected = firstPrice.mulDiv(secondPrice, 10 ** outputDecimals_);
         assertEq(priceInt, expected, "Price should match expected for fuzzed output decimals");
+    }
+
+    // given outputDecimals is < the expo of price feed one
+    //  given that price one is < 1
+    //   [X] the price loses precision
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceOneExpo_priceLessThanOne() public {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed one
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This price will lose precision when converted to output decimals
+        // The price is also < 1 in 18 decimal scale
+        pyth.setPrice(PRICE_ID_3, 122222222222222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -18, price = 122222222222222222
+        // outputDecimals = 9, price = 122222222.222222222
+        // Second price:
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 9, price = 1234567890 (1.23456789 * 10^9)
+        // Expected result: 122222222 * 1234567890 / 10^9 = 150891630
+        uint256 expected = 150891630;
+        assertEq(priceInt, expected, "Price should lose precision");
+    }
+
+    //  given that price one rounds down to 0
+    //   [X] it returns zero
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceOneExpo_priceRoundsDownToZero()
+        public
+    {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed one
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This will round down to 0 when converted to output decimals
+        pyth.setPrice(PRICE_ID_3, 122222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -18, price = 122222222
+        // outputDecimals = 9, price = 0 (122222222 * 10^9 / 10^18 is less than 1)
+        // Expected result: 0
+        uint256 expected = 0;
+        assertEq(priceInt, expected, "Price should round down to zero");
+    }
+
+    //  [X] the price loses precision
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceOneExpo() public {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed one
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This price will lose precision when converted to output decimals
+        pyth.setPrice(PRICE_ID_3, 1222222222222222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -18, price = 1222222222222222222
+        // outputDecimals = 9, price = 1222222222.222222222
+        // Second price:
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 9, price = 1234567890 (1.23456789 * 10^9)
+        // Expected result: 1222222222 * 1234567890 / 10^9 = 1508916309
+        uint256 expected = 1508916309;
+        assertEq(priceInt, expected, "Price should lose precision");
+    }
+
+    // given outputDecimals is < the expo of price feed two
+    //  given that price two is < 1
+    //   [X] the price loses precision
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceTwoExpo_priceLessThanOne() public {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed two
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This price will lose precision when converted to output decimals
+        // The price is also < 1 in 18 decimal scale
+        pyth.setPrice(PRICE_ID_3, 122222222222222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 9, price = 1234567890 (1.23456789 * 10^9)
+        // Second price:
+        // expo = -18, price = 122222222222222222
+        // outputDecimals = 9, price = 122222222.222222222
+        // Expected result: 1234567890 * 122222222 / 10^9 = 150891630
+        uint256 expected = 150891630;
+        assertEq(priceInt, expected, "Price should lose precision");
+    }
+
+    //  given that price two rounds down to 0
+    //   [X] it returns zero
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceTwoExpo_priceRoundsDownToZero()
+        public
+    {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed two
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This will round down to 0 when converted to output decimals
+        pyth.setPrice(PRICE_ID_3, 122222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 9, price = 1234567890 (1.23456789 * 10^9)
+        // Second price:
+        // expo = -18, price = 122222222
+        // outputDecimals = 9, price = 0 (122222222 * 10^9 / 10^18 is less than 1)
+        // Expected result: 0
+        uint256 expected = 0;
+        assertEq(priceInt, expected, "Price should round down to zero");
+    }
+
+    //  [X] the price loses precision
+    function test_getTwoFeedPriceMul_outputDecimalsLessThanPriceTwoExpo() public {
+        // Bound output decimals to 9, which is less than the expo (18) of price feed two
+        uint8 outputDecimals = 9;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
+        // This price will lose precision when converted to output decimals
+        pyth.setPrice(PRICE_ID_3, 1222222222222222222, CONF_3, EXPO_3, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18, // scale max confidence to the new output decimals
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            (MAX_CONFIDENCE * 10 ** outputDecimals) / 10 ** 18 // scale max confidence to the new output decimals
+        );
+        uint256 priceInt = pythSubmodule.getTwoFeedPriceMul(address(0), outputDecimals, params);
+
+        // First price:
+        // expo = -8, price = 123456789 (1.23456789 * 10^8)
+        // outputDecimals = 9, price = 1234567890 (1.23456789 * 10^9)
+        // Second price:
+        // expo = -18, price = 1222222222222222222
+        // outputDecimals = 9, price = 1222222222.222222222
+        // Expected result: 1234567890 * 1222222222 / 10^9 = 1508916309
+        uint256 expected = 1508916309;
+        assertEq(priceInt, expected, "Price should lose precision");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)
