@@ -27,6 +27,7 @@ import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {PythPriceFeeds} from "modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
@@ -53,8 +54,12 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
     address public constant CONVERTIBLE_DEPOSIT_ACTIVATOR =
         0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E;
+    address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address public constant PYTH = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6;
 
     uint256 internal constant OHM_USD_PRICE = 20e18;
+    bytes32 internal constant ETH_USD_FEED_ID =
+        0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
 
     // System contracts
     Kernel public kernel;
@@ -69,6 +74,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
     // Submodules
     ChainlinkPriceFeeds public chainlinkPrice;
+    PythPriceFeeds public pythPrice;
     SimplePriceFeedStrategy public strategy;
 
     // Permissioned addresses
@@ -158,6 +164,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
+        pythPrice = new PythPriceFeeds(price);
         strategy = new SimplePriceFeedStrategy(price);
 
         // Upgrade PRICE module to v1.2
@@ -175,14 +182,20 @@ contract OlympusPricev1_2ForkTest is Test {
         // Install submodules
         vm.startPrank(moduleWriter);
         price.installSubmodule(chainlinkPrice);
+        price.installSubmodule(pythPrice);
         price.installSubmodule(strategy);
         vm.stopPrank();
+
+        // TODO remove Chainlink mock price feed
 
         ohmUsdPriceFeed = new MockPriceFeed();
         ohmUsdPriceFeed.setDecimals(8);
 
         // Configure OHM asset with MA tracking and OHM-ETH/ETH-USD feeds
         _configureOhmAsset();
+
+        // Configure WETH asset with Pyth feed
+        _configureWethAsset();
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -221,6 +234,45 @@ contract OlympusPricev1_2ForkTest is Test {
             uint32(30 days), // movingAverageDuration
             uint48(block.timestamp), // lastObservationTime
             observations,
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // strategy
+            feeds
+        );
+
+        vm.stopPrank();
+    }
+
+    function _configureWethAsset() internal {
+        // Configure WETH with real Pyth price feed for ETH/USD
+        uint48 updateThreshold = 24 hours;
+        // Max confidence in absolute price terms (output decimals, 18)
+        // This value allows for $10 difference
+        uint256 maxConfidence = 10e18;
+
+        vm.startPrank(priceWriterV2);
+
+        // Configure WETH with Pyth feed
+        PythPriceFeeds.OneFeedParams memory ethUsdParams = PythPriceFeeds.OneFeedParams(
+            PYTH,
+            ETH_USD_FEED_ID,
+            updateThreshold,
+            maxConfidence
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.PYTH"),
+            PythPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethUsdParams)
+        );
+
+        // This will revert if calling the Pyth feed fails
+        price.addAsset(
+            address(WETH),
+            false, // storeMovingAverage
+            false, // useMovingAverage
+            uint32(0), // movingAverageDuration
+            uint48(0), // lastObservationTime
+            new uint256[](0), // observations
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // strategy
             feeds
         );
