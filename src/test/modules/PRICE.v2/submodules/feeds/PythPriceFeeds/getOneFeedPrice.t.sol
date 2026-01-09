@@ -490,31 +490,7 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
         assertEq(priceInt, 1000000, "Price should match expected value for very negative expo");
     }
 
-    // given the confidence interval equals the maximum
-    //  [X] it returns the correct price
-    function test_getOneFeedPrice_confidenceEqualsMaximum() public {
-        // Confidence interval equals maximum threshold
-        // CONF_1 = 1000000 with expo=-8 converts to 1e16 in output decimals
-        // MAX_CONFIDENCE = 2e16, so CONF_1 should pass
-        // This test verifies that a confidence that is below the maximum passes
-        pyth.setPrice(PRICE_ID_1, PRICE_1, CONF_1, EXPO_1, block.timestamp);
-
-        bytes memory params = encodeOneFeedParams(
-            address(pyth),
-            PRICE_ID_1,
-            UPDATE_THRESHOLD,
-            MAX_CONFIDENCE
-        );
-        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
-
-        assertEq(
-            priceInt,
-            EXPECTED_PRICE_1_18_DEC,
-            "Price should be valid when confidence is below maximum"
-        );
-    }
-
-    // given the confidence interval is below the maximum
+    // given the confidence interval is <= the maximum
     //  [X] it correctly converts the price
     function test_getOneFeedPrice_confidenceBelowMaximum(uint64 priceConfidence_) public {
         // expo = -8, outputDecimals = 18
