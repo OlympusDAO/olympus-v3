@@ -233,5 +233,30 @@
         "addr": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
         "chainId": 1,
         "name": "olympus-periphery-convertible-deposit-activator"
+    },
+    {
+        "addr": "0x31F8Cc382c9898b273eff4e0b7626a6987C846E8",
+        "chainId": 1,
+        "name": "olympus-legacy-treasury"
+    },
+    {
+        "addr": "0x184f3FAd8618a6F458C16bae63F70C426fE784B3",
+        "chainId": 1,
+        "name": "olympus-legacy-migrator"
+    },
+    {
+        "addr": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
+        "chainId": 1,
+        "name": "olympus-legacy-ohm-v2"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-burner"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-periphery-migration-helper"
     }
 ]
