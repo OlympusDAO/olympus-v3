@@ -13,6 +13,7 @@ import {ERC20 as SolmateERC20} from "solmate/tokens/ERC20.sol";
 // MigrationProposal imports
 import {MigrationProposal} from "src/proposals/MigrationProposal.sol";
 import {MigrationHelper} from "src/proposals/MigrationHelper.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 interface OlympusTreasury {
     enum MANAGING {
@@ -92,6 +93,11 @@ contract MigrationProposalTest is ProposalTest {
     Burner public burner;
     MigrationHelper public migrationHelper;
 
+    address public constant HOLDER1 = address(0x1111111111111111111111111111111111111111);
+    address public constant HOLDER2 = address(0x2222222222222222222222222222222222222222);
+    uint256 public constant HOLDER1_BALANCE = 1000e9; // 1000 OHM (9 decimals)
+    uint256 public constant HOLDER2_BALANCE = 5000e9; // 5000 OHM (9 decimals)
+
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
@@ -121,24 +127,66 @@ contract MigrationProposalTest is ProposalTest {
         // Deploy MigrationHelper (deployed separately, not by the proposal)
         // This needs to be deployed before treasury setup so it can be granted permissions
         address timelock = TIMELOCK;
+
+        // Create test data for OHMv1 holders
+        // In production, these would be the actual holder addresses and their recorded balances
+        MigrationHelper.OHMv1Holder[] memory holders = new MigrationHelper.OHMv1Holder[](2);
+        holders[0] = MigrationHelper.OHMv1Holder({
+            holder: HOLDER1,
+            recordedBalance: HOLDER1_BALANCE
+        });
+        holders[1] = MigrationHelper.OHMv1Holder({
+            holder: HOLDER2,
+            recordedBalance: HOLDER2_BALANCE
+        });
+
+        // Mint OHMv1 to holders before proposal execution
+        // Use deal cheatcode to give them OHMv1 tokens
+        deal(address(OHMv1), HOLDER1, HOLDER1_BALANCE);
+        deal(address(OHMv1), HOLDER2, HOLDER2_BALANCE);
+
+        // Deploy MigrationHelper
         migrationHelper = new MigrationHelper(
             timelock, // owner
             address(burner),
-            address(treasury),
-            address(migrator),
-            0xB63cac384247597756545b500253ff8E607a8020, // staking from addresses.json
-            0x0ab87046fBb341D058F17CBC4c1133F25a20a52f, // gohm from addresses.json
-            address(OHMv1),
-            address(OHMv2),
-            address(tempOHM)
+            address(tempOHM),
+            holders
         );
 
         // ========== DAO MS SETUP STEPS ==========
+        _setupTreasuryAndMintTempOHM();
 
+        // ========== PROPOSAL SIMULATION ==========
+
+        // Deploy proposal under test with tempOHM and MigrationHelper addresses
+        MigrationProposal proposal = new MigrationProposal(
+            address(tempOHM),
+            address(migrationHelper)
+        );
+
+        // Set to true once the proposal has been submitted on-chain to enforce calldata matching
+        hasBeenSubmitted = false;
+
+        // Create TestSuite
+        _setupSuite(address(proposal));
+
+        // Update addresses with test-deployed contracts (needed for _build and _validate)
+        addresses.addAddress("olympus-policy-burner", address(burner));
+
+        // Set debug mode
+        suite.setDebug(true);
+
+        // Simulate the proposal
+        _simulateProposal();
+
+        // ========== VERIFY AIRDROP ==========
+        _verifyAirdrop();
+    }
+
+    /// @notice Helper function to set up treasury permissions and mint tempOHM
+    function _setupTreasuryAndMintTempOHM() internal {
         console2.log("");
         console2.log("====== Setting up treasury...");
-
-        console2.log("block:", block.number);
 
         // Confirm that tempOHM is not a reserve token
         assertFalse(
@@ -233,28 +281,42 @@ contract MigrationProposalTest is ProposalTest {
         vm.prank(DAO_MS);
         tempOHM.mint(TIMELOCK, maxTempOHM);
         console2.log("maxTempOHM (18 dp):", maxTempOHM);
+    }
 
-        // ========== PROPOSAL SIMULATION ==========
+    /// @notice Helper function to verify airdrop execution
+    function _verifyAirdrop() internal {
+        // Get gOHM interface for balance checks
+        IgOHM gohm = IgOHM(0x0ab87046fBb341D058F17CBC4c1133F25a20a52f);
 
-        // Deploy proposal under test with tempOHM and MigrationHelper addresses
-        MigrationProposal proposal = new MigrationProposal(
-            address(tempOHM),
-            address(migrationHelper)
+        // Check that holders array is set correctly
+        // Public array returns tuple, so we need to destructure
+        (address holder1FromContract, uint256 balance1FromContract) = migrationHelper.ohmv1Holders(
+            0
+        );
+        (address holder2FromContract, uint256 balance2FromContract) = migrationHelper.ohmv1Holders(
+            1
         );
 
-        // Set to true once the proposal has been submitted on-chain to enforce calldata matching
-        hasBeenSubmitted = false;
+        assertEq(holder1FromContract, HOLDER1, "Holder 1 address should match");
+        assertEq(balance1FromContract, HOLDER1_BALANCE, "Holder 1 recorded balance should match");
+        assertEq(holder2FromContract, HOLDER2, "Holder 2 address should match");
+        assertEq(balance2FromContract, HOLDER2_BALANCE, "Holder 2 recorded balance should match");
 
-        // Create TestSuite
-        _setupSuite(address(proposal));
+        // Calculate expected gOHM amounts using the conversion function
+        uint256 expectedGohm1 = gohm.balanceTo(HOLDER1_BALANCE);
+        uint256 expectedGohm2 = gohm.balanceTo(HOLDER2_BALANCE);
 
-        // Update addresses with test-deployed contracts (needed for _build and _validate)
-        addresses.addAddress("olympus-policy-burner", address(burner));
+        // Get gOHM balances after proposal execution
+        uint256 gohmBalance1 = IERC20(address(gohm)).balanceOf(HOLDER1);
+        uint256 gohmBalance2 = IERC20(address(gohm)).balanceOf(HOLDER2);
 
-        // Set debug mode
-        suite.setDebug(true);
+        // Verify that holders received the expected amount of gOHM
+        assertEq(gohmBalance1, expectedGohm1, "Holder 1 should receive correct amount of gOHM");
+        assertEq(gohmBalance2, expectedGohm2, "Holder 2 should receive correct amount of gOHM");
 
-        // Simulate the proposal
-        _simulateProposal();
+        console2.log("Holder 1 received gOHM:", gohmBalance1);
+        console2.log("Holder 1 expected gOHM:", expectedGohm1);
+        console2.log("Holder 2 received gOHM:", gohmBalance2);
+        console2.log("Holder 2 expected gOHM:", expectedGohm2);
     }
 }

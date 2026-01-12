@@ -34,14 +34,16 @@ interface OlympusTokenMigrator {
 contract MigrationHelper is Owned {
     using SafeTransferLib for ERC20;
 
-    // Immutable contract addresses
+    // Hardcoded legacy contract addresses (mainnet)
+    address public constant TREASURY = 0x31F8Cc382c9898b273eff4e0b7626a6987C846E8;
+    address public constant MIGRATOR = 0x184f3FAd8618a6F458C16bae63F70C426fE784B3;
+    address public constant STAKING = 0xB63cac384247597756545b500253ff8E607a8020;
+    address public constant GOHM = 0x0ab87046fBb341D058F17CBC4c1133F25a20a52f;
+    address public constant OHMV1 = 0x383518188C0C6d7730D91b2c03a03C837814a899;
+    address public constant OHMV2 = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
+
+    // Immutable contract addresses (variable)
     address public immutable BURNER;
-    address public immutable TREASURY;
-    address public immutable MIGRATOR;
-    address public immutable STAKING;
-    address public immutable GOHM;
-    address public immutable OHMV1;
-    address public immutable OHMV2;
     address public immutable TEMPOHM;
 
     bytes32 public constant MIGRATION_CATEGORY = "migration";
@@ -49,39 +51,56 @@ contract MigrationHelper is Owned {
     /// @notice True if the activation has been performed
     bool public isActivated = false;
 
+    /// @notice Struct to store OHMv1 holder information
+    struct OHMv1Holder {
+        address holder;
+        uint256 recordedBalance;
+    }
+
+    /// @notice Array of OHMv1 holders eligible for airdrop
+    OHMv1Holder[] public ohmv1Holders;
+
     event Activated(address caller);
+    event AirdropSent(address indexed holder, uint256 ohmv1Amount, uint256 gohmAmount);
+    event AirdropSkipped(
+        address indexed holder,
+        uint256 recordedBalance,
+        uint256 currentBalance,
+        string reason
+    );
+
     error AlreadyActivated();
     error InvalidParams(string reason);
 
     constructor(
         address owner_,
         address burner_,
-        address treasury_,
-        address migrator_,
-        address staking_,
-        address gohm_,
-        address ohmv1_,
-        address ohmv2_,
-        address tempOHM_
+        address tempOHM_,
+        OHMv1Holder[] memory ohmv1Holders_
     ) Owned(owner_) {
         if (owner_ == address(0)) revert InvalidParams("owner");
         if (burner_ == address(0)) revert InvalidParams("burner");
-        if (treasury_ == address(0)) revert InvalidParams("treasury");
-        if (migrator_ == address(0)) revert InvalidParams("migrator");
-        if (staking_ == address(0)) revert InvalidParams("staking");
-        if (gohm_ == address(0)) revert InvalidParams("gohm");
-        if (ohmv1_ == address(0)) revert InvalidParams("ohmv1");
-        if (ohmv2_ == address(0)) revert InvalidParams("ohmv2");
         if (tempOHM_ == address(0)) revert InvalidParams("tempOHM");
 
         BURNER = burner_;
-        TREASURY = treasury_;
-        MIGRATOR = migrator_;
-        STAKING = staking_;
-        GOHM = gohm_;
-        OHMV1 = ohmv1_;
-        OHMV2 = ohmv2_;
         TEMPOHM = tempOHM_;
+
+        // Store OHMv1 holders
+        for (uint256 i = 0; i < ohmv1Holders_.length; i++) {
+            ohmv1Holders.push(ohmv1Holders_[i]);
+        }
+    }
+
+    /// @notice Set OHMv1 holders (can be called by owner to update holders)
+    /// @param holders_ Array of OHMv1 holders
+    function setOHMv1Holders(OHMv1Holder[] calldata holders_) external onlyOwner {
+        // Clear existing holders
+        delete ohmv1Holders;
+
+        // Add new holders
+        for (uint256 i = 0; i < holders_.length; i++) {
+            ohmv1Holders.push(holders_[i]);
+        }
     }
 
     /// @notice Executes the migration process
@@ -97,56 +116,87 @@ contract MigrationHelper is Owned {
         // Revert if already activated
         if (isActivated) revert AlreadyActivated();
 
-        // Get tempOHM balance from owner (Timelock)
-        uint256 tempOHMBalance = ERC20(TEMPOHM).balanceOf(owner);
-        if (tempOHMBalance == 0) revert InvalidParams("No tempOHM balance");
-
         // Step 1: Add burner category "migration"
         Burner(BURNER).addCategory(MIGRATION_CATEGORY);
 
-        // Step 2: Transfer tempOHM from owner to this contract
+        // Step 2-4: Deposit tempOHM to treasury
+        {
+            uint256 tempOHMBalance = ERC20(TEMPOHM).balanceOf(owner);
+            if (tempOHMBalance == 0) revert InvalidParams("No tempOHM balance");
+            _depositTempOHMToTreasury(tempOHMBalance);
+        }
+
+        // Step 5-7: Migrate OHMv1 to gOHM
+        _migrateOHMv1ToGOHM();
+
+        // Step 8: Airdrop gOHM to holders
+        _airdropToHolders();
+
+        // Step 9-13: Unstake and burn remaining gOHM
+        _unstakeAndBurn();
+
+        // Mark as activated
+        isActivated = true;
+        emit Activated(msg.sender);
+    }
+
+    /// @notice Deposit tempOHM to treasury to receive OHMv1
+    function _depositTempOHMToTreasury(uint256 tempOHMBalance) internal {
+        // Transfer tempOHM from owner to this contract
         // Note: Owner must have approved tempOHM to this contract before calling activate()
         ERC20(TEMPOHM).safeTransferFrom(owner, address(this), tempOHMBalance);
 
-        // Step 3: Approve tempOHM for treasury
+        // Approve tempOHM for treasury
         ERC20(TEMPOHM).safeApprove(TREASURY, tempOHMBalance);
 
-        // Step 4: Deposit tempOHM to treasury (this mints OHMv1 to this contract)
+        // Deposit tempOHM to treasury (this mints OHMv1 to this contract)
         OlympusTreasury(TREASURY).deposit(tempOHMBalance, TEMPOHM, 0);
+    }
 
-        // Step 5: Get OHMv1 balance received from treasury
+    /// @notice Migrate OHMv1 to gOHM via migrator
+    function _migrateOHMv1ToGOHM() internal {
         uint256 ohmv1Balance = IERC20(OHMV1).balanceOf(address(this));
-
-        // Step 6: Approve OHMv1 for migrator
         IERC20(OHMV1).approve(MIGRATOR, ohmv1Balance);
-
-        // Step 7: Migrate OHMv1 to gOHM (via migrator)
         OlympusTokenMigrator(MIGRATOR).migrate(
             ohmv1Balance,
             OlympusTokenMigrator.TYPE.UNSTAKED,
             OlympusTokenMigrator.TYPE.WRAPPED
         );
+    }
 
-        // Step 8: Get gOHM balance received from migration
-        uint256 gohmBalance = IgOHM(GOHM).balanceOf(address(this));
+    /// @notice Unstake gOHM to OHMv2 and burn
+    function _unstakeAndBurn() internal {
+        // Approve and unstake gOHM to OHMv2
+        uint256 gohmAmount = IgOHM(GOHM).balanceOf(address(this));
+        IERC20(GOHM).approve(STAKING, gohmAmount);
+        IStaking(STAKING).unstake(address(this), gohmAmount, false, false);
 
-        // Step 9: Approve gOHM for staking
-        IERC20(GOHM).approve(STAKING, gohmBalance);
-
-        // Step 10: Unstake gOHM to OHMv2
-        IStaking(STAKING).unstake(address(this), gohmBalance, false, false);
-
-        // Step 11: Get OHMv2 balance received from unstaking
+        // Get OHMv2 balance and burn
         uint256 ohmv2Balance = IERC20(OHMV2).balanceOf(address(this));
-
-        // Step 12: Approve OHMv2 for burner
         IERC20(OHMV2).approve(BURNER, ohmv2Balance);
-
-        // Step 13: Burn OHMv2 with category "migration"
         Burner(BURNER).burnFrom(address(this), ohmv2Balance, MIGRATION_CATEGORY);
+    }
 
-        // Mark as activated
-        isActivated = true;
-        emit Activated(msg.sender);
+    /// @notice Airdrop gOHM to OHMv1 holders
+    function _airdropToHolders() internal {
+        // Iterate through holders and airdrop
+        uint256 length = ohmv1Holders.length;
+        for (uint256 i = 0; i < length; ++i) {
+            address holderAddr = ohmv1Holders[i].holder;
+            uint256 recordedBal = ohmv1Holders[i].recordedBalance;
+
+            if (IERC20(OHMV1).balanceOf(holderAddr) >= recordedBal) {
+                uint256 gohmAmount = IgOHM(GOHM).balanceTo(recordedBal);
+                ERC20(GOHM).safeTransfer(holderAddr, gohmAmount);
+                emit AirdropSent(holderAddr, recordedBal, gohmAmount);
+            } else {
+                emit AirdropSkipped(
+                    holderAddr,
+                    recordedBal,
+                    IERC20(OHMV1).balanceOf(holderAddr),
+                    "Insufficient balance"
+                );
+            }
+        }
     }
 }
