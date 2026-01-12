@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {IStaking} from "interfaces/IStaking.sol";
-import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
+import {IStaking} from "src/interfaces/IStaking.sol";
+import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 
 contract MockStakingZD is IStaking {
     Epoch public epoch;
@@ -35,11 +35,27 @@ contract MockStakingZD is IStaking {
         if (trigger_) bounty = rebase();
     }
 
+    function stake(address, uint256 _amount, bool, bool) external returns (uint256) {
+        return _amount;
+    }
+
     function setDistributor(address _distributor) external {
         distributor = ZeroDistributor(_distributor);
     }
 
     function secondsToNextEpoch() external view returns (uint256) {
         return epoch.end > block.timestamp ? epoch.end - block.timestamp : 0;
+    }
+
+    function warmupPeriod() external view returns (uint256) {
+        return 0;
+    }
+
+    function OHM() external view returns (address) {
+        return address(0);
+    }
+
+    function gOHM() external view returns (address) {
+        return address(0);
     }
 }

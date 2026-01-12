@@ -26,7 +26,7 @@ interface ICoolerComposites {
         IDLGTEv1.DelegationRequest[] calldata delegationRequests
     ) external;
 
-    /// @notice Allow user to add collateral and borrow from Cooler V2
+    /// @notice Allow user to repay debt and remove collateral from Cooler V2
     /// @dev    User must provide authorization signature before using function
     ///
     /// @param authorization        Authorization info. Set the `account` field to the zero address to indicate that authorization has already been provided through `IMonoCooler.setAuthorization()`.
