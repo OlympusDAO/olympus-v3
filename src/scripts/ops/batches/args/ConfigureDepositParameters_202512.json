@@ -1,0 +1,16 @@
+{
+    "functions": [
+        {
+            "args": {
+                "annualInterestRate": 550,
+                "baseEmissionsRate": 400000,
+                "enabledPeriods": [3],
+                "maxBorrowPercentage": 9670,
+                "minPriceScalar": 1100000000000000000,
+                "reclaimRatePeriods": [3],
+                "reclaimRates": [9750]
+            },
+            "name": "ConfigureDepositParameters"
+        }
+    ]
+}
