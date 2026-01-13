@@ -264,6 +264,7 @@ contract SomethingTest {
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
 - Do not use `require()` for assertions. Instead, preference custom errors. Custom errors should be defined in the contract's parent interface (where available), or else in the contract itself.
+- Do not revert with a blank message, use a custom error instead.
 - Contracts should have a separate interface that is defined in a separate file, to allow for easy integration. All interfaces are MIT-licensed, and should avoid using internal types. Interfaces should also use NatSpec to define functions and types, and any expectations for implementation contracts.
 - Contracts that implement interfaces should use the `@inheritdoc` NatSpec tag in function documentation to reference the parent interface's function.
 - Function documentation should outline the behaviour of the function, including any conditions that would result in a revert.
@@ -291,6 +292,16 @@ contract SomethingTest {
 - Policies can use the `PolicyEnabler` mix-in to inherit common functionality around enabling/disabling contracts. Periphery contracts can use `PeripheryEnabler`.
 - Error handling with custom errors following naming conventions
 - When planning a new feature, to write the plan to disk in Markdown format, and always include a TODO list that can be checked off. When working on that new feature, regularly update the status in the task list of that feature plan.
+
+### Imports
+
+- When importing dependencies, use a versioned import path, e.g. `@solmate-6.2.0` instead of `solmate`. Refer to remappings.txt for the aliases.
+- Imports must be at the top of the file, below the license and pragma.
+- Imports should be grouped under headings of: interface, libraries, contracts
+- Within each grouping, keep the imports sorted by the dependency path
+- Do NOT do global imports, `import "src/Kernel.sol"`
+- Instead, import individual contracts from a file, e.g. `import {Kernel} from "src/Kernel.sol"`
+- The codebase has different approaches to imports. Ignore those and implement the prescribed approach.
 
 ### Solidity Math Guidelines
 
