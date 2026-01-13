@@ -8,27 +8,25 @@ import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravo
 // Contracts
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MigrationHelper} from "src/proposals/MigrationHelper.sol";
+import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
 import {Burner} from "src/policies/Burner.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @notice Proposal to execute OHM v1 migration to OHM v2 and burn
+/// @notice Proposal to enable LegacyMigrator for OHM v1 migration and execute gOHM burn
 contract MigrationProposal is GovernorBravoProposal {
     // Kernel will be used in most proposals
     address internal _kernel;
-    // MigrationHelper deployed separately, passed during construction
+    // LegacyMigrator and MigrationHelper deployed separately, retrieved from addresses
+    LegacyMigrator internal _legacyMigrator;
     MigrationHelper internal _migrationHelper;
-    // tempOHM address passed during construction
-    address internal _tempOHM;
 
-    error InvalidTempOHM();
+    error InvalidLegacyMigrator();
     error InvalidMigrationHelper();
 
-    constructor(address tempOHM_, address migrationHelper_) {
-        if (tempOHM_ == address(0)) revert InvalidTempOHM();
-        if (migrationHelper_ == address(0)) revert InvalidMigrationHelper();
-        _tempOHM = tempOHM_;
-        _migrationHelper = MigrationHelper(migrationHelper_);
+    constructor() {
+        // Addresses will be retrieved from Addresses in _deploy()
     }
 
     // Returns the id of the proposal.
@@ -45,29 +43,43 @@ contract MigrationProposal is GovernorBravoProposal {
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# OHM v1 Migration\n\n",
-                "This proposal executes the migration of OHM v1 to OHM v2 and burns the migrated tokens.\n\n",
+                "# OHM v1 Migration via LegacyMigrator\n\n",
+                "This proposal enables the LegacyMigrator policy and executes the gOHM burn.\n\n",
                 "## Summary\n\n",
-                "This proposal has three main steps:\n\n",
-                "1. Grant `burner_admin` role to MigrationHelper\n",
-                "2. Execute MigrationHelper.activate() to perform the migration\n",
-                "3. Revoke `burner_admin` role from MigrationHelper\n\n",
+                "This proposal has two main steps:\n\n",
+                "1. Enable LegacyMigrator policy for OHM v1 to OHM v2 migration\n",
+                "2. Execute MigrationHelper.activate() to perform the gOHM burn\n\n",
+                "## Background\n\n",
+                "The LegacyMigrator policy uses a merkle tree to verify eligible OHM v1 holders ",
+                "and allows them to migrate their tokens to OHM v2. This policy is pre-deployed ",
+                "and only needs to be enabled via this proposal.\n\n",
+                "The MigrationHelper contract performs the final gOHM burn after the migration period.\n\n",
                 "## Steps\n\n",
-                "1. Grant `burner_admin` role to MigrationHelper contract\n",
-                "2. Approve tempOHM to MigrationHelper (from Timelock)\n",
+                "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2)\n",
+                "2. Grant `burner_admin` role to MigrationHelper\n",
                 "3. Call MigrationHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
-                "   - Deposits tempOHM to treasury to receive OHM v1\n",
-                "   - Migrates OHM v1 to gOHM\n",
-                "   - Unstakes gOHM to OHM v2\n",
+                "   - Burns gOHM to receive OHM v2\n",
                 '   - Burns OHM v2 with category "migration"\n',
-                "4. Revoke `burner_admin` role from MigrationHelper contract\n"
+                "4. Revoke `burner_admin` role from MigrationHelper\n\n",
+                "## Note\n\n",
+                "Treasury permissions for tempOHM and MigrationHelper should be set up separately ",
+                "via the MigrationSetup script before this proposal is executed."
             );
     }
 
     function _deploy(Addresses addresses, address) internal override {
         // Store the kernel address in state
         _kernel = addresses.getAddress("olympus-kernel");
+
+        // Retrieve LegacyMigrator and MigrationHelper from addresses
+        address legacyMigratorAddr = addresses.getAddress("olympus-policy-legacy-migrator");
+        if (legacyMigratorAddr == address(0)) revert InvalidLegacyMigrator();
+        _legacyMigrator = LegacyMigrator(legacyMigratorAddr);
+
+        address migrationHelperAddr = addresses.getAddress("olympus-policy-migration-helper");
+        if (migrationHelperAddr == address(0)) revert InvalidMigrationHelper();
+        _migrationHelper = MigrationHelper(migrationHelperAddr);
     }
 
     function _afterDeploy(Addresses addresses, address deployer) internal override {}
@@ -76,7 +88,14 @@ contract MigrationProposal is GovernorBravoProposal {
     function _build(Addresses addresses) internal override {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
-        // STEP 1: Grant "burner_admin" role to MigrationHelper
+        // STEP 1: Enable LegacyMigrator policy
+        _pushAction(
+            address(_legacyMigrator),
+            abi.encodeWithSelector(IEnabler.enable.selector, abi.encode("")),
+            "Enable LegacyMigrator policy"
+        );
+
+        // STEP 2: Grant "burner_admin" role to MigrationHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -88,22 +107,11 @@ contract MigrationProposal is GovernorBravoProposal {
             "Grant burner_admin role to MigrationHelper"
         );
 
-        // STEP 2: Approve tempOHM to MigrationHelper (from Timelock)
-        _pushAction(
-            _tempOHM,
-            abi.encodeWithSelector(
-                IERC20.approve.selector,
-                address(_migrationHelper),
-                type(uint256).max
-            ),
-            "Approve tempOHM to MigrationHelper"
-        );
-
         // STEP 3: Call MigrationHelper.activate()
         _pushAction(
             address(_migrationHelper),
             abi.encodeWithSelector(MigrationHelper.activate.selector),
-            "Execute migration via MigrationHelper"
+            "Execute gOHM burn via MigrationHelper"
         );
 
         // STEP 4: Revoke "burner_admin" role from MigrationHelper
@@ -141,45 +149,28 @@ contract MigrationProposal is GovernorBravoProposal {
 
         // solhint-disable custom-errors
 
-        // 1. Validate that MigrationHelper is marked as activated
+        // 1. Validate that LegacyMigrator is enabled
+        require(_legacyMigrator.isEnabled() == true, "LegacyMigrator should be enabled");
+
+        // 2. Validate that MigrationHelper is marked as activated
         require(_migrationHelper.isActivated() == true, "MigrationHelper should be activated");
 
-        // 2. Validate that "migration" category exists in Burner
+        // 3. Validate that "migration" category exists in Burner
         bytes32 migrationCategory = _migrationHelper.MIGRATION_CATEGORY();
         require(
             Burner(burner).categoryApproved(migrationCategory) == true,
             "Migration category should be approved in Burner"
         );
 
-        // 3. Validate that burner_admin role was revoked from MigrationHelper
+        // 4. Validate that burner_admin role was revoked from MigrationHelper
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(_migrationHelper), bytes32("burner_admin")) == false,
             "MigrationHelper should not have burner_admin role"
         );
 
-        // 4. Validate that there is no OHMv1 left in the Timelock or the MigrationHelper contract
+        // 5. Validate that there is no gOHM left in the Timelock or the MigrationHelper contract
         address timelock = addresses.getAddress("olympus-timelock");
-        require(
-            IERC20(OHMv1).balanceOf(timelock) == 0,
-            "There should be no OHMv1 left in the Timelock"
-        );
-        require(
-            IERC20(OHMv1).balanceOf(address(_migrationHelper)) == 0,
-            "There should be no OHMv1 left in the MigrationHelper contract"
-        );
-
-        // 5. Validate that there is no tempOHM left in the Timelock or the MigrationHelper contract
-        require(
-            IERC20(_tempOHM).balanceOf(timelock) == 0,
-            "There should be no tempOHM left in the Timelock"
-        );
-        require(
-            IERC20(_tempOHM).balanceOf(address(_migrationHelper)) == 0,
-            "There should be no tempOHM left in the MigrationHelper contract"
-        );
-
-        // 6. Validate that there is no gOHM left in the Timelock or the MigrationHelper contract
         require(
             IERC20(GOHM).balanceOf(timelock) == 0,
             "There should be no gOHM left in the Timelock"
@@ -189,7 +180,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no gOHM left in the MigrationHelper contract"
         );
 
-        // 7. Validate that there is no OHMv2 left in the Timelock or the MigrationHelper contract
+        // 6. Validate that there is no OHMv2 left in the Timelock or the MigrationHelper contract
         require(
             IERC20(OHMv2).balanceOf(timelock) == 0,
             "There should be no OHMv2 left in the Timelock"

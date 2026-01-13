@@ -8,12 +8,12 @@ import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin-5.3.0/access/Ownable.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {Burner} from "src/policies/Burner.sol";
+import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
 import {ERC20 as SolmateERC20} from "solmate/tokens/ERC20.sol";
 
 // MigrationProposal imports
 import {MigrationProposal} from "src/proposals/MigrationProposal.sol";
 import {MigrationHelper} from "src/proposals/MigrationHelper.sol";
-import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 interface OlympusTreasury {
     enum MANAGING {
@@ -66,6 +66,7 @@ contract OwnedERC20 is ERC20, Ownable {
     }
 
     /// @notice Burn tokens from the specified address
+    /// @dev    Caller needs allowance if burning from another address
     function burn(address from, uint256 amount) public virtual {
         // If the caller is not the token holder, spend the allowance (or revert)
         if (from != msg.sender) {
@@ -92,6 +93,7 @@ contract MigrationProposalTest is ProposalTest {
     IERC20 public OHMv2;
     Burner public burner;
     MigrationHelper public migrationHelper;
+    LegacyMigrator public legacyMigrator;
 
     address public constant HOLDER1 = address(0x1111111111111111111111111111111111111111);
     address public constant HOLDER2 = address(0x2222222222222222222222222222222222222222);
@@ -153,16 +155,33 @@ contract MigrationProposalTest is ProposalTest {
             holders
         );
 
-        // ========== DAO MS SETUP STEPS ==========
-        _setupTreasuryAndMintTempOHM();
+        // ========== DEPLOY LEGACY MIGRATOR ==========
+
+        // Deploy LegacyMigrator (pre-deployed, enabled via proposal)
+        legacyMigrator = new LegacyMigrator(kernel, IERC20(address(OHMv1)));
+
+        // Install LegacyMigrator into the kernel
+        vm.prank(DAO_MS);
+        kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
+
+        // ========== NOTE: TREASURY SETUP ==========
+        // Treasury permissions for tempOHM and MigrationHelper should be set up
+        // separately via the MigrationSetup script before this proposal is executed.
+        // This includes:
+        // - Setting tempOHM as a reserve token
+        // - Granting MigrationHelper permission to withdraw tempOHM
+        // - Minting tempOHM to the Timelock for the gOHM burn
+        //
+        // For this test, we assume those steps have been completed via MigrationSetup.
+        // In a real scenario, run:
+        //   forge script MigrationSetup --sig "queue(...)" --broadcast
+        //   (wait for timelock)
+        //   forge script MigrationSetup --sig "toggle(...)" --broadcast
 
         // ========== PROPOSAL SIMULATION ==========
 
-        // Deploy proposal under test with tempOHM and MigrationHelper addresses
-        MigrationProposal proposal = new MigrationProposal(
-            address(tempOHM),
-            address(migrationHelper)
-        );
+        // Deploy proposal under test (no constructor parameters needed)
+        MigrationProposal proposal = new MigrationProposal();
 
         // Set to true once the proposal has been submitted on-chain to enforce calldata matching
         hasBeenSubmitted = false;
@@ -172,6 +191,9 @@ contract MigrationProposalTest is ProposalTest {
 
         // Update addresses with test-deployed contracts (needed for _build and _validate)
         addresses.addAddress("olympus-policy-burner", address(burner));
+        addresses.addAddress("olympus-policy-legacy-migrator", address(legacyMigrator));
+        addresses.addAddress("olympus-policy-migration-helper", address(migrationHelper));
+        addresses.addAddress("external.tokens.tempOHM", address(tempOHM));
 
         // Set debug mode
         suite.setDebug(true);
@@ -179,144 +201,25 @@ contract MigrationProposalTest is ProposalTest {
         // Simulate the proposal
         _simulateProposal();
 
-        // ========== VERIFY AIRDROP ==========
-        _verifyAirdrop();
+        // ========== VERIFY MIGRATION HELPER ACTIVATION ==========
+        _verifyMigrationHelperActivation();
     }
 
-    /// @notice Helper function to set up treasury permissions and mint tempOHM
-    function _setupTreasuryAndMintTempOHM() internal {
-        console2.log("");
-        console2.log("====== Setting up treasury...");
+    /// @notice Helper function to verify MigrationHelper activation
+    function _verifyMigrationHelperActivation() internal view {
+        // Verify that MigrationHelper is marked as activated
+        assertTrue(migrationHelper.isActivated(), "MigrationHelper should be activated");
 
-        // Confirm that tempOHM is not a reserve token
-        assertFalse(
-            treasury.isReserveToken(address(tempOHM)),
-            "tempOHM should not be a reserve token"
-        );
-
-        // Add tempOHM as a reserve token
-        console2.log("Adding tempOHM as a reserve token...");
-        vm.prank(DAO_MS);
-        treasury.queue(OlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM));
-
-        // Print the queue
-        console2.log("reserveTokenQueue:", treasury.reserveTokenQueue(address(tempOHM)));
-
-        // Confirm that MigrationHelper is not a reserve depositor
-        assertFalse(
-            treasury.isReserveDepositor(address(migrationHelper)),
-            "MigrationHelper should not be a reserve depositor"
-        );
-
-        // Add MigrationHelper as a reserve depositor
-        console2.log("Adding MigrationHelper as a reserve depositor...");
-        vm.prank(DAO_MS);
-        treasury.queue(OlympusTreasury.MANAGING.RESERVEDEPOSITOR, address(migrationHelper));
-
-        // Warp forward to the timelock expiry
-        console2.log("Warpping forward to the timelock expiry...");
-        vm.roll(BLOCK + BLOCKS_NEEDED_FOR_QUEUE + 1);
-
-        // Toggle tempOHM as a reserve token
-        console2.log("Enabling tempOHM as a reserve token...");
-        vm.prank(DAO_MS);
-        treasury.toggle(OlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM), address(0));
-
-        // Verify that tempOHM is a reserve token
-        assertTrue(treasury.isReserveToken(address(tempOHM)), "tempOHM should be a reserve token");
-
-        // Toggle MigrationHelper as a reserve depositor
-        console2.log("Enabling MigrationHelper as a reserve depositor...");
-        vm.prank(DAO_MS);
-        treasury.toggle(
-            OlympusTreasury.MANAGING.RESERVEDEPOSITOR,
-            address(migrationHelper),
-            address(0)
-        );
-
-        // Verify that MigrationHelper is a reserve depositor
+        // Verify that the "migration" category was added to the burner
+        bytes32 migrationCategory = migrationHelper.MIGRATION_CATEGORY();
         assertTrue(
-            treasury.isReserveDepositor(address(migrationHelper)),
-            "MigrationHelper should be a reserve depositor"
+            burner.categoryApproved(migrationCategory),
+            "Migration category should be approved in Burner"
         );
 
         console2.log("");
-        console2.log("====== Minting OHM v1...");
-
-        // Excess reserves is 65659757174924
-        console2.log("Treasury excess reserves (18 dp):", treasury.excessReserves());
-
-        // OHM valuation of tempOHM is 1:1 in OHM decimals
-        assertEq(
-            treasury.valueOf(address(tempOHM), 1e18),
-            1e9,
-            "OHM valuation of tempOHM should be 1:1 in OHM decimals"
-        );
-
-        // OHMv1 old supply is 553483798713734 (9 dp)
-        // OHMv1 total supply is 278651810168261 (9 dp)
-        // The difference is what can be minted and migrated
-        // Difference is 274831988545473 (274831.988545473 OHM)
-        console2.log("OHMv1 oldSupply (9 dp):", migrator.oldSupply());
-        console2.log("OHMv1 total supply (9 dp):", OHMv1.totalSupply());
-        uint256 maxMintableOHM = migrator.oldSupply() - OHMv1.totalSupply();
-        console2.log("maxMintableOHM (9 dp):", maxMintableOHM);
-
-        // 1e9 OHM = 21403507467877949 gOHM (18 dp)
-        // 274831988545473 OHM can be converted into how much gOHM?
-        // 274831988545473 * 21403507467877949 / 1e18 = 5882368519244778449578 gOHM (18 dp)
-
-        // Migrator gOHM balance is 4232050112844353034347 (18 dp)
-        // maxMigrateableOHM * conversionRate = 4232050112844353034347
-        // maxMigrateableOHM = 4232050112844353034347 / conversionRate = 4232050112844353034347 * 1e9 / 21403507467877949 = 197726943548656 OHM (9 dp) (197,726.9435486566)
-        // In reality, the maxOHM is higher
-        uint256 maxOHM = 197726943548656;
-        // There seems to be some issue with calculations, as the maxOHM results in residual gOHM
-        // 176481131518703773 * 1e9 / 21403507467877949
-        // = 8245430417
-        maxOHM += 8245430417;
-        uint256 maxTempOHM = maxOHM * 1e9;
-
-        // Mint tempOHM to the Timelock (MigrationHelper owner)
-        vm.prank(DAO_MS);
-        tempOHM.mint(TIMELOCK, maxTempOHM);
-        console2.log("maxTempOHM (18 dp):", maxTempOHM);
-    }
-
-    /// @notice Helper function to verify airdrop execution
-    function _verifyAirdrop() internal {
-        // Get gOHM interface for balance checks
-        IgOHM gohm = IgOHM(0x0ab87046fBb341D058F17CBC4c1133F25a20a52f);
-
-        // Check that holders array is set correctly
-        // Public array returns tuple, so we need to destructure
-        (address holder1FromContract, uint256 balance1FromContract) = migrationHelper.ohmv1Holders(
-            0
-        );
-        (address holder2FromContract, uint256 balance2FromContract) = migrationHelper.ohmv1Holders(
-            1
-        );
-
-        assertEq(holder1FromContract, HOLDER1, "Holder 1 address should match");
-        assertEq(balance1FromContract, HOLDER1_BALANCE, "Holder 1 recorded balance should match");
-        assertEq(holder2FromContract, HOLDER2, "Holder 2 address should match");
-        assertEq(balance2FromContract, HOLDER2_BALANCE, "Holder 2 recorded balance should match");
-
-        // Calculate expected gOHM amounts using the conversion function
-        uint256 expectedGohm1 = gohm.balanceTo(HOLDER1_BALANCE);
-        uint256 expectedGohm2 = gohm.balanceTo(HOLDER2_BALANCE);
-
-        // Get gOHM balances after proposal execution
-        uint256 gohmBalance1 = IERC20(address(gohm)).balanceOf(HOLDER1);
-        uint256 gohmBalance2 = IERC20(address(gohm)).balanceOf(HOLDER2);
-
-        // Verify that holders received the expected amount of gOHM
-        assertEq(gohmBalance1, expectedGohm1, "Holder 1 should receive correct amount of gOHM");
-        assertEq(gohmBalance2, expectedGohm2, "Holder 2 should receive correct amount of gOHM");
-
-        console2.log("Holder 1 received gOHM:", gohmBalance1);
-        console2.log("Holder 1 expected gOHM:", expectedGohm1);
-        console2.log("Holder 2 received gOHM:", gohmBalance2);
-        console2.log("Holder 2 expected gOHM:", expectedGohm2);
+        console2.log("====== Migration Helper Activation Verified ======");
+        console2.log("MigrationHelper activated:", migrationHelper.isActivated());
+        console2.log("Migration category approved:", burner.categoryApproved(migrationCategory));
     }
 }
