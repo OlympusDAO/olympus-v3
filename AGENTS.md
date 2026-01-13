@@ -42,6 +42,73 @@ Ask first:
 - Changing file permissions
 - Full test suites (`test`, `test:unit`, `test:fork` or `test:proposal`)
 
+## Agent Behaviour
+
+### Communication Style
+
+- Be direct and concise
+- Avoid conversational fillers ("Let me...", "I'm going to...", "Now I'll...").
+- State what you're doing, not what you're about to do. Example: Instead of "Let me read the file to understand what's happening", simply read the file and report findings.
+
+### Approach
+
+- Make reasonable assumptions based on codebase conventions. Only ask when:
+    - Multiple valid approaches exist with significant trade-offs
+    - Security implications are unclear
+    - The choice affects external integrations
+- Document assumptions in comments when you proceed without asking
+- When stuck, ask a clarifying question
+
+### Scope Management
+
+- Fix the specific issue, not the surrounding code unless requested
+- Don't refactor "just because" - prefer ugly-but-working over clean-but-risky
+- Exception: If you spot a critical security bug, flag it immediately
+
+### Information Gathering
+
+- Read the actual implementation before making changes. Never guess.
+- For cross-cutting concerns (e.g., "all places that use X"), use grep/glob to find all instances first
+- When exploring, cast a wide net initially, then narrow down
+
+### Failure Handling
+
+- If a build/test fails, report the actual error, not a summary
+- Include file:line references for all errors
+- Attempt to fix before reporting, but explain what you tried
+
+### Context Retention
+
+- Remember user preferences stated earlier in the conversation
+- When a pattern is established (e.g., "always use 18 decimals"), apply it consistently
+- If the user corrects you, update your mental model and acknowledge
+
+### Tool Selection
+
+- Prefer specialized tools (Read, Grep, Glob) over bash equivalents
+- Use Bash only for: git, npm/pnpm, forge commands, or actual terminal operations
+- Never use bash for file operations (cat, sed, awk, echo redirections)
+
+### Progress Reporting
+
+- For multi-step tasks, use TodoWrite proactively
+- Mark tasks in_progress immediately when starting
+- Mark completed immediately after finishing—not in batches
+- One task in_progress at a time
+
+### Testing Discipline
+
+- Write or update tests before implementation
+- If tests don't exist for a function you're modifying, create them first
+- Run the specific test file after changes, not the full suite
+- Only run full test suites when explicitly requested or at major milestones
+
+### Commit and Git Hygiene
+
+- Never create commits unless explicitly asked
+- Never push unless explicitly asked
+- When creating commits, follow the repository's commit message style (check git log first)
+
 ## Architecture Overview
 
 ### Default Framework Components
@@ -97,12 +164,6 @@ src/
 ```
 
 ## Development Guidelines
-
-### Behaviour
-
-- Write or update tests first on new features, then implement
-- When stuck, ask a clarifying question
-- Plan before implementing
 
 ### Testing
 
