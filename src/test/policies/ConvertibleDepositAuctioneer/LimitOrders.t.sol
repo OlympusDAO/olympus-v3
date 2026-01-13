@@ -10,6 +10,7 @@ pragma solidity >=0.8.20;
 // Test
 import {Test} from "@forge-std-1.9.6/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
+import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -51,6 +52,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
     MockERC20 public receiptToken12;
     MockPositionNFT public positionNFT;
     MockConvertibleDepositAuctioneer public cdAuctioneer;
+    MockDepositManager public depositManager;
     Kernel public kernel;
 
     address public owner = makeAddr("owner");
@@ -91,8 +93,15 @@ contract CDAuctioneerLimitOrdersTest is Test {
         receiptToken12 = new MockERC20("Receipt12", "RCT12", 18);
         positionNFT = new MockPositionNFT();
 
+        // Deploy mock deposit manager
+        depositManager = new MockDepositManager(kernel, address(usds));
+
         // Deploy mock auctioneer
-        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(usds));
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(
+            kernel,
+            address(depositManager),
+            address(usds)
+        );
 
         // Configure mock auctioneer
         cdAuctioneer.setMinimumBid(MIN_BID);
@@ -114,6 +123,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         limitOrders = new CDAuctioneerLimitOrders(
             owner,
+            address(depositManager),
             address(cdAuctioneer),
             address(usds),
             address(sUsds),
@@ -494,6 +504,127 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    function _getExpectedWithdrawable(uint256 amount_) internal view returns (uint256) {
+        uint256 shares = (amount_ * sUsds.totalSupply()) / sUsds.totalAssets();
+        return (shares * (sUsds.totalAssets() + amount_)) / (sUsds.totalSupply() + shares);
+    }
+
+    // when the USDS withdrawable from sUSDS is less than the deposited amount
+    //  when there is no incentive budget
+    //   [X] the deposit budget is the amount withdrawable from sUSDS
+    //   [X] the incentive budget is 0
+    //   [X] the total USDS owed is the amount withdrawable from sUSDS
+    function test_createOrder_givenYield_zeroIncentiveBudget(uint256 depositBudget) public {
+        // Bound the parameters
+        depositBudget = bound(depositBudget, DEFAULT_MIN_FILL_SIZE, 50_000e18);
+
+        // Accrue yield
+        _accrueYield(123e18);
+
+        uint256 expectedShares = sUsds.previewDeposit(depositBudget);
+        uint256 expectedWithdrawable = _getExpectedWithdrawable(depositBudget);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            depositBudget, // depositBudget
+            0, // incentiveBudget
+            DEFAULT_MAX_PRICE, // maxPrice
+            DEFAULT_MIN_FILL_SIZE // minFillSize
+        );
+
+        assertEq(orderId, 0, "First order should have ID 0");
+
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.owner, alice, "Order owner should be alice");
+        assertEq(order.depositPeriod, PERIOD_3, "Order deposit period should be PERIOD_3");
+        assertEq(
+            order.depositBudget,
+            expectedWithdrawable,
+            "Order deposit budget should match expected withdrawable amount"
+        );
+        assertEq(order.incentiveBudget, 0, "Order incentive budget should match input");
+        assertEq(order.depositSpent, 0, "Order deposit spent should be 0 initially");
+        assertEq(order.incentiveSpent, 0, "Order incentive spent should be 0 initially");
+        assertEq(order.maxPrice, DEFAULT_MAX_PRICE, "Order max price should match input");
+        assertEq(
+            order.minFillSize,
+            DEFAULT_MIN_FILL_SIZE,
+            "Order min fill size should match input"
+        );
+        assertTrue(order.active, "Order should be active");
+
+        // Check balances and invariants
+        checkOrderInvariants(orderId, expectedWithdrawable, 0, address(0), 0, expectedShares);
+    }
+
+    //  [X] the deposit budget is the deposit budget provided
+    //  [X] the incentive budget is the withdrawable amount minus the deposit budget
+    //  [X] the total USDS owed is the amount withdrawable from sUSDS
+    function test_createOrder_givenYield(uint256 depositBudget) public {
+        // Bound the parameters
+        depositBudget = bound(depositBudget, DEFAULT_MIN_FILL_SIZE, 50_000e18);
+        uint256 incentiveBudget = DEFAULT_INCENTIVE_BUDGET;
+
+        // Accrue yield
+        _accrueYield(123e18);
+
+        uint256 expectedShares = sUsds.previewDeposit(depositBudget + incentiveBudget);
+        uint256 expectedIncentiveBudget;
+        {
+            uint256 expectedWithdrawable = _getExpectedWithdrawable(
+                depositBudget + incentiveBudget
+            );
+
+            // The deposit budget will be made whole, an the incentive budget decreased
+            expectedIncentiveBudget = expectedWithdrawable - depositBudget;
+        }
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            depositBudget, // depositBudget
+            incentiveBudget, // incentiveBudget
+            DEFAULT_MAX_PRICE, // maxPrice
+            DEFAULT_MIN_FILL_SIZE // minFillSize
+        );
+
+        assertEq(orderId, 0, "First order should have ID 0");
+
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.owner, alice, "Order owner should be alice");
+        assertEq(order.depositPeriod, PERIOD_3, "Order deposit period should be PERIOD_3");
+        assertEq(
+            order.depositBudget,
+            depositBudget,
+            "Order deposit budget should match deposit budget"
+        );
+        assertEq(
+            order.incentiveBudget,
+            expectedIncentiveBudget,
+            "Order incentive budget should match expected incentive budget"
+        );
+        assertEq(order.depositSpent, 0, "Order deposit spent should be 0 initially");
+        assertEq(order.incentiveSpent, 0, "Order incentive spent should be 0 initially");
+        assertEq(order.maxPrice, DEFAULT_MAX_PRICE, "Order max price should match input");
+        assertEq(
+            order.minFillSize,
+            DEFAULT_MIN_FILL_SIZE,
+            "Order min fill size should match input"
+        );
+        assertTrue(order.active, "Order should be active");
+
+        // Check balances and invariants
+        checkOrderInvariants(
+            orderId,
+            depositBudget + expectedIncentiveBudget,
+            0,
+            address(0),
+            0,
+            expectedShares
+        );
+    }
+
     // when there are multiple orders
     //  [X] it creates multiple orders with sequential IDs
     function test_createOrder_multipleOrders() public {
@@ -759,6 +890,33 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
+    // when the deposit would result in 0 being withdrawable
+    //  [X] it reverts
+    function test_createOrder_zeroWithdrawable_reverts(uint256 depositBudget) public {
+        // Bound the parameters
+        // The actual higher bounds may be higher, but these values guarantee a 0 withdrawable amount
+        depositBudget = bound(depositBudget, 1, 5);
+
+        // Accrue yield
+        _accrueYield(10000e18);
+
+        // Set the auctioneer minimum bid to 1
+        // Required for the minFillSize to be 1
+        cdAuctioneer.setMinimumBid(1);
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "zero shares"));
+
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            depositBudget, // depositBudget
+            0, // incentiveBudget
+            DEFAULT_MAX_PRICE, // maxPrice
+            1 // minFillSize
+        );
+    }
+
     // ========== FILL ORDER TESTS ========== //
 
     // when order is active and price is below max
@@ -853,6 +1011,159 @@ contract CDAuctioneerLimitOrdersTest is Test {
             fillAmount + expectedIncentive,
             filler,
             expectedIncentive,
+            expectedShares
+        );
+    }
+
+    function test_fillOrder_givenYield_beforeCreate() public {
+        // Accrue yield
+        _accrueYield(123e18);
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Get the deposit budget
+        (uint256 depositRemaining, uint256 incentiveRemaining) = limitOrders.getRemaining(orderId);
+
+        // Check canFillOrder returns true before fill
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                depositRemaining
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, depositRemaining),
+                "Effective price should equal mock price"
+            );
+        }
+
+        // Fill order
+        vm.prank(filler);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, depositRemaining);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            depositRemaining,
+            "Actual fill amount should equal requested fill amount"
+        );
+        assertEq(
+            returnedIncentive,
+            incentiveRemaining,
+            "Returned incentive should equal incentive remaining"
+        );
+        assertEq(remainingDeposit, 0, "Remaining deposit should be 0");
+
+        // Check order status
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, depositRemaining, "Deposit spent should equal fill amount");
+        assertEq(
+            order.incentiveSpent,
+            incentiveRemaining,
+            "Incentive spent should equal incentive remaining"
+        );
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            depositRemaining + incentiveRemaining,
+            depositRemaining + incentiveRemaining,
+            filler,
+            incentiveRemaining,
+            0
+        );
+    }
+
+    function test_fillOrder_givenYield_afterCreate() public {
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Accrue yield
+        _accrueYield(123e18);
+
+        // Get the deposit budget
+        (uint256 depositRemaining, uint256 incentiveRemaining) = limitOrders.getRemaining(orderId);
+
+        uint256 expectedShares = sUsds.balanceOf(address(limitOrders)) -
+            sUsds.previewWithdraw(depositRemaining + incentiveRemaining);
+
+        // Check canFillOrder returns true before fill
+        {
+            (bool canFill, string memory reason, uint256 effectivePrice) = limitOrders.canFillOrder(
+                orderId,
+                depositRemaining
+            );
+            assertTrue(canFill, "Order should be fillable");
+            assertEq(bytes(reason).length, 0, "Reason should be empty when order is fillable");
+            assertEq(
+                effectivePrice,
+                _getEffectivePrice(MOCK_PRICE, depositRemaining),
+                "Effective price should equal mock price"
+            );
+        }
+
+        // Fill order
+        vm.prank(filler);
+        (
+            uint256 actualFillAmount,
+            uint256 returnedIncentive,
+            uint256 remainingDeposit
+        ) = limitOrders.fillOrder(orderId, depositRemaining);
+
+        // Check return values
+        assertEq(
+            actualFillAmount,
+            depositRemaining,
+            "Actual fill amount should equal requested fill amount"
+        );
+        assertEq(
+            returnedIncentive,
+            incentiveRemaining,
+            "Returned incentive should equal incentive remaining"
+        );
+        assertEq(remainingDeposit, 0, "Remaining deposit should be 0");
+
+        // Check order status
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositSpent, depositRemaining, "Deposit spent should equal fill amount");
+        assertEq(
+            order.incentiveSpent,
+            incentiveRemaining,
+            "Incentive spent should equal incentive remaining"
+        );
+
+        // Check alice received NFT
+        assertEq(positionNFT.ownerOf(1), alice, "Alice should own NFT token ID 1");
+
+        // Check balances and invariants after fill
+        checkOrderInvariants(
+            orderId,
+            depositRemaining + incentiveRemaining,
+            depositRemaining + incentiveRemaining,
+            filler,
+            incentiveRemaining,
             expectedShares
         );
     }
@@ -2382,24 +2693,24 @@ contract CDAuctioneerLimitOrdersTest is Test {
         );
     }
 
-    function test_cancelOrder_givenYield(uint256 yieldAmount_) public {
+    function test_cancelOrder_givenYield_afterCreate(uint256 yieldAmount_) public {
         yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
+
+        uint256 expectedIncentiveBudget;
+        {
+            uint256 expectedWithdrawable = _getExpectedWithdrawable(
+                DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET
+            );
+
+            // The deposit budget will be made whole, an the incentive budget decreased
+            expectedIncentiveBudget = expectedWithdrawable - DEFAULT_DEPOSIT_BUDGET;
+        }
 
         vm.prank(alice);
         uint256 orderId = limitOrders.createOrder(
             PERIOD_3,
             DEFAULT_DEPOSIT_BUDGET,
             DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            DEFAULT_MIN_FILL_SIZE
-        );
-
-        // Create a second order
-        vm.prank(alice);
-        limitOrders.createOrder(
-            PERIOD_3,
-            SMALL_DEPOSIT_BUDGET,
-            SMALL_INCENTIVE_BUDGET,
             DEFAULT_MAX_PRICE,
             DEFAULT_MIN_FILL_SIZE
         );
@@ -2417,7 +2728,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
         assertEq(
             order.incentiveBudget,
-            DEFAULT_INCENTIVE_BUDGET,
+            expectedIncentiveBudget,
             "Incentive budget should be unchanged"
         );
         assertEq(order.depositSpent, 0, "Deposit spent should be 0");
@@ -2425,16 +2736,65 @@ contract CDAuctioneerLimitOrdersTest is Test {
         assertFalse(order.active, "Order should be inactive after cancellation");
 
         // USDS owed should be reduced by the full amount of deposit and incentive budgets
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            SMALL_DEPOSIT_BUDGET + SMALL_INCENTIVE_BUDGET,
-            "Total USDS owed should be the sum of the deposit and incentive budgets of the second order"
-        );
+        assertEq(limitOrders.totalUsdsOwed(), 0, "Total USDS owed should be 0");
 
         // Alice should receive full refund
         assertEq(
             usds.balanceOf(alice) - aliceBalanceBefore,
-            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_DEPOSIT_BUDGET + expectedIncentiveBudget,
+            "Alice should receive full refund of deposit + incentive budgets"
+        );
+    }
+
+    function test_cancelOrder_givenYield_beforeCreate(uint256 yieldAmount_) public {
+        yieldAmount_ = bound(yieldAmount_, 1e18, 100_000e18);
+
+        // Yield accrual
+        _accrueYield(yieldAmount_);
+
+        uint256 expectedIncentiveBudget;
+        {
+            uint256 expectedWithdrawable = _getExpectedWithdrawable(
+                DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET
+            );
+
+            // The deposit budget will be made whole, an the incentive budget decreased
+            expectedIncentiveBudget = expectedWithdrawable - DEFAULT_DEPOSIT_BUDGET;
+        }
+
+        vm.prank(alice);
+        uint256 orderId = limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+
+        vm.prank(alice);
+        limitOrders.cancelOrder(orderId);
+
+        // Check order status
+        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
+        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
+        assertEq(
+            order.incentiveBudget,
+            expectedIncentiveBudget,
+            "Incentive budget should be unchanged"
+        );
+        assertEq(order.depositSpent, 0, "Deposit spent should be 0");
+        assertEq(order.incentiveSpent, 0, "Incentive spent should be 0");
+        assertFalse(order.active, "Order should be inactive after cancellation");
+
+        // USDS owed should be reduced by the full amount of deposit and incentive budgets
+        assertEq(limitOrders.totalUsdsOwed(), 0, "Total USDS owed should be 0");
+
+        // Alice should receive full refund
+        assertEq(
+            usds.balanceOf(alice) - aliceBalanceBefore,
+            DEFAULT_DEPOSIT_BUDGET + expectedIncentiveBudget,
             "Alice should receive full refund of deposit + incentive budgets"
         );
     }
@@ -2730,7 +3090,57 @@ contract CDAuctioneerLimitOrdersTest is Test {
     //  [X] it transfers sUSDS shares to recipient
     //  [X] it does not transfer USDS to recipient
     //  [X] the contract remains solvent
-    function test_sweepYield_success() public {
+    function test_sweepYield_beforeCreate() public {
+        // Yield accrual
+        _accrueYield(123e18);
+
+        vm.prank(alice);
+        limitOrders.createOrder(
+            PERIOD_3,
+            DEFAULT_DEPOSIT_BUDGET,
+            DEFAULT_INCENTIVE_BUDGET,
+            DEFAULT_MAX_PRICE,
+            DEFAULT_MIN_FILL_SIZE
+        );
+
+        // Calculate expected yield
+        uint256 sUsdsBalance = sUsds.balanceOf(address(limitOrders));
+        uint256 usdsOwedShares = sUsds.previewWithdraw(limitOrders.totalUsdsOwed());
+        uint256 expectedYieldShares = sUsdsBalance - usdsOwedShares;
+        uint256 expectedYield = sUsds.previewRedeem(expectedYieldShares);
+        uint256 recipientUsdsBefore = usds.balanceOf(yieldRecipient);
+        uint256 recipientSharesBefore = sUsds.balanceOf(yieldRecipient);
+
+        // Check preview functions
+        uint256 yield = limitOrders.getAccruedYield();
+        assertEq(yield, expectedYield, "Yield should equal expected yield");
+
+        uint256 yieldShares = limitOrders.getAccruedYieldShares();
+        assertEq(
+            yieldShares,
+            expectedYieldShares,
+            "Yield shares should equal expected yield shares"
+        );
+
+        // Perform sweep
+        limitOrders.sweepYield();
+
+        // Check balances
+        assertEq(
+            usds.balanceOf(yieldRecipient),
+            recipientUsdsBefore,
+            "USDS balance of yield recipient should be unchanged"
+        );
+        assertEq(
+            sUsds.balanceOf(yieldRecipient),
+            recipientSharesBefore + expectedYieldShares,
+            "sUSDS balance of yield recipient should equal expected yield shares"
+        );
+
+        _assertSolvent();
+    }
+
+    function test_sweepYield_afterCreate() public {
         vm.prank(alice);
         limitOrders.createOrder(
             PERIOD_3,
@@ -3364,6 +3774,7 @@ contract CDAuctioneerLimitOrdersTest is Test {
 
         new CDAuctioneerLimitOrders(
             owner,
+            address(depositManager),
             address(cdAuctioneer),
             address(usds),
             address(sUsds),
@@ -3494,764 +3905,6 @@ contract CDAuctioneerLimitOrdersTest is Test {
             limitOrders.onERC721Received.selector,
             "Should return onERC721Received selector"
         );
-    }
-
-    // ========== CHANGE ORDER TESTS ========== //
-
-    // changeOrder
-    // when increasing the deposit and incentive budgets
-    //  [X] it transfers additional budget from the user
-    //  [X] it increases budgets
-    //  [X] it increases the USDS owed by the additional budget
-    function test_changeOrder_increaseBudgets() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            SMALL_DEPOSIT_BUDGET,
-            SMALL_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
-        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
-        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(order.active, true, "Order should be active");
-
-        // Alice paid additional 5025
-        assertEq(
-            aliceBalanceBefore - usds.balanceOf(alice),
-            5_025e18,
-            "Alice should pay additional 5_025e18"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 10_050e18, "Total USDS owed should be increased");
-    }
-
-    // when decreasing the deposit and incentive budgets
-    //  [X] it decreases budgets
-    //  [X] it refunds the additional budget to the user
-    //  [X] it reduces the USDS owed by the additional budget
-    function test_changeOrder_decreaseBudgets() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            SMALL_DEPOSIT_BUDGET,
-            SMALL_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 5_000e18, "Deposit budget should be decreased to 5_000e18");
-        assertEq(order.incentiveBudget, 25e18, "Incentive budget should be decreased to 25e18");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
-        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(order.active, true, "Order should be active");
-
-        // Alice received 5025 back
-        assertEq(
-            usds.balanceOf(alice) - aliceBalanceBefore,
-            5_025e18,
-            "Alice should receive 5_025e18 refund"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 5_025e18, "Total USDS owed should be decreased");
-    }
-
-    // given there has been a partial fill
-    //  when decreasing the deposit and incentive budgets below the remaining budget
-    //   [X] it resets spent amounts
-    //   [X] it refunds the additional budget to the user
-    //   [X] it decreases budgets
-    //   [X] it reduces the USDS owed by the additional budget
-    function test_changeOrder_afterPartialFill_decreasedBudget() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Partial fill: spends 3000 deposit + 15 incentive
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, 3_000e18);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
-        assertEq(
-            orderBefore.depositSpent,
-            3_000e18,
-            "Before change: deposit spent should be 3_000e18"
-        );
-        assertEq(
-            orderBefore.incentiveSpent,
-            15e18,
-            "Before change: incentive spent should be 15e18"
-        );
-
-        // Remaining: 7000 + 35 = 7035
-        // New total: 5000 + 25 = 5025
-        // User receives: 7035 - 5025 = 2010
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            SMALL_DEPOSIT_BUDGET,
-            SMALL_INCENTIVE_BUDGET,
-            32e18,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
-        assertEq(
-            orderAfter.depositBudget,
-            5_000e18,
-            "After change: deposit budget should be 5_000e18"
-        );
-        assertEq(
-            orderAfter.incentiveBudget,
-            25e18,
-            "After change: incentive budget should be 25e18"
-        );
-        assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.maxPrice, 32e18, "Max price should be updated to 32e18");
-        assertEq(orderAfter.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(orderAfter.active, true, "Order should be active");
-
-        // User receives refund
-        assertEq(
-            usds.balanceOf(alice) - aliceBalanceBefore,
-            2_010e18,
-            "Alice should receive 2_010e18 refund (remaining - new total)"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 5_025e18, "Total USDS owed should be decreased");
-    }
-
-    //  when increasing the deposit and incentive budgets above the remaining
-    //   [X] it resets spent amounts
-    //   [X] it transfers additional budget from the user
-    //   [X] it increases budgets
-    //   [X] it increases the USDS owed by the additional budget
-    function test_changeOrder_afterPartialFill_increasedBudget() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Partial fill: spends 3000 deposit + 15 incentive
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, 3_000e18);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
-        assertEq(
-            orderBefore.depositSpent,
-            3_000e18,
-            "Before change: deposit spent should be 3_000e18"
-        );
-        assertEq(
-            orderBefore.incentiveSpent,
-            15e18,
-            "Before change: incentive spent should be 15e18"
-        );
-
-        // Remaining: 7000 + 35 = 7035
-        // New total: 11000 + 110 = 11110
-        // User spends: 11110 - 7035 = 4075
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(orderId, 11_000e18, 110e18, 32e18, SMALL_MIN_FILL_SIZE);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
-        assertEq(
-            orderAfter.depositBudget,
-            11_000e18,
-            "After change: deposit budget should be 11_000e18"
-        );
-        assertEq(
-            orderAfter.incentiveBudget,
-            110e18,
-            "After change: incentive budget should be 110e18"
-        );
-        assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.maxPrice, 32e18, "Max price should be updated to 32e18");
-        assertEq(orderAfter.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(orderAfter.active, true, "Order should be active");
-
-        // User spends additional
-        assertEq(
-            aliceBalanceBefore - usds.balanceOf(alice),
-            4075e18,
-            "Alice should pay additional 4075e18"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 11_110e18, "Total USDS owed should be increased");
-    }
-
-    //  when the total budget is the same as the remaining
-    //   [X] it resets spent amounts
-    //   [X] it does not transfer additional budget from the user
-    //   [X] it does not change budgets
-    //   [X] it does not change the USDS owed
-    function test_changeOrder_afterPartialFill_sameBudget(
-        uint256 newMaxPrice_,
-        uint256 newMinFillSize_
-    ) public {
-        newMaxPrice_ = bound(newMaxPrice_, 1, 100e18);
-        newMinFillSize_ = bound(newMinFillSize_, MIN_BID, 7_000e18);
-
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Partial fill: spends 3000 deposit + 15 incentive
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, 3_000e18);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderBefore = limitOrders.getOrder(orderId);
-        assertEq(
-            orderBefore.depositSpent,
-            3_000e18,
-            "Before change: deposit spent should be 3_000e18"
-        );
-        assertEq(
-            orderBefore.incentiveSpent,
-            15e18,
-            "Before change: incentive spent should be 15e18"
-        );
-
-        // Remaining: 7000 + 35 = 7035
-
-        // Invariant: USDS owed is original deposit + original incentive - spent amounts
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            7_000e18 + 35e18,
-            "Total USDS owed should be unchanged"
-        );
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(orderId, 7_000e18, 35e18, newMaxPrice_, newMinFillSize_);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory orderAfter = limitOrders.getOrder(orderId);
-        assertEq(
-            orderAfter.depositBudget,
-            7_000e18,
-            "After change: deposit budget should be 7_000e18"
-        );
-        assertEq(
-            orderAfter.incentiveBudget,
-            35e18,
-            "After change: incentive budget should be 35e18"
-        );
-        assertEq(orderAfter.depositSpent, 0, "Deposit spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.incentiveSpent, 0, "Incentive spent should be reset to 0"); // Reset!
-        assertEq(orderAfter.maxPrice, newMaxPrice_, "Max price should be updated to new value");
-        assertEq(
-            orderAfter.minFillSize,
-            newMinFillSize_,
-            "Min fill size should be updated to new value"
-        );
-        assertEq(orderAfter.active, true, "Order should be active");
-
-        // User does not spend additional
-        assertEq(
-            usds.balanceOf(alice),
-            aliceBalanceBefore,
-            "Alice should not spend additional funds"
-        );
-
-        // Invariant: USDS owed is original deposit + original incentive - spent amounts
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            7_000e18 + 35e18,
-            "Total USDS owed should be unchanged"
-        );
-    }
-
-    //  [X] it allows changing incentive rate freely
-    function test_changeOrder_afterPartialFill_canChangeIncentiveRateFreely() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            100e18,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        ); // 1% rate
-
-        // Fill half
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, 5_000e18); // Pays 50 incentive
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        // Remaining: 5000 + 50 = 5050
-        // Can now set 0.1% rate - no problem since spent is reset
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            SMALL_DEPOSIT_BUDGET,
-            5e18,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 5_000e18, "Deposit budget should be updated to 5_000e18");
-        assertEq(order.incentiveBudget, 5e18, "Incentive budget should be updated to 5e18");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
-        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(order.active, true, "Order should be active");
-
-        // User received excess: 5050 - 5005 = 45
-        assertEq(
-            usds.balanceOf(alice) - aliceBalanceBefore,
-            45e18,
-            "Alice should receive 45e18 refund (remaining - new total)"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 5_005e18, "Total USDS owed should be decreased");
-    }
-
-    // when the budget is the same
-    //  when only the maxPrice is changed
-    //   [X] it changes the max price
-    //   [X] it makes no transfer
-    //   [X] it resets the spent amounts
-    function test_changeOrder_onlyMaxPrice(uint256 newMaxPrice_) public {
-        newMaxPrice_ = bound(newMaxPrice_, 1, 100e18);
-
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(PERIOD_3, 10_000e18, 50e18, 35e18, MIN_BID);
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(orderId, 10_000e18, 50e18, newMaxPrice_, MIN_BID);
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
-        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be unchanged");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, newMaxPrice_, "Max price should be updated");
-        assertEq(order.minFillSize, MIN_BID, "Min fill size should be unchanged");
-        assertEq(order.active, true, "Order should be active");
-
-        // Check owner balance
-        assertEq(
-            usds.balanceOf(alice),
-            aliceBalanceBefore,
-            "Alice balance should not change when budgets are unchanged"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            10_000e18 + 50e18,
-            "Total USDS owed should be unchanged"
-        );
-    }
-
-    //  when only the minFillSize is changed
-    //   [X] it changes the min fill size
-    //   [X] it makes no transfer
-    //   [X] it resets the spent amounts
-    function test_changeOrder_onlyMinFillSize(uint256 newMinFillSize_) public {
-        newMinFillSize_ = bound(newMinFillSize_, MIN_BID, DEFAULT_DEPOSIT_BUDGET);
-
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            newMinFillSize_
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, DEFAULT_DEPOSIT_BUDGET, "Deposit budget should be unchanged");
-        assertEq(
-            order.incentiveBudget,
-            DEFAULT_INCENTIVE_BUDGET,
-            "Incentive budget should be unchanged"
-        );
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, DEFAULT_MAX_PRICE, "Max price should be unchanged");
-        assertEq(
-            order.minFillSize,
-            newMinFillSize_,
-            "Min fill size should be updated to new value"
-        );
-        assertEq(order.active, true, "Order should be active");
-
-        // Check owner balance
-        assertEq(
-            usds.balanceOf(alice),
-            aliceBalanceBefore,
-            "Alice balance should not change when budgets are unchanged"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(
-            limitOrders.totalUsdsOwed(),
-            DEFAULT_DEPOSIT_BUDGET + DEFAULT_INCENTIVE_BUDGET,
-            "Total USDS owed should be unchanged"
-        );
-    }
-
-    // when the order has been completely filled
-    //  [X] it changes the budget
-    //  [X] it changes the min fill size
-    //  [X] it changes the max price
-    //  [X] it resets the spent amounts
-    //  [X] it transfers additional budget from the user
-    //  [X] it increases the USDS owed by the additional budget
-    function test_changeOrder_completelyFilled() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            SMALL_DEPOSIT_BUDGET,
-            SMALL_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        // Completely fill the order
-        vm.prank(filler);
-        limitOrders.fillOrder(orderId, 5_000e18);
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        // Change order
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            32e18,
-            499e18
-        );
-
-        // Check order status
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be updated to 10_000e18");
-        assertEq(order.incentiveBudget, 50e18, "Incentive budget should be updated to 50e18");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, 32e18, "Max price should be updated to 32e18");
-        assertEq(order.minFillSize, 499e18, "Min fill size should be updated to 499e18");
-        assertEq(order.active, true, "Order should be active");
-
-        // Alice paid additional 10050
-        assertEq(
-            aliceBalanceBefore - usds.balanceOf(alice),
-            10_050e18,
-            "Alice should pay additional 10_050e18"
-        );
-
-        // Invariant: USDS owed is new deposit + new incentive
-        assertEq(limitOrders.totalUsdsOwed(), 10_050e18, "Total USDS owed should be increased");
-    }
-
-    // when caller is not order owner
-    //  [X] it reverts
-    function test_changeOrder_revert_notOwner() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(bob);
-        vm.expectRevert(ILimitOrders.NotOrderOwner.selector);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            40e18,
-            SMALL_MIN_FILL_SIZE
-        );
-    }
-
-    // when order is not active
-    //  [X] it reverts
-    function test_changeOrder_revert_orderNotActive() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        limitOrders.cancelOrder(orderId);
-
-        vm.prank(alice);
-        vm.expectRevert(ILimitOrders.OrderNotActive.selector);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            40e18,
-            SMALL_MIN_FILL_SIZE
-        );
-    }
-
-    // when newDepositBudget is zero
-    //  [X] it reverts
-    function test_changeOrder_revert_zeroDeposit() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "depositBudget")
-        );
-        limitOrders.changeOrder(
-            orderId,
-            0,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-    }
-
-    // when newMaxPrice is zero
-    //  [X] it reverts
-    function test_changeOrder_revert_zeroMaxPrice() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "maxPrice"));
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            0,
-            SMALL_MIN_FILL_SIZE
-        );
-    }
-
-    // when newMinFillSize is zero
-    //  [X] it reverts
-    function test_changeOrder_revert_zeroMinFill() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(ILimitOrders.InvalidParam.selector, "minFillSize"));
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            0
-        );
-    }
-
-    // when newMinFillSize exceeds newDepositBudget
-    //  [X] it reverts
-    function test_changeOrder_revert_minFillExceedsDeposit() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILimitOrders.InvalidParam.selector,
-                "minFillSize > depositBudget"
-            )
-        );
-        limitOrders.changeOrder(
-            orderId,
-            1_000e18,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            2_000e18
-        );
-    }
-
-    // when newMinFillSize is below auctioneer minimum
-    //  [X] it reverts
-    function test_changeOrder_revert_minFillBelowAuctioneerMin() public {
-        cdAuctioneer.setMinimumBid(500e18);
-
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILimitOrders.InvalidParam.selector,
-                "minFillSize < auctioneer minimum"
-            )
-        );
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            100e18
-        );
-    }
-
-    // when setting incentiveBudget to zero
-    //  [X] it decreases budgets
-    //  [X] it refunds the additional budget to the user
-    //  [X] it reduces the USDS owed by the additional budget
-    function test_changeOrder_zeroIncentive() public {
-        vm.prank(alice);
-        uint256 orderId = limitOrders.createOrder(
-            PERIOD_3,
-            DEFAULT_DEPOSIT_BUDGET,
-            DEFAULT_INCENTIVE_BUDGET,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        uint256 aliceBalanceBefore = usds.balanceOf(alice);
-
-        vm.prank(alice);
-        limitOrders.changeOrder(
-            orderId,
-            DEFAULT_DEPOSIT_BUDGET,
-            0,
-            DEFAULT_MAX_PRICE,
-            SMALL_MIN_FILL_SIZE
-        );
-
-        ILimitOrders.LimitOrder memory order = limitOrders.getOrder(orderId);
-        assertEq(order.depositBudget, 10_000e18, "Deposit budget should be unchanged");
-        assertEq(order.incentiveBudget, 0, "Incentive budget should be updated to 0");
-        assertEq(order.depositSpent, 0, "Deposit spent should be reset to 0");
-        assertEq(order.incentiveSpent, 0, "Incentive spent should be reset to 0");
-        assertEq(order.maxPrice, 35e18, "Max price should be unchanged");
-        assertEq(order.minFillSize, 500e18, "Min fill size should be unchanged");
-        assertEq(order.active, true, "Order should be active");
-
-        // Alice returned 50e18 incentive
-        assertEq(
-            usds.balanceOf(alice) - aliceBalanceBefore,
-            50e18,
-            "Alice should receive 50e18 incentive"
-        );
-
-        // Invariant: USDS owed is deposit + incentive
-        assertEq(limitOrders.totalUsdsOwed(), 10_000e18, "Total USDS owed should be decreased");
     }
 }
 /// forge-lint: disable-end(mixed-case-variable)

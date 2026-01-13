@@ -1,0 +1,10 @@
+{
+    "functions": [
+        {
+            "args": {
+                "contract": "olympus.periphery.ConvertibleDepositAuctioneerLimitOrders"
+            },
+            "name": "PeripheryEnable"
+        }
+    ]
+}

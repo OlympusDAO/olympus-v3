@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.20;
+/// forge-lint: disable-start(mixed-case-function)
+pragma solidity >=0.8.24;
 
 // Interfaces
 import {IConvertibleDepositAuctioneer} from "../interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 import {ILimitOrders} from "../interfaces/deposits/ILimitOrders.sol";
 import {IVersioned} from "../../interfaces/IVersioned.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC721Receiver} from "@openzeppelin-5.3.0/token/ERC721/IERC721Receiver.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
@@ -15,6 +17,7 @@ import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {ERC721} from "@openzeppelin-5.3.0/token/ERC721/ERC721.sol";
 import {ERC4626} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC4626.sol";
 import {ERC721Utils} from "@openzeppelin-5.3.0/token/ERC721/utils/ERC721Utils.sol";
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 
 /// @title  CDAuctioneer Limit Orders
@@ -25,17 +28,23 @@ import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 contract CDAuctioneerLimitOrders is
     ILimitOrders,
     IVersioned,
+    IERC721Receiver,
     ReentrancyGuardTransient,
     Ownable,
     PeripheryEnabler
 {
     using SafeERC20 for ERC20;
+    using Math for uint256;
 
     // ========== CONSTANTS ========== //
 
     uint256 internal constant OHM_SCALE = 1e9;
 
     // ========== IMMUTABLES ========== //
+
+    /// @notice The Deposit Manager contract
+    /// @dev    This variable is immutable
+    address public immutable DEPOSIT_MANAGER;
 
     /// @notice The Convertible Deposit Auctioneer contract
     /// @dev    This variable is immutable
@@ -77,6 +86,7 @@ contract CDAuctioneerLimitOrders is
 
     constructor(
         address owner_,
+        address depositManager_,
         address cdAuctioneer_,
         address usds_,
         address sUsds_,
@@ -85,20 +95,23 @@ contract CDAuctioneerLimitOrders is
         uint8[] memory depositPeriods_,
         address[] memory receiptTokens_
     ) Ownable(owner_) {
+        if (depositManager_ == address(0)) revert InvalidParam("depositManager");
         if (cdAuctioneer_ == address(0)) revert InvalidParam("cdAuctioneer");
         if (usds_ == address(0)) revert InvalidParam("usds");
         if (sUsds_ == address(0)) revert InvalidParam("sUsds");
         if (positionNft_ == address(0)) revert InvalidParam("positionNft");
         if (yieldRecipient_ == address(0)) revert InvalidParam("yieldRecipient");
-        if (depositPeriods_.length != receiptTokens_.length) revert ArrayLengthMismatch();
+        uint256 len = depositPeriods_.length;
+        if (len != receiptTokens_.length) revert ArrayLengthMismatch();
 
+        DEPOSIT_MANAGER = depositManager_;
         CD_AUCTIONEER = IConvertibleDepositAuctioneer(cdAuctioneer_);
         USDS = ERC20(usds_);
         SUSDS = ERC4626(sUsds_);
         POSITION_NFT = ERC721(positionNft_);
         yieldRecipient = yieldRecipient_;
 
-        for (uint256 i = 0; i < depositPeriods_.length; i++) {
+        for (uint256 i = 0; i < len; i++) {
             _addDepositPeriod(depositPeriods_[i], receiptTokens_[i]);
         }
 
@@ -165,8 +178,7 @@ contract CDAuctioneerLimitOrders is
         }
 
         // Check if deposit period is enabled in auctioneer
-        (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
-        if (!isEnabled) revert DepositPeriodNotEnabled();
+        _requireEnabledDepositPeriod(depositPeriod_);
 
         // Set the receipt token
         receiptTokens[depositPeriod_] = ERC20(receiptToken_);
@@ -200,6 +212,47 @@ contract CDAuctioneerLimitOrders is
 
     // ========== ORDER MANAGEMENT ========== //
 
+    /// @notice Internal function to deposit USDS into sUSDS and adjust the deposit and incentive budgets
+    ///
+    /// @param  depositBudget_          USDS budget for bids
+    /// @param  incentiveBudget_        USDS budget for filler incentives (paid proportionally)
+    /// @return actualDepositBudget     The actual deposit budget (may be less than the input)
+    /// @return actualIncentiveBudget   The actual incentive budget (may be less than the input)
+    function _deposit(
+        uint256 depositBudget_,
+        uint256 incentiveBudget_
+    ) internal returns (uint256 actualDepositBudget, uint256 actualIncentiveBudget) {
+        uint256 actualDeposit;
+        {
+            // Pull from caller
+            uint256 totalDeposit = depositBudget_ + incentiveBudget_;
+            USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
+
+            // Check that the deposit will result in a non-zero amount of shares
+            if (SUSDS.previewDeposit(totalDeposit) == 0) revert InvalidParam("zero shares");
+
+            // Deposit into sUSDS
+            uint256 depositedShares = SUSDS.deposit(totalDeposit, address(this));
+            actualDeposit = SUSDS.previewRedeem(depositedShares);
+
+            // Check that the withdrawable amount is not 0 (though this should never happen)
+            if (actualDeposit == 0) revert InvalidParam("zero withdrawable amount");
+        }
+
+        // Adjust the deposit and incentive budgets, based on the withdrawable amount
+        // If the amount withdrawable is less than the deposit budget, then the deposit budget is the actual deposit (and the incentive budget is 0)
+        if (actualDeposit <= depositBudget_) {
+            actualDepositBudget = actualDeposit;
+        }
+        // Otherwise, set the deposit budget to the input, and adjust the incentive budget to the difference
+        else {
+            actualDepositBudget = depositBudget_;
+            actualIncentiveBudget = actualDeposit - depositBudget_;
+        }
+
+        return (actualDepositBudget, actualIncentiveBudget);
+    }
+
     /// @notice Create a new limit order
     /// @dev    This function will revert if:
     ///         - The contract is not enabled
@@ -231,8 +284,7 @@ contract CDAuctioneerLimitOrders is
             revert ReceiptTokenNotConfigured();
         }
 
-        (bool isEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
-        if (!isEnabled) revert DepositPeriodNotEnabled();
+        _requireEnabledDepositPeriod(depositPeriod_);
 
         // Verify that the caller/owner can receive ERC721 tokens
         ERC721Utils.checkOnERC721Received(msg.sender, address(this), msg.sender, 0, "");
@@ -241,109 +293,41 @@ contract CDAuctioneerLimitOrders is
         if (minFillSize_ < auctioneerMinBid)
             revert InvalidParam("minFillSize < auctioneer minimum");
 
-        uint256 totalDeposit = depositBudget_ + incentiveBudget_;
-        USDS.safeTransferFrom(msg.sender, address(this), totalDeposit);
-        SUSDS.deposit(totalDeposit, address(this));
-        totalUsdsOwed += totalDeposit;
+        (uint256 actualDepositBudget, uint256 actualIncentiveBudget) = _deposit(
+            depositBudget_,
+            incentiveBudget_
+        );
+        totalUsdsOwed += actualDepositBudget + actualIncentiveBudget;
 
-        orderId = nextOrderId++;
+        unchecked {
+            orderId = nextOrderId++;
+        }
 
         _ordersForUser[msg.sender].push(orderId);
 
         _orders[orderId] = LimitOrder({
             owner: msg.sender,
             depositPeriod: depositPeriod_,
-            depositBudget: depositBudget_,
-            incentiveBudget: incentiveBudget_,
+            active: true,
+            depositBudget: actualDepositBudget,
+            incentiveBudget: actualIncentiveBudget,
             depositSpent: 0,
             incentiveSpent: 0,
             maxPrice: maxPrice_,
-            minFillSize: minFillSize_,
-            active: true
+            minFillSize: minFillSize_
         });
 
         emit OrderCreated(
             orderId,
             msg.sender,
             depositPeriod_,
-            depositBudget_,
-            incentiveBudget_,
+            actualDepositBudget,
+            actualIncentiveBudget,
             maxPrice_,
             minFillSize_
         );
 
         return orderId;
-    }
-
-    /// @notice Modify an existing limit order (resets spent amounts)
-    /// @dev    Functionally equivalent to cancel + create but preserves order ID
-    ///
-    ///         This function will revert if:
-    ///         - The contract is not enabled
-    ///         - The caller is not the order owner
-    ///         - The order is not active
-    ///         - The new deposit budget, max price, or min fill size is invalid
-    ///         - The new min fill size is below the auctioneer minimum bid
-    ///
-    /// @param  orderId_            The ID of the order to modify
-    /// @param  newDepositBudget_   New deposit budget
-    /// @param  newIncentiveBudget_ New incentive budget
-    /// @param  newMaxPrice_        New max price
-    /// @param  newMinFillSize_     New min fill size
-    function changeOrder(
-        uint256 orderId_,
-        uint256 newDepositBudget_,
-        uint256 newIncentiveBudget_,
-        uint256 newMaxPrice_,
-        uint256 newMinFillSize_
-    ) external nonReentrant onlyEnabled {
-        LimitOrder storage order = _orders[orderId_];
-
-        if (order.owner != msg.sender) revert NotOrderOwner();
-        if (!order.active) revert OrderNotActive();
-
-        // Validate new params (same as createOrder)
-        if (newDepositBudget_ == 0) revert InvalidParam("depositBudget");
-        if (newMaxPrice_ == 0) revert InvalidParam("maxPrice");
-        if (newMinFillSize_ == 0) revert InvalidParam("minFillSize");
-        if (newMinFillSize_ > newDepositBudget_) revert InvalidParam("minFillSize > depositBudget");
-        if (newMinFillSize_ < CD_AUCTIONEER.getMinimumBid())
-            revert InvalidParam("minFillSize < auctioneer minimum");
-
-        // Calculate old remaining (what's left to work with)
-        uint256 oldRemaining = (order.depositBudget - order.depositSpent) +
-            (order.incentiveBudget - order.incentiveSpent);
-
-        uint256 newTotal = newDepositBudget_ + newIncentiveBudget_;
-
-        if (newTotal > oldRemaining) {
-            // Need more funds from user
-            uint256 increase = newTotal - oldRemaining;
-            totalUsdsOwed += increase;
-            USDS.safeTransferFrom(msg.sender, address(this), increase);
-            SUSDS.deposit(increase, address(this));
-        } else if (newTotal < oldRemaining) {
-            // Return excess to user
-            uint256 decrease = oldRemaining - newTotal;
-            totalUsdsOwed -= decrease;
-            SUSDS.withdraw(decrease, msg.sender, address(this));
-        }
-
-        // Reset order with fresh values
-        order.depositBudget = newDepositBudget_;
-        order.incentiveBudget = newIncentiveBudget_;
-        order.depositSpent = 0;
-        order.incentiveSpent = 0;
-        order.maxPrice = newMaxPrice_;
-        order.minFillSize = newMinFillSize_;
-
-        emit OrderChanged(
-            orderId_,
-            newDepositBudget_,
-            newIncentiveBudget_,
-            newMaxPrice_,
-            newMinFillSize_
-        );
     }
 
     /// @notice Calculate capped fill amount and incentive for an order
@@ -354,9 +338,9 @@ contract CDAuctioneerLimitOrders is
     /// @return incentive        The incentive amount (with final fill handling)
     /// @return remainingDeposit The remaining deposit budget
     function _calculateFillAndIncentive(
-        LimitOrder memory order_,
+        LimitOrder storage order_,
         uint256 fillAmount_
-    ) internal pure returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
+    ) internal view returns (uint256 cappedFill, uint256 incentive, uint256 remainingDeposit) {
         remainingDeposit = order_.depositBudget - order_.depositSpent;
 
         // Cap fill to remaining deposit budget
@@ -410,13 +394,7 @@ contract CDAuctioneerLimitOrders is
             revert FillBelowMinimum();
         }
 
-        // Check that the deposit period is enabled
-        {
-            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
-                order.depositPeriod
-            );
-            if (!isDepositPeriodEnabled) revert DepositPeriodNotEnabled();
-        }
+        _requireEnabledDepositPeriod(order.depositPeriod);
         // Check that the receipt token is still configured
         if (address(receiptTokens[order.depositPeriod]) == address(0))
             revert ReceiptTokenNotConfigured();
@@ -436,7 +414,7 @@ contract CDAuctioneerLimitOrders is
         // Approve and execute bid
         // The fill amount is the amount of USDS that will be used for the bid, and so is used for incentive and subsequent calculations.
         // The actual amount is the quantity of receipt tokens that will be received.
-        USDS.approve(address(CD_AUCTIONEER), fillAmount_);
+        USDS.approve(address(DEPOSIT_MANAGER), fillAmount_);
         (uint256 ohmOut, uint256 positionId, , uint256 actualAmount) = CD_AUCTIONEER.bid(
             order.depositPeriod,
             fillAmount_,
@@ -446,7 +424,7 @@ contract CDAuctioneerLimitOrders is
         );
 
         // Transfer position NFT and receipt tokens to order owner
-        POSITION_NFT.transferFrom(address(this), order.owner, positionId);
+        POSITION_NFT.safeTransferFrom(address(this), order.owner, positionId);
         if (actualAmount > 0) {
             receiptTokens[order.depositPeriod].safeTransfer(order.owner, actualAmount);
         }
@@ -461,7 +439,10 @@ contract CDAuctioneerLimitOrders is
         emit OrderFilled(orderId_, msg.sender, fillAmount_, incentive, ohmOut, positionId);
 
         // Calculate remaining deposit after fill and return
-        return (fillAmount_, incentive, remainingDepositBefore - fillAmount_);
+        unchecked {
+            // No underflow: fillAmount_ is capped to remainingDepositBefore in _calculateFillAndIncentive
+            return (fillAmount_, incentive, remainingDepositBefore - fillAmount_);
+        }
     }
 
     /// @notice Cancel an active order and return remaining funds
@@ -478,15 +459,13 @@ contract CDAuctioneerLimitOrders is
 
         if (order.owner != msg.sender) revert NotOrderOwner();
         if (!order.active) revert OrderNotActive();
-        if (order.depositSpent == order.depositBudget) revert OrderFullySpent();
+        uint256 depositBudget = order.depositBudget;
+        uint256 depositSpent = order.depositSpent;
+        if (depositSpent == depositBudget) revert OrderFullySpent();
 
-        // Ternaries to ensure against underflow when cancelling
-        uint256 remainingDeposit = order.depositBudget > order.depositSpent
-            ? order.depositBudget - order.depositSpent
-            : 0;
-        uint256 remainingIncentive = order.incentiveBudget > order.incentiveSpent
-            ? order.incentiveBudget - order.incentiveSpent
-            : 0;
+        // Calculate remaining amounts (saturating subtraction ensures no underflow when cancelling)
+        uint256 remainingDeposit = depositBudget.saturatingSub(depositSpent);
+        uint256 remainingIncentive = order.incentiveBudget.saturatingSub(order.incentiveSpent);
         uint256 totalRemaining = remainingDeposit + remainingIncentive;
 
         order.active = false;
@@ -504,7 +483,7 @@ contract CDAuctioneerLimitOrders is
     /// @notice Calculate current accrued yield in USDS terms
     ///
     /// @return uint256 The current accrued yield in USDS terms
-    function getAccruedYield() public view returns (uint256) {
+    function getAccruedYield() external view returns (uint256) {
         return SUSDS.convertToAssets(getAccruedYieldShares());
     }
 
@@ -518,9 +497,7 @@ contract CDAuctioneerLimitOrders is
         // previewWithdraw rounds UP, giving us the max shares needed to cover obligations
         uint256 sharesRequired = SUSDS.previewWithdraw(totalUsdsOwed);
 
-        if (sUsdsBalance <= sharesRequired) return 0;
-
-        return sUsdsBalance - sharesRequired;
+        return sUsdsBalance.saturatingSub(sharesRequired);
     }
 
     /// @notice Sweep all accrued yield to the yield recipient as sUSDS
@@ -587,7 +564,7 @@ contract CDAuctioneerLimitOrders is
     ) public view returns (uint256 incentive, uint256 incentiveRate) {
         if (!isEnabled) return (0, 0);
 
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
         if (order.depositBudget == 0) return (0, 0);
 
         (, incentive, ) = _calculateFillAndIncentive(order, fillAmount_);
@@ -607,19 +584,18 @@ contract CDAuctioneerLimitOrders is
     ) public view returns (bool canFill, string memory reason, uint256 effectivePrice) {
         if (!isEnabled) return (false, "Contract disabled", 0);
 
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         if (!order.active) return (false, "Order not active", 0);
 
         // Check that the deposit period is enabled
+        uint8 depositPeriod = order.depositPeriod;
         {
-            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(
-                order.depositPeriod
-            );
+            (bool isDepositPeriodEnabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod);
             if (!isDepositPeriodEnabled) return (false, "Deposit period not enabled", 0);
         }
         // Check that the receipt token is still configured
-        if (address(receiptTokens[order.depositPeriod]) == address(0))
+        if (address(receiptTokens[depositPeriod]) == address(0))
             return (false, "Receipt token not configured", 0);
 
         uint256 remainingDeposit = order.depositBudget - order.depositSpent;
@@ -631,7 +607,7 @@ contract CDAuctioneerLimitOrders is
             return (false, "Fill below minimum", 0);
         }
 
-        uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(order.depositPeriod, actualFill);
+        uint256 expectedOhmOut = CD_AUCTIONEER.previewBid(depositPeriod, actualFill);
         if (expectedOhmOut == 0) return (false, "Zero OHM output", 0);
 
         effectivePrice = (actualFill * OHM_SCALE) / expectedOhmOut;
@@ -650,9 +626,9 @@ contract CDAuctioneerLimitOrders is
     function getRemaining(
         uint256 orderId_
     ) external view returns (uint256 deposit, uint256 incentive) {
-        LimitOrder memory order = _orders[orderId_];
-        deposit = order.depositBudget - order.depositSpent;
-        incentive = order.incentiveBudget - order.incentiveSpent;
+        LimitOrder storage order = _orders[orderId_];
+        deposit = order.depositBudget.saturatingSub(order.depositSpent);
+        incentive = order.incentiveBudget.saturatingSub(order.incentiveSpent);
     }
 
     /// @notice Get current execution price for a fill amount
@@ -707,21 +683,18 @@ contract CDAuctioneerLimitOrders is
         uint256 index0,
         uint256 index1
     ) internal view returns (uint256[] memory) {
+        uint256[] memory tmp = new uint256[](index1 - index0);
         uint256 count = 0;
         for (uint256 i = index0; i < index1; i++) {
             if (_isOrderFillable(i, depositPeriod_)) {
-                count++;
+                tmp[count++] = i;
             }
         }
 
         uint256[] memory fillable = new uint256[](count);
-        uint256 index = 0;
-        for (uint256 i = index0; i < index1; i++) {
-            if (_isOrderFillable(i, depositPeriod_)) {
-                fillable[index++] = i;
-            }
+        for (uint256 i = 0; i < count; i++) {
+            fillable[i] = tmp[i];
         }
-
         return fillable;
     }
 
@@ -731,7 +704,7 @@ contract CDAuctioneerLimitOrders is
     /// @param  depositPeriod_  The deposit period
     /// @return bool            Whether the order is fillable
     function _isOrderFillable(uint256 orderId_, uint8 depositPeriod_) internal view returns (bool) {
-        LimitOrder memory order = _orders[orderId_];
+        LimitOrder storage order = _orders[orderId_];
 
         // Early return if deposit period doesn't match
         if (order.depositPeriod != depositPeriod_) return false;
@@ -747,6 +720,12 @@ contract CDAuctioneerLimitOrders is
         // receipt token configured, order not fully spent, min fill size, and price checks
         (bool canFill, , ) = canFillOrder(orderId_, checkAmount);
         return canFill;
+    }
+
+    // Requires that the deposit period be enabled in the auctioneer
+    function _requireEnabledDepositPeriod(uint8 depositPeriod_) private view {
+        (bool enabled, ) = CD_AUCTIONEER.isDepositPeriodEnabled(depositPeriod_);
+        if (!enabled) revert DepositPeriodNotEnabled();
     }
 
     // ========== ENABLER FUNCTIONS ========== //
@@ -779,7 +758,7 @@ contract CDAuctioneerLimitOrders is
         address,
         uint256,
         bytes calldata
-    ) external pure returns (bytes4) {
+    ) external pure override returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
@@ -790,6 +769,8 @@ contract CDAuctioneerLimitOrders is
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(ILimitOrders).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
+            interfaceId == type(IERC721Receiver).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
+/// forge-lint: disable-end(mixed-case-function)
