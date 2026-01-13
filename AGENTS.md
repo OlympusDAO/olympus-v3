@@ -286,7 +286,9 @@ contract SomethingTest {
 
 - Modules inherit from `Module` base contract with keycode and version
 - Policies inherit from `Policy` base contract with dependency/permission requests
-- Use `KernelAdapter` for kernel integration in other contracts
+- Use the `IVersioned` interface to standardise versioning of Modules and Policies
+- Contracts that implement interfaces should implement the `supportsInterface()` function from ERC165
+- Policies can use the `PolicyEnabler` mix-in to inherit common functionality around enabling/disabling contracts. Periphery contracts can use `PeripheryEnabler`.
 - Error handling with custom errors following naming conventions
 - When planning a new feature, to write the plan to disk in Markdown format, and always include a TODO list that can be checked off. When working on that new feature, regularly update the status in the task list of that feature plan.
 
