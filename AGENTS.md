@@ -19,7 +19,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 - `pnpm run prettier` - Format code (runs quicker than linting)
 - `forge build` - Build all files
 - `forge build --contracts path/to/contract.sol` - Build a specific contract
-- `forge test` - Test all files. Don't use this, as it will run all tests, many of which require additional parameters to run successfully.
+- `forge test` - Test all files. Avoid using this without additional flags, as it will run all tests, many of which require additional parameters to run successfully.
 - `forge test -vvv --match-contract ContractTest` - Run a specific test contract
 
 Note: always build, test and lint updated files. Use project-wide build and test commands sparingly.
@@ -93,7 +93,7 @@ Ask first:
 
 - For multi-step tasks, use TodoWrite proactively
 - Mark tasks in_progress immediately when starting
-- Mark completed immediately after finishing—not in batches
+- Mark completed after finishing - not in batches
 - One task in_progress at a time
 
 ### Testing Discipline
@@ -254,7 +254,7 @@ contract SomethingTest {
 ### Code Standards
 
 - Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
-- Optimizer runs: 10,000 (except for some contracts that require specific runs in order to meet bytecode limits, see foundry.toml)
+- Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
@@ -296,7 +296,7 @@ When working with Solidity code involving mathematical operations, follow these 
 
 #### Core Principles
 
-1. **No Floating Point**: Solidity has no floating point numbers - all numbers are integers.
+1. **No Floating-Point**: Solidity has no floating-point numbers - all numbers are integers.
 
 2. **Decimal Representation**:
     - Decimal numbers are represented as integers with an associated decimal scale
