@@ -107,7 +107,18 @@ Ask first:
 
 - Never create commits unless explicitly asked
 - Never push unless explicitly asked
-- When creating commits, follow the repository's commit message style (check git log first)
+- The git commit message should follow the format of: `<type>(<scope>): <description>`
+    - `type` may be one of:
+        - feat: Introduces a new feature.
+        - fix: Patches a bug.
+        - docs: Documentation-only changes.
+        - style: Changes that do not affect the meaning of the code (white-space, formatting, etc).
+        - refactor: A code change that neither fixes a bug nor adds a feature.
+        - perf: Improves performance.
+        - test: Adds missing tests or corrects existing tests.
+        - chore: Changes to the build process or auxiliary tools and libraries such as documentation generation.
+    - `scope` can refer to the area of code (such as the feature) where the change has taken place
+    - `description` is a concise summary of the changes
 
 ## Architecture Overview
 
