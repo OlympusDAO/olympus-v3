@@ -8,7 +8,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 ## Build and Development Commands
 
-- `pnpm run build` - Build and refresh dependencies (runs `./shell/full_install.sh`). This takes a long time, so use it only on a fresh install or when switching branches.
+- `pnpm run build` - Refresh dependencies, clean and run a full build (runs `./shell/full_install.sh`). This takes a long time, so use it only on a fresh install or when switching branches.
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
 - `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
 - `pnpm run test:fork` - Run fork tests (requires `FORK_TEST_RPC_URL` env var)
@@ -17,8 +17,30 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 - `pnpm run lint` - Format and lint code (prettier + solhint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
 - `pnpm run prettier` - Format code (runs quicker than linting)
-- `forge build` - Basic Foundry build
-- `forge test` - Basic Foundry test
+- `forge build` - Build all files
+- `forge build --contracts path/to/contract.sol` - Build a specific contract
+- `forge test` - Test all files. Don't use this, as it will run all tests, many of which require additional parameters to run successfully.
+- `forge test -vvv --match-contract ContractTest` - Run a specific test contract
+
+Note: always build, test and lint updated files. Use project-wide build and test commands sparingly.
+
+## Safety and Permissions
+
+Allowed without prompt:
+
+- Read files, list files
+- Build single file
+- Formatting and linting
+- Test single file
+
+Ask first:
+
+- Installing dependencies
+- Full build
+- Git push
+- Deleting files
+- Changing file permissions
+- Full test suites (`test`, `test:unit`, `test:fork` or `test:proposal`)
 
 ## Architecture Overview
 
@@ -75,6 +97,12 @@ src/
 ```
 
 ## Development Guidelines
+
+### Behaviour
+
+- Write or update tests first on new features, then implement
+- When stuck, ask a clarifying question
+- Plan before implementing
 
 ### Testing
 
@@ -156,7 +184,9 @@ contract SomethingTest {
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
 - Do not use `require()` for assertions. Instead, preference custom errors. Custom errors should be defined in the contract's parent interface (where available), or else in the contract itself.
-- Contracts should have a separate interface that is defined in a separate file, to allow for easy integration. All interfaces are MIT-licensed, and should avoid using internal types.
+- Contracts should have a separate interface that is defined in a separate file, to allow for easy integration. All interfaces are MIT-licensed, and should avoid using internal types. Interfaces should also use NatSpec to define functions and types, and any expectations for implementation contracts.
+- Contracts that implement interfaces should use the `@inheritdoc` NatSpec tag in function documentation to reference the parent interface's function.
+- Function documentation should outline the behaviour of the function, including any conditions that would result in a revert.
 
 ### Access Control Pattern
 
