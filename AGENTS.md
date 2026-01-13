@@ -235,7 +235,7 @@ contract SomethingTest {
 ### Code Standards
 
 - Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
-- Optimizer runs: 10,000 (except for some contracts that require specific runs in order to meet bytecode limtis, see foundry.toml)
+- Optimizer runs: 10,000 (except for some contracts that require specific runs in order to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
@@ -367,11 +367,11 @@ Always think through the decimal arithmetic step-by-step and make the reasoning 
 
 ### Code Reviews with CodeRabbit
 
-If CodeRabbit is installed, run it as a way to review your code. Run the command: `coderabbit -h` for details on comands available.
+If CodeRabbit is installed, run it as a way to review your code. Run the command: `coderabbit -h` for details on commands available.
 
 In general, I want you to run coderabbit with the `--prompt-only` flag.
 
-To review uncommitted changes (this is what we'll use most of the time) run: `coderrabit --prompt-only -t uncommitted`.
+To review uncommitted changes (this is what we'll use most of the time) run: `coderabbit --prompt-only -t uncommitted`.
 
 It is more useful if the review is performed against a base branch, using the `--base <branchName>` flag.
 
