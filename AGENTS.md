@@ -120,6 +120,14 @@ Ask first:
     - `scope` can refer to the area of code (such as the feature) where the change has taken place
     - `description` is a concise summary of the changes
 
+### Git Workflow
+
+- When starting work on a new branch or feature, use git worktree instead of switching branches
+- List existing worktrees before creating new ones: `git worktree list`
+- Create a worktree for a branch: `git worktree add ../olympus-v3-<feature-name> <branch-name>`
+- When done with a worktree, remove it: `git worktree remove ../olympus-v3-<feature-name>`
+- Be aware of worktree locations when running commands—use absolute paths if the worktree is outside the main repo
+
 ## Architecture Overview
 
 ### Default Framework Components
@@ -417,3 +425,17 @@ rule { print rule "|" $0 }
     print "  " $2
 }'
 ```
+
+### Git Worktrees
+
+Git worktrees allow multiple branches to be checked out simultaneously without stashing or committing changes. This is useful for:
+
+- Working on multiple features concurrently
+- Testing code on different branches
+- Reviewing PRs while preserving current work
+
+Common commands:
+
+- `git worktree list` - Show all worktrees
+- `git worktree add <path> <branch>` - Create new worktree for a branch
+- `git worktree remove <path>` - Delete a worktree
