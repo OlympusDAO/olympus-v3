@@ -85,9 +85,9 @@ contract ConvertibleOHMTellerTestBase is Test {
 
         // Prepare test parameters
         uint48 startTimestamp = uint48(vm.getBlockTimestamp());
-        // Set eligible to 3 months from now (rounded to the nearest day)
+        // Set the eligible time to 3 months from now (rounded to the nearest day)
         eligibleTimestamp = _roundToDay(startTimestamp + 90 days);
-        // Set expiry to 6 months from now (rounded to the nearest day)
+        // Set the expiry time to 6 months from now (rounded to the nearest day)
         expiryTimestamp = _roundToDay(startTimestamp + 180 days);
     }
 
