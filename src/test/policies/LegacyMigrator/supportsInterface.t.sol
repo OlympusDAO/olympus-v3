@@ -8,29 +8,32 @@ import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 contract LegacyMigratorSupportsInterfaceTest is LegacyMigratorTest {
+    // ========== SUPPORTS INTERFACE TESTS ========== //
+    // Given interface check
+    //  [X] it supports IERC165
+    //  [X] it supports IVersioned
+    //  [X] it supports ILegacyMigrator
+    //  [X] it supports IEnabler
+    //  [X] it does not support random interface
+
     function test_supportsInterface() public view {
-        // Should support IERC165
         assertTrue(migrator.supportsInterface(type(IERC165).interfaceId), "Should support IERC165");
 
-        // Should support IVersioned
         assertTrue(
             migrator.supportsInterface(type(IVersioned).interfaceId),
             "Should support IVersioned"
         );
 
-        // Should support ILegacyMigrator
         assertTrue(
             migrator.supportsInterface(type(ILegacyMigrator).interfaceId),
             "Should support ILegacyMigrator"
         );
 
-        // Should support IEnabler (via PolicyEnabler)
         assertTrue(
             migrator.supportsInterface(type(IEnabler).interfaceId),
             "Should support IEnabler"
         );
 
-        // Should not support random interface
         assertFalse(
             migrator.supportsInterface(bytes4(0xffffffff)),
             "Should not support random interface"

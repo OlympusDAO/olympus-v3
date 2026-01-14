@@ -5,7 +5,11 @@ import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 import {Permissions, Keycode, toKeycode, fromKeycode} from "src/Kernel.sol";
 
 contract LegacyMigratorRequestPermissionsTest is LegacyMigratorTest {
-    function test_requestPermissions() public {
+    // ========== REQUEST PERMISSIONS TESTS ========== //
+    // Given policy is configured
+    //  [X] it returns correct MINTR permissions
+
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);

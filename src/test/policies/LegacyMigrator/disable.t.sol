@@ -12,12 +12,11 @@ contract LegacyMigratorDisableTest is LegacyMigratorTest {
         vm.prank(emergencyUser);
         migrator.disable("");
 
-        // Check contract is disabled
         assertEq(migrator.isEnabled(), false, "Contract should be disabled");
     }
 
-    // Given non-emergency user tries to disable
-    //  [X] it reverts
+    // Given non-emergency user
+    //  [X] it reverts when disabling
 
     function test_givenNonEmergencyUser_triesToDisable_reverts() public {
         bytes memory err = abi.encodeWithSignature("NotAuthorised()");

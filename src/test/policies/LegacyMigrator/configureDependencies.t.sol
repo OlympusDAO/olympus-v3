@@ -6,6 +6,8 @@ import {Keycode, fromKeycode, toKeycode} from "src/Kernel.sol";
 
 contract LegacyMigratorConfigureDependenciesTest is LegacyMigratorTest {
     // ========== CONFIGURE DEPENDENCIES TESTS ========== //
+    // Given policy is configured
+    //  [X] it returns correct dependencies (MINTR, ROLES)
 
     function test_configureDependencies() public {
         Keycode[] memory expectedDeps = new Keycode[](2);

@@ -204,7 +204,79 @@ contract LegacyMigratorTest is StdInvariant, Test {
         }
     }
 
-    // ======== MODIFIERS ======== //
+    // ======== STATE SETTING MODIFIERS ======== //
+
+    /// @dev Modifier to set state where the contract is disabled
+    modifier givenContractDisabled() {
+        vm.prank(emergencyUser);
+        migrator.disable("");
+        _;
+    }
+
+    /// @dev Modifier to set state where alice has approved OHM v1 to the migrator
+    modifier givenAliceApproved() {
+        vm.prank(alice);
+        ohmV1.approve(address(migrator), ALICE_ALLOWANCE);
+        _;
+    }
+
+    /// @dev Modifier to set state where bob has approved OHM v1 to the migrator
+    modifier givenBobApproved() {
+        vm.prank(bob);
+        ohmV1.approve(address(migrator), BOB_ALLOWANCE);
+        _;
+    }
+
+    /// @dev Modifier to set state where alice has fully migrated
+    modifier givenAliceMigrated() {
+        vm.prank(alice);
+        ohmV1.approve(address(migrator), ALICE_ALLOWANCE);
+        vm.prank(alice);
+        migrator.migrate(ALICE_ALLOWANCE, aliceProof);
+        _;
+    }
+
+    /// @dev Modifier to set state where bob has fully migrated
+    modifier givenBobMigrated() {
+        vm.prank(bob);
+        ohmV1.approve(address(migrator), BOB_ALLOWANCE);
+        vm.prank(bob);
+        migrator.migrate(BOB_ALLOWANCE, bobProof);
+        _;
+    }
+
+    /// @dev Modifier to set state where the migration cap is set to a specific value
+    modifier givenCapSet(uint256 newCap_) {
+        vm.prank(adminUser);
+        migrator.setMigrationCap(newCap_);
+        _;
+    }
+
+    /// @dev Modifier to set state where the cap is reached (set to alice's allowance)
+    modifier givenCapReached() {
+        vm.prank(adminUser);
+        migrator.setMigrationCap(ALICE_ALLOWANCE);
+        _;
+    }
+
+    /// @dev Modifier to set state where the merkle root has been updated (resets hasMigrated)
+    modifier givenMerkleRootUpdated() {
+        bytes32 newRoot = bytes32(uint256(1));
+        vm.prank(legacyMigrationAdmin);
+        migrator.setMerkleRoot(newRoot);
+        _;
+    }
+
+    /// @dev Modifier to set state where the contract is re-enabled (disabled then enabled)
+    modifier givenReEnabled() {
+        vm.prank(emergencyUser);
+        migrator.disable("");
+        vm.prank(adminUser);
+        migrator.enable("");
+        _;
+    }
+
+    // ======== ROLE MODIFIERS ======== //
 
     /// @dev Modifier to run a function as the admin user
     modifier asAdmin() {
