@@ -35,11 +35,18 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @notice Thrown when the provided merkle proof is invalid
     error InvalidProof();
 
-    /// @notice Thrown when the amount exceeds the user's allowance
-    error AmountExceedsAllowance();
+    /// @notice Thrown when the amount exceeds the user's allocation
+    ///
+    /// @param requested The amount requested to migrate
+    /// @param allocated The user's allocated amount from the merkle tree
+    /// @param migrated The amount already migrated by the user
+    error AmountExceedsAllowance(uint256 requested, uint256 allocated, uint256 migrated);
 
     /// @notice Thrown when the migration cap would be exceeded
-    error CapExceeded();
+    ///
+    /// @param amount The amount requested to migrate
+    /// @param remaining The remaining MINTR approval for the migrator contract
+    error CapExceeded(uint256 amount, uint256 remaining);
 
     /// @notice Thrown when the amount is zero
     error ZeroAmount();
@@ -69,10 +76,12 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @return migratedAmount_ The amount migrated by the user
     function migratedAmounts(address account_) external view returns (uint256 migratedAmount_);
 
-    /// @notice The maximum amount of OHM v2 that can be migrated
+    /// @notice The remaining amount of OHM that can be minted by this contract
+    /// @dev    Returns the actual MINTR mint approval, not a stored value. This is the
+    ///         remaining amount available for migration and is always in sync with MINTR state.
     ///
-    /// @return cap_ The migration cap
-    function migrationCap() external view returns (uint256 cap_);
+    /// @return remaining_ The remaining OHM that can be minted
+    function remainingMintApproval() external view returns (uint256 remaining_);
 
     /// @notice The total amount of OHM v2 migrated so far
     ///
@@ -97,7 +106,8 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     function setMerkleRoot(bytes32 merkleRoot_) external;
 
     /// @notice Update the migration cap
-    /// @dev    Adjusts MINTR approval accordingly
+    /// @dev    Queries the current MINTR approval and adjusts it to the target cap.
+    ///         This ensures the cap is always in sync with MINTR state.
     ///
     /// @param cap_ The new migration cap (9 decimals)
     function setMigrationCap(uint256 cap_) external;

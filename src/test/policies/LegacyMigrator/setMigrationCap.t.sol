@@ -3,6 +3,7 @@ pragma solidity >=0.8.15;
 
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
 
 contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
     event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
@@ -59,7 +60,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         migrator.setMigrationCap(newCap);
 
         // Assert state
-        assertEq(migrator.migrationCap(), newCap, "Migration cap should be updated");
+        assertEq(migrator.remainingMintApproval(), newCap, "Migration cap should be updated");
     }
 
     //  given new cap is lower than old cap
@@ -75,7 +76,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         vm.prank(adminUser);
         migrator.setMigrationCap(newCap);
 
-        assertEq(migrator.migrationCap(), newCap, "Migration cap should be updated");
+        assertEq(migrator.remainingMintApproval(), newCap, "Migration cap should be updated");
     }
 
     // given any uint256 cap value
@@ -85,6 +86,76 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         vm.prank(adminUser);
         migrator.setMigrationCap(newCap_);
 
-        assertEq(migrator.migrationCap(), newCap_, "Migration cap should match input");
+        assertEq(migrator.remainingMintApproval(), newCap_, "Migration cap should match input");
+    }
+
+    // ========== CAP SYNC TESTS ========== //
+
+    // given the cap is set to 0
+    //  [X] migrations are blocked
+
+    function test_givenCapSetToZero_migrationsBlocked() public givenAliceApproved {
+        // Set cap to 0
+        vm.prank(adminUser);
+        migrator.setMigrationCap(0);
+
+        // Verify MINTR approval is 0
+        assertEq(MINTR.mintApproval(address(migrator)), 0, "MINTR approval should be 0");
+
+        // Expect revert when trying to migrate
+        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.CapExceeded.selector, 100e9, 0);
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        migrator.migrate(100e9, aliceProof, ALICE_ALLOWANCE);
+    }
+
+    // given the cap is set to a specific value X
+    //  [X] migrations up to X work
+    //  [X] migrations exceeding X fail
+
+    function test_givenCapSetToX_amountXWorks_amountXPlusOneFails() public givenAliceApproved {
+        uint256 X = 200e9;
+
+        // Set cap to X
+        vm.prank(adminUser);
+        migrator.setMigrationCap(X);
+
+        // Alice can migrate exactly X
+        vm.prank(alice);
+        migrator.migrate(X, aliceProof, ALICE_ALLOWANCE);
+
+        // MINTR approval is now 0
+        assertEq(MINTR.mintApproval(address(migrator)), 0, "MINTR approval should be 0");
+
+        // Trying to migrate more should fail
+        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.CapExceeded.selector, 1, 0);
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        migrator.migrate(1, aliceProof, ALICE_ALLOWANCE);
+    }
+
+    // given the cap is set multiple times
+    //  [X] migrationCap always reflects current MINTR approval
+
+    function test_givenMultipleCapChanges_migrationCapReflectsMINTR() public {
+        // Initially, migrationCap should equal INITIAL_CAP
+        assertEq(migrator.remainingMintApproval(), INITIAL_CAP, "Initial cap should match");
+        assertEq(MINTR.mintApproval(address(migrator)), INITIAL_CAP, "MINTR should match");
+
+        // Set cap to a lower value
+        uint256 lowerCap = INITIAL_CAP - 500e9;
+        vm.prank(adminUser);
+        migrator.setMigrationCap(lowerCap);
+        assertEq(migrator.remainingMintApproval(), lowerCap, "Cap should be lower");
+        assertEq(MINTR.mintApproval(address(migrator)), lowerCap, "MINTR should match");
+
+        // Set cap to a higher value
+        uint256 higherCap = lowerCap + 1000e9;
+        vm.prank(adminUser);
+        migrator.setMigrationCap(higherCap);
+        assertEq(migrator.remainingMintApproval(), higherCap, "Cap should be higher");
+        assertEq(MINTR.mintApproval(address(migrator)), higherCap, "MINTR should match");
     }
 }

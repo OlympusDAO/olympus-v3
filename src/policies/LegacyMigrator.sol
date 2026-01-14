@@ -43,7 +43,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     // =========  CONSTANTS ========= //
 
-    /// @notice The role required to set merkle root and migration cap
+    /// @notice The role required to set merkle root
     bytes32 internal constant LEGACY_MIGRATION_ADMIN_ROLE = "legacy_migration_admin";
 
     // =========  STATE VARIABLES ========= //
@@ -70,9 +70,6 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     address[] public migratedUsers;
 
     /// @inheritdoc ILegacyMigrator
-    uint256 public override migrationCap;
-
-    /// @inheritdoc ILegacyMigrator
     uint256 public override totalMigrated;
 
     // =========  CONSTRUCTOR ========= //
@@ -92,6 +89,11 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @inheritdoc ILegacyMigrator
     function ohmV2() external view returns (IERC20 ohmV2_) {
         return _ohmV2;
+    }
+
+    /// @inheritdoc ILegacyMigrator
+    function remainingMintApproval() external view returns (uint256 remaining_) {
+        remaining_ = MINTR.mintApproval(address(this));
     }
 
     // =========  POLICY SETUP ========= //
@@ -199,25 +201,29 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         if (!_verifyClaim(msg.sender, allocatedAmount_, proof_)) revert InvalidProof();
 
         // Check that amount doesn't exceed user's allocation
-        if (migratedAmounts[msg.sender] + amount_ > allocatedAmount_)
-            revert AmountExceedsAllowance();
+        uint256 userMigrated = migratedAmounts[msg.sender];
+        if (userMigrated + amount_ > allocatedAmount_) {
+            revert AmountExceedsAllowance(amount_, allocatedAmount_, userMigrated);
+        }
 
-        // Check that total migration doesn't exceed cap (1:1 conversion)
-        if (totalMigrated + amount_ > migrationCap) revert CapExceeded();
+        // Check MINTR approval (represents remaining amount that can be minted)
+        uint256 mintrApproval = MINTR.mintApproval(address(this));
+        if (amount_ > mintrApproval) {
+            revert CapExceeded(amount_, mintrApproval);
+        }
 
         // Track user for first migration (for resetting when merkle root changes)
-        if (migratedAmounts[msg.sender] == 0) {
+        if (userMigrated == 0) {
             migratedUsers.push(msg.sender);
         }
 
         // Update user's migrated amount
-        migratedAmounts[msg.sender] += amount_;
+        migratedAmounts[msg.sender] = userMigrated + amount_;
 
         // Burn OHM v1 from user (user must have approved this contract)
         IERC20BurnableMintable(address(_ohmV1)).burnFrom(msg.sender, amount_);
 
         // Mint OHM v2 to user (1:1 conversion, same decimals)
-        // Note: MINTR approval is pre-set via setMigrationCap, not here
         MINTR.mintOhm(msg.sender, amount_);
 
         // Update tracking
@@ -249,18 +255,18 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @inheritdoc ILegacyMigrator
     function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
-        uint256 oldCap = migrationCap;
+        // Get current MINTR approval (actual current cap, not stored state)
+        uint256 currentApproval = MINTR.mintApproval(address(this));
 
-        // Adjust MINTR approval accordingly
-        if (cap_ > oldCap) {
+        // Adjust MINTR approval to reach the target cap
+        if (cap_ > currentApproval) {
             // Increase approval
-            MINTR.increaseMintApproval(address(this), cap_ - oldCap);
-        } else if (cap_ < oldCap) {
+            MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
+        } else if (cap_ < currentApproval) {
             // Decrease approval
-            MINTR.decreaseMintApproval(address(this), oldCap - cap_);
+            MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
         }
 
-        migrationCap = cap_;
-        emit MigrationCapUpdated(cap_, oldCap);
+        emit MigrationCapUpdated(cap_, currentApproval);
     }
 }

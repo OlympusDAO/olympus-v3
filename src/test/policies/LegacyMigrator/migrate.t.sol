@@ -71,7 +71,8 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_givenInsufficientBalance_reverts() public givenAliceApproved {
         // Transfer the balance of OHM v1 to bob (so that alice has insufficient balance)
         vm.prank(alice);
-        ohmV1.transfer(bob, ALICE_ALLOWANCE);
+        bool success = ohmV1.transfer(bob, ALICE_ALLOWANCE);
+        assertTrue(success, "Transfer should succeed");
 
         // Expect revert
         // MockOhm uses a string error for insufficient balance
@@ -89,7 +90,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
     function test_givenAmountExceedsAllocation_reverts() public givenAliceApproved {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.AmountExceedsAllowance.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.AmountExceedsAllowance.selector,
+            ALICE_ALLOWANCE + 1,
+            ALICE_ALLOWANCE,
+            0
+        );
         vm.expectRevert(err);
 
         // Call function
@@ -108,7 +114,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         amount_ = bound(amount_, ALICE_ALLOWANCE - 500e9 + 1, ALICE_ALLOWANCE);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.AmountExceedsAllowance.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.AmountExceedsAllowance.selector,
+            amount_,
+            ALICE_ALLOWANCE,
+            500e9
+        );
         vm.expectRevert(err);
 
         // Call function
@@ -122,6 +133,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     //    [X] it updates totalMigrated
 
     function test_givenMultiplePartialMigrations_succeeds() public givenAliceApproved {
+        // Get initial MINTR approval
+        uint256 initialApproval = MINTR.mintApproval(address(migrator));
+
         // Do multiple small migrations instead of one large one
         uint256 firstAmount = 200e9;
         uint256 secondAmount = 300e9;
@@ -137,6 +151,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
             "Alice should have migrated first amount"
         );
         assertEq(ohmV2.balanceOf(alice), firstAmount, "Alice should receive first OHM v2");
+        // MINTR approval should decrease by firstAmount
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - firstAmount,
+            "MINTR approval should decrease by firstAmount"
+        );
 
         // Second migration
         vm.prank(alice);
@@ -151,6 +171,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
             firstAmount + secondAmount,
             "Alice should receive second OHM v2"
         );
+        // MINTR approval should decrease by secondAmount
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - firstAmount - secondAmount,
+            "MINTR approval should decrease by secondAmount"
+        );
 
         // Third migration
         vm.prank(alice);
@@ -158,6 +184,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         assertEq(migrator.migratedAmounts(alice), total, "Alice should have migrated total amount");
         assertEq(migrator.totalMigrated(), total, "Total migrated should equal total");
         assertEq(ohmV2.balanceOf(alice), total, "Alice should receive total OHM v2");
+        // MINTR approval should decrease by thirdAmount
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - total,
+            "MINTR approval should decrease by total amount"
+        );
     }
 
     //   [X] it succeeds
@@ -195,6 +227,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     //   [X] it emits Migrated event
 
     function test_fullAmount_succeeds() public givenAliceApproved {
+        // Get initial MINTR approval
+        uint256 initialApproval = MINTR.mintApproval(address(migrator));
+
         // Expect event
         vm.expectEmit(true, true, false, true);
         emit Migrated(alice, ALICE_ALLOWANCE, ALICE_ALLOWANCE);
@@ -219,6 +254,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
             ALICE_ALLOWANCE,
             "Alice should receive ALICE_ALLOWANCE OHM v2"
         );
+        // MINTR approval should decrease by ALICE_ALLOWANCE
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - ALICE_ALLOWANCE,
+            "MINTR approval should decrease by migrated amount"
+        );
     }
 
     //  given the user has fully migrated
@@ -240,7 +281,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         ohmV1.mint(alice, amount_);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.AmountExceedsAllowance.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.AmountExceedsAllowance.selector,
+            amount_,
+            ALICE_ALLOWANCE,
+            ALICE_ALLOWANCE
+        );
         vm.expectRevert(err);
 
         // Call function
@@ -254,18 +300,79 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_givenCapReached_reverts() public givenCapReached givenBobApproved {
         // Assert that the cap is lower than the bob allowance
         assertLt(
-            migrator.migrationCap(),
+            migrator.remainingMintApproval(),
             BOB_ALLOWANCE,
             "Migration cap should be lower than bob allowance"
         );
 
+        // Get current MINTR approval (remaining amount that can be migrated)
+        uint256 mintrApproval = MINTR.mintApproval(address(migrator));
+
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.CapExceeded.selector);
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.CapExceeded.selector,
+            BOB_ALLOWANCE,
+            mintrApproval
+        );
         vm.expectRevert(err);
 
         // Call function
         vm.prank(bob);
         migrator.migrate(BOB_ALLOWANCE, bobProof, BOB_ALLOWANCE);
+    }
+
+    // given partial migration consumed most of the cap
+    //  when the user attempts to migrate more than remaining approval
+    //   [X] it reverts with CapExceeded
+    //   [X] it shows the correct remaining amount
+
+    function test_givenPartialMigration_exceedsRemainingApproval_reverts() public {
+        uint256 cap = 1500e9; // Cap between alice and bob's allowances
+        uint256 alicePartial = 1000e9; // Alice uses most of the cap
+
+        // Set cap
+        vm.prank(adminUser);
+        migrator.setMigrationCap(cap);
+
+        // Approve and verify initial MINTR approval
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            cap,
+            "Initial MINTR approval should match cap"
+        );
+
+        // Alice approves and migrates
+        vm.prank(alice);
+        ohmV1.approve(address(migrator), ALICE_ALLOWANCE);
+        vm.prank(alice);
+        migrator.migrate(alicePartial, aliceProof, ALICE_ALLOWANCE);
+
+        // Verify MINTR approval decreased
+        uint256 remaining = cap - alicePartial; // 500e9 remaining
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            remaining,
+            "MINTR approval should decrease by migrated amount"
+        );
+        assertEq(migrator.remainingMintApproval(), remaining, "remainingMintApproval should match");
+
+        // Bob approves
+        vm.prank(bob);
+        ohmV1.approve(address(migrator), BOB_ALLOWANCE);
+
+        // Bob tries to migrate more than remaining
+        uint256 bobAttempt = 600e9; // More than 500e9 remaining
+
+        // Expect revert with CapExceeded showing correct remaining
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.CapExceeded.selector,
+            bobAttempt,
+            remaining
+        );
+        vm.expectRevert(err);
+
+        vm.prank(bob);
+        migrator.migrate(bobAttempt, bobProof, BOB_ALLOWANCE);
     }
 
     // given alice attempts to migrate for bob
@@ -291,12 +398,21 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         givenAliceApproved
         givenBobApproved
     {
+        // Get initial MINTR approval
+        uint256 initialApproval = MINTR.mintApproval(address(migrator));
+
         // Alice migrates first
         vm.prank(alice);
         migrator.migrate(ALICE_ALLOWANCE, aliceProof, ALICE_ALLOWANCE);
 
         assertEq(migrator.migratedAmounts(alice), ALICE_ALLOWANCE, "Alice should have migrated");
         assertEq(migrator.migratedAmounts(bob), 0, "Bob should not have migrated yet");
+        // MINTR approval should decrease by alice's amount
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - ALICE_ALLOWANCE,
+            "MINTR approval should decrease after alice migration"
+        );
 
         // Bob migrates second
         vm.prank(bob);
@@ -320,6 +436,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         // Verify balances
         assertEq(ohmV2.balanceOf(alice), ALICE_ALLOWANCE, "Alice should have her OHM v2");
         assertEq(ohmV2.balanceOf(bob), BOB_ALLOWANCE, "Bob should have his OHM v2");
+
+        // MINTR approval should decrease by both amounts
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            initialApproval - ALICE_ALLOWANCE - BOB_ALLOWANCE,
+            "MINTR approval should decrease by total migrated amount"
+        );
     }
 
     function test_givenMultipleUsers_partialMigrationsTrackedIndependently()
@@ -432,7 +555,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         // Only test amounts that exceed the allowance
         vm.assume(amount > ALICE_ALLOWANCE);
 
-        bytes memory err = abi.encodeWithSignature("AmountExceedsAllowance()");
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.AmountExceedsAllowance.selector,
+            amount,
+            ALICE_ALLOWANCE,
+            0
+        );
         vm.expectRevert(err);
 
         vm.prank(alice);

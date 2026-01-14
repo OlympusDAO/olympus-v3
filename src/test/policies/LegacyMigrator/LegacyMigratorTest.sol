@@ -262,10 +262,10 @@ contract LegacyMigratorTest is StdInvariant, Test {
         _;
     }
 
-    /// @dev Modifier to set state where the cap is reached (set to alice's allowance)
+    /// @dev Modifier to set state where the cap is reached (set to 0)
     modifier givenCapReached() {
         vm.prank(adminUser);
-        migrator.setMigrationCap(ALICE_ALLOWANCE);
+        migrator.setMigrationCap(0);
         _;
     }
 
