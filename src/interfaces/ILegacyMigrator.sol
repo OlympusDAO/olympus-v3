@@ -64,10 +64,10 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @return merkleRoot_ The current merkle root
     function merkleRoot() external view returns (bytes32 merkleRoot_);
 
-    /// @notice Whether the user has migrated under the current root
+    /// @notice The amount a user has migrated under the current root
     /// @param account_ The account to check
-    /// @return hasMigrated_ True if the user has migrated
-    function hasMigrated(address account_) external view returns (bool hasMigrated_);
+    /// @return migratedAmount_ The amount migrated by the user
+    function migratedAmounts(address account_) external view returns (uint256 migratedAmount_);
 
     /// @notice The maximum amount of OHM v2 that can be migrated
     ///
@@ -83,11 +83,12 @@ interface ILegacyMigrator is IEnabler, IVersioned {
 
     /// @notice Migrate OHM v1 to OHM v2
     /// @dev    User must approve this contract to transfer their OHM v1
-    ///         Users must migrate their full allowance in one transaction (all-or-nothing)
+    ///         Users can migrate any amount up to their allocated amount in multiple transactions
     ///
-    /// @param amount_ The amount of OHM v1 to migrate (9 decimals) - must equal full allowance
-    /// @param proof_ The merkle proof proving the user is eligible for this amount
-    function migrate(uint256 amount_, bytes32[] calldata proof_) external;
+    /// @param amount_ The amount of OHM v1 to migrate (9 decimals)
+    /// @param proof_ The merkle proof proving the user is eligible
+    /// @param allocatedAmount_ The user's allocated amount from the merkle tree
+    function migrate(uint256 amount_, bytes32[] calldata proof_, uint256 allocatedAmount_) external;
 
     /// @notice Update the merkle root for eligible claims
     /// @dev    Resets all migrated amounts to zero
@@ -101,14 +102,14 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @param cap_ The new migration cap (9 decimals)
     function setMigrationCap(uint256 cap_) external;
 
-    /// @notice Verify if a claim is valid for a given account and amount
+    /// @notice Verify if a claim is valid for a given account and allocated amount
     /// @param account_ The account to verify
-    /// @param amount_ The amount to verify
+    /// @param allocatedAmount_ The allocated amount to verify
     /// @param proof_ The merkle proof
     /// @return valid_ True if the claim is valid
     function verifyClaim(
         address account_,
-        uint256 amount_,
+        uint256 allocatedAmount_,
         bytes32[] calldata proof_
     ) external view returns (bool valid_);
 }

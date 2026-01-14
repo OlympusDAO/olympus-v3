@@ -15,8 +15,6 @@ import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.so
 
 // ============  EXTERNAL CONTRACTS ============ //
 
-import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-
 // ============  INTERNAL CONTRACTS ============ //
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
@@ -29,15 +27,15 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice Policy to allow OHM v1 holders to migrate to OHM v2 via merkle proof verification
 /// @dev    Inherits from Policy, RolesConsumer, PolicyEnabler, IVersioned, and ILegacyMigrator
 ///
-///         Migration flow (all-or-nothing):
+///         Migration flow (partial migrations allowed):
 ///         1. User has OHM v1 balance
-///         2. User proves eligibility via merkle proof
-///         3. User transfers OHM v1 to contract
-///         4. Contract mints OHM v2 to user (1:1, same decimals)
-///         5. User marked as migrated (cannot migrate again)
+///         2. User proves eligibility via merkle proof with their allocated amount
+///         3. User can migrate any amount up to their allocation in multiple transactions
+///         4. Contract burns OHM v1 and mints OHM v2 to user (1:1, same decimals)
+///         5. User's migrated amount is tracked until they reach their allocation
 ///
 ///         Admin functions:
-///         - setMerkleRoot: Update eligibility tree
+///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
 ///         - setMigrationCap: Update global cap and MINTR approval
 ///         - enable/disable: Emergency pause/resume
 contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILegacyMigrator {
@@ -60,16 +58,16 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @notice The OHM v2 token contract from MINTR (9 decimals)
     /// @dev    Set in configureDependencies via MINTR.ohm()
-    OlympusERC20Token internal _ohmV2;
+    IERC20 internal _ohmV2;
 
     /// @inheritdoc ILegacyMigrator
     bytes32 public override merkleRoot;
 
     /// @inheritdoc ILegacyMigrator
-    mapping(address => bool) public override hasMigrated;
+    mapping(address user_ => uint256 amount_) public override migratedAmounts;
 
     /// @notice Array of users who have migrated for resetting when merkle root changes
-    address[] public users;
+    address[] public migratedUsers;
 
     /// @inheritdoc ILegacyMigrator
     uint256 public override migrationCap;
@@ -93,7 +91,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @inheritdoc ILegacyMigrator
     function ohmV2() external view returns (IERC20 ohmV2_) {
-        return IERC20(address(_ohmV2));
+        return _ohmV2;
     }
 
     // =========  POLICY SETUP ========= //
@@ -115,7 +113,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
 
         // Set ohmV2 from MINTR
-        _ohmV2 = MINTR.ohm();
+        _ohmV2 = IERC20(address(MINTR.ohm()));
     }
 
     /// @inheritdoc Policy
@@ -147,20 +145,33 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
             super.supportsInterface(interfaceId);
     }
 
+    // =========  MODIFIERS ========= //
+
+    function _onlyAdminOrLegacyMigrationAdmin() internal view {
+        if (!ROLES.hasRole(msg.sender, LEGACY_MIGRATION_ADMIN_ROLE) && !_isAdmin(msg.sender))
+            revert NotAuthorised();
+    }
+
+    modifier onlyAdminOrLegacyMigrationAdmin() {
+        _onlyAdminOrLegacyMigrationAdmin();
+        _;
+    }
+
     // =========  MIGRATE FUNCTIONS ========= //
 
     /// @notice Internal function to verify a merkle proof
+    /// @dev Uses double-hashing to prevent leaf collision attacks (OpenZeppelin standard)
     /// @param account_ The account to verify
-    /// @param amount_ The amount to verify
+    /// @param allocatedAmount_ The allocated amount to verify
     /// @param proof_ The merkle proof
     /// @return valid True if the proof is valid
     function _verifyClaim(
         address account_,
-        uint256 amount_,
+        uint256 allocatedAmount_,
         bytes32[] calldata proof_
     ) internal view returns (bool valid) {
-        // Generate leaf for this account and amount
-        bytes32 leaf = keccak256(abi.encode(account_, amount_));
+        // Generate leaf for this account and allocated amount (double-hashed)
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(account_, allocatedAmount_))));
 
         // Verify proof against current root
         return proof_.verify(merkleRoot, leaf);
@@ -169,31 +180,38 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @inheritdoc ILegacyMigrator
     function verifyClaim(
         address account_,
-        uint256 amount_,
+        uint256 allocatedAmount_,
         bytes32[] calldata proof_
     ) external view returns (bool valid_) {
-        return _verifyClaim(account_, amount_, proof_);
+        return _verifyClaim(account_, allocatedAmount_, proof_);
     }
 
     /// @inheritdoc ILegacyMigrator
-    function migrate(uint256 amount_, bytes32[] calldata proof_) external onlyEnabled {
+    function migrate(
+        uint256 amount_,
+        bytes32[] calldata proof_,
+        uint256 allocatedAmount_
+    ) external onlyEnabled {
         // Check amount is not zero
         if (amount_ == 0) revert ZeroAmount();
 
-        // Verify merkle proof for this claim
-        if (!_verifyClaim(msg.sender, amount_, proof_)) revert InvalidProof();
+        // Verify merkle proof for this claim with the allocated amount
+        if (!_verifyClaim(msg.sender, allocatedAmount_, proof_)) revert InvalidProof();
 
-        // Check if user has already migrated under current root
-        if (hasMigrated[msg.sender]) revert AmountExceedsAllowance();
+        // Check that amount doesn't exceed user's allocation
+        if (migratedAmounts[msg.sender] + amount_ > allocatedAmount_)
+            revert AmountExceedsAllowance();
 
         // Check that total migration doesn't exceed cap (1:1 conversion)
         if (totalMigrated + amount_ > migrationCap) revert CapExceeded();
 
-        // Mark user as migrated
-        hasMigrated[msg.sender] = true;
+        // Track user for first migration (for resetting when merkle root changes)
+        if (migratedAmounts[msg.sender] == 0) {
+            migratedUsers.push(msg.sender);
+        }
 
-        // Track user for resetting when merkle root changes
-        users.push(msg.sender);
+        // Update user's migrated amount
+        migratedAmounts[msg.sender] += amount_;
 
         // Burn OHM v1 from user (user must have approved this contract)
         IERC20BurnableMintable(address(_ohmV1)).burnFrom(msg.sender, amount_);
@@ -209,14 +227,20 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     }
 
     /// @inheritdoc ILegacyMigrator
-    function setMerkleRoot(bytes32 merkleRoot_) external onlyRole(LEGACY_MIGRATION_ADMIN_ROLE) {
-        // Reset migration status for all tracked users
-        for (uint256 i = 0; i < users.length; i++) {
-            hasMigrated[users[i]] = false;
+    /// @dev    When the merkle root is updated, the migrated amounts for all users are reset to 0.
+    function setMerkleRoot(
+        bytes32 merkleRoot_
+    ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+        // Reset migration amounts for all tracked users
+        // The reason for this is that the merkle tree will be generated based on OHM v1 balances
+        // captured at the time of the root update. Having to take the un-migrated allocations into
+        // account would require a more complex logic to handle.
+        for (uint256 i = 0; i < migratedUsers.length; i++) {
+            delete migratedAmounts[migratedUsers[i]];
         }
 
-        // Clear the users array
-        delete users;
+        // Clear the migratedUsers array
+        delete migratedUsers;
 
         // Update merkle root
         merkleRoot = merkleRoot_;
@@ -224,7 +248,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     }
 
     /// @inheritdoc ILegacyMigrator
-    function setMigrationCap(uint256 cap_) external onlyAdminRole {
+    function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
         uint256 oldCap = migrationCap;
 
         // Adjust MINTR approval accordingly

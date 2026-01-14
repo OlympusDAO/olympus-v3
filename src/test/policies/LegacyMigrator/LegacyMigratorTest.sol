@@ -13,6 +13,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {LegacyMigrator} from "policies/LegacyMigrator.sol";
+import {Hashes} from "@openzeppelin-5.3.0/utils/cryptography/Hashes.sol";
 
 /// @title LegacyMigratorTest
 /// @notice Parent test contract for LegacyMigrator with shared setup and helpers
@@ -116,13 +117,13 @@ contract LegacyMigratorTest is StdInvariant, Test {
         // Grant this test contract "admin" role temporarily for setup
         rolesAdmin.grantRole("admin", address(this));
 
+        // Enable the migrator
+        migrator.enable("");
+
         // Generate merkle tree and set it in the migrator
         _generateMerkleTree();
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(merkleRoot);
-
-        // Enable the migrator
-        migrator.enable("");
 
         // Give alice and bob some OHM v1
         ohmV1.mint(alice, ALICE_ALLOWANCE);
@@ -136,62 +137,62 @@ contract LegacyMigratorTest is StdInvariant, Test {
     }
 
     // ======== MERKLE TREE HELPERS ======== //
+    // NOTE: We use OpenZeppelin's Hashes.commutativeKeccak256 for hashing pairs, which matches
+    // the standard approach used by OZ's MerkleProof library. This ensures commutativity (hashing
+    // order doesn't matter) and uses efficient memory layout for keccak256 operations.
+    //
+    // For simple static trees with known leaves (like our 2-user test), manual generation is
+    // straightforward. OZ's MerkleTree library is designed for incremental on-chain tree building
+    // (push-based), which is overkill for this use case.
 
-    function _generateMerkleLeaves() internal view returns (bytes32[] memory leaves) {
-        leaves = new bytes32[](2);
-        // Encode (address, uint256) for each user
-        leaves[0] = keccak256(abi.encode(alice, ALICE_ALLOWANCE));
-        leaves[1] = keccak256(abi.encode(bob, BOB_ALLOWANCE));
-    }
-
+    /// @dev Generate merkle tree for alice and bob with their allowances
+    /// Uses double-hashing for leaves (OpenZeppelin standard for merkle allowlists)
     function _generateMerkleTree() internal {
-        bytes32[] memory leaves = _generateMerkleLeaves();
-
-        // Sort leaves for merkle tree
+        bytes32[] memory leaves = _generateLeaves();
         _sortBytes32Array(leaves);
 
-        // Generate proofs and root
-        if (leaves[0] == keccak256(abi.encode(alice, ALICE_ALLOWANCE))) {
-            // Alice is first, Bob is second
-            aliceProof = new bytes32[](1);
-            aliceProof[0] = leaves[1];
+        // Compute root using OpenZeppelin's commutative hashing
+        merkleRoot = Hashes.commutativeKeccak256(leaves[0], leaves[1]);
 
-            bobProof = new bytes32[](1);
-            bobProof[0] = leaves[0];
+        // Generate proofs for alice and bob
+        bytes32 aliceLeaf = _leaf(alice, ALICE_ALLOWANCE);
+        bytes32 bobLeaf = _leaf(bob, BOB_ALLOWANCE);
+
+        aliceProof = new bytes32[](1);
+        bobProof = new bytes32[](1);
+
+        // Each proof is the sibling leaf
+        if (leaves[0] == aliceLeaf) {
+            aliceProof[0] = leaves[1]; // Alice's sibling is Bob
+            bobProof[0] = leaves[0]; // Bob's sibling is Alice
         } else {
-            // Bob is first, Alice is second
-            aliceProof = new bytes32[](1);
-            aliceProof[0] = leaves[1];
-
-            bobProof = new bytes32[](1);
-            bobProof[0] = leaves[0];
-        }
-
-        // Compute root using OpenZeppelin's _hashPair approach (sort, then hash)
-        // For two leaves: if a < b, hash(keccak256(a,b)), else hash(keccak256(b,a))
-        // This matches how MerkleProof.processProof computes the root
-        bytes32 left = leaves[0];
-        bytes32 right = leaves[1];
-        bytes32[] memory proof = new bytes32[](1);
-        proof[0] = right;
-        // Simulate the verification: start with left, hash with right
-        bytes32 computedHash = left;
-        computedHash = _hashPair(computedHash, proof[0]);
-        merkleRoot = computedHash;
-    }
-
-    function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
-        return a < b ? _efficientHash(a, b) : _efficientHash(b, a);
-    }
-
-    function _efficientHash(bytes32 a, bytes32 b) internal pure returns (bytes32 value) {
-        assembly {
-            mstore(0x00, a)
-            mstore(0x20, b)
-            value := keccak256(0x00, 0x40)
+            aliceProof[0] = leaves[0]; // Alice's sibling is Bob
+            bobProof[0] = leaves[1]; // Bob's sibling is Alice
         }
     }
 
+    /// @dev Refresh the merkle tree with the same allocations (simulates root update)
+    function _refreshMerkleTree() internal {
+        _generateMerkleTree();
+
+        // Update the contract's merkle root
+        vm.prank(legacyMigrationAdmin);
+        migrator.setMerkleRoot(merkleRoot);
+    }
+
+    /// @dev Generate double-hashed leaves for alice and bob
+    function _generateLeaves() internal view returns (bytes32[] memory leaves) {
+        leaves = new bytes32[](2);
+        leaves[0] = _leaf(alice, ALICE_ALLOWANCE);
+        leaves[1] = _leaf(bob, BOB_ALLOWANCE);
+    }
+
+    /// @dev Generate a double-hashed leaf for merkle tree (OpenZeppelin standard)
+    function _leaf(address account_, uint256 amount_) internal pure returns (bytes32) {
+        return keccak256(bytes.concat(keccak256(abi.encode(account_, amount_))));
+    }
+
+    /// @dev Sort bytes32 array in ascending order
     function _sortBytes32Array(bytes32[] memory arr) internal pure {
         for (uint256 i = 0; i < arr.length - 1; i++) {
             for (uint256 j = i + 1; j < arr.length; j++) {
@@ -227,21 +228,30 @@ contract LegacyMigratorTest is StdInvariant, Test {
         _;
     }
 
-    /// @dev Modifier to set state where alice has fully migrated
-    modifier givenAliceMigrated() {
+    /// @dev Modifier to set state where alice has partially migrated
+    modifier givenAlicePartiallyMigrated(uint256 migratedAmount_) {
         vm.prank(alice);
         ohmV1.approve(address(migrator), ALICE_ALLOWANCE);
         vm.prank(alice);
-        migrator.migrate(ALICE_ALLOWANCE, aliceProof);
+        migrator.migrate(migratedAmount_, aliceProof, ALICE_ALLOWANCE);
+        _;
+    }
+
+    /// @dev Modifier to set state where alice has fully migrated
+    modifier givenAliceFullyMigrated() {
+        vm.prank(alice);
+        ohmV1.approve(address(migrator), ALICE_ALLOWANCE);
+        vm.prank(alice);
+        migrator.migrate(ALICE_ALLOWANCE, aliceProof, ALICE_ALLOWANCE);
         _;
     }
 
     /// @dev Modifier to set state where bob has fully migrated
-    modifier givenBobMigrated() {
+    modifier givenBobFullyMigrated() {
         vm.prank(bob);
         ohmV1.approve(address(migrator), BOB_ALLOWANCE);
         vm.prank(bob);
-        migrator.migrate(BOB_ALLOWANCE, bobProof);
+        migrator.migrate(BOB_ALLOWANCE, bobProof, BOB_ALLOWANCE);
         _;
     }
 
@@ -259,11 +269,17 @@ contract LegacyMigratorTest is StdInvariant, Test {
         _;
     }
 
-    /// @dev Modifier to set state where the merkle root has been updated (resets hasMigrated)
+    /// @dev Modifier to set state where the merkle root has been updated (resets migrated amounts)
     modifier givenMerkleRootUpdated() {
         bytes32 newRoot = bytes32(uint256(1));
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot);
+        _;
+    }
+
+    /// @dev Modifier to set state where the merkle root has been updated to same allocations (refreshes tree)
+    modifier givenMerkleRootRefreshed() {
+        _refreshMerkleTree();
         _;
     }
 

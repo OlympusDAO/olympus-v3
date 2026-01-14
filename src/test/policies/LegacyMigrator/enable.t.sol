@@ -5,37 +5,36 @@ import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 
 contract LegacyMigratorEnableTest is LegacyMigratorTest {
     // ========== ENABLE TESTS ========== //
-    // Given contract disabled + admin role
-    //  [X] it enables the contract
 
-    function test_givenContractDisabled_adminEnables_succeeds() public givenContractDisabled {
-        assertEq(migrator.isEnabled(), false, "Contract should be disabled");
+    // given the contract is enabled
+    //  [X] it reverts
 
-        vm.prank(adminUser);
-        migrator.enable("");
-
-        assertEq(migrator.isEnabled(), true, "Contract should be enabled");
-    }
-
-    // Given contract enabled + admin role
-    //  [X] it reverts (already enabled)
-
-    function test_givenContractEnabled_adminTriesToEnable_reverts() public {
+    function test_givenContractEnabled_reverts() public {
+        // Assert prior state
         assertEq(migrator.isEnabled(), true, "Contract should be enabled");
 
+        // Expect revert
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
 
+        // Call function
         vm.prank(adminUser);
         migrator.enable("");
     }
 
-    // Given contract disabled + non-admin
-    //  [X] it reverts (not authorised)
+    // given the contract is disabled
+    //  given the caller does not have the admin role
+    //   [X] it reverts
 
-    function test_givenContractDisabled_nonAdminTriesToEnable_reverts() public givenContractDisabled {
+    function test_givenContractDisabled_givenCallerDoesNotHaveAdminRole_reverts(
+        address caller_
+    ) public givenContractDisabled {
+        vm.assume(caller_ != adminUser);
+
+        // Assert prior state
         assertEq(migrator.isEnabled(), false, "Contract should be disabled");
 
+        // Expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -43,44 +42,23 @@ contract LegacyMigratorEnableTest is LegacyMigratorTest {
         );
         vm.expectRevert(err);
 
-        vm.prank(alice);
+        // Call function
+        vm.prank(caller_);
         migrator.enable("");
     }
 
-    // Given contract disabled + emergency role (not admin)
-    //  [X] it reverts (emergency is not admin)
+    //  given the caller has the admin role
+    //   [X] it enables the contract
 
-    function test_givenContractDisabled_emergencyTriesToEnable_reverts() public givenContractDisabled {
+    function test_givenContractDisabled_givenCallerHasAdminRole() public givenContractDisabled {
+        // Assert prior state
         assertEq(migrator.isEnabled(), false, "Contract should be disabled");
 
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32("admin")
-        );
-        vm.expectRevert(err);
-
-        vm.prank(emergencyUser);
+        // Call function
+        vm.prank(adminUser);
         migrator.enable("");
-    }
 
-    // Given contract disabled + legacy migration admin (not admin)
-    //  [X] it reverts (legacy migration admin is not admin)
-
-    function test_givenContractDisabled_legacyMigrationAdminTriesToEnable_reverts()
-        public
-        givenContractDisabled
-    {
-        assertEq(migrator.isEnabled(), false, "Contract should be disabled");
-
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32("admin")
-        );
-        vm.expectRevert(err);
-
-        vm.prank(legacyMigrationAdmin);
-        migrator.enable("");
+        // Assert state
+        assertEq(migrator.isEnabled(), true, "Contract should be enabled");
     }
 }

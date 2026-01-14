@@ -3,67 +3,86 @@ pragma solidity >=0.8.15;
 
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
 contract LegacyMigratorSetMerkleRootTest is LegacyMigratorTest {
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
 
     // ========== SET MERKLE ROOT TESTS ========== //
-    // Given non-legacy migration admin
-    //  [X] it reverts when setting merkle root
 
-    function test_givenNonLegacyMigrationAdmin_setsMerkleRoot_reverts() public {
+    // given the contract is disabled
+    //  [X] it reverts
+
+    function test_givenDisabled_reverts() public givenContractDisabled {
         bytes32 newRoot = bytes32(uint256(1));
 
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32("legacy_migration_admin")
-        );
-        vm.expectRevert(err);
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
 
-        vm.prank(alice);
+        // Call function
+        vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot);
     }
 
-    // Given legacy migration admin
-    //  [X] it can set merkle root
-    //  [X] it resets hasMigrated for all users
+    // given caller does not have legacy_migration_admin or admin role
+    //  [X] it reverts
 
-    function test_givenLegacyMigrationAdmin_setsMerkleRoot_succeeds() public givenAliceMigrated {
-        assertTrue(migrator.hasMigrated(alice), "Alice should have migrated");
+    function test_givenNonAuthorizedCaller_reverts(address caller_) public {
+        vm.assume(caller_ != legacyMigrationAdmin && caller_ != adminUser);
+
+        bytes32 newRoot = bytes32(uint256(1));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(err);
+
+        // Call function
+        vm.prank(caller_);
+        migrator.setMerkleRoot(newRoot);
+    }
+
+    // given caller has legacy_migration_admin or admin role
+    //  when the merkle root is any bytes32 value
+    //   [X] it sets the merkle root
+
+    function test_fuzz(bytes32 newRoot_) public {
+        // Call function
+        vm.prank(legacyMigrationAdmin);
+        migrator.setMerkleRoot(newRoot_);
+
+        // Assert state
+        assertEq(migrator.merkleRoot(), newRoot_, "Merkle root should match input");
+    }
+
+    //  [X] it sets the merkle root
+    //  [X] it resets migratedAmounts for all users
+
+    function test_succeeds(uint8 callerIndex_) public givenAlicePartiallyMigrated(500e9) {
+        vm.assume(callerIndex_ < 2);
+
+        // Set the caller
+        address caller = callerIndex_ == 0 ? legacyMigrationAdmin : adminUser;
+
+        // Assert previous state
+        assertEq(
+            migrator.migratedAmounts(alice),
+            500e9,
+            "Alice should have migrated partial amount"
+        );
 
         bytes32 newRoot = bytes32(uint256(2));
 
+        // Expect event
         vm.expectEmit(false, false, false, true);
-        emit MerkleRootUpdated(newRoot, legacyMigrationAdmin);
+        emit MerkleRootUpdated(newRoot, caller);
 
-        vm.prank(legacyMigrationAdmin);
+        // Call function
+        vm.prank(caller);
         migrator.setMerkleRoot(newRoot);
 
+        // Assert new state
         assertEq(migrator.merkleRoot(), newRoot, "Merkle root should be updated");
-        assertFalse(migrator.hasMigrated(alice), "Alice should be reset after root change");
-    }
-
-    // ========== DISABLED STATE TESTS ========== //
-    // Given contract is disabled
-    //  [X] legacy migration admin can still set merkle root
-
-    function test_givenContractDisabled_setsMerkleRoot_succeeds() public givenContractDisabled {
-        bytes32 newRoot = bytes32(uint256(3));
-
-        vm.prank(legacyMigrationAdmin);
-        migrator.setMerkleRoot(newRoot);
-
-        assertEq(migrator.merkleRoot(), newRoot, "Merkle root should be updated when disabled");
-    }
-
-    // ========== FUZZ TESTS ========== //
-    // Given any bytes32 value
-    //  [X] legacy migration admin can set it as merkle root
-
-    function test_fuzz_setMerkleRoot_acceptsAnyBytes32(bytes32 newRoot) public {
-        vm.prank(legacyMigrationAdmin);
-        migrator.setMerkleRoot(newRoot);
-
-        assertEq(migrator.merkleRoot(), newRoot, "Merkle root should match input");
+        assertEq(migrator.migratedAmounts(alice), 0, "Alice should be reset after root change");
     }
 }
