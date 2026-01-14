@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {RewardDistributorUSDS} from "../../policies/rewards/RewardDistributorUSDS.sol";
-import {IRewardDistributor} from "policies/interfaces/rewards/IRewardDistributor.sol";
+import {RewardDistributorUSDS} from "src/policies/rewards/RewardDistributorUSDS.sol";
+import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {Kernel, toKeycode, Actions} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
