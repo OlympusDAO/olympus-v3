@@ -92,7 +92,7 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @return remaining_ The remaining OHM that can be minted
     function remainingMintApproval() external view returns (uint256 remaining_);
 
-    /// @notice The total amount of OHM v2 migrated so far
+    /// @notice The total amount of OHM v1 migrated so far
     ///
     /// @return totalMigrated_ The total migrated amount
     function totalMigrated() external view returns (uint256 totalMigrated_);

@@ -414,7 +414,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     }
 
     // given both alice and bob migrate
-    //  [X] their migratedAmountss are tracked independently
+    //  [X] their migratedAmounts are tracked independently
     //  [X] alice's migration doesn't affect bob's state
     //  [X] bob's migration doesn't affect alice's state
 
