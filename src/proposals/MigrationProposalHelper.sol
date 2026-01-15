@@ -100,7 +100,7 @@ contract MigrationProposalHelper is Owned {
     /// @notice Migrate OHMv1 to gOHM via migrator
     function _migrateOHMv1ToGOHM() internal {
         uint256 ohmv1Balance = IERC20(OHMV1).balanceOf(address(this));
-        IERC20(OHMV1).approve(MIGRATOR, ohmv1Balance);
+        ERC20(OHMV1).safeApprove(MIGRATOR, ohmv1Balance);
         IOlympusTokenMigrator(MIGRATOR).migrate(
             ohmv1Balance,
             IOlympusTokenMigrator.TYPE.UNSTAKED,
@@ -112,12 +112,12 @@ contract MigrationProposalHelper is Owned {
     function _unstakeAndBurn() internal {
         // Approve and unstake gOHM to OHMv2
         uint256 gohmAmount = IgOHM(GOHM).balanceOf(address(this));
-        IERC20(GOHM).approve(STAKING, gohmAmount);
+        ERC20(GOHM).safeApprove(STAKING, gohmAmount);
         IStaking(STAKING).unstake(address(this), gohmAmount, false, false);
 
         // Get OHMv2 balance and burn
         uint256 ohmv2Balance = IERC20(OHMV2).balanceOf(address(this));
-        IERC20(OHMV2).approve(BURNER, ohmv2Balance);
+        ERC20(OHMV2).safeApprove(BURNER, ohmv2Balance);
         Burner(BURNER).burnFrom(address(this), ohmv2Balance, MIGRATION_CATEGORY);
     }
 }
