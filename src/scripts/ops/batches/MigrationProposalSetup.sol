@@ -16,6 +16,8 @@ import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 contract MigrationProposalSetup is BatchScriptV2 {
     IERC20 public constant OHMV1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
 
+    // TODO validation checks need to be performed post-simulation
+
     /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
     ///         This must be executed first, then after timelock period, permissions are effective
