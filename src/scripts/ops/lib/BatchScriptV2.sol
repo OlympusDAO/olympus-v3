@@ -9,7 +9,7 @@ import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
-import {Safe} from "@safe-utils-0.0.13/Safe.sol";
+import {Safe} from "@safe-utils-0.0.17/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
