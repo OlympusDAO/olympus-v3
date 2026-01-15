@@ -11,24 +11,8 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IStaking} from "src/interfaces/IStaking.sol";
 import {Burner} from "src/policies/Burner.sol";
-
-interface OlympusTreasury {
-    function deposit(
-        uint256 _amount,
-        address _token,
-        uint256 _profit
-    ) external returns (uint256 send_);
-}
-
-interface OlympusTokenMigrator {
-    enum TYPE {
-        UNSTAKED,
-        STAKED,
-        WRAPPED
-    }
-
-    function migrate(uint256 _amount, TYPE _from, TYPE _to) external;
-}
+import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
+import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 
 /// @notice Single-use contract to execute OHM v1 migration to OHM v2 and burn
 contract MigrationHelper is Owned {
@@ -113,17 +97,17 @@ contract MigrationHelper is Owned {
         ERC20(TEMPOHM).safeApprove(TREASURY, tempOHMBalance);
 
         // Deposit tempOHM to treasury (this mints OHMv1 to this contract)
-        OlympusTreasury(TREASURY).deposit(tempOHMBalance, TEMPOHM, 0);
+        IOlympusTreasury(TREASURY).deposit(tempOHMBalance, TEMPOHM, 0);
     }
 
     /// @notice Migrate OHMv1 to gOHM via migrator
     function _migrateOHMv1ToGOHM() internal {
         uint256 ohmv1Balance = IERC20(OHMV1).balanceOf(address(this));
         IERC20(OHMV1).approve(MIGRATOR, ohmv1Balance);
-        OlympusTokenMigrator(MIGRATOR).migrate(
+        IOlympusTokenMigrator(MIGRATOR).migrate(
             ohmv1Balance,
-            OlympusTokenMigrator.TYPE.UNSTAKED,
-            OlympusTokenMigrator.TYPE.WRAPPED
+            IOlympusTokenMigrator.TYPE.UNSTAKED,
+            IOlympusTokenMigrator.TYPE.WRAPPED
         );
     }
 

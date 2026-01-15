@@ -64,7 +64,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "4. Revoke `burner_admin` role from MigrationHelper\n\n",
                 "## Note\n\n",
                 "Treasury permissions for tempOHM and MigrationHelper should be set up separately ",
-                "via the MigrationSetup script before this proposal is executed."
+                "via the MigrationProposalSetup script before this proposal is executed."
             );
     }
 
