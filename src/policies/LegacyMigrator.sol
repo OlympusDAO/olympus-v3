@@ -83,11 +83,15 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     // =========  CONSTRUCTOR ========= //
 
-    constructor(Kernel kernel_, IERC20 ohmV1_, IgOHM gOHM_) Policy(kernel_) {
+    constructor(Kernel kernel_, IERC20 ohmV1_, IgOHM gOHM_, bytes32 merkleRoot_) Policy(kernel_) {
         if (address(ohmV1_) == address(0)) revert ZeroAddress();
         if (address(gOHM_) == address(0)) revert ZeroAddress();
         _ohmV1 = ohmV1_;
         _gOHM = gOHM_;
+
+        // Set the merkle root
+        merkleRoot = merkleRoot_;
+        emit MerkleRootUpdated(merkleRoot_, msg.sender);
     }
 
     // =========  INTERFACE GETTERS ========= //
@@ -142,6 +146,43 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+    }
+
+    // =========  ENABLE/DISABLE OVERRIDES ========= //
+
+    /// @notice Override _enable to accept initial migration cap
+    /// @dev    The enableData should be ABI-encoded as (uint256 migrationCap)
+    ///
+    ///         This allows setting the initial migration cap when enabling the contract.
+    ///         The merkle root is set in the constructor and cannot be changed via enable().
+    ///
+    ///         On re-enable, the MINTR approval is adjusted to match the provided cap.
+    ///
+    /// @param enableData_ ABI-encoded (uint256 migrationCap)
+    function _enable(bytes calldata enableData_) internal override {
+        // Decode enableData: (uint256 migrationCap)
+        uint256 migrationCap = abi.decode(enableData_, (uint256));
+        _setMigrationCap(migrationCap);
+    }
+
+    // =========  INTERNAL FUNCTIONS ========= //
+
+    /// @notice Internal function to set the migration cap by adjusting MINTR approval
+    /// @dev    Gets current MINTR approval and increases or decreases to reach target cap
+    /// @param cap_ The target migration cap (in OHM v2 units)
+    function _setMigrationCap(uint256 cap_) internal {
+        // Get current MINTR approval
+        uint256 currentApproval = MINTR.mintApproval(address(this));
+
+        // Increase or decrease MINTR approval to reach the target cap
+        if (cap_ > currentApproval) {
+            MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
+        } else if (cap_ < currentApproval) {
+            MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
+        }
+
+        // Emit event
+        emit MigrationCapUpdated(cap_, currentApproval);
     }
 
     // =========  VERSION ========= //
@@ -276,18 +317,6 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @inheritdoc ILegacyMigrator
     function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
-        // Get current MINTR approval (actual current cap, not stored state)
-        uint256 currentApproval = MINTR.mintApproval(address(this));
-
-        // Adjust MINTR approval to reach the target cap
-        if (cap_ > currentApproval) {
-            // Increase approval
-            MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
-        } else if (cap_ < currentApproval) {
-            // Decrease approval
-            MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
-        }
-
-        emit MigrationCapUpdated(cap_, currentApproval);
+        _setMigrationCap(cap_);
     }
 }

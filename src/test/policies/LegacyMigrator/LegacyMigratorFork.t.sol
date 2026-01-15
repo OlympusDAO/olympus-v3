@@ -60,19 +60,21 @@ contract LegacyMigratorForkTest is Test {
 
     /// @notice Deploy and configure LegacyMigrator
     function _deployLegacyMigrator() internal {
+        // Set merkle root and migration cap
+        bytes32 dummyRoot = keccak256(abi.encode("dummy"));
+        uint256 initialCap = 1_000_000e9; // 1M OHM
+
         // Deploy LegacyMigrator with mainnet gOHM address
-        legacyMigrator = new LegacyMigrator(kernel, ohmV1, gOHM);
+        legacyMigrator = new LegacyMigrator(kernel, ohmV1, gOHM, dummyRoot);
         vm.label(address(legacyMigrator), "LegacyMigrator");
 
         // Activate LegacyMigrator in the kernel
         vm.prank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
 
-        // Enable the migrator with initial cap and merkle root (TIMELOCK has admin role on mainnet)
-        bytes32 dummyRoot = keccak256(abi.encode("dummy"));
-        uint256 initialCap = 1_000_000e9; // 1M OHM
+        // Enable the migrator with initial cap (TIMELOCK has admin role on mainnet)
         vm.prank(TIMELOCK);
-        legacyMigrator.enable(abi.encode(initialCap, dummyRoot));
+        legacyMigrator.enable(abi.encode(initialCap));
     }
 
     // ============ TESTS ============ //

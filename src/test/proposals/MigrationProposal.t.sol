@@ -162,7 +162,12 @@ contract MigrationProposalTest is ProposalTest {
         // ========== DEPLOY LEGACY MIGRATOR ==========
 
         // Deploy LegacyMigrator (pre-deployed, enabled via proposal)
-        legacyMigrator = new LegacyMigrator(kernel, IERC20(address(OHMv1)), gOHM);
+        legacyMigrator = new LegacyMigrator(
+            kernel,
+            IERC20(address(OHMv1)),
+            gOHM,
+            bytes32(0) // merkleRoot (set to zero, not used in proposal test)
+        );
 
         // Install LegacyMigrator into the kernel
         vm.prank(DAO_MS);

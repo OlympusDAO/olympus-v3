@@ -17,9 +17,9 @@ contract LegacyMigratorEnableTest is LegacyMigratorTest {
         bytes memory err = abi.encodeWithSignature("NotDisabled()");
         vm.expectRevert(err);
 
-        // Call function
+        // Call function with valid enableData (only cap, merkle root is in constructor)
         vm.prank(adminUser);
-        migrator.enable("");
+        migrator.enable(abi.encode(INITIAL_CAP));
     }
 
     // given the contract is disabled
@@ -42,9 +42,9 @@ contract LegacyMigratorEnableTest is LegacyMigratorTest {
         );
         vm.expectRevert(err);
 
-        // Call function
+        // Call function with valid enableData (only cap, merkle root is in constructor)
         vm.prank(caller_);
-        migrator.enable("");
+        migrator.enable(abi.encode(INITIAL_CAP));
     }
 
     //  given the caller has the admin role
@@ -54,11 +54,19 @@ contract LegacyMigratorEnableTest is LegacyMigratorTest {
         // Assert prior state
         assertEq(migrator.isEnabled(), false, "Contract should be disabled");
 
-        // Call function
+        // Call function with valid enableData (only cap, merkle root is in constructor)
         vm.prank(adminUser);
-        migrator.enable("");
+        migrator.enable(abi.encode(INITIAL_CAP));
 
         // Assert state
         assertEq(migrator.isEnabled(), true, "Contract should be enabled");
+        // Verify MINTR approval was set
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            INITIAL_CAP,
+            "MINTR approval should be set to INITIAL_CAP"
+        );
+        // Verify merkle root was set
+        assertEq(migrator.merkleRoot(), merkleRoot, "Merkle root should be set");
     }
 }

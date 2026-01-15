@@ -98,9 +98,17 @@ contract LegacyMigratorTest is StdInvariant, Test {
         vm.label(address(MINTR), "MINTR");
         vm.label(address(ROLES), "ROLES");
 
+        // Generate merkle tree BEFORE deploying LegacyMigrator (merkleRoot is in constructor)
+        _generateMerkleTree();
+
         // Deploy policies
         rolesAdmin = new RolesAdmin(kernel);
-        migrator = new LegacyMigrator(kernel, IERC20(address(ohmV1)), IgOHM(address(gOHM)));
+        migrator = new LegacyMigrator(
+            kernel,
+            IERC20(address(ohmV1)),
+            IgOHM(address(gOHM)),
+            merkleRoot
+        );
 
         // Label policies
         vm.label(address(rolesAdmin), "RolesAdmin");
@@ -124,20 +132,12 @@ contract LegacyMigratorTest is StdInvariant, Test {
         // Grant this test contract "admin" role temporarily for setup
         rolesAdmin.grantRole("admin", address(this));
 
-        // Enable the migrator
-        migrator.enable("");
-
-        // Generate merkle tree and set it in the migrator
-        _generateMerkleTree();
-        vm.prank(legacyMigrationAdmin);
-        migrator.setMerkleRoot(merkleRoot);
+        // Enable the migrator with initial cap (merkle root is in constructor)
+        migrator.enable(abi.encode(INITIAL_CAP));
 
         // Give alice and bob some OHM v1
         ohmV1.mint(alice, ALICE_ALLOWANCE);
         ohmV1.mint(bob, BOB_ALLOWANCE);
-
-        // Set initial migration cap
-        migrator.setMigrationCap(INITIAL_CAP);
 
         // Revoke "admin" role from this test contract after setup
         rolesAdmin.revokeRole("admin", address(this));
@@ -295,7 +295,8 @@ contract LegacyMigratorTest is StdInvariant, Test {
         vm.prank(emergencyUser);
         migrator.disable("");
         vm.prank(adminUser);
-        migrator.enable("");
+        // Re-enable with same cap (merkle root is in constructor, doesn't change)
+        migrator.enable(abi.encode(INITIAL_CAP));
         _;
     }
 
