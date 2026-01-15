@@ -40,35 +40,36 @@ contract MigrationProposal is GovernorBravoProposal {
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "OHM v1 Migration";
+        return "Defund OHM v1 TokenMigrator and Enable LegacyMigrator";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# OHM v1 Migration via LegacyMigrator\n\n",
-                "This proposal enables the LegacyMigrator policy and executes the gOHM burn.\n\n",
+                "# Defund OHM v1 TokenMigrator and Enable LegacyMigrator\n\n",
+                "This proposal defunds the old OHM v1 TokenMigrator and enables the LegacyMigrator policy to allow OHM v1 holders to migrate to OHM v2.\n\n",
                 "## Summary\n\n",
                 "This proposal has two main steps:\n\n",
                 "1. Enable LegacyMigrator policy for OHM v1 to OHM v2 migration\n",
-                "2. Execute MigrationProposalHelper.activate() to perform the gOHM burn\n\n",
+                "2. Execute MigrationProposalHelper.activate() to perform defunding of the old TokenMigrator\n\n",
                 "## Background\n\n",
-                "The LegacyMigrator policy uses a merkle tree to verify eligible OHM v1 holders ",
-                "and allows them to migrate their tokens to OHM v2. This policy is pre-deployed ",
-                "and only needs to be enabled via this proposal.\n\n",
-                "The MigrationProposalHelper contract performs the final gOHM burn after the migration period.\n\n",
+                "The OHM v1 TokenMigrator was used to migrate OHM v1 to gOHM."
+                "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.",
+                "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n",
+                "The proposed LegacyMigrator policy replaces the old TokenMigrator.",
+                "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.",
                 "## Steps\n\n",
                 "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2)\n",
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
                 "3. Call MigrationProposalHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
+                "   - Deposits a dummy asset (tempOHM) into the legacy treasury, in order to mint the maximum amount of OHM v1 that can be migrated\n",
+                "   - Migrates OHM v1 to gOHM\n",
                 "   - Burns gOHM to receive OHM v2\n",
-                '   - Burns OHM v2 with category "migration"\n',
                 "4. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Note\n\n",
-                "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately ",
-                "via the MigrationProposalSetup script before this proposal is executed."
+                "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately by the DAO MS before this proposal is executed."
             );
     }
 
