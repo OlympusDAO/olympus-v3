@@ -259,7 +259,7 @@ contract SomethingTest {
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. Attempt to address those warnings and errors.
+- Running `forge build` will output the `forge` tool's linting output. Attempt to address those notes, warnings and errors.
 - When completing a minor or major milestone and before any git commits, run the formatter: `pnpm run prettier`
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
