@@ -12,9 +12,11 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Interfaces
-import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IERC20 as ChainlinkIERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";
@@ -36,6 +38,13 @@ import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
 import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
+
+// Migration contracts
+import {OwnedERC20} from "src/external/OwnedERC20.sol";
+import {Burner} from "src/policies/Burner.sol";
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
@@ -383,7 +392,7 @@ contract DeployV3 is WithEnvironment {
         // Deploy LockReleaseTokenPool
         vm.broadcast();
         LockReleaseTokenPool lockReleaseTokenPool = new LockReleaseTokenPool(
-            IERC20(ohm),
+            ChainlinkIERC20(ohm),
             ohmDecimals,
             allowlist,
             rmnProxy,
@@ -851,5 +860,91 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(limitOrders), "olympus.periphery");
+    }
+
+    // ===== MIGRATION CONTRACTS ===== //
+
+    function deployTempOHM() public returns (address, string memory) {
+        // Input parameters
+        string memory name = _readDeploymentArgString("TempOHM", "name");
+        string memory symbol = _readDeploymentArgString("TempOHM", "symbol");
+        address initialOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        // Log parameters
+        console2.log("TempOHM parameters:");
+        console2.log("  name", name);
+        console2.log("  symbol", symbol);
+        console2.log("  initialOwner", initialOwner);
+
+        // Deploy
+        vm.broadcast();
+        OwnedERC20 tempOHM = new OwnedERC20(name, symbol, initialOwner);
+
+        return (address(tempOHM), "external.tokens");
+    }
+
+    function deployBurner() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log parameters
+        console2.log("Burner parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+
+        // Deploy
+        vm.broadcast();
+        Burner burner = new Burner(Kernel(kernel), ERC20(ohm));
+
+        return (address(burner), "olympus.policies");
+    }
+
+    function deployMigrationProposalHelper() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address owner = _getAddressNotZero("olympus.governance.Timelock");
+        address burner = _getAddressNotZero("olympus.policies.Burner");
+        address tempOHM = _getAddressNotZero("external.tokens.TempOHM");
+
+        // Log parameters
+        console2.log("MigrationProposalHelper parameters:");
+        console2.log("  owner", owner);
+        console2.log("  burner", burner);
+        console2.log("  tempOHM", tempOHM);
+
+        // Deploy
+        vm.broadcast();
+        MigrationProposalHelper helper = new MigrationProposalHelper(owner, burner, tempOHM);
+
+        return (address(helper), "olympus.periphery");
+    }
+
+    function deployLegacyMigrator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohmV1 = _getAddressNotZero("olympus.legacy.OHM");
+        address gohm = _getAddressNotZero("olympus.legacy.gOHM");
+        bytes32 merkleRoot = bytes32(0); // Set to zero, will be set to a valid root after the proposal is executed
+
+        // Log parameters
+        console2.log("LegacyMigrator parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohmV1", ohmV1);
+        console2.log("  gohm", gohm);
+        console2.log("  merkleRoot", vm.toString(merkleRoot));
+
+        // Deploy
+        vm.broadcast();
+        LegacyMigrator migrator = new LegacyMigrator(
+            Kernel(kernel),
+            IERC20(ohmV1),
+            IgOHM(gohm),
+            merkleRoot
+        );
+
+        return (address(migrator), "olympus.policies");
     }
 }
