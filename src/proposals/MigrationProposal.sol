@@ -60,7 +60,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "The proposed LegacyMigrator policy replaces the old TokenMigrator.\n",
                 "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n",
                 "## Steps\n\n",
-                "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2)\n",
+                "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
                 "3. Call MigrationProposalHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
@@ -68,6 +68,10 @@ contract MigrationProposal is GovernorBravoProposal {
                 "   - Migrates OHM v1 to gOHM\n",
                 "   - Burns gOHM to receive OHM v2\n",
                 "4. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
+                "## Additional Steps\n\n",
+                "1. DAO MS to update the merkle root for the LegacyMigrator policy\n",
+                "2. DAO MS to remove tempOHM as a reserve token from the legacy treasury\n",
+                "3. DAO MS to remove MigrationProposalHelper as a reserve depositor from the legacy treasury\n",
                 "## Note\n\n",
                 "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately by the DAO MS before this proposal is executed.\n"
             );
@@ -96,6 +100,7 @@ contract MigrationProposal is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
         // STEP 1: Enable LegacyMigrator policy
+        // TODO add initial migration cap
         _pushAction(
             address(_legacyMigrator),
             abi.encodeWithSelector(IEnabler.enable.selector, abi.encode("")),
