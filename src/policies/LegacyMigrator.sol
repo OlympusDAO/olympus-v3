@@ -306,14 +306,13 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @inheritdoc ILegacyMigrator
     /// @dev    When the merkle root is updated, the nonce is incremented.
-    ///         This invalidates all previous migrations without needing to iterate over users.
+    ///         This resets all previous migrations without needing to iterate over users.
+    ///         The new merkle tree should reflect the amount each user can migrate going
+    ///         forward (i.e., their current OHM v1 balance).
     function setMerkleRoot(
         bytes32 merkleRoot_
     ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
-        // Increment nonce to invalidate all previous migrations
-        // The new merkle tree will be generated based on OHM v1 balances
-        // captured at the time of the root update. Old migrations are automatically
-        // invalidated since they're stored under the old nonce key.
+        // Increment nonce to reset all previous migrations
         _currentMerkleNonce++;
 
         // Update merkle root

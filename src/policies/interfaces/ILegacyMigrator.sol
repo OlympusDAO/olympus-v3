@@ -109,7 +109,6 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     function migrate(uint256 amount_, bytes32[] calldata proof_, uint256 allocatedAmount_) external;
 
     /// @notice Update the merkle root for eligible claims
-    /// @dev    Resets all migrated amounts to zero
     ///
     /// @param merkleRoot_ The new merkle root
     function setMerkleRoot(bytes32 merkleRoot_) external;
