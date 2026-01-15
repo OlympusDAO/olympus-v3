@@ -63,7 +63,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         uint256 newCap = INITIAL_CAP + 1000e9;
 
         // Expect emit
-        vm.expectEmit(false, false, false, true);
+        vm.expectEmit(true, true, true, true);
         emit MigrationCapUpdated(newCap, INITIAL_CAP);
 
         // Call function
@@ -81,7 +81,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
     function test_givenAdmin_setsLowerCap_decreasesApproval() public {
         uint256 newCap = INITIAL_CAP - 1000e9;
 
-        vm.expectEmit(false, false, false, true);
+        vm.expectEmit(true, true, true, true);
         emit MigrationCapUpdated(newCap, INITIAL_CAP);
 
         vm.prank(adminUser);

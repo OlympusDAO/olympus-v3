@@ -74,7 +74,7 @@ contract LegacyMigratorSetMerkleRootTest is LegacyMigratorTest {
         bytes32 newRoot = bytes32(uint256(2));
 
         // Expect event
-        vm.expectEmit(false, false, false, true);
+        vm.expectEmit(true, true, true, true);
         emit MerkleRootUpdated(newRoot, caller);
 
         // Call function

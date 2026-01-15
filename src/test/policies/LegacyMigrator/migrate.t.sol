@@ -255,7 +255,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         uint256 expectedOHMv2 = _expectedOHMv2(ALICE_ALLOWANCE);
 
         // Expect event
-        vm.expectEmit(true, true, false, true);
+        vm.expectEmit(true, true, true, true);
         emit Migrated(alice, ALICE_ALLOWANCE, expectedOHMv2);
 
         // Call function
