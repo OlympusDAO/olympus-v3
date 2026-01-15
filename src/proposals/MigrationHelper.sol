@@ -51,23 +51,7 @@ contract MigrationHelper is Owned {
     /// @notice True if the activation has been performed
     bool public isActivated = false;
 
-    /// @notice Struct to store OHMv1 holder information
-    struct OHMv1Holder {
-        address holder;
-        uint256 recordedBalance;
-    }
-
-    /// @notice Array of OHMv1 holders eligible for airdrop
-    OHMv1Holder[] public ohmv1Holders;
-
     event Activated(address caller);
-    event AirdropSent(address indexed holder, uint256 ohmv1Amount, uint256 gohmAmount);
-    event AirdropSkipped(
-        address indexed holder,
-        uint256 recordedBalance,
-        uint256 currentBalance,
-        string reason
-    );
 
     error AlreadyActivated();
     error InvalidParams(string reason);
@@ -75,8 +59,7 @@ contract MigrationHelper is Owned {
     constructor(
         address owner_,
         address burner_,
-        address tempOHM_,
-        OHMv1Holder[] memory ohmv1Holders_
+        address tempOHM_
     ) Owned(owner_) {
         if (owner_ == address(0)) revert InvalidParams("owner");
         if (burner_ == address(0)) revert InvalidParams("burner");
@@ -84,23 +67,6 @@ contract MigrationHelper is Owned {
 
         BURNER = burner_;
         TEMPOHM = tempOHM_;
-
-        // Store OHMv1 holders
-        for (uint256 i = 0; i < ohmv1Holders_.length; i++) {
-            ohmv1Holders.push(ohmv1Holders_[i]);
-        }
-    }
-
-    /// @notice Set OHMv1 holders (can be called by owner to update holders)
-    /// @param holders_ Array of OHMv1 holders
-    function setOHMv1Holders(OHMv1Holder[] calldata holders_) external onlyOwner {
-        // Clear existing holders
-        delete ohmv1Holders;
-
-        // Add new holders
-        for (uint256 i = 0; i < holders_.length; i++) {
-            ohmv1Holders.push(holders_[i]);
-        }
     }
 
     /// @notice Executes the migration process
@@ -119,20 +85,17 @@ contract MigrationHelper is Owned {
         // Step 1: Add burner category "migration"
         Burner(BURNER).addCategory(MIGRATION_CATEGORY);
 
-        // Step 2-4: Deposit tempOHM to treasury
+        // Step 2: Deposit tempOHM to treasury
         {
             uint256 tempOHMBalance = ERC20(TEMPOHM).balanceOf(owner);
             if (tempOHMBalance == 0) revert InvalidParams("No tempOHM balance");
             _depositTempOHMToTreasury(tempOHMBalance);
         }
 
-        // Step 5-7: Migrate OHMv1 to gOHM
+        // Step 3: Migrate OHMv1 to gOHM
         _migrateOHMv1ToGOHM();
 
-        // Step 8: Airdrop gOHM to holders
-        _airdropToHolders();
-
-        // Step 9-13: Unstake and burn remaining gOHM
+        // Step 4: Unstake and burn remaining gOHM
         _unstakeAndBurn();
 
         // Mark as activated
@@ -175,28 +138,5 @@ contract MigrationHelper is Owned {
         uint256 ohmv2Balance = IERC20(OHMV2).balanceOf(address(this));
         IERC20(OHMV2).approve(BURNER, ohmv2Balance);
         Burner(BURNER).burnFrom(address(this), ohmv2Balance, MIGRATION_CATEGORY);
-    }
-
-    /// @notice Airdrop gOHM to OHMv1 holders
-    function _airdropToHolders() internal {
-        // Iterate through holders and airdrop
-        uint256 length = ohmv1Holders.length;
-        for (uint256 i = 0; i < length; ++i) {
-            address holderAddr = ohmv1Holders[i].holder;
-            uint256 recordedBal = ohmv1Holders[i].recordedBalance;
-
-            if (IERC20(OHMV1).balanceOf(holderAddr) >= recordedBal) {
-                uint256 gohmAmount = IgOHM(GOHM).balanceTo(recordedBal);
-                ERC20(GOHM).safeTransfer(holderAddr, gohmAmount);
-                emit AirdropSent(holderAddr, recordedBal, gohmAmount);
-            } else {
-                emit AirdropSkipped(
-                    holderAddr,
-                    recordedBal,
-                    IERC20(OHMV1).balanceOf(holderAddr),
-                    "Insufficient balance"
-                );
-            }
-        }
     }
 }

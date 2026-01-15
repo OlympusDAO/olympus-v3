@@ -98,11 +98,6 @@ contract MigrationProposalTest is ProposalTest {
     MigrationHelper public migrationHelper;
     LegacyMigrator public legacyMigrator;
 
-    address public constant HOLDER1 = address(0x1111111111111111111111111111111111111111);
-    address public constant HOLDER2 = address(0x2222222222222222222222222222222222222222);
-    uint256 public constant HOLDER1_BALANCE = 1000e9; // 1000 OHM (9 decimals)
-    uint256 public constant HOLDER2_BALANCE = 5000e9; // 5000 OHM (9 decimals)
-
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
@@ -133,23 +128,6 @@ contract MigrationProposalTest is ProposalTest {
         // Deploy MigrationHelper (deployed separately, not by the proposal)
         // This needs to be deployed before treasury setup so it can be granted permissions
         address timelock = TIMELOCK;
-
-        // Create test data for OHMv1 holders
-        // In production, these would be the actual holder addresses and their recorded balances
-        MigrationHelper.OHMv1Holder[] memory holders = new MigrationHelper.OHMv1Holder[](2);
-        holders[0] = MigrationHelper.OHMv1Holder({
-            holder: HOLDER1,
-            recordedBalance: HOLDER1_BALANCE
-        });
-        holders[1] = MigrationHelper.OHMv1Holder({
-            holder: HOLDER2,
-            recordedBalance: HOLDER2_BALANCE
-        });
-
-        // Mint OHMv1 to holders before proposal execution
-        // Use deal cheatcode to give them OHMv1 tokens
-        deal(address(OHMv1), HOLDER1, HOLDER1_BALANCE);
-        deal(address(OHMv1), HOLDER2, HOLDER2_BALANCE);
 
         // Deploy MigrationHelper
         migrationHelper = new MigrationHelper(
