@@ -242,7 +242,7 @@
     {
         "addr": "0x184f3FAd8618a6F458C16bae63F70C426fE784B3",
         "chainId": 1,
-        "name": "olympus-legacy-migrator"
+        "name": "olympus-ohm-v1-migrator"
     },
     {
         "addr": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
@@ -257,6 +257,11 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-periphery-migration-helper"
+        "name": "olympus-policy-legacy-migrator"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-periphery-migration-proposal-helper"
     }
 ]

@@ -25,7 +25,7 @@ contract MigrationProposalTest is ProposalTest {
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
     address public constant GOHM = 0x0ab87046fBb341D058F17CBC4c1133F25a20a52f;
 
-    IOlympusTreasury public treasury;
+    IOlympusTreasury public legacyTreasury;
     OwnedERC20 public tempOHM;
     IERC20 public OHMv1;
     IgOHM public gOHM;
@@ -34,72 +34,17 @@ contract MigrationProposalTest is ProposalTest {
     MigrationProposalHelper public migrationProposalHelper;
     LegacyMigrator public legacyMigrator;
 
+    bool public constant isTempOHMDeployed = false;
+    bool public constant isBurnerSetup = false;
+    bool public constant isMigrationProposalHelperDeployed = false;
+    bool public constant isLegacyMigratorSetup = false;
+    bool public constant isLegacyTreasurySetup = false;
+
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
 
-        // Existing contracts
-        OHMv1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
-        gOHM = IgOHM(GOHM);
-        treasury = IOlympusTreasury(0x31F8Cc382c9898b273eff4e0b7626a6987C846E8);
-
-        Kernel kernel = Kernel(0x2286d7f9639e8158FaD1169e76d1FbC38247f54b);
-
-        // Create tempOHM token
-        tempOHM = new OwnedERC20("TempOHM", "tempOHM", DAO_MS);
-        vm.label(address(tempOHM), "tempOHM");
-
-        // Deploy burner and install it into the kernel
-        // Note: In production, the burner would already be deployed and activated
-        OHMv2 = IERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
-        burner = new Burner(kernel, SolmateERC20(address(OHMv2)));
-
-        // Install burner into the kernel
-        vm.prank(DAO_MS);
-        kernel.executeAction(Actions.ActivatePolicy, address(burner));
-
-        // ========== DEPLOY MIGRATION HELPER ==========
-
-        // Deploy MigrationProposalHelper (deployed separately, not by the proposal)
-        // This needs to be deployed before treasury setup so it can be granted permissions
-        address timelock = TIMELOCK;
-
-        // Deploy MigrationProposalHelper
-        migrationProposalHelper = new MigrationProposalHelper(
-            timelock, // owner
-            address(burner),
-            address(tempOHM)
-        );
-
-        // ========== DEPLOY LEGACY MIGRATOR ==========
-
-        // Deploy LegacyMigrator (pre-deployed, enabled via proposal)
-        legacyMigrator = new LegacyMigrator(
-            kernel,
-            IERC20(address(OHMv1)),
-            gOHM,
-            bytes32(0) // merkleRoot (set to zero, not used in proposal test)
-        );
-
-        // Install LegacyMigrator into the kernel
-        vm.prank(DAO_MS);
-        kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
-
-        // ========== NOTE: TREASURY SETUP ==========
-        // Treasury permissions for tempOHM and MigrationProposalHelper should be set up
-        // separately via the MigrationProposalSetup script before this proposal is executed.
-        // This includes:
-        // - Setting tempOHM as a reserve token
-        // - Granting MigrationProposalHelper permission to withdraw tempOHM
-        // - Minting tempOHM to the Timelock for the gOHM burn
-        //
-        // For this test, we assume those steps have been completed via MigrationProposalSetup.
-        // In a real scenario, run:
-        //   forge script MigrationProposalSetup --sig "queue(...)" --broadcast
-        //   (wait for timelock)
-        //   forge script MigrationProposalSetup --sig "toggle(...)" --broadcast
-
-        // ========== PROPOSAL SIMULATION ==========
+        // ========== PROPOSAL SETUP ==========
 
         // Deploy proposal under test (no constructor parameters needed)
         MigrationProposal proposal = new MigrationProposal();
@@ -110,11 +55,141 @@ contract MigrationProposalTest is ProposalTest {
         // Create TestSuite
         _setupSuite(address(proposal));
 
-        // Update addresses with test-deployed contracts (needed for _build and _validate)
-        addresses.addAddress("olympus-policy-burner", address(burner));
-        addresses.addAddress("olympus-policy-legacy-migrator", address(legacyMigrator));
-        addresses.addAddress("olympus-policy-migration-helper", address(migrationProposalHelper));
-        addresses.addAddress("external.tokens.tempOHM", address(tempOHM));
+        // ========== Other scaffolding ==========
+
+        // Existing contracts
+        OHMv1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
+        OHMv2 = IERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
+        gOHM = IgOHM(GOHM);
+        legacyTreasury = IOlympusTreasury(0x31F8Cc382c9898b273eff4e0b7626a6987C846E8);
+        vm.label(address(legacyTreasury), "legacyTreasury");
+
+        Kernel kernel = Kernel(0x2286d7f9639e8158FaD1169e76d1FbC38247f54b);
+
+        // TempOHM setup
+        if (isTempOHMDeployed == true) {
+            address tempOHMAddress = addresses.getAddress("olympus-temp-ohm");
+            if (tempOHMAddress == address(0)) {
+                revert("tempOHM address is not set");
+            }
+            tempOHM = OwnedERC20(tempOHMAddress);
+            vm.label(address(tempOHM), "tempOHM");
+
+            console2.log("tempOHM already deployed");
+        }
+        else {
+            tempOHM = new OwnedERC20("TempOHM", "tempOHM", DAO_MS);
+            vm.label(address(tempOHM), "tempOHM");
+            addresses.addAddress("olympus-temp-ohm", address(tempOHM));
+
+            console2.log("tempOHM deployed");
+        }
+
+        // Burner setup
+        if (isBurnerSetup == true) {
+            address burnerAddress = addresses.getAddress("olympus-policy-burner");
+            if (burnerAddress == address(0)) {
+                revert("burner address is not set");
+            }
+            burner = Burner(burnerAddress);
+            vm.label(address(burner), "burner");
+
+            console2.log("burner policy already deployed");
+        }
+        else {
+            // Deploy burner
+            burner = new Burner(kernel, SolmateERC20(address(OHMv2)));
+            vm.label(address(burner), "burner");
+            addresses.addAddress("olympus-policy-burner", address(burner));
+
+            // Install burner into the kernel
+            vm.prank(DAO_MS);
+            kernel.executeAction(Actions.ActivatePolicy, address(burner));
+
+            console2.log("burner policy deployed and setup");
+        }
+
+        // MigrationProposalHelper setup
+        if (isMigrationProposalHelperDeployed == true) {
+            address migrationProposalHelperAddress = addresses.getAddress("olympus-periphery-migration-proposal-helper");
+            if (migrationProposalHelperAddress == address(0)) {
+                revert("migrationProposalHelper address is not set");
+            }
+            migrationProposalHelper = MigrationProposalHelper(migrationProposalHelperAddress);
+            vm.label(address(migrationProposalHelper), "migrationProposalHelper");
+
+            console2.log("migrationProposalHelper already deployed");
+        }
+        else {
+            // Deploy MigrationProposalHelper
+            migrationProposalHelper = new MigrationProposalHelper(
+                TIMELOCK, // owner
+                address(burner),
+                address(tempOHM)
+            );
+            vm.label(address(migrationProposalHelper), "migrationProposalHelper");
+            addresses.addAddress("olympus-periphery-migration-proposal-helper", address(migrationProposalHelper));
+
+            console2.log("migrationProposalHelper deployed and setup");
+        }
+
+        // LegacyMigrator setup
+        if (isLegacyMigratorSetup == true) {
+            address legacyMigratorAddress = addresses.getAddress("olympus-policy-legacy-migrator");
+            if (legacyMigratorAddress == address(0)) {
+                revert("legacyMigrator address is not set");
+            }
+            legacyMigrator = LegacyMigrator(legacyMigratorAddress);
+            vm.label(address(legacyMigrator), "legacyMigrator");
+
+            console2.log("legacyMigrator already deployed");
+        }
+        else {
+            // Deploy LegacyMigrator
+            legacyMigrator = new LegacyMigrator(
+                kernel,
+                IERC20(address(OHMv1)),
+                gOHM,
+                bytes32(0) // merkleRoot (set to zero, not used in proposal test)
+            );
+            vm.label(address(legacyMigrator), "legacyMigrator");
+            addresses.addAddress("olympus-policy-legacy-migrator", address(legacyMigrator));
+
+            // Install LegacyMigrator into the kernel
+            vm.prank(DAO_MS);
+            kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
+
+            console2.log("legacyMigrator deployed and setup");
+        }
+
+        // LegacyTreasury setup
+        if (isLegacyTreasurySetup == true) {
+            // Do nothing
+
+            console2.log("legacyTreasury already setup");
+        }
+        else {
+            // Queue tempOHM as a reserve token in the legacy treasury
+            vm.prank(DAO_MS);
+            legacyTreasury.queue(IOlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM));
+
+            // Queue MigrationProposalHelper as a reserve depositor in the legacy treasury
+            vm.prank(DAO_MS);
+            legacyTreasury.queue(IOlympusTreasury.MANAGING.RESERVEDEPOSITOR, address(migrationProposalHelper));
+
+            // Warp to the end of the timelock period
+            vm.warp(block.timestamp + BLOCKS_NEEDED_FOR_QUEUE);
+
+            // Toggle tempOHM as a reserve token in the legacy treasury
+            vm.prank(DAO_MS);
+            legacyTreasury.toggle(IOlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM), address(0));
+
+            // Toggle MigrationProposalHelper as a reserve depositor in the legacy treasury
+            vm.prank(DAO_MS);
+            legacyTreasury.toggle(IOlympusTreasury.MANAGING.RESERVEDEPOSITOR, address(migrationProposalHelper), address(0));
+
+            console2.log("legacyTreasury setup");
+        }
 
         // Set debug mode
         suite.setDebug(true);
