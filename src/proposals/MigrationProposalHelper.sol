@@ -4,8 +4,8 @@ pragma solidity >=0.8.20;
 
 // Libraries
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
