@@ -54,11 +54,11 @@ contract MigrationProposal is GovernorBravoProposal {
                 "1. Enable LegacyMigrator policy for OHM v1 to OHM v2 migration\n",
                 "2. Execute MigrationProposalHelper.activate() to perform defunding of the old TokenMigrator\n\n",
                 "## Background\n\n",
-                "The OHM v1 TokenMigrator was used to migrate OHM v1 to gOHM."
-                "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.",
+                "The OHM v1 TokenMigrator was used to migrate OHM v1 to gOHM.\n"
+                "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.\n",
                 "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n",
-                "The proposed LegacyMigrator policy replaces the old TokenMigrator.",
-                "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.",
+                "The proposed LegacyMigrator policy replaces the old TokenMigrator.\n",
+                "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n",
                 "## Steps\n\n",
                 "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2)\n",
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
@@ -69,7 +69,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "   - Burns gOHM to receive OHM v2\n",
                 "4. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Note\n\n",
-                "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately by the DAO MS before this proposal is executed."
+                "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately by the DAO MS before this proposal is executed.\n"
             );
     }
 
