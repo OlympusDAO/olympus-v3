@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // OCG Proposal Simulator
@@ -22,6 +23,9 @@ contract MigrationProposal is GovernorBravoProposal {
     LegacyMigrator internal _legacyMigrator;
     MigrationProposalHelper internal _migrationProposalHelper;
 
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 public constant BURNER_ADMIN_ROLE = bytes32("burner_admin");
+
     error InvalidLegacyMigrator();
     error InvalidMigrationProposalHelper();
 
@@ -31,12 +35,12 @@ contract MigrationProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 0;
+        return 13;
     }
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "Migration Proposal";
+        return "OHM v1 Migration";
     }
 
     // Provides a brief description of the proposal.
@@ -77,7 +81,9 @@ contract MigrationProposal is GovernorBravoProposal {
         if (legacyMigratorAddr == address(0)) revert InvalidLegacyMigrator();
         _legacyMigrator = LegacyMigrator(legacyMigratorAddr);
 
-        address migrationProposalHelperAddr = addresses.getAddress("olympus-policy-migration-helper");
+        address migrationProposalHelperAddr = addresses.getAddress(
+            "olympus-policy-migration-helper"
+        );
         if (migrationProposalHelperAddr == address(0)) revert InvalidMigrationProposalHelper();
         _migrationProposalHelper = MigrationProposalHelper(migrationProposalHelperAddr);
     }
@@ -101,7 +107,7 @@ contract MigrationProposal is GovernorBravoProposal {
             /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                bytes32("burner_admin"),
+                BURNER_ADMIN_ROLE,
                 address(_migrationProposalHelper)
             ),
             "Grant burner_admin role to MigrationProposalHelper"
@@ -120,7 +126,7 @@ contract MigrationProposal is GovernorBravoProposal {
             /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(
                 RolesAdmin.revokeRole.selector,
-                bytes32("burner_admin"),
+                BURNER_ADMIN_ROLE,
                 address(_migrationProposalHelper)
             ),
             "Revoke burner_admin role from MigrationProposalHelper"
@@ -153,7 +159,10 @@ contract MigrationProposal is GovernorBravoProposal {
         require(_legacyMigrator.isEnabled() == true, "LegacyMigrator should be enabled");
 
         // 2. Validate that MigrationProposalHelper is marked as activated
-        require(_migrationProposalHelper.isActivated() == true, "MigrationProposalHelper should be activated");
+        require(
+            _migrationProposalHelper.isActivated() == true,
+            "MigrationProposalHelper should be activated"
+        );
 
         // 3. Validate that "migration" category exists in Burner
         bytes32 migrationCategory = _migrationProposalHelper.MIGRATION_CATEGORY();
@@ -189,5 +198,16 @@ contract MigrationProposal is GovernorBravoProposal {
             IERC20(OHMv2).balanceOf(address(_migrationProposalHelper)) == 0,
             "There should be no OHMv2 left in the MigrationProposalHelper contract"
         );
+
+        // 7. Validate that there is no OHMv1 left in the Timelock or the MigrationProposalHelper contract
+        require(
+            IERC20(OHMv1).balanceOf(timelock) == 0,
+            "There should be no OHMv1 left in the Timelock"
+        );
+        require(
+            IERC20(OHMv1).balanceOf(address(_migrationProposalHelper)) == 0,
+            "There should be no OHMv1 left in the MigrationProposalHelper contract"
+        );
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // ============  INTERFACES ============ //
@@ -60,14 +61,14 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     // ROLES is already declared in RolesConsumer
 
     /// @notice The gOHM token contract used for OHM v2 amount calculation
-    IgOHM internal immutable _gOHM;
+    IgOHM internal immutable _GOHM;
 
     /// @notice The OHM v1 token contract (9 decimals)
-    IERC20 internal immutable _ohmV1;
+    IERC20 internal immutable _OHMV1;
 
     /// @notice The OHM v2 token contract from MINTR (9 decimals)
     /// @dev    Set in configureDependencies via MINTR.ohm()
-    IERC20 internal _ohmV2;
+    IERC20 internal _OHMV2;
 
     /// @inheritdoc ILegacyMigrator
     bytes32 public override merkleRoot;
@@ -86,8 +87,8 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     constructor(Kernel kernel_, IERC20 ohmV1_, IgOHM gOHM_, bytes32 merkleRoot_) Policy(kernel_) {
         if (address(ohmV1_) == address(0)) revert ZeroAddress();
         if (address(gOHM_) == address(0)) revert ZeroAddress();
-        _ohmV1 = ohmV1_;
-        _gOHM = gOHM_;
+        _OHMV1 = ohmV1_;
+        _GOHM = gOHM_;
 
         // Set the merkle root
         merkleRoot = merkleRoot_;
@@ -98,17 +99,17 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     /// @inheritdoc ILegacyMigrator
     function ohmV1() external view returns (IERC20 ohmV1_) {
-        return _ohmV1;
+        return _OHMV1;
     }
 
     /// @inheritdoc ILegacyMigrator
     function ohmV2() external view returns (IERC20 ohmV2_) {
-        return _ohmV2;
+        return _OHMV2;
     }
 
     /// @inheritdoc ILegacyMigrator
     function gOHM() external view returns (address gOHM_) {
-        return address(_gOHM);
+        return address(_GOHM);
     }
 
     /// @inheritdoc ILegacyMigrator
@@ -135,7 +136,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
 
         // Set ohmV2 from MINTR
-        _ohmV2 = IERC20(address(MINTR.ohm()));
+        _OHMV2 = IERC20(address(MINTR.ohm()));
     }
 
     /// @inheritdoc Policy
@@ -143,9 +144,15 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
 
         requests = new Permissions[](3);
-        requests[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        requests[2] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        requests[0] = Permissions({keycode: MINTR_KEYCODE, funcSelector: MINTR.mintOhm.selector});
+        requests[1] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        requests[2] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.decreaseMintApproval.selector
+        });
     }
 
     // =========  ENABLE/DISABLE OVERRIDES ========= //
@@ -230,6 +237,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         bytes32[] calldata proof_
     ) internal view returns (bool valid) {
         // Generate leaf for this account and allocated amount (double-hashed)
+        /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(account_, allocatedAmount_))));
 
         // Verify proof against current root
@@ -262,8 +270,8 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
         // Calculate OHM v2 amount using gOHM conversion to match the migration flow
         // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
-        uint256 gohmAmount = _gOHM.balanceTo(amount_);
-        uint256 ohmV2Amount = _gOHM.balanceFrom(gohmAmount);
+        uint256 gohmAmount = _GOHM.balanceTo(amount_);
+        uint256 ohmV2Amount = _GOHM.balanceFrom(gohmAmount);
 
         // Check that OHM v2 amount is not zero (may happen due to gOHM rounding)
         if (ohmV2Amount == 0) revert ZeroAmount();
@@ -283,7 +291,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         migratedAmounts[msg.sender] = userMigrated + amount_;
 
         // Burn OHM v1 from user (user must have approved this contract)
-        IERC20BurnableMintable(address(_ohmV1)).burnFrom(msg.sender, amount_);
+        IERC20BurnableMintable(address(_OHMV1)).burnFrom(msg.sender, amount_);
 
         // Mint OHM v2 to user (amount calculated via gOHM conversion)
         MINTR.mintOhm(msg.sender, ohmV2Amount);
@@ -320,3 +328,4 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         _setMigrationCap(cap_);
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

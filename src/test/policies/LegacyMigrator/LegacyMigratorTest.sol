@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
 import {Test} from "forge-std/Test.sol";
@@ -10,7 +11,7 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockGohm} from "src/test/mocks/MockGohm.sol";
 
-import {Kernel, Keycode, Permissions, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -163,7 +164,6 @@ contract LegacyMigratorTest is StdInvariant, Test {
 
         // Generate proofs for alice and bob
         bytes32 aliceLeaf = _leaf(alice, ALICE_ALLOWANCE);
-        bytes32 bobLeaf = _leaf(bob, BOB_ALLOWANCE);
 
         aliceProof = new bytes32[](1);
         bobProof = new bytes32[](1);
@@ -196,6 +196,7 @@ contract LegacyMigratorTest is StdInvariant, Test {
 
     /// @dev Generate a double-hashed leaf for merkle tree (OpenZeppelin standard)
     function _leaf(address account_, uint256 amount_) internal pure returns (bytes32) {
+        /// forge-lint: disable-next-line(asm-keccak256)
         return keccak256(bytes.concat(keccak256(abi.encode(account_, amount_))));
     }
 
@@ -323,3 +324,4 @@ contract LegacyMigratorTest is StdInvariant, Test {
         vm.stopPrank();
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)

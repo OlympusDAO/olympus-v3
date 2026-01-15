@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.20;
 
 // Libraries
@@ -40,11 +41,7 @@ contract MigrationProposalHelper is Owned {
     error AlreadyActivated();
     error InvalidParams(string reason);
 
-    constructor(
-        address owner_,
-        address burner_,
-        address tempOHM_
-    ) Owned(owner_) {
+    constructor(address owner_, address burner_, address tempOHM_) Owned(owner_) {
         if (owner_ == address(0)) revert InvalidParams("owner");
         if (burner_ == address(0)) revert InvalidParams("burner");
         if (tempOHM_ == address(0)) revert InvalidParams("tempOHM");
@@ -124,3 +121,4 @@ contract MigrationProposalHelper is Owned {
         Burner(BURNER).burnFrom(address(this), ohmv2Balance, MIGRATION_CATEGORY);
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

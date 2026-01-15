@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -131,3 +132,4 @@ interface ILegacyMigrator is IEnabler, IVersioned {
         bytes32[] calldata proof_
     ) external view returns (bool valid_);
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

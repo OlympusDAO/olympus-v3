@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {Test} from "forge-std/Test.sol";
@@ -61,6 +62,7 @@ contract LegacyMigratorForkTest is Test {
     /// @notice Deploy and configure LegacyMigrator
     function _deployLegacyMigrator() internal {
         // Set merkle root and migration cap
+        /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 dummyRoot = keccak256(abi.encode("dummy"));
         uint256 initialCap = 1_000_000e9; // 1M OHM
 
@@ -99,6 +101,7 @@ contract LegacyMigratorForkTest is Test {
         uint256 ohmV2Before = ohmV2.balanceOf(user);
 
         // Create a merkle proof that allows the user to migrate
+        /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(user, amount))));
         bytes32[] memory proof = new bytes32[](0); // No siblings needed for single leaf tree
 
@@ -127,3 +130,4 @@ contract LegacyMigratorForkTest is Test {
         console2.log("Match:", actualOHMv2 == expectedOHMv2);
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

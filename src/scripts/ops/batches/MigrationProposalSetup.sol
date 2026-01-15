@@ -14,7 +14,7 @@ import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 /// @notice Setup script for migration treasury permissions
 /// @dev    Provides queue() and toggle() functions for managing tempOHM and MigrationProposalHelper permissions
 contract MigrationProposalSetup is BatchScriptV2 {
-    IERC20 public constant OHMv1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
+    IERC20 public constant OHMV1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
 
     /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
@@ -28,7 +28,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
-        address migrationProposalHelper = _envAddressNotZero("olympus.periphery.MigrationProposalHelper");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
         address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
 
         console2.log("=== Setting up Legacy Treasury ===");
@@ -61,11 +63,15 @@ contract MigrationProposalSetup is BatchScriptV2 {
 
         // Confirm that MigrationProposalHelper is not a reserve depositor in the legacy treasury
         if (IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
-            revert("MigrationProposalHelper should not be a reserve depositor in the legacy treasury");
+            revert(
+                "MigrationProposalHelper should not be a reserve depositor in the legacy treasury"
+            );
         }
 
         // Add MigrationProposalHelper as a reserve depositor to the legacy treasury
-        console2.log("Adding MigrationProposalHelper as a reserve depositor to the legacy treasury");
+        console2.log(
+            "Adding MigrationProposalHelper as a reserve depositor to the legacy treasury"
+        );
         addToBatch(
             legacyTreasury,
             abi.encodeWithSelector(
@@ -76,7 +82,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
         );
 
         // Print the queue result
-        uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(migrationProposalHelper);
+        uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(
+            migrationProposalHelper
+        );
         if (reserveDepositorTimelock == 0) {
             revert("reserveDepositor queue timestamp should not be 0");
         }
@@ -98,7 +106,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
-        address migrationProposalHelper = _envAddressNotZero("olympus.periphery.MigrationProposalHelper");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
         address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
 
         console2.log("=== Toggling Legacy Treasury Permissions ===");
@@ -124,7 +134,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
         }
 
         // Toggle MigrationProposalHelper as a reserve depositor in the legacy treasury
-        console2.log("Toggling MigrationProposalHelper as a reserve depositor in the legacy treasury");
+        console2.log(
+            "Toggling MigrationProposalHelper as a reserve depositor in the legacy treasury"
+        );
         addToBatch(
             legacyTreasury,
             abi.encodeWithSelector(
@@ -163,20 +175,23 @@ contract MigrationProposalSetup is BatchScriptV2 {
         console2.log("Timelock:", timelock);
 
         // Excess reserves is 65659757174924
-        console2.log("Treasury excess reserves (18 dp):", IOlympusTreasury(legacyTreasury).excessReserves());
+        console2.log(
+            "Treasury excess reserves (18 dp):",
+            IOlympusTreasury(legacyTreasury).excessReserves()
+        );
 
         // OHM valuation of tempOHM is 1:1 in OHM decimals
         if (IOlympusTreasury(legacyTreasury).valueOf(address(tempOHM), 1e18) != 1e9) {
             revert("OHM valuation of tempOHM should be 1:1 in OHM decimals");
         }
 
-        // OHMv1 old supply is 553483798713734 (9 dp)
-        // OHMv1 total supply is 278651810168261 (9 dp)
+        // OHMV1 old supply is 553483798713734 (9 dp)
+        // OHMV1 total supply is 278651810168261 (9 dp)
         // The difference is what can be minted and migrated
         // Difference is 274831988545473 (274831.988545473 OHM)
-        console2.log("OHMv1 oldSupply (9 dp):", IOlympusTokenMigrator(migrator).oldSupply());
-        console2.log("OHMv1 total supply (9 dp):", OHMv1.totalSupply());
-        uint256 maxMintableOHM = IOlympusTokenMigrator(migrator).oldSupply() - OHMv1.totalSupply();
+        console2.log("OHMV1 oldSupply (9 dp):", IOlympusTokenMigrator(migrator).oldSupply());
+        console2.log("OHMV1 total supply (9 dp):", OHMV1.totalSupply());
+        uint256 maxMintableOHM = IOlympusTokenMigrator(migrator).oldSupply() - OHMV1.totalSupply();
         console2.log("maxMintableOHM (9 dp):", maxMintableOHM);
 
         // 1e9 OHM = 21403507467877949 gOHM (18 dp)

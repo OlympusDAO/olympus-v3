@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity ^0.8.0;
 
 import {ProposalTest} from "./ProposalTest.sol";
@@ -34,11 +35,11 @@ contract MigrationProposalTest is ProposalTest {
     MigrationProposalHelper public migrationProposalHelper;
     LegacyMigrator public legacyMigrator;
 
-    bool public constant isTempOHMDeployed = false;
-    bool public constant isBurnerSetup = false;
-    bool public constant isMigrationProposalHelperDeployed = false;
-    bool public constant isLegacyMigratorSetup = false;
-    bool public constant isLegacyTreasurySetup = false;
+    bool public constant IS_TEMP_OHM_DEPLOYED = false;
+    bool public constant IS_BURNER_SETUP = false;
+    bool public constant IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED = false;
+    bool public constant IS_LEGACY_MIGRATOR_SETUP = false;
+    bool public constant IS_LEGACY_TREASURY_SETUP = false;
 
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
@@ -67,7 +68,7 @@ contract MigrationProposalTest is ProposalTest {
         Kernel kernel = Kernel(0x2286d7f9639e8158FaD1169e76d1FbC38247f54b);
 
         // TempOHM setup
-        if (isTempOHMDeployed == true) {
+        if (IS_TEMP_OHM_DEPLOYED == true) {
             address tempOHMAddress = addresses.getAddress("olympus-temp-ohm");
             if (tempOHMAddress == address(0)) {
                 revert("tempOHM address is not set");
@@ -76,8 +77,7 @@ contract MigrationProposalTest is ProposalTest {
             vm.label(address(tempOHM), "tempOHM");
 
             console2.log("tempOHM already deployed");
-        }
-        else {
+        } else {
             tempOHM = new OwnedERC20("TempOHM", "tempOHM", DAO_MS);
             vm.label(address(tempOHM), "tempOHM");
             addresses.addAddress("olympus-temp-ohm", address(tempOHM));
@@ -86,7 +86,7 @@ contract MigrationProposalTest is ProposalTest {
         }
 
         // Burner setup
-        if (isBurnerSetup == true) {
+        if (IS_BURNER_SETUP == true) {
             address burnerAddress = addresses.getAddress("olympus-policy-burner");
             if (burnerAddress == address(0)) {
                 revert("burner address is not set");
@@ -95,8 +95,7 @@ contract MigrationProposalTest is ProposalTest {
             vm.label(address(burner), "burner");
 
             console2.log("burner policy already deployed");
-        }
-        else {
+        } else {
             // Deploy burner
             burner = new Burner(kernel, SolmateERC20(address(OHMv2)));
             vm.label(address(burner), "burner");
@@ -110,8 +109,10 @@ contract MigrationProposalTest is ProposalTest {
         }
 
         // MigrationProposalHelper setup
-        if (isMigrationProposalHelperDeployed == true) {
-            address migrationProposalHelperAddress = addresses.getAddress("olympus-periphery-migration-proposal-helper");
+        if (IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED == true) {
+            address migrationProposalHelperAddress = addresses.getAddress(
+                "olympus-periphery-migration-proposal-helper"
+            );
             if (migrationProposalHelperAddress == address(0)) {
                 revert("migrationProposalHelper address is not set");
             }
@@ -119,8 +120,7 @@ contract MigrationProposalTest is ProposalTest {
             vm.label(address(migrationProposalHelper), "migrationProposalHelper");
 
             console2.log("migrationProposalHelper already deployed");
-        }
-        else {
+        } else {
             // Deploy MigrationProposalHelper
             migrationProposalHelper = new MigrationProposalHelper(
                 TIMELOCK, // owner
@@ -128,13 +128,16 @@ contract MigrationProposalTest is ProposalTest {
                 address(tempOHM)
             );
             vm.label(address(migrationProposalHelper), "migrationProposalHelper");
-            addresses.addAddress("olympus-periphery-migration-proposal-helper", address(migrationProposalHelper));
+            addresses.addAddress(
+                "olympus-periphery-migration-proposal-helper",
+                address(migrationProposalHelper)
+            );
 
             console2.log("migrationProposalHelper deployed and setup");
         }
 
         // LegacyMigrator setup
-        if (isLegacyMigratorSetup == true) {
+        if (IS_LEGACY_MIGRATOR_SETUP == true) {
             address legacyMigratorAddress = addresses.getAddress("olympus-policy-legacy-migrator");
             if (legacyMigratorAddress == address(0)) {
                 revert("legacyMigrator address is not set");
@@ -143,8 +146,7 @@ contract MigrationProposalTest is ProposalTest {
             vm.label(address(legacyMigrator), "legacyMigrator");
 
             console2.log("legacyMigrator already deployed");
-        }
-        else {
+        } else {
             // Deploy LegacyMigrator
             legacyMigrator = new LegacyMigrator(
                 kernel,
@@ -163,30 +165,40 @@ contract MigrationProposalTest is ProposalTest {
         }
 
         // LegacyTreasury setup
-        if (isLegacyTreasurySetup == true) {
+        if (IS_LEGACY_TREASURY_SETUP == true) {
             // Do nothing
 
             console2.log("legacyTreasury already setup");
-        }
-        else {
+        } else {
             // Queue tempOHM as a reserve token in the legacy treasury
             vm.prank(DAO_MS);
             legacyTreasury.queue(IOlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM));
 
             // Queue MigrationProposalHelper as a reserve depositor in the legacy treasury
             vm.prank(DAO_MS);
-            legacyTreasury.queue(IOlympusTreasury.MANAGING.RESERVEDEPOSITOR, address(migrationProposalHelper));
+            legacyTreasury.queue(
+                IOlympusTreasury.MANAGING.RESERVEDEPOSITOR,
+                address(migrationProposalHelper)
+            );
 
             // Warp to the end of the timelock period
             vm.warp(block.timestamp + BLOCKS_NEEDED_FOR_QUEUE);
 
             // Toggle tempOHM as a reserve token in the legacy treasury
             vm.prank(DAO_MS);
-            legacyTreasury.toggle(IOlympusTreasury.MANAGING.RESERVETOKEN, address(tempOHM), address(0));
+            legacyTreasury.toggle(
+                IOlympusTreasury.MANAGING.RESERVETOKEN,
+                address(tempOHM),
+                address(0)
+            );
 
             // Toggle MigrationProposalHelper as a reserve depositor in the legacy treasury
             vm.prank(DAO_MS);
-            legacyTreasury.toggle(IOlympusTreasury.MANAGING.RESERVEDEPOSITOR, address(migrationProposalHelper), address(0));
+            legacyTreasury.toggle(
+                IOlympusTreasury.MANAGING.RESERVEDEPOSITOR,
+                address(migrationProposalHelper),
+                address(0)
+            );
 
             console2.log("legacyTreasury setup");
         }
@@ -205,7 +217,10 @@ contract MigrationProposalTest is ProposalTest {
     /// @notice Helper function to verify MigrationProposalHelper activation
     function _verifyMigrationProposalHelperActivation() internal view {
         // Verify that MigrationProposalHelper is marked as activated
-        assertTrue(migrationProposalHelper.isActivated(), "MigrationProposalHelper should be activated");
+        assertTrue(
+            migrationProposalHelper.isActivated(),
+            "MigrationProposalHelper should be activated"
+        );
 
         // Verify that the "migration" category was added to the burner
         bytes32 migrationCategory = migrationProposalHelper.MIGRATION_CATEGORY();
@@ -220,3 +235,4 @@ contract MigrationProposalTest is ProposalTest {
         console2.log("Migration category approved:", burner.categoryApproved(migrationCategory));
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

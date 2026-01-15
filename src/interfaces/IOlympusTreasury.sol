@@ -35,5 +35,9 @@ interface IOlympusTreasury {
 
     function reserveDepositorQueue(address) external view returns (uint256);
 
-    function deposit(uint256 _amount, address _token, uint256 _profit) external returns (uint256 send_);
+    function deposit(
+        uint256 _amount,
+        address _token,
+        uint256 _profit
+    ) external returns (uint256 send_);
 }

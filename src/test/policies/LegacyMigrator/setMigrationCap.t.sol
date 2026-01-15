@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
@@ -189,3 +190,4 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         assertEq(MINTR.mintApproval(address(migrator)), higherCap, "MINTR should match");
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

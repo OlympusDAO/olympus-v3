@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
@@ -12,9 +13,18 @@ contract LegacyMigratorRequestPermissionsTest is LegacyMigratorTest {
     function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        expectedPerms[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        expectedPerms[0] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.mintOhm.selector
+        });
+        expectedPerms[1] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        expectedPerms[2] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.decreaseMintApproval.selector
+        });
 
         Permissions[] memory perms = migrator.requestPermissions();
         assertEq(perms.length, expectedPerms.length, "Permissions length mismatch");
@@ -32,3 +42,4 @@ contract LegacyMigratorRequestPermissionsTest is LegacyMigratorTest {
         }
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
