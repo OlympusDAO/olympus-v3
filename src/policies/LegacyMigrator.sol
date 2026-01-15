@@ -210,9 +210,6 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         bytes32[] calldata proof_,
         uint256 allocatedAmount_
     ) external onlyEnabled {
-        // Check amount is not zero
-        if (amount_ == 0) revert ZeroAmount();
-
         // Verify merkle proof for this claim with the allocated amount
         if (!_verifyClaim(msg.sender, allocatedAmount_, proof_)) revert InvalidProof();
 
@@ -226,6 +223,9 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
         uint256 gohmAmount = _gOHM.balanceTo(amount_);
         uint256 ohmV2Amount = _gOHM.balanceFrom(gohmAmount);
+
+        // Check that OHM v2 amount is not zero (may happen due to gOHM rounding)
+        if (ohmV2Amount == 0) revert ZeroAmount();
 
         // Check MINTR approval (represents remaining amount that can be minted)
         uint256 mintrApproval = MINTR.mintApproval(address(this));

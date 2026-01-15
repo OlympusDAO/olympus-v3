@@ -48,7 +48,9 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @param remaining The remaining MINTR approval for the migrator contract
     error CapExceeded(uint256 amount, uint256 remaining);
 
-    /// @notice Thrown when the amount is zero
+    /// @notice Thrown when the OHM v2 amount after gOHM conversion is zero
+    /// @dev    This can happen when the input OHM v1 amount is very small and
+    ///         gOHM conversion rounds down to zero
     error ZeroAmount();
 
     /// @notice Thrown when an address parameter is zero
