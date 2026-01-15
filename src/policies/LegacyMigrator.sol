@@ -6,7 +6,7 @@ pragma solidity >=0.8.15;
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
-import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
+import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 

@@ -4,7 +4,7 @@ pragma solidity >=0.8.15;
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
+import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 contract LegacyMigratorSupportsInterfaceTest is LegacyMigratorTest {

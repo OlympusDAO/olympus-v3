@@ -3,7 +3,7 @@ pragma solidity >=0.8.15;
 
 import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
+import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
 
 contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
     event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
