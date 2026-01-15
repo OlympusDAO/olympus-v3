@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import {ProposalTest} from "./ProposalTest.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin-5.3.0/access/Ownable.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -85,11 +86,13 @@ contract MigrationProposalTest is ProposalTest {
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
+    address public constant GOHM = 0x0ab87046fBb341D058F17CBC4c1133F25a20a52f;
 
     OlympusTreasury public treasury;
     OlympusTokenMigrator public migrator;
     OwnedERC20 public tempOHM;
     IERC20 public OHMv1;
+    IgOHM public gOHM;
     IERC20 public OHMv2;
     Burner public burner;
     MigrationHelper public migrationHelper;
@@ -106,6 +109,7 @@ contract MigrationProposalTest is ProposalTest {
 
         // Existing contracts
         OHMv1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
+        gOHM = IgOHM(GOHM);
         treasury = OlympusTreasury(0x31F8Cc382c9898b273eff4e0b7626a6987C846E8);
         migrator = OlympusTokenMigrator(0x184f3FAd8618a6F458C16bae63F70C426fE784B3);
 
@@ -158,7 +162,7 @@ contract MigrationProposalTest is ProposalTest {
         // ========== DEPLOY LEGACY MIGRATOR ==========
 
         // Deploy LegacyMigrator (pre-deployed, enabled via proposal)
-        legacyMigrator = new LegacyMigrator(kernel, IERC20(address(OHMv1)));
+        legacyMigrator = new LegacyMigrator(kernel, IERC20(address(OHMv1)), gOHM);
 
         // Install LegacyMigrator into the kernel
         vm.prank(DAO_MS);

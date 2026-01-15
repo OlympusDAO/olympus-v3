@@ -8,6 +8,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
 import {ILegacyMigrator} from "src/interfaces/ILegacyMigrator.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 // ============  LIBRARIES ============ //
 
@@ -31,8 +32,13 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         1. User has OHM v1 balance
 ///         2. User proves eligibility via merkle proof with their allocated amount
 ///         3. User can migrate any amount up to their allocation in multiple transactions
-///         4. Contract burns OHM v1 and mints OHM v2 to user (1:1, same decimals)
-///         5. User's migrated amount is tracked until they reach their allocation
+///         4. Contract calculates OHM v2 amount using gOHM conversion (to match production flow):
+///            - Convert OHM v1 to gOHM via gOHM.balanceTo(ohmV1Amount)
+///            - Convert gOHM back to OHM v2 via gOHM.balanceFrom(gOHMAmount)
+///            - This matches the production flow: OHM v1 -> gOHM -> OHM v2
+///            - When gOHM index is not at base level, the result may be slightly less due to rounding
+///         5. Contract burns OHM v1 and mints calculated OHM v2 amount to user
+///         6. User's migrated amount is tracked by OHM v1 amount (original allocation)
 ///
 ///         Admin functions:
 ///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
@@ -52,6 +58,9 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     MINTRv1 internal MINTR;
 
     // ROLES is already declared in RolesConsumer
+
+    /// @notice The gOHM token contract used for OHM v2 amount calculation
+    IgOHM internal immutable _gOHM;
 
     /// @notice The OHM v1 token contract (9 decimals)
     IERC20 internal immutable _ohmV1;
@@ -74,9 +83,11 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     // =========  CONSTRUCTOR ========= //
 
-    constructor(Kernel kernel_, IERC20 ohmV1_) Policy(kernel_) {
+    constructor(Kernel kernel_, IERC20 ohmV1_, IgOHM gOHM_) Policy(kernel_) {
         if (address(ohmV1_) == address(0)) revert ZeroAddress();
+        if (address(gOHM_) == address(0)) revert ZeroAddress();
         _ohmV1 = ohmV1_;
+        _gOHM = gOHM_;
     }
 
     // =========  INTERFACE GETTERS ========= //
@@ -89,6 +100,11 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @inheritdoc ILegacyMigrator
     function ohmV2() external view returns (IERC20 ohmV2_) {
         return _ohmV2;
+    }
+
+    /// @inheritdoc ILegacyMigrator
+    function gOHM() external view returns (address gOHM_) {
+        return address(_gOHM);
     }
 
     /// @inheritdoc ILegacyMigrator
@@ -206,10 +222,15 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
             revert AmountExceedsAllowance(amount_, allocatedAmount_, userMigrated);
         }
 
+        // Calculate OHM v2 amount using gOHM conversion to match the migration flow
+        // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
+        uint256 gohmAmount = _gOHM.balanceTo(amount_);
+        uint256 ohmV2Amount = _gOHM.balanceFrom(gohmAmount);
+
         // Check MINTR approval (represents remaining amount that can be minted)
         uint256 mintrApproval = MINTR.mintApproval(address(this));
-        if (amount_ > mintrApproval) {
-            revert CapExceeded(amount_, mintrApproval);
+        if (ohmV2Amount > mintrApproval) {
+            revert CapExceeded(ohmV2Amount, mintrApproval);
         }
 
         // Track user for first migration (for resetting when merkle root changes)
@@ -217,19 +238,19 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
             migratedUsers.push(msg.sender);
         }
 
-        // Update user's migrated amount
+        // Update user's migrated amount (tracked by OHM v1 amount)
         migratedAmounts[msg.sender] = userMigrated + amount_;
 
         // Burn OHM v1 from user (user must have approved this contract)
         IERC20BurnableMintable(address(_ohmV1)).burnFrom(msg.sender, amount_);
 
-        // Mint OHM v2 to user (1:1 conversion, same decimals)
-        MINTR.mintOhm(msg.sender, amount_);
+        // Mint OHM v2 to user (amount calculated via gOHM conversion)
+        MINTR.mintOhm(msg.sender, ohmV2Amount);
 
-        // Update tracking
+        // Update tracking (use OHM v1 amount for total migrated)
         totalMigrated += amount_;
 
-        emit Migrated(msg.sender, amount_, amount_);
+        emit Migrated(msg.sender, amount_, ohmV2Amount);
     }
 
     /// @inheritdoc ILegacyMigrator

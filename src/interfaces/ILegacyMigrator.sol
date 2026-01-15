@@ -66,6 +66,12 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     /// @return ohmV2_ The OHM v2 token
     function ohmV2() external view returns (IERC20 ohmV2_);
 
+    /// @notice The gOHM token contract used for conversion calculations
+    /// @dev    Used to calculate OHM v2 amount via balanceTo/balanceFrom to match production flow
+    ///
+    /// @return gOHM_ The gOHM token
+    function gOHM() external view returns (address gOHM_);
+
     /// @notice The current merkle root for verifying eligible claims
     ///
     /// @return merkleRoot_ The current merkle root

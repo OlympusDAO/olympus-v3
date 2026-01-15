@@ -6,7 +6,9 @@ import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockGohm} from "src/test/mocks/MockGohm.sol";
 
 import {Kernel, Keycode, Permissions, Actions, toKeycode} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
@@ -32,6 +34,7 @@ contract LegacyMigratorTest is StdInvariant, Test {
     // Tokens
     MockOhm internal ohmV1;
     MockOhm internal ohmV2;
+    MockGohm internal gOHM;
 
     // Kernel and modules
     Kernel internal kernel;
@@ -75,9 +78,13 @@ contract LegacyMigratorTest is StdInvariant, Test {
         ohmV1 = new MockOhm("Olympus V1", "OHM", 9);
         ohmV2 = new MockOhm("Olympus V2", "OHM", 9);
 
+        // Deploy mock gOHM token (18 decimals, with index that causes rounding)
+        gOHM = new MockGohm("Governance OHM", "gOHM", 18);
+
         // Label tokens
         vm.label(address(ohmV1), "OHM_V1");
         vm.label(address(ohmV2), "OHM_V2");
+        vm.label(address(gOHM), "GOHM");
 
         // Deploy kernel
         kernel = new Kernel();
@@ -93,7 +100,7 @@ contract LegacyMigratorTest is StdInvariant, Test {
 
         // Deploy policies
         rolesAdmin = new RolesAdmin(kernel);
-        migrator = new LegacyMigrator(kernel, IERC20(address(ohmV1)));
+        migrator = new LegacyMigrator(kernel, IERC20(address(ohmV1)), IgOHM(address(gOHM)));
 
         // Label policies
         vm.label(address(rolesAdmin), "RolesAdmin");

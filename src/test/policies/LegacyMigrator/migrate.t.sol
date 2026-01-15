@@ -9,6 +9,16 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     event Migrated(address indexed user, uint256 ohmV1Amount, uint256 ohmV2Amount);
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
 
+    // ========== HELPERS ========== //
+
+    /// @notice Calculate expected OHM v2 amount from OHM v1 amount using gOHM conversion
+    /// @param ohmV1Amount_ The OHM v1 amount (9 decimals)
+    /// @return ohmV2Amount_ The expected OHM v2 amount (9 decimals)
+    function _expectedOHMv2(uint256 ohmV1Amount_) internal view returns (uint256 ohmV2Amount_) {
+        uint256 gohmAmount = gOHM.balanceTo(ohmV1Amount_);
+        ohmV2Amount_ = gOHM.balanceFrom(gohmAmount);
+    }
+
     // ========== MIGRATE TESTS ========== //
 
     // given contract is disabled
@@ -142,6 +152,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         uint256 thirdAmount = 500e9;
         uint256 total = firstAmount + secondAmount + thirdAmount; // = 1000e9 = ALICE_ALLOWANCE
 
+        // Calculate expected OHM v2 for each amount
+        uint256 firstExpected = _expectedOHMv2(firstAmount);
+        uint256 secondExpected = _expectedOHMv2(secondAmount);
+        uint256 thirdExpected = _expectedOHMv2(thirdAmount);
+        uint256 totalExpected = firstExpected + secondExpected + thirdExpected;
+
         // First migration
         vm.prank(alice);
         migrator.migrate(firstAmount, aliceProof, ALICE_ALLOWANCE);
@@ -150,11 +166,11 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
             firstAmount,
             "Alice should have migrated first amount"
         );
-        assertEq(ohmV2.balanceOf(alice), firstAmount, "Alice should receive first OHM v2");
-        // MINTR approval should decrease by firstAmount
+        assertEq(ohmV2.balanceOf(alice), firstExpected, "Alice should receive first OHM v2");
+        // MINTR approval should decrease by actual OHM v2 minted
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - firstAmount,
+            initialApproval - firstExpected,
             "MINTR approval should decrease by firstAmount"
         );
 
@@ -168,13 +184,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         );
         assertEq(
             ohmV2.balanceOf(alice),
-            firstAmount + secondAmount,
+            firstExpected + secondExpected,
             "Alice should receive second OHM v2"
         );
-        // MINTR approval should decrease by secondAmount
+        // MINTR approval should decrease by actual OHM v2 minted
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - firstAmount - secondAmount,
+            initialApproval - firstExpected - secondExpected,
             "MINTR approval should decrease by secondAmount"
         );
 
@@ -182,12 +198,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         vm.prank(alice);
         migrator.migrate(thirdAmount, aliceProof, ALICE_ALLOWANCE);
         assertEq(migrator.migratedAmounts(alice), total, "Alice should have migrated total amount");
-        assertEq(migrator.totalMigrated(), total, "Total migrated should equal total");
-        assertEq(ohmV2.balanceOf(alice), total, "Alice should receive total OHM v2");
-        // MINTR approval should decrease by thirdAmount
+        assertEq(migrator.totalMigrated(), total, "Total migrated should equal OHM v1 amount");
+        assertEq(ohmV2.balanceOf(alice), totalExpected, "Alice should receive total OHM v2");
+        // MINTR approval should decrease by actual OHM v2 minted
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - total,
+            initialApproval - totalExpected,
             "MINTR approval should decrease by total amount"
         );
     }
@@ -200,7 +216,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_givenPartialMigration_secondMigration(
         uint256 amount_
     ) public givenAlicePartiallyMigrated(500e9) {
-        amount_ = bound(amount_, 1, ALICE_ALLOWANCE - 500e9);
+        // Minimum of 3 ensures gOHM conversion produces non-zero result
+        // At MockGohm index of 269238508004, values < 3 round to 0
+        amount_ = bound(amount_, 3, ALICE_ALLOWANCE - 500e9);
 
         // Call function
         vm.prank(alice);
@@ -215,9 +233,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         assertEq(
             migrator.totalMigrated(),
             500e9 + amount_,
-            "Total migrated should equal partial amount"
+            "Total migrated should equal OHM v1 amount"
         );
-        assertEq(ohmV2.balanceOf(alice), 500e9 + amount_, "Alice should receive partial OHM v2");
+        assertEq(
+            ohmV2.balanceOf(alice),
+            _expectedOHMv2(500e9) + _expectedOHMv2(amount_),
+            "Alice should receive partial OHM v2"
+        );
     }
 
     //  when the user attempts to migrate their entire allocation
@@ -229,10 +251,11 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_fullAmount_succeeds() public givenAliceApproved {
         // Get initial MINTR approval
         uint256 initialApproval = MINTR.mintApproval(address(migrator));
+        uint256 expectedOHMv2 = _expectedOHMv2(ALICE_ALLOWANCE);
 
         // Expect event
         vm.expectEmit(true, true, false, true);
-        emit Migrated(alice, ALICE_ALLOWANCE, ALICE_ALLOWANCE);
+        emit Migrated(alice, ALICE_ALLOWANCE, expectedOHMv2);
 
         // Call function
         vm.prank(alice);
@@ -247,17 +270,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         assertEq(
             migrator.totalMigrated(),
             ALICE_ALLOWANCE,
-            "Total migrated should equal ALICE_ALLOWANCE"
+            "Total migrated should equal OHM v1 amount"
         );
-        assertEq(
-            ohmV2.balanceOf(alice),
-            ALICE_ALLOWANCE,
-            "Alice should receive ALICE_ALLOWANCE OHM v2"
-        );
-        // MINTR approval should decrease by ALICE_ALLOWANCE
+        assertEq(ohmV2.balanceOf(alice), expectedOHMv2, "Alice should receive expected OHM v2");
+        // MINTR approval should decrease by actual OHM v2 minted
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - ALICE_ALLOWANCE,
+            initialApproval - expectedOHMv2,
             "MINTR approval should decrease by migrated amount"
         );
     }
@@ -308,10 +327,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         // Get current MINTR approval (remaining amount that can be migrated)
         uint256 mintrApproval = MINTR.mintApproval(address(migrator));
 
+        // Calculate expected OHM v2 amount for BOB_ALLOWANCE
+        uint256 expectedOHMv2 = _expectedOHMv2(BOB_ALLOWANCE);
+
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
             ILegacyMigrator.CapExceeded.selector,
-            BOB_ALLOWANCE,
+            expectedOHMv2,
             mintrApproval
         );
         vm.expectRevert(err);
@@ -347,8 +369,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         vm.prank(alice);
         migrator.migrate(alicePartial, aliceProof, ALICE_ALLOWANCE);
 
-        // Verify MINTR approval decreased
-        uint256 remaining = cap - alicePartial; // 500e9 remaining
+        // Verify MINTR approval decreased by actual OHM v2 minted
+        uint256 aliceMinted = _expectedOHMv2(alicePartial);
+        uint256 remaining = cap - aliceMinted;
         assertEq(
             MINTR.mintApproval(address(migrator)),
             remaining,
@@ -361,12 +384,13 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         ohmV1.approve(address(migrator), BOB_ALLOWANCE);
 
         // Bob tries to migrate more than remaining
-        uint256 bobAttempt = 600e9; // More than 500e9 remaining
+        uint256 bobAttempt = 600e9; // More than remaining
+        uint256 bobExpectedOHMv2 = _expectedOHMv2(bobAttempt);
 
         // Expect revert with CapExceeded showing correct remaining
         bytes memory err = abi.encodeWithSelector(
             ILegacyMigrator.CapExceeded.selector,
-            bobAttempt,
+            bobExpectedOHMv2,
             remaining
         );
         vm.expectRevert(err);
@@ -400,6 +424,8 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     {
         // Get initial MINTR approval
         uint256 initialApproval = MINTR.mintApproval(address(migrator));
+        uint256 expectedAliceOHMv2 = _expectedOHMv2(ALICE_ALLOWANCE);
+        uint256 expectedBobOHMv2 = _expectedOHMv2(BOB_ALLOWANCE);
 
         // Alice migrates first
         vm.prank(alice);
@@ -407,10 +433,10 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
         assertEq(migrator.migratedAmounts(alice), ALICE_ALLOWANCE, "Alice should have migrated");
         assertEq(migrator.migratedAmounts(bob), 0, "Bob should not have migrated yet");
-        // MINTR approval should decrease by alice's amount
+        // MINTR approval should decrease by actual alice OHM v2 minted
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - ALICE_ALLOWANCE,
+            initialApproval - expectedAliceOHMv2,
             "MINTR approval should decrease after alice migration"
         );
 
@@ -426,21 +452,21 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         );
         assertEq(migrator.migratedAmounts(bob), BOB_ALLOWANCE, "Bob should have migrated");
 
-        // Verify total migrated is sum of both
+        // Verify total migrated is sum of both OHM v1 amounts
         assertEq(
             migrator.totalMigrated(),
             ALICE_ALLOWANCE + BOB_ALLOWANCE,
-            "Total should be sum of both"
+            "Total should be sum of both OHM v1 amounts"
         );
 
         // Verify balances
-        assertEq(ohmV2.balanceOf(alice), ALICE_ALLOWANCE, "Alice should have her OHM v2");
-        assertEq(ohmV2.balanceOf(bob), BOB_ALLOWANCE, "Bob should have his OHM v2");
+        assertEq(ohmV2.balanceOf(alice), expectedAliceOHMv2, "Alice should have her OHM v2");
+        assertEq(ohmV2.balanceOf(bob), expectedBobOHMv2, "Bob should have his OHM v2");
 
         // MINTR approval should decrease by both amounts
         assertEq(
             MINTR.mintApproval(address(migrator)),
-            initialApproval - ALICE_ALLOWANCE - BOB_ALLOWANCE,
+            initialApproval - expectedAliceOHMv2 - expectedBobOHMv2,
             "MINTR approval should decrease by total migrated amount"
         );
     }
@@ -468,8 +494,12 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         assertEq(migrator.migratedAmounts(alice), alicePartial, "Alice should still have partial");
         assertEq(migrator.migratedAmounts(bob), bobPartial, "Bob should have partial");
 
-        // Verify total
-        assertEq(migrator.totalMigrated(), alicePartial + bobPartial, "Total should be sum");
+        // Verify total (OHM v1 amounts)
+        assertEq(
+            migrator.totalMigrated(),
+            alicePartial + bobPartial,
+            "Total should be sum of OHM v1 amounts"
+        );
 
         // Alice can migrate remaining
         uint256 aliceRemaining = ALICE_ALLOWANCE - alicePartial;
@@ -520,7 +550,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_givenRootRefreshed_canMigrateAgain(
         uint256 amount_
     ) public givenAlicePartiallyMigrated(500e9) givenAliceApproved {
-        amount_ = bound(amount_, 1, ALICE_ALLOWANCE);
+        // Minimum of 3 ensures gOHM conversion produces non-zero result
+        // At MockGohm index of 269238508004, values < 3 round to 0
+        amount_ = bound(amount_, 3, ALICE_ALLOWANCE);
 
         // Ensure that alice has enough OHM v1 to migrate a second time
         ohmV1.mint(alice, amount_);
@@ -546,7 +578,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         assertEq(migrator.migratedAmounts(alice), amount_, "Alice should have migrated amount");
         assertEq(
             ohmV2.balanceOf(alice),
-            500e9 + amount_,
+            _expectedOHMv2(500e9) + _expectedOHMv2(amount_),
             "Alice should receive previously migrated amount + new amount of OHM v2"
         );
     }
@@ -568,7 +600,9 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     }
 
     function test_fuzz(uint256 amount_) public givenAliceApproved {
-        amount_ = bound(amount_, 1, ALICE_ALLOWANCE);
+        // Minimum of 3 ensures gOHM conversion produces non-zero result
+        // At MockGohm index of 269238508004, values < 3 round to 0
+        amount_ = bound(amount_, 3, ALICE_ALLOWANCE);
 
         // Call function
         vm.prank(alice);

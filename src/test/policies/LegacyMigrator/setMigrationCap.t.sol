@@ -10,6 +10,16 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
 
     uint256 internal constant NEW_CAP = 20000e9;
 
+    // ========== HELPERS ========== //
+
+    /// @notice Calculate expected OHM v2 amount from OHM v1 amount using gOHM conversion
+    /// @param ohmV1Amount_ The OHM v1 amount (9 decimals)
+    /// @return ohmV2Amount_ The expected OHM v2 amount (9 decimals)
+    function _expectedOHMv2(uint256 ohmV1Amount_) internal view returns (uint256 ohmV2Amount_) {
+        uint256 gohmAmount = gOHM.balanceTo(ohmV1Amount_);
+        ohmV2Amount_ = gOHM.balanceFrom(gohmAmount);
+    }
+
     // ========== SET MIGRATION CAP TESTS ========== //
 
     //  given contract is disabled
@@ -103,11 +113,17 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         assertEq(MINTR.mintApproval(address(migrator)), 0, "MINTR approval should be 0");
 
         // Expect revert when trying to migrate
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.CapExceeded.selector, 100e9, 0);
+        uint256 amount = 100e9;
+        uint256 expectedOHMv2 = _expectedOHMv2(amount);
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.CapExceeded.selector,
+            expectedOHMv2,
+            0
+        );
         vm.expectRevert(err);
 
         vm.prank(alice);
-        migrator.migrate(100e9, aliceProof, ALICE_ALLOWANCE);
+        migrator.migrate(amount, aliceProof, ALICE_ALLOWANCE);
     }
 
     // given the cap is set to a specific value X
@@ -116,24 +132,38 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
 
     function test_givenCapSetToX_amountXWorks_amountXPlusOneFails() public givenAliceApproved {
         uint256 X = 200e9;
+        uint256 expectedOHMv2 = _expectedOHMv2(X);
+        uint256 remaining = X - expectedOHMv2; // Rounding loss leaves some approval
 
         // Set cap to X
         vm.prank(adminUser);
         migrator.setMigrationCap(X);
 
-        // Alice can migrate exactly X
+        // Alice can migrate exactly X OHM v1 (which mints expectedOHMv2 OHM v2)
         vm.prank(alice);
         migrator.migrate(X, aliceProof, ALICE_ALLOWANCE);
 
-        // MINTR approval is now 0
-        assertEq(MINTR.mintApproval(address(migrator)), 0, "MINTR approval should be 0");
+        // MINTR approval is now the remaining amount due to rounding loss
+        assertEq(
+            MINTR.mintApproval(address(migrator)),
+            remaining,
+            "MINTR approval should be remaining amount"
+        );
 
         // Trying to migrate more should fail
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.CapExceeded.selector, 1, 0);
+        // Note: Using a larger amount since small values may round to 0
+        uint256 extraAmount = 100e9;
+        uint256 extraExpected = _expectedOHMv2(extraAmount);
+
+        bytes memory err = abi.encodeWithSelector(
+            ILegacyMigrator.CapExceeded.selector,
+            extraExpected,
+            remaining
+        );
         vm.expectRevert(err);
 
         vm.prank(alice);
-        migrator.migrate(1, aliceProof, ALICE_ALLOWANCE);
+        migrator.migrate(extraAmount, aliceProof, ALICE_ALLOWANCE);
     }
 
     // given the cap is set multiple times
