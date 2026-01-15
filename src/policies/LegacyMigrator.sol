@@ -73,11 +73,12 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @inheritdoc ILegacyMigrator
     bytes32 public override merkleRoot;
 
-    /// @inheritdoc ILegacyMigrator
-    mapping(address user_ => uint256 amount_) public override migratedAmounts;
+    /// @notice Current merkle root nonce for invalidating old migrations on root update
+    uint256 internal _currentMerkleNonce = 1;
 
-    /// @notice Array of users who have migrated for resetting when merkle root changes
-    address[] public migratedUsers;
+    /// @notice Mapping of user => nonce => migrated amount
+    /// @dev    Nonce-based invalidation allows O(1) merkle root updates
+    mapping(address user => mapping(uint256 nonce => uint256 amount)) private _migratedAmounts;
 
     /// @inheritdoc ILegacyMigrator
     uint256 public override totalMigrated;
@@ -115,6 +116,12 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @inheritdoc ILegacyMigrator
     function remainingMintApproval() external view returns (uint256 remaining_) {
         remaining_ = MINTR.mintApproval(address(this));
+    }
+
+    /// @inheritdoc ILegacyMigrator
+    /// @dev    Returns the migrated amount for the current merkle root nonce
+    function migratedAmounts(address account_) external view returns (uint256 migratedAmount_) {
+        migratedAmount_ = _migratedAmounts[account_][_currentMerkleNonce];
     }
 
     // =========  POLICY SETUP ========= //
@@ -263,7 +270,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         if (!_verifyClaim(msg.sender, allocatedAmount_, proof_)) revert InvalidProof();
 
         // Check that amount doesn't exceed user's allocation
-        uint256 userMigrated = migratedAmounts[msg.sender];
+        uint256 userMigrated = _migratedAmounts[msg.sender][_currentMerkleNonce];
         if (userMigrated + amount_ > allocatedAmount_) {
             revert AmountExceedsAllowance(amount_, allocatedAmount_, userMigrated);
         }
@@ -282,13 +289,8 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
             revert CapExceeded(ohmV2Amount, mintrApproval);
         }
 
-        // Track user for first migration (for resetting when merkle root changes)
-        if (userMigrated == 0) {
-            migratedUsers.push(msg.sender);
-        }
-
-        // Update user's migrated amount (tracked by OHM v1 amount)
-        migratedAmounts[msg.sender] = userMigrated + amount_;
+        // Update user's migrated amount for current nonce (tracked by OHM v1 amount)
+        _migratedAmounts[msg.sender][_currentMerkleNonce] = userMigrated + amount_;
 
         // Update tracking (use OHM v1 amount for total migrated)
         totalMigrated += amount_;
@@ -303,20 +305,16 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     }
 
     /// @inheritdoc ILegacyMigrator
-    /// @dev    When the merkle root is updated, the migrated amounts for all users are reset to 0.
+    /// @dev    When the merkle root is updated, the nonce is incremented.
+    ///         This invalidates all previous migrations without needing to iterate over users.
     function setMerkleRoot(
         bytes32 merkleRoot_
     ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
-        // Reset migration amounts for all tracked users
-        // The reason for this is that the merkle tree will be generated based on OHM v1 balances
-        // captured at the time of the root update. Having to take the un-migrated allocations into
-        // account would require a more complex logic to handle.
-        for (uint256 i = 0; i < migratedUsers.length; i++) {
-            delete migratedAmounts[migratedUsers[i]];
-        }
-
-        // Clear the migratedUsers array
-        delete migratedUsers;
+        // Increment nonce to invalidate all previous migrations
+        // The new merkle tree will be generated based on OHM v1 balances
+        // captured at the time of the root update. Old migrations are automatically
+        // invalidated since they're stored under the old nonce key.
+        _currentMerkleNonce++;
 
         // Update merkle root
         merkleRoot = merkleRoot_;
