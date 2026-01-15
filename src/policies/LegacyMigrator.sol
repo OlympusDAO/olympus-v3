@@ -290,14 +290,14 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         // Update user's migrated amount (tracked by OHM v1 amount)
         migratedAmounts[msg.sender] = userMigrated + amount_;
 
+        // Update tracking (use OHM v1 amount for total migrated)
+        totalMigrated += amount_;
+
         // Burn OHM v1 from user (user must have approved this contract)
         IERC20BurnableMintable(address(_OHMV1)).burnFrom(msg.sender, amount_);
 
         // Mint OHM v2 to user (amount calculated via gOHM conversion)
         MINTR.mintOhm(msg.sender, ohmV2Amount);
-
-        // Update tracking (use OHM v1 amount for total migrated)
-        totalMigrated += amount_;
 
         emit Migrated(msg.sender, amount_, ohmV2Amount);
     }
