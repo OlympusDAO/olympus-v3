@@ -12,12 +12,12 @@ import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 
 /// @notice Setup script for migration treasury permissions
-/// @dev    Provides queue() and toggle() functions for managing tempOHM and MigrationHelper permissions
+/// @dev    Provides queue() and toggle() functions for managing tempOHM and MigrationProposalHelper permissions
 contract MigrationProposalSetup is BatchScriptV2 {
     IERC20 public constant OHMv1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
 
-    /// @notice Queue treasury permissions for tempOHM and MigrationHelper
-    /// @dev    Grants MigrationHelper permission to deposit tempOHM into treasury
+    /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
+    /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
     ///         This must be executed first, then after timelock period, permissions are effective
     function queue(
         bool useDaoMS_,
@@ -28,12 +28,12 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
-        address migrationHelper = _envAddressNotZero("olympus.periphery.MigrationHelper");
+        address migrationProposalHelper = _envAddressNotZero("olympus.periphery.MigrationProposalHelper");
         address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
 
         console2.log("=== Setting up Legacy Treasury ===");
         console2.log("Legacy Treasury:", legacyTreasury);
-        console2.log("MigrationHelper:", migrationHelper);
+        console2.log("MigrationProposalHelper:", migrationProposalHelper);
         console2.log("tempOHM:", tempOHM);
 
         // Confirm that tempOHM is not a reserve token in the legacy treasury
@@ -59,24 +59,24 @@ contract MigrationProposalSetup is BatchScriptV2 {
         }
         console2.log("reserveToken queue timestamp:", reserveTokenTimelock);
 
-        // Confirm that MigrationHelper is not a reserve depositor in the legacy treasury
-        if (IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationHelper)) {
-            revert("MigrationHelper should not be a reserve depositor in the legacy treasury");
+        // Confirm that MigrationProposalHelper is not a reserve depositor in the legacy treasury
+        if (IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
+            revert("MigrationProposalHelper should not be a reserve depositor in the legacy treasury");
         }
 
-        // Add MigrationHelper as a reserve depositor to the legacy treasury
-        console2.log("Adding MigrationHelper as a reserve depositor to the legacy treasury");
+        // Add MigrationProposalHelper as a reserve depositor to the legacy treasury
+        console2.log("Adding MigrationProposalHelper as a reserve depositor to the legacy treasury");
         addToBatch(
             legacyTreasury,
             abi.encodeWithSelector(
                 IOlympusTreasury.queue.selector,
                 IOlympusTreasury.MANAGING.RESERVEDEPOSITOR,
-                migrationHelper
+                migrationProposalHelper
             )
         );
 
         // Print the queue result
-        uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(migrationHelper);
+        uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(migrationProposalHelper);
         if (reserveDepositorTimelock == 0) {
             revert("reserveDepositor queue timestamp should not be 0");
         }
@@ -86,8 +86,8 @@ contract MigrationProposalSetup is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Toggle treasury permissions for tempOHM and MigrationHelper
-    /// @dev    Enables MigrationHelper permission to deposit tempOHM into treasury
+    /// @notice Toggle treasury permissions for tempOHM and MigrationProposalHelper
+    /// @dev    Enables MigrationProposalHelper permission to deposit tempOHM into treasury
     ///         This must be executed after timelock period, permissions are effective
     function toggle(
         bool useDaoMS_,
@@ -98,12 +98,12 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
-        address migrationHelper = _envAddressNotZero("olympus.periphery.MigrationHelper");
+        address migrationProposalHelper = _envAddressNotZero("olympus.periphery.MigrationProposalHelper");
         address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
 
         console2.log("=== Toggling Legacy Treasury Permissions ===");
         console2.log("Legacy Treasury:", legacyTreasury);
-        console2.log("MigrationHelper:", migrationHelper);
+        console2.log("MigrationProposalHelper:", migrationProposalHelper);
         console2.log("tempOHM:", tempOHM);
 
         // Toggle tempOHM as a reserve token in the legacy treasury
@@ -123,21 +123,21 @@ contract MigrationProposalSetup is BatchScriptV2 {
             revert("tempOHM should be a reserve token in the legacy treasury");
         }
 
-        // Toggle MigrationHelper as a reserve depositor in the legacy treasury
-        console2.log("Toggling MigrationHelper as a reserve depositor in the legacy treasury");
+        // Toggle MigrationProposalHelper as a reserve depositor in the legacy treasury
+        console2.log("Toggling MigrationProposalHelper as a reserve depositor in the legacy treasury");
         addToBatch(
             legacyTreasury,
             abi.encodeWithSelector(
                 IOlympusTreasury.toggle.selector,
                 IOlympusTreasury.MANAGING.RESERVEDEPOSITOR,
-                migrationHelper,
+                migrationProposalHelper,
                 address(0)
             )
         );
 
-        // Verify that MigrationHelper is now a reserve depositor in the legacy treasury
-        if (!IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationHelper)) {
-            revert("MigrationHelper should be a reserve depositor in the legacy treasury");
+        // Verify that MigrationProposalHelper is now a reserve depositor in the legacy treasury
+        if (!IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
+            revert("MigrationProposalHelper should be a reserve depositor in the legacy treasury");
         }
 
         console2.log("Legacy Treasury permissions toggled");
@@ -194,7 +194,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         maxOHM += 8245430417;
         uint256 maxTempOHM = maxOHM * 1e9;
 
-        // Mint tempOHM to the Timelock (MigrationHelper owner)
+        // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
         OwnedERC20(tempOHM).mint(timelock, maxTempOHM);
         console2.log("maxTempOHM (18 dp):", maxTempOHM);
 

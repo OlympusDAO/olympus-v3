@@ -7,7 +7,7 @@ import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravo
 
 // Contracts
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {MigrationHelper} from "src/proposals/MigrationHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
 import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
 import {Burner} from "src/policies/Burner.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -18,12 +18,12 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 contract MigrationProposal is GovernorBravoProposal {
     // Kernel will be used in most proposals
     address internal _kernel;
-    // LegacyMigrator and MigrationHelper deployed separately, retrieved from addresses
+    // LegacyMigrator and MigrationProposalHelper deployed separately, retrieved from addresses
     LegacyMigrator internal _legacyMigrator;
-    MigrationHelper internal _migrationHelper;
+    MigrationProposalHelper internal _migrationProposalHelper;
 
     error InvalidLegacyMigrator();
-    error InvalidMigrationHelper();
+    error InvalidMigrationProposalHelper();
 
     constructor() {
         // Addresses will be retrieved from Addresses in _deploy()
@@ -48,22 +48,22 @@ contract MigrationProposal is GovernorBravoProposal {
                 "## Summary\n\n",
                 "This proposal has two main steps:\n\n",
                 "1. Enable LegacyMigrator policy for OHM v1 to OHM v2 migration\n",
-                "2. Execute MigrationHelper.activate() to perform the gOHM burn\n\n",
+                "2. Execute MigrationProposalHelper.activate() to perform the gOHM burn\n\n",
                 "## Background\n\n",
                 "The LegacyMigrator policy uses a merkle tree to verify eligible OHM v1 holders ",
                 "and allows them to migrate their tokens to OHM v2. This policy is pre-deployed ",
                 "and only needs to be enabled via this proposal.\n\n",
-                "The MigrationHelper contract performs the final gOHM burn after the migration period.\n\n",
+                "The MigrationProposalHelper contract performs the final gOHM burn after the migration period.\n\n",
                 "## Steps\n\n",
                 "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2)\n",
-                "2. Grant `burner_admin` role to MigrationHelper\n",
-                "3. Call MigrationHelper.activate() which:\n",
+                "2. Grant `burner_admin` role to MigrationProposalHelper\n",
+                "3. Call MigrationProposalHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
                 "   - Burns gOHM to receive OHM v2\n",
                 '   - Burns OHM v2 with category "migration"\n',
-                "4. Revoke `burner_admin` role from MigrationHelper\n\n",
+                "4. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Note\n\n",
-                "Treasury permissions for tempOHM and MigrationHelper should be set up separately ",
+                "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately ",
                 "via the MigrationProposalSetup script before this proposal is executed."
             );
     }
@@ -72,14 +72,14 @@ contract MigrationProposal is GovernorBravoProposal {
         // Store the kernel address in state
         _kernel = addresses.getAddress("olympus-kernel");
 
-        // Retrieve LegacyMigrator and MigrationHelper from addresses
+        // Retrieve LegacyMigrator and MigrationProposalHelper from addresses
         address legacyMigratorAddr = addresses.getAddress("olympus-policy-legacy-migrator");
         if (legacyMigratorAddr == address(0)) revert InvalidLegacyMigrator();
         _legacyMigrator = LegacyMigrator(legacyMigratorAddr);
 
-        address migrationHelperAddr = addresses.getAddress("olympus-policy-migration-helper");
-        if (migrationHelperAddr == address(0)) revert InvalidMigrationHelper();
-        _migrationHelper = MigrationHelper(migrationHelperAddr);
+        address migrationProposalHelperAddr = addresses.getAddress("olympus-policy-migration-helper");
+        if (migrationProposalHelperAddr == address(0)) revert InvalidMigrationProposalHelper();
+        _migrationProposalHelper = MigrationProposalHelper(migrationProposalHelperAddr);
     }
 
     function _afterDeploy(Addresses addresses, address deployer) internal override {}
@@ -95,35 +95,35 @@ contract MigrationProposal is GovernorBravoProposal {
             "Enable LegacyMigrator policy"
         );
 
-        // STEP 2: Grant "burner_admin" role to MigrationHelper
+        // STEP 2: Grant "burner_admin" role to MigrationProposalHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
                 bytes32("burner_admin"),
-                address(_migrationHelper)
+                address(_migrationProposalHelper)
             ),
-            "Grant burner_admin role to MigrationHelper"
+            "Grant burner_admin role to MigrationProposalHelper"
         );
 
-        // STEP 3: Call MigrationHelper.activate()
+        // STEP 3: Call MigrationProposalHelper.activate()
         _pushAction(
-            address(_migrationHelper),
-            abi.encodeWithSelector(MigrationHelper.activate.selector),
-            "Execute gOHM burn via MigrationHelper"
+            address(_migrationProposalHelper),
+            abi.encodeWithSelector(MigrationProposalHelper.activate.selector),
+            "Execute gOHM burn via MigrationProposalHelper"
         );
 
-        // STEP 4: Revoke "burner_admin" role from MigrationHelper
+        // STEP 4: Revoke "burner_admin" role from MigrationProposalHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
             abi.encodeWithSelector(
                 RolesAdmin.revokeRole.selector,
                 bytes32("burner_admin"),
-                address(_migrationHelper)
+                address(_migrationProposalHelper)
             ),
-            "Revoke burner_admin role from MigrationHelper"
+            "Revoke burner_admin role from MigrationProposalHelper"
         );
     }
 
@@ -143,51 +143,51 @@ contract MigrationProposal is GovernorBravoProposal {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         address burner = addresses.getAddress("olympus-policy-burner");
-        address OHMv1 = _migrationHelper.OHMV1();
-        address OHMv2 = _migrationHelper.OHMV2();
-        address GOHM = _migrationHelper.GOHM();
+        address OHMv1 = _migrationProposalHelper.OHMV1();
+        address OHMv2 = _migrationProposalHelper.OHMV2();
+        address GOHM = _migrationProposalHelper.GOHM();
 
         // solhint-disable custom-errors
 
         // 1. Validate that LegacyMigrator is enabled
         require(_legacyMigrator.isEnabled() == true, "LegacyMigrator should be enabled");
 
-        // 2. Validate that MigrationHelper is marked as activated
-        require(_migrationHelper.isActivated() == true, "MigrationHelper should be activated");
+        // 2. Validate that MigrationProposalHelper is marked as activated
+        require(_migrationProposalHelper.isActivated() == true, "MigrationProposalHelper should be activated");
 
         // 3. Validate that "migration" category exists in Burner
-        bytes32 migrationCategory = _migrationHelper.MIGRATION_CATEGORY();
+        bytes32 migrationCategory = _migrationProposalHelper.MIGRATION_CATEGORY();
         require(
             Burner(burner).categoryApproved(migrationCategory) == true,
             "Migration category should be approved in Burner"
         );
 
-        // 4. Validate that burner_admin role was revoked from MigrationHelper
+        // 4. Validate that burner_admin role was revoked from MigrationProposalHelper
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(address(_migrationHelper), bytes32("burner_admin")) == false,
-            "MigrationHelper should not have burner_admin role"
+            roles.hasRole(address(_migrationProposalHelper), bytes32("burner_admin")) == false,
+            "MigrationProposalHelper should not have burner_admin role"
         );
 
-        // 5. Validate that there is no gOHM left in the Timelock or the MigrationHelper contract
+        // 5. Validate that there is no gOHM left in the Timelock or the MigrationProposalHelper contract
         address timelock = addresses.getAddress("olympus-timelock");
         require(
             IERC20(GOHM).balanceOf(timelock) == 0,
             "There should be no gOHM left in the Timelock"
         );
         require(
-            IERC20(GOHM).balanceOf(address(_migrationHelper)) == 0,
-            "There should be no gOHM left in the MigrationHelper contract"
+            IERC20(GOHM).balanceOf(address(_migrationProposalHelper)) == 0,
+            "There should be no gOHM left in the MigrationProposalHelper contract"
         );
 
-        // 6. Validate that there is no OHMv2 left in the Timelock or the MigrationHelper contract
+        // 6. Validate that there is no OHMv2 left in the Timelock or the MigrationProposalHelper contract
         require(
             IERC20(OHMv2).balanceOf(timelock) == 0,
             "There should be no OHMv2 left in the Timelock"
         );
         require(
-            IERC20(OHMv2).balanceOf(address(_migrationHelper)) == 0,
-            "There should be no OHMv2 left in the MigrationHelper contract"
+            IERC20(OHMv2).balanceOf(address(_migrationProposalHelper)) == 0,
+            "There should be no OHMv2 left in the MigrationProposalHelper contract"
         );
     }
 }

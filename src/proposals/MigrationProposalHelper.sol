@@ -15,7 +15,7 @@ import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 
 /// @notice Single-use contract to execute OHM v1 migration to OHM v2 and burn
-contract MigrationHelper is Owned {
+contract MigrationProposalHelper is Owned {
     using SafeTransferLib for ERC20;
 
     // Hardcoded legacy contract addresses (mainnet)

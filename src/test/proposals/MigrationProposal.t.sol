@@ -14,7 +14,7 @@ import {OwnedERC20} from "src/external/OwnedERC20.sol";
 
 // MigrationProposal imports
 import {MigrationProposal} from "src/proposals/MigrationProposal.sol";
-import {MigrationHelper} from "src/proposals/MigrationHelper.sol";
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
 
 contract MigrationProposalTest is ProposalTest {
     /// @dev Block the migration should be executed at
@@ -31,7 +31,7 @@ contract MigrationProposalTest is ProposalTest {
     IgOHM public gOHM;
     IERC20 public OHMv2;
     Burner public burner;
-    MigrationHelper public migrationHelper;
+    MigrationProposalHelper public migrationProposalHelper;
     LegacyMigrator public legacyMigrator;
 
     function setUp() public virtual {
@@ -60,12 +60,12 @@ contract MigrationProposalTest is ProposalTest {
 
         // ========== DEPLOY MIGRATION HELPER ==========
 
-        // Deploy MigrationHelper (deployed separately, not by the proposal)
+        // Deploy MigrationProposalHelper (deployed separately, not by the proposal)
         // This needs to be deployed before treasury setup so it can be granted permissions
         address timelock = TIMELOCK;
 
-        // Deploy MigrationHelper
-        migrationHelper = new MigrationHelper(
+        // Deploy MigrationProposalHelper
+        migrationProposalHelper = new MigrationProposalHelper(
             timelock, // owner
             address(burner),
             address(tempOHM)
@@ -86,11 +86,11 @@ contract MigrationProposalTest is ProposalTest {
         kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
 
         // ========== NOTE: TREASURY SETUP ==========
-        // Treasury permissions for tempOHM and MigrationHelper should be set up
+        // Treasury permissions for tempOHM and MigrationProposalHelper should be set up
         // separately via the MigrationProposalSetup script before this proposal is executed.
         // This includes:
         // - Setting tempOHM as a reserve token
-        // - Granting MigrationHelper permission to withdraw tempOHM
+        // - Granting MigrationProposalHelper permission to withdraw tempOHM
         // - Minting tempOHM to the Timelock for the gOHM burn
         //
         // For this test, we assume those steps have been completed via MigrationProposalSetup.
@@ -113,7 +113,7 @@ contract MigrationProposalTest is ProposalTest {
         // Update addresses with test-deployed contracts (needed for _build and _validate)
         addresses.addAddress("olympus-policy-burner", address(burner));
         addresses.addAddress("olympus-policy-legacy-migrator", address(legacyMigrator));
-        addresses.addAddress("olympus-policy-migration-helper", address(migrationHelper));
+        addresses.addAddress("olympus-policy-migration-helper", address(migrationProposalHelper));
         addresses.addAddress("external.tokens.tempOHM", address(tempOHM));
 
         // Set debug mode
@@ -124,16 +124,16 @@ contract MigrationProposalTest is ProposalTest {
 
         // ========== VERIFY MIGRATION HELPER ACTIVATION ==========
 
-        _verifyMigrationHelperActivation();
+        _verifyMigrationProposalHelperActivation();
     }
 
-    /// @notice Helper function to verify MigrationHelper activation
-    function _verifyMigrationHelperActivation() internal view {
-        // Verify that MigrationHelper is marked as activated
-        assertTrue(migrationHelper.isActivated(), "MigrationHelper should be activated");
+    /// @notice Helper function to verify MigrationProposalHelper activation
+    function _verifyMigrationProposalHelperActivation() internal view {
+        // Verify that MigrationProposalHelper is marked as activated
+        assertTrue(migrationProposalHelper.isActivated(), "MigrationProposalHelper should be activated");
 
         // Verify that the "migration" category was added to the burner
-        bytes32 migrationCategory = migrationHelper.MIGRATION_CATEGORY();
+        bytes32 migrationCategory = migrationProposalHelper.MIGRATION_CATEGORY();
         assertTrue(
             burner.categoryApproved(migrationCategory),
             "Migration category should be approved in Burner"
@@ -141,7 +141,7 @@ contract MigrationProposalTest is ProposalTest {
 
         console2.log("");
         console2.log("====== Migration Helper Activation Verified ======");
-        console2.log("MigrationHelper activated:", migrationHelper.isActivated());
+        console2.log("MigrationProposalHelper activated:", migrationProposalHelper.isActivated());
         console2.log("Migration category approved:", burner.categoryApproved(migrationCategory));
     }
 }
