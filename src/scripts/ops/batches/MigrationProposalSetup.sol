@@ -208,6 +208,8 @@ contract MigrationProposalSetup is BatchScriptV2 {
         proposeBatch();
     }
 
+    /// @notice Mint tempOHM to the Timelock (MigrationProposalHelper owner)
+    /// @dev    To be run before OCG proposal submission
     function mintTempOHM(
         bool useDaoMS_,
         bool signOnly_,
@@ -262,7 +264,14 @@ contract MigrationProposalSetup is BatchScriptV2 {
         uint256 maxTempOHM = maxOHM * 1e9;
 
         // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
-        OwnedERC20(tempOHM).mint(timelock, maxTempOHM);
+        addToBatch(
+            tempOHM,
+            abi.encodeWithSelector(
+                OwnedERC20.mint.selector,
+                timelock,
+                maxTempOHM
+            )
+        );
         console2.log("maxTempOHM (18 dp):", maxTempOHM);
 
         console2.log("tempOHM minted to Timelock");
