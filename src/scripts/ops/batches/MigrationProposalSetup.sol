@@ -264,14 +264,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         uint256 maxTempOHM = maxOHM * 1e9;
 
         // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
-        addToBatch(
-            tempOHM,
-            abi.encodeWithSelector(
-                OwnedERC20.mint.selector,
-                timelock,
-                maxTempOHM
-            )
-        );
+        addToBatch(tempOHM, abi.encodeWithSelector(OwnedERC20.mint.selector, timelock, maxTempOHM));
         console2.log("maxTempOHM (18 dp):", maxTempOHM);
 
         console2.log("tempOHM minted to Timelock");
