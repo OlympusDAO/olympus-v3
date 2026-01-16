@@ -21,7 +21,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
     ///         This must be executed first, then after timelock period, permissions are effective
-    function queue(
+    function queueEnable(
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
@@ -29,7 +29,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
-        address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
         );
@@ -99,7 +99,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     /// @notice Toggle treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Enables MigrationProposalHelper permission to deposit tempOHM into treasury
     ///         This must be executed after timelock period, permissions are effective
-    function toggle(
+    function toggleEnable(
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
@@ -107,7 +107,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
-        address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
         );
@@ -166,7 +166,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
-        address legacyTreasury = _envAddressNotZero("olympus.legacy.Treasury");
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
         address timelock = _envAddressNotZero("olympus.timelock");
         address migrator = _envAddressNotZero("olympus.legacy.TokenMigrator");
