@@ -20,7 +20,7 @@ import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol
 contract MigrationProposalTest is ProposalTest {
     /// @dev Block the migration should be executed at
     uint256 public constant BLOCK = 24070000;
-    uint256 public constant BLOCKS_NEEDED_FOR_QUEUE = 6000;
+    uint256 public constant TIMELOCK_DELAY = 6000;
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
@@ -182,7 +182,7 @@ contract MigrationProposalTest is ProposalTest {
             );
 
             // Warp to the end of the timelock period
-            vm.warp(block.timestamp + BLOCKS_NEEDED_FOR_QUEUE);
+            vm.warp(block.timestamp + TIMELOCK_DELAY);
 
             // Toggle tempOHM as a reserve token in the legacy treasury
             vm.prank(DAO_MS);
