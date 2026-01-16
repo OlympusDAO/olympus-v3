@@ -36,6 +36,9 @@ libs = ["dependencies"]
 [profile.deploy]
 script_execution_protection = false
 
+[profile.multisig]
+script_execution_protection = false
+
 [fuzz]
 runs = 256
 

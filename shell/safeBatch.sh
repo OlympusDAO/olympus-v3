@@ -101,7 +101,7 @@ export POLICY_MS=$POLICY_MS
 export EMERGENCY_MS=$EMERGENCY_MS
 export USE_TENDERLY_FORK=$testnet
 export WALLET_TYPE=$WALLET_TYPE
-forge script ./src/scripts/ops/batches/$contract.sol:$contract \
+FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract \
     --sig "$batch(bool)()" $broadcast \
     --rpc-url $RPC_URL \
     $ACCOUNT_FLAG \

@@ -133,7 +133,7 @@ else
 fi
 
 # Build forge command
-FORGE_CMD="forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow $VERBOSITY"
+FORGE_CMD="FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow $VERBOSITY"
 
 # Add broadcast flag
 if [ "$broadcast" == "true" ]; then

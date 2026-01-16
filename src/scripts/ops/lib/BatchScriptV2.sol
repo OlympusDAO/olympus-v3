@@ -56,6 +56,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     ///         If this is provided, the batch will be proposed using the signature instead of asking the sender to sign
     bytes internal _signature;
 
+    /// @notice Optional post-batch validation function selector
+    /// @dev    If set, this function will be called after batch simulation to validate state
+    bytes4 internal _postBatchValidateSelector;
+
     // TODOs
     // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
@@ -87,6 +91,12 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
     function _hasSignature() internal view returns (bool) {
         return bytes(_signature).length > 0;
+    }
+
+    /// @notice Set the post-batch validation function selector
+    /// @param selector_ The function selector to call after batch simulation
+    function _setPostBatchValidateSelector(bytes4 selector_) internal {
+        _postBatchValidateSelector = selector_;
     }
 
     function _setUpBatchScript(bool signOnly_, address owner_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
@@ -237,7 +247,27 @@ abstract contract BatchScriptV2 is WithEnvironment {
         vm.stopPrank();
         console2.log("Batch simulation completed");
 
-        // Validate heart beat after batch execution
+        // Call custom post-batch validation if selector is set (before heartbeats)
+        if (_postBatchValidateSelector != bytes4(0)) {
+            console2.log("\n=== Starting post-batch validation ===");
+            console2.log("Calling post-batch validation function");
+            (bool success, bytes memory data) = address(this).call(
+                abi.encodeWithSelector(_postBatchValidateSelector)
+            );
+            if (!success) {
+                // Revert with the error data
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+            console2.log("Post-batch validation passed");
+        } else {
+            console2.log("\nNo post-batch validation selector set, skipping validation");
+        }
+
+        // Validate heart beat after batch execution and post-batch validation
         _validateHeartBeat();
 
         // If signOnly, get the signature and return
@@ -292,6 +322,26 @@ abstract contract BatchScriptV2 is WithEnvironment {
         vm.stopBroadcast();
 
         console2.log("Batch executed");
+
+        // Call custom post-batch validation if selector is set
+        if (_postBatchValidateSelector != bytes4(0)) {
+            console2.log("\n=== Starting post-batch validation ===");
+            console2.log("Calling post-batch validation function");
+            (bool success, bytes memory data) = address(this).call(
+                abi.encodeWithSelector(_postBatchValidateSelector)
+            );
+            if (!success) {
+                // Revert with the error data
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+            console2.log("Post-batch validation passed");
+        } else {
+            console2.log("\nNo post-batch validation selector set, skipping validation");
+        }
     }
 
     function proposeBatch() public {
