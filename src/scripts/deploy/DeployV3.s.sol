@@ -925,7 +925,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
-        address ohmV1 = _getAddressNotZero("olympus.legacy.OHM");
+        address ohmV1 = _getAddressNotZero("olympus.legacy.OHMv1");
         address gohm = _getAddressNotZero("olympus.legacy.gOHM");
         bytes32 merkleRoot = bytes32(0); // Set to zero, will be set to a valid root after the proposal is executed
 
