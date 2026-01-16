@@ -33,7 +33,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
         );
-        address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
         console2.log("=== Setting up Legacy Treasury ===");
         console2.log("Legacy Treasury:", legacyTreasury);
@@ -111,7 +111,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
         );
-        address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
 
         console2.log("=== Toggling Legacy Treasury Permissions ===");
         console2.log("Legacy Treasury:", legacyTreasury);
@@ -169,7 +169,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
-        address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
         );
@@ -219,7 +219,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
-        address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address timelock = _envAddressNotZero("olympus.timelock");
         address migrator = _envAddressNotZero("olympus.legacy.TokenMigrator");
 
