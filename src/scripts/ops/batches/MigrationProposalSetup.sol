@@ -158,6 +158,56 @@ contract MigrationProposalSetup is BatchScriptV2 {
         proposeBatch();
     }
 
+    /// @notice Remove tempOHM and MigrationProposalHelper as a reserve token and depositor from the legacy treasury
+    /// @dev    To be run after the OCG proposal has been executed
+    function disable(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        // Get addresses from environment
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
+        address tempOHM = _envAddressNotZero("external.tokens.tempOHM");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+
+        console2.log("=== Queueing Removal of tempOHM and MigrationProposalHelper ===");
+        console2.log("Legacy Treasury:", legacyTreasury);
+        console2.log("tempOHM:", tempOHM);
+        console2.log("MigrationProposalHelper:", migrationProposalHelper);
+
+        // Remove tempOHM as a reserve token from the legacy treasury
+        console2.log("Removing tempOHM as a reserve token from the legacy treasury");
+        addToBatch(
+            legacyTreasury,
+            abi.encodeWithSelector(
+                IOlympusTreasury.toggle.selector,
+                IOlympusTreasury.MANAGING.RESERVETOKEN,
+                tempOHM
+            )
+        );
+
+        // Remove MigrationProposalHelper as a reserve depositor from the legacy treasury
+        console2.log(
+            "Removing MigrationProposalHelper as a reserve depositor from the legacy treasury"
+        );
+        addToBatch(
+            legacyTreasury,
+            abi.encodeWithSelector(
+                IOlympusTreasury.toggle.selector,
+                IOlympusTreasury.MANAGING.RESERVEDEPOSITOR,
+                migrationProposalHelper,
+                address(0)
+            )
+        );
+
+        console2.log("Legacy Treasury permissions removed");
+        proposeBatch();
+    }
+
     function mintTempOHM(
         bool useDaoMS_,
         bool signOnly_,
