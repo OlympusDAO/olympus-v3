@@ -16,7 +16,8 @@ import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 contract MigrationProposalSetup is BatchScriptV2 {
     IERC20 public constant OHMV1 = IERC20(0x383518188C0C6d7730D91b2c03a03C837814a899);
 
-    // TODO validation checks need to be performed post-simulation
+    /// @notice Expected tempOHM amount for mint validation
+    uint256 internal _expectedTempOHMAmount;
 
     /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
@@ -56,13 +57,6 @@ contract MigrationProposalSetup is BatchScriptV2 {
             )
         );
 
-        // Print the queue result
-        uint256 reserveTokenTimelock = IOlympusTreasury(legacyTreasury).reserveTokenQueue(tempOHM);
-        if (reserveTokenTimelock == 0) {
-            revert("reserveToken queue timestamp should not be 0");
-        }
-        console2.log("reserveToken queue timestamp:", reserveTokenTimelock);
-
         // Confirm that MigrationProposalHelper is not a reserve depositor in the legacy treasury
         if (IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
             revert(
@@ -83,7 +77,33 @@ contract MigrationProposalSetup is BatchScriptV2 {
             )
         );
 
-        // Print the queue result
+        console2.log("Legacy Treasury permissions queued");
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateQueueEnablePostBatch.selector);
+
+        proposeBatch();
+    }
+
+    /// @notice Validate queueEnable state after batch execution
+    /// @dev    Validates that tempOHM and MigrationProposalHelper have been queued properly
+    function _validateQueueEnablePostBatch() external view {
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
+
+        console2.log("\n Validating queueEnable Post-Batch State ");
+
+        // Validate reserveToken queue
+        uint256 reserveTokenTimelock = IOlympusTreasury(legacyTreasury).reserveTokenQueue(tempOHM);
+        if (reserveTokenTimelock == 0) {
+            revert("reserveToken queue timestamp should not be 0");
+        }
+        console2.log("reserveToken queue timestamp:", reserveTokenTimelock);
+
+        // Validate reserveDepositor queue
         uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(
             migrationProposalHelper
         );
@@ -92,8 +112,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         }
         console2.log("reserveDepositor queue timestamp:", reserveDepositorTimelock);
 
-        console2.log("Legacy Treasury permissions queued");
-        proposeBatch();
+        console2.log("queueEnable post-batch validation passed");
     }
 
     /// @notice Toggle treasury permissions for tempOHM and MigrationProposalHelper
@@ -130,11 +149,6 @@ contract MigrationProposalSetup is BatchScriptV2 {
             )
         );
 
-        // Verify that tempOHM is now a reserve token in the legacy treasury
-        if (!IOlympusTreasury(legacyTreasury).isReserveToken(tempOHM)) {
-            revert("tempOHM should be a reserve token in the legacy treasury");
-        }
-
         // Toggle MigrationProposalHelper as a reserve depositor in the legacy treasury
         console2.log(
             "Toggling MigrationProposalHelper as a reserve depositor in the legacy treasury"
@@ -149,13 +163,38 @@ contract MigrationProposalSetup is BatchScriptV2 {
             )
         );
 
-        // Verify that MigrationProposalHelper is now a reserve depositor in the legacy treasury
+        console2.log("Legacy Treasury permissions toggled");
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateToggleEnablePostBatch.selector);
+
+        proposeBatch();
+    }
+
+    /// @notice Validate toggleEnable state after batch execution
+    /// @dev    Validates that tempOHM and MigrationProposalHelper have been enabled properly
+    function _validateToggleEnablePostBatch() external view {
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
+
+        console2.log("\n Validating toggleEnable Post-Batch State ");
+
+        // Validate tempOHM is now a reserve token
+        if (!IOlympusTreasury(legacyTreasury).isReserveToken(tempOHM)) {
+            revert("tempOHM should be a reserve token in the legacy treasury");
+        }
+        console2.log("tempOHM is a reserve token");
+
+        // Validate MigrationProposalHelper is now a reserve depositor
         if (!IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
             revert("MigrationProposalHelper should be a reserve depositor in the legacy treasury");
         }
+        console2.log("MigrationProposalHelper is a reserve depositor");
 
-        console2.log("Legacy Treasury permissions toggled");
-        proposeBatch();
+        console2.log("toggleEnable post-batch validation passed");
     }
 
     /// @notice Remove tempOHM and MigrationProposalHelper as a reserve token and depositor from the legacy treasury
@@ -205,7 +244,39 @@ contract MigrationProposalSetup is BatchScriptV2 {
         );
 
         console2.log("Legacy Treasury permissions removed");
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateDisablePostBatch.selector);
+
         proposeBatch();
+    }
+
+    /// @notice Validate disable state after batch execution
+    /// @dev    Validates that tempOHM and MigrationProposalHelper have been removed properly
+    function _validateDisablePostBatch() external view {
+        address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+
+        console2.log("\n Validating disable Post-Batch State ");
+
+        // Validate tempOHM is no longer a reserve token
+        if (IOlympusTreasury(legacyTreasury).isReserveToken(tempOHM)) {
+            revert("tempOHM should not be a reserve token in the legacy treasury");
+        }
+        console2.log("tempOHM is not a reserve token");
+
+        // Validate MigrationProposalHelper is no longer a reserve depositor
+        if (IOlympusTreasury(legacyTreasury).isReserveDepositor(migrationProposalHelper)) {
+            revert(
+                "MigrationProposalHelper should not be a reserve depositor in the legacy treasury"
+            );
+        }
+        console2.log("MigrationProposalHelper is not a reserve depositor");
+
+        console2.log("disable post-batch validation passed");
     }
 
     /// @notice Mint tempOHM to the Timelock (MigrationProposalHelper owner)
@@ -263,12 +334,45 @@ contract MigrationProposalSetup is BatchScriptV2 {
         maxOHM += 8245430417;
         uint256 maxTempOHM = maxOHM * 1e9;
 
+        // Store expected amount for post-batch validation
+        _expectedTempOHMAmount = maxTempOHM;
+
         // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
         addToBatch(tempOHM, abi.encodeWithSelector(OwnedERC20.mint.selector, timelock, maxTempOHM));
         console2.log("maxTempOHM (18 dp):", maxTempOHM);
 
         console2.log("tempOHM minted to Timelock");
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateMintTempOHMPostBatch.selector);
+
         proposeBatch();
+    }
+
+    /// @notice Validate mintTempOHM state after batch execution
+    /// @dev    Validates that the timelock received the expected tempOHM amount
+    function _validateMintTempOHMPostBatch() external view {
+        address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
+        address timelock = _envAddressNotZero("olympus.timelock");
+
+        console2.log("\n Validating mintTempOHM Post-Batch State ");
+
+        // Validate timelock has the expected tempOHM balance
+        uint256 timelockBalance = IERC20(tempOHM).balanceOf(timelock);
+        if (timelockBalance < _expectedTempOHMAmount) {
+            revert(
+                string.concat(
+                    "Timelock tempOHM balance should be at least ",
+                    vm.toString(_expectedTempOHMAmount),
+                    ", but is ",
+                    vm.toString(timelockBalance)
+                )
+            );
+        }
+        console2.log("Timelock tempOHM balance:", timelockBalance);
+        console2.log("Expected balance:", _expectedTempOHMAmount);
+
+        console2.log("mintTempOHM post-batch validation passed");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
