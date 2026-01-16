@@ -64,6 +64,9 @@ if [ "$fork" == "true" ]; then
         exit 1
     fi
 
+    # Set the ACCOUNT_ADDRESS to the DAO MS address
+    ACCOUNT_ADDRESS=$(get_address_not_zero "$chain" "olympus.multisig.dao")
+
     # Override RPC and set env var for Anvil mode
     chain="http://localhost:8545"
     export USE_ANVIL_FORK=true

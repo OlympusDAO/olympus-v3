@@ -6,6 +6,8 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 
+import {Surl} from "@surl-1.0.0/Surl.sol";
+
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
@@ -20,6 +22,7 @@ import {Kernel, toKeycode} from "src/Kernel.sol";
 abstract contract BatchScriptV2 is WithEnvironment {
     using Safe for *;
     using stdJson for string;
+    using Surl for *;
 
     /// @notice Address of the owner
     /// @dev    This could be a Safe Multisig or an EOA
@@ -344,7 +347,165 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
+    /// @notice Execute batch via Anvil fork with auto-impersonation
+    /// @dev    Uses vm.startBroadcast with the multisig address to impersonate signers
+    function _sendAnvilBatch() private {
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to execute");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log("=== Executing batch via Anvil fork ===");
+
+        // Simulate batch execution first
+        console2.log("Simulating execution of batch");
+        vm.startPrank(_owner);
+        _runBatch();
+        vm.stopPrank();
+        console2.log("Batch simulation completed");
+
+        // Call custom post-batch validation if selector is set (before heartbeats)
+        if (_postBatchValidateSelector != bytes4(0)) {
+            console2.log("\n=== Starting post-batch validation ===");
+            console2.log("Calling post-batch validation function");
+            (bool success, bytes memory data) = address(this).call(
+                abi.encodeWithSelector(_postBatchValidateSelector)
+            );
+            if (!success) {
+                // Revert with the error data
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+            console2.log("Post-batch validation passed");
+        } else {
+            console2.log("\nNo post-batch validation selector set, skipping validation");
+        }
+
+        // Validate heart beat after batch execution and post-batch validation
+        _validateHeartBeat();
+
+        // Check if we're in broadcast mode before executing on Anvil fork
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Anvil fork execution");
+            return;
+        }
+
+        // Execute batch on Anvil fork with auto-impersonation
+        console2.log("\nBroadcasting batch to Anvil fork");
+        vm.startBroadcast(_owner);
+
+        for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
+            (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
+
+            if (!success) {
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+
+        vm.stopBroadcast();
+        console2.log("Batch executed successfully on Anvil fork");
+    }
+
+    /// @notice Execute batch via Tenderly VNet using HTTP API calls
+    /// @dev    Sends transactions to Tenderly VNet for execution without requiring private keys
+    function _sendTenderlyBatch() private {
+        // Check if we're in broadcast mode
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Tenderly VNet execution");
+            return;
+        }
+
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to execute");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log("=== Executing batch via Tenderly VNet ===");
+
+        // Get the testnet RPC URL and access key
+        string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
+        string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
+        string memory TENDERLY_VNET_ID = vm.envString("TENDERLY_VNET_ID");
+        string memory TENDERLY_ACCESS_KEY = vm.envString("TENDERLY_ACCESS_KEY");
+
+        // Iterate over the batch targets and execute them
+        for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
+
+            // Construct the API call
+            string[] memory headers = new string[](3);
+            headers[0] = "Accept: application/json";
+            headers[1] = "Content-Type: application/json";
+            headers[2] = string.concat("X-Access-Key: ", TENDERLY_ACCESS_KEY);
+
+            string memory url = string.concat(
+                "https://api.tenderly.co/api/v1/account/",
+                TENDERLY_ACCOUNT_SLUG,
+                "/project/",
+                TENDERLY_PROJECT_SLUG,
+                "/vnets/",
+                TENDERLY_VNET_ID,
+                "/transactions"
+            );
+
+            // Execute the API call
+            (uint256 status, bytes memory response) = url.post(
+                headers,
+                string.concat(
+                    "{",
+                    '"callArgs": {',
+                    '"from": "',
+                    vm.toString(_owner),
+                    '", "to": "',
+                    vm.toString(_batchTargets[i]),
+                    '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
+                    '"data": "',
+                    vm.toString(_batchData[i]),
+                    '"',
+                    "}}"
+                )
+            );
+
+            string memory responseString = string(response);
+            console2.log("  Response:", responseString);
+
+            // If the response contains "error", exit
+            if (status >= 400 || vm.keyExists(responseString, ".error")) {
+                revert("Error executing batch action on Tenderly VNet");
+            }
+        }
+
+        console2.log("Batch executed successfully on Tenderly VNet");
+    }
+
     function proposeBatch() public {
+        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
+        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
+
+        // Handle fork modes first
+        if (useAnvilFork) {
+            _sendAnvilBatch();
+            return;
+        }
+
+        if (useTenderlyFork) {
+            _sendTenderlyBatch();
+            return;
+        }
+
+        // Normal execution path
         if (_isMultiSig) {
             _proposeMultisigBatch();
         } else {

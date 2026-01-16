@@ -5,6 +5,7 @@ import {BatchScript} from "./lib/BatchScript.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {console2} from "forge-std/console2.sol";
 import {Surl} from "@surl-1.0.0/Surl.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 
 abstract contract OlyBatch is BatchScript {
     using stdJson for string;
@@ -97,7 +98,7 @@ abstract contract OlyBatch is BatchScript {
                 return;
             }
             if (useTenderlyFork) {
-                _sendTestnetBatch();
+                _sendTenderlyBatch();
                 return;
             }
         }
@@ -106,8 +107,13 @@ abstract contract OlyBatch is BatchScript {
     }
 
     function _sendAnvilBatch() private {
+        // Check if we're in broadcast mode
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Anvil fork execution");
+            return;
+        }
+
         console2.log("Executing batch via Anvil fork");
-        // Use the `safe` address which is set by the modifier (daoMS, policyMS, or emergencyMS)
         vm.startBroadcast(safe);
 
         for (uint256 i; i < actionsTo.length; i++) {
@@ -128,7 +134,13 @@ abstract contract OlyBatch is BatchScript {
         console2.log("Batch executed successfully");
     }
 
-    function _sendTestnetBatch() private {
+    function _sendTenderlyBatch() private {
+        // Check if we're in broadcast mode
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Tenderly VNet execution");
+            return;
+        }
+
         // Get the testnet RPC URL and access key
         string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
         string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
