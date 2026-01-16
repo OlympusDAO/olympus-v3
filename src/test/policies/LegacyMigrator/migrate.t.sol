@@ -97,8 +97,6 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     // given amount exceeds allocation
     //  [X] it reverts
 
-    // TODO amountExceedsAllowance should mention the allowance
-
     function test_givenAmountExceedsAllocation_reverts() public givenAliceApproved {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
