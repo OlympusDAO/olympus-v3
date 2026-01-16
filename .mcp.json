@@ -1,35 +1,33 @@
 {
-  "mcpServers": {
-    "etherscan": {
-      "type": "http",
-      "url": "https://mcp.etherscan.io/mcp/",
-      "headers": {
-        "Authorization": "Bearer ${MCP_ETHERSCAN_API_KEY}"
-      }
-    },
-    "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {
-        "Authorization": "Bearer ${MCP_GITHUB_PAT}"
-      }
-    },
-    "context7": {
-      "type": "http",
-      "url": "https://mcp.context7.com/mcp",
-      "headers": {
-        "CONTEXT7_API_KEY": "${MCP_CONTEXT7_API_KEY}"
-      }
-    },
-    "coderabbitai": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "coderabbitai-mcp@latest"
-      ],
-      "env": {
-        "GITHUB_PAT": "${MCP_GITHUB_PAT}"
-      }
+    "mcpServers": {
+        "coderabbitai": {
+            "args": ["coderabbitai-mcp@latest"],
+            "command": "npx",
+            "env": {
+                "GITHUB_PAT": "${MCP_GITHUB_PAT}"
+            },
+            "type": "stdio"
+        },
+        "context7": {
+            "headers": {
+                "CONTEXT7_API_KEY": "${MCP_CONTEXT7_API_KEY}"
+            },
+            "type": "http",
+            "url": "https://mcp.context7.com/mcp"
+        },
+        "etherscan": {
+            "headers": {
+                "Authorization": "Bearer ${MCP_ETHERSCAN_API_KEY}"
+            },
+            "type": "http",
+            "url": "https://mcp.etherscan.io/mcp/"
+        },
+        "github": {
+            "headers": {
+                "Authorization": "Bearer ${MCP_GITHUB_PAT}"
+            },
+            "type": "http",
+            "url": "https://api.githubcopilot.com/mcp/"
+        }
     }
-  }
 }
