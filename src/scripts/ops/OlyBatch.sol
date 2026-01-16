@@ -88,15 +88,44 @@ abstract contract OlyBatch is BatchScript {
     function loadEnv() internal virtual;
 
     function executeBatch(bool send_) internal override {
-        bool isTestnet = vm.envOr("TESTNET", false);
+        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
+        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
 
-        if (isTestnet && send_) {
-            console2.log("Sending batch on testnet");
-            _sendTestnetBatch();
-            return;
+        if (send_) {
+            if (useAnvilFork) {
+                _sendAnvilBatch();
+                return;
+            }
+            if (useTenderlyFork) {
+                _sendTestnetBatch();
+                return;
+            }
         }
 
         super.executeBatch(send_);
+    }
+
+    function _sendAnvilBatch() private {
+        console2.log("Executing batch via Anvil fork");
+        // Use the `safe` address which is set by the modifier (daoMS, policyMS, or emergencyMS)
+        vm.startBroadcast(safe);
+
+        for (uint256 i; i < actionsTo.length; i++) {
+            console2.log("  Executing batch action ", i + 1);
+            (bool success, bytes memory data) = actionsTo[i].call(actionsData[i]);
+            if (!success) {
+                // Revert with error data
+                // solhint-disable-next-line no-inline-assembly
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+
+        vm.stopBroadcast();
+        console2.log("Batch executed successfully");
     }
 
     function _sendTestnetBatch() private {

@@ -99,7 +99,7 @@ echo "  Broadcasting: $broadcast"
 export DAO_MS=$DAO_MS
 export POLICY_MS=$POLICY_MS
 export EMERGENCY_MS=$EMERGENCY_MS
-export TESTNET=$testnet
+export USE_TENDERLY_FORK=$testnet
 export WALLET_TYPE=$WALLET_TYPE
 forge script ./src/scripts/ops/batches/$contract.sol:$contract \
     --sig "$batch(bool)()" $broadcast \

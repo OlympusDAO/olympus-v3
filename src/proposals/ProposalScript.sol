@@ -110,7 +110,7 @@ abstract contract ProposalScript is ScriptSuite {
         console2.log(proposal.description());
     }
 
-    function executeOnTestnet() public {
+    function executeOnTenderly() public {
         console2.log("Building proposal...");
         // set debug mode to true and run it to build the actions list
         proposal.setDebug(true);
@@ -179,5 +179,39 @@ abstract contract ProposalScript is ScriptSuite {
                 revert("Error executing proposal action");
             }
         }
+    }
+
+    function executeOnAnvilFork() public {
+        console2.log("Building proposal...");
+        // set debug mode to true and run it to build the actions list
+        proposal.setDebug(true);
+
+        // run the proposal to build it
+        proposal.run(addresses, address(0));
+
+        console2.log("Preparing transactions");
+        // Get the timelock address
+        address timelock = addresses.getAddress("olympus-timelock");
+
+        // Get the proposal actions
+        (address[] memory targets, , bytes[] memory arguments) = proposal.getProposalActions();
+
+        console2.log("Executing proposal via Anvil fork");
+        vm.startBroadcast(timelock);
+        for (uint256 i; i < targets.length; i++) {
+            console2.log("  Executing proposal action ", i + 1);
+            (bool success, bytes memory data) = targets[i].call(arguments[i]);
+            if (!success) {
+                // Revert with error data
+                // solhint-disable-next-line no-inline-assembly
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+        vm.stopBroadcast();
+        console2.log("Proposal executed successfully");
     }
 }

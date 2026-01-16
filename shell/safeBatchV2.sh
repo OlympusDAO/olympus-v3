@@ -13,7 +13,8 @@
 # [--signature <signature>]
 # [--nonce <nonce>]
 # [--broadcast <true|false>]
-# [--testnet <true|false>]
+# [--tenderly <true|false>]
+# [--fork <true|false>]
 # [--verbose <true|false>]
 # [--args <args-file>]
 # [--env <env-file>]
@@ -34,7 +35,8 @@ load_env
 
 # Set sane defaults
 broadcast=${broadcast:-false}
-testnet=${testnet:-false}
+tenderly=${tenderly:-false}
+fork=${fork:-false}
 multisig=${multisig:-false}
 signonly=${signonly:-false}
 verbose=${verbose:-false}
@@ -47,11 +49,28 @@ echo "Validating named arguments"
 validate_text "$contract" "No contract name provided. Provide the contract name after the --contract flag."
 validate_text "$function" "No function name provided. Provide the function name after the --function flag."
 validate_text "$chain" "No chain specified. Specify the chain after the --chain flag."
-validate_boolean "$testnet" "Invalid value for --testnet. Must be true or false."
+validate_boolean "$tenderly" "Invalid value for --tenderly. Must be true or false."
+validate_boolean "$fork" "Invalid value for --fork. Must be true or false."
 validate_boolean "$broadcast" "Invalid value for --broadcast. Must be true or false."
 validate_boolean "$multisig" "Invalid value for --multisig. Must be true or false."
 validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
 validate_boolean "$verbose" "Invalid value for --verbose. Must be true or false."
+
+# Handle fork mode (before summary so chain displays correctly)
+if [ "$fork" == "true" ]; then
+    # Verify Anvil is running
+    if ! curl -sSf -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 > /dev/null 2>&1; then
+        display_error "Anvil is not running on http://localhost:8545. Start it with: pnpm run anvil:fork"
+        exit 1
+    fi
+
+    # Override RPC and set env var for Anvil mode
+    chain="http://localhost:8545"
+    export USE_ANVIL_FORK=true
+else
+    # Set USE_TENDERLY_FORK based on tenderly flag
+    export USE_TENDERLY_FORK=$tenderly
+fi
 
 echo ""
 echo "Summary:"
@@ -61,7 +80,8 @@ echo "  Chain: $chain"
 echo "  Account address: $ACCOUNT_ADDRESS"
 echo "  Executing as multisig: $multisig"
 echo "  Sign only: $signonly"
-echo "  Testnet: $testnet"
+echo "  Tenderly mode: $tenderly"
+echo "  Fork mode: $fork"
 echo "  Broadcasting: $broadcast"
 echo "  Verbose: $verbose"
 if [ -n "$ARGS_FILE" ]; then
@@ -104,9 +124,6 @@ fi
 
 # Set the nonce
 export SAFE_NONCE=$nonce
-
-# Execute the batch
-export TESTNET=$testnet
 
 # Set verbosity level
 if [ "$verbose" == "true" ]; then

@@ -397,7 +397,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     ///         Restores original timestamp and thresholds after validation to avoid signature issues
     function _validateHeartBeat() internal {
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
-        console2.log("\nValidating heart beat (full 24-hour cycle - 3 beats)");
+        console2.log("\n=== Validating heart beat (full 24-hour cycle - 3 beats) ===");
         console2.log("Heart address:", heart);
 
         OlympusHeart heartContract = OlympusHeart(heart);
