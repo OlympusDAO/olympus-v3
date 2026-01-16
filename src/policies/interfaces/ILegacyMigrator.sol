@@ -121,6 +121,7 @@ interface ILegacyMigrator is IEnabler, IVersioned {
     function setMigrationCap(uint256 cap_) external;
 
     /// @notice Verify if a claim is valid for a given account and allocated amount
+    ///
     /// @param account_ The account to verify
     /// @param allocatedAmount_ The allocated amount to verify
     /// @param proof_ The merkle proof
