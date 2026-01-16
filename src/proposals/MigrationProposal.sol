@@ -26,6 +26,10 @@ contract MigrationProposal is GovernorBravoProposal {
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 public constant BURNER_ADMIN_ROLE = bytes32("burner_admin");
 
+    /// @notice Initial migration cap for LegacyMigrator (in OHM v1, 9 decimals)
+    /// @dev    TODO: Update migration cap before mainnet deployment
+    uint256 public constant INITIAL_MIGRATION_CAP = 1000e9;
+
     error InvalidLegacyMigrator();
     error InvalidMigrationProposalHelper();
 
@@ -87,7 +91,7 @@ contract MigrationProposal is GovernorBravoProposal {
         _legacyMigrator = LegacyMigrator(legacyMigratorAddr);
 
         address migrationProposalHelperAddr = addresses.getAddress(
-            "olympus-policy-migration-helper"
+            "olympus-periphery-migration-proposal-helper"
         );
         if (migrationProposalHelperAddr == address(0)) revert InvalidMigrationProposalHelper();
         _migrationProposalHelper = MigrationProposalHelper(migrationProposalHelperAddr);
@@ -100,10 +104,9 @@ contract MigrationProposal is GovernorBravoProposal {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
 
         // STEP 1: Enable LegacyMigrator policy
-        // TODO add initial migration cap
         _pushAction(
             address(_legacyMigrator),
-            abi.encodeWithSelector(IEnabler.enable.selector, abi.encode("")),
+            abi.encodeWithSelector(IEnabler.enable.selector, abi.encode(INITIAL_MIGRATION_CAP)),
             "Enable LegacyMigrator policy"
         );
 
