@@ -13,7 +13,9 @@
         },
         {
             "name": "MigrationProposalHelper",
-            "args": {}
+            "args": {
+                "OHMv1ToMigrate": "197735188979073000000000"
+            }
         },
         {
             "name": "LegacyMigrator",
