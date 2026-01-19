@@ -56,6 +56,33 @@ validate_boolean "$multisig" "Invalid value for --multisig. Must be true or fals
 validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
 validate_boolean "$verbose" "Invalid value for --verbose. Must be true or false."
 
+# Validate and set account flags (consistent with deployV3.sh)
+if [ "$signonly" == "true" ]; then
+    # Validate that multisig is also true
+    if [ "$multisig" != "true" ]; then
+        display_error "When --signonly is true, --multisig must also be true."
+        exit 1
+    fi
+
+    # Validate that a signature is not provided
+    if [ "$signature" != "0x" ]; then
+        display_error "When --signonly is true, --signature must not be provided."
+        exit 1
+    fi
+
+    validate_text "$ledger" "No ledger index provided. Provide the mnemonic index after the --ledger flag."
+
+    set_account_address_ledger "$ledger"
+
+    # Calculate the derivation path
+    LEDGER_DERIVATION_PATH="m/44'/60'/${ledger}'/0/0"
+    # validate_and_set_account is not used, as it would set the LEDGER_FLAGS variable to use the Ledger. This would block ffi calls within the script from using the Ledger.
+    echo "  The script will result in your Ledger device prompting for approval of a signature."
+else
+    validate_and_set_account "$account" "$ledger"
+    LEDGER_DERIVATION_PATH=""
+fi
+
 # Handle fork mode (before summary so chain displays correctly)
 if [ "$fork" == "true" ]; then
     # Verify Anvil is running
@@ -64,8 +91,9 @@ if [ "$fork" == "true" ]; then
         exit 1
     fi
 
-    # Set the ACCOUNT_ADDRESS to the DAO MS address
-    ACCOUNT_ADDRESS=$(get_address_not_zero "$chain" "olympus.multisig.dao")
+    # Set the unlocked address
+    ACCOUNT_ADDRESS="$(get_address_not_zero "$chain" "olympus.multisig.dao")"
+    UNLOCKED_FLAG="--unlocked"
 
     # Override RPC and set env var for Anvil mode
     chain="http://localhost:8545"
@@ -98,33 +126,6 @@ else
     echo "  Nonce: (default)"
 fi
 
-# Validate and set account flags (consistent with deployV3.sh)
-if [ "$signonly" == "true" ]; then
-    # Validate that multisig is also true
-    if [ "$multisig" != "true" ]; then
-        display_error "When --signonly is true, --multisig must also be true."
-        exit 1
-    fi
-
-    # Validate that a signature is not provided
-    if [ "$signature" != "0x" ]; then
-        display_error "When --signonly is true, --signature must not be provided."
-        exit 1
-    fi
-
-    validate_text "$ledger" "No ledger index provided. Provide the mnemonic index after the --ledger flag."
-
-    set_account_address_ledger "$ledger"
-
-    # Calculate the derivation path
-    LEDGER_DERIVATION_PATH="m/44'/60'/${ledger}'/0/0"
-    # validate_and_set_account is not used, as it would set the LEDGER_FLAGS variable to use the Ledger. This would block ffi calls within the script from using the Ledger.
-    echo "  The script will result in your Ledger device prompting for approval of a signature."
-else
-    validate_and_set_account "$account" "$ledger"
-    LEDGER_DERIVATION_PATH=""
-fi
-
 # Set the nonce
 export SAFE_NONCE=$nonce
 
@@ -136,7 +137,7 @@ else
 fi
 
 # Build forge command
-FORGE_CMD="FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS --slow $VERBOSITY"
+FORGE_CMD="FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS $UNLOCKED_FLAG --slow $VERBOSITY"
 
 # Add broadcast flag
 if [ "$broadcast" == "true" ]; then
