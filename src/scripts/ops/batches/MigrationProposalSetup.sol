@@ -26,9 +26,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
+        string calldata ledgerDerivationPath_,
         bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
@@ -122,9 +124,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
+        string calldata ledgerDerivationPath_,
         bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address migrationProposalHelper = _envAddressNotZero(
@@ -203,9 +207,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
+        string calldata ledgerDerivationPath_,
         bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
@@ -286,9 +292,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath,
+        string calldata ledgerDerivationPath_,
         bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
