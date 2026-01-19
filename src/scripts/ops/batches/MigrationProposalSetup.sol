@@ -300,7 +300,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
         // Get addresses from environment
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
-        address timelock = _envAddressNotZero("olympus.timelock");
+        address timelock = _envAddressNotZero("olympus.governance.Timelock");
         address migrator = _envAddressNotZero("olympus.legacy.TokenMigrator");
 
         console2.log("=== Minting tempOHM ===");
@@ -362,7 +362,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
     /// @dev    Validates that the timelock received the expected tempOHM amount
     function _validateMintTempOHMPostBatch() external view {
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
-        address timelock = _envAddressNotZero("olympus.timelock");
+        address timelock = _envAddressNotZero("olympus.governance.Timelock");
 
         console2.log("\n Validating mintTempOHM Post-Batch State ");
 
