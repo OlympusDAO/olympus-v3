@@ -225,7 +225,8 @@ contract MigrationProposalSetup is BatchScriptV2 {
             abi.encodeWithSelector(
                 IOlympusTreasury.toggle.selector,
                 IOlympusTreasury.MANAGING.RESERVETOKEN,
-                tempOHM
+                tempOHM,
+                address(0)
             )
         );
 
