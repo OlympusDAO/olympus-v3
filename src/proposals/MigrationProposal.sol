@@ -69,12 +69,13 @@ contract MigrationProposal is GovernorBravoProposal {
                 "## Steps\n\n",
                 "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
-                "3. Call MigrationProposalHelper.activate() which:\n",
+                "3. Grant MigrationProposalHelper permission to spend tempOHM\n",
+                "4. Call MigrationProposalHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
                 "   - Deposits a dummy asset (tempOHM) into the legacy treasury, in order to mint the maximum amount of OHM v1 that can be migrated\n",
                 "   - Migrates OHM v1 to gOHM\n",
                 "   - Burns gOHM to receive OHM v2\n",
-                "4. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
+                "5. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Additional Steps\n\n",
                 "1. DAO MS to update the merkle root for the LegacyMigrator policy\n",
                 "2. DAO MS to remove tempOHM as a reserve token from the legacy treasury\n",
@@ -105,6 +106,8 @@ contract MigrationProposal is GovernorBravoProposal {
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
+        address tempOHM = addresses.getAddress("external-tokens-tempohm");
+        address timelock = addresses.getAddress("olympus-timelock");
 
         // STEP 1: Enable LegacyMigrator policy
         _pushAction(
@@ -125,14 +128,28 @@ contract MigrationProposal is GovernorBravoProposal {
             "Grant burner_admin role to MigrationProposalHelper"
         );
 
-        // STEP 3: Call MigrationProposalHelper.activate()
+        // STEP 3: Grant MigrationProposalHelper permission to spend tempOHM
+        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
+        if (tempOHMBalance == 0) revert("No tempOHM balance on timelock");
+
+        _pushAction(
+            address(tempOHM),
+            abi.encodeWithSelector(
+                IERC20.approve.selector,
+                address(_migrationProposalHelper),
+                tempOHMBalance
+            ),
+            "Grant MigrationProposalHelper permission to spend tempOHM"
+        );
+
+        // STEP 4: Call MigrationProposalHelper.activate()
         _pushAction(
             address(_migrationProposalHelper),
             abi.encodeWithSelector(MigrationProposalHelper.activate.selector),
             "Execute gOHM burn via MigrationProposalHelper"
         );
 
-        // STEP 4: Revoke "burner_admin" role from MigrationProposalHelper
+        // STEP 5: Revoke "burner_admin" role from MigrationProposalHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -161,9 +178,10 @@ contract MigrationProposal is GovernorBravoProposal {
         // Load the contract addresses
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         address burner = addresses.getAddress("olympus-policy-burner");
-        address OHMv1 = _migrationProposalHelper.OHMV1();
-        address OHMv2 = _migrationProposalHelper.OHMV2();
-        address GOHM = _migrationProposalHelper.GOHM();
+        address OHMv1 = addresses.getAddress("olympus-legacy-ohm-v1");
+        address OHMv2 = addresses.getAddress("olympus-legacy-ohm-v2");
+        address GOHM = addresses.getAddress("olympus-legacy-gohm");
+        address tempOHM = addresses.getAddress("external-tokens-tempohm");
 
         // solhint-disable custom-errors
 
@@ -219,6 +237,12 @@ contract MigrationProposal is GovernorBravoProposal {
         require(
             IERC20(OHMv1).balanceOf(address(_migrationProposalHelper)) == 0,
             "There should be no OHMv1 left in the MigrationProposalHelper contract"
+        );
+
+        // 8. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
+        require(
+            IERC20(tempOHM).allowance(address(timelock), address(_migrationProposalHelper)) == 0,
+            "There should be no dangling approval for tempOHM to be spent by the MigrationProposalHelper"
         );
     }
 }
