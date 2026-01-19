@@ -111,6 +111,20 @@ cast call <kernel_address> "getModuleForKeycode(bytes5)" "(0x5052494345)" --rpc-
 cast call <governor_address> "proposals(uint256)" "<proposal_id>" --rpc-url http://localhost:8545
 ```
 
+## Mining Blocks (Warping Forward)
+
+To advance the blockchain by a specific number of blocks (e.g., for time-dependent testing):
+
+```bash
+# Mine 100 blocks
+./shell/anvil_warp.sh 100
+
+# Mine 1000 blocks
+./shell/anvil_warp.sh 1000
+```
+
+The script will mine the specified number of blocks and display the current block number as verification.
+
 ## Resetting the Fork
 
 To start fresh without restarting Anvil:
