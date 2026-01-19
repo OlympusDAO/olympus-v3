@@ -10,6 +10,7 @@ import {OwnedERC20} from "src/external/OwnedERC20.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
 
 /// @notice Setup script for migration treasury permissions
 /// @dev    Provides queue() and toggle() functions for managing tempOHM and MigrationProposalHelper permissions
@@ -18,6 +19,75 @@ contract MigrationProposalSetup is BatchScriptV2 {
 
     /// @notice Expected tempOHM amount for mint validation
     uint256 internal _expectedTempOHMAmount;
+
+    function install(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+
+        // Get addresses from environment
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address burner = _envAddressNotZero("olympus.policies.Burner");
+        address legacyMigrator = _envAddressNotZero("olympus.policies.LegacyMigrator");
+
+        // Display addresses
+        console2.log("Kernel:", kernel);
+        console2.log("Burner:", burner);
+        console2.log("LegacyMigrator:", legacyMigrator);
+
+        // Install Burner policy
+        console2.log("Installing Burner policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, burner)
+        );
+
+        // Install LegacyMigrator policy
+        console2.log("Installing LegacyMigrator policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                legacyMigrator
+            )
+        );
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateInstallPostBatch.selector);
+
+        // Propose batch
+        proposeBatch();
+        console2.log("Batch completed");
+    }
+
+    /// @notice Validate install state after batch execution
+    /// @dev    Validates that Burner and LegacyMigrator have been installed properly
+    function _validateInstallPostBatch() external view {
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address burner = _envAddressNotZero("olympus.policies.Burner");
+        address legacyMigrator = _envAddressNotZero("olympus.policies.LegacyMigrator");
+
+        console2.log("Validating install Post-Batch State");
+
+        // Validate Burner policy is active
+        if (!Kernel(kernel).isPolicyActive(Policy(burner))) {
+            revert("Burner policy should be active");
+        }
+        console2.log("Burner policy is active");
+
+        // Validate LegacyMigrator policy is active
+        if (!Kernel(kernel).isPolicyActive(Policy(legacyMigrator))) {
+            revert("LegacyMigrator policy should be active");
+        }
+        console2.log("LegacyMigrator policy is active");
+
+        console2.log("install post-batch validation passed");
+    }
 
     /// @notice Queue treasury permissions for tempOHM and MigrationProposalHelper
     /// @dev    Grants MigrationProposalHelper permission to deposit tempOHM into treasury
