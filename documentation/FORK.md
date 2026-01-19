@@ -45,7 +45,7 @@ Activate/configure the deployed contracts via multisig batch:
 ```bash
 ./shell/safeBatchV2.sh \
   --contract MyBatchScript \
-  --function run \
+  --function functionName \
   --chain mainnet \
   --account my_wallet \
   --multisig true \
