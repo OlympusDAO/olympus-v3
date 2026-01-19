@@ -101,18 +101,18 @@ contract MigrationProposalSetup is BatchScriptV2 {
         // Validate reserveToken queue
         uint256 reserveTokenTimelock = IOlympusTreasury(legacyTreasury).reserveTokenQueue(tempOHM);
         if (reserveTokenTimelock == 0) {
-            revert("reserveToken queue timestamp should not be 0");
+            revert("reserveToken queue block should not be 0");
         }
-        console2.log("reserveToken queue timestamp:", reserveTokenTimelock);
+        console2.log("reserveToken queue block:", reserveTokenTimelock);
 
         // Validate reserveDepositor queue
         uint256 reserveDepositorTimelock = IOlympusTreasury(legacyTreasury).reserveDepositorQueue(
             migrationProposalHelper
         );
         if (reserveDepositorTimelock == 0) {
-            revert("reserveDepositor queue timestamp should not be 0");
+            revert("reserveDepositor queue block should not be 0");
         }
-        console2.log("reserveDepositor queue timestamp:", reserveDepositorTimelock);
+        console2.log("reserveDepositor queue block:", reserveDepositorTimelock);
 
         console2.log("queueEnable post-batch validation passed");
     }
