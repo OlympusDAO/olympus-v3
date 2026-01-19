@@ -93,12 +93,12 @@ contract DeployV3 is WithEnvironment {
             return;
         } else if (len == 1) {
             // Only one deployment
-            string memory name = abi.decode(sequenceFile.parseRaw(".sequence..name"), (string));
+            string memory name = abi.decode(sequenceFile.parseRaw(".sequence[*].name"), (string));
             deployments.push(name);
         } else {
             // More than one deployment
             string[] memory names = abi.decode(
-                sequenceFile.parseRaw(".sequence..name"),
+                sequenceFile.parseRaw(".sequence[*].name"),
                 (string[])
             );
             for (uint256 i = 0; i < len; i++) {
