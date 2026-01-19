@@ -40,6 +40,7 @@ contract MigrationProposalTest is ProposalTest {
     bool public constant IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED = false;
     bool public constant IS_LEGACY_MIGRATOR_SETUP = false;
     bool public constant IS_LEGACY_TREASURY_SETUP = false;
+    bool public constant IS_TEMP_OHM_MINTED = false;
 
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
@@ -69,7 +70,7 @@ contract MigrationProposalTest is ProposalTest {
 
         // TempOHM setup
         if (IS_TEMP_OHM_DEPLOYED == true) {
-            address tempOHMAddress = addresses.getAddress("olympus-temp-ohm");
+            address tempOHMAddress = addresses.getAddress("external-tokens-tempohm");
             if (tempOHMAddress == address(0)) {
                 revert("tempOHM address is not set");
             }
@@ -80,7 +81,7 @@ contract MigrationProposalTest is ProposalTest {
         } else {
             tempOHM = new OwnedERC20("TempOHM", "tempOHM", DAO_MS);
             vm.label(address(tempOHM), "tempOHM");
-            addresses.addAddress("olympus-temp-ohm", address(tempOHM));
+            addresses.addAddress("external-tokens-tempohm", address(tempOHM));
 
             console2.log("tempOHM deployed");
         }
@@ -201,6 +202,16 @@ contract MigrationProposalTest is ProposalTest {
             );
 
             console2.log("legacyTreasury setup");
+        }
+
+        // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
+        if (IS_TEMP_OHM_MINTED == true) {
+            // Do nothing
+            console2.log("tempOHM already minted");
+        } else {
+            vm.prank(DAO_MS);
+            tempOHM.mint(TIMELOCK, 197735188979073);
+            console2.log("tempOHM minted to Timelock");
         }
 
         // Set debug mode
