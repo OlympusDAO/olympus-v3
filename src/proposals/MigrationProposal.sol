@@ -6,6 +6,9 @@ pragma solidity >=0.8.20;
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 
+// Script
+import {ProposalScript} from "./ProposalScript.sol";
+
 // Contracts
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
@@ -218,5 +221,9 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no OHMv1 left in the MigrationProposalHelper contract"
         );
     }
+}
+
+contract MigrationProposalScript is ProposalScript {
+    constructor() ProposalScript(new MigrationProposal()) {}
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
