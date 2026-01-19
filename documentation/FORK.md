@@ -53,18 +53,22 @@ Activate/configure the deployed contracts via multisig batch:
   --fork true
 ```
 
+**Note:** `--chain mainnet` is still required so the script can look up addresses from `env.json`. When `--fork true` is used, the RPC is automatically overridden to `http://localhost:8545`.
+
 ### Phase 3: Create OCG Proposal
 
 For governance actions, create and test an OCG proposal:
 
 ```bash
-./shell/submitProposal.sh \
+src/scripts/proposals/submitProposal.sh \
   --file src/proposals/MyProposal.sol \
   --contract MyProposal \
   --account my_wallet \
-  --fork http://localhost:8545 \
+  --fork true \
   --broadcast true
 ```
+
+**Note:** When `--fork true` is used, the script automatically overrides `RPC_URL` to `http://localhost:8545`. No need to set it manually.
 
 ### Phase 4: Execute Proposal on Fork
 
@@ -87,10 +91,10 @@ pnpm run anvil:fork
 ./shell/deployV3.sh --target PRICE --chain http://localhost:8545 --broadcast
 
 # 2. MS Batch to activate
-./shell/safeBatchV2.sh --contract PriceDeploy --function run --chain http://localhost:8545 --account tester --fork true --broadcast true
+./shell/safeBatchV2.sh --contract PriceDeploy --function run --chain mainnet --account tester --fork true --broadcast true
 
 # 3. Create proposal
-./shell/submitProposal.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice --account tester --fork http://localhost:8545 --broadcast true
+src/scripts/proposals/submitProposal.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice --account tester --fork true --broadcast true
 
 # 4. Execute proposal
 src/scripts/proposals/executeOnAnvilFork.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice
@@ -138,9 +142,9 @@ To start fresh without restarting Anvil:
 
 | Variable | For Anvil Mode | For Tenderly Mode |
 |----------|----------------|-------------------|
-| `USE_TENDERLY_FORK` | auto-set by `--fork` | set by `--tenderly` |
-| `USE_ANVIL_FORK` | auto-set by `--fork` | ✗ |
+| `USE_TENDERLY_FORK` | ✗ | set by `--tenderly` |
+| `USE_ANVIL_FORK` | set by `--fork` | ✗ |
 | `TENDERLY_*` | ✗ | ✓ |
-| `RPC_URL` | auto-set to localhost | ✓ |
+| `RPC_URL` | auto-set to localhost by `--fork` | ✓ |
 
 **Note:** `anvil:fork` uses the `mainnet` RPC endpoint defined in `foundry.toml`. To fork from a different network, set the `TESTNET_RPC_URL` environment variable and run `anvil --fork-url $TESTNET_RPC_URL --port 8545 --auto-impersonate` directly.

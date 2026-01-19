@@ -52,6 +52,16 @@ if [ -z "$contract" ]; then
     exit 1
 fi
 
+# Override RPC_URL to local fork if fork mode is enabled
+if [ "$FORK" = "true" ]; then
+    # Verify Anvil is running
+    if ! curl -sSf -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 > /dev/null 2>&1; then
+        echo "Error: Anvil is not running on http://localhost:8545. Start it with: pnpm run anvil:fork"
+        exit 1
+    fi
+    RPC_URL="http://localhost:8545"
+fi
+
 # Check if the RPC_URL was specified
 if [ -z "$RPC_URL" ]; then
     echo "Error: RPC_URL was not specified"
