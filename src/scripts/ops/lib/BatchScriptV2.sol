@@ -237,41 +237,19 @@ abstract contract BatchScriptV2 is WithEnvironment {
         return txHash;
     }
 
-    function _proposeMultisigBatch() internal {
+    /// @notice Execute batch via Multisig with proposal
+    /// @dev    Simulates, validates, and proposes batch transactions to the multisig
+    function _sendMultisigBatch() internal {
         if (_batchTargets.length == 0) {
-            console2.log("No batch targets to propose");
+            console2.log("No batch targets to execute");
             return;
         }
 
         console2.log("\n");
-        console2.log("Simulating execution of batch");
-        vm.startPrank(_owner);
-        _runBatch();
-        vm.stopPrank();
-        console2.log("Batch simulation completed");
+        console2.log("=== Executing batch via Multisig ===");
 
-        // Call custom post-batch validation if selector is set (before heartbeats)
-        if (_postBatchValidateSelector != bytes4(0)) {
-            console2.log("\n=== Starting post-batch validation ===");
-            console2.log("Calling post-batch validation function");
-            (bool success, bytes memory data) = address(this).call(
-                abi.encodeWithSelector(_postBatchValidateSelector)
-            );
-            if (!success) {
-                // Revert with the error data
-                assembly {
-                    let revertStringLength := mload(data)
-                    let revertStringPtr := add(data, 0x20)
-                    revert(revertStringPtr, revertStringLength)
-                }
-            }
-            console2.log("Post-batch validation passed");
-        } else {
-            console2.log("\nNo post-batch validation selector set, skipping validation");
-        }
-
-        // Validate heart beat after batch execution and post-batch validation
-        _validateHeartBeat();
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
 
         // If signOnly, get the signature and return
         if (_signOnly) {
@@ -295,13 +273,13 @@ abstract contract BatchScriptV2 is WithEnvironment {
             return;
         }
 
+        // Check if we're in broadcast mode before proposing
         if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
-            console2.log("Not broadcasting, skipping batch proposal");
+            console2.log("Not broadcasting, skipping multisig proposal");
             return;
         }
 
-        console2.log("\n");
-        console2.log("Proposing batch to multi-sig");
+        console2.log("\nBroadcasting batch to Multisig");
 
         bytes32 txHash = _proposeMultisigBatchTransactions();
 
@@ -309,42 +287,35 @@ abstract contract BatchScriptV2 is WithEnvironment {
         console2.logBytes32(txHash);
     }
 
-    function _proposeEOABatch() internal {
+    /// @notice Execute batch via EOA with broadcast
+    /// @dev    Simulates and validates first, then executes if broadcast mode is enabled
+    function _sendEOABatch() internal {
         if (_batchTargets.length == 0) {
-            console2.log("No batch targets to propose");
+            console2.log("No batch targets to execute");
             return;
         }
 
         console2.log("\n");
-        console2.log("Executing batch as EOA");
+        console2.log("=== Executing batch via EOA ===");
 
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
+
+        // Check if we're in broadcast mode before executing
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping EOA execution");
+            return;
+        }
+
+        // Execute batch on EOA with broadcast
+        console2.log("\nBroadcasting batch to EOA");
         vm.startBroadcast();
 
         _runBatch();
 
         vm.stopBroadcast();
 
-        console2.log("Batch executed");
-
-        // Call custom post-batch validation if selector is set
-        if (_postBatchValidateSelector != bytes4(0)) {
-            console2.log("\n=== Starting post-batch validation ===");
-            console2.log("Calling post-batch validation function");
-            (bool success, bytes memory data) = address(this).call(
-                abi.encodeWithSelector(_postBatchValidateSelector)
-            );
-            if (!success) {
-                // Revert with the error data
-                assembly {
-                    let revertStringLength := mload(data)
-                    let revertStringPtr := add(data, 0x20)
-                    revert(revertStringPtr, revertStringLength)
-                }
-            }
-            console2.log("Post-batch validation passed");
-        } else {
-            console2.log("\nNo post-batch validation selector set, skipping validation");
-        }
+        console2.log("Batch executed successfully");
     }
 
     /// @notice Execute batch via Anvil fork with auto-impersonation
@@ -358,35 +329,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
         console2.log("\n");
         console2.log("=== Executing batch via Anvil fork ===");
 
-        // Simulate batch execution first
-        console2.log("Simulating execution of batch");
-        vm.startPrank(_owner);
-        _runBatch();
-        vm.stopPrank();
-        console2.log("Batch simulation completed");
-
-        // Call custom post-batch validation if selector is set (before heartbeats)
-        if (_postBatchValidateSelector != bytes4(0)) {
-            console2.log("\n=== Starting post-batch validation ===");
-            console2.log("Calling post-batch validation function");
-            (bool success, bytes memory data) = address(this).call(
-                abi.encodeWithSelector(_postBatchValidateSelector)
-            );
-            if (!success) {
-                // Revert with the error data
-                assembly {
-                    let revertStringLength := mload(data)
-                    let revertStringPtr := add(data, 0x20)
-                    revert(revertStringPtr, revertStringLength)
-                }
-            }
-            console2.log("Post-batch validation passed");
-        } else {
-            console2.log("\nNo post-batch validation selector set, skipping validation");
-        }
-
-        // Validate heart beat after batch execution and post-batch validation
-        _validateHeartBeat();
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
 
         // Check if we're in broadcast mode before executing on Anvil fork
         if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
@@ -419,12 +363,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @notice Execute batch via Tenderly VNet using HTTP API calls
     /// @dev    Sends transactions to Tenderly VNet for execution without requiring private keys
     function _sendTenderlyBatch() private {
-        // Check if we're in broadcast mode
-        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
-            console2.log("Not broadcasting, skipping Tenderly VNet execution");
-            return;
-        }
-
         if (_batchTargets.length == 0) {
             console2.log("No batch targets to execute");
             return;
@@ -432,6 +370,15 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         console2.log("\n");
         console2.log("=== Executing batch via Tenderly VNet ===");
+
+        // Simulate and validate with snapshot/revert (newly added)
+        _validateWithSnapshot();
+
+        // Check if we're in broadcast mode before executing on Tenderly VNet
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Tenderly VNet execution");
+            return;
+        }
 
         // Get the testnet RPC URL and access key
         string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
@@ -507,9 +454,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         // Normal execution path
         if (_isMultiSig) {
-            _proposeMultisigBatch();
+            _sendMultisigBatch();
         } else {
-            _proposeEOABatch();
+            _sendEOABatch();
         }
     }
 
@@ -683,6 +630,54 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
             lastBeat = uint48(heartContract_.lastBeat());
         }
+    }
+
+    /// @notice Run custom post-batch validation if selector is set
+    /// @dev    Calls the function specified by _postBatchValidateSelector
+    function _runPostBatchValidation() internal {
+        if (_postBatchValidateSelector != bytes4(0)) {
+            console2.log("\n=== Starting post-batch validation ===");
+            console2.log("Calling post-batch validation function");
+            (bool success, bytes memory data) = address(this).call(
+                abi.encodeWithSelector(_postBatchValidateSelector)
+            );
+            if (!success) {
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+            console2.log("Post-batch validation passed");
+        } else {
+            console2.log("\nNo post-batch validation selector set, skipping custom validation");
+        }
+    }
+
+    /// @notice Run simulation and validation with state rollback
+    /// @dev    Creates snapshot before simulation, reverts after validation.
+    ///         This ensures both simulation AND validation state changes are removed.
+    function _validateWithSnapshot() internal {
+        // Create snapshot BEFORE simulation (critical!)
+        uint256 snapshotId = vm.snapshotState();
+        console2.log("Created snapshot before simulation, id:", snapshotId);
+
+        // Simulate batch execution
+        console2.log("Simulating execution of batch");
+        vm.startPrank(_owner);
+        _runBatch();
+        vm.stopPrank();
+        console2.log("Batch simulation completed");
+
+        // Call custom post-batch validation
+        _runPostBatchValidation();
+
+        // Validate heart beat
+        _validateHeartBeat();
+
+        // Revert to snapshot - removes BOTH simulation and validation artifacts
+        vm.revertToStateAndDelete(snapshotId);
+        console2.log("Restored state from snapshot (simulation + validation artifacts removed)");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
