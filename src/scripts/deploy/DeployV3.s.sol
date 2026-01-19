@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // Scripting
@@ -905,18 +906,33 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address owner = _getAddressNotZero("olympus.governance.Timelock");
+        address admin = _getAddressNotZero("olympus.governance.Multisig");
         address burner = _getAddressNotZero("olympus.policies.Burner");
         address tempOHM = _getAddressNotZero("external.tokens.TempOHM");
+
+        // Read OHMv1ToMigrate from args
+        uint256 OHMv1ToMigrate = _readDeploymentArgUint256(
+            "MigrationProposalHelper",
+            "OHMv1ToMigrate"
+        );
 
         // Log parameters
         console2.log("MigrationProposalHelper parameters:");
         console2.log("  owner", owner);
+        console2.log("  admin", admin);
         console2.log("  burner", burner);
         console2.log("  tempOHM", tempOHM);
+        console2.log("  OHMv1ToMigrate", OHMv1ToMigrate);
 
         // Deploy
         vm.broadcast();
-        MigrationProposalHelper helper = new MigrationProposalHelper(owner, burner, tempOHM);
+        MigrationProposalHelper helper = new MigrationProposalHelper(
+            owner,
+            admin,
+            burner,
+            tempOHM,
+            OHMv1ToMigrate
+        );
 
         return (address(helper), "olympus.periphery");
     }
@@ -948,3 +964,4 @@ contract DeployV3 is WithEnvironment {
         return (address(migrator), "olympus.policies");
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

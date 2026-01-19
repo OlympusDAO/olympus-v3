@@ -20,7 +20,6 @@ import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol
 contract MigrationProposalTest is ProposalTest {
     /// @dev Block the migration should be executed at
     uint256 public constant BLOCK = 24070000;
-    uint256 public constant TIMELOCK_DELAY = 6000;
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
@@ -122,11 +121,16 @@ contract MigrationProposalTest is ProposalTest {
 
             console2.log("migrationProposalHelper already deployed");
         } else {
+            // Initial OHM v1 limit (1e9 decimals) - calculated off-chain
+            uint256 maxOHMv1ToMigrate = 197735188979073; // ~197.7k OHM v1
+
             // Deploy MigrationProposalHelper
             migrationProposalHelper = new MigrationProposalHelper(
                 TIMELOCK, // owner
+                DAO_MS, // admin
                 address(burner),
-                address(tempOHM)
+                address(tempOHM),
+                maxOHMv1ToMigrate
             );
             vm.label(address(migrationProposalHelper), "migrationProposalHelper");
             addresses.addAddress(
@@ -182,8 +186,17 @@ contract MigrationProposalTest is ProposalTest {
                 address(migrationProposalHelper)
             );
 
-            // Warp to the end of the timelock period
-            vm.warp(block.timestamp + TIMELOCK_DELAY);
+            // Get the actual queue expiry block numbers
+            uint256 reserveTokenQueueBlock = legacyTreasury.reserveTokenQueue(address(tempOHM));
+            uint256 reserveDepositorQueueBlock = legacyTreasury.reserveDepositorQueue(
+                address(migrationProposalHelper)
+            );
+
+            // Warp to the later of the two queue expiry block numbers
+            uint256 queueExpiryBlock = reserveTokenQueueBlock > reserveDepositorQueueBlock
+                ? reserveTokenQueueBlock
+                : reserveDepositorQueueBlock;
+            vm.roll(queueExpiryBlock);
 
             // Toggle tempOHM as a reserve token in the legacy treasury
             vm.prank(DAO_MS);
@@ -209,8 +222,11 @@ contract MigrationProposalTest is ProposalTest {
             // Do nothing
             console2.log("tempOHM already minted");
         } else {
+            // Mint enough tempOHM for the migration (maxOHMv1ToMigrate * 1e9)
+            uint256 maxOHMv1ToMigrate = 197735188979073; // ~197.7k OHM v1 (1e9 decimals)
+            uint256 tempOHMToMint = maxOHMv1ToMigrate * 1e9; // Convert to 1e18 decimals
             vm.prank(DAO_MS);
-            tempOHM.mint(TIMELOCK, 197735188979073);
+            tempOHM.mint(TIMELOCK, tempOHMToMint);
             console2.log("tempOHM minted to Timelock");
         }
 

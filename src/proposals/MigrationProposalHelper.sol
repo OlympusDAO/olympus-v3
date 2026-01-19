@@ -6,6 +6,7 @@ pragma solidity >=0.8.20;
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {ERC20Burnable} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC20Burnable.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -31,23 +32,58 @@ contract MigrationProposalHelper is Owned {
     address public immutable BURNER;
     address public immutable TEMPOHM;
 
+    /// @notice Admin address that can update the OHM v1 migration limit
+    address public immutable ADMIN;
+
+    /// @notice Maximum amount of OHM v1 to migrate (1e9 decimals)
+    uint256 public OHMv1ToMigrate;
+
     bytes32 public constant MIGRATION_CATEGORY = "migration";
 
     /// @notice True if the activation has been performed
     bool public isActivated = false;
 
     event Activated(address caller);
+    event OHMv1ToMigrateUpdated(uint256 newMax);
 
     error AlreadyActivated();
     error InvalidParams(string reason);
+    error Unauthorized();
 
-    constructor(address owner_, address burner_, address tempOHM_) Owned(owner_) {
+    constructor(
+        address owner_,
+        address admin_,
+        address burner_,
+        address tempOHM_,
+        uint256 OHMv1ToMigrate_
+    ) Owned(owner_) {
         if (owner_ == address(0)) revert InvalidParams("owner");
+        if (admin_ == address(0)) revert InvalidParams("admin");
         if (burner_ == address(0)) revert InvalidParams("burner");
         if (tempOHM_ == address(0)) revert InvalidParams("tempOHM");
 
         BURNER = burner_;
         TEMPOHM = tempOHM_;
+        ADMIN = admin_;
+        OHMv1ToMigrate = OHMv1ToMigrate_;
+    }
+
+    function _onlyOwnerOrAdmin() internal view {
+        if (msg.sender != owner && msg.sender != ADMIN) revert Unauthorized();
+    }
+
+    /// @notice Modifier to restrict access to owner or admin
+    modifier onlyOwnerOrAdmin() {
+        _onlyOwnerOrAdmin();
+        _;
+    }
+
+    /// @notice Set the maximum OHM v1 to migrate
+    /// @dev    Only callable by owner or admin. Updates the migration limit.
+    /// @param maxOHMv1_ The new maximum OHM v1 amount (1e9 decimals)
+    function setOHMv1ToMigrate(uint256 maxOHMv1_) external onlyOwnerOrAdmin {
+        OHMv1ToMigrate = maxOHMv1_;
+        emit OHMv1ToMigrateUpdated(maxOHMv1_);
     }
 
     /// @notice Executes the migration process
@@ -60,52 +96,75 @@ contract MigrationProposalHelper is Owned {
     ///         - The caller is not the owner
     ///         - The function has already been run
     function activate() external onlyOwner {
-        // Revert if already activated
+        // Set isActivated first (CEI: state change before external calls)
+        // This prevents re-entrancy and ensures function only runs once
         if (isActivated) revert AlreadyActivated();
+        isActivated = true;
 
         // Step 1: Add burner category "migration"
         Burner(BURNER).addCategory(MIGRATION_CATEGORY);
 
-        // Step 2: Deposit tempOHM to treasury
-        {
-            uint256 tempOHMBalance = ERC20(TEMPOHM).balanceOf(owner);
-            if (tempOHMBalance == 0) revert InvalidParams("No tempOHM balance");
-            _depositTempOHMToTreasury(tempOHMBalance);
-        }
+        // Step 2: Deposit tempOHM to treasury, receive OHM v1
+        uint256 ohmV1Minted = _depositTempOHMToTreasury();
 
-        // Step 3: Migrate OHMv1 to gOHM
-        _migrateOHMv1ToGOHM();
+        // Step 3: Migrate OHMv1 to gOHM (uses returned amount, not balance)
+        _migrateOHMv1ToGOHM(ohmV1Minted);
 
         // Step 4: Unstake and burn remaining gOHM
         _unstakeAndBurn();
 
-        // Mark as activated
-        isActivated = true;
+        // Step 5: Burn any excess tempOHM and OHM v1 in this contract
+        _burnExcess();
+
         emit Activated(msg.sender);
     }
 
     /// @notice Deposit tempOHM to treasury to receive OHMv1
-    function _depositTempOHMToTreasury(uint256 tempOHMBalance) internal {
+    /// @return ohmV1Minted The amount of OHM v1 minted from the deposit
+    function _depositTempOHMToTreasury() internal returns (uint256 ohmV1Minted) {
+        // Calculate max tempOHM to deposit (convert OHM v1 limit from 1e9 to 1e18)
+        uint256 maxTempOHM = OHMv1ToMigrate * 1e9;
+
         // Transfer tempOHM from owner to this contract
-        // Note: Owner must have approved tempOHM to this contract before calling activate()
-        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), tempOHMBalance);
+        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), maxTempOHM);
 
         // Approve tempOHM for treasury
-        ERC20(TEMPOHM).safeApprove(TREASURY, tempOHMBalance);
+        ERC20(TEMPOHM).safeApprove(TREASURY, maxTempOHM);
 
         // Deposit tempOHM to treasury (this mints OHMv1 to this contract)
-        IOlympusTreasury(TREASURY).deposit(tempOHMBalance, TEMPOHM, 0);
+        // Use the return value from deposit for precision
+        ohmV1Minted = IOlympusTreasury(TREASURY).deposit(maxTempOHM, TEMPOHM, 0);
     }
 
     /// @notice Migrate OHMv1 to gOHM via migrator
-    function _migrateOHMv1ToGOHM() internal {
-        uint256 ohmv1Balance = IERC20(OHMV1).balanceOf(address(this));
-        ERC20(OHMV1).safeApprove(MIGRATOR, ohmv1Balance);
+    /// @param ohmV1Amount The amount of OHM v1 to migrate
+    function _migrateOHMv1ToGOHM(uint256 ohmV1Amount) internal {
+        // Don't early exit - zero amount indicates a problem
+        if (ohmV1Amount == 0) revert InvalidParams("Zero OHM v1 amount to migrate");
+
+        ERC20(OHMV1).safeApprove(MIGRATOR, ohmV1Amount);
         IOlympusTokenMigrator(MIGRATOR).migrate(
-            ohmv1Balance,
+            ohmV1Amount,
             IOlympusTokenMigrator.TYPE.UNSTAKED,
             IOlympusTokenMigrator.TYPE.WRAPPED
         );
+    }
+
+    /// @notice Burn any excess tempOHM and OHM v1 in this contract
+    /// @dev    Any remaining tokens in this contract are burned directly.
+    ///         Uses standard ERC20 burn() for both tokens.
+    function _burnExcess() internal {
+        // Burn excess tempOHM
+        uint256 excessTempOHM = ERC20(TEMPOHM).balanceOf(address(this));
+        if (excessTempOHM > 0) {
+            ERC20Burnable(TEMPOHM).burn(excessTempOHM);
+        }
+
+        // Burn excess OHM v1
+        uint256 excessOHMv1 = IERC20(OHMV1).balanceOf(address(this));
+        if (excessOHMv1 > 0) {
+            ERC20Burnable(address(OHMV1)).burn(excessOHMv1);
+        }
     }
 
     /// @notice Unstake gOHM to OHMv2 and burn
