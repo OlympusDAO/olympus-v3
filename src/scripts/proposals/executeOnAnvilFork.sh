@@ -60,9 +60,12 @@ fi
 # Set default RPC URL if not provided
 export RPC_URL=${RPC_URL:-"http://localhost:8545"}
 
+echo "Funding timelock with ETH for gas..."
+cast rpc --rpc-url $RPC_URL anvil_setBalance "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39" "0xDE0B6B3A7640000" --silent
+
 echo "Executing proposal via Anvil fork"
 echo "Proposal contract: $file:$contract"
 echo "RPC URL: $RPC_URL"
 
 # Run the forge script
-forge script $file:$contract --sig "executeOnAnvilFork()" --rpc-url $RPC_URL --broadcast
+forge script $file:$contract --sig "executeOnAnvilFork()" --rpc-url $RPC_URL --broadcast --unlocked

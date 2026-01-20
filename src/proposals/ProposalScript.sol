@@ -186,6 +186,10 @@ abstract contract ProposalScript is ScriptSuite {
         // set debug mode to true and run it to build the actions list
         proposal.setDebug(true);
 
+        // Create snapshot before simulation
+        uint256 snapshotId = vm.snapshotState();
+        console2.log("Created snapshot before simulation, id:", snapshotId);
+
         // run the proposal to build it
         proposal.run(addresses, address(0));
 
@@ -195,6 +199,10 @@ abstract contract ProposalScript is ScriptSuite {
 
         // Get the proposal actions
         (address[] memory targets, , bytes[] memory arguments) = proposal.getProposalActions();
+
+        // Revert to snapshot
+        vm.revertToStateAndDelete(snapshotId);
+        console2.log("Restored state from snapshot (simulation artifacts removed)");
 
         console2.log("Executing proposal via Anvil fork");
         vm.startBroadcast(timelock);
