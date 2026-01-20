@@ -14,7 +14,7 @@ fi
 BLOCK_COUNT=$1
 
 # Check if anvil is running
-if ! cast block-number --rpc-url http://localhost:8545 &>/dev/null; then
+if ! cast block-number --rpc-url http://localhost:8545 &> /dev/null; then
     echo "Error: Cannot connect to anvil at http://localhost:8545"
     echo "Please start anvil fork first:"
     echo "  pnpm run anvil:fork"

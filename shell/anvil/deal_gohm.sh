@@ -18,7 +18,7 @@ WALLET=$1
 RPC_URL="http://localhost:8545"
 
 # Check if anvil is running
-if ! cast block-number --rpc-url $RPC_URL &>/dev/null; then
+if ! cast block-number --rpc-url $RPC_URL &> /dev/null; then
     echo "Error: Cannot connect to anvil at $RPC_URL"
     echo "Please start anvil fork first:"
     echo "  anvil --fork-url <RPC_URL> --auto-impersonate"
@@ -28,7 +28,7 @@ fi
 # Constants
 GOHM="0x0ab87046fBb341D058F17CBC4c1133F25a20a52f"
 SOURCE="0xD3204Ae00d6599Ba6e182c6D640A79d76CdAad74"
-AMOUNT="15000000000000000000"  # 15 gOHM in wei (18 decimals)
+AMOUNT="15000000000000000000" # 15 gOHM in wei (18 decimals)
 
 echo "=== Dealing 15 gOHM to $WALLET ==="
 echo ""

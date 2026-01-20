@@ -1,10 +1,10 @@
 {
     "functions": [
         {
-            "name": "setOHMv1ToMigrate",
             "args": {
                 "OHMv1ToMigrate": "197543809682892"
-            }
+            },
+            "name": "setOHMv1ToMigrate"
         }
     ]
 }
