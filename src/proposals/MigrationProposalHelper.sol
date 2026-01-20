@@ -86,6 +86,12 @@ contract MigrationProposalHelper is Owned {
         emit OHMv1ToMigrateUpdated(maxOHMv1_);
     }
 
+    /// @notice Calculate the amount of tempOHM to deposit
+    /// @dev    This is based on the OHMv1ToMigrate amount, converted to 1e18 decimals
+    function getTempOHMToDeposit() public view returns (uint256) {
+        return OHMv1ToMigrate * 1e9;
+    }
+
     /// @notice Executes the migration process
     /// @dev    This function assumes:
     ///         - The "burner_admin" role has been granted to this contract
@@ -122,18 +128,18 @@ contract MigrationProposalHelper is Owned {
     /// @notice Deposit tempOHM to treasury to receive OHMv1
     /// @return ohmV1Minted The amount of OHM v1 minted from the deposit
     function _depositTempOHMToTreasury() internal returns (uint256 ohmV1Minted) {
-        // Calculate max tempOHM to deposit (convert OHM v1 limit from 1e9 to 1e18)
-        uint256 maxTempOHM = OHMv1ToMigrate * 1e9;
+        // Calculate tempOHM to deposit (convert OHM v1 limit from 1e9 to 1e18)
+        uint256 tempOHMToDeposit = getTempOHMToDeposit();
 
         // Transfer tempOHM from owner to this contract
-        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), maxTempOHM);
+        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), tempOHMToDeposit);
 
         // Approve tempOHM for treasury
-        ERC20(TEMPOHM).safeApprove(TREASURY, maxTempOHM);
+        ERC20(TEMPOHM).safeApprove(TREASURY, tempOHMToDeposit);
 
         // Deposit tempOHM to treasury (this mints OHMv1 to this contract)
         // Use the return value from deposit for precision
-        ohmV1Minted = IOlympusTreasury(TREASURY).deposit(maxTempOHM, TEMPOHM, 0);
+        ohmV1Minted = IOlympusTreasury(TREASURY).deposit(tempOHMToDeposit, TEMPOHM, 0);
     }
 
     /// @notice Migrate OHMv1 to gOHM via migrator

@@ -131,15 +131,13 @@ contract MigrationProposal is GovernorBravoProposal {
         );
 
         // STEP 3: Grant MigrationProposalHelper permission to spend tempOHM
-        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
-        if (tempOHMBalance == 0) revert("No tempOHM balance on timelock");
-
+        uint256 tempOHMToApprove = _migrationProposalHelper.getTempOHMToDeposit();
         _pushAction(
             address(tempOHM),
             abi.encodeWithSelector(
                 IERC20.approve.selector,
                 address(_migrationProposalHelper),
-                tempOHMBalance
+                tempOHMToApprove
             ),
             "Grant MigrationProposalHelper permission to spend tempOHM"
         );
