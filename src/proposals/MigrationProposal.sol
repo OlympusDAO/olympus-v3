@@ -65,7 +65,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.\n",
                 "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n",
                 "The proposed LegacyMigrator policy replaces the old TokenMigrator.\n",
-                "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n",
+                "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n\n",
                 "## Steps\n\n",
                 "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
@@ -79,7 +79,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "## Additional Steps\n\n",
                 "1. DAO MS to update the merkle root for the LegacyMigrator policy\n",
                 "2. DAO MS to remove tempOHM as a reserve token from the legacy treasury\n",
-                "3. DAO MS to remove MigrationProposalHelper as a reserve depositor from the legacy treasury\n",
+                "3. DAO MS to remove MigrationProposalHelper as a reserve depositor from the legacy treasury\n\n",
                 "## Note\n\n",
                 "Treasury permissions for tempOHM and MigrationProposalHelper should be set up separately by the DAO MS before this proposal is executed.\n"
             );
