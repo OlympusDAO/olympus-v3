@@ -10,7 +10,6 @@ import {OwnedERC20} from "src/external/OwnedERC20.sol";
 import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
-import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 
 /// @notice Setup script for migration treasury permissions
@@ -362,6 +361,7 @@ contract MigrationProposalSetup is BatchScriptV2 {
 
     /// @notice Mint tempOHM to the Timelock (MigrationProposalHelper owner)
     /// @dev    To be run before OCG proposal submission
+    ///         Reads OHMv1ToMigrate from MigrationProposalHelper to determine amount
     function mintTempOHM(
         bool useDaoMS_,
         bool signOnly_,
@@ -375,54 +375,41 @@ contract MigrationProposalSetup is BatchScriptV2 {
         address legacyTreasury = _envAddressNotZero("olympus.legacy.TreasuryV2");
         address tempOHM = _envAddressNotZero("external.tokens.TempOHM");
         address timelock = _envAddressNotZero("olympus.governance.Timelock");
-        address migrator = _envAddressNotZero("olympus.legacy.TokenMigrator");
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
 
         console2.log("=== Minting tempOHM ===");
         console2.log("Legacy Treasury:", legacyTreasury);
         console2.log("tempOHM:", tempOHM);
         console2.log("Timelock:", timelock);
+        console2.log("MigrationProposalHelper:", migrationProposalHelper);
 
-        // Excess reserves is 65659757174924
-        console2.log(
-            "Treasury excess reserves (18 dp):",
-            IOlympusTreasury(legacyTreasury).excessReserves()
-        );
-
-        // OHM valuation of tempOHM is 1:1 in OHM decimals
+        // Validate tempOHM valuation
         if (IOlympusTreasury(legacyTreasury).valueOf(address(tempOHM), 1e18) != 1e9) {
             revert("OHM valuation of tempOHM should be 1:1 in OHM decimals");
         }
 
-        // OHMV1 old supply is 553483798713734 (9 dp)
-        // OHMV1 total supply is 278651810168261 (9 dp)
-        // The difference is what can be minted and migrated
-        // Difference is 274831988545473 (274831.988545473 OHM)
-        console2.log("OHMV1 oldSupply (9 dp):", IOlympusTokenMigrator(migrator).oldSupply());
-        console2.log("OHMV1 total supply (9 dp):", OHMV1.totalSupply());
-        uint256 maxMintableOHM = IOlympusTokenMigrator(migrator).oldSupply() - OHMV1.totalSupply();
-        console2.log("maxMintableOHM (9 dp):", maxMintableOHM);
+        // Read OHMv1ToMigrate from MigrationProposalHelper (must be pre-set)
+        uint256 ohmV1ToMigrate = MigrationProposalHelper(migrationProposalHelper).OHMv1ToMigrate();
+        if (ohmV1ToMigrate == 0) {
+            revert("OHMv1ToMigrate must be set on MigrationProposalHelper before minting tempOHM");
+        }
+        console2.log("OHMv1ToMigrate (9 dp):", ohmV1ToMigrate);
 
-        // 1e9 OHM = 21403507467877949 gOHM (18 dp)
-        // 274831988545473 OHM can be converted into how much gOHM?
-        // 274831988545473 * 21403507467877949 / 1e18 = 5882368519244778449578 gOHM (18 dp)
-
-        // Migrator gOHM balance is 4232050112844353034347 (18 dp)
-        // maxMigrateableOHM * conversionRate = 4232050112844353034347
-        // maxMigrateableOHM = 4232050112844353034347 / conversionRate = 4232050112844353034347 * 1e9 / 21403507467877949 = 197726943548656 OHM (9 dp) (197,726.9435486566)
-        // In reality, the maxOHM is higher
-        uint256 maxOHM = 197726943548656;
-        // There seems to be some issue with calculations, as the maxOHM results in residual gOHM
-        // 176481131518703773 * 1e9 / 21403507467877949
-        // = 8245430417
-        maxOHM += 8245430417;
-        uint256 maxTempOHM = maxOHM * 1e9;
+        // Calculate tempOHM needed from the helper's getter
+        uint256 tempOHMNeeded = MigrationProposalHelper(migrationProposalHelper)
+            .getTempOHMToDeposit();
+        console2.log("tempOHM needed (18 dp):", tempOHMNeeded);
 
         // Store expected amount for post-batch validation
-        _expectedTempOHMAmount = maxTempOHM;
+        _expectedTempOHMAmount = tempOHMNeeded;
 
-        // Mint tempOHM to the Timelock (MigrationProposalHelper owner)
-        addToBatch(tempOHM, abi.encodeWithSelector(OwnedERC20.mint.selector, timelock, maxTempOHM));
-        console2.log("maxTempOHM (18 dp):", maxTempOHM);
+        // Mint tempOHM to the Timelock
+        addToBatch(
+            tempOHM,
+            abi.encodeWithSelector(OwnedERC20.mint.selector, timelock, tempOHMNeeded)
+        );
 
         console2.log("tempOHM minted to Timelock");
 
