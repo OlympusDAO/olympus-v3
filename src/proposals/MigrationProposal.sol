@@ -17,7 +17,6 @@ import {Burner} from "src/policies/Burner.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ERC20Burnable} from "@openzeppelin-5.3.0/token/ERC20/extensions/ERC20Burnable.sol";
 
 /// @notice Proposal to enable LegacyMigrator for OHM v1 migration and execute gOHM burn
 contract MigrationProposal is GovernorBravoProposal {
