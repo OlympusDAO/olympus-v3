@@ -162,7 +162,7 @@ contract MigrationProposal is GovernorBravoProposal {
         );
 
         // STEP 6. Burn excess tempOHM from timelock
-        tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
+        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
         if (tempOHMBalance > 0) {
             _pushAction(
                 address(tempOHM),
