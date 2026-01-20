@@ -7,6 +7,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
@@ -19,6 +20,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
 
     /// @notice Expected tempOHM amount for mint validation
     uint256 internal _expectedTempOHMAmount;
+
+    /// @notice Expected OHMv1ToMigrate amount for setOHMv1ToMigrate validation (1e9 decimals)
+    uint256 internal _expectedOHMv1ToMigrateAmount;
 
     function install(
         bool useDaoMS_,
@@ -452,6 +456,93 @@ contract MigrationProposalSetup is BatchScriptV2 {
         console2.log("Expected balance:", _expectedTempOHMAmount);
 
         console2.log("mintTempOHM post-batch validation passed");
+    }
+
+    /// @notice Set the OHM v1 to migrate value on MigrationProposalHelper
+    /// @dev    Updates the amount of OHM v1 that will be migrated
+    ///         Args file format: {"functions": [{"name": "setOHMv1ToMigrate", "args": {"OHMv1ToMigrate": "197735188979073"}}]}
+    function setOHMv1ToMigrate(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        // Get addresses from environment
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+
+        console2.log("=== Setting OHM v1 to Migrate on MigrationProposalHelper ===");
+        console2.log("MigrationProposalHelper:", migrationProposalHelper);
+
+        // Read the new OHMv1ToMigrate value from args file
+        uint256 newOHMv1ToMigrate = _readBatchArgUint256("setOHMv1ToMigrate", "OHMv1ToMigrate");
+
+        console2.log("New OHMv1ToMigrate (1e9 decimals):", newOHMv1ToMigrate);
+
+        // Set OHMv1ToMigrate on MigrationProposalHelper
+        addToBatch(
+            migrationProposalHelper,
+            abi.encodeWithSelector(
+                MigrationProposalHelper.setOHMv1ToMigrate.selector,
+                newOHMv1ToMigrate
+            )
+        );
+
+        // Store expected amount for post-batch validation
+        _expectedOHMv1ToMigrateAmount = newOHMv1ToMigrate;
+
+        console2.log("OHMv1ToMigrate set on MigrationProposalHelper");
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this._validateSetOHMv1ToMigratePostBatch.selector);
+
+        proposeBatch();
+    }
+
+    /// @notice Validate setOHMv1ToMigrate state after batch execution
+    /// @dev    Validates that OHMv1ToMigrate has been updated correctly
+    function _validateSetOHMv1ToMigratePostBatch() external view {
+        address migrationProposalHelper = _envAddressNotZero(
+            "olympus.periphery.MigrationProposalHelper"
+        );
+
+        console2.log("\n Validating setOHMv1ToMigrate Post-Batch State ");
+
+        // Validate OHMv1ToMigrate was set correctly
+        uint256 actualOHMv1ToMigrate = MigrationProposalHelper(migrationProposalHelper)
+            .OHMv1ToMigrate();
+        if (actualOHMv1ToMigrate != _expectedOHMv1ToMigrateAmount) {
+            revert(
+                string.concat(
+                    "OHMv1ToMigrate should be ",
+                    vm.toString(_expectedOHMv1ToMigrateAmount),
+                    ", but is ",
+                    vm.toString(actualOHMv1ToMigrate)
+                )
+            );
+        }
+        console2.log("OHMv1ToMigrate:", actualOHMv1ToMigrate);
+        console2.log("Expected value:", _expectedOHMv1ToMigrateAmount);
+
+        // Validate getTempOHMToDeposit returns correct value
+        uint256 tempOHMToDeposit = MigrationProposalHelper(migrationProposalHelper)
+            .getTempOHMToDeposit();
+        uint256 expectedTempOHM = _expectedOHMv1ToMigrateAmount * 1e9;
+        if (tempOHMToDeposit != expectedTempOHM) {
+            revert(
+                string.concat(
+                    "getTempOHMToDeposit should return ",
+                    vm.toString(expectedTempOHM),
+                    ", but returns ",
+                    vm.toString(tempOHMToDeposit)
+                )
+            );
+        }
+        console2.log("getTempOHMToDeposit:", tempOHMToDeposit);
+
+        console2.log("setOHMv1ToMigrate post-batch validation passed");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
