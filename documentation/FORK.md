@@ -10,6 +10,7 @@ This guide covers the complete workflow for testing protocol changes against a l
 | `--fork true` | Execute on local Anvil fork | `http://localhost:8545` | Foundry `vm.startBroadcast()` | Local testing/dev |
 
 **Key differences:**
+
 - `--tenderly` connects to the real testnet and uses Tenderly's VNet API to simulate transactions
 - `--fork` connects to a local Anvil fork and executes transactions directly using Foundry broadcast
 - `--fork` requires Anvil running locally; `--tenderly` does not
