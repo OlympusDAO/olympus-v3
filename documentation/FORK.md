@@ -122,13 +122,29 @@ To advance the blockchain by a specific number of blocks (e.g., for time-depende
 
 ```bash
 # Mine 100 blocks
-./shell/anvil_warp.sh 100
+./shell/anvil/warp.sh 100
 
 # Mine 1000 blocks
-./shell/anvil_warp.sh 1000
+./shell/anvil/warp.sh 1000
 ```
 
 The script will mine the specified number of blocks and display the current block number as verification.
+
+## Dealing gOHM for Voting Tests
+
+To deal 15 gOHM to a wallet and set up voting checkpoints (useful for testing governance proposals):
+
+```bash
+# Deal 15 gOHM to a wallet
+./shell/anvil/deal_gohm.sh <wallet_address>
+```
+
+The script will:
+1. Transfer 15 gOHM from a wealthy holder to the target wallet
+2. Mine 1 block to create a voting checkpoint
+3. Delegate votes to the target wallet (self-delegation)
+4. Mine another block to checkpoint the delegation
+5. Verify and display the voting power
 
 ## Resetting the Fork
 

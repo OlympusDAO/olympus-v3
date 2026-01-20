@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# anvil_warp.sh - Script to mine blocks on a local anvil fork
+# warp.sh - Script to mine blocks on a local anvil fork
 
 # Exit if any error occurs
 set -e
@@ -12,6 +12,14 @@ if [ -z "$1" ]; then
 fi
 
 BLOCK_COUNT=$1
+
+# Check if anvil is running
+if ! cast block-number --rpc-url http://localhost:8545 &>/dev/null; then
+    echo "Error: Cannot connect to anvil at http://localhost:8545"
+    echo "Please start anvil fork first:"
+    echo "  pnpm run anvil:fork"
+    exit 1
+fi
 
 # Validate it's a positive integer
 if ! [[ "$BLOCK_COUNT" =~ ^[0-9]+$ ]] || [ "$BLOCK_COUNT" -eq 0 ]; then
