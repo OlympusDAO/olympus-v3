@@ -363,6 +363,7 @@ contract EmissionManagerTest is Test {
         // Mint gOHM supply to test against
         // Index is 10,000, therefore a total supply of 1,000 gOHM = 10,000,000 OHM
         gohm.mint(address(this), 1_000 * 1e18);
+        gohm.setIndex(1e9 * 10000); // Set index to 10,000 (in 1e9 scale)
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
         uint256 testReserve = 1_000_000 * 1e18;

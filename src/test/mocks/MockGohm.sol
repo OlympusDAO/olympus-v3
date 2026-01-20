@@ -17,7 +17,8 @@ contract MockGohm is MockERC20, IDelegate {
     /// @notice Index set to a value that causes rounding (not at base level of 1e9)
     ///         This simulates the real gOHM behavior where the index grows over time
     ///         At this index: balanceTo(balanceFrom(x)) < x for some values due to double rounding
-    uint256 public constant index = 269238508004;
+    /// @dev    Made mutable to allow tests to set a custom index for specific scenarios
+    uint256 public index = 269238508004;
 
     mapping(address => address) public override delegates;
 
@@ -29,6 +30,12 @@ contract MockGohm is MockERC20, IDelegate {
 
     function delegate(address delegatee_) public {
         delegates[msg.sender] = delegatee_;
+    }
+
+    /// @notice Set the gOHM index for testing purposes
+    /// @param index_ The new index value (in 1e9 scale, where 1e9 = 1:1 ratio)
+    function setIndex(uint256 index_) external {
+        index = index_;
     }
 
     /// @notice Converts gOHM amount to OHM (what happens when unstaking)
