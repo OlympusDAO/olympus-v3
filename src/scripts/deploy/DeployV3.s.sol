@@ -906,7 +906,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address owner = _getAddressNotZero("olympus.governance.Timelock");
-        address admin = _getAddressNotZero("olympus.governance.Multisig");
+        address admin = _getAddressNotZero("olympus.multisig.dao");
         address burner = _getAddressNotZero("olympus.policies.Burner");
         address tempOHM = _getAddressNotZero("external.tokens.TempOHM");
 
