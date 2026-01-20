@@ -108,7 +108,6 @@ contract MigrationProposal is GovernorBravoProposal {
     function _build(Addresses addresses) internal override {
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
         address tempOHM = addresses.getAddress("external-tokens-tempohm");
-        address OHMv1 = addresses.getAddress("olympus-legacy-ohm-v1");
         address timelock = addresses.getAddress("olympus-timelock");
 
         // STEP 1: Enable LegacyMigrator policy
@@ -130,14 +129,14 @@ contract MigrationProposal is GovernorBravoProposal {
             "Grant burner_admin role to MigrationProposalHelper"
         );
 
-        // STEP 3: Grant MigrationProposalHelper permission to spend tempOHM
-        uint256 tempOHMToApprove = _migrationProposalHelper.getTempOHMToDeposit();
+        // STEP 3: Grant MigrationProposalHelper permission to spend all tempOHM
+        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
         _pushAction(
             address(tempOHM),
             abi.encodeWithSelector(
                 IERC20.approve.selector,
                 address(_migrationProposalHelper),
-                tempOHMToApprove
+                tempOHMBalance
             ),
             "Grant MigrationProposalHelper permission to spend tempOHM"
         );
@@ -161,27 +160,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "Revoke burner_admin role from MigrationProposalHelper"
         );
 
-        // STEP 6. Burn excess tempOHM from timelock
-        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
-        if (tempOHMBalance > 0) {
-            _pushAction(
-                address(tempOHM),
-                abi.encodeWithSelector(ERC20Burnable.burn.selector, tempOHMBalance),
-                "Burn excess tempOHM from timelock"
-            );
-        }
-
-        // STEP 7. Burn excess OHM v1 from timelock
-        uint256 OHMv1Balance = IERC20(OHMv1).balanceOf(timelock);
-        if (OHMv1Balance > 0) {
-            _pushAction(
-                address(OHMv1),
-                abi.encodeWithSelector(ERC20Burnable.burn.selector, OHMv1Balance),
-                "Burn excess OHM v1 from timelock"
-            );
-        }
-
-        // STEP 8. Revoke any spending approval for tempOHM
+        // STEP 6. Revoke any spending approval for tempOHM
         _pushAction(
             address(tempOHM),
             abi.encodeWithSelector(IERC20.approve.selector, address(_migrationProposalHelper), 0),
@@ -266,22 +245,20 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no OHMv1 left in the MigrationProposalHelper contract"
         );
 
-        // 8. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
-        require(
-            IERC20(tempOHM).allowance(address(timelock), address(_migrationProposalHelper)) == 0,
-            "There should be no dangling approval for tempOHM to be spent by the MigrationProposalHelper"
-        );
-
-        // 9. Validate that there is no tempOHM left in the Timelock
+        // 7. Validate that there is no tempOHM left in the Timelock or the MigrationProposalHelper contract
         require(
             IERC20(tempOHM).balanceOf(timelock) == 0,
             "There should be no tempOHM left in the Timelock"
         );
-
-        // 10. Validate that there is no OHMv1 left in the Timelock
         require(
-            IERC20(OHMv1).balanceOf(timelock) == 0,
-            "There should be no OHMv1 left in the Timelock"
+            IERC20(tempOHM).balanceOf(address(_migrationProposalHelper)) == 0,
+            "There should be no tempOHM left in the MigrationProposalHelper contract"
+        );
+
+        // 8. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
+        require(
+            IERC20(tempOHM).allowance(address(timelock), address(_migrationProposalHelper)) == 0,
+            "There should be no dangling approval for tempOHM to be spent by the MigrationProposalHelper"
         );
     }
 }

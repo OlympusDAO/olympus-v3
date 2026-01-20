@@ -128,13 +128,13 @@ contract MigrationProposalHelper is Owned {
     /// @notice Deposit tempOHM to treasury to receive OHMv1
     /// @return ohmV1Minted The amount of OHM v1 minted from the deposit
     function _depositTempOHMToTreasury() internal returns (uint256 ohmV1Minted) {
+        // Transfer all of the tempOHM from the owner to this contract
+        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), ERC20(TEMPOHM).balanceOf(owner));
+
         // Calculate tempOHM to deposit (convert OHM v1 limit from 1e9 to 1e18)
         uint256 tempOHMToDeposit = getTempOHMToDeposit();
 
-        // Transfer tempOHM from owner to this contract
-        ERC20(TEMPOHM).safeTransferFrom(owner, address(this), tempOHMToDeposit);
-
-        // Approve tempOHM for treasury
+        // Approve spending of tempOHM by treasury
         ERC20(TEMPOHM).safeApprove(TREASURY, tempOHMToDeposit);
 
         // Deposit tempOHM to treasury (this mints OHMv1 to this contract)
