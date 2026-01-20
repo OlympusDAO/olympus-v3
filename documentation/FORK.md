@@ -88,7 +88,7 @@ pnpm run anvil:fork
 
 # Terminal 2: Run full test workflow
 # 1. Deploy
-./shell/deployV3.sh --target PRICE --chain http://localhost:8545 --broadcast
+./shell/deployV3.sh --target PRICE --chain http://localhost:8545 --broadcast true
 
 # 2. MS Batch to activate
 ./shell/safeBatchV2.sh --contract PriceDeploy --function run --chain mainnet --account tester --fork true --broadcast true
@@ -131,12 +131,7 @@ The script will mine the specified number of blocks and display the current bloc
 
 ## Resetting the Fork
 
-To start fresh without restarting Anvil:
-
-```bash
-# Anvil will reset to the fork block when you restart the process
-# Or manually reset within Anvil by sending the anvil_reset transaction
-```
+Just restart `anvil`.
 
 ## Environment Variables
 
