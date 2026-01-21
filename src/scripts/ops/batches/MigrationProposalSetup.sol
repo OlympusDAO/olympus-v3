@@ -35,12 +35,12 @@ contract MigrationProposalSetup is BatchScriptV2 {
         // Get addresses from environment
         address kernel = _envAddressNotZero("olympus.Kernel");
         address burner = _envAddressNotZero("olympus.policies.Burner");
-        address legacyMigrator = _envAddressNotZero("olympus.policies.LegacyMigrator");
+        address v1Migrator = _envAddressNotZero("olympus.policies.V1Migrator");
 
         // Display addresses
         console2.log("Kernel:", kernel);
         console2.log("Burner:", burner);
-        console2.log("LegacyMigrator:", legacyMigrator);
+        console2.log("V1Migrator:", v1Migrator);
 
         // Install Burner policy
         console2.log("Installing Burner policy");
@@ -49,14 +49,14 @@ contract MigrationProposalSetup is BatchScriptV2 {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, burner)
         );
 
-        // Install LegacyMigrator policy
-        console2.log("Installing LegacyMigrator policy");
+        // Install V1Migrator policy
+        console2.log("Installing V1Migrator policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
-                legacyMigrator
+                v1Migrator
             )
         );
 
@@ -69,11 +69,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
     }
 
     /// @notice Validate install state after batch execution
-    /// @dev    Validates that Burner and LegacyMigrator have been installed properly
+    /// @dev    Validates that Burner and V1Migrator have been installed properly
     function _validateInstallPostBatch() external view {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address burner = _envAddressNotZero("olympus.policies.Burner");
-        address legacyMigrator = _envAddressNotZero("olympus.policies.LegacyMigrator");
+        address v1Migrator = _envAddressNotZero("olympus.policies.V1Migrator");
 
         console2.log("Validating install Post-Batch State");
 
@@ -83,11 +83,11 @@ contract MigrationProposalSetup is BatchScriptV2 {
         }
         console2.log("Burner policy is active");
 
-        // Validate LegacyMigrator policy is active
-        if (!Kernel(kernel).isPolicyActive(Policy(legacyMigrator))) {
-            revert("LegacyMigrator policy should be active");
+        // Validate V1Migrator policy is active
+        if (!Kernel(kernel).isPolicyActive(Policy(v1Migrator))) {
+            revert("V1Migrator policy should be active");
         }
-        console2.log("LegacyMigrator policy is active");
+        console2.log("V1Migrator policy is active");
 
         console2.log("install post-batch validation passed");
     }

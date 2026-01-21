@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {Keycode, fromKeycode, toKeycode} from "src/Kernel.sol";
 
-contract LegacyMigratorConfigureDependenciesTest is LegacyMigratorTest {
+contract V1MigratorConfigureDependenciesTest is V1MigratorTest {
     // ========== CONFIGURE DEPENDENCIES TESTS ========== //
     // Given policy is configured
     //  [X] it returns correct dependencies (MINTR, ROLES)

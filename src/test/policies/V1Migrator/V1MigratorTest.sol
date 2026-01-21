@@ -15,12 +15,12 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {LegacyMigrator} from "policies/LegacyMigrator.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {Hashes} from "@openzeppelin-5.3.0/utils/cryptography/Hashes.sol";
 
-/// @title LegacyMigratorTest
-/// @notice Parent test contract for LegacyMigrator with shared setup and helpers
-contract LegacyMigratorTest is StdInvariant, Test {
+/// @title V1MigratorTest
+/// @notice Parent test contract for V1Migrator with shared setup and helpers
+contract V1MigratorTest is StdInvariant, Test {
     UserFactory public userCreator;
 
     // Role holders - distinct users for each role
@@ -44,7 +44,7 @@ contract LegacyMigratorTest is StdInvariant, Test {
 
     // Policies
     RolesAdmin internal rolesAdmin;
-    LegacyMigrator internal migrator;
+    V1Migrator internal migrator;
 
     // Test constants
     uint256 internal constant ALICE_ALLOWANCE = 1000e9; // 1000 OHM (9 decimals)
@@ -99,21 +99,16 @@ contract LegacyMigratorTest is StdInvariant, Test {
         vm.label(address(MINTR), "MINTR");
         vm.label(address(ROLES), "ROLES");
 
-        // Generate merkle tree BEFORE deploying LegacyMigrator (merkleRoot is in constructor)
+        // Generate merkle tree BEFORE deploying V1Migrator (merkleRoot is in constructor)
         _generateMerkleTree();
 
         // Deploy policies
         rolesAdmin = new RolesAdmin(kernel);
-        migrator = new LegacyMigrator(
-            kernel,
-            IERC20(address(ohmV1)),
-            IgOHM(address(gOHM)),
-            merkleRoot
-        );
+        migrator = new V1Migrator(kernel, IERC20(address(ohmV1)), IgOHM(address(gOHM)), merkleRoot);
 
         // Label policies
         vm.label(address(rolesAdmin), "RolesAdmin");
-        vm.label(address(migrator), "LegacyMigrator");
+        vm.label(address(migrator), "V1Migrator");
 
         // Initialize system
         kernel.executeAction(Actions.InstallModule, address(MINTR));

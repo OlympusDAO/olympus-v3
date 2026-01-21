@@ -6,16 +6,16 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
-import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 
-/// @title LegacyMigratorForkTest
-/// @notice Fork test to verify LegacyMigrator works correctly against mainnet state
+/// @title V1MigratorForkTest
+/// @notice Fork test to verify V1Migrator works correctly against mainnet state
 ///
-///         LegacyMigrator uses gOHM conversion (balanceTo -> balanceFrom)
+///         V1Migrator uses gOHM conversion (balanceTo -> balanceFrom)
 ///         to match the production migration flow. When the gOHM index is not at base
 ///         level (1e9), the double rounding can result in small losses (1 wei or more).
-contract LegacyMigratorForkTest is Test {
+contract V1MigratorForkTest is Test {
     // ============ CONSTANTS ============ //
 
     /// @notice Block number for the fork
@@ -35,7 +35,7 @@ contract LegacyMigratorForkTest is Test {
     IERC20 public ohmV1;
     IERC20 public ohmV2;
     Kernel public kernel;
-    LegacyMigrator public legacyMigrator;
+    V1Migrator public v1Migrator;
 
     // ============ SETUP ============ //
 
@@ -55,42 +55,42 @@ contract LegacyMigratorForkTest is Test {
         vm.label(OHM_V2, "OHM_V2");
         vm.label(KERNEL, "KERNEL");
 
-        // Deploy and activate LegacyMigrator for testing
-        _deployLegacyMigrator();
+        // Deploy and activate V1Migrator for testing
+        _deployV1Migrator();
     }
 
-    /// @notice Deploy and configure LegacyMigrator
-    function _deployLegacyMigrator() internal {
+    /// @notice Deploy and configure V1Migrator
+    function _deployV1Migrator() internal {
         // Set merkle root and migration cap
         /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 dummyRoot = keccak256(abi.encode("dummy"));
         uint256 initialCap = 1_000_000e9; // 1M OHM
 
-        // Deploy LegacyMigrator with mainnet gOHM address
-        legacyMigrator = new LegacyMigrator(kernel, ohmV1, gOHM, dummyRoot);
-        vm.label(address(legacyMigrator), "LegacyMigrator");
+        // Deploy V1Migrator with mainnet gOHM address
+        v1Migrator = new V1Migrator(kernel, ohmV1, gOHM, dummyRoot);
+        vm.label(address(v1Migrator), "V1Migrator");
 
-        // Activate LegacyMigrator in the kernel
+        // Activate V1Migrator in the kernel
         vm.prank(DAO_MS);
-        kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
+        kernel.executeAction(Actions.ActivatePolicy, address(v1Migrator));
 
         // Enable the migrator with initial cap (TIMELOCK has admin role on mainnet)
         vm.prank(TIMELOCK);
-        legacyMigrator.enable(abi.encode(initialCap));
+        v1Migrator.enable(abi.encode(initialCap));
     }
 
     // ============ TESTS ============ //
 
-    /// @notice Test that LegacyMigrator migration works correctly against mainnet
+    /// @notice Test that V1Migrator migration works correctly against mainnet
     ///         Validates that users receive the correct OHM v2 amount after gOHM conversion
-    function test_legacyMigrator_migrationWorks(uint256 amount) public {
+    function test_v1Migrator_migrationWorks(uint256 amount) public {
         // Bound to reasonable amounts
         amount = bound(amount, 1e9, 10_000e9);
 
         address user = makeAddr("user");
         vm.label(user, "user");
 
-        // Calculate expected OHM v2 via gOHM conversion (what LegacyMigrator does internally)
+        // Calculate expected OHM v2 via gOHM conversion (what V1Migrator does internally)
         uint256 gohmAmount = gOHM.balanceTo(amount);
         uint256 expectedOHMv2 = gOHM.balanceFrom(gohmAmount);
 
@@ -107,12 +107,12 @@ contract LegacyMigratorForkTest is Test {
 
         // Set merkle root to include this user
         vm.prank(TIMELOCK);
-        legacyMigrator.setMerkleRoot(leaf);
+        v1Migrator.setMerkleRoot(leaf);
 
-        // User approves and migrates via LegacyMigrator
+        // User approves and migrates via V1Migrator
         vm.startPrank(user);
-        ohmV1.approve(address(legacyMigrator), amount);
-        legacyMigrator.migrate(amount, proof, amount);
+        ohmV1.approve(address(v1Migrator), amount);
+        v1Migrator.migrate(amount, proof, amount);
         vm.stopPrank();
 
         // Check the result
@@ -123,7 +123,7 @@ contract LegacyMigratorForkTest is Test {
         assertEq(actualOHMv2, expectedOHMv2, "User should receive expected OHM v2 amount");
 
         // Verify the conversion
-        console2.log("====== LegacyMigrator Migration ======");
+        console2.log("====== V1Migrator Migration ======");
         console2.log("Input OHM v1:", amount);
         console2.log("Expected OHM v2:", expectedOHMv2);
         console2.log("Actual OHM v2:", actualOHMv2);

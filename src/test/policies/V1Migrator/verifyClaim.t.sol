@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 
-contract LegacyMigratorVerifyClaimTest is LegacyMigratorTest {
+contract V1MigratorVerifyClaimTest is V1MigratorTest {
     // ========== VERIFY CLAIM TESTS ========== //
 
     // when the proof is invalid

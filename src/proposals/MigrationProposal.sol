@@ -12,28 +12,28 @@ import {ProposalScript} from "./ProposalScript.sol";
 // Contracts
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
-import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {Burner} from "src/policies/Burner.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @notice Proposal to enable LegacyMigrator for OHM v1 migration and execute gOHM burn
+/// @notice Proposal to enable V1Migrator for OHM v1 migration and execute gOHM burn
 contract MigrationProposal is GovernorBravoProposal {
     // Kernel will be used in most proposals
     address internal _kernel;
-    // LegacyMigrator and MigrationProposalHelper deployed separately, retrieved from addresses
-    LegacyMigrator internal _legacyMigrator;
+    // V1Migrator and MigrationProposalHelper deployed separately, retrieved from addresses
+    V1Migrator internal _v1Migrator;
     MigrationProposalHelper internal _migrationProposalHelper;
 
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 public constant BURNER_ADMIN_ROLE = bytes32("burner_admin");
 
-    /// @notice Initial migration cap for LegacyMigrator (in OHM v1, 9 decimals)
+    /// @notice Initial migration cap for V1Migrator (in OHM v1, 9 decimals)
     /// @dev    TODO: Update migration cap before mainnet deployment
     uint256 public constant INITIAL_MIGRATION_CAP = 1000e9;
 
-    error InvalidLegacyMigrator();
+    error InvalidV1Migrator();
     error InvalidMigrationProposalHelper();
 
     constructor() {
@@ -47,27 +47,27 @@ contract MigrationProposal is GovernorBravoProposal {
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "Defund OHM v1 TokenMigrator and Enable LegacyMigrator";
+        return "Defund OHM v1 TokenMigrator and Enable V1Migrator";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Defund OHM v1 TokenMigrator and Enable LegacyMigrator\n\n",
-                "This proposal defunds the old OHM v1 TokenMigrator and enables the LegacyMigrator policy to allow OHM v1 holders to migrate to OHM v2.\n\n",
+                "# Defund OHM v1 TokenMigrator and Enable V1Migrator\n\n",
+                "This proposal defunds the old OHM v1 TokenMigrator and enables the V1Migrator policy to allow OHM v1 holders to migrate to OHM v2.\n\n",
                 "## Summary\n\n",
                 "This proposal has two main steps:\n\n",
-                "1. Enable LegacyMigrator policy for OHM v1 to OHM v2 migration\n",
+                "1. Enable V1Migrator policy for OHM v1 to OHM v2 migration\n",
                 "2. Execute MigrationProposalHelper.activate() to perform defunding of the old TokenMigrator\n\n",
                 "## Background\n\n",
                 "The OHM v1 TokenMigrator was used to migrate OHM v1 to gOHM.\n"
                 "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.\n",
                 "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n",
-                "The proposed LegacyMigrator policy replaces the old TokenMigrator.\n",
+                "The proposed V1Migrator policy replaces the old TokenMigrator.\n",
                 "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n\n",
                 "## Steps\n\n",
-                "1. Enable LegacyMigrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
+                "1. Enable V1Migrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
                 "2. Grant `burner_admin` role to MigrationProposalHelper\n",
                 "3. Grant MigrationProposalHelper permission to spend tempOHM\n",
                 "4. Call MigrationProposalHelper.activate() which:\n",
@@ -77,7 +77,7 @@ contract MigrationProposal is GovernorBravoProposal {
                 "   - Burns gOHM to receive OHM v2\n",
                 "5. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Additional Steps\n\n",
-                "1. DAO MS to update the merkle root for the LegacyMigrator policy\n",
+                "1. DAO MS to update the merkle root for the V1Migrator policy\n",
                 "2. DAO MS to remove tempOHM as a reserve token from the legacy treasury\n",
                 "3. DAO MS to remove MigrationProposalHelper as a reserve depositor from the legacy treasury\n\n",
                 "## Note\n\n",
@@ -89,10 +89,10 @@ contract MigrationProposal is GovernorBravoProposal {
         // Store the kernel address in state
         _kernel = addresses.getAddress("olympus-kernel");
 
-        // Retrieve LegacyMigrator and MigrationProposalHelper from addresses
-        address legacyMigratorAddr = addresses.getAddress("olympus-policy-legacy-migrator");
-        if (legacyMigratorAddr == address(0)) revert InvalidLegacyMigrator();
-        _legacyMigrator = LegacyMigrator(legacyMigratorAddr);
+        // Retrieve V1Migrator and MigrationProposalHelper from addresses
+        address v1MigratorAddr = addresses.getAddress("olympus-policy-v1-migrator");
+        if (v1MigratorAddr == address(0)) revert InvalidV1Migrator();
+        _v1Migrator = V1Migrator(v1MigratorAddr);
 
         address migrationProposalHelperAddr = addresses.getAddress(
             "olympus-periphery-migration-proposal-helper"
@@ -109,11 +109,11 @@ contract MigrationProposal is GovernorBravoProposal {
         address tempOHM = addresses.getAddress("external-tokens-tempohm");
         address timelock = addresses.getAddress("olympus-timelock");
 
-        // STEP 1: Enable LegacyMigrator policy
+        // STEP 1: Enable V1Migrator policy
         _pushAction(
-            address(_legacyMigrator),
+            address(_v1Migrator),
             abi.encodeWithSelector(IEnabler.enable.selector, abi.encode(INITIAL_MIGRATION_CAP)),
-            "Enable LegacyMigrator policy"
+            "Enable V1Migrator policy"
         );
 
         // STEP 2: Grant "burner_admin" role to MigrationProposalHelper
@@ -190,8 +190,8 @@ contract MigrationProposal is GovernorBravoProposal {
 
         // solhint-disable custom-errors
 
-        // 1. Validate that LegacyMigrator is enabled
-        require(_legacyMigrator.isEnabled() == true, "LegacyMigrator should be enabled");
+        // 1. Validate that V1Migrator is enabled
+        require(_v1Migrator.isEnabled() == true, "V1Migrator should be enabled");
 
         // 2. Validate that MigrationProposalHelper is marked as activated
         require(

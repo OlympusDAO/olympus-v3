@@ -7,7 +7,7 @@ pragma solidity >=0.8.15;
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";
-import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
+import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 
@@ -25,9 +25,9 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @title LegacyMigrator
+/// @title V1Migrator
 /// @notice Policy to allow OHM v1 holders to migrate to OHM v2 via merkle proof verification
-/// @dev    Inherits from Policy, RolesConsumer, PolicyEnabler, IVersioned, and ILegacyMigrator
+/// @dev    Inherits from Policy, RolesConsumer, PolicyEnabler, IVersioned, and IV1Migrator
 ///
 ///         Migration flow (partial migrations allowed):
 ///         1. User has OHM v1 balance
@@ -45,7 +45,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
 ///         - setMigrationCap: Update global cap and MINTR approval
 ///         - enable/disable: Emergency pause/resume
-contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILegacyMigrator {
+contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migrator {
     using MerkleProof for bytes32[];
 
     // =========  CONSTANTS ========= //
@@ -70,7 +70,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @dev    Set in configureDependencies via MINTR.ohm()
     IERC20 internal _OHMV2;
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     bytes32 public override merkleRoot;
 
     /// @notice Current merkle root nonce for invalidating old migrations on root update
@@ -80,7 +80,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     /// @dev    Nonce-based invalidation allows O(1) merkle root updates
     mapping(address user => mapping(uint256 nonce => uint256 amount)) private _migratedAmounts;
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     uint256 public override totalMigrated;
 
     // =========  CONSTRUCTOR ========= //
@@ -98,27 +98,27 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
 
     // =========  INTERFACE GETTERS ========= //
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function ohmV1() external view returns (IERC20 ohmV1_) {
         return _OHMV1;
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function ohmV2() external view returns (IERC20 ohmV2_) {
         return _OHMV2;
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function gOHM() external view returns (address gOHM_) {
         return address(_GOHM);
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function remainingMintApproval() external view returns (uint256 remaining_) {
         remaining_ = MINTR.mintApproval(address(this));
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     /// @dev    Returns the migrated amount for the current merkle root nonce
     function migratedAmounts(address account_) external view returns (uint256 migratedAmount_) {
         migratedAmount_ = _migratedAmounts[account_][_currentMerkleNonce];
@@ -209,12 +209,12 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
     // =========  ERC165 ========= //
 
     /// @notice ERC165 interface support
-    /// @dev    Supports IERC165, IVersioned, ILegacyMigrator, and IEnabler (via PolicyEnabler)
+    /// @dev    Supports IERC165, IVersioned, IV1Migrator, and IEnabler (via PolicyEnabler)
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            interfaceId == type(ILegacyMigrator).interfaceId ||
+            interfaceId == type(IV1Migrator).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
@@ -251,7 +251,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         return proof_.verify(merkleRoot, leaf);
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function verifyClaim(
         address account_,
         uint256 allocatedAmount_,
@@ -260,7 +260,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         return _verifyClaim(account_, allocatedAmount_, proof_);
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function migrate(
         uint256 amount_,
         bytes32[] calldata proof_,
@@ -304,7 +304,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         emit Migrated(msg.sender, amount_, ohmV2Amount);
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     /// @dev    When the merkle root is updated, the nonce is incremented.
     ///         This resets all previous migrations without needing to iterate over users.
     ///         The new merkle tree should reflect the amount each user can migrate going
@@ -320,7 +320,7 @@ contract LegacyMigrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, ILe
         emit MerkleRootUpdated(merkleRoot_, msg.sender);
     }
 
-    /// @inheritdoc ILegacyMigrator
+    /// @inheritdoc IV1Migrator
     function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
         _setMigrationCap(cap_);
     }

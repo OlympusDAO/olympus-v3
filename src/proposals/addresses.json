@@ -262,7 +262,7 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-legacy-migrator"
+        "name": "olympus-policy-v1-migrator"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",

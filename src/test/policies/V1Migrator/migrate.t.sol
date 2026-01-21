@@ -2,11 +2,11 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
+import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
-contract LegacyMigratorMigrateTest is LegacyMigratorTest {
+contract V1MigratorMigrateTest is V1MigratorTest {
     event Migrated(address indexed user, uint256 ohmV1Amount, uint256 ohmV2Amount);
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
 
@@ -40,7 +40,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
     function test_whenAmountIsZero_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.ZeroAmount.selector);
+        bytes memory err = abi.encodeWithSelector(IV1Migrator.ZeroAmount.selector);
         vm.expectRevert(err);
 
         // Call function
@@ -55,7 +55,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         bytes32[] memory invalidProof = new bytes32[](0);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.InvalidProof.selector);
+        bytes memory err = abi.encodeWithSelector(IV1Migrator.InvalidProof.selector);
         vm.expectRevert(err);
 
         // Call function
@@ -100,7 +100,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
     function test_givenAmountExceedsAllocation_reverts() public givenAliceApproved {
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.AmountExceedsAllowance.selector,
+            IV1Migrator.AmountExceedsAllowance.selector,
             ALICE_ALLOWANCE + 1,
             ALICE_ALLOWANCE,
             0
@@ -124,7 +124,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.AmountExceedsAllowance.selector,
+            IV1Migrator.AmountExceedsAllowance.selector,
             amount_,
             ALICE_ALLOWANCE,
             500e9
@@ -300,7 +300,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.AmountExceedsAllowance.selector,
+            IV1Migrator.AmountExceedsAllowance.selector,
             amount_,
             ALICE_ALLOWANCE,
             ALICE_ALLOWANCE
@@ -331,7 +331,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.CapExceeded.selector,
+            IV1Migrator.CapExceeded.selector,
             expectedOHMv2,
             mintrApproval
         );
@@ -388,7 +388,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
         // Expect revert with CapExceeded showing correct remaining
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.CapExceeded.selector,
+            IV1Migrator.CapExceeded.selector,
             bobExpectedOHMv2,
             remaining
         );
@@ -403,7 +403,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
 
     function test_givenCallerNotProofOwner_reverts() public givenAliceApproved givenBobApproved {
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.InvalidProof.selector);
+        bytes memory err = abi.encodeWithSelector(IV1Migrator.InvalidProof.selector);
         vm.expectRevert(err);
 
         // Call function
@@ -536,7 +536,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         migrator.setMerkleRoot(newRoot);
 
         // Expect revert
-        bytes memory err = abi.encodeWithSelector(ILegacyMigrator.InvalidProof.selector);
+        bytes memory err = abi.encodeWithSelector(IV1Migrator.InvalidProof.selector);
         vm.expectRevert(err);
 
         // Call function
@@ -587,7 +587,7 @@ contract LegacyMigratorMigrateTest is LegacyMigratorTest {
         vm.assume(amount > ALICE_ALLOWANCE);
 
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.AmountExceedsAllowance.selector,
+            IV1Migrator.AmountExceedsAllowance.selector,
             amount,
             ALICE_ALLOWANCE,
             0

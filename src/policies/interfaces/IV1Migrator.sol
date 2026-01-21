@@ -6,10 +6,10 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
-/// @title ILegacyMigrator
-/// @notice Interface for the LegacyMigrator policy that allows OHM v1 holders to migrate to OHM v2
+/// @title IV1Migrator
+/// @notice Interface for the V1Migrator policy that allows OHM v1 holders to migrate to OHM v2
 ///         via merkle proof verification
-interface ILegacyMigrator is IEnabler, IVersioned {
+interface IV1Migrator is IEnabler, IVersioned {
     // ============ EVENTS ============ //
 
     /// @notice Emitted when a user successfully migrates OHM v1 to OHM v2

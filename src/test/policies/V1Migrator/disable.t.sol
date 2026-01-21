@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
-contract LegacyMigratorDisableTest is LegacyMigratorTest {
+contract V1MigratorDisableTest is V1MigratorTest {
     // ========== DISABLE TESTS ========== //
     // given contract is disabled
     //  [X] it reverts

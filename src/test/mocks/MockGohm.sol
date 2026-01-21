@@ -10,7 +10,7 @@ interface IDelegate {
 }
 
 /// @title MockGohm
-/// @notice Mock gOHM token for testing the LegacyMigrator conversion
+/// @notice Mock gOHM token for testing the V1Migrator conversion
 /// @dev    Uses an index that causes rounding to simulate production behavior
 ///         Index 269238508004 causes small rounding losses (e.g., 1000 OHM v1 -> 999.999999999 OHM v2)
 contract MockGohm is MockERC20, IDelegate {

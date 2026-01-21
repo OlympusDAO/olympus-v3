@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
-contract LegacyMigratorSetMerkleRootTest is LegacyMigratorTest {
+contract V1MigratorSetMerkleRootTest is V1MigratorTest {
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
 
     // ========== SET MERKLE ROOT TESTS ========== //

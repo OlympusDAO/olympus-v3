@@ -44,7 +44,7 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 import {Burner} from "src/policies/Burner.sol";
 import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
-import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
@@ -937,7 +937,7 @@ contract DeployV3 is WithEnvironment {
         return (address(helper), "olympus.periphery");
     }
 
-    function deployLegacyMigrator() public returns (address, string memory) {
+    function deployV1Migrator() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
@@ -946,7 +946,7 @@ contract DeployV3 is WithEnvironment {
         bytes32 merkleRoot = bytes32(0); // Set to zero, will be set to a valid root after the proposal is executed
 
         // Log parameters
-        console2.log("LegacyMigrator parameters:");
+        console2.log("V1Migrator parameters:");
         console2.log("  kernel", kernel);
         console2.log("  ohmV1", ohmV1);
         console2.log("  gohm", gohm);
@@ -954,7 +954,7 @@ contract DeployV3 is WithEnvironment {
 
         // Deploy
         vm.broadcast();
-        LegacyMigrator migrator = new LegacyMigrator(
+        V1Migrator migrator = new V1Migrator(
             Kernel(kernel),
             IERC20(ohmV1),
             IgOHM(gohm),

@@ -8,7 +8,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {Burner} from "src/policies/Burner.sol";
-import {LegacyMigrator} from "src/policies/LegacyMigrator.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {ERC20 as SolmateERC20} from "solmate/tokens/ERC20.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
@@ -32,12 +32,12 @@ contract MigrationProposalTest is ProposalTest {
     IERC20 public OHMv2;
     Burner public burner;
     MigrationProposalHelper public migrationProposalHelper;
-    LegacyMigrator public legacyMigrator;
+    V1Migrator public v1Migrator;
 
     bool public constant IS_TEMP_OHM_DEPLOYED = false;
     bool public constant IS_BURNER_SETUP = false;
     bool public constant IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED = false;
-    bool public constant IS_LEGACY_MIGRATOR_SETUP = false;
+    bool public constant IS_V1_MIGRATOR_SETUP = false;
     bool public constant IS_LEGACY_TREASURY_SETUP = false;
     bool public constant IS_TEMP_OHM_MINTED = false;
 
@@ -141,32 +141,32 @@ contract MigrationProposalTest is ProposalTest {
             console2.log("migrationProposalHelper deployed and setup");
         }
 
-        // LegacyMigrator setup
-        if (IS_LEGACY_MIGRATOR_SETUP == true) {
-            address legacyMigratorAddress = addresses.getAddress("olympus-policy-legacy-migrator");
-            if (legacyMigratorAddress == address(0)) {
-                revert("legacyMigrator address is not set");
+        // V1Migrator setup
+        if (IS_V1_MIGRATOR_SETUP == true) {
+            address v1MigratorAddress = addresses.getAddress("olympus-policy-v1-migrator");
+            if (v1MigratorAddress == address(0)) {
+                revert("v1Migrator address is not set");
             }
-            legacyMigrator = LegacyMigrator(legacyMigratorAddress);
-            vm.label(address(legacyMigrator), "legacyMigrator");
+            v1Migrator = V1Migrator(v1MigratorAddress);
+            vm.label(address(v1Migrator), "v1Migrator");
 
-            console2.log("legacyMigrator already deployed");
+            console2.log("v1Migrator already deployed");
         } else {
-            // Deploy LegacyMigrator
-            legacyMigrator = new LegacyMigrator(
+            // Deploy V1Migrator
+            v1Migrator = new V1Migrator(
                 kernel,
                 IERC20(address(OHMv1)),
                 gOHM,
                 bytes32(0) // merkleRoot (set to zero, not used in proposal test)
             );
-            vm.label(address(legacyMigrator), "legacyMigrator");
-            addresses.addAddress("olympus-policy-legacy-migrator", address(legacyMigrator));
+            vm.label(address(v1Migrator), "v1Migrator");
+            addresses.addAddress("olympus-policy-v1-migrator", address(v1Migrator));
 
-            // Install LegacyMigrator into the kernel
+            // Install V1Migrator into the kernel
             vm.prank(DAO_MS);
-            kernel.executeAction(Actions.ActivatePolicy, address(legacyMigrator));
+            kernel.executeAction(Actions.ActivatePolicy, address(v1Migrator));
 
-            console2.log("legacyMigrator deployed and setup");
+            console2.log("v1Migrator deployed and setup");
         }
 
         // LegacyTreasury setup

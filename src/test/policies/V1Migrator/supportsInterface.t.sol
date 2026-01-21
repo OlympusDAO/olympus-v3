@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
+import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
-contract LegacyMigratorSupportsInterfaceTest is LegacyMigratorTest {
+contract V1MigratorSupportsInterfaceTest is V1MigratorTest {
     // ========== SUPPORTS INTERFACE TESTS ========== //
     // Given interface check
     //  [X] it supports IERC165
     //  [X] it supports IVersioned
-    //  [X] it supports ILegacyMigrator
+    //  [X] it supports IV1Migrator
     //  [X] it supports IEnabler
     //  [X] it does not support random interface
 
@@ -25,8 +25,8 @@ contract LegacyMigratorSupportsInterfaceTest is LegacyMigratorTest {
         );
 
         assertTrue(
-            migrator.supportsInterface(type(ILegacyMigrator).interfaceId),
-            "Should support ILegacyMigrator"
+            migrator.supportsInterface(type(IV1Migrator).interfaceId),
+            "Should support IV1Migrator"
         );
 
         assertTrue(

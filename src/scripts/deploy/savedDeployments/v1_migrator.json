@@ -18,7 +18,7 @@
             }
         },
         {
-            "name": "LegacyMigrator",
+            "name": "V1Migrator",
             "args": {}
         }
     ]

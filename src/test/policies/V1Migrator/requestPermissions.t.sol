@@ -2,10 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {Permissions, Keycode, toKeycode, fromKeycode} from "src/Kernel.sol";
 
-contract LegacyMigratorRequestPermissionsTest is LegacyMigratorTest {
+contract V1MigratorRequestPermissionsTest is V1MigratorTest {
     // ========== REQUEST PERMISSIONS TESTS ========== //
     // Given policy is configured
     //  [X] it returns correct MINTR permissions

@@ -2,11 +2,11 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {LegacyMigratorTest} from "./LegacyMigratorTest.sol";
+import {V1MigratorTest} from "./V1MigratorTest.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ILegacyMigrator} from "src/policies/interfaces/ILegacyMigrator.sol";
+import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
-contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
+contract V1MigratorSetMigrationCapTest is V1MigratorTest {
     event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
 
     uint256 internal constant NEW_CAP = 20000e9;
@@ -117,7 +117,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         uint256 amount = 100e9;
         uint256 expectedOHMv2 = _expectedOHMv2(amount);
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.CapExceeded.selector,
+            IV1Migrator.CapExceeded.selector,
             expectedOHMv2,
             0
         );
@@ -157,7 +157,7 @@ contract LegacyMigratorSetMigrationCapTest is LegacyMigratorTest {
         uint256 extraExpected = _expectedOHMv2(extraAmount);
 
         bytes memory err = abi.encodeWithSelector(
-            ILegacyMigrator.CapExceeded.selector,
+            IV1Migrator.CapExceeded.selector,
             extraExpected,
             remaining
         );
