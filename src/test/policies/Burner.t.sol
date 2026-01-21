@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
+// =========== TEST CONTRACTS ===========
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-import "src/Kernel.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
+// =========== CONTRACTS ===========
 import {Burner} from "policies/Burner.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {Kernel, Keycode, Permissions, Actions, fromKeycode, toKeycode} from "src/Kernel.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 
 // solhint-disable-next-line max-states-count
 contract BurnerTest is Test {
+    /// forge-lint: disable-start(mixed-case-variable)
+
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 constant BURNER_ADMIN = bytes32("burner_admin");
+
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
@@ -32,6 +35,8 @@ contract BurnerTest is Test {
 
     RolesAdmin internal rolesAdmin;
     Burner internal burner;
+
+    /// forge-lint: disable-end(mixed-case-variable)
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -135,13 +140,16 @@ contract BurnerTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
-        Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
-        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        Keycode mintrKeycode = toKeycode("MINTR");
+        Keycode trsryKeycode = toKeycode("TRSRY");
+        expectedPerms[0] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.burnOhm.selector});
+        expectedPerms[1] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.withdrawReserves.selector});
+        expectedPerms[2] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
 
         Permissions[] memory perms = burner.requestPermissions();
         // Check: permission storage
@@ -229,7 +237,7 @@ contract BurnerTest is Test {
         // Attempt to burn without burner_admin role and expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
+            BURNER_ADMIN
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -297,7 +305,7 @@ contract BurnerTest is Test {
         // Attempt to burn without burner_admin role and expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
+            BURNER_ADMIN
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -349,7 +357,7 @@ contract BurnerTest is Test {
         // Attempt to burn without burner_admin role and expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
+            BURNER_ADMIN
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -423,7 +431,7 @@ contract BurnerTest is Test {
 
     // [X] Get Categories
 
-    function test_getCategories() public {
+    function test_getCategories() public view {
         bytes32[] memory categories = burner.getCategories();
 
         assertEq(categories.length, 3);

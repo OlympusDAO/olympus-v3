@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-
+// =========== LIBRARIES ===========
 import {TransferHelper} from "libraries/TransferHelper.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
+// =========== CONTRACTS ===========
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 
 /// @title Olympus Burner Policy
 /// @notice Olympus Burner Policy Contract
@@ -33,25 +33,30 @@ contract Burner is Policy, RolesConsumer {
 
     // ========== STATE ========== //
 
+    /// forge-lint: disable-start(mixed-case-variable)
+
     // Modules
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
     // Olympus contract dependencies
     /// @notice OHM token
-    ERC20 public immutable ohm;
+    ERC20 public immutable OHM;
 
     // Burn metadata
     /// @notice List of approved categories for logging OHM burns
     bytes32[] public categories;
+
     /// @notice Whether a category is approved for logging
     /// @dev This is used to prevent logging of burn events that are not consistent with standardized names
     mapping(bytes32 => bool) public categoryApproved;
 
+    /// forge-lint: disable-end(mixed-case-variable)
+
     // ========= POLICY SETUP ========= //
 
     constructor(Kernel kernel_, ERC20 ohm_) Policy(kernel_) {
-        ohm = ohm_;
+        OHM = ohm_;
     }
 
     /// @inheritdoc Policy
@@ -65,35 +70,42 @@ contract Burner is Policy, RolesConsumer {
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 trsryMajor, ) = TRSRY.VERSION();
+        (uint8 mintrMajor, ) = MINTR.VERSION();
+        (uint8 rolesMajor, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1, 1]);
-        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+        if (mintrMajor != 1 || rolesMajor != 1 || trsryMajor != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        ohm.safeApprove(address(MINTR), type(uint256).max);
+        OHM.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode trsryKeycode = toKeycode("TRSRY");
 
         requests = new Permissions[](3);
-        requests[0] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[0] = Permissions({keycode: MINTR.KEYCODE(), funcSelector: MINTR.burnOhm.selector});
+        requests[1] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.withdrawReserves.selector});
+        requests[2] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
     }
 
     // ========= BURN FUNCTIONS ========= //
 
     modifier onlyApproved(bytes32 category_) {
-        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
+        _onlyApproved(category_);
         _;
+    }
+
+    function _onlyApproved(bytes32 category_) internal view {
+        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
     }
 
     /// @notice Burn OHM from the treasury
@@ -103,8 +115,8 @@ contract Burner is Policy, RolesConsumer {
         bytes32 category_
     ) external onlyRole("burner_admin") onlyApproved(category_) {
         // Withdraw OHM from the treasury
-        TRSRY.increaseWithdrawApproval(address(this), ohm, amount_);
-        TRSRY.withdrawReserves(address(this), ohm, amount_);
+        TRSRY.increaseWithdrawApproval(address(this), OHM, amount_);
+        TRSRY.withdrawReserves(address(this), OHM, amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
@@ -125,7 +137,7 @@ contract Burner is Policy, RolesConsumer {
         bytes32 category_
     ) external onlyRole("burner_admin") onlyApproved(category_) {
         // Transfer OHM from the user to this contract
-        ohm.safeTransferFrom(from_, address(this), amount_);
+        OHM.safeTransferFrom(from_, address(this), amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
