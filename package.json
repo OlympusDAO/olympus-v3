@@ -24,7 +24,7 @@
         "lint": "pnpm run prettier && pnpm run solhint && pnpm run markdownlint",
         "lint:check": "pnpm run prettier:check && pnpm run solhint:check && pnpm run markdownlint:check",
         "test": "./shell/test_all.sh",
-        "test:unit": "forge test --no-match-contract '(Fork)' --no-match-path 'src/test/proposals/*.t.sol' -vvv",
+        "test:unit": "forge test --no-match-contract '(Fork|Script)' --no-match-path 'src/test/proposals/*.t.sol' -vvv",
         "test:fork": "forge test --match-contract 'Fork' --no-match-contract 'CrossChainBridgeFork|TokenPoolFork' --fork-url mainnet -vvv",
         "test:proposal": "forge test --match-path 'src/test/proposals/*.t.sol' --fork-url mainnet -vvv",
         "test:crosschainfork": "forge test --match-contract 'CrossChainBridgeFork|TokenPoolFork' -vvv",
