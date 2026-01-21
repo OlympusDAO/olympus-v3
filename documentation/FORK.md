@@ -140,6 +140,7 @@ To deal 15 gOHM to a wallet and set up voting checkpoints (useful for testing go
 ```
 
 The script will:
+
 1. Transfer 15 gOHM from a wealthy holder to the target wallet
 2. Mine 1 block to create a voting checkpoint
 3. Delegate votes to the target wallet (self-delegation)
