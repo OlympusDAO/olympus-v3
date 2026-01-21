@@ -51,7 +51,6 @@ contract MaxMigratableOHMScript is Test {
             console2.log("Consider increasing STARTING_AMOUNT and running again.");
             console2.log("\nResult with current STARTING_AMOUNT:");
             console2.log("Max migratable OHMv1 (9 dp):", STARTING_AMOUNT);
-            console2.log("In human-readable:", STARTING_AMOUNT / 1e9, "OHM");
             console2.log("Corresponding tempOHM (18 dp):", STARTING_AMOUNT * 1e9);
             console2.log("\n=== For args file ===");
             console2.log(
@@ -61,6 +60,20 @@ contract MaxMigratableOHMScript is Test {
                     '"}}]}'
                 )
             );
+            return;
+        }
+
+        // Check if LOWER_BOUND fails
+        // It is returned as the max if no match is found in between,
+        // so we need to check if it works.
+        if (!_tryMigration(LOWER_BOUND)) {
+            console2.log("\n=== WARNING ===");
+            console2.log("LOWER_BOUND failed!");
+            console2.log("The maximum migratable amount may be lower than LOWER_BOUND.");
+            console2.log("Consider decreasing LOWER_BOUND and running again.");
+            console2.log("\nResult with current LOWER_BOUND:");
+            console2.log("Max migratable OHMv1 (9 dp):", LOWER_BOUND);
+            console2.log("Corresponding tempOHM (18 dp):", LOWER_BOUND * 1e9);
             return;
         }
 
