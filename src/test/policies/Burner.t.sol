@@ -144,8 +144,14 @@ contract BurnerTest is Test {
         Permissions[] memory expectedPerms = new Permissions[](3);
         Keycode mintrKeycode = toKeycode("MINTR");
         Keycode trsryKeycode = toKeycode("TRSRY");
-        expectedPerms[0] = Permissions({keycode: mintrKeycode, funcSelector: MINTR.burnOhm.selector});
-        expectedPerms[1] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.withdrawReserves.selector});
+        expectedPerms[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.burnOhm.selector
+        });
+        expectedPerms[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
         expectedPerms[2] = Permissions({
             keycode: trsryKeycode,
             funcSelector: TRSRY.increaseWithdrawApproval.selector
@@ -235,10 +241,7 @@ contract BurnerTest is Test {
 
     function testRevert_burnFromTreasury_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            BURNER_ADMIN
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burnFromTreasury(1, "TEST_CATEGORY_1");
@@ -303,10 +306,7 @@ contract BurnerTest is Test {
 
     function testRevert_burnFrom_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            BURNER_ADMIN
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burnFrom(alice, 1, "TEST_CATEGORY_1");
@@ -355,10 +355,7 @@ contract BurnerTest is Test {
 
     function testRevert_burn_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            BURNER_ADMIN
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burn(1, "TEST_CATEGORY_1");

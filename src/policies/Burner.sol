@@ -90,7 +90,10 @@ contract Burner is Policy, RolesConsumer {
 
         requests = new Permissions[](3);
         requests[0] = Permissions({keycode: MINTR.KEYCODE(), funcSelector: MINTR.burnOhm.selector});
-        requests[1] = Permissions({keycode: trsryKeycode, funcSelector: TRSRY.withdrawReserves.selector});
+        requests[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
         requests[2] = Permissions({
             keycode: trsryKeycode,
             funcSelector: TRSRY.increaseWithdrawApproval.selector
