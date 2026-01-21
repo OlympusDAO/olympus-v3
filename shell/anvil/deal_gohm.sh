@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
     echo "Example: $0 0x1A5309F208f161a393E8b5A253de8Ab894A67188"
     echo ""
     echo "Note: Script requires anvil running with --auto-impersonate:"
-    echo "  anvil --fork-url <RPC_URL> --auto-impersonate"
+    echo "  pnpm run anvil:fork"
     exit 1
 fi
 
@@ -21,7 +21,7 @@ RPC_URL="http://localhost:8545"
 if ! cast block-number --rpc-url $RPC_URL &> /dev/null; then
     echo "Error: Cannot connect to anvil at $RPC_URL"
     echo "Please start anvil fork first:"
-    echo "  anvil --fork-url <RPC_URL> --auto-impersonate"
+    echo "  pnpm run anvil:fork"
     exit 1
 fi
 

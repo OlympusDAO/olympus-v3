@@ -8,14 +8,18 @@ set -e
 # Check if block count argument provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <block_count>"
+    echo "Example: $0 100"
+    echo "Note: Script requires anvil running with --auto-impersonate:"
+    echo "  pnpm run anvil:fork"
     exit 1
 fi
 
 BLOCK_COUNT=$1
+RPC_URL="http://localhost:8545"
 
 # Check if anvil is running
-if ! cast block-number --rpc-url http://localhost:8545 &> /dev/null; then
-    echo "Error: Cannot connect to anvil at http://localhost:8545"
+if ! cast block-number --rpc-url $RPC_URL &> /dev/null; then
+    echo "Error: Cannot connect to anvil at $RPC_URL"
     echo "Please start anvil fork first:"
     echo "  pnpm run anvil:fork"
     exit 1
@@ -29,11 +33,11 @@ fi
 
 BLOCK_HEX=$(cast to-hex "$BLOCK_COUNT")
 
-echo "Mining $BLOCK_COUNT blocks on http://localhost:8545..."
-cast rpc --rpc-url http://localhost:8545 anvil_mine "$BLOCK_HEX"
+echo "Mining $BLOCK_COUNT blocks on $RPC_URL..."
+cast rpc --rpc-url $RPC_URL anvil_mine "$BLOCK_HEX"
 
 echo "Complete."
 echo ""
 echo "Current block:"
-cast block-number --rpc-url http://localhost:8545
+cast block-number --rpc-url $RPC_URL
 echo ""
