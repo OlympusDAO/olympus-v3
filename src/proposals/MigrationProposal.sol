@@ -208,8 +208,7 @@ contract MigrationProposal is GovernorBravoProposal {
 
         // 4. Validate that burner_admin role was revoked from MigrationProposalHelper
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(address(_migrationProposalHelper), bytes32("burner_admin")) == false,
+            roles.hasRole(address(_migrationProposalHelper), BURNER_ADMIN_ROLE) == false,
             "MigrationProposalHelper should not have burner_admin role"
         );
 
