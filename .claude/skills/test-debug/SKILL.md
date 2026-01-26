@@ -36,9 +36,11 @@ Unit tests run in isolation without external chain state.
 ### Running All Unit Tests
 
 **Quick check** (runs all unit tests):
+
 ```bash
 pnpm run test:unit
 ```
+
 **Warning:** This will run all unit tests and may take several minutes.
 
 ### Running a Specific Test Contract
@@ -56,16 +58,19 @@ forge test -vvv --match-test testGivenAmountIsZero
 ### Debugging a Failing Unit Test
 
 1. **First run** - See the failure:
+
    ```bash
    forge test -vvv --match-contract DepositTest
    ```
 
 2. **If failure is in `setUp()`** - Use maximum verbosity:
+
    ```bash
    forge test -vvvv --match-contract DepositTest
    ```
 
 3. **Narrow to specific test** - Once you know which test fails:
+
    ```bash
    forge test -vvvv --match-test testGivenAmountIsZero_whenDeposit_reverts
    ```
@@ -73,13 +78,15 @@ forge test -vvv --match-test testGivenAmountIsZero
 ### Reading Unit Test Traces
 
 When a test fails with `-vvv` or `-vvvv`, Foundry outputs a trace showing:
+
 - Contract calls (depth indicates call stack)
 - State changes
 - Revert reasons
 - Line numbers
 
 **Example trace output:**
-```
+
+```text
 [Fork] Cheats.sol (0x7109709ECfa91a80626fF3989D68f67F5b1DD12D)
 [5592] SimpleVault::deposit(1000000000000000000, 0x...)
     ├─ [5592] ERC20::approve()
@@ -108,9 +115,11 @@ ALCHEMY_API_KEY=your_key_here
 ### Running All Fork Tests
 
 **Quick check** (runs all fork tests):
+
 ```bash
 pnpm run test:fork
 ```
+
 **Warning:** This will run all fork tests and may take several minutes.
 
 ### Running a Specific Fork Test Contract
@@ -130,18 +139,21 @@ forge test -vvvv --match-contract ProposalFork --fork-url baseSepolia
 ### Common Fork Test Issues
 
 **Issue:** `Fork not found` error
+
 ```bash
 # Solution: Ensure RPC URL is correct and Alchemy key is set
 forge test -vvvv --match-contract MyTest --fork-url https://eth-mainnet.g.alchemy.com/v2/$ALCHEMY_API_KEY
 ```
 
 **Issue:** Test passes locally but fails in CI
+
 ```bash
 # Solution: Fork at a specific block to match CI environment
 forge test -vvvv --match-contract MyTest --fork-url mainnet --fork-block-number 21000000
 ```
 
 **Issue:** `setUp()` failure with no trace
+
 ```bash
 # Solution: Use -vvvv to see setup trace
 forge test -vvvv --match-contract MyForkTest --fork-url mainnet
@@ -169,9 +181,11 @@ Proposal tests simulate governance proposals on a forked chain.
 ### Running All Proposal Tests
 
 **Quick check** (runs all proposal tests):
+
 ```bash
 pnpm run test:proposal
 ```
+
 **Warning:** This will run all proposal tests and may take several minutes.
 
 ### Running a Specific Proposal
@@ -204,16 +218,19 @@ function test_proposal() public {
 ### Debugging Proposal Failures
 
 **Step 1:** Run with verbosity
+
 ```bash
 forge test -vvv --match-contract ProposalExample --match-path 'src/test/proposals/*.t.sol' --fork-url mainnet
 ```
 
 **Step 1a:** If failure is in `setUp()`, use maximum verbosity
+
 ```bash
 forge test -vvvv --match-contract ProposalExample --match-path 'src/test/proposals/*.t.sol' --fork-url mainnet
 ```
 
 **Step 2:** Check the proposal ID and state
+
 ```solidity
 function setUp() public {
     vm.createSelectFork("mainnet", 21000000);
@@ -227,6 +244,7 @@ function setUp() public {
 ```
 
 **Step 3:** Verify caller has voting power
+
 ```solidity
 function test_proposal() public {
     address proposer = makeAddr("proposer");
@@ -270,7 +288,8 @@ contract.doSomething(0); // Will revert
 ```
 
 If the revert doesn't match, Foundry will show:
-```
+
+```text
 Error: Expected revert "CONTRACT_InvalidAmount" but got "CONTRACT_Unauthorized"
 ```
 

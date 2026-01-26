@@ -31,7 +31,7 @@ When analyzing linting output:
 
 When providing linting analysis, organize findings as:
 
-```
+```text
 ## In-Scope Files (Fix Required)
 - src/path/File.sol: Fix the issue directly
 
@@ -74,6 +74,7 @@ For contracts still in development, **always fix the linter note** by refactorin
 ### Common Fixes
 
 **Shadowing variable names:**
+
 ```solidity
 // BAD - Shadowing
 uint256 amount = 100;
@@ -89,6 +90,7 @@ uint256 amount = 100;
 ```
 
 **Unnecessary variables:**
+
 ```solidity
 // BAD - Unused variable
 uint256 calculatedValue = _calculate();
@@ -100,6 +102,7 @@ return calculatedValue > 0;
 ```
 
 **Explicit conversions:**
+
 ```solidity
 // BAD - Unsafe typecast
 address contractAddress = address(uint160(tokenContract));
@@ -109,6 +112,7 @@ address contractAddress = address(tokenContract);
 ```
 
 **Modifier logic:**
+
 ```solidity
 // BAD - Unwrapped modifier logic
 modifier onlyAdmin() {
@@ -172,6 +176,7 @@ mapping(address => uint256) internal balances;
 ```
 
 This convention distinguishes internal state from:
+
 - Public state variables (no underscore): `uint256 public totalSupply;`
 - Local variables (no underscore): `uint256 amount = 100;`
 - Function parameters (no underscore): `function mint(uint256 amount)`
@@ -185,6 +190,7 @@ pnpm run lint:check
 ```
 
 This runs:
+
 - `prettier:check` - Check formatting
 - `solhint:check` - Check Solidity linting
 - `markdownlint` - Check Markdown files
@@ -196,6 +202,7 @@ pnpm run lint
 ```
 
 This runs:
+
 - `prettier` - Auto-formats code
 - `solhint` - Auto-fixes some Solidity issues
 - `markdownlint` - Auto-fixes Markdown issues

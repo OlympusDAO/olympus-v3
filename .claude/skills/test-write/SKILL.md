@@ -13,16 +13,19 @@ This guide covers the standards for writing test files in the Olympus V3 codebas
 Each contract function should have its own dedicated test file. This keeps tests focused and makes navigation easier.
 
 **Examples:**
+
 - `src/test/modules/DEPOS/mint.t.sol` - Tests for the `mint()` function
 - `src/test/modules/DEPOS/burn.t.sol` - Tests for the `burn()` function
 - `src/test/modules/MINTR/periodicTasks.t.sol` - Tests for periodic task functions
 
 **File naming:**
+
 - Use lowercase, descriptive names: `mint.t.sol`, `addPeriodicTask.t.sol`
 - Use `.t.sol` extension for test files
 - Match the function name being tested
 
 **Base test contracts:**
+
 - Create a parent test contract for each contract (e.g., `DEPOSTest.sol`)
 - Parent contract contains setup functions, common assertions, helper functions, and state modifiers
 - Individual test files inherit from the parent
@@ -118,6 +121,7 @@ contract MintTest is DEPOSTest {
 ```
 
 **Parent contract structure:**
+
 1. **State variables** - Shared contract addresses, test accounts
 2. **setUp()** - Deploy contracts, set initial state
 3. **Helper functions** - `_createPosition()`, `_dealTokens()`, `_warp()`
@@ -140,6 +144,7 @@ Two modifier prefixes with distinct purposes:
 | `when*` | Denote parameter has a specific value or property | `whenAmountIsZero`, `whenCallerIsNotAdmin` |
 
 **`given*` modifiers** - Set up state before the test:
+
 ```solidity
 // Creates a position before test runs
 modifier givenPositionExists(uint256 positionId_) {
@@ -156,6 +161,7 @@ modifier givenContractIsEnabled() {
 ```
 
 **`when*` modifiers** - Describe parameter conditions (less common, but useful for clarity):
+
 ```solidity
 // Indicates the test uses zero amount
 modifier whenAmountIsZero() {
@@ -180,6 +186,7 @@ function test_givenPositionExists_whenAmountIsZero_burn() public
 ```
 
 **Common modifier patterns:**
+
 ```solidity
 // GOOD - Clear state setup via modifier
 modifier givenPositionExists(uint256 positionId_) {
@@ -238,7 +245,7 @@ function test_anotherThing() public givenContractIsEnabled {
 
 Use the branching tree pattern to organize tests by conditions and behaviors:
 
-```
+```solidity
 // given <condition>
 //   when <action>
 //     [X] it <expected result>
@@ -392,6 +399,7 @@ function test_givenPositionExists_givenUserHasAllowance_whenThirdPartyBurns_burn
 ### Always Use Error Selectors
 
 **GOOD - Error selector:**
+
 ```solidity
 vm.expectRevert(
     abi.encodeWithSelector(
@@ -401,6 +409,7 @@ vm.expectRevert(
 ```
 
 **BAD - String message:**
+
 ```solidity
 vm.expectRevert("Insufficient remaining");
 vm.expectRevert("UNAUTHORIZED");
