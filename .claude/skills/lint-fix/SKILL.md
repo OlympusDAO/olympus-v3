@@ -116,18 +116,18 @@ address contractAddress = address(tokenContract);
 ```solidity
 // BAD - Unwrapped modifier logic
 modifier onlyAdmin() {
-    require(msg.sender == admin, "Unauthorized");
+    if(msg.sender != admin) revert("Unauthorized");
     _;
-    _doSomething(); // Linter note: logic after modifier body
 }
 
 // GOOD - Wrap in function
-modifier onlyAdmin() {
-    _;
+function _onlyAdmin() {
+    if(msg.sender != admin) revert("Unauthorized");
 }
 
-function doSomething() onlyAdmin external {
-    _doSomething();
+modifier onlyAdmin() {
+    _onlyAdmin();
+    _;
 }
 ```
 
