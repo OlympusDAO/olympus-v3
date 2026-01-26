@@ -9,11 +9,13 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 ## Build and Development Commands
 
 **Installation and Build:**
+
 - `pnpm install` - Install all dependencies (runs postinstall script)
 - `pnpm build` or `forge build` - Build all files
 - `forge build --contracts path/to/contract.sol` - Build a specific contract
 
 **Testing:**
+
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
 - `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
@@ -21,7 +23,10 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 - `pnpm run test:coverage` - Generate test coverage report
 - `forge test -vvv --match-contract ContractTest` - Run a specific test contract
 
+**For detailed test debugging guidance (verbosity levels, setUp() issues, trace output), use the `/test-debug` skill.**
+
 **Linting:**
+
 - `pnpm run lint` - Format and lint code (prettier + solhint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
 - `pnpm run prettier` - Format code (runs quicker than linting)
