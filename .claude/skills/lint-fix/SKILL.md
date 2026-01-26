@@ -121,7 +121,7 @@ modifier onlyAdmin() {
 }
 
 // GOOD - Wrap in function
-function _onlyAdmin() {
+function _onlyAdmin() internal {
     if(msg.sender != admin) revert("Unauthorized");
 }
 
