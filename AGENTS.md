@@ -31,6 +31,8 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 - `pnpm run lint:check` - Check formatting and linting without fixing
 - `pnpm run prettier` - Format code (runs quicker than linting)
 
+**For detailed linter note resolution guidance (deployed vs in-development contracts, suppression templates), use the `/lint-fix` skill.**
+
 **Note:** Always build, test and lint updated files. Use project-wide build and test commands sparingly.
 
 ## Safety and Permissions
@@ -234,7 +236,8 @@ Key standards summary:
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. Attempt to address those notes, warnings and errors.
+- Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
+- Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
 - When completing a minor or major milestone and before any git commits, run the formatter: `pnpm run prettier`
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
@@ -386,15 +389,22 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 
 ### Linting
 
-The following command will get a list of linting rules that have errors/warnings/notes:
+**For detailed linter note resolution guidance (deployed vs in-development contracts, suppression templates, common fixes), use the `/lint-fix` skill.**
+
+**Check for linting issues:**
 
 ```bash
-forge lint 2>&1 | grep -E "^warning\[|^note\[" | grep -v "src/test" | sed 's/^.*\[\([^]]*\)\].*/\1/' | sort | uniq | cat
+pnpm run lint:check       # Check all linting rules
+forge build                # Output forge-lint notes
 ```
 
-The following command will report on the linting rules that have errors/warnings/notes and the affected files:
+**The following commands show detailed linting rule breakdown:**
 
 ```bash
+# List all linting rules with notes/warnings
+forge lint 2>&1 | grep -E "^warning\[|^note\[" | grep -v "src/test" | sed 's/^.*\[\([^]]*\)\].*/\1/' | sort | uniq | cat
+
+# Show linting rules grouped by file
 forge lint 2>&1 | sed -n '
 /^note\[/ { s/^note\[\([^]]*\)\].*/NOTE:\1/p; h; d; }
 /^warning\[/ { s/^warning\[\([^]]*\)\].*/WARNING:\1/p; h; d; }
