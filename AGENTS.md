@@ -139,6 +139,35 @@ Ask first:
 - When done with a worktree, remove it: `git worktree remove ../olympus-v3-<feature-name>`
 - Be aware of worktree locations when running commands—use absolute paths if the worktree is outside the main repo
 
+## Available Skills
+
+Claude skills are located in `.claude/skills/` and can be invoked by name:
+
+| Skill         | Purpose                                                                              |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `/test-write` | Test writing guidance (file structure, modifiers, naming, error handling)            |
+| `/test-debug` | Test debugging guidance (verbosity levels, setUp() issues, trace output)             |
+| `/lint-fix`   | Linter note resolution (deployed vs in-development contracts, suppression templates) |
+
+Invoke a skill by name, e.g., `/test-write` for test writing guidance.
+
+### MCP Servers
+
+The project includes Model Context Protocol (MCP) servers for enhanced AI capabilities:
+
+| Server         | Purpose                                         |
+| -------------- | ----------------------------------------------- |
+| **CodeRabbit** | Automated code review via `coderabbitai-mcp`    |
+| **Context7**   | Context-aware assistance via context7.com       |
+| **Etherscan**  | On-chain contract verification via etherscan.io |
+| **GitHub**     | Repository integration via githubcopilot.com    |
+
+Configuration is in `.mcp.json`. API keys are set via environment variables:
+
+- `MCP_GITHUB_PAT` - GitHub personal access token (for CodeRabbit and GitHub)
+- `MCP_CONTEXT7_API_KEY` - Context7 API key
+- `MCP_ETHERSCAN_API_KEY` - Etherscan API key
+
 ## Architecture Overview
 
 ### Default Framework Components
@@ -146,11 +175,13 @@ Ask first:
 The protocol follows the Default Framework pattern with a three major components:
 
 1. **Kernel** (`src/Kernel.sol`) - Central governance and access control system
+
     - Manages installation/upgrading of modules and activation/deactivation of policies
     - Implements role-based access control with 5-byte keycodes
     - Executes governance actions: InstallModule, UpgradeModule, ActivatePolicy, DeactivatePolicy, ChangeExecutor, MigrateKernel
 
 2. **Modules** (`src/modules/`) - Shared state storage with minimal dependencies
+
     - Each module has a 5-byte keycode identifier (e.g., TRSRY, MINTR, PRICE)
     - Define roles for policies to access module functions
     - Can be upgraded by installing new versions with same keycode
@@ -215,7 +246,7 @@ src/
 
 Key standards summary:
 
-- One test file per contract function
+- One test file per contract **external** function (internal functions are tested indirectly via their callers)
 - Use `given*` modifiers for state setup
 - Follow branching tree naming: `test_given<Condition>_<Action>_<ExpectedResult>()`
 - Always use error selectors, never string messages: `abi.encodeWithSelector(Error.selector)`
@@ -290,11 +321,13 @@ When working with Solidity code involving mathematical operations, follow these 
 1. **No Floating-Point**: Solidity has no floating-point numbers - all numbers are integers.
 
 2. **Decimal Representation**:
+
     - Decimal numbers are represented as integers with an associated decimal scale
     - Example: 1.0 with 18 decimals = 1000000000000000000 (1e18)
     - Always track and document the decimal scale of each variable
 
 3. **Multiplication & Division Order**:
+
     - When multiplying/dividing numbers with different scales, order matters
     - General pattern: multiply first, then divide to maintain precision
     - Example: `result = a * scaleB / scaleC` where result has scaleB decimals
@@ -302,6 +335,7 @@ When working with Solidity code involving mathematical operations, follow these 
     - Phantom overflows can occur, where `a * scaleB` (from the example above) overflows the maximum value of `uint256`. For that reason, it is advisable to use the FullMath library in `src/libraries/FullMath.sol`.
 
 4. **Rounding Behavior**:
+
     - Solidity rounds DOWN by default (floor division)
     - Use `mulDiv()` for standard rounding down
     - Use `mulDivUp()` when rounding up is needed
@@ -394,8 +428,8 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 **Check for linting issues:**
 
 ```bash
-pnpm run lint:check       # Check all linting rules
-forge build                # Output forge-lint notes
+pnpm run lint:check # Check all linting rules
+forge build         # Output forge-lint notes
 ```
 
 **The following commands show detailed linting rule breakdown:**
