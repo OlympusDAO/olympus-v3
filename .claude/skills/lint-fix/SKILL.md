@@ -224,9 +224,9 @@ pnpm run solhint
 
 | Rule | Description | Fix Strategy |
 |------|-------------|--------------|
-| `var-name-mixedcase` | Variable uses mixedCase | Rename to snakeCase or suppress if deployed |
+| `var-name-mixedcase` | Variable uses mixedCase | Ensure variable uses mixedCase or suppress |
 | `func-name-mixedcase` | Function uses mixedCase | Rename or suppress if external interface |
-| `const-name-snakecase` | Constant uses snakeCase | Rename to mixedCase or suppress |
+| `const-name-snakecase` | Constant uses snakeCase | Rename to SCREAMING_SNAKE_CASE or suppress |
 | `avoid-low-level-calls` | Uses `call`/`delegatecall` | Refactor or suppress if required |
 | `no-empty-blocks` | Empty code block | Remove or add comment |
 | `unwrapped-modifier-logic` | Logic after `_;` in modifier | Move logic to function |
