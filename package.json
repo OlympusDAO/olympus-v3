@@ -13,7 +13,8 @@
         "yarn": "use-pnpm"
     },
     "scripts": {
-        "build": "chmod +x shell/*.sh && ./shell/full_install.sh",
+        "postinstall": "./shell/postinstall.sh",
+        "build": "forge build",
         "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
         "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
         "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
