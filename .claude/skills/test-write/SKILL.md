@@ -174,7 +174,7 @@ modifier whenCallerIsNotAdmin() {
 }
 
 // Usage example
-function test_givenPositionExists_whenAmountIsZero_burn() public
+function test_givenPositionExists_whenAmountIsZero() public
     givenPositionExists(1)
     whenAmountIsZero
 {
@@ -247,10 +247,10 @@ Use the branching tree pattern to organize tests by conditions and behaviors:
 
 ```solidity
 // given <condition>
-//   when <action>
+//   when <parameter>
 //     [X] it <expected result>
 
-function test_given<Condition>_<Action>() {
+function test_given<Condition>_when<Parameter>() {
     // test code with multiple assertions
 }
 ```
@@ -269,7 +269,7 @@ function test_givenVaultBelowCapacity_whenDepositExceeds_reverts() public {
     // test code
 }
 
-function test_givenVaultBelowCapacity_whenDepositWithinCapacity_mintsShares() public {
+function test_givenVaultBelowCapacity_whenDepositWithinCapacity() public {
     // test code
 }
 ```
@@ -278,17 +278,17 @@ function test_givenVaultBelowCapacity_whenDepositWithinCapacity_mintsShares() pu
 
 ```solidity
 // Multiple given* conditions:
-function test_givenPositionExists_givenContractIsEnabled_burn() public {
+function test_givenPositionExists_givenContractIsEnabled() public {
     // Position exists AND contract is enabled
 }
 
 // Multiple when* conditions:
-function test_givenPositionExists_whenAmountIsZero_whenCallerIsNotOwner_burn() public {
+function test_givenPositionExists_whenAmountIsZero_whenCallerIsNotOwner() public {
     // Position exists, amount is zero, caller is not owner
 }
 
 // Both given* and when* conditions:
-function test_givenPositionExists_givenContractIsEnabled_whenAmountExceedsRemaining_burn() public {
+function test_givenPositionExists_givenContractIsEnabled_whenAmountExceedsRemaining() public {
     // Position exists, contract enabled, amount exceeds remaining
 }
 ```
@@ -306,7 +306,7 @@ function test_givenPositionExists_givenContractIsEnabled_whenAmountExceedsRemain
 //   when mint is called
 //     [X] it reverts
 
-function test_givenCallerNotAdmin_mint() public {
+function test_givenCallerNotAdmin() public {
     vm.expectRevert(abi.encodeWithSelector(ROLES.ROLES_RequireRole.selector));
     DEPOS.mint(100e18, 1e9);
 }
@@ -315,7 +315,7 @@ function test_givenCallerNotAdmin_mint() public {
 //   when burn is called
 //     [X] it reverts
 
-function test_givenAmountIsZero_burn() public {
+function test_givenAmountIsZero() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidAmount.selector));
@@ -326,7 +326,7 @@ function test_givenAmountIsZero_burn() public {
 //   when amount exceeds remaining
 //     [X] it reverts with InsufficientRemaining error
 
-function test_givenPositionExists_whenAmountExceedsRemaining_burn() public {
+function test_givenPositionExists_whenAmountExceedsRemaining() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_InsufficientRemaining.selector));
@@ -340,7 +340,7 @@ function test_givenPositionExists_whenAmountExceedsRemaining_burn() public {
 //     when burn is called
 //       [X] it reverts
 
-function test_givenPositionExists_givenPositionExpired_whenBurn_burn() public {
+function test_givenPositionExists_givenPositionExpired() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
     _warp(block.timestamp + 31 days);
 
@@ -356,7 +356,7 @@ function test_givenPositionExists_givenPositionExpired_whenBurn_burn() public {
 //     [X] it emits PositionClosed event
 //     [X] it returns zero
 
-function test_givenPositionExists_whenAmountEqualsRemaining_burn() public {
+function test_givenPositionExists_whenAmountEqualsRemaining() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.expectEmit(true, true, true, true);
@@ -376,7 +376,7 @@ function test_givenPositionExists_whenAmountEqualsRemaining_burn() public {
 //       [X] it updates owner
 //       [X] it emits Transfer event
 
-function test_givenPositionExists_givenUserHasAllowance_whenThirdPartyBurns_burn() public {
+function test_givenPositionExists_givenUserHasAllowance_whenThirdPartyBurns() public {
     address thirdParty = makeAddr("thirdParty");
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
