@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
