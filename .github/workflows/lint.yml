@@ -22,11 +22,11 @@ jobs:
               with:
                   version: 9
 
-            - name: Install Node dependencies
-              run: pnpm install --frozen-lockfile
-
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Install Node dependencies
+              run: pnpm install --frozen-lockfile
 
             - name: Run lint check
               run: pnpm run lint:check
