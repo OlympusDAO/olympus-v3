@@ -19,3 +19,4 @@ dependencies/
 !AGENTS.md
 !CLAUDE.md
 !.claude/
+.claude/settings.local.json
