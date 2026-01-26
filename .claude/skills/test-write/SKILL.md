@@ -502,7 +502,7 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 | Pattern | Avoid | Use Instead |
 |---------|-------|-------------|
 | State setup | Inline in each test | `given*` modifiers |
-| Test naming | `test_somethingBad` | `test_givenCondition_action_expectedResult` |
+| Test naming | `test_somethingBad` | `test_givenCondition_whenParameter` (success) or `test_givenCondition_whenParameter_reverts` (revert) |
 | Error testing | `vm.expectRevert("message")` | `abi.encodeWithSelector(Error.selector)` |
 | Assertions | `assertEq(a, b)` | `assertEq(a, b, "description")` |
 | File organization | Multiple functions per file | One function per file |

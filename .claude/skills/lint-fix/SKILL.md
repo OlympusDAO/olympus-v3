@@ -193,7 +193,7 @@ This runs:
 
 - `prettier:check` - Check formatting
 - `solhint:check` - Check Solidity linting
-- `markdownlint` - Check Markdown files
+- `markdownlint:check` - Check Markdown files
 
 ### Full Lint (With Auto-Fix)
 
