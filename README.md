@@ -2,9 +2,10 @@
 
 Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms.
 
-Use `pnpm run build` to refresh deps.
+Run `pnpm install` to install all dependencies.
+Run `pnpm build` or `forge build` to run a build.
 
-Set up a foundry config in foundry.toml.
+Configure foundry settings in foundry.toml.
 
 ## SRC Directory Structure
 

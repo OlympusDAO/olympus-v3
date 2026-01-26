@@ -9,6 +9,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 
 // Interfaces
 import {IEmissionManager} from "src/policies/interfaces/IEmissionManager.sol";
+import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -796,6 +797,290 @@ contract ConvertibleDepositInstall is BatchScriptV2 {
 
         console2.log("Activator batch prepared");
         proposeBatch();
+    }
+
+    /// @notice Reconfigure ConvertibleDeposit parameters
+    /// @dev    Only adds parameters to batch if they differ from current values
+    ///         Reads desired values from args file
+    function configureDepositParameters(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath, signature_) {
+        address depositRedemptionVault = _envAddressNotZero(
+            "olympus.policies.DepositRedemptionVault"
+        );
+        address convertibleDepositFacility = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositFacility"
+        );
+        address convertibleDepositAuctioneer = _envAddressNotZero(
+            "olympus.policies.ConvertibleDepositAuctioneer"
+        );
+        address emissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
+        address usds = _envAddressNotZero("external.tokens.USDS");
+
+        console2.log("=== Configuring ConvertibleDeposit Parameters ===");
+
+        // Read desired values from args file
+        uint256 annualInterestRateDesired = _readBatchArgUint256(
+            "ConfigureDepositParameters",
+            "annualInterestRate"
+        );
+        uint256 maxBorrowPercentageDesired = _readBatchArgUint256(
+            "ConfigureDepositParameters",
+            "maxBorrowPercentage"
+        );
+        uint256 minPriceScalarDesired = _readBatchArgUint256(
+            "ConfigureDepositParameters",
+            "minPriceScalar"
+        );
+        uint256 baseEmissionsRateDesired = _readBatchArgUint256(
+            "ConfigureDepositParameters",
+            "baseEmissionsRate"
+        );
+        uint256[] memory enabledPeriods = _readBatchArgUint256Array(
+            "ConfigureDepositParameters",
+            "enabledPeriods"
+        );
+        uint256[] memory reclaimRatePeriods = _readBatchArgUint256Array(
+            "ConfigureDepositParameters",
+            "reclaimRatePeriods"
+        );
+        uint256[] memory reclaimRates = _readBatchArgUint256Array(
+            "ConfigureDepositParameters",
+            "reclaimRates"
+        );
+
+        // Configure each category
+        _configureEmissionsParameters(
+            emissionManager,
+            minPriceScalarDesired,
+            baseEmissionsRateDesired
+        );
+        _configureBorrowingParameters(
+            depositRedemptionVault,
+            convertibleDepositFacility,
+            usds,
+            annualInterestRateDesired,
+            maxBorrowPercentageDesired
+        );
+        _configureDepositPeriods(
+            convertibleDepositAuctioneer,
+            convertibleDepositFacility,
+            usds,
+            enabledPeriods
+        );
+        _configureReclaimRates(convertibleDepositFacility, usds, reclaimRatePeriods, reclaimRates);
+
+        console2.log("ConvertibleDeposit parameters reconfiguration batch prepared");
+        proposeBatch();
+    }
+
+    /// @notice Configure borrowing parameters
+    function _configureBorrowingParameters(
+        address depositRedemptionVault,
+        address convertibleDepositFacility,
+        address usds,
+        uint256 annualInterestRateDesired,
+        uint256 maxBorrowPercentageDesired
+    ) internal {
+        uint16 currentAnnualInterestRate = IDepositRedemptionVault(depositRedemptionVault)
+            .getAnnualInterestRate(IERC20(usds), convertibleDepositFacility);
+        uint16 currentMaxBorrowPercentage = IDepositRedemptionVault(depositRedemptionVault)
+            .getMaxBorrowPercentage(IERC20(usds), convertibleDepositFacility);
+        uint16 annualInterestRate = SafeCast.encodeUInt16(annualInterestRateDesired);
+        uint16 maxBorrowPercentage = SafeCast.encodeUInt16(maxBorrowPercentageDesired);
+
+        if (currentAnnualInterestRate != annualInterestRate) {
+            console2.log("Annual Interest Rate changed:");
+            console2.log("orig: ", currentAnnualInterestRate);
+            console2.log("new:  ", annualInterestRate);
+            addToBatch(
+                depositRedemptionVault,
+                abi.encodeWithSelector(
+                    IDepositRedemptionVault.setAnnualInterestRate.selector,
+                    IERC20(usds),
+                    convertibleDepositFacility,
+                    annualInterestRate
+                )
+            );
+        } else {
+            console2.log("Annual Interest Rate unchanged:", annualInterestRate);
+        }
+
+        if (currentMaxBorrowPercentage != maxBorrowPercentage) {
+            console2.log("Max Borrow Percentage changed:");
+            console2.log("orig: ", currentMaxBorrowPercentage);
+            console2.log("new:  ", maxBorrowPercentage);
+            addToBatch(
+                depositRedemptionVault,
+                abi.encodeWithSelector(
+                    IDepositRedemptionVault.setMaxBorrowPercentage.selector,
+                    IERC20(usds),
+                    convertibleDepositFacility,
+                    maxBorrowPercentage
+                )
+            );
+        } else {
+            console2.log("Max Borrow Percentage unchanged:", maxBorrowPercentage);
+        }
+    }
+
+    /// @notice Configure reclaim rates for deposit periods
+    /// @dev    Perform this after configuring deposit periods
+    function _configureReclaimRates(
+        address convertibleDepositFacility,
+        address usds,
+        uint256[] memory reclaimRatePeriods,
+        uint256[] memory reclaimRates
+    ) internal {
+        // solhint-disable-next-line gas-custom-errors
+        require(
+            reclaimRatePeriods.length == reclaimRates.length,
+            "ConvertibleDepositInstall: reclaimRatePeriods and reclaimRates must have same length"
+        );
+
+        for (uint256 i = 0; i < reclaimRatePeriods.length; i++) {
+            uint8 period = SafeCast.encodeUInt8(reclaimRatePeriods[i]);
+            uint16 desiredReclaimRate = SafeCast.encodeUInt16(reclaimRates[i]);
+            uint16 currentReclaimRate = IDepositFacility(convertibleDepositFacility)
+                .getAssetPeriodReclaimRate(IERC20(usds), period);
+
+            if (currentReclaimRate != desiredReclaimRate) {
+                console2.log("Reclaim Rate for period", period);
+                console2.log("orig: ", currentReclaimRate);
+                console2.log("new:  ", desiredReclaimRate);
+                addToBatch(
+                    convertibleDepositFacility,
+                    abi.encodeWithSelector(
+                        IDepositFacility.setAssetPeriodReclaimRate.selector,
+                        IERC20(usds),
+                        period,
+                        desiredReclaimRate
+                    )
+                );
+            } else {
+                console2.log("Reclaim Rate for period", period);
+                console2.log("unchanged:", desiredReclaimRate);
+            }
+        }
+    }
+
+    /// @notice Configure emissions parameters
+    function _configureEmissionsParameters(
+        address emissionManager,
+        uint256 minPriceScalarDesired,
+        uint256 baseEmissionsRateDesired
+    ) internal {
+        uint256 currentMinPriceScalar = EmissionManager(emissionManager).minPriceScalar();
+        uint256 currentBaseEmissionsRate = EmissionManager(emissionManager).baseEmissionRate();
+
+        if (currentMinPriceScalar != minPriceScalarDesired) {
+            console2.log("Min Price Scalar changed:");
+            console2.log("orig: ", currentMinPriceScalar);
+            console2.log("new:  ", minPriceScalarDesired);
+            addToBatch(
+                emissionManager,
+                abi.encodeWithSelector(
+                    EmissionManager.setMinPriceScalar.selector,
+                    minPriceScalarDesired
+                )
+            );
+        } else {
+            console2.log("Min Price Scalar unchanged:", minPriceScalarDesired);
+        }
+
+        if (currentBaseEmissionsRate != baseEmissionsRateDesired) {
+            console2.log("Base Emissions Rate changed:");
+            console2.log("orig: ", currentBaseEmissionsRate);
+            console2.log("new:  ", baseEmissionsRateDesired);
+            uint256 changeNeeded;
+            bool shouldAdd;
+            if (baseEmissionsRateDesired > currentBaseEmissionsRate) {
+                changeNeeded = baseEmissionsRateDesired - currentBaseEmissionsRate;
+                shouldAdd = true;
+            } else {
+                changeNeeded = currentBaseEmissionsRate - baseEmissionsRateDesired;
+                shouldAdd = false;
+            }
+            addToBatch(
+                emissionManager,
+                abi.encodeWithSelector(
+                    EmissionManager.changeBaseRate.selector,
+                    changeNeeded,
+                    uint48(1), // Next heartbeat
+                    shouldAdd
+                )
+            );
+        } else {
+            console2.log("Base Emissions Rate unchanged:", baseEmissionsRateDesired);
+        }
+    }
+
+    /// @notice Configure deposit periods (enable/disable)
+    function _configureDepositPeriods(
+        address convertibleDepositAuctioneer,
+        address convertibleDepositFacility,
+        address usds,
+        uint256[] memory enabledPeriods
+    ) internal {
+        uint8[] memory currentEnabledPeriods = IConvertibleDepositAuctioneer(
+            convertibleDepositAuctioneer
+        ).getDepositPeriods();
+
+        // Disable all currently enabled periods that are not in the desired list
+        for (uint256 i = 0; i < currentEnabledPeriods.length; i++) {
+            uint8 period = currentEnabledPeriods[i];
+            bool shouldBeEnabled = false;
+            for (uint256 j = 0; j < enabledPeriods.length; j++) {
+                if (SafeCast.encodeUInt8(enabledPeriods[j]) == period) {
+                    shouldBeEnabled = true;
+                    break;
+                }
+            }
+            if (!shouldBeEnabled) {
+                console2.log("Disabling deposit period:", period);
+                addToBatch(
+                    convertibleDepositAuctioneer,
+                    abi.encodeWithSelector(
+                        IConvertibleDepositAuctioneer.disableDepositPeriod.selector,
+                        period
+                    )
+                );
+                console2.log("Setting reclaim rate to 0 for disabled period:", period);
+                addToBatch(
+                    convertibleDepositFacility,
+                    abi.encodeWithSelector(
+                        IDepositFacility.setAssetPeriodReclaimRate.selector,
+                        IERC20(usds),
+                        period,
+                        uint16(0)
+                    )
+                );
+            }
+        }
+
+        // Enable all desired periods that are not currently enabled
+        for (uint256 i = 0; i < enabledPeriods.length; i++) {
+            uint8 period = SafeCast.encodeUInt8(enabledPeriods[i]);
+            (bool isEnabled, ) = IConvertibleDepositAuctioneer(convertibleDepositAuctioneer)
+                .isDepositPeriodEnabled(period);
+
+            if (!isEnabled) {
+                console2.log("Enabling deposit period:", period);
+                addToBatch(
+                    convertibleDepositAuctioneer,
+                    abi.encodeWithSelector(
+                        IConvertibleDepositAuctioneer.enableDepositPeriod.selector,
+                        period
+                    )
+                );
+            } else {
+                console2.log("Deposit period already enabled:", period);
+            }
+        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

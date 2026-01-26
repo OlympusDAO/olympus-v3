@@ -1,26 +1,27 @@
 {
-    "name": "forge-template",
-    "author": "FrankieIsLost",
+    "name": "olympus-v3",
+    "author": "OlympusDAO",
     "version": "1.0.0",
-    "description": "A forge template",
-    "homepage": "https://github.com/FrankieIsLost/forge-template#readme",
+    "description": "Olympus V3 contracts",
+    "homepage": "https://github.com/OlympusDAO/olympus-v3/blob/main/README.md",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/FrankieIsLost/forge-template.git"
+        "url": "git+https://github.com/OlympusDAO/olympus-v3.git"
     },
     "engines": {
         "npm": "use-pnpm",
         "yarn": "use-pnpm"
     },
     "scripts": {
-        "build": "chmod +x shell/*.sh && ./shell/full_install.sh",
-        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
-        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
-        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '**/*.sh' '**/*.json' '**/**.yaml' '**/**.yml' '**/*.toml'",
+        "postinstall": "./shell/postinstall.sh",
+        "build": "forge build",
+        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
+        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
+        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
         "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
         "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
-        "markdownlint": "markdownlint --fix '**/*.md'",
-        "markdownlint:check": "markdownlint '**/*.md'",
+        "markdownlint": "markdownlint --dot --fix '**/*.md'",
+        "markdownlint:check": "markdownlint --dot '**/*.md'",
         "lint": "pnpm run prettier && pnpm run solhint && pnpm run markdownlint",
         "lint:check": "pnpm run prettier:check && pnpm run solhint:check && pnpm run markdownlint:check",
         "test": "./shell/test_all.sh",
