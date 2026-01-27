@@ -69,8 +69,31 @@ function exampleFunction(uint256 paramOne_, address paramTwo_) external returns 
 
 - **`@notice`**: User-facing description. Keep it clear and concise. Describe what, not how.
 - **`@dev`**: Implementation details, caveats, or technical notes. Use as many lines as needed.
+- **`@inheritdoc`**: Use when implementing functions from interfaces or parent contracts. Place as the first tag. This references the parent documentation and reduces duplication.
 - **`@param`**: Required for every parameter. Describe what the parameter represents.
 - **`@return`**: Required for non-void functions. Format: `@return<TAB>type<TAB>description`
+
+### Implementing Interface Functions
+
+When implementing a function defined in an interface, use `@inheritdoc` to reference the parent documentation:
+
+```solidity
+/// @inheritdoc ISimplePriceFeedStrategy
+/// @dev        List here any particular details about the implementation
+function getAveragePriceExcludingDeviations(
+    uint256[] memory prices_,
+    bytes memory params_
+) public pure returns (uint256 price) {
+    // implementation
+}
+```
+
+**Benefits of `@inheritdoc`:**
+
+- Reduces documentation duplication between interface and implementation
+- Ensures consistency - changes to interface docs automatically propagate
+- Keeps implementation NatSpec focused on implementation-specific details only
+- Tools like Solidity doc generators will merge parent and child documentation
 
 ### Function Examples
 
@@ -243,6 +266,7 @@ modifier onlyAdmin() {
 | Undocumented parameters   | No `@param` for some parameters            | All parameters documented                        |
 | Struct fields inline      | Inline `/// @notice` on each field         | Document fields as `@param` at struct level      |
 | Multi-line on single line | Very long `/// @notice` line               | Break across multiple `/// @notice` lines        |
+| Missing @inheritdoc       | Duplicating interface docs               | Use `/// @inheritdoc InterfaceName`              |
 
 ## GOOD vs BAD Examples
 
