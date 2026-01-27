@@ -7,9 +7,6 @@ import {SimplePriceFeedStrategyBase} from "./SimplePriceFeedStrategyBase.t.sol";
 // Interfaces
 import {ISimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
-// Libraries
-import {FullMath} from "libraries/FullMath.sol";
-
 /// @title Tests for getAveragePriceExcludingDeviations function
 /// @notice Tests the deviation-based price aggregation strategy that excludes outliers
 contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
@@ -77,6 +74,8 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // given deviationBps is 0 or >= 10000
     //   [X] it reverts with ParamsInvalid
     //
+    // given deviationBps is > 0 and < 10000
+    //   [X] it returns the average of the prices
 
     function test_givenParamsEmpty_reverts() public {
         uint256[] memory prices = new uint256[](3);
@@ -153,6 +152,21 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
+    function test_givenDeviationBpsGreaterThanZeroAndLessThanMax_fuzz(
+        uint16 deviationBps_
+    ) public view {
+        deviationBps_ = uint16(bound(deviationBps_, 1, 9999));
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1000e18;
+        prices[1] = 1000e18;
+        prices[2] = 1000e18;
+        bytes memory params = _encodeDeviationParams(deviationBps_, false);
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+        assertEq(result, 1000e18, "should return average of prices");
+    }
+
     // ============================================================================
     // ZERO PRICE HANDLING TESTS
     // ============================================================================
@@ -165,7 +179,6 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //     [X] it returns the single non-zero price
     //   given revertOnInsufficientCount is true
     //     [X] it reverts with PriceCountInvalid
-    //
 
     function test_givenAllPricesZero_reverts() public {
         uint256[] memory prices = new uint256[](3);
@@ -207,154 +220,581 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // ============================================================================
     //
     // given exactly 2 non-zero prices (after zero filtering)
-    //   given neither price deviates from average
-    //     [X] it returns the average of both prices
-    //   given both prices deviate from average (tight threshold)
-    //     [X] it reverts with PriceCountInvalid (no data)
-    //   given neither price deviates (loose threshold)
-    //     [X] it returns the average of both prices
-    //
+    //  given revertOnInsufficientCount is false
+    //   given both prices deviate from average
+    //    [X] it reverts with PriceCountInvalid (no data)
+    //   given both prices within deviation threshold
+    //    [X] it returns the average of both prices
+    //  given revertOnInsufficientCount is true
+    //   given both prices deviate from average
+    //    [X] it reverts with PriceCountInvalid (no data)
+    //   given both prices within deviation threshold
+    //    [X] it returns the average of both prices
 
-    function test_givenTwoNonZeroPrices_givenNoneDeviating() public view {
+    function test_givenTwoNonZeroPrices_givenBothDeviating_reverts(uint8 index_) public {
+        index_ = uint8(bound(index_, 0, 1));
+
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
+        prices[0] = index_ == 0 ? 1000e18 : 1500e18;
+        prices[1] = index_ == 0 ? 1500e18 : 1000e18;
+        prices[2] = 0;
+        bytes memory params = _encodeDeviationParams(500, false); // 5% deviation
+
+        // Non-zero prices: [1000e18, 1500e18]
+        // Average (benchmark): (1000e18 + 1500e18) / 2 = 1250e18
+        // Deviations from 1250e18:
+        //   1000e18: |1000 - 1250| / 1250 = 20% > 5% -> Exclude
+        //   1500e18: |1500 - 1250| / 1250 = 20% > 5% -> Exclude
+        // Result: 0 prices remain -> revert with PriceCountInvalid(0, 2)
+        _expectRevertPriceCount(0, 2);
+        strategy.getAveragePriceExcludingDeviations(prices, params);
+    }
+
+    function test_givenTwoNonZeroPrices_givenNoneDeviating(uint8 index_) public view {
+        index_ = uint8(bound(index_, 0, 1));
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = index_ == 0 ? 1000e18 : 1050e18;
+        prices[1] = index_ == 0 ? 1050e18 : 1000e18;
         prices[2] = 0;
         bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
 
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
 
-        // average = (1000e18 + 1050e18) / 2 = 1025e18
-        // Neither deviates from 1025e18 by more than 10%
+        // Non-zero prices: [1000e18, 1050e18]
+        // Average (benchmark): (1000e18 + 1050e18) / 2 = 1025e18
+        // Deviations from 1025e18:
+        //   1000e18: |1000 - 1025| / 1025 = 2.44% < 10% -> Include
+        //   1050e18: |1050 - 1025| / 1025 = 2.44% < 10% -> Include
+        // Result: (1000e18 + 1050e18) / 2 = 1025e18
         assertEq(result, 1025e18, "should return average of non-deviating prices");
     }
 
-    function test_givenTwoNonZeroPrices_givenBothDeviating_reverts() public {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1500e18;
-        prices[2] = 0;
-        bytes memory params = _encodeDeviationParams(500, false); // 5% deviation
+    function test_givenTwoNonZeroPrices_givenStrictMode_givenBothDeviating_reverts(
+        uint8 index_
+    ) public {
+        index_ = uint8(bound(index_, 0, 1));
 
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = index_ == 0 ? 1000e18 : 1500e18;
+        prices[1] = index_ == 0 ? 1500e18 : 1000e18;
+        prices[2] = 0;
+        bytes memory params = _encodeDeviationParams(500, true); // 5% deviation
+
+        // Non-zero prices: [1000e18, 1500e18]
+        // Average (benchmark): (1000e18 + 1500e18) / 2 = 1250e18
+        // Deviations from 1250e18:
+        //   1000e18: |1000 - 1250| / 1250 = 20% > 5% -> Exclude
+        //   1500e18: |1500 - 1250| / 1250 = 20% > 5% -> Exclude
+        // Result: 0 prices remain -> revert with PriceCountInvalid(0, 2)
         _expectRevertPriceCount(0, 2);
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenTwoNonZeroPrices_givenOneDeviating_givenFlagFalse() public view {
+    function test_givenTwoNonZeroPrices_givenStrictMode_givenNoneDeviating(
+        uint8 index_
+    ) public view {
+        index_ = uint8(bound(index_, 0, 1));
+
         uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1500e18; // ~40% deviation from average of 1250e18
+        prices[0] = index_ == 0 ? 1000e18 : 1050e18;
+        prices[1] = index_ == 0 ? 1050e18 : 1000e18;
         prices[2] = 0;
-        bytes memory params = _encodeDeviationParams(3000, false); // 30% deviation
+        bytes memory params = _encodeDeviationParams(1000, true); // 10% deviation
 
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
 
-        // average = (1000e18 + 1500e18) / 2 = 1250e18
-        // 1000e18: |1000 - 1250| / 1250 = 20% < 30% -> Include
-        // 1500e18: |1500 - 1250| / 1250 = 20% < 30% -> Include
-        // Both included, return average
-        assertEq(result, 1250e18, "should return average of both prices");
-    }
-
-    function test_givenTwoNonZeroPrices_wideDeviation_reverts() public {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1500e18; // 40% deviation from average of 1250e18
-        prices[2] = 0;
-        bytes memory params = _encodeDeviationParams(1500, false); // 15% deviation
-
-        // average = (1000e18 + 1500e18) / 2 = 1250e18
-        // 1000e18: |1000 - 1250| / 1250 = 20% > 15% -> Exclude
-        // 1500e18: |1500 - 1250| / 1250 = 20% > 15% -> Exclude
-        // Both excluded -> revert (no data)
-        _expectRevertPriceCount(0, 2);
-        strategy.getAveragePriceExcludingDeviations(prices, params);
-    }
-
-    function test_givenTwoNonZeroPrices_strictDeviation() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1150e18;
-        prices[2] = 0;
-        bytes memory params = _encodeDeviationParams(2000, false); // 20% deviation
-
-        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
-
-        // average = (1000e18 + 1150e18) / 2 = 1075e18
-        // 1000e18: |1000 - 1075| / 1075 = 6.98% < 20% -> Include
-        // 1150e18: |1150 - 1075| / 1075 = 6.98% < 20% -> Include
-        assertEq(result, 1075e18, "should return average of both prices");
+        // Non-zero prices: [1000e18, 1050e18]
+        // Average (benchmark): (1000e18 + 1050e18) / 2 = 1025e18
+        // Deviations from 1025e18:
+        //   1000e18: |1000 - 1025| / 1025 = 2.44% < 10% -> Include
+        //   1050e18: |1050 - 1025| / 1025 = 2.44% < 10% -> Include
+        // Result: (1000e18 + 1050e18) / 2 = 1025e18
+        assertEq(result, 1025e18, "should return average of non-deviating prices");
     }
 
     // ============================================================================
     // BASIC FUNCTIONALITY TESTS (Median as Benchmark, 3+ prices)
     // ============================================================================
     //
-    // given 3+ non-zero prices (median as benchmark)
-    //   given no prices deviate from median
+    // when 3 non-zero prices (after zero filtering, median as benchmark)
+    //   when no prices deviate from median
     //     [X] it returns the average of all prices
-    //   given one price deviates from median
+    //   when one price deviates from median
     //     [X] it returns the average of non-deviating prices
-    //   given multiple prices deviate from median
-    //     given 2+ prices remain after exclusion
-    //       [X] it returns the average of remaining prices
+    //   when two prices deviate from median
+    //     when best effort mode (revertOnInsufficientCount=false)
+    //       [X] it returns the remaining price
+    //     when strict mode (revertOnInsufficientCount=true)
+    //       [X] it reverts with PriceCountInvalid
     //
-    // given even number of prices (4+)
-    //   [X] it uses median of middle two values as benchmark
+    // when 4 non-zero prices (after zero filtering, median as benchmark)
+    //   when no prices deviate from median
+    //     [X] it returns the average of all prices
+    //   when one price deviates from median
+    //     [X] it returns the average of non-deviating prices
+    //   when two prices deviate from median
+    //     [X] it returns the average of non-deviating prices
+    //   when three prices deviate from median
+    //     [N/A] Mathematically impossible for even count (see note below)
+    //   when four prices deviate from median
+    //     [X] it reverts with PriceCountInvalid (all deviate)
+    //
+    // when 5 non-zero prices (after zero filtering, median as benchmark)
+    //   when outliers are present
+    //     [X] it returns the average of non-deviating prices
     //
 
-    function test_givenThreePricesNoneDeviating() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 1200e18;
+    function test_whenThreePrices_whenZeroDeviate(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 3));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](4);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 1200e18;
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 1200e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 1200e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1200e18;
+            prices[3] = 0;
+        }
         bytes memory params = _encodeDeviationParams(2000, false); // 20% deviation
 
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
 
-        // Sorted: [1000e18, 1050e18, 1200e18]
+        // Non-zero sorted: [1000e18, 1050e18, 1200e18]
         // Median: 1050e18
         // Deviations from 1050e18:
         //   1000e18: |1000 - 1050| / 1050 = 4.76% < 20% -> Include
         //   1050e18: 0% -> Include
         //   1200e18: |1200 - 1050| / 1050 = 14.29% < 20% -> Include
-        // Result: (1000e18 + 1050e18 + 1200e18) / 3
-        uint256 sum = (1000e18 + 1050e18 + 1200e18);
-        uint256 expected = FullMath.mulDiv(sum, 1, 3);
+        // Expected: (1000e18 + 1050e18 + 1200e18) / 3 = 3250e18 / 3 = 1083.33...e18
+        // 3250000000000000000000 / 3 = 1083333333333333333333 (truncated)
+        uint256 expected = 1083333333333333333333;
         assertEq(result, expected, "should return average of all non-deviating prices");
     }
 
-    function test_givenThreePricesOneDeviating() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 5000e18; // Significant outlier
+    function test_whenThreePrices_whenOneDeviate(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 3));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](4);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 5000e18; // Outlier
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 5000e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 5000e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 5000e18;
+            prices[3] = 0;
+        }
         bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
 
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
 
-        // Sorted: [1000e18, 1050e18, 5000e18]
+        // Non-zero sorted: [1000e18, 1050e18, 5000e18]
         // Median: 1050e18
         // Deviations from 1050e18:
         //   1000e18: |1000 - 1050| / 1050 = 4.76% < 10% -> Include
         //   1050e18: 0% -> Include
         //   5000e18: |5000 - 1050| / 1050 = 376% > 10% -> Exclude
-        // Result: (1000e18 + 1050e18) / 2 = 1025e18
-        assertEq(result, 1025e18, "should return average of non-deviating prices");
+        // Expected: (1000e18 + 1050e18) / 2 = 2050e18 / 2 = 1025e18
+        uint256 expected = 1025e18;
+        assertEq(result, expected, "should return average of non-deviating prices");
     }
 
-    function test_givenFivePricesWithOutliers() public view {
+    function test_whenThreePrices_whenTwoDeviate_whenBestEffortMode(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 3));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](4);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 3000e18;
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 3000e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 3000e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 3000e18;
+            prices[3] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(100, false); // 1% deviation - tight
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+
+        // Non-zero sorted: [1000e18, 1050e18, 3000e18]
+        // Median: 1050e18
+        // Deviations from 1050e18:
+        //   1000e18: |1000 - 1050| / 1050 = 4.76% > 1% -> Exclude
+        //   1050e18: 0% -> Include
+        //   3000e18: |3000 - 1050| / 1050 = 185.71% > 1% -> Exclude
+        // Only median remains (1 price)
+        // With best effort mode (flag=false), return single remaining price
+        // Expected: 1050e18
+        uint256 expected = 1050e18;
+        assertEq(result, expected, "should return single remaining price");
+    }
+
+    function test_whenThreePrices_whenTwoDeviate_whenStrictMode_reverts(uint8 seed) public {
+        seed = uint8(bound(seed, 0, 3));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](4);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 3000e18;
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 3000e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 3000e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 3000e18;
+            prices[3] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(100, true); // 1% deviation, strict mode
+
+        // Non-zero sorted: [1000e18, 1050e18, 3000e18]
+        // Median: 1050e18
+        // Deviations from 1050e18:
+        //   1000e18: |1000 - 1050| / 1050 = 4.76% > 1% -> Exclude
+        //   1050e18: 0% -> Include
+        //   3000e18: |3000 - 1050| / 1050 = 185.71% > 1% -> Exclude
+        // Only median remains (1 price)
+        // With strict mode (flag=true), revert with PriceCountInvalid(1, 2)
+        _expectRevertPriceCount(1, 2);
+        strategy.getAveragePriceExcludingDeviations(prices, params);
+    }
+
+    function test_whenFourPrices_whenZeroDeviate(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 4));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
         uint256[] memory prices = new uint256[](5);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 1200e18;
-        prices[3] = 950e18;
-        prices[4] = 5000e18; // Outlier
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 1100e18;
+            prices[4] = 1150e18;
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 1100e18;
+            prices[4] = 1150e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 1100e18;
+            prices[4] = 1150e18;
+        } else if (seed == 3) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1100e18;
+            prices[3] = 0;
+            prices[4] = 1150e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1100e18;
+            prices[3] = 1150e18;
+            prices[4] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(2000, false); // 20% deviation
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+
+        // Non-zero sorted: [1000e18, 1050e18, 1100e18, 1150e18]
+        // Median (even count): (1050e18 + 1100e18) / 2 = 1075e18
+        // Deviations from 1075e18:
+        //   1000e18: |1000 - 1075| / 1075 = 6.98% < 20% -> Include
+        //   1050e18: |1050 - 1075| / 1075 = 2.33% < 20% -> Include
+        //   1100e18: |1100 - 1075| / 1075 = 2.33% < 20% -> Include
+        //   1150e18: |1150 - 1075| / 1075 = 6.98% < 20% -> Include
+        // Expected: (1000e18 + 1050e18 + 1100e18 + 1150e18) / 4 = 4300e18 / 4 = 1075e18
+        uint256 expected = 1075e18;
+        assertEq(result, expected, "should return average of all non-deviating prices");
+    }
+
+    function test_whenFourPrices_whenOneDeviate(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 4));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](5);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18; // Outlier
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18;
+        } else if (seed == 3) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1100e18;
+            prices[3] = 0;
+            prices[4] = 5000e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1100e18;
+            prices[3] = 5000e18;
+            prices[4] = 0;
+        }
         bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
 
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
 
-        // Sorted: [950e18, 1000e18, 1050e18, 1200e18, 5000e18]
+        // Non-zero sorted: [1000e18, 1050e18, 1100e18, 5000e18]
+        // Median (even count): (1050e18 + 1100e18) / 2 = 1075e18
+        // Deviations from 1075e18:
+        //   1000e18: |1000 - 1075| / 1075 = 6.98% < 10% -> Include
+        //   1050e18: |1050 - 1075| / 1075 = 2.33% < 10% -> Include
+        //   1100e18: |1100 - 1075| / 1075 = 2.33% < 10% -> Include
+        //   5000e18: |5000 - 1075| / 1075 = 365% > 10% -> Exclude
+        // Expected: (1000e18 + 1050e18 + 1100e18) / 3 = 3150e18 / 3 = 1050e18
+        uint256 expected = 1050e18;
+        assertEq(result, expected, "should return average excluding outlier");
+    }
+
+    function test_whenFourPrices_whenTwoDeviate(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 4));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](5);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 900e18;
+            prices[2] = 1075e18;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18; // Outlier
+        } else if (seed == 1) {
+            prices[0] = 900e18;
+            prices[1] = 0;
+            prices[2] = 1075e18;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18;
+        } else if (seed == 2) {
+            prices[0] = 900e18;
+            prices[1] = 1075e18;
+            prices[2] = 0;
+            prices[3] = 1100e18;
+            prices[4] = 5000e18;
+        } else if (seed == 3) {
+            prices[0] = 900e18;
+            prices[1] = 1075e18;
+            prices[2] = 1100e18;
+            prices[3] = 0;
+            prices[4] = 5000e18;
+        } else {
+            prices[0] = 900e18;
+            prices[1] = 1075e18;
+            prices[2] = 1100e18;
+            prices[3] = 5000e18;
+            prices[4] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(500, false); // 5% deviation
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+
+        // Non-zero sorted: [900e18, 1075e18, 1100e18, 5000e18]
+        // Median (even count): (1075e18 + 1100e18) / 2 = 1087.5e18
+        // Deviations from 1087.5e18:
+        //   900e18: |1087.5 - 900| / 1087.5 = 17.24% > 5% -> Exclude
+        //   1075e18: |1087.5 - 1075| / 1087.5 = 1.15% < 5% -> Include
+        //   1100e18: |1100 - 1087.5| / 1087.5 = 1.15% < 5% -> Include
+        //   5000e18: |5000 - 1087.5| / 1087.5 = 360% > 5% -> Exclude
+        // Expected: (1075e18 + 1100e18) / 2 = 2175e18 / 2 = 1087.5e18
+        uint256 expected = 1087.5e18;
+        assertEq(result, expected, "should return average of 2 remaining prices");
+    }
+
+    // Note: For even count (4 prices), the median is the average of the two middle
+    // values. Due to this mathematical property, both middle values are always
+    // equidistant from the median, meaning they either both deviate or both
+    // remain. Therefore, "exactly 3 deviating" (leaving 1 remaining) is not
+    // possible for even count with median as benchmark.
+    //
+    // The possible outcomes for 4 prices are:
+    //   - 0 deviate (4 remain) ✅ test_whenFourPrices_whenZeroDeviate
+    //   - 1 deviates (3 remain) ✅ test_whenFourPrices_whenOneDeviate
+    //   - 2 deviate (2 remain) ✅ test_whenFourPrices_whenTwoDeviate_whenTwoRemain
+    //   - 4 deviate (0 remain) ✅ test_whenFourPrices_whenAllDeviate_reverts
+    //
+    // The "1 remaining" case (3 deviating) is only possible with odd counts like
+    // 3 prices, where the median is one of the actual values and always included.
+    // See test_whenThreePrices_whenTwoDeviate_whenBestEffortMode for the 3-price case.
+
+    function test_whenFourPrices_whenAllDeviate_reverts(uint8 seed) public {
+        seed = uint8(bound(seed, 0, 4));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](5);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 100e18;
+            prices[2] = 896e18;
+            prices[3] = 1104e18;
+            prices[4] = 5000e18;
+        } else if (seed == 1) {
+            prices[0] = 100e18;
+            prices[1] = 0;
+            prices[2] = 896e18;
+            prices[3] = 1104e18;
+            prices[4] = 5000e18;
+        } else if (seed == 2) {
+            prices[0] = 100e18;
+            prices[1] = 896e18;
+            prices[2] = 0;
+            prices[3] = 1104e18;
+            prices[4] = 5000e18;
+        } else if (seed == 3) {
+            prices[0] = 100e18;
+            prices[1] = 896e18;
+            prices[2] = 1104e18;
+            prices[3] = 0;
+            prices[4] = 5000e18;
+        } else {
+            prices[0] = 100e18;
+            prices[1] = 896e18;
+            prices[2] = 1104e18;
+            prices[3] = 5000e18;
+            prices[4] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
+
+        // Non-zero sorted: [100e18, 896e18, 1104e18, 5000e18]
+        // Median (even count): (896e18 + 1104e18) / 2 = 1000e18
+        // Deviations from 1000e18:
+        //   100e18: |100 - 1000| / 1000 = 90% > 10% -> Exclude
+        //   896e18: |1000 - 896| / 1000 = 10.4% > 10% -> Exclude
+        //   1104e18: |1104 - 1000| / 1000 = 10.4% > 10% -> Exclude
+        //   5000e18: |5000 - 1000| / 1000 = 400% > 10% -> Exclude
+        // All 4 non-zero prices deviate from median -> revert with PriceCountInvalid(0, 2)
+        _expectRevertPriceCount(0, 2);
+        strategy.getAveragePriceExcludingDeviations(prices, params);
+    }
+
+    function test_whenFivePrices_whenOutliersExcluded(uint8 seed) public view {
+        seed = uint8(bound(seed, 0, 5));
+
+        // Permute the order of prices based on seed value
+        // Each seed places the zero at a different position
+        uint256[] memory prices = new uint256[](6);
+        if (seed == 0) {
+            prices[0] = 0;
+            prices[1] = 1000e18;
+            prices[2] = 1050e18;
+            prices[3] = 1200e18;
+            prices[4] = 950e18;
+            prices[5] = 5000e18; // Outlier
+        } else if (seed == 1) {
+            prices[0] = 1000e18;
+            prices[1] = 0;
+            prices[2] = 1050e18;
+            prices[3] = 1200e18;
+            prices[4] = 950e18;
+            prices[5] = 5000e18;
+        } else if (seed == 2) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 0;
+            prices[3] = 1200e18;
+            prices[4] = 950e18;
+            prices[5] = 5000e18;
+        } else if (seed == 3) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1200e18;
+            prices[3] = 0;
+            prices[4] = 950e18;
+            prices[5] = 5000e18;
+        } else if (seed == 4) {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1200e18;
+            prices[3] = 950e18;
+            prices[4] = 0;
+            prices[5] = 5000e18;
+        } else {
+            prices[0] = 1000e18;
+            prices[1] = 1050e18;
+            prices[2] = 1200e18;
+            prices[3] = 950e18;
+            prices[4] = 5000e18;
+            prices[5] = 0;
+        }
+        bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+
+        // Non-zero sorted: [950e18, 1000e18, 1050e18, 1200e18, 5000e18]
         // Median: 1050e18
         // Deviations from 1050e18:
         //   950e18: |950 - 1050| / 1050 = 9.52% < 10% -> Include
@@ -362,100 +802,9 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         //   1050e18: 0% -> Include
         //   1200e18: |1200 - 1050| / 1050 = 14.29% > 10% -> Exclude
         //   5000e18: |5000 - 1050| / 1050 = 376% > 10% -> Exclude
-        // Result: (950e18 + 1000e18 + 1050e18) / 3 = 1000e18
-        assertEq(result, 1000e18, "should return average excluding outliers");
-    }
-
-    // ============================================================================
-    // revertOnInsufficientCount FLAG TESTS
-    // ============================================================================
-    //
-    // given 1 price remains after exclusion
-    //   given revertOnInsufficientCount is false
-    //     [X] it returns the remaining price
-    //   given revertOnInsufficientCount is true
-    //     [X] it reverts with PriceCountInvalid
-    //
-    // given 0 prices remain after exclusion (all deviate)
-    //   [X] it reverts with PriceCountInvalid
-    //
-
-    function test_givenOneRemainsAfterExclusion_givenFlagFalse() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 3000e18;
-        bytes memory params = _encodeDeviationParams(100, false); // 1% deviation - tight
-
-        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
-
-        // Sorted: [1000e18, 1050e18, 3000e18]
-        // Median: 1050e18
-        // Deviations from 1050e18:
-        //   1000e18: 4.76% < 1% -> No, > 1% -> Exclude
-        //   1050e18: 0% -> Include
-        //   3000e18: 185% > 1% -> Exclude
-        // Only median remains
-        // With flag=false, return single remaining price
-        assertEq(result, 1050e18, "should return single remaining price");
-    }
-
-    function test_givenOneRemainsAfterExclusion_givenFlagTrue_reverts() public {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 3000e18;
-        bytes memory params = _encodeDeviationParams(100, true); // 1% deviation, strict mode
-
-        _expectRevertPriceCount(1, 2);
-        strategy.getAveragePriceExcludingDeviations(prices, params);
-    }
-
-    // ============================================================================
-    // EDGE CASE TESTS
-    // ============================================================================
-
-    // Note: The median price never deviates from itself (0% deviation), so it's
-    // not possible for ALL prices to deviate when using median as benchmark.
-    // This test verifies the strict mode behavior with tight deviation threshold.
-
-    function test_givenTightDeviationOnlyMedianRemains_givenFlagTrue_reverts() public {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 1050e18;
-        prices[2] = 3000e18;
-        bytes memory params = _encodeDeviationParams(100, true); // 1% deviation, strict mode
-
-        // Sorted: [1000e18, 1050e18, 3000e18]
-        // Median: 1050e18
-        // Deviations from 1050e18:
-        //   1000e18: 4.76% > 1% -> Exclude
-        //   1050e18: 0% -> Include
-        //   3000e18: 185% > 1% -> Exclude
-        // Only median remains, flag=true -> revert
-        _expectRevertPriceCount(1, 2);
-        strategy.getAveragePriceExcludingDeviations(prices, params);
-    }
-
-    function test_givenFourPricesEvenCount_usesMedian() public view {
-        uint256[] memory prices = new uint256[](4);
-        prices[0] = 900e18;
-        prices[1] = 1000e18;
-        prices[2] = 1100e18;
-        prices[3] = 5000e18;
-        bytes memory params = _encodeDeviationParams(1000, false); // 10% deviation
-
-        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
-
-        // Sorted: [900e18, 1000e18, 1100e18, 5000e18]
-        // Median (even count): (1000e18 + 1100e18) / 2 = 1050e18
-        // Deviations from 1050e18:
-        //   900e18: |900 - 1050| / 1050 = 14.29% > 10% -> Exclude
-        //   1000e18: |1000 - 1050| / 1050 = 4.76% < 10% -> Include
-        //   1100e18: |1100 - 1050| / 1050 = 4.76% < 10% -> Include
-        //   5000e18: |5000 - 1050| / 1050 = 376% > 10% -> Exclude
-        // Result: (1000e18 + 1100e18) / 2 = 1050e18
-        assertEq(result, 1050e18, "should use median as benchmark for even count");
+        // Expected: (950e18 + 1000e18 + 1050e18) / 3 = 3000e18 / 3 = 1000e18
+        uint256 expected = 1000e18;
+        assertEq(result, expected, "should return average excluding outliers");
     }
 
     // ============================================================================
