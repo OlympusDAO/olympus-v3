@@ -308,33 +308,64 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         return _getAveragePrice(nonZeroPrices);
     }
 
-    /// @notice         This strategy returns the median of the non-zero prices in the array.
-    /// @dev            If the array has an even number of non-zero prices, the average of the two middle
-    /// @dev            prices is returned.
-    ///
-    /// @dev            Zero prices in the array are ignored, to allow for
-    /// @dev            handling of price lookup sources that return errors.
-    /// @dev            Otherwise, an asset with any zero price would result in
-    /// @dev            no price being returned at all.
-    ///
-    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), the values are passed on to `getAveragePrice()`.
-    ///
-    /// @dev            Will revert if:
-    /// @dev            - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
-    ///
-    /// @param prices_  Array of prices
-    /// @return         The resolved price
-    function getMedianPrice(uint256[] memory prices_, bytes memory) public pure returns (uint256) {
-        // Misconfiguration
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    If even number of prices, returns average of two middle values.
+    /// @dev    Zero prices are ignored to handle failing price feeds gracefully.
+    /// @dev    In strict mode, reverts if fewer than 3 non-zero prices exist.
+    function getMedianPrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 3 elements: misconfiguration
+            - Invalid params: wrong length (must be exactly 32 bytes)
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2 non-zero prices       | Return average          | Revert              |
+            | 3+ non-zero prices      | Return median           | Return median       |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Best effort mode (accept single source)
+            - flag=true: Strict mode (require 3+ sources for median)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
         if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
+        // ========== PARAMETER DECODING ==========
+        if (params_.length != 32) revert SimpleStrategy_ParamsInvalid(params_);
+        bool revertOnInsufficientCount = abi.decode(params_, (bool));
+
+        // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
-
         uint256 nonZeroPricesLen = nonZeroPrices.length;
-        // Can only calculate a median if there are 3+ non-zero prices
-        if (nonZeroPricesLen == 0) return 0;
-        if (nonZeroPricesLen < 3) return getAveragePrice(prices_, "");
 
+        // 0 prices = no data, always revert
+        if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+
+        // 1 price = check flag
+        if (nonZeroPricesLen == 1) {
+            if (revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 3);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
+
+        // 2 prices = check flag (median requires 3+)
+        if (nonZeroPricesLen == 2) {
+            if (revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
+            // flag=false: fall back to average
+            return getAveragePrice(prices_, "");
+        }
+
+        // ========== 3+ PRICES: CALCULATE MEDIAN ==========
         // Sort the prices
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 

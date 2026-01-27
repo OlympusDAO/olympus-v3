@@ -62,6 +62,10 @@ abstract contract SimplePriceFeedStrategyBase is Test {
         return abi.encode(p);
     }
 
+    function _encodeStrictModeParams(bool strictMode_) internal pure returns (bytes memory) {
+        return abi.encode(strictMode_);
+    }
+
     function _expectRevertParams(bytes memory params_) internal {
         bytes memory err = abi.encodeWithSelector(
             SimplePriceFeedStrategy.SimpleStrategy_ParamsInvalid.selector,

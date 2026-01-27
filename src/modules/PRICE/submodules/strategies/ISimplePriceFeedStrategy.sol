@@ -21,4 +21,14 @@ interface ISimplePriceFeedStrategy {
         uint256[] memory prices_,
         bytes memory params_
     ) external pure returns (uint256 price);
+
+    /// @notice Returns the median of non-zero prices in the array
+    ///
+    /// @param  prices_  Array of prices from multiple feeds (minimum 3 elements)
+    /// @param  params_  Bool encoded as bytes - must be exactly 32 bytes
+    /// @return price    The resolved price (median of non-zero prices)
+    function getMedianPrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) external pure returns (uint256 price);
 }

@@ -16,134 +16,146 @@ contract SimplePriceFeedStrategyGetMedianPriceTest is SimplePriceFeedStrategyBas
 
     // =========  TESTS ========= //
 
-    function test_getMedianPrice_priceZero_indexFuzz(uint8 priceZeroIndex_) public view {
-        uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 0, 9));
+    // ========== CONFIGURATION ERRORS ========== //
 
-        uint256[] memory prices = new uint256[](10);
-        for (uint8 i = 0; i < 10; i++) {
-            if (i == priceZeroIndex) {
-                prices[i] = 0;
-            } else {
-                prices[i] = 1e18;
-            }
-        }
-
-        uint256 medianPrice = strategy.getMedianPrice(prices, "");
-
-        // The median price will be 1e18, which means the zero price will be ignored
-        assertEq(medianPrice, 1e18);
-    }
-
-    function test_getMedianPrice_revertsOnArrayLengthInvalid(uint8 len_) public {
+    function test_whenInvalidArrayLength_reverts(uint8 len_) public {
         uint8 len = uint8(bound(len_, 0, 2));
         uint256[] memory prices = new uint256[](len);
 
         _expectRevertPriceCount(len, 3);
+        strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+    }
+
+    function test_whenEmptyParams_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1e18;
+        prices[1] = 2e18;
+        prices[2] = 3e18;
+
+        _expectRevertParams("");
         strategy.getMedianPrice(prices, "");
     }
 
-    function test_getMedianPrice_empty_fuzz(uint8 len_) public view {
+    function test_whenInvalidParamsLength_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1e18;
+        prices[1] = 2e18;
+        prices[2] = 3e18;
+
+        bytes memory invalidParams = abi.encode(uint256(123), uint256(456)); // 64 bytes
+
+        _expectRevertParams(invalidParams);
+        strategy.getMedianPrice(prices, invalidParams);
+    }
+
+    // ========== ALL PRICES ZERO ========== //
+
+    function test_whenAllPricesZero_reverts(uint8 len_) public {
         uint8 len = uint8(bound(len_, 3, 10));
         uint256[] memory prices = new uint256[](len);
 
-        uint256 returnedPrice = strategy.getMedianPrice(prices, "");
-        assertEq(returnedPrice, 0);
+        _expectRevertPriceCount(0, 3);
+        strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
     }
 
-    function test_getMedianPrice_unsorted() public view {
+    // ========== ONE NON-ZERO PRICE ========== //
+
+    function test_whenOneNonZeroPrice(uint8 arrayLen_) public view {
+        uint8 arrayLen = uint8(bound(arrayLen_, 3, 10));
+        uint256[] memory prices = new uint256[](arrayLen);
+        prices[arrayLen - 1] = 1.5e18;
+
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.5e18, "should return the single non-zero price");
+    }
+
+    function test_whenOneNonZeroPrice_whenStrictMode_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[2] = 1e18;
+
+        _expectRevertPriceCount(1, 3);
+        strategy.getMedianPrice(prices, _encodeStrictModeParams(true));
+    }
+
+    // ========== TWO NON-ZERO PRICES ========== //
+
+    function test_whenTwoNonZeroPrices(uint8 arrayLen_) public view {
+        uint8 arrayLen = uint8(bound(arrayLen_, 3, 10));
+        uint256[] memory prices = new uint256[](arrayLen);
+        prices[arrayLen - 2] = 1e18;
+        prices[arrayLen - 1] = 2e18;
+
+        // (1e18 + 2e18) / 2 = 1.5e18
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.5e18, "should return average of two non-zero prices");
+    }
+
+    function test_whenTwoNonZeroPrices_whenStrictMode_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[1] = 1e18;
+        prices[2] = 2e18;
+
+        _expectRevertPriceCount(2, 3);
+        strategy.getMedianPrice(prices, _encodeStrictModeParams(true));
+    }
+
+    // ========== THREE+ NON-ZERO PRICES ========== //
+
+    function test_whenThreePricesUnsorted() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 3 * 1e18;
         prices[1] = 1 * 1e18;
         prices[2] = 1.2 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
-        assertEq(price, 1.2 * 1e18);
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.2e18, "should return median of three unsorted prices");
     }
 
-    function test_getMedianPrice_unsorted_priceZero() public view {
+    function test_whenFourPricesUnsorted() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 3 * 1e18;
         prices[1] = 1 * 1e18;
         prices[2] = 0;
         prices[3] = 1.2 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
-
-        // Ignores the zero price
-        assertEq(price, 1.2 * 1e18);
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.2e18, "should return median of three non-zero prices");
     }
 
-    function test_getMedianPrice_arrayLengthValid_priceDoubleZero() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1 * 1e18;
-        prices[1] = 0;
-        prices[2] = 0;
-
-        uint256 price = strategy.getMedianPrice(prices, "");
-
-        // Ignores the zero price
-        assertEq(price, 1e18);
-    }
-
-    function test_getMedianPrice_arrayLengthValid_priceSingleZero() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1 * 1e18;
-        prices[1] = 2 * 1e18;
-        prices[2] = 0;
-
-        uint256 price = strategy.getMedianPrice(prices, "");
-
-        // Ignores the zero price and returns the average of the non-zero prices
-        assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
-    }
-
-    function test_getMedianPrice_arrayLengthValid_priceSingleZero_indexZero() public view {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 0;
-        prices[1] = 1 * 1e18;
-        prices[2] = 2 * 1e18;
-
-        uint256 price = strategy.getMedianPrice(prices, "");
-
-        // Ignores the zero price and returns the average of the non-zero prices
-        assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
-    }
-
-    function test_getMedianPrice_lengthOdd() public view {
+    function test_whenOddLengthArray() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18;
         prices[2] = 3 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
-        assertEq(price, 1.2 * 1e18);
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.2e18, "should return middle price from odd-length array");
     }
 
-    function test_getMedianPrice_lengthOdd_priceZero() public view {
+    function test_whenOddLengthArray_oneZero() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18;
         prices[2] = 0;
         prices[3] = 3 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
-
-        // Ignores the zero price
-        assertEq(price, 1.2 * 1e18);
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 1.2e18, "should return middle price from odd-length array with one zero");
     }
 
-    function test_getMedianPrice_lengthEven() public view {
+    function test_whenEvenLengthArray() public view {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 4 * 1e18;
         prices[1] = 2 * 1e18;
         prices[2] = 1 * 1e18;
         prices[3] = 3 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
-        assertEq(price, (2 * 1e18 + 3 * 1e18) / 2);
+        // Average of middle two: (2e18 + 3e18) / 2 = 2.5e18
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 2.5e18, "should return average of two middle prices");
     }
 
-    function test_getMedianPrice_lengthEven_priceZero() public view {
+    function test_whenEvenLengthArray_oneZero() public view {
         uint256[] memory prices = new uint256[](5);
         prices[0] = 4 * 1e18;
         prices[1] = 2 * 1e18;
@@ -151,9 +163,32 @@ contract SimplePriceFeedStrategyGetMedianPriceTest is SimplePriceFeedStrategyBas
         prices[3] = 0;
         prices[4] = 3 * 1e18;
 
-        uint256 price = strategy.getMedianPrice(prices, "");
+        // Average of middle two: (2e18 + 3e18) / 2 = 2.5e18
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(price, 2.5e18, "should return average of two middle prices with one zero");
+    }
 
-        // Ignores the zero price
-        assertEq(price, (2 * 1e18 + 3 * 1e18) / 2);
+    function test_whenOnePriceZero_outOfTen(uint8 priceZeroIndex_) public view {
+        uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 0, 9));
+
+        uint256[] memory prices = new uint256[](10);
+        for (uint8 i = 0; i < 10; i++) {
+            prices[i] = i == priceZeroIndex ? 0 : 1e18;
+        }
+
+        uint256 medianPrice = strategy.getMedianPrice(prices, _encodeStrictModeParams(false));
+        assertEq(medianPrice, 1e18, "should return median when one price out of ten is zero");
+    }
+
+    // ========== STRICT MODE WITH VALID PRICES ========== //
+
+    function test_whenThreePrices_whenStrictMode() public view {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1 * 1e18;
+        prices[1] = 2 * 1e18;
+        prices[2] = 3 * 1e18;
+
+        uint256 price = strategy.getMedianPrice(prices, _encodeStrictModeParams(true));
+        assertEq(price, 2e18, "should return median in strict mode with three prices");
     }
 }
