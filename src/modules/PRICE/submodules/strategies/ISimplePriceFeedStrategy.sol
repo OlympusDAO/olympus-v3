@@ -13,12 +13,10 @@ interface ISimplePriceFeedStrategy {
     }
 
     /// @notice Returns the average of prices that do not deviate from a benchmark
-    /// @dev    Calculates benchmark (median for 3+ prices, average for 2), excludes
-    /// @dev    outliers beyond the deviation threshold, and returns average of remaining prices.
     ///
-    /// @param  prices_ Array of prices from multiple feeds
-    /// @param  params_ Encoded DeviationParams struct (64 bytes)
-    /// @return price   The resolved price (average of non-deviating prices)
+    /// @param  prices_  Array of prices from multiple feeds
+    /// @param  params_  Encoded DeviationParams struct (64 bytes)
+    /// @return price    The resolved price (average of non-deviating prices)
     function getAveragePriceExcludingDeviations(
         uint256[] memory prices_,
         bytes memory params_
