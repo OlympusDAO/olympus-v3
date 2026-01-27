@@ -399,6 +399,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
         // ========== 2 PRICES: USE AVERAGE AS BENCHMARK ==========
         if (nonZeroCount == 2) {
+            // Note: Addition may overflow if prices are unreasonably large. This is acceptable
+            // as price feeds typically use 18 decimals with reasonable market values.
             uint256 averagePrice = (nonZeroPrices[0] + nonZeroPrices[1]) / 2;
 
             // Single pass: collect valid prices (max 2)
@@ -457,6 +459,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             revert SimpleStrategy_PriceCountInvalid(1, 2);
 
         // Sum valid prices (only the filled portion of the array)
+        // Note: Accumulation may overflow if prices are unreasonably large. This is acceptable
+        // as price feeds typically use 18 decimals with reasonable market values.
         uint256 multiPriceSum = 0;
         for (uint256 i = 0; i < multiPriceValidCount; i++) {
             multiPriceSum += validPrices[i];
