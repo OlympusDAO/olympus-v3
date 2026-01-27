@@ -22,7 +22,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //   [X] it reverts with PriceCountInvalid
     //
 
-    function test_givenInputArrayLengthZero_reverts() public {
+    function test_whenInputArrayLengthZero_reverts() public {
         uint256[] memory prices = new uint256[](0);
         bytes memory params = _encodeDeviationParams(1000, false);
 
@@ -30,7 +30,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenInputArrayLengthOne_reverts() public {
+    function test_whenInputArrayLengthOne_reverts() public {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 1000e18;
         bytes memory params = _encodeDeviationParams(1000, false);
@@ -39,7 +39,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenInputArrayLengthTwo_reverts() public {
+    function test_whenInputArrayLengthTwo_reverts() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -49,7 +49,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenInputArrayLengthLessThanThree_fuzz_reverts(
+    function test_whenInputArrayLengthLessThanThree_reverts_fuzz(
         uint8 length,
         uint256 price1,
         uint256 price2
@@ -77,7 +77,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // given deviationBps is > 0 and < 10000
     //   [X] it returns the average of the prices
 
-    function test_givenParamsEmpty_reverts() public {
+    function test_whenParamsEmpty_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -88,7 +88,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenParamsLengthOne_reverts() public {
+    function test_whenParamsLengthOne_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -99,7 +99,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenParamsLengthThirtyTwo_reverts() public {
+    function test_whenParamsLengthThirtyTwo_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -110,7 +110,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenParamsLengthNinetySix_reverts() public {
+    function test_whenParamsLengthNinetySix_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -130,7 +130,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, paramsExtended);
     }
 
-    function test_givenDeviationBpsZero_reverts() public {
+    function test_whenDeviationBpsZero_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -141,7 +141,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenDeviationBpsEqualsMax_reverts() public {
+    function test_whenDeviationBpsEqualsMax_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
@@ -152,9 +152,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenDeviationBpsGreaterThanZeroAndLessThanMax_fuzz(
-        uint16 deviationBps_
-    ) public view {
+    function test_whenValidDeviationBps_fuzz(uint16 deviationBps_) public view {
         deviationBps_ = uint16(bound(deviationBps_, 1, 9999));
 
         uint256[] memory prices = new uint256[](3);
@@ -180,7 +178,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //   given revertOnInsufficientCount is true
     //     [X] it reverts with PriceCountInvalid
 
-    function test_givenAllPricesZero_reverts() public {
+    function test_whenAllPricesZero_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 0;
         prices[1] = 0;
@@ -191,7 +189,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenThreePricesTwoZeros_givenFlagFalse() public view {
+    function test_whenThreePricesTwoZeros_andRevertOnInsufficientCountFalse() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 0;
@@ -204,7 +202,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, 1000e18, "should return single non-zero price");
     }
 
-    function test_givenThreePricesTwoZeros_givenFlagTrue_reverts() public {
+    function test_whenThreePricesTwoZeros_andRevertOnInsufficientCountTrue_reverts() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 0;
@@ -231,7 +229,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //   given both prices within deviation threshold
     //    [X] it returns the average of both prices
 
-    function test_givenTwoNonZeroPrices_givenBothDeviating_reverts(uint8 index_) public {
+    function test_whenTwoNonZeroPrices_bothDeviating_reverts(uint8 index_) public {
         index_ = uint8(bound(index_, 0, 1));
 
         uint256[] memory prices = new uint256[](3);
@@ -250,7 +248,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenTwoNonZeroPrices_givenNoneDeviating(uint8 index_) public view {
+    function test_whenTwoNonZeroPrices_noneDeviating(uint8 index_) public view {
         index_ = uint8(bound(index_, 0, 1));
 
         uint256[] memory prices = new uint256[](3);
@@ -270,9 +268,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, 1025e18, "should return average of non-deviating prices");
     }
 
-    function test_givenTwoNonZeroPrices_givenStrictMode_givenBothDeviating_reverts(
-        uint8 index_
-    ) public {
+    function test_whenTwoNonZeroPrices_strictMode_bothDeviating_reverts(uint8 index_) public {
         index_ = uint8(bound(index_, 0, 1));
 
         uint256[] memory prices = new uint256[](3);
@@ -291,9 +287,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_givenTwoNonZeroPrices_givenStrictMode_givenNoneDeviating(
-        uint8 index_
-    ) public view {
+    function test_whenTwoNonZeroPrices_strictMode_noneDeviating(uint8 index_) public view {
         index_ = uint8(bound(index_, 0, 1));
 
         uint256[] memory prices = new uint256[](3);
@@ -345,7 +339,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //     [X] it returns the average of non-deviating prices
     //
 
-    function test_whenThreePrices_whenZeroDeviate(uint8 seed) public view {
+    function test_whenThreePrices_zeroDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 3));
 
         // Permute the order of prices based on seed value
@@ -388,7 +382,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, expected, "should return average of all non-deviating prices");
     }
 
-    function test_whenThreePrices_whenOneDeviate(uint8 seed) public view {
+    function test_whenThreePrices_oneDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 3));
 
         // Permute the order of prices based on seed value
@@ -430,7 +424,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, expected, "should return average of non-deviating prices");
     }
 
-    function test_whenThreePrices_whenTwoDeviate_whenBestEffortMode(uint8 seed) public view {
+    function test_whenThreePrices_twoDeviating_bestEffortMode(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 3));
 
         // Permute the order of prices based on seed value
@@ -474,7 +468,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, expected, "should return single remaining price");
     }
 
-    function test_whenThreePrices_whenTwoDeviate_whenStrictMode_reverts(uint8 seed) public {
+    function test_whenThreePrices_twoDeviating_strictMode_reverts(uint8 seed) public {
         seed = uint8(bound(seed, 0, 3));
 
         // Permute the order of prices based on seed value
@@ -515,7 +509,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_whenFourPrices_whenZeroDeviate(uint8 seed) public view {
+    function test_whenFourPrices_zeroDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 4));
 
         // Permute the order of prices based on seed value
@@ -568,7 +562,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, expected, "should return average of all non-deviating prices");
     }
 
-    function test_whenFourPrices_whenOneDeviate(uint8 seed) public view {
+    function test_whenFourPrices_oneDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 4));
 
         // Permute the order of prices based on seed value
@@ -621,7 +615,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, expected, "should return average excluding outlier");
     }
 
-    function test_whenFourPrices_whenTwoDeviate(uint8 seed) public view {
+    function test_whenFourPrices_twoDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 4));
 
         // Permute the order of prices based on seed value
@@ -690,7 +684,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // 3 prices, where the median is one of the actual values and always included.
     // See test_whenThreePrices_whenTwoDeviate_whenBestEffortMode for the 3-price case.
 
-    function test_whenFourPrices_whenAllDeviate_reverts(uint8 seed) public {
+    function test_whenFourPrices_allDeviating_reverts(uint8 seed) public {
         seed = uint8(bound(seed, 0, 4));
 
         // Permute the order of prices based on seed value
@@ -741,7 +735,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_whenFivePrices_whenOutliersExcluded(uint8 seed) public view {
+    function test_whenFivePrices_outliersExcluded(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 5));
 
         // Permute the order of prices based on seed value
@@ -817,7 +811,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //
     // ============================================================================
 
-    function test_givenThreePricesWithValidDeviation_fuzz(
+    function test_whenThreePrices_validDeviation_fuzz(
         uint64 price1,
         uint64 price2,
         uint64 price3,
@@ -843,7 +837,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertGt(result, 0, "result should be positive");
     }
 
-    function test_givenThreePricesWithStrictMode_fuzz(
+    function test_whenThreePrices_strictMode_fuzz(
         uint64 price1,
         uint64 price2,
         uint64 price3,
