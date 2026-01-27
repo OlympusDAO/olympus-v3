@@ -312,13 +312,13 @@ function getAveragePrice(
 ```solidity
 /// @notice Configuration for deviation-based price resolution
 ///
-/// @param  deviationBps_    Maximum deviation threshold in basis points
-/// @param  minSources_      Minimum number of price sources required
-/// @param  maxSources_      Maximum number of price sources to use
+/// @param  deviationBps    Maximum deviation threshold in basis points
+/// @param  minSources      Minimum number of price sources required
+/// @param  maxSources      Maximum number of price sources to use
 struct DeviationConfig {
-    uint256 deviationBps_;
-    uint256 minSources_;
-    uint256 maxSources_;
+    uint256 deviationBps;
+    uint256 minSources;
+    uint256 maxSources;
 }
 ```
 
