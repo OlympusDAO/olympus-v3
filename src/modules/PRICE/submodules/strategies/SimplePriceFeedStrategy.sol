@@ -273,11 +273,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
-        if (((averagePrice - minPrice) * 10000) / averagePrice > deviationBps) return medianPrice;
+        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX))
+            return medianPrice;
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return medianPrice;
+        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX))
+            return medianPrice;
 
         // Otherwise, return the first non-zero value
         return firstNonZeroPrice;
