@@ -2,6 +2,9 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
+// Interfaces
+import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
+
 // Libraries
 import {QuickSort} from "libraries/QuickSort.sol";
 import {Deviation} from "libraries/Deviation.sol";
@@ -15,7 +18,7 @@ import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 /// @author     0xJem
 /// @notice     The functions in this contract provide PRICEv2 strategies that can be used to handle
 /// @notice     the results from multiple price feeds
-contract SimplePriceFeedStrategy is PriceSubmodule {
+contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     using QuickSort for uint256[];
 
     /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
@@ -334,6 +337,131 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         return _getMedianPrice(sortedPrices);
+    }
+
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    Validates input parameters and filters outliers before computing average.
+    /// @dev    Reverts if fewer than 3 prices are provided (configuration error).
+    /// @dev    Reverts if no valid prices remain after filtering (no data error).
+    function getAveragePriceExcludingDeviations(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 3 elements: misconfiguration
+            - Invalid params: wrong length or deviationBps out of bounds
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2 non-zero prices       | Use avg as benchmark    | Use avg as benchmark|
+            | 3+ non-zero prices      | Use median as benchmark | Use median as bench |
+            | All prices excluded     | Revert                  | Revert              |
+            | 1 price remains         | Return that price       | Revert              |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Accept single source (best effort)
+            - flag=true: Require 2+ sources (strict mode, recommended)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
+
+        // ========== PARAMETER DECODING ==========
+        // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
+        ISimplePriceFeedStrategy.DeviationParams memory params;
+        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        params = abi.decode(params_, (ISimplePriceFeedStrategy.DeviationParams));
+
+        // Validate deviation bounds (must be > 0 and < 10000)
+        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
+
+        // ========== ZERO PRICE FILTERING ==========
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        uint256 nonZeroCount = nonZeroPrices.length;
+
+        // 0 prices = no data, always revert
+        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+
+        // 1 price = check flag
+        if (nonZeroCount == 1) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
+
+        // ========== 2 PRICES: USE AVERAGE AS BENCHMARK ==========
+        if (nonZeroCount == 2) {
+            uint256 averagePrice = (nonZeroPrices[0] + nonZeroPrices[1]) / 2;
+
+            // Single pass: collect valid prices (max 2)
+            uint256[2] memory twoPriceValidPrices;
+            uint256 twoPriceValidCount = 0;
+            for (uint256 i = 0; i < 2; i++) {
+                if (
+                    !Deviation.isDeviating(
+                        nonZeroPrices[i],
+                        averagePrice,
+                        params.deviationBps,
+                        DEVIATION_MAX
+                    )
+                ) {
+                    twoPriceValidPrices[twoPriceValidCount] = nonZeroPrices[i];
+                    twoPriceValidCount++;
+                }
+            }
+
+            // 0 prices = no data, always revert
+            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+
+            // 1 price = check flag
+            if (twoPriceValidCount == 1 && params.revertOnInsufficientCount)
+                revert SimpleStrategy_PriceCountInvalid(1, 2);
+
+            return (twoPriceValidPrices[0] + twoPriceValidPrices[1]) / twoPriceValidCount;
+        }
+
+        // ========== 3+ PRICES: USE MEDIAN AS BENCHMARK ==========
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
+        uint256 medianPrice = _getMedianPrice(sortedPrices);
+
+        // Single pass: collect valid prices into dynamic array
+        uint256[] memory validPrices = new uint256[](nonZeroCount);
+        uint256 multiPriceValidCount = 0;
+        for (uint256 i = 0; i < nonZeroCount; i++) {
+            if (
+                !Deviation.isDeviating(
+                    sortedPrices[i],
+                    medianPrice,
+                    params.deviationBps,
+                    DEVIATION_MAX
+                )
+            ) {
+                validPrices[multiPriceValidCount] = sortedPrices[i];
+                multiPriceValidCount++;
+            }
+        }
+
+        // 0 prices = no data, always revert
+        if (multiPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+
+        // 1 price = check flag
+        if (multiPriceValidCount == 1 && params.revertOnInsufficientCount)
+            revert SimpleStrategy_PriceCountInvalid(1, 2);
+
+        // Sum valid prices (only the filled portion of the array)
+        uint256 multiPriceSum = 0;
+        for (uint256 i = 0; i < multiPriceValidCount; i++) {
+            multiPriceSum += validPrices[i];
+        }
+        return multiPriceSum / multiPriceValidCount;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)
