@@ -293,6 +293,40 @@ function test_givenPositionExists_givenContractIsEnabled_whenAmountExceedsRemain
 }
 ```
 
+### Parameterized Tests (first condition is `when`)
+
+Tests that primarily vary input data parameters use `when` as the first condition. The key distinction:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `given*` | State (pre-existing conditions) | `givenPositionExists`, `givenContractIsEnabled` |
+| `when*` | Parameters (input/config being tested) | `whenThreePrices`, `whenAmountIsZero`, `whenStrictMode` |
+
+```solidity
+// when input has 3 prices
+//   when zero deviate from median
+//     [X] it returns average of all prices
+
+function test_whenThreePrices_whenZeroDeviate() public {
+    // 3 prices = input parameter, not pre-existing state
+    uint256[] memory prices = new uint256[](3);
+    prices[0] = 1000e18;
+    prices[1] = 1050e18;
+    prices[2] = 1200e18;
+    // test logic...
+}
+
+// when strict mode is enabled
+//   when only one price remains
+//     [X] it reverts
+
+function test_whenStrictMode_whenOneRemains_reverts() public {
+    // Configuration parameter test
+    bytes memory params = encodeDeviationParams(1000, true); // strict mode
+    // test logic...
+}
+```
+
 **Note:** Don't include the expected result in the function name. A single test often has multiple assertions/checks.
 
 **Ordering:** Write error/revert tests first, then success tests. This makes failures easier to spot.
