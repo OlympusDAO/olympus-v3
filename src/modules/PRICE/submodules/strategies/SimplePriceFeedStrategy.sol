@@ -64,8 +64,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @notice        Returns a new array with only the non-zero elements of the input array
     ///
-    /// @param array_  Array of uint256 values
-    /// @return        Array of non-zero uint256 values
+    /// @param  array_  Array of uint256 values
+    /// @return uint256[]  Array of non-zero uint256 values
     function _getNonZeroArray(uint256[] memory array_) internal pure returns (uint256[] memory) {
         // Determine the number of non-zero array elements
         uint256 nonZeroCount = 0;
@@ -90,8 +90,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     /// @dev            This function will calculate the average of all values in the array.
     /// @dev            If non-zero values should not be included in the average, filter them prior.
     ///
-    /// @param prices_  Array of prices
-    /// @return         The average price or 0
+    /// @param  prices_  Array of prices
+    /// @return uint256  The average price or 0
     function _getAveragePrice(uint256[] memory prices_) internal pure returns (uint256) {
         uint256 pricesLen = prices_.length;
 
@@ -113,8 +113,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     /// @dev            If there are only two prices, the average of the two will be returned.
     /// @dev            If non-zero values should not be included in the median, filter them prior.
     ///
-    /// @param prices_  Array of prices
-    /// @return         The median price
+    /// @param  prices_  Array of prices
+    /// @return uint256  The median price
     function _getMedianPrice(uint256[] memory prices_) internal pure returns (uint256) {
         uint256 pricesLen = prices_.length;
 
@@ -139,8 +139,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     ///
     /// @dev            If a non-zero price cannot be found, 0 will be returned.
     ///
-    /// @param prices_  Array of prices
-    /// @return         The resolved price
+    /// @param  prices_  Array of prices
+    /// @return uint256  The resolved price
     function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory
@@ -670,9 +670,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     /// @dev            The validCount parameter specifies how many elements to consider.
     /// @dev            If there are only two prices, the average of the two will be returned.
     ///
-    /// @param prices_      Array of prices (must be sorted)
-    /// @param validCount_  Number of valid elements in the array
-    /// @return             The median price
+    /// @param  prices_      Array of prices (must be sorted)
+    /// @param  validCount_  Number of valid elements in the array
+    /// @return uint256      The median price
     function _getMedianPrice(
         uint256[] memory prices_,
         uint256 validCount_
@@ -694,8 +694,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @notice         Decodes and validates DeviationParams from calldata
     /// @dev            Reverts if params length is invalid or deviationBps is out of bounds
-    /// @param params_    Encoded DeviationParams bytes
-    /// @return             Decoded DeviationParams struct
+    ///
+    /// @param  params_  Encoded DeviationParams bytes
+    /// @return DeviationParams  Decoded DeviationParams struct
     function _decodeDeviationParams(
         bytes memory params_
     ) internal pure returns (ISimplePriceFeedStrategy.DeviationParams memory) {
@@ -715,12 +716,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @notice         Filters prices by deviation from a benchmark value
     /// @dev            Returns a sorted array of non-deviating prices and the count
-    /// @param prices_    Sorted array of prices to filter
-    /// @param benchmark_  The benchmark value to check deviation against
-    /// @param deviationBps_ The accepted deviation in basis points
-    /// @param minExpectedCount_ Minimum number of prices required (for error reporting)
-    /// @return             validPrices_ Sorted array of non-deviating prices
-    /// @return             validCount_ Number of non-deviating prices found
+    ///
+    /// @param  prices_            Sorted array of prices to filter
+    /// @param  benchmark_         The benchmark value to check deviation against
+    /// @param  deviationBps_      The accepted deviation in basis points
+    /// @param  minExpectedCount_  Minimum number of prices required (for error reporting)
+    /// @return validPrices_       Sorted array of non-deviating prices
+    /// @return validCount_        Number of non-deviating prices found
     function _filterByDeviation(
         uint256[] memory prices_,
         uint256 benchmark_,
