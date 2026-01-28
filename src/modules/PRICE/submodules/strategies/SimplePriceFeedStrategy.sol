@@ -577,5 +577,167 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         }
         return multiPriceSum / multiPriceValidCount;
     }
+
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    Validates input parameters and filters outliers before computing median.
+    /// @dev    Reverts if fewer than 3 prices are provided (configuration error).
+    /// @dev    Reverts if no valid prices remain after filtering (no data error).
+    function getMedianPriceExcludingDeviations(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 3 elements: misconfiguration
+            - Invalid params: wrong length or deviationBps out of bounds
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2 non-zero prices       | Use avg as benchmark    | Revert              |
+            | 3+ non-zero prices      | Use median as benchmark | Use median as bench |
+            | All prices excluded     | Revert                  | Revert              |
+            | 1 price remains         | Return that price       | Revert              |
+            | 2 prices remain         | Return average          | Revert              |
+            | 3+ prices remain        | Return median           | Return median       |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Accept 1-2 sources (best effort)
+            - flag=true: Require 3+ sources for median (strict mode, recommended)
+            - Median is used as benchmark for 3+ prices (same as getAveragePriceExcludingDeviations)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
+
+        // ========== PARAMETER DECODING ==========
+        // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
+        ISimplePriceFeedStrategy.DeviationParams memory params;
+        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        params = abi.decode(params_, (ISimplePriceFeedStrategy.DeviationParams));
+
+        // Validate deviation bounds (must be > 0 and < 10000)
+        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
+
+        // ========== ZERO PRICE FILTERING ==========
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        uint256 nonZeroCount = nonZeroPrices.length;
+
+        // 0 prices = no data, always revert
+        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+
+        // 1 price = check flag (median requires 3+ sources)
+        if (nonZeroCount == 1) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 3);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
+
+        // 2 prices = check flag (median requires 3+ sources in strict mode)
+        if (nonZeroCount == 2) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
+            // flag=false: continue with deviation checking using average as benchmark
+            // Note: Addition may overflow if prices are unreasonably large. This is acceptable
+            // as price feeds typically use 18 decimals with reasonable market values.
+            uint256 averagePrice = (nonZeroPrices[0] + nonZeroPrices[1]) / 2;
+
+            // Single pass: collect valid prices (max 2)
+            uint256[2] memory twoPriceValidPrices;
+            uint256 twoPriceValidCount = 0;
+            for (uint256 i = 0; i < 2; i++) {
+                if (
+                    !Deviation.isDeviating(
+                        nonZeroPrices[i],
+                        averagePrice,
+                        params.deviationBps,
+                        DEVIATION_MAX
+                    )
+                ) {
+                    twoPriceValidPrices[twoPriceValidCount] = nonZeroPrices[i];
+                    twoPriceValidCount++;
+                }
+            }
+
+            // 0 prices = no data, always revert
+            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+
+            // 1 price = return that price
+            // 2 prices = return average
+            return (twoPriceValidPrices[0] + twoPriceValidPrices[1]) / twoPriceValidCount;
+        }
+
+        // ========== 3+ PRICES: USE MEDIAN AS BENCHMARK ==========
+        // Note: Using median (not average) as benchmark for the deviation check
+        // This is the same approach as getAveragePriceExcludingDeviations
+        // Using median as benchmark prevents the case where all values deviate from their own average
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
+        uint256 medianPrice = _getMedianPrice(sortedPrices);
+
+        // Single pass: collect valid prices into dynamic array
+        uint256[] memory validPrices = new uint256[](nonZeroCount);
+        uint256 multiPriceValidCount = 0;
+        for (uint256 i = 0; i < nonZeroCount; i++) {
+            if (
+                !Deviation.isDeviating(
+                    sortedPrices[i],
+                    medianPrice,
+                    params.deviationBps,
+                    DEVIATION_MAX
+                )
+            ) {
+                validPrices[multiPriceValidCount] = sortedPrices[i];
+                multiPriceValidCount++;
+            }
+        }
+
+        // 0 prices = no data, always revert
+        if (multiPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+
+        // 1 price = check flag (median requires 3+ sources)
+        if (multiPriceValidCount == 1 && params.revertOnInsufficientCount)
+            revert SimpleStrategy_PriceCountInvalid(1, 3);
+
+        // 2 prices = check flag, then return average
+        if (multiPriceValidCount == 2) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
+            return (validPrices[0] + validPrices[1]) / 2;
+        }
+
+        // 3+ prices: return median of valid prices
+        // Note: validPrices is already sorted since we iterated through sortedPrices in order
+        return _getMedianPrice(validPrices, multiPriceValidCount);
+    }
+
+    /// @notice         Returns the median of the prices in the array
+    /// @dev            This function will calculate the median of all values in the array.
+    /// @dev            It assumes that the price array is sorted in ascending order.
+    /// @dev            The validCount parameter specifies how many elements to consider.
+    /// @dev            If there are only two prices, the average of the two will be returned.
+    ///
+    /// @param prices_      Array of prices (must be sorted)
+    /// @param validCount_  Number of valid elements in the array
+    /// @return             The median price
+    function _getMedianPrice(
+        uint256[] memory prices_,
+        uint256 validCount_
+    ) internal pure returns (uint256) {
+        // If there are an even number of prices, return the average of the two middle prices
+        if (validCount_ % 2 == 0) {
+            uint256 middlePrice1 = prices_[validCount_ / 2 - 1];
+            uint256 middlePrice2 = prices_[validCount_ / 2];
+            return (middlePrice1 + middlePrice2) / 2;
+        }
+
+        // Otherwise return the median price
+        // Don't need to subtract 1 from validCount_ to get midpoint index
+        // since integer division will round down
+        return prices_[validCount_ / 2];
+    }
 }
 /// forge-lint: disable-end(mixed-case-function)

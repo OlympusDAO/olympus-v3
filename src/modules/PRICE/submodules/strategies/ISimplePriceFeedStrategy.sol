@@ -69,4 +69,17 @@ interface ISimplePriceFeedStrategy {
         uint256[] memory prices_,
         bytes memory params_
     ) external pure returns (uint256 price);
+
+    /// @notice Returns the median of prices, excluding those deviating from the benchmark
+    ///
+    /// @dev    Iteratively filters out deviating prices and returns the median of remaining prices.
+    /// @dev    This is a "consensus" strategy - outliers are removed until all remaining prices agree.
+    ///
+    /// @param  prices_  Array of prices from multiple feeds (minimum 3 elements)
+    /// @param  params_  Encoded DeviationParams struct (64 bytes)
+    /// @return price    The resolved price (median of non-deviating prices)
+    function getMedianPriceExcludingDeviations(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) external pure returns (uint256 price);
 }
