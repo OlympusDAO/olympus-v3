@@ -7,6 +7,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -315,7 +316,9 @@ contract UniswapV3Price is PriceSubmodule {
     /// @return bool True if the contract supports interfaceId_
     function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return
-            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            interfaceId == type(ISubmodule).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

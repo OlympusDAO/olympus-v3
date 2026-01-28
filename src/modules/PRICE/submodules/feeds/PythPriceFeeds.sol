@@ -6,6 +6,7 @@ pragma solidity >=0.8.15;
 import {IPyth} from "src/interfaces/IPyth.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -438,7 +439,9 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @return bool True if the contract supports interfaceId_
     function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return
-            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            interfaceId == type(ISubmodule).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

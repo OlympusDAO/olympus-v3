@@ -6,6 +6,7 @@ pragma solidity >=0.8.15;
 import {Keycode, Module, fromKeycode, ensureContract} from "src/Kernel.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 
 //============================================================================================//
 //                                        GLOBAL TYPES                                        //
@@ -78,6 +79,7 @@ abstract contract ModuleWithSubmodules is Module {
     error Module_SubmoduleAlreadyInstalled(SubKeycode subKeycode_);
     error Module_SubmoduleNotInstalled(SubKeycode subKeycode_);
     error Module_SubmoduleExecutionReverted(bytes error_);
+    error Module_SubmoduleInterfaceNotImplemented(address submodule_);
 
     // ========= SUBMODULE MANAGEMENT ========= //
 
@@ -185,6 +187,17 @@ abstract contract ModuleWithSubmodules is Module {
         SubKeycode subKeycode = newSubmodule_.SUBKEYCODE();
         ensureValidSubKeycode(subKeycode, keycode);
 
+        // Validate that the submodule implements ISubmodule
+        // We check this by calling supportsInterface with the ISubmodule interface ID
+        (bool success, bytes memory data) = address(newSubmodule_).staticcall(
+            abi.encodeWithSelector(IERC165.supportsInterface.selector, type(ISubmodule).interfaceId)
+        );
+        // If the call succeeds and returns false, the submodule doesn't implement ISubmodule
+        if (success && data.length > 0) {
+            bool supported = abi.decode(data, (bool));
+            if (!supported) revert Module_SubmoduleInterfaceNotImplemented(address(newSubmodule_));
+        }
+
         return subKeycode;
     }
 }
@@ -192,7 +205,7 @@ abstract contract ModuleWithSubmodules is Module {
 /// @notice Submodules are isolated components of a module that can be upgraded independently.
 /// @dev    Submodules are installed and uninstalled directly on the module.
 /// @dev    If a module is going to hold state that should be persisted across upgrades, then a submodule pattern may be a good fit.
-abstract contract Submodule is IVersioned {
+abstract contract Submodule is IVersioned, ISubmodule {
     error Submodule_OnlyParent(address caller_);
     error Submodule_ModuleDoesNotExist(Keycode keycode_);
     error Submodule_InvalidParent();
@@ -234,7 +247,9 @@ abstract contract Submodule is IVersioned {
     /// @return bool True if the contract supports interfaceId_
     function supportsInterface(bytes4 interfaceId) external pure virtual returns (bool) {
         return
-            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            interfaceId == type(ISubmodule).interfaceId;
     }
 
     /// @notice Initialization function for the submodule
