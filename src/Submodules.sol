@@ -192,11 +192,12 @@ abstract contract ModuleWithSubmodules is Module {
         (bool success, bytes memory data) = address(newSubmodule_).staticcall(
             abi.encodeWithSelector(IERC165.supportsInterface.selector, type(ISubmodule).interfaceId)
         );
-        // If the call succeeds and returns false, the submodule doesn't implement ISubmodule
-        if (success && data.length > 0) {
-            bool supported = abi.decode(data, (bool));
-            if (!supported) revert Module_SubmoduleInterfaceNotImplemented(address(newSubmodule_));
-        }
+        // The call must succeed and return true for ISubmodule
+        // If success is false, the contract doesn't implement supportsInterface at all
+        if (!success || data.length == 0)
+            revert Module_SubmoduleInterfaceNotImplemented(address(newSubmodule_));
+        bool supported = abi.decode(data, (bool));
+        if (!supported) revert Module_SubmoduleInterfaceNotImplemented(address(newSubmodule_));
 
         return subKeycode;
     }

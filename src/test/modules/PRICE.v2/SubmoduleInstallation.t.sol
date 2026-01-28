@@ -8,9 +8,10 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 // Bophades
 import {Actions, Kernel, Module} from "src/Kernel.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
-import {ModuleWithSubmodules} from "src/Submodules.sol";
+import {ModuleWithSubmodules, Submodule} from "src/Submodules.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {MockInvalidSubmodule} from "test/mocks/MockInvalidSubmodule.sol";
+import {MockSubmoduleNoERC165} from "test/mocks/MockSubmoduleNoERC165.sol";
 
 /// @title     SubmoduleInstallationTest
 /// @author    0xJem
@@ -21,7 +22,8 @@ contract SubmoduleInstallationTest is Test {
     Kernel internal kernel;
     OlympusPricev2 internal price;
     ChainlinkPriceFeeds internal validSubmodule;
-    MockInvalidSubmodule internal invalidSubmodule;
+    MockInvalidSubmodule internal invalidSubmodule; // Has supportsInterface but returns false for ISubmodule
+    MockSubmoduleNoERC165 internal noERC165Submodule; // No supportsInterface at all
 
     address internal moduleWriter;
 
@@ -45,6 +47,7 @@ contract SubmoduleInstallationTest is Test {
         // Deploy submodules
         validSubmodule = new ChainlinkPriceFeeds(price);
         invalidSubmodule = new MockInvalidSubmodule(price);
+        noERC165Submodule = new MockSubmoduleNoERC165(price);
     }
 
     // ========= TESTS ========== //
@@ -59,8 +62,10 @@ contract SubmoduleInstallationTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Test that installing a submodule that doesn't implement ISubmodule reverts
-    function test_installSubmodule_givenSubmoduleDoesNotImplementISubmodule_reverts() public {
+    /// @notice Test that installing a submodule that returns false for ISubmodule reverts
+    /// @dev    MockInvalidSubmodule implements supportsInterface but returns false for ISubmodule.interfaceId
+    /// @dev    This tests the case where a contract implements ERC-165 but doesn't properly implement ISubmodule
+    function test_installSubmodule_givenSubmoduleReturnsFalseForISubmodule_reverts() public {
         vm.startPrank(moduleWriter);
 
         // Expect revert with Module_SubmoduleInterfaceNotImplemented error
@@ -71,6 +76,26 @@ contract SubmoduleInstallationTest is Test {
             )
         );
         price.installSubmodule(invalidSubmodule);
+
+        vm.stopPrank();
+    }
+
+    /// @notice Test that installing a submodule without supportsInterface reverts
+    /// @dev    MockSubmoduleNoERC165 doesn't inherit from Submodule, so it has no supportsInterface function
+    /// @dev    The staticcall to supportsInterface will fail (success = false), triggering validation failure
+    function test_installSubmodule_givenSubmoduleNoSupportsInterface_reverts() public {
+        vm.startPrank(moduleWriter);
+
+        // Expect revert with Module_SubmoduleInterfaceNotImplemented error
+        // The staticcall to supportsInterface will fail since the function doesn't exist
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_SubmoduleInterfaceNotImplemented.selector,
+                address(noERC165Submodule)
+            )
+        );
+        // Cast to Submodule type - this is allowed at compile time but will fail validation at runtime
+        price.installSubmodule(Submodule(address(noERC165Submodule)));
 
         vm.stopPrank();
     }
