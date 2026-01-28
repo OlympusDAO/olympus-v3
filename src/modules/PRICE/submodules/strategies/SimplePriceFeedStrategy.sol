@@ -190,13 +190,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
         // ========== PARAMETER DECODING ==========
-        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
-        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
-            params_,
-            (ISimplePriceFeedStrategy.DeviationParams)
-        );
-        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);
 
         // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
@@ -262,13 +256,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
         // ========== PARAMETER DECODING ==========
-        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
-        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
-            params_,
-            (ISimplePriceFeedStrategy.DeviationParams)
-        );
-        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);
 
         // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
@@ -485,14 +473,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
         // ========== PARAMETER DECODING ==========
-        // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
-        ISimplePriceFeedStrategy.DeviationParams memory params;
-        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
-        params = abi.decode(params_, (ISimplePriceFeedStrategy.DeviationParams));
-
-        // Validate deviation bounds (must be > 0 and < 10000)
-        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);
 
         // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
@@ -544,38 +525,26 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 medianPrice = _getMedianPrice(sortedPrices);
 
-        // Single pass: collect valid prices into dynamic array
-        uint256[] memory validPrices = new uint256[](nonZeroCount);
-        uint256 multiPriceValidCount = 0;
-        for (uint256 i = 0; i < nonZeroCount; i++) {
-            if (
-                !Deviation.isDeviating(
-                    sortedPrices[i],
-                    medianPrice,
-                    params.deviationBps,
-                    DEVIATION_MAX
-                )
-            ) {
-                validPrices[multiPriceValidCount] = sortedPrices[i];
-                multiPriceValidCount++;
-            }
-        }
-
-        // 0 prices = no data, always revert
-        if (multiPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+        // Filter by deviation from median
+        (uint256[] memory validPrices, uint256 validCount) = _filterByDeviation(
+            sortedPrices,
+            medianPrice,
+            params.deviationBps,
+            2
+        );
 
         // 1 price = check flag
-        if (multiPriceValidCount == 1 && params.revertOnInsufficientCount)
+        if (validCount == 1 && params.revertOnInsufficientCount)
             revert SimpleStrategy_PriceCountInvalid(1, 2);
 
         // Sum valid prices (only the filled portion of the array)
         // Note: Accumulation may overflow if prices are unreasonably large. This is acceptable
         // as price feeds typically use 18 decimals with reasonable market values.
         uint256 multiPriceSum = 0;
-        for (uint256 i = 0; i < multiPriceValidCount; i++) {
+        for (uint256 i = 0; i < validCount; i++) {
             multiPriceSum += validPrices[i];
         }
-        return multiPriceSum / multiPriceValidCount;
+        return multiPriceSum / validCount;
     }
 
     /// @inheritdoc ISimplePriceFeedStrategy
@@ -617,14 +586,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
         // ========== PARAMETER DECODING ==========
-        // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
-        ISimplePriceFeedStrategy.DeviationParams memory params;
-        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
-        params = abi.decode(params_, (ISimplePriceFeedStrategy.DeviationParams));
-
-        // Validate deviation bounds (must be > 0 and < 10000)
-        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);
 
         // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
@@ -679,39 +641,27 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 medianPrice = _getMedianPrice(sortedPrices);
 
-        // Single pass: collect valid prices into dynamic array
-        uint256[] memory validPrices = new uint256[](nonZeroCount);
-        uint256 multiPriceValidCount = 0;
-        for (uint256 i = 0; i < nonZeroCount; i++) {
-            if (
-                !Deviation.isDeviating(
-                    sortedPrices[i],
-                    medianPrice,
-                    params.deviationBps,
-                    DEVIATION_MAX
-                )
-            ) {
-                validPrices[multiPriceValidCount] = sortedPrices[i];
-                multiPriceValidCount++;
-            }
-        }
-
-        // 0 prices = no data, always revert
-        if (multiPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+        // Filter by deviation from median
+        (uint256[] memory validPrices, uint256 validCount) = _filterByDeviation(
+            sortedPrices,
+            medianPrice,
+            params.deviationBps,
+            3
+        );
 
         // 1 price = check flag (median requires 3+ sources)
-        if (multiPriceValidCount == 1 && params.revertOnInsufficientCount)
+        if (validCount == 1 && params.revertOnInsufficientCount)
             revert SimpleStrategy_PriceCountInvalid(1, 3);
 
         // 2 prices = check flag, then return average
-        if (multiPriceValidCount == 2) {
+        if (validCount == 2) {
             if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
             return (validPrices[0] + validPrices[1]) / 2;
         }
 
         // 3+ prices: return median of valid prices
         // Note: validPrices is already sorted since we iterated through sortedPrices in order
-        return _getMedianPrice(validPrices, multiPriceValidCount);
+        return _getMedianPrice(validPrices, validCount);
     }
 
     /// @notice         Returns the median of the prices in the array
@@ -738,6 +688,59 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         // Don't need to subtract 1 from validCount_ to get midpoint index
         // since integer division will round down
         return prices_[validCount_ / 2];
+    }
+
+    // ========== PARAMETER DECODING HELPERS ==========
+
+    /// @notice         Decodes and validates DeviationParams from calldata
+    /// @dev            Reverts if params length is invalid or deviationBps is out of bounds
+    /// @param params_    Encoded DeviationParams bytes
+    /// @return             Decoded DeviationParams struct
+    function _decodeDeviationParams(
+        bytes memory params_
+    ) internal pure returns (ISimplePriceFeedStrategy.DeviationParams memory) {
+        // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
+        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
+            params_,
+            (ISimplePriceFeedStrategy.DeviationParams)
+        );
+
+        // Validate deviation bounds (must be > 0 and < 10000)
+        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
+
+        return params;
+    }
+
+    /// @notice         Filters prices by deviation from a benchmark value
+    /// @dev            Returns a sorted array of non-deviating prices and the count
+    /// @param prices_    Sorted array of prices to filter
+    /// @param benchmark_  The benchmark value to check deviation against
+    /// @param deviationBps_ The accepted deviation in basis points
+    /// @param minExpectedCount_ Minimum number of prices required (for error reporting)
+    /// @return             validPrices_ Sorted array of non-deviating prices
+    /// @return             validCount_ Number of non-deviating prices found
+    function _filterByDeviation(
+        uint256[] memory prices_,
+        uint256 benchmark_,
+        uint16 deviationBps_,
+        uint256 minExpectedCount_
+    ) internal pure returns (uint256[] memory validPrices_, uint256 validCount_) {
+        uint256 pricesCount = prices_.length;
+
+        // Collect valid prices into dynamic array
+        validPrices_ = new uint256[](pricesCount);
+        validCount_ = 0;
+        for (uint256 i = 0; i < pricesCount; i++) {
+            if (!Deviation.isDeviating(prices_[i], benchmark_, deviationBps_, DEVIATION_MAX)) {
+                validPrices_[validCount_] = prices_[i];
+                validCount_++;
+            }
+        }
+
+        // 0 prices = no data, always revert
+        if (validCount_ == 0) revert SimpleStrategy_PriceCountInvalid(0, minExpectedCount_);
     }
 }
 /// forge-lint: disable-end(mixed-case-function)
