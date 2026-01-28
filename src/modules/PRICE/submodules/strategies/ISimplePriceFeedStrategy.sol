@@ -45,7 +45,7 @@ interface ISimplePriceFeedStrategy {
         bytes memory params_
     ) external pure returns (uint256 price);
 
-    /// @notice Returns the average of prices, or the average if min/max deviate from the average benchmark
+    /// @notice Returns the average if min/max prices deviate from benchmark, otherwise returns the first price
     ///
     /// @dev    Checks if min or max prices deviate from the average. Returns average if deviation detected, otherwise first price.
     /// @dev    This is a "deviation check" strategy - single check to decide between two return values.
