@@ -4,17 +4,14 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      ChainlinkPriceFeeds
 /// @author     0xJem
@@ -366,14 +363,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     // ========== IERC165 ========== //
 
-    /// @notice Query if a contract implements an interface
-    /// @param interfaceId The interface identifier, as specified in ERC-165
-    /// @return bool True if the contract supports interfaceId_
-    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
-        return
-            interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IVersioned).interfaceId ||
-            interfaceId == type(ISubmodule).interfaceId;
+    /// @inheritdoc Submodule
+    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
+        return super.supportsInterface(interfaceId);
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

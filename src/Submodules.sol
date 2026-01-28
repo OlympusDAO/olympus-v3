@@ -245,7 +245,7 @@ abstract contract Submodule is IVersioned, ISubmodule {
     /// @notice Query if a contract implements an interface
     /// @param interfaceId The interface identifier, as specified in ERC-165
     /// @return bool True if the contract supports interfaceId_
-    function supportsInterface(bytes4 interfaceId) external pure virtual returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public pure virtual returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
