@@ -290,23 +290,23 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         if (nonZeroPricesLen == 2) {
             if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
             // flag=false: check deviation and return appropriate value
-            uint256 averagePrice = _getAveragePrice(nonZeroPrices);
+            uint256 twoPriceAverage = _getAveragePrice(nonZeroPrices);
             // Check if prices deviate from average
             if (
                 Deviation.isDeviating(
                     nonZeroPrices[0],
-                    averagePrice,
+                    twoPriceAverage,
                     params.deviationBps,
                     DEVIATION_MAX
                 ) ||
                 Deviation.isDeviating(
                     nonZeroPrices[1],
-                    averagePrice,
+                    twoPriceAverage,
                     params.deviationBps,
                     DEVIATION_MAX
                 )
             ) {
-                return averagePrice;
+                return twoPriceAverage;
             }
             // No deviation, return first price
             return firstNonZeroPrice;
