@@ -285,26 +285,55 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         return firstNonZeroPrice;
     }
 
-    /// @notice         This strategy returns the average of the non-zero prices in the array.
-    /// @dev            Return 0 if all prices in the array are zero. This ensures that a situation
-    /// @dev            where all price feeds are down is handled gracefully.
-    ///
-    /// @dev            Will revert if:
-    /// @dev            - The number of elements in the `prices_` array is less than 2 (which would represent a mis-configuration)
-    ///
-    /// @dev            Zero prices in the array are ignored, to allow for
-    /// @dev            handling of price lookup sources that return errors.
-    /// @dev            Otherwise, an asset with any zero price would result in
-    /// @dev            no price being returned at all.
-    ///
-    /// @param prices_  Array of prices
-    /// @return         The resolved price
-    function getAveragePrice(uint256[] memory prices_, bytes memory) public pure returns (uint256) {
-        // Handle misconfiguration
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    Zero prices are ignored to handle failing price feeds gracefully.
+    /// @dev    In strict mode, reverts if fewer than 2 non-zero prices exist.
+    function getAveragePrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 2 elements: misconfiguration
+            - Invalid params: wrong length (must be exactly 32 bytes)
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2+ non-zero prices      | Return average          | Return average      |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Best effort mode (accept single source)
+            - flag=true: Strict mode (require 2+ sources for average)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
-        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        // ========== PARAMETER DECODING ==========
+        if (params_.length != 32) revert SimpleStrategy_ParamsInvalid(params_);
+        bool revertOnInsufficientCount = abi.decode(params_, (bool));
 
+        // ========== ZERO PRICE FILTERING ==========
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
+
+        // 0 prices = no data, always revert
+        if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+
+        // 1 price = check flag
+        if (nonZeroPricesLen == 1) {
+            if (revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
+
+        // ========== 2+ PRICES: CALCULATE AVERAGE ==========
         return _getAveragePrice(nonZeroPrices);
     }
 
@@ -361,8 +390,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         // 2 prices = check flag (median requires 3+)
         if (nonZeroPricesLen == 2) {
             if (revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
-            // flag=false: fall back to average
-            return getAveragePrice(prices_, "");
+            // flag=false: fall back to average using filtered array
+            return _getAveragePrice(nonZeroPrices);
         }
 
         // ========== 3+ PRICES: CALCULATE MEDIAN ==========

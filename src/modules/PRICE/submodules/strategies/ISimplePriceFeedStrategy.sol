@@ -12,6 +12,16 @@ interface ISimplePriceFeedStrategy {
         bool revertOnInsufficientCount;
     }
 
+    /// @notice Returns the average of non-zero prices in the array
+    ///
+    /// @param  prices_  Array of prices from multiple feeds (minimum 2 elements)
+    /// @param  params_  Bool encoded as bytes - must be exactly 32 bytes
+    /// @return price    The resolved price (average of non-zero prices)
+    function getAveragePrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) external pure returns (uint256 price);
+
     /// @notice Returns the average of prices that do not deviate from a benchmark
     ///
     /// @param  prices_  Array of prices from multiple feeds
