@@ -181,7 +181,7 @@ contract SimplePriceFeedStrategyGetAveragePriceIfDeviationTest is SimplePriceFee
     }
 
     function test_whenThreeNonZeroPrices_whenNoDeviating() public view {
-        uint256[] memory prices = new uint256[](2);
+        uint256[] memory prices = new uint256[](3);
         prices[0] = 1e18;
         prices[1] = 1.001e18; // 0.1% deviation < 1% threshold
         prices[2] = 1.002e18; // 0.2% deviation < 1% threshold
