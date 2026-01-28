@@ -184,6 +184,7 @@ contract SimplePriceFeedStrategyGetAveragePriceIfDeviationTest is SimplePriceFee
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1e18;
         prices[1] = 1.001e18; // 0.1% deviation < 1% threshold
+        prices[2] = 1.002e18; // 0.2% deviation < 1% threshold
 
         uint256 price = strategy.getAveragePriceIfDeviation(
             prices,
