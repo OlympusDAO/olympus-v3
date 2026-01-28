@@ -4,6 +4,8 @@
 pragma solidity >=0.8.15;
 
 import {Keycode, Module, fromKeycode, ensureContract} from "src/Kernel.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 //============================================================================================//
 //                                        GLOBAL TYPES                                        //
@@ -190,7 +192,7 @@ abstract contract ModuleWithSubmodules is Module {
 /// @notice Submodules are isolated components of a module that can be upgraded independently.
 /// @dev    Submodules are installed and uninstalled directly on the module.
 /// @dev    If a module is going to hold state that should be persisted across upgrades, then a submodule pattern may be a good fit.
-abstract contract Submodule {
+abstract contract Submodule is IVersioned {
     error Submodule_OnlyParent(address caller_);
     error Submodule_ModuleDoesNotExist(Keycode keycode_);
     error Submodule_InvalidParent();
@@ -224,7 +226,16 @@ abstract contract Submodule {
     /// @return major - Major version upgrade indicates breaking change to the interface.
     /// @dev    A major (breaking) change may require the parent module to be updated as well.
     /// @return minor - Minor version change retains backward-compatible interface.
-    function VERSION() external pure virtual returns (uint8 major, uint8 minor) {}
+    /// @inheritdoc IVersioned
+    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {}
+
+    /// @notice Query if a contract implements an interface
+    /// @param interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool True if the contract supports interfaceId_
+    function supportsInterface(bytes4 interfaceId) external pure virtual returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
+    }
 
     /// @notice Initialization function for the submodule
     /// @dev    This function is called when the submodule is installed or upgraded by the module.

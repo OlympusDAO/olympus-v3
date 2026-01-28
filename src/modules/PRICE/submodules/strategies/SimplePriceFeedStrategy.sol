@@ -2,9 +2,13 @@
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
+// Interfaces
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+
 // Libraries
-import {QuickSort} from "libraries/QuickSort.sol";
-import {Deviation} from "libraries/Deviation.sol";
+import {Deviation} from "src/libraries/Deviation.sol";
+import {QuickSort} from "src/libraries/QuickSort.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
@@ -53,8 +57,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -334,6 +337,16 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         return _getMedianPrice(sortedPrices);
+    }
+
+    // ========== IERC165 ========== //
+
+    /// @notice Query if a contract implements an interface
+    /// @param interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool True if the contract supports interfaceId_
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

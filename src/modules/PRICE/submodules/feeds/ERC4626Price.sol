@@ -4,6 +4,8 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -68,8 +70,7 @@ contract ERC4626Price is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== PRICE FUNCTIONS ========== //
@@ -145,6 +146,21 @@ contract ERC4626Price is PriceSubmodule {
         );
 
         return assetPrice;
+    }
+
+    // ========== IERC165 ========== //
+
+    /// @notice Query if a contract implements an interface
+    /// @param interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool True if the contract supports interfaceId_
+    // ========== IERC165 ========== //
+
+    /// @notice Query if a contract implements an interface
+    /// @param interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool True if the contract supports interfaceId_
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

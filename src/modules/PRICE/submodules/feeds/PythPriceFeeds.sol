@@ -152,8 +152,7 @@ contract PythPriceFeeds is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== PRICE FEED FUNCTIONS ========== //
@@ -432,13 +431,12 @@ contract PythPriceFeeds is PriceSubmodule {
         return priceResult;
     }
 
-    // ========== IERC165 FUNCTIONS ========== //
+    // ========== IERC165 ========== //
 
-    /// @notice     Returns whether the contract supports the given interface
-    ///
-    /// @param interfaceId The interface identifier to check
-    /// @return bool Whether the contract supports the interface
-    function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
+    /// @notice Query if a contract implements an interface
+    /// @param interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool True if the contract supports interfaceId_
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
     }

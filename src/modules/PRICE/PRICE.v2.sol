@@ -40,6 +40,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2 {
         return _decimals;
     }
 
+    /// @notice Returns the version of the PRICEv2 module
+    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
+        return (2, 0);
+    }
+
     function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId || interfaceId == type(IPRICEv2).interfaceId;
