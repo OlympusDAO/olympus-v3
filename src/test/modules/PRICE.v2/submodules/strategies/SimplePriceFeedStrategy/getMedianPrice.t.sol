@@ -5,13 +5,11 @@ pragma solidity >=0.8.0;
 import {SimplePriceFeedStrategyBase} from "./SimplePriceFeedStrategyBase.t.sol";
 
 // Libraries
-import {Math} from "libraries/Balancer/math/Math.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 /// @title Tests for getMedianPrice function
 /// @notice Tests the median price aggregation strategy
 contract SimplePriceFeedStrategyGetMedianPriceTest is SimplePriceFeedStrategyBase {
-    using Math for uint256;
     using QuickSort for uint256[];
 
     // =========  TESTS ========= //

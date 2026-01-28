@@ -812,61 +812,87 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     //
     // ============================================================================
 
-    function test_whenThreePrices_validDeviation_fuzz(
-        uint64 price1,
-        uint64 price2,
-        uint64 price3,
-        uint16 deviationBps
+    function test_whenThreePricesDeviating_fuzz(
+        uint256 basePrice_,
+        uint256 deviationAmount_
     ) public view {
-        // Bound prices to reasonable range (1e9 to 1e19, scaled down)
-        vm.assume(price1 >= 1e9 && price1 <= 1e19);
-        vm.assume(price2 >= 1e9 && price2 <= 1e19);
-        vm.assume(price3 >= 1e9 && price3 <= 1e19);
-        // Bound deviationBps to reasonable values (10% to 90%)
-        vm.assume(deviationBps >= 1000 && deviationBps <= 9000);
+        uint16 deviationBps = 1000; // 10%
+        // Base price between 0.5e18 and 1.5e18
+        uint256 basePrice = bound(basePrice_, 0.5e18, 1.5e18);
+        // Deviation amount between 20% and 100% of base price (ensures deviation detected)
+        uint256 deviationAmount = bound(deviationAmount_, basePrice / 5, basePrice);
 
         uint256[] memory prices = new uint256[](3);
-        prices[0] = price1;
-        prices[1] = price2;
-        prices[2] = price3;
-        bytes memory params = _encodeDeviationParams(deviationBps, false);
+        prices[0] = basePrice;
+        prices[1] = basePrice;
+        prices[2] = basePrice + deviationAmount; // Deviates from average
 
-        // Should not revert with valid inputs
-        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+        // Expected: average of non-deviating prices = basePrice
+        uint256 result = strategy.getAveragePriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(deviationBps, false)
+        );
+        assertEq(result, basePrice, "should return average of non-deviating prices");
+    }
 
-        // Basic sanity check: result should be positive
-        assertGt(result, 0, "result should be positive");
+    function test_whenThreePricesNotDeviating_fuzz(
+        uint256 basePrice_,
+        uint256 smallVariance1_,
+        uint256 smallVariance2_
+    ) public view {
+        uint16 deviationBps = 1000; // 10%
+        // Base price between 0.5e18 and 1.5e18
+        uint256 basePrice = bound(basePrice_, 0.5e18, 1.5e18);
+        // Small variances less than 1% of base price (ensures no deviation)
+        uint256 smallVariance1 = bound(smallVariance1_, 0, basePrice / 100);
+        uint256 smallVariance2 = bound(smallVariance2_, 0, basePrice / 100);
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = basePrice;
+        prices[1] = basePrice + smallVariance1;
+        prices[2] = basePrice + smallVariance2;
+
+        // Expected: average of all three prices (none deviate)
+        uint256 expectedAverage = (basePrice +
+            (basePrice + smallVariance1) +
+            (basePrice + smallVariance2)) / 3;
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(deviationBps, false)
+        );
+        assertEq(result, expectedAverage, "should return average of all prices when none deviate");
     }
 
     function test_whenThreePrices_strictMode_fuzz(
-        uint64 price1,
-        uint64 price2,
-        uint64 price3,
-        uint16 deviationBps
+        uint256 basePrice_,
+        uint256 smallVariance1_,
+        uint256 smallVariance2_
     ) public view {
-        // Bound prices to a clustered range to ensure at least 2 are non-deviating
-        // All prices within 10% of each other = at least 2 will be included
-        uint256 basePrice = 1000e18;
-        vm.assume(price1 >= 1e8 && price1 <= 1e17); // Allow some variation
-        vm.assume(price2 >= 1e8 && price2 <= 1e17);
-        vm.assume(price3 >= 1e8 && price3 <= 1e17);
+        uint16 deviationBps = 1000; // 10%
+        // Base price between 0.5e18 and 1.5e18
+        uint256 basePrice = bound(basePrice_, 0.5e18, 1.5e18);
+        // Small variances less than 1% of base price (ensures no deviation)
+        uint256 smallVariance1 = bound(smallVariance1_, 0, basePrice / 100);
+        uint256 smallVariance2 = bound(smallVariance2_, 0, basePrice / 100);
 
-        // Construct prices clustered around basePrice (within 5%)
-        // This ensures at least 2/3 will be included with 10% deviation
         uint256[] memory prices = new uint256[](3);
-        prices[0] = basePrice + uint256(price1); // 1000e18 to 1001e18 range
-        prices[1] = basePrice + uint256(price2);
-        prices[2] = basePrice + uint256(price3);
+        prices[0] = basePrice;
+        prices[1] = basePrice + smallVariance1;
+        prices[2] = basePrice + smallVariance2;
 
-        // Bound deviationBps to reasonable values (10% to 90%)
-        vm.assume(deviationBps >= 1000 && deviationBps <= 9000);
+        // Expected: average of all three prices (none deviate)
+        uint256 expectedAverage = (basePrice +
+            (basePrice + smallVariance1) +
+            (basePrice + smallVariance2)) / 3;
 
         bytes memory params = _encodeDeviationParams(deviationBps, true); // strict mode
 
-        // Should not revert with at least 2 clustered prices
         uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
-
-        // Basic sanity check: result should be positive
-        assertGt(result, 0, "result should be positive");
+        assertEq(
+            result,
+            expectedAverage,
+            "should return average of all non-deviating prices in strict mode"
+        );
     }
 }

@@ -10,7 +10,6 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {Math} from "libraries/Balancer/math/Math.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 // Bophades
@@ -22,7 +21,6 @@ import {ISimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/ISim
 /// @notice Contains shared setup, helpers, and common test infrastructure
 abstract contract SimplePriceFeedStrategyBase is Test {
     using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;
-    using Math for uint256;
     using FullMath for uint256;
     using QuickSort for uint256[];
 
@@ -84,18 +82,19 @@ abstract contract SimplePriceFeedStrategyBase is Test {
     }
 
     /// @notice              Indicates whether the supplied values are deviating
+    /// @notice              Matches Deviation library behavior using mulDivUp for rounding
     /// @param deviationBps_ The deviation in basis points, where 0 = 0% and 10_000 = 100%
     function _isDeviating(
         uint256 valueOne_,
         uint256 referenceValue_,
         uint256 deviationBps_
     ) internal pure returns (bool) {
-        uint256 largerValue = valueOne_.max(referenceValue_);
-        uint256 smallerValue = valueOne_.min(referenceValue_);
+        uint256 diff = (valueOne_ > referenceValue_)
+            ? valueOne_ - referenceValue_
+            : referenceValue_ - valueOne_;
 
-        // 10_000 = 100%
+        // 10_000 = 100%, use mulDivUp to match Deviation library
         uint256 deviationBase = 10_000;
-
-        return (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_) > deviationBps_;
+        return diff.mulDivUp(deviationBase, referenceValue_) > deviationBps_;
     }
 }

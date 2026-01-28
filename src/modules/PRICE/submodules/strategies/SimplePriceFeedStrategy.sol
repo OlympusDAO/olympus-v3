@@ -158,130 +158,178 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         return 0;
     }
 
-    /// @notice         This strategy returns the average of the non-zero prices in the array if
-    /// @notice         the deviation from the average is greater than the deviationBps (specified in `params_`).
-    ///
-    /// @dev            This strategy is useful to smooth out price volatility.
-    ///
-    /// @dev            Zero prices in the array are ignored, to allow for
-    /// @dev            handling of price lookup sources that return errors.
-    /// @dev            Otherwise, an asset with any zero price would result in
-    /// @dev            no price being returned at all.
-    ///
-    /// @dev            If no deviation is detected, the first non-zero price in the array is returned.
-    /// @dev            If there are not enough non-zero array elements to calculate an average (< 2), the first non-zero price in the array (or 0) is returned.
-    ///
-    /// @dev            Will revert if:
-    /// @dev            - The number of elements in the `prices_` array is less than 2, since it would represent a mis-configuration.
-    /// @dev            - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
-    ///
-    /// @param prices_  Array of prices
-    /// @param params_  uint256 encoded as bytes
-    /// @return         The resolved price
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    Uses average as benchmark for deviation calculation.
+    /// @dev    If no deviation detected, returns the first non-zero price.
     function getAveragePriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // Can't work with  < 2 length
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 2 elements: misconfiguration
+            - Invalid params: wrong length or invalid deviationBps
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2+ non-zero prices      | Check deviation         | Check deviation     |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Best effort mode (accept single source)
+            - flag=true: Strict mode (require 2+ sources)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
+        // ========== PARAMETER DECODING ==========
+        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
+            params_,
+            (ISimplePriceFeedStrategy.DeviationParams)
+        );
+        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
+
+        // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
 
-        // Return 0 if all prices are 0
-        if (nonZeroPrices.length == 0) return 0;
+        // 0 prices = no data, always revert
+        if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
 
-        // Cache first non-zero price since the array is sorted in place
-        uint256 firstNonZeroPrice = nonZeroPrices[0];
+        // 1 price = check flag
+        if (nonZeroPricesLen == 1) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
 
-        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
-        if (nonZeroPrices.length == 1) return firstNonZeroPrice;
-
-        // Get the average and abort if there's a problem
+        // ========== 2+ PRICES: CHECK DEVIATION ==========
         uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 averagePrice = _getAveragePrice(sortedPrices);
 
-        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
-        uint256 deviationBps = abi.decode(params_, (uint256));
-        // Not necessary to use `Deviation.isDeviatingWithBpsCheck()` thanks to this check
-        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
-
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
-        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX))
+        if (Deviation.isDeviating(minPrice, averagePrice, params.deviationBps, DEVIATION_MAX))
             return averagePrice;
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX))
+        if (Deviation.isDeviating(maxPrice, averagePrice, params.deviationBps, DEVIATION_MAX))
             return averagePrice;
 
-        // Otherwise, return the first non-zero value
-        return firstNonZeroPrice;
+        // No deviation detected, return the first non-zero price
+        return nonZeroPrices[0];
     }
 
-    /// @notice         This strategy returns the median of the non-zero prices in the array if
-    /// @notice         the deviation from the average is greater than the deviationBps (specified in `params_`).
-    ///
-    /// @dev            This strategy is useful to smooth out price volatility.
-    ///
-    /// @dev            Zero prices in the array are ignored, to allow for
-    /// @dev            handling of price lookup sources that return errors.
-    /// @dev            Otherwise, an asset with any zero price would result in
-    /// @dev            no price being returned at all.
-    ///
-    /// @dev            If no deviation is detected, the first non-zero price in the array is returned.
-    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), this function falls back to `getAveragePriceIfDeviation()`.
-    ///
-    /// @dev            Will revert if:
-    /// @dev            - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
-    /// @dev            - The deviationBps is 0.
-    /// @dev            - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
-    ///
-    /// @param prices_  Array of prices
-    /// @param params_  uint256 encoded as bytes
-    /// @return         The resolved price
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev    Uses median as benchmark for deviation calculation.
+    /// @dev    Falls back to getAveragePriceIfDeviation if fewer than 3 non-zero prices.
     function getMedianPriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // Misconfiguration
+        /*
+            CASE HANDLING SUMMARY
+            =====================
+
+            Configuration Issues (always revert):
+            - Input array < 3 elements: misconfiguration
+            - Invalid params: wrong length or invalid deviationBps
+
+            Runtime Issues (handled based on revertOnInsufficientCount flag):
+            | Scenario                | flag=false              | flag=true           |
+            |-------------------------|-------------------------|---------------------|
+            | All prices zero         | Revert                  | Revert              |
+            | 1 non-zero price        | Return that price       | Revert              |
+            | 2 non-zero prices       | Return average          | Revert              |
+            | 3+ non-zero prices      | Check deviation         | Check deviation     |
+
+            RATIONALE:
+            - 0 prices always reverts (no data is an error)
+            - flag=false: Best effort mode (accept 1-2 sources)
+            - flag=true: Strict mode (require 3+ sources for median)
+        */
+
+        // ========== CONFIGURATION VALIDATION ==========
         if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
+        // ========== PARAMETER DECODING ==========
+        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
+            params_,
+            (ISimplePriceFeedStrategy.DeviationParams)
+        );
+        if (params.deviationBps <= DEVIATION_MIN || params.deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
+
+        // ========== ZERO PRICE FILTERING ==========
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
 
-        // Return 0 if all prices are 0
-        if (nonZeroPrices.length == 0) return 0;
+        // 0 prices = no data, always revert
+        if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
 
-        // Cache first non-zero price since the array is sorted in place
+        // Cache first non-zero price before sorting
         uint256 firstNonZeroPrice = nonZeroPrices[0];
 
-        // If there are not enough non-zero prices to calculate a median, pass it on to `getAveragePriceIfDeviation()`
-        if (nonZeroPrices.length < 3) return getAveragePriceIfDeviation(prices_, params_);
+        // 1 price = check flag
+        if (nonZeroPricesLen == 1) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 3);
+            return nonZeroPrices[0]; // flag=false: accept single source
+        }
 
+        // 2 prices = check flag (median requires 3+)
+        if (nonZeroPricesLen == 2) {
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
+            // flag=false: check deviation and return appropriate value
+            uint256 averagePrice = _getAveragePrice(nonZeroPrices);
+            // Check if prices deviate from average
+            if (
+                Deviation.isDeviating(
+                    nonZeroPrices[0],
+                    averagePrice,
+                    params.deviationBps,
+                    DEVIATION_MAX
+                ) ||
+                Deviation.isDeviating(
+                    nonZeroPrices[1],
+                    averagePrice,
+                    params.deviationBps,
+                    DEVIATION_MAX
+                )
+            ) {
+                return averagePrice;
+            }
+            // No deviation, return first price
+            return firstNonZeroPrice;
+        }
+
+        // ========== 3+ PRICES: CHECK DEVIATION ==========
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
-        // Get the average and median and abort if there's a problem
-        // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
+        // Get the average and median
         uint256 averagePrice = _getAveragePrice(sortedPrices);
         uint256 medianPrice = _getMedianPrice(sortedPrices);
 
-        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
-        uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
-            revert SimpleStrategy_ParamsInvalid(params_);
-
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
-        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX))
+        if (Deviation.isDeviating(minPrice, averagePrice, params.deviationBps, DEVIATION_MAX))
             return medianPrice;
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX))
+        if (Deviation.isDeviating(maxPrice, averagePrice, params.deviationBps, DEVIATION_MAX))
             return medianPrice;
 
-        // Otherwise, return the first non-zero value
+        // No deviation detected, return the first non-zero value
         return firstNonZeroPrice;
     }
 
