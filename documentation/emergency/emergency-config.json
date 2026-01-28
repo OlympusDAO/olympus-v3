@@ -81,7 +81,7 @@
                 "CCIPLockReleaseTokenPool": "0xF166375E8Ee42565F93e244C606b8c09b9F67dbc",
                 "ConvertibleDepositAuctioneer": "0x247f1989aDc0F63D07b91Bf645De879b9de06fbB",
                 "ConvertibleDepositFacility": "0x0bE69702E83f06A027E6841B614f6946d1265441",
-                "CoolerComposites": "0xe7A87B624E45ee182C39F2a3AaEFFB7aF485AD41",
+                "CoolerV2Composites": "0xe7A87B624E45ee182C39F2a3AaEFFB7aF485AD41",
                 "CoolerV2": "0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c",
                 "CoolerV2Migrator": "0x70233D8F47042d3A5813026e2157B5181C608cD0",
                 "CrossChainBridge": "0x79A0D5eB7ceC7994A74a3Cc050945AA53B9Fc19A",
@@ -205,7 +205,7 @@
                 {
                     "abi": "periphery_enabler",
                     "args": [{"name": "disableData_", "type": "bytes", "value": ""}],
-                    "contractKey": "olympus.periphery.CoolerComposites",
+                    "contractKey": "olympus.periphery.CoolerV2Composites",
                     "function": "disable",
                     "signature": "disable(bytes)"
                 },
@@ -535,7 +535,7 @@
         "YieldRepurchaseFacility",
         "ReserveMigrator",
         "ReserveWrapper",
-        "CoolerComposites",
+        "CoolerV2Composites",
         "CoolerV2Migrator"
     ],
 
