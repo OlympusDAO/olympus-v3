@@ -63,10 +63,5 @@ abstract contract PriceSubmodule is Submodule {
     function _PRICE() internal view returns (PRICEv2) {
         return PRICEv2(address(parent));
     }
-
-    /// @inheritdoc Submodule
-    function supportsInterface(bytes4 interfaceId) public pure virtual override returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
 }
 /// forge-lint: disable-end(mixed-case-function)
