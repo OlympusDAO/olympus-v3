@@ -18,7 +18,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // INPUT VALIDATION TESTS (Configuration Issues - always revert)
     // ============================================================================
     //
-    // given input array has less than 3 elements
+    // when input array has less than 3 elements
     //   [X] it reverts with PriceCountInvalid
     //
 
@@ -68,13 +68,13 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // PARAMS VALIDATION TESTS
     // ============================================================================
     //
-    // given params length is not 64 bytes
+    // when params length is not 64 bytes
     //   [X] it reverts with ParamsInvalid
     //
-    // given deviationBps is 0 or >= 10000
+    // when deviationBps is 0 or >= 10000
     //   [X] it reverts with ParamsInvalid
     //
-    // given deviationBps is > 0 and < 10000
+    // when deviationBps is > 0 and < 10000
     //   [X] it returns the average of the prices
 
     function test_whenParamsEmpty_reverts() public {
@@ -169,13 +169,13 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // ZERO PRICE HANDLING TESTS
     // ============================================================================
     //
-    // given all prices are zero
+    // when all prices are zero
     //   [X] it reverts with PriceCountInvalid
     //
-    // given exactly 1 non-zero price (after zero filtering)
-    //   given revertOnInsufficientCount is false
+    // when exactly 1 non-zero price (after zero filtering)
+    //   when revertOnInsufficientCount is false
     //     [X] it returns the single non-zero price
-    //   given revertOnInsufficientCount is true
+    //   when revertOnInsufficientCount is true
     //     [X] it reverts with PriceCountInvalid
 
     function test_whenAllPricesZero_reverts() public {
@@ -189,7 +189,18 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_whenThreePricesTwoZeros_andRevertOnInsufficientCountFalse() public view {
+    function test_whenOneNonZeroPrice_strictMode_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1000e18;
+        prices[1] = 0;
+        prices[2] = 0;
+        bytes memory params = _encodeDeviationParams(1000, true);
+
+        _expectRevertPriceCount(1, 2);
+        strategy.getAveragePriceExcludingDeviations(prices, params);
+    }
+
+    function test_whenOneNonZeroPrice_bestEffortMode() public view {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1000e18;
         prices[1] = 0;
@@ -202,31 +213,20 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         assertEq(result, 1000e18, "should return single non-zero price");
     }
 
-    function test_whenThreePricesTwoZeros_andRevertOnInsufficientCountTrue_reverts() public {
-        uint256[] memory prices = new uint256[](3);
-        prices[0] = 1000e18;
-        prices[1] = 0;
-        prices[2] = 0;
-        bytes memory params = _encodeDeviationParams(1000, true);
-
-        _expectRevertPriceCount(1, 2);
-        strategy.getAveragePriceExcludingDeviations(prices, params);
-    }
-
     // ============================================================================
     // TWO-PRICE FALLBACK TESTS (Average as Benchmark)
     // ============================================================================
     //
-    // given exactly 2 non-zero prices (after zero filtering)
-    //  given revertOnInsufficientCount is false
-    //   given both prices deviate from average
+    // when exactly 2 non-zero prices (after zero filtering)
+    //  when revertOnInsufficientCount is false
+    //   when both prices deviate from average
     //    [X] it reverts with PriceCountInvalid (no data)
-    //   given both prices within deviation threshold
+    //   when both prices within deviation threshold
     //    [X] it returns the average of both prices
-    //  given revertOnInsufficientCount is true
-    //   given both prices deviate from average
+    //  when revertOnInsufficientCount is true
+    //   when both prices deviate from average
     //    [X] it reverts with PriceCountInvalid (no data)
-    //   given both prices within deviation threshold
+    //   when both prices within deviation threshold
     //    [X] it returns the average of both prices
 
     function test_whenTwoNonZeroPrices_bothDeviating_reverts(uint8 index_) public {
@@ -805,9 +805,10 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // FUZZ TESTS
     // ============================================================================
     //
-    // fuzz tests
-    //   [X] given random valid inputs (flag=false) - no revert
-    //   [X] given random clustered inputs (flag=true) - no revert
+    // when random valid inputs with flag=false
+    //   [X] it does not revert
+    // when random clustered inputs with flag=true
+    //   [X] it does not revert
     //
     // ============================================================================
 
