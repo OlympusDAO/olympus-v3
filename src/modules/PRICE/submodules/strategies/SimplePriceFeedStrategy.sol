@@ -480,11 +480,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         uint256 nonZeroCount = nonZeroPrices.length;
 
         // 0 prices = no data, always revert
-        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
 
         // 1 price = check flag
         if (nonZeroCount == 1) {
-            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 3);
             return nonZeroPrices[0]; // flag=false: accept single source
         }
 
@@ -512,11 +512,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             }
 
             // 0 prices = no data, always revert
-            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
+            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
 
             // 1 price = check flag
             if (twoPriceValidCount == 1 && params.revertOnInsufficientCount)
-                revert SimpleStrategy_PriceCountInvalid(1, 2);
+                revert SimpleStrategy_PriceCountInvalid(1, 3);
 
             return (twoPriceValidPrices[0] + twoPriceValidPrices[1]) / twoPriceValidCount;
         }
@@ -530,12 +530,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             sortedPrices,
             medianPrice,
             params.deviationBps,
-            2
+            3
         );
 
         // 1 price = check flag
         if (validCount == 1 && params.revertOnInsufficientCount)
-            revert SimpleStrategy_PriceCountInvalid(1, 2);
+            revert SimpleStrategy_PriceCountInvalid(1, 3);
 
         // Sum valid prices (only the filled portion of the array)
         // Note: Accumulation may overflow if prices are unreasonably large. This is acceptable
@@ -661,33 +661,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
         // 3+ prices: return median of valid prices
         // Note: validPrices is already sorted since we iterated through sortedPrices in order
-        return _getMedianPrice(validPrices, validCount);
-    }
-
-    /// @notice         Returns the median of the prices in the array
-    /// @dev            This function will calculate the median of all values in the array.
-    /// @dev            It assumes that the price array is sorted in ascending order.
-    /// @dev            The validCount parameter specifies how many elements to consider.
-    /// @dev            If there are only two prices, the average of the two will be returned.
-    ///
-    /// @param  prices_      Array of prices (must be sorted)
-    /// @param  validCount_  Number of valid elements in the array
-    /// @return uint256      The median price
-    function _getMedianPrice(
-        uint256[] memory prices_,
-        uint256 validCount_
-    ) internal pure returns (uint256) {
-        // If there are an even number of prices, return the average of the two middle prices
-        if (validCount_ % 2 == 0) {
-            uint256 middlePrice1 = prices_[validCount_ / 2 - 1];
-            uint256 middlePrice2 = prices_[validCount_ / 2];
-            return (middlePrice1 + middlePrice2) / 2;
-        }
-
-        // Otherwise return the median price
-        // Don't need to subtract 1 from validCount_ to get midpoint index
-        // since integer division will round down
-        return prices_[validCount_ / 2];
+        return _getMedianPrice(validPrices);
     }
 
     // ========== PARAMETER DECODING HELPERS ==========
@@ -731,18 +705,26 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     ) internal pure returns (uint256[] memory validPrices_, uint256 validCount_) {
         uint256 pricesCount = prices_.length;
 
-        // Collect valid prices into dynamic array
-        validPrices_ = new uint256[](pricesCount);
+        // First pass: count valid prices to size array correctly
         validCount_ = 0;
         for (uint256 i = 0; i < pricesCount; i++) {
             if (!Deviation.isDeviating(prices_[i], benchmark_, deviationBps_, DEVIATION_MAX)) {
-                validPrices_[validCount_] = prices_[i];
                 validCount_++;
             }
         }
 
         // 0 prices = no data, always revert
         if (validCount_ == 0) revert SimpleStrategy_PriceCountInvalid(0, minExpectedCount_);
+
+        // Second pass: collect valid prices into correctly sized array
+        validPrices_ = new uint256[](validCount_);
+        uint256 index = 0;
+        for (uint256 i = 0; i < pricesCount; i++) {
+            if (!Deviation.isDeviating(prices_[i], benchmark_, deviationBps_, DEVIATION_MAX)) {
+                validPrices_[index] = prices_[i];
+                index++;
+            }
+        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function)
