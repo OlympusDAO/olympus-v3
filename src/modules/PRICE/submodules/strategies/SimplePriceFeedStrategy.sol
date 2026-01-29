@@ -6,13 +6,13 @@ pragma solidity >=0.8.15;
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Libraries
-import {QuickSort} from "libraries/QuickSort.sol";
-import {Deviation} from "libraries/Deviation.sol";
+import {Deviation} from "src/libraries/Deviation.sol";
+import {QuickSort} from "src/libraries/QuickSort.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      SimplePriceFeedStrategy
 /// @author     0xJem
@@ -56,8 +56,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== HELPER FUNCTIONS ========== //
