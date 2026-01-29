@@ -1,258 +1,213 @@
 # Update Emergency Config
 
-This skill helps you update the emergency shutdown configuration when adding or modifying emergency components.
+This skill updates `emergency-config.json` based on an existing Solidity emergency script and `env.json`.
 
-## File Structure Overview
+## Prerequisites
 
-| File | Purpose | Change Frequency |
-|------|---------|------------------|
-| `documentation/emergency/emergency-config.schema.json` | Validation rules | Rarely (only when adding new fields) |
-| `documentation/emergency/emergency-config.json` | Components, addresses, chains | On every new contract |
-| `documentation/emergency/emergency-abis.json` | ABI definitions for shutdown functions | Only when new function pattern |
-| `shell/validate-emergency-config.js` | Validation script | Rarely |
+Before using this skill, ensure:
+1. The Solidity batch script exists in `src/scripts/emergency/`
+2. Contract addresses are deployed and present in `src/scripts/env.json`
 
-## Available ABI Patterns
+## Workflow
 
-Most new contracts use existing ABI patterns. Check this table before adding new ABIs:
-
-| ABI Key | Functions | Used By |
-|---------|-----------|---------|
-| `emergency` | `shutdownWithdrawals()`, `shutdownMinting()`, `shutdown()`, `restart()` | Emergency policy |
-| `periphery_enabler` | `disable(bytes)`, `enable(bytes)` | Heart, ConvertibleDeposits, CCIPBridge, CCIPTokenPool, ReserveWrapper, and most new contracts |
-| `cooler_v2` | `setBorrowPaused(bool)`, `setLiquidationsPaused(bool)` | CoolerV2 |
-| `cross_chain_bridge` | `setBridgeStatus(bool)` | CrossChainBridge (LayerZero) |
-| `reserve_migrator` | `activate()`, `deactivate()` | ReserveMigrator |
-| `yield_repurchase_facility` | `shutdown(address[])` | YieldRepurchaseFacility |
-| `emission_manager` | `shutdown()`, `restart()` | EmissionManager |
-| `ccip_lock_release_pool` | `withdrawLiquidity(uint256)` | CCIPLockReleaseTokenPool (mainnet) |
-| `bond_manager` | `emergencyShutdownFixedExpiryMarket(uint256)` | BondManager (manual only) |
-
-**Note:** Most new contracts implement `IEnabler` interface and use `periphery_enabler` ABI. You typically don't need to add new ABIs.
-
-## Adding a New Emergency Component
-
-### Step 1: Create the Solidity Batch Script
-
-Create a new file in `src/scripts/emergency/YourComponent.sol`:
-
-```solidity
-// SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.15;
-
-import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {IEmergencyBatch} from "src/scripts/emergency/IEmergencyBatch.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-
-contract YourComponent is BatchScriptV2, IEmergencyBatch {
-    function run(
-        bool signOnly_,
-        string memory argsFilePath_,
-        string memory ledgerDerivationPath_,
-        bytes memory signature_
-    )
-        external
-        override
-        setUpEmergency(signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
-        // OR use setUp(true, ...) for DAO MS controlled contracts
-    {
-        _validateArgsFileEmpty(argsFilePath_);
-
-        address contractAddress = _envAddressNotZero("olympus.policies.YourContract");
-        addToBatch(contractAddress, abi.encodeWithSelector(IEnabler.disable.selector, ""));
-
-        proposeBatch();
-    }
-}
+```
+[Solidity script exists] + [Contract deployed in env.json]
+                    ↓
+         Run this skill with script path
+                    ↓
+         Parses script → extracts calls, owner
+                    ↓
+         Reads env.json → gets addresses per chain
+                    ↓
+         Generates component for emergency-config.json
+                    ↓
+         Asks for metadata (severity, category, etc.)
+                    ↓
+         Updates emergency-config.json
+                    ↓
+         Runs validation
 ```
 
-**Multisig Selection:**
-- `setUpEmergency(...)` - Uses Emergency MS (faster, for critical issues)
-- `setUp(true, ...)` - Uses DAO MS (requires governance)
+## Usage
 
-### Step 2: Add Contract Address to env.json
+```
+/update-emergency-config src/scripts/emergency/YourComponent.sol
+```
 
-Add the contract address to `src/scripts/env.json` under the appropriate chain:
+## Instructions for Claude
 
+When this skill is invoked:
+
+### Step 1: Parse the Solidity Script
+
+Read the provided Solidity file and extract:
+
+1. **Owner (multisig type)**:
+   - `setUpEmergency(...)` → `"owner": "emergency"`
+   - `setUp(true, ...)` → `"owner": "dao"`
+
+2. **Contract keys and function calls** from `addToBatch()` calls:
+   ```solidity
+   address addr = _envAddressNotZero("olympus.policies.ContractName");
+   addToBatch(addr, abi.encodeWithSelector(IInterface.functionName.selector, args));
+   ```
+   Extract:
+   - `contractKey`: e.g., `"olympus.policies.ContractName"`
+   - `function`: e.g., `"functionName"`
+   - `signature`: e.g., `"functionName(bool)"` (derive from selector/interface)
+   - `args`: extract argument values if present
+
+3. **Component ID**: derive from contract name in kebab-case (e.g., `YieldRepurchaseFacility.sol` → `yield-repurchase-facility`)
+
+### Step 2: Read env.json for Addresses
+
+Read `src/scripts/env.json` and for each chain, resolve the contractKey to get addresses.
+
+For example, if contractKey is `"olympus.policies.OlympusHeart"`:
+- Check `env.json.current.mainnet.olympus.policies.OlympusHeart`
+- Check `env.json.current.sepolia.olympus.policies.OlympusHeart`
+- etc.
+
+Build `availableOn` array from chains where address exists and is not zero address.
+
+### Step 3: Determine ABI Key
+
+Match the function signature to existing ABIs in `emergency-abis.json`:
+
+| Function Pattern | ABI Key |
+|------------------|---------|
+| `disable(bytes)` | `periphery_enabler` |
+| `enable(bytes)` | `periphery_enabler` |
+| `shutdownWithdrawals()`, `shutdownMinting()`, `shutdown()`, `restart()` | `emergency` |
+| `setBorrowPaused(bool)`, `setLiquidationsPaused(bool)` | `cooler_v2` |
+| `setBridgeStatus(bool)` | `cross_chain_bridge` |
+| `deactivate()`, `activate()` | `reserve_migrator` |
+| `shutdown(address[])` | `yield_repurchase_facility` |
+| `withdrawLiquidity(uint256)` | `ccip_lock_release_pool` |
+| `emergencyShutdownFixedExpiryMarket(uint256)` | `bond_manager` |
+
+If no match found, ask user if a new ABI entry is needed.
+
+### Step 4: Ask User for Metadata
+
+Use AskUserQuestion to gather:
+
+1. **Category** (required):
+   - `treasury` - TRSRY, MINTR related
+   - `lending` - Cooler, loans
+   - `bridge` - Cross-chain bridges
+   - `emissions` - EmissionManager, bonds
+   - `core` - Heart, fundamental operations
+   - `reserve` - Reserve management
+
+2. **Severity** (required):
+   - `critical` - Immediate shutdown, funds at risk
+   - `high` - Urgent, significant vulnerability
+   - `medium` - Important but not urgent
+   - `low` - Monitor, precautionary
+
+3. **Description** (required): What this shutdown does (1-2 sentences)
+
+4. **Shutdown Criteria** (optional): When to trigger (list of conditions)
+
+5. **Post-Shutdown Steps** (optional): Steps after shutdown (list)
+
+6. **Dependencies** (optional): Other component IDs to shutdown together
+
+### Step 5: Update emergency-config.json
+
+1. Read current `documentation/emergency/emergency-config.json`
+
+2. Add contract to `contractRegistry` if not present (extract contract name from contractKey, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`)
+
+3. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
+
+4. Add new component to `components` array:
 ```json
 {
-  "current": {
-    "mainnet": {
-      "olympus": {
-        "policies": {
-          "YourContract": "0x..."
-        }
-      }
-    }
-  }
-}
-```
-
-### Step 3: Update emergency-config.json
-
-**3.1** Add to `contractRegistry`:
-```json
-"contractRegistry": [
-  "Emergency",
-  "CoolerV2",
-  "YourContract"
-]
-```
-
-**3.2** Add contract address to `chains.mainnet.contracts` (and other chains):
-```json
-"chains": {
-  "mainnet": {
-    "contracts": {
-      "YourContract": "0x..."
-    }
-  }
-}
-```
-
-**3.3** Add new component to `components` array:
-```json
-{
-  "id": "your-component",
-  "name": "Your Component Name",
-  "description": "What this shutdown does",
-  "category": "lending|treasury|bridge|emissions|core|reserve",
-  "severity": "critical|high|medium|low",
-  "owner": "emergency|dao",
-  "shutdownCriteria": [
-    "When to trigger this shutdown"
-  ],
+  "id": "<kebab-case-id>",
+  "name": "<Human Readable Name>",
+  "description": "<from user>",
+  "category": "<from user>",
+  "severity": "<from user>",
+  "owner": "<emergency|dao>",
+  "shutdownCriteria": ["<from user>"],
   "calls": [
     {
-      "contractKey": "olympus.policies.YourContract",
-      "function": "disable",
-      "signature": "disable(bytes)",
-      "args": [
-        { "name": "disableData_", "type": "bytes", "value": "" }
-      ],
-      "abi": "periphery_enabler"
+      "contractKey": "<from script>",
+      "function": "<from script>",
+      "signature": "<from script>",
+      "args": [<from script>],
+      "abi": "<matched abi key>"
     }
   ],
-  "availableOn": ["mainnet", "sepolia"],
-  "postShutdownSteps": [
-    "Steps to take after shutdown"
-  ],
-  "batchScript": "src/scripts/emergency/YourComponent.sol"
+  "availableOn": ["<chains from env.json>"],
+  "postShutdownSteps": ["<from user>"],
+  "batchScript": "<path to solidity script>"
 }
 ```
 
-### Step 4: Add ABI (only if new function pattern)
+5. Update `version` (bump patch version)
 
-**Skip this step** if your contract uses `disable(bytes)` - it's already in `periphery_enabler`.
+6. Update `lastUpdated` to current ISO 8601 timestamp
 
-Only add new ABI if your contract has a unique shutdown function:
-
-```json
-{
-  "your_new_abi": [
-    {
-      "inputs": [{ "internalType": "uint256", "name": "param_", "type": "uint256" }],
-      "name": "customShutdown",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    }
-  ]
-}
-```
-
-### Step 5: Update version and timestamp
-
-In `emergency-config.json`:
-```json
-{
-  "version": "1.1.0",
-  "lastUpdated": "2025-01-28T00:00:00Z"
-}
-```
+7. Update `updatedBy` to `"claude-code"`
 
 ### Step 6: Validate
 
+Run validation:
 ```bash
 node shell/validate-emergency-config.js
 ```
 
-## Quick Reference: Component Fields
+If validation fails, fix the issues and re-run.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `id` | Yes | Unique kebab-case identifier |
-| `name` | Yes | Human-readable name |
-| `description` | Yes | What the shutdown does |
-| `category` | Yes | `treasury`, `lending`, `bridge`, `emissions`, `core`, `reserve` |
-| `severity` | Yes | `critical`, `high`, `medium`, `low` |
-| `owner` | Yes | `emergency` (Emergency MS) or `dao` (DAO MS) |
-| `calls` | Yes | Array of function calls |
-| `availableOn` | Yes | Array of chain names |
-| `shutdownCriteria` | No | When to trigger shutdown |
-| `postShutdownSteps` | No | Steps after shutdown |
-| `dependencies` | No | Other component IDs to shutdown together |
-| `batchScript` | No | Path to Solidity script |
+### Step 7: Summary
 
-## Modifying an Existing Component
+Report to user:
+- Component ID added
+- Chains where available
+- Owner (emergency/dao MS)
+- Reminder to test with `./shell/shutdown.sh <component-id> --list`
 
-1. Find the component in `emergency-config.json` by its `id`
-2. Update the relevant fields
-3. Bump `version` (patch for fixes, minor for new features)
-4. Update `lastUpdated`
-5. Run validation
-6. Update the Solidity script if function calls changed
+## Example
 
-## Adding a New Chain
+For `src/scripts/emergency/Heart.sol`:
 
-1. Add chain config to `chains` in emergency-config.json:
+**Parsed from script:**
+- Owner: `emergency` (uses `setUpEmergency`)
+- ContractKey: `olympus.policies.OlympusHeart`
+- Function: `disable(bytes)` with empty bytes arg
+- ABI: `periphery_enabler`
 
+**From env.json:**
+- mainnet: `0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB`
+- sepolia: `0x1dc2c4E15189a7aa61Eff2b3DD3D5EAe8fA03377`
+
+**Generated component:**
 ```json
 {
-  "chains": {
-    "newchain": {
-      "chainId": 12345,
-      "multisigs": {
-        "emergency": "0x...",
-        "dao": "0x..."
-      },
-      "contracts": {
-        "Emergency": "0x...",
-        "CrossChainBridge": "0x..."
-      }
-    }
-  }
+  "id": "heart",
+  "name": "Olympus Heart",
+  "description": "Disables the Heart policy that triggers periodic protocol operations",
+  "category": "core",
+  "severity": "medium",
+  "owner": "emergency",
+  "calls": [{
+    "contractKey": "olympus.policies.OlympusHeart",
+    "function": "disable",
+    "signature": "disable(bytes)",
+    "args": [{"name": "disableData_", "type": "bytes", "value": ""}],
+    "abi": "periphery_enabler"
+  }],
+  "availableOn": ["mainnet", "sepolia"],
+  "batchScript": "src/scripts/emergency/Heart.sol"
 }
 ```
 
-2. Update `availableOn` for relevant components
-3. Add addresses to `src/scripts/env.json`
-4. Run validation
+## Notes
 
-## Validation Checklist
-
-Before committing changes:
-
-- [ ] Run `node shell/validate-emergency-config.js`
-- [ ] All new contracts are in `contractRegistry`
-- [ ] All ABI keys exist in `emergency-abis.json`
-- [ ] All chains in `availableOn` exist in `chains`
-- [ ] Contract addresses added to relevant chains
-- [ ] `lastUpdated` and `version` fields updated
-- [ ] Solidity script tested with `--dry-run`
-
-## Common Issues
-
-### "Unknown ABI reference"
-Check the ABI patterns table above. Most contracts use `periphery_enabler`. Only add new ABI if truly unique function.
-
-### "Unknown chain in availableOn"
-Add the chain to `chains` object or remove from `availableOn`.
-
-### "Duplicate component ID"
-Each component must have a unique kebab-case `id`.
-
-### "Invalid address format"
-Addresses must be 42 characters: `0x` + 40 hex characters.
-
-### "Contract in registry has no component"
-Either add a component for the contract or remove it from `contractRegistry`.
+- Most new contracts implement `IEnabler` interface and use `periphery_enabler` ABI
+- Only add new ABI entries if the function signature is truly unique
+- Dynamic args (like `withdrawLiquidity(uint256)`) should use `"value": "dynamic"` with `"envKey"` for resolution
+- Keep component IDs kebab-case and descriptive
