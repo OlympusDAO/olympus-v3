@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.15;
 
 import {Keycode, Module, toKeycode} from "src/Kernel.sol";
@@ -37,3 +38,4 @@ contract MockSubmoduleNoERC165 is IVersioned {
     /// @notice This contract intentionally does NOT implement supportsInterface
     /// The validation staticcall will fail, and installation should be rejected
 }
+/// forge-lint: disable-end(mixed-case-function)
