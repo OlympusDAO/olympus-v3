@@ -145,12 +145,5 @@ contract ERC4626Price is PriceSubmodule {
 
         return assetPrice;
     }
-
-    // ========== IERC165 ========== //
-
-    /// @inheritdoc Submodule
-    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
 }
 /// forge-lint: disable-end(mixed-case-function)

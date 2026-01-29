@@ -334,12 +334,5 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         return _getMedianPrice(sortedPrices);
     }
-
-    // ========== IERC165 ========== //
-
-    /// @inheritdoc Submodule
-    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
 }
 /// forge-lint: disable-end(mixed-case-function)

@@ -428,12 +428,5 @@ contract PythPriceFeeds is PriceSubmodule {
 
         return priceResult;
     }
-
-    // ========== IERC165 ========== //
-
-    /// @inheritdoc Submodule
-    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
 }
 /// forge-lint: disable-end(mixed-case-function)

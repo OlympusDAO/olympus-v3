@@ -863,12 +863,5 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         return lookupTokenPrice;
     }
-
-    // ========== IERC165 ========== //
-
-    /// @inheritdoc Submodule
-    function supportsInterface(bytes4 interfaceId) public pure override returns (bool) {
-        return super.supportsInterface(interfaceId);
-    }
 }
 /// forge-lint: disable-end(mixed-case-function,screaming-snake-case-immutable)
