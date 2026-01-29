@@ -933,14 +933,27 @@ contract PriceV2Test is Test {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
-        // Set price feeds to zero
+        // Set all feeds to zero to trigger strategy failure (0 non-zero prices)
+        // With the new strategy, 0 non-zero prices causes SimpleStrategy_PriceCountInvalid
         reserveUsdPriceFeed.setLatestAnswer(int256(0));
         reserveEthPriceFeed.setLatestAnswer(int256(0));
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(reserve));
-        vm.expectRevert(err);
+        // Strategy fails with SimpleStrategy_PriceCountInvalid when all prices are zero
+        // This is wrapped in PRICE_StrategyFailed
+        // Construct the full expected revert data
+        bytes memory innerError = abi.encodeWithSelector(
+            bytes4(keccak256("SimpleStrategy_PriceCountInvalid(uint256,uint256)")),
+            uint256(0),
+            uint256(2)
+        );
+        bytes memory expectedRevert = abi.encodeWithSelector(
+            bytes4(keccak256("PRICE_StrategyFailed(address,bytes)")),
+            address(reserve),
+            innerError
+        );
+        vm.expectRevert(expectedRevert);
         price.getPrice(address(reserve), IPRICEv2.Variant.CURRENT);
     }
 
@@ -1070,14 +1083,27 @@ contract PriceV2Test is Test {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
-        // Set price feeds to zero
+        // Set all feeds to zero to trigger strategy failure (0 non-zero prices)
+        // With the new strategy, 0 non-zero prices causes SimpleStrategy_PriceCountInvalid
         ohmUsdPriceFeed.setLatestAnswer(int256(0));
         ohmEthPriceFeed.setLatestAnswer(int256(0));
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
-        vm.expectRevert(err);
+        // Strategy fails with SimpleStrategy_PriceCountInvalid when all prices are zero
+        // This is wrapped in PRICE_StrategyFailed
+        // Construct the full expected revert data
+        bytes memory innerError = abi.encodeWithSelector(
+            bytes4(keccak256("SimpleStrategy_PriceCountInvalid(uint256,uint256)")),
+            uint256(0),
+            uint256(3)
+        );
+        bytes memory expectedRevert = abi.encodeWithSelector(
+            bytes4(keccak256("PRICE_StrategyFailed(address,bytes)")),
+            address(ohm),
+            innerError
+        );
+        vm.expectRevert(expectedRevert);
         price.getPrice(address(ohm), IPRICEv2.Variant.CURRENT);
     }
 
@@ -2059,13 +2085,25 @@ contract PriceV2Test is Test {
         vm.prank(priceWriter);
         price.storePrice(address(weth));
 
-        // Set ohm price to zero
+        // Set ohm price feeds to zero (including ETH/USD which is used by recursive feeds)
         ohmUsdPriceFeed.setLatestAnswer(int256(0));
         ohmEthPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
-        vm.expectRevert(err);
+        // Strategy fails with SimpleStrategy_PriceCountInvalid when all prices are zero
+        // This is wrapped in PRICE_StrategyFailed
+        // Construct the full expected revert data
+        bytes memory innerError = abi.encodeWithSelector(
+            bytes4(keccak256("SimpleStrategy_PriceCountInvalid(uint256,uint256)")),
+            uint256(0),
+            uint256(3)
+        );
+        bytes memory expectedRevert = abi.encodeWithSelector(
+            bytes4(keccak256("PRICE_StrategyFailed(address,bytes)")),
+            address(ohm),
+            innerError
+        );
+        vm.expectRevert(expectedRevert);
         vm.prank(priceWriter);
         price.storePrice(address(ohm));
     }
