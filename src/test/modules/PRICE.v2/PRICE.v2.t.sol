@@ -32,6 +32,7 @@ import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPrice
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {BalancerPoolTokenPrice, IVault, IWeightedPool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Tests for OlympusPrice v2
 //
@@ -562,7 +563,12 @@ contract PriceV2Test is Test {
                 IPRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector,
-                    abi.encode(uint256(300)) // 3% deviation
+                    abi.encode(
+                        ISimplePriceFeedStrategy.DeviationParams({
+                            deviationBps: 300,
+                            revertOnInsufficientCount: false
+                        })
+                    )
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
@@ -603,7 +609,12 @@ contract PriceV2Test is Test {
                 IPRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
-                    abi.encode(uint256(300)) // 3% deviation
+                    abi.encode(
+                        ISimplePriceFeedStrategy.DeviationParams({
+                            deviationBps: 300,
+                            revertOnInsufficientCount: false
+                        })
+                    )
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
@@ -800,7 +811,15 @@ contract PriceV2Test is Test {
             assetStrategy.selector,
             SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector
         );
-        assertEq(assetStrategy.params, abi.encode(uint256(300)));
+        assertEq(
+            assetStrategy.params,
+            abi.encode(
+                ISimplePriceFeedStrategy.DeviationParams({
+                    deviationBps: 300,
+                    revertOnInsufficientCount: false
+                })
+            )
+        );
         IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 3);
         /// forge-lint: disable-next-line(unsafe-typecast)
