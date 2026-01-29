@@ -22,7 +22,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     using QuickSort for uint256[];
 
     /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
-    uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
+    uint8 internal constant DEVIATION_PARAMS_LENGTH = 64;
 
     /// @notice     Represents a 0% deviation, which is invalid
     uint256 internal constant DEVIATION_MIN = 0;
@@ -675,7 +675,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         bytes memory params_
     ) internal pure returns (ISimplePriceFeedStrategy.DeviationParams memory) {
         // DeviationParams encoding: uint16 (32 bytes) + bool (32 bytes) = 64 bytes
-        if (params_.length != 64) revert SimpleStrategy_ParamsInvalid(params_);
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
             params_,
             (ISimplePriceFeedStrategy.DeviationParams)
