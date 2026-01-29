@@ -6,14 +6,14 @@ pragma solidity >=0.8.15;
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {ERC4626} from "@solmate-6.2.0/mixins/ERC4626.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
+import {PRICEv2, PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 /// @title      ERC4626Price
 /// @author     0xJem
@@ -68,8 +68,7 @@ contract ERC4626Price is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== PRICE FUNCTIONS ========== //

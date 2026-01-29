@@ -8,14 +8,14 @@ import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.s
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+import {UniswapV3OracleHelper as OracleHelper} from "src/libraries/UniswapV3/Oracle.sol";
 import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      UniswapV3Price
 /// @author     0xJem
@@ -101,8 +101,7 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== TOKEN PRICE FUNCTIONS ========== //

@@ -4,8 +4,6 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IPyth} from "src/interfaces/IPyth.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -13,8 +11,8 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
+import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 
 /// @title      PythPriceFeeds
 /// @author     0xJem
@@ -152,8 +150,7 @@ contract PythPriceFeeds is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== PRICE FEED FUNCTIONS ========== //
@@ -430,17 +427,6 @@ contract PythPriceFeeds is PriceSubmodule {
         uint256 priceResult = firstPrice.mulDiv(secondPrice, 10 ** outputDecimals_);
 
         return priceResult;
-    }
-
-    // ========== IERC165 FUNCTIONS ========== //
-
-    /// @notice     Returns whether the contract supports the given interface
-    ///
-    /// @param interfaceId The interface identifier to check
-    /// @return bool Whether the contract supports the interface
-    function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
-        return
-            interfaceId == type(IERC165).interfaceId || interfaceId == type(IVersioned).interfaceId;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

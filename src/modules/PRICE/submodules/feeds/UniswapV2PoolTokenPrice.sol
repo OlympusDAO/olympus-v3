@@ -13,8 +13,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
+import {PRICEv2, PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {PriceSubmodule, PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 /// @title      UniswapV2PoolTokenPrice
 /// @author     0xJem
@@ -119,8 +119,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== HELPER FUNCTIONS ========== //

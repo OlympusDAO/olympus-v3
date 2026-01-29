@@ -6,12 +6,12 @@ pragma solidity >=0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      ChainlinkPriceFeeds
 /// @author     0xJem
@@ -121,8 +121,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 0;
+        return (1, 0);
     }
 
     // ========== PRICE FEED FUNCTIONS ========== //
