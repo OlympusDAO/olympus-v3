@@ -480,11 +480,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         uint256 nonZeroCount = nonZeroPrices.length;
 
         // 0 prices = no data, always revert
-        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+        if (nonZeroCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
 
         // 1 price = check flag
         if (nonZeroCount == 1) {
-            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 3);
+            if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
             return nonZeroPrices[0]; // flag=false: accept single source
         }
 
@@ -512,11 +512,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             }
 
             // 0 prices = no data, always revert
-            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 3);
+            if (twoPriceValidCount == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
 
             // 1 price = check flag
             if (twoPriceValidCount == 1 && params.revertOnInsufficientCount)
-                revert SimpleStrategy_PriceCountInvalid(1, 3);
+                revert SimpleStrategy_PriceCountInvalid(1, 2);
 
             return (twoPriceValidPrices[0] + twoPriceValidPrices[1]) / twoPriceValidCount;
         }
@@ -530,12 +530,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             sortedPrices,
             medianPrice,
             params.deviationBps,
-            3
+            2
         );
 
         // 1 price = check flag
         if (validCount == 1 && params.revertOnInsufficientCount)
-            revert SimpleStrategy_PriceCountInvalid(1, 3);
+            revert SimpleStrategy_PriceCountInvalid(1, 2);
 
         // Sum valid prices (only the filled portion of the array)
         // Note: Accumulation may overflow if prices are unreasonably large. This is acceptable
