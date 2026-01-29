@@ -656,6 +656,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         // 2 prices = check flag, then return average
         if (validCount == 2) {
             if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(2, 3);
+
+            // Note: Addition may overflow if prices are unreasonably large. This is acceptable
+            // as price feeds typically use 18 decimals with reasonable market values.
             return (validPrices[0] + validPrices[1]) / 2;
         }
 
