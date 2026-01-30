@@ -65,11 +65,11 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
 //     [X] only when contract is enabled
-//     [X] only admin role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only when contract is enabled
-//     [X] only admin role can call
+//     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
 // [X] execOnSubmodule
 //     [X] only when contract is enabled
@@ -196,10 +196,8 @@ contract PriceConfigv2Test is Test {
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
-        priceConfig.enable("");
         priceConfig.installSubmodule(address(chainlinkPrice));
         priceConfig.installSubmodule(address(strategy));
-        priceConfig.disable("");
         vm.stopPrank();
     }
 
@@ -279,9 +277,9 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    modifier givenEnabled() {
+    modifier givenDisabled() {
         vm.prank(admin);
-        priceConfig.enable(abi.encode(""));
+        priceConfig.disable(abi.encode(""));
         _;
     }
 
@@ -348,8 +346,10 @@ contract PriceConfigv2Test is Test {
         }
     }
 
-    function test_constructor() public view {
-        assertEq(priceConfig.isEnabled(), false, "Disabled by default");
+    function test_constructor() public {
+        // Create a fresh PriceConfigv2 to test initial constructor state
+        PriceConfigv2 freshPriceConfig = new PriceConfigv2(kernel);
+        assertEq(freshPriceConfig.isEnabled(), true, "Enabled by default");
     }
 
     function test_usingOlympusPricev1_2() public {
@@ -374,7 +374,7 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICEv2 Configuration ========== */
 
-    function test_addAssetPrice_notEnabled_reverts() public {
+    function test_addAssetPrice_notEnabled_reverts() public givenDisabled {
         // Prepare arguments
         uint256[] memory obs = new uint256[](0);
         IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](0);
@@ -401,7 +401,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice_unauthorizedUser_reverts(address user_) public givenEnabled {
+    function test_addAssetPrice_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Setup data to add asset
@@ -468,7 +468,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice(uint8 role_) public givenEnabled {
+    function test_addAssetPrice(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -547,7 +547,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, abi.encode(feedComponents));
     }
 
-    function test_removeAssetPrice_notEnabled_reverts() public {
+    function test_removeAssetPrice_notEnabled_reverts() public givenDisabled {
         _expectRevertNotEnabled();
 
         // Call function
@@ -555,7 +555,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.removeAssetPrice(address(ohm));
     }
 
-    function test_removeAssetPrice_unauthorizedUser_reverts(address user_) public givenEnabled {
+    function test_removeAssetPrice_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -586,7 +586,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.approved, false);
     }
 
-    function test_removeAssetPrice(uint8 role_) public givenEnabled {
+    function test_removeAssetPrice(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -616,7 +616,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, bytes(""));
     }
 
-    function test_updateAssetPriceFeeds_notEnabled_reverts() public {
+    function test_updateAssetPriceFeeds_notEnabled_reverts() public givenDisabled {
         // Setup data to update feeds
         IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](0);
 
@@ -628,9 +628,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
     }
 
-    function test_updateAssetPriceFeeds_unauthorizedUser_reverts(
-        address user_
-    ) public givenEnabled {
+    function test_updateAssetPriceFeeds_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -668,7 +666,7 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds.length, 1);
     }
 
-    function test_updateAssetPriceFeeds(uint8 role_) public givenEnabled {
+    function test_updateAssetPriceFeeds(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -697,7 +695,7 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds[0].params, newFeeds[0].params);
     }
 
-    function test_updateAssetPriceStrategy_notEnabled_reverts() public {
+    function test_updateAssetPriceStrategy_notEnabled_reverts() public givenDisabled {
         // Prepare arguments
         IPRICEv2.Component memory newStrat = IPRICEv2.Component(
             strategy.SUBKEYCODE(),
@@ -713,9 +711,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
     }
 
-    function test_updateAssetPriceStrategy_unauthorizedUser_reverts(
-        address user_
-    ) public givenEnabled {
+    function test_updateAssetPriceStrategy_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -769,7 +765,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.useMovingAverage, false);
     }
 
-    function test_updateAssetPriceStrategy(uint8 role_) public givenEnabled {
+    function test_updateAssetPriceStrategy(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -808,7 +804,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.useMovingAverage, false);
     }
 
-    function test_updateAssetMovingAverage_notEnabled_reverts() public {
+    function test_updateAssetMovingAverage_notEnabled_reverts() public givenDisabled {
         // Prepare arguments
         uint256[] memory obs = new uint256[](0);
 
@@ -826,9 +822,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_updateAssetMovingAverage_unauthorizedUser_reverts(
-        address user_
-    ) public givenEnabled {
+    function test_updateAssetMovingAverage_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -883,7 +877,7 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.storeMovingAverage, false);
     }
 
-    function test_updateAssetMovingAverage() public givenEnabled {
+    function test_updateAssetMovingAverage() public {
         // Add a new asset to PRICEv2 that doesn't have a moving average
         MockERC20 fohm = new MockERC20("Fake OHM", "FOHM", 9);
 
@@ -950,7 +944,7 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICEv2 Submodule Installation/Upgrade ========== */
 
-    function test_installSubmodule_notEnabled_reverts() public {
+    function test_installSubmodule_notEnabled_reverts() public givenDisabled {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -962,8 +956,8 @@ contract PriceConfigv2Test is Test {
         priceConfig.installSubmodule(address(newStrategy));
     }
 
-    function test_installSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != admin);
+    function test_installSubmodule_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
@@ -972,8 +966,8 @@ contract PriceConfigv2Test is Test {
         address submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(0));
 
-        // Try to install submodule with non-admin account, expect revert
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", ROLE_ADMIN);
+        // Try to install submodule with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
         vm.prank(user_);
         priceConfig.installSubmodule(address(newStrategy));
@@ -991,7 +985,7 @@ contract PriceConfigv2Test is Test {
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_installSubmodule() public givenEnabled {
+    function test_installSubmodule() public {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -1008,7 +1002,7 @@ contract PriceConfigv2Test is Test {
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_upgradeSubmodule_notEnabled_reverts() public {
+    function test_upgradeSubmodule_notEnabled_reverts() public givenDisabled {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -1020,8 +1014,8 @@ contract PriceConfigv2Test is Test {
         priceConfig.upgradeSubmodule(address(newChainlink));
     }
 
-    function test_upgradeSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
-        vm.assume(user_ != admin);
+    function test_upgradeSubmodule_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
 
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
@@ -1033,8 +1027,8 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1);
         assertEq(minor, 0);
 
-        // Try to upgrade chainlink submodule with non-admin account, expect revert
-        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", ROLE_ADMIN);
+        // Try to upgrade chainlink submodule with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
         vm.prank(user_);
         priceConfig.upgradeSubmodule(address(newChainlink));
@@ -1058,7 +1052,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule() public givenEnabled {
+    function test_upgradeSubmodule() public {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -1081,7 +1075,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_execOnSubmodule_notEnabled_reverts() public {
+    function test_execOnSubmodule_notEnabled_reverts() public givenDisabled {
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
@@ -1101,7 +1095,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_execOnSubmodule(uint8 role_) public givenEnabled {
+    function test_execOnSubmodule(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -1122,7 +1116,7 @@ contract PriceConfigv2Test is Test {
         // No error
     }
 
-    function test_execOnSubmodule_unauthorizedUser_reverts(address user_) public givenEnabled {
+    function test_execOnSubmodule_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Perform an action on the submodule

@@ -179,7 +179,7 @@ contract OlympusPricev1_2ForkTest is Test {
         }
         vm.stopPrank();
 
-        // Install submodules (requires price_admin role)
+        // Install submodules (requires admin or price_admin role)
         vm.startPrank(DAO_MS);
         priceConfig.installSubmodule(address(chainlinkPrice));
         priceConfig.installSubmodule(address(pythPrice));
