@@ -1,0 +1,35 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusPriceV1",
+            "args": {
+                "observationFrequency": 28800,
+                "minimumTargetPrice": 12280000000000000000
+            }
+        },
+        {
+            "name": "ChainlinkPriceFeeds",
+            "args": {}
+        },
+        {
+            "name": "PythPriceFeeds",
+            "args": {}
+        },
+        {
+            "name": "UniswapV3Price",
+            "args": {}
+        },
+        {
+            "name": "ERC4626Price",
+            "args": {}
+        },
+        {
+            "name": "SimplePriceFeedStrategy",
+            "args": {}
+        },
+        {
+            "name": "OlympusPriceConfigv2",
+            "args": {}
+        }
+    ]
+}

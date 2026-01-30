@@ -1,40 +1,68 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.15;
+pragma solidity >=0.8.24;
 
 // Scripting
-import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
+import {console2} from "@forge-std-1.9.6/console2.sol";
+import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Interfaces
-import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
-import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
-import {Kernel} from "src/Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
+
+// Bridge
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
-import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
-import {OlympusHeart} from "src/policies/Heart.sol";
-import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
-import {DepositManager} from "src/policies/deposits/DepositManager.sol";
-import {EmissionManager} from "src/policies/EmissionManager.sol";
-import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
-import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
+
+// Deposits
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
-import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
-import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
+import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
+
+// Other
+import {EmissionManager} from "src/policies/EmissionManager.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReserveWrapper} from "src/policies/ReserveWrapper.sol";
 import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
+
+// Modules
+import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
+import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
+
+// PRICE submodules
+import {BalancerPoolTokenPrice} from "src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol";
+import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
+import {UniswapV2PoolTokenPrice} from "src/modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
+import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+
+// Oracle factories
+import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
+import {ERC7726Oracle} from "src/policies/price/ERC7726Oracle.sol";
+import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
+
+// PRICE
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
+import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
+import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+
+// Test mocks
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 // OCG Activator contracts
@@ -650,50 +678,34 @@ contract DeployV3 is WithEnvironment {
         return (address(zeroDistributor), "olympus.policies");
     }
 
-    function deployOlympusPrice() public returns (address, string memory) {
-        // Dependencies
-        address kernel = _getAddressNotZero("olympus.Kernel");
-        address ohmEthPriceFeed = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
-        address reserveEthPriceFeed = _envAddressNotZero("external.chainlink.daiEthPriceFeed");
-
+    function deployOlympusPriceV1() public returns (address, string memory) {
         // Input parameters
-        uint48 ohmEthUpdateThreshold = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "ohmEthUpdateThreshold")
-        );
-        uint48 reserveEthUpdateThreshold = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "reserveEthUpdateThreshold")
-        );
-        uint48 observationFrequency = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "observationFrequency")
-        );
-        uint48 movingAverageDuration = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("OlympusPrice", "movingAverageDuration")
+        uint32 observationFrequency = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("OlympusPriceV1", "observationFrequency")
         );
         uint256 minimumTargetPrice = _readDeploymentArgUint256(
-            "OlympusPrice",
+            "OlympusPriceV1",
             "minimumTargetPrice"
         );
 
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
         // Log parameters
-        console2.log("PRICE parameters:");
+        console2.log("PRICEv1.2 parameters:");
         console2.log("  kernel", kernel);
-        console2.log("  ohmEthPriceFeed", ohmEthPriceFeed);
-        console2.log("  reserveEthPriceFeed", reserveEthPriceFeed);
-        console2.log("  reserveEthUpdateThreshold", reserveEthUpdateThreshold);
+        console2.log("  ohm", ohm);
         console2.log("  observationFrequency", observationFrequency);
-        console2.log("  movingAverageDuration", movingAverageDuration);
         console2.log("  minimumTargetPrice", minimumTargetPrice);
 
-        // Deploy Price module
+        // Deploy PRICEv1_2 (replaces existing PRICE module)
         vm.broadcast();
-        OlympusPrice price = new OlympusPrice(
+        OlympusPricev1_2 price = new OlympusPricev1_2(
             Kernel(kernel),
-            AggregatorV2V3Interface(ohmEthPriceFeed),
-            ohmEthUpdateThreshold,
-            AggregatorV2V3Interface(reserveEthPriceFeed),
-            reserveEthUpdateThreshold,
+            ohm,
             observationFrequency,
-            movingAverageDuration,
             minimumTargetPrice
         );
 
@@ -708,12 +720,198 @@ contract DeployV3 is WithEnvironment {
         console2.log("PriceConfig parameters:");
         console2.log("  kernel", kernel);
 
-        // Deploy PriceConfig policy
+        // Deploy PriceConfig policy (v1)
         vm.broadcast();
         OlympusPriceConfig priceConfig = new OlympusPriceConfig(Kernel(kernel));
 
         return (address(priceConfig), "olympus.policies");
     }
+
+    function deployOlympusPriceConfigv2() public returns (address, string memory) {
+        // Dependencies
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("PriceConfigv2 parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy PriceConfigv2 policy (auto-enables on deployment)
+        vm.broadcast();
+        PriceConfigv2 priceConfig = new PriceConfigv2(Kernel(kernel));
+
+        return (address(priceConfig), "olympus.policies");
+    }
+
+    // ========== PRICE SUBMODULE DEPLOYMENT FUNCTIONS ========== //
+
+    function deployChainlinkPriceFeeds() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("ChainlinkPriceFeeds parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        ChainlinkPriceFeeds feeds = new ChainlinkPriceFeeds(Module(priceModule));
+
+        return (address(feeds), "olympus.submodules.PRICE");
+    }
+
+    function deployPythPriceFeeds() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("PythPriceFeeds parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        PythPriceFeeds feeds = new PythPriceFeeds(Module(priceModule));
+
+        return (address(feeds), "olympus.submodules.PRICE");
+    }
+
+    function deployUniswapV3Price() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("UniswapV3Price parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        UniswapV3Price price = new UniswapV3Price(Module(priceModule));
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deployERC4626Price() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("ERC4626Price parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        ERC4626Price price = new ERC4626Price(Module(priceModule));
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deploySimplePriceFeedStrategy() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("SimplePriceFeedStrategy parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        SimplePriceFeedStrategy strategy = new SimplePriceFeedStrategy(Module(priceModule));
+
+        return (address(strategy), "olympus.submodules.PRICE");
+    }
+
+    function deployUniswapV2PoolTokenPrice() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+
+        // Log parameters
+        console2.log("UniswapV2PoolTokenPrice parameters:");
+        console2.log("  priceModule", priceModule);
+
+        // Deploy
+        vm.broadcast();
+        UniswapV2PoolTokenPrice price = new UniswapV2PoolTokenPrice(Module(priceModule));
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    function deployBalancerPoolTokenPrice() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
+        address balVault = _envAddressNotZero("external.balancer.BalancerVault");
+
+        // Log parameters
+        console2.log("BalancerPoolTokenPrice parameters:");
+        console2.log("  priceModule", priceModule);
+        console2.log("  balVault", balVault);
+
+        // Deploy
+        vm.broadcast();
+        BalancerPoolTokenPrice price = new BalancerPoolTokenPrice(
+            Module(priceModule),
+            IVault(balVault)
+        );
+
+        return (address(price), "olympus.submodules.PRICE");
+    }
+
+    // ========== ORACLE FACTORY DEPLOYMENT FUNCTIONS ========== //
+
+    function deployChainlinkOracleFactory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("ChainlinkOracleFactory parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy
+        vm.broadcast();
+        ChainlinkOracleFactory factory = new ChainlinkOracleFactory(Kernel(kernel));
+
+        return (address(factory), "olympus.policies");
+    }
+
+    function deployMorphoOracleFactory() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("MorphoOracleFactory parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy
+        vm.broadcast();
+        MorphoOracleFactory factory = new MorphoOracleFactory(Kernel(kernel));
+
+        return (address(factory), "olympus.policies");
+    }
+
+    function deployERC7726Oracle() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("ERC7726Oracle parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy
+        vm.broadcast();
+        ERC7726Oracle oracle = new ERC7726Oracle(Kernel(kernel));
+
+        return (address(oracle), "olympus.policies");
+    }
+
+    // ========== MOCK PRICE FEED DEPLOYMENT FUNCTIONS ========== //
 
     function deploydaiEthPriceFeed() public returns (address, string memory) {
         // Log parameters

@@ -1,0 +1,16 @@
+{
+    "sequence": [
+        {
+            "name": "ChainlinkOracleFactory",
+            "args": {}
+        },
+        {
+            "name": "MorphoOracleFactory",
+            "args": {}
+        },
+        {
+            "name": "ERC7726Oracle",
+            "args": {}
+        }
+    ]
+}
