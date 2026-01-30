@@ -54,7 +54,7 @@ Potential solutions:
 - Is there a rollback plan if something fails?
 - Are critical operations batched to avoid downtime?
 - Does a batch account for the 11-day OCG timelock?
-- Is the reliability of the heartbeat put in jeopoardy?
+- Is the reliability of the heartbeat put in jeopardy?
 
 ### Cleanup
 
