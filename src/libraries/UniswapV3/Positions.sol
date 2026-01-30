@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 // Uniswap V3
 import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {IUniswapV2ERC20} from "./IUniswapV2ERC20.sol";
 
