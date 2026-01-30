@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(mixed-case-function)
 pragma solidity >=0.8.24;
 
 // Scripting
@@ -57,7 +58,6 @@ import {ERC7726Oracle} from "src/policies/price/ERC7726Oracle.sol";
 import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
 // PRICE
-import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
@@ -101,6 +101,7 @@ contract DeployV3 is WithEnvironment {
         // It would be nice to print the RPC URL being used here, but unfortunately vm.rpcUrl() prints the URL configured in foundry.toml
 
         // Load deployment data
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         sequenceFile = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
@@ -192,6 +193,7 @@ contract DeployV3 is WithEnvironment {
             inputs[0] = "mkdir";
             inputs[1] = "deployments";
 
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.ffi(inputs);
         }
 
@@ -208,6 +210,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("Writing deployments to", file);
 
         // Write deployment info to file in JSON format
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(file, "{");
 
         // solhint-disable quotes
@@ -215,6 +218,7 @@ contract DeployV3 is WithEnvironment {
         // Iterate through the contracts that were deployed and write their addresses to the file
         uint256 len = deployedToKeys.length;
         for (uint256 i; i < len - 1; ++i) {
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.writeLine(
                 file,
                 string.concat(
@@ -227,6 +231,7 @@ contract DeployV3 is WithEnvironment {
             );
         }
         // Write last deployment without a comma
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(
             file,
             string.concat(
@@ -237,6 +242,7 @@ contract DeployV3 is WithEnvironment {
                 '"'
             )
         );
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(file, "}");
 
         // solhint-enable quotes
@@ -253,6 +259,7 @@ contract DeployV3 is WithEnvironment {
             inputs[1] = string.concat("current", ".", chain_, ".", key);
             inputs[2] = vm.toString(value);
 
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.ffi(inputs);
         }
     }
@@ -1051,3 +1058,4 @@ contract DeployV3 is WithEnvironment {
         return (address(limitOrders), "olympus.periphery");
     }
 }
+/// forge-lint: disable-end(mixed-case-function)
