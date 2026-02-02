@@ -9,8 +9,8 @@ import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
+import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
@@ -390,135 +390,67 @@ contract ConvertibleOHMTeller is
         return (token, quoteToken, creator, eligible, expiry, strikePrice);
     }
 
-    // TODO: optimize this algorithm and packing.
-    // TODO: update comments.
-    /// @notice Derive name and symbol of the token
+    /// @notice Derives a name and symbol of the convertible token
+    /// @dev Examples:
+    ///      - Strike 15.50 USDS, expiry 2025-06-01: Name "OHM/USDS 15.5 20250601", Symbol "cOHM-20250601"
+    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150 20251231",  Symbol "cOHM-20251231"
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
         uint256 strikePrice_
-    ) internal view returns (bytes32, bytes32) {
-        // Examples
-        // WETH call option expiring on 2100-01-01 with strike price of 10_010.50 DAI would be formatted as:
-        // Name: "WETH/DAI C 1.001e+4 2100-01-01"
-        // Symbol: "oWETH-21000101"
-        //
-        // WETH put option expiring on 2100-01-01 with strike price of 10.546 DAI would be formatted as:
-        // Name: "WETH/DAI P 1.054e+1 2100-01-01"
-        // Symbol: "oWETH-21000101"
-        //
-        // Note: Names are more specific than symbols, but none are guaranteed to be completely unique to
-        // a specific oToken.
-        // To ensure uniqueness, the convertible token address and hash identifier should be used.
-
-        // Get the date format from the expiry timestamp.
-        (string memory yearStr, string memory monthStr, string memory dayStr) = Timestamp
-            .toPaddedString(uint48(expiry_));
-
-        // Format token symbols
-        // Symbols longer than 5 characters are truncated, min length would be 1 if tokens have no symbols,
-        // max length is 11
-        bytes memory tokenSymbols;
-        {
-            bytes memory quoteSymbol = bytes(IERC20Metadata(quoteToken_).symbol());
-            if (quoteSymbol.length > 5) quoteSymbol = abi.encodePacked(bytes5(quoteSymbol));
-
-            // TODO: confirm that this format is right.
-            tokenSymbols = abi.encodePacked("OHM/", quoteSymbol);
-        }
-
-        // Format strike price
-        // Strike price is formatted as scientific notation to 3 significant figures
-        // Will either be 8 or 9 bytes, e.g. 1.056e+1 (8) or 9.745e-12 (9)
-        bytes memory strike = _getScientificNotation(
-            strikePrice_,
-            IERC20Metadata(quoteToken_).decimals()
+    ) internal view returns (bytes32 name, bytes32 symbol) {
+        // Convert the expiry timestamp as YYYYMMDD
+        (string memory y, string memory m, string memory d) = Timestamp.toPaddedString(
+            uint48(expiry_)
         );
+        bytes memory date = abi.encodePacked(y, m, d);
 
-        // Construct name/symbol strings.
+        // Get the quote symbol (truncated to 5 chars max)
+        bytes memory quoteSymbol = bytes(IERC20Metadata(quoteToken_).symbol());
+        if (quoteSymbol.length > 5) quoteSymbol = abi.encodePacked(bytes5(quoteSymbol));
 
-        // Name and symbol can each be at most 32 bytes since it is stored as a bytes32
-        // Name is formatted as "payoutSymbol/quoteSymbol callPut strikePrice expiry" with the following constraints:
-        // payoutSymbol - 5 bytes
-        // "/" - 1 byte
-        // quoteSymbol - 5 bytes
-        // " " - 1 byte
-        // callPut - 1 byte
-        // " " - 1 byte
-        // strikePrice - 8 or 9 bytes, scientific notation to 3 significant figures, e.g. 1.056e+1 (8) or 9.745e-12 (9)
-        // " " - 1 byte
-        // expiry - 8 bytes, YYYYMMDD
-        // Total is 31 or 32 bytes
+        // Format the strike price as decimal with up to 2 fractional digits (e.g., "15.00")
+        bytes memory price = _formatPrice(strikePrice_, IERC20Metadata(quoteToken_).decimals());
 
-        // Symbol is formatted as "oPayoutSymbol-expiry" with the following constraints:
-        // "o" - 1 byte
-        // payoutSymbol - 5 bytes
-        // "-" - 1 byte
-        // expiry - 8 bytes, YYYYMMDD
-        // Total is 15 bytes
-
-        bytes32 name = bytes32(
-            abi.encodePacked(tokenSymbols, " ", strike, " ", yearStr, monthStr, dayStr)
-        );
+        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "cOHM-YYYYMMDD"
+        name = bytes32(abi.encodePacked("OHM/", quoteSymbol, " ", price, " ", date));
         // TODO: decide what prefix should be used.
-        bytes32 symbol = bytes32(abi.encodePacked("cOHM-", yearStr, monthStr, dayStr));
-
+        symbol = bytes32(abi.encodePacked("cOHM-", date));
         return (name, symbol);
     }
 
-    /// @notice Helper function to calculate number of price decimals in the provided price
-    /// @param price_   The price to calculate the number of decimals for
-    /// @return         The number of decimals
+    /// @notice Formats price as a decimal string with 2 fractional digits
+    /// @dev Requires tokenDecimals_ >= 2 to avoid underflow
+    /// @param price_ The price in token decimals
+    /// @param tokenDecimals_ The number of decimals in the quote token
+    /// @return The formatted price as bytes (e.g., "15.00", "15.50", "15.05")
+    function _formatPrice(
+        uint256 price_,
+        uint8 tokenDecimals_
+    ) internal pure returns (bytes memory) {
+        uint256 wholePart = price_ / (10 ** tokenDecimals_);
+        uint256 fracPart = (price_ % (10 ** tokenDecimals_)) / (10 ** (tokenDecimals_ - 2));
+        return
+            abi.encodePacked(
+                uint2str(wholePart),
+                ".",
+                fracPart < 10 ? "0" : "",
+                uint2str(fracPart)
+            );
+    }
+
+    /// @notice Calculates a number of price decimals in the provided price
+    /// @dev Used for validation in deploy() to ensure a strike price has sufficient precision
+    /// @param price_ The price to calculate the number of decimals for
+    /// @param tokenDecimals_ The number of decimals in the quote token
+    /// @return The number of price decimals (can be negative for prices < 1)
     function _getPriceDecimals(uint256 price_, uint8 tokenDecimals_) internal pure returns (int8) {
         int8 decimals;
         while (price_ >= 10) {
             price_ = price_ / 10;
             decimals++;
         }
-
-        // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
-        // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
         return decimals - int8(tokenDecimals_);
-    }
-
-    /// @notice Helper function to format a uint256 into scientific notation with 3 significant figures
-    /// @param price_           The price to format
-    /// @param tokenDecimals_   The number of decimals in the token
-    function _getScientificNotation(
-        uint256 price_,
-        uint8 tokenDecimals_
-    ) internal pure returns (bytes memory) {
-        // Get a bytes representation of the price in scientific notation with 3 significant figures.
-        // 1. Get the number of price decimals
-        int8 priceDecimals = _getPriceDecimals(price_, tokenDecimals_);
-
-        // Scientific notation can support up to 2 digit exponents (i.e. price decimals)
-        // The bounds for valid prices have been checked earlier when the token was deployed
-        // so we don't have to check again here.
-
-        // 2. Get a string of the price decimals and exponent figure
-        bytes memory decStr;
-        if (priceDecimals < 0) {
-            uint256 decimals = uint256(uint8(-priceDecimals));
-            decStr = bytes.concat("e-", bytes(uint2str(decimals)));
-        } else {
-            uint256 decimals = uint256(uint8(priceDecimals));
-            decStr = bytes.concat("e+", bytes(uint2str(decimals)));
-        }
-
-        // 3. Get a string of the leading digits with decimal point
-        uint8 priceMagnitude = uint8(int8(tokenDecimals_) + priceDecimals);
-        uint256 digits = price_ / (10 ** (priceMagnitude < 3 ? 0 : priceMagnitude - 3));
-        bytes memory digitStr = bytes(uint2str(digits));
-        uint256 len = bytes(digitStr).length;
-        bytes memory leadingStr = bytes.concat(digitStr[0], ".");
-        for (uint256 i = 1; i < len; ++i) {
-            leadingStr = bytes.concat(leadingStr, digitStr[i]);
-        }
-
-        // 4. Combine and return
-        // The bytes string should be at most 9 bytes (e.g. 1.056e-10)
-        return bytes.concat(leadingStr, decStr);
     }
 
     function _getTokenHash(

@@ -199,7 +199,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
         assertEq(
             keccak256(bytes(token.name())),
-            keccak256(abi.encodePacked(bytes32("OHM/USDS 1.500e+1 19700630"))),
+            keccak256(abi.encodePacked(bytes32("OHM/USDS 15.00 19700630"))),
             "The name should match"
         );
         assertEq(
