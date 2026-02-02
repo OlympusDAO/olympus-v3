@@ -138,8 +138,13 @@ abstract contract BaseVaultRewardDistributor is BaseRewardDistributor, IVaultRew
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_,
-        bool asVaultToken_
+        bytes calldata params_
     ) external virtual onlyEnabled returns (address rewardToken, uint256 tokensTransferred) {
+        IVaultRewardDistributor.ClaimParams memory p = abi.decode(
+            params_,
+            (IVaultRewardDistributor.ClaimParams)
+        );
+
         _validateClaimArrays(epochEndDates_, amounts_, proofs_);
 
         (uint256 totalAmount, uint256[] memory claimedEpochEndDates) = _processClaims(
@@ -155,7 +160,7 @@ abstract contract BaseVaultRewardDistributor is BaseRewardDistributor, IVaultRew
             msg.sender,
             totalAmount,
             claimedEpochEndDates,
-            asVaultToken_
+            p.asVaultToken
         );
     }
 

@@ -7,6 +7,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {RewardDistributorUSDS} from "src/policies/rewards/RewardDistributorUSDS.sol";
 import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
+import {IVaultRewardDistributor} from "src/policies/interfaces/rewards/IVaultRewardDistributor.sol";
 import {Kernel, toKeycode, Actions} from "src/Kernel.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -102,6 +103,11 @@ contract RewardDistributorUSDSTest is Test {
         uint256 amount
     ) internal pure returns (bytes32) {
         return keccak256(bytes.concat(keccak256(abi.encode(user, epochEndDate, amount))));
+    }
+
+    // Encodes IVaultRewardDistributor.ClaimParams for the claim function
+    function _encodeClaimParams(bool asVaultToken) internal pure returns (bytes memory) {
+        return abi.encode(IVaultRewardDistributor.ClaimParams({asVaultToken: asVaultToken}));
     }
 
     /// @notice Helper to get the first epoch end date (23:59:59 UTC of start day)
@@ -302,7 +308,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, false); // asVaultToken = false
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false)); // asVaultToken = false
 
         // Verify
         assertEq(usds.balanceOf(alice), amount);
@@ -341,7 +347,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, true); // asVaultToken = true
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(true)); // asVaultToken = true
 
         // Verify (uses convertToShares which rounds down)
         assertEq(sUSDS.balanceOf(alice), sUSDS.convertToShares(amount));
@@ -390,7 +396,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
 
         // Verify
         assertEq(usds.balanceOf(alice), amount1 + amount2);
@@ -415,7 +421,7 @@ contract RewardDistributorUSDSTest is Test {
         proofs[0] = new bytes32[](0);
 
         vm.startPrank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
 
         // Verify previewClaim returns 0 after claiming
         (uint256 claimable, uint256 shares) = distributor.previewClaim(
@@ -434,7 +440,7 @@ contract RewardDistributorUSDSTest is Test {
                 epochEndDate
             )
         );
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
         vm.stopPrank();
     }
 
@@ -474,7 +480,7 @@ contract RewardDistributorUSDSTest is Test {
             proofs1[0] = new bytes32[](0);
 
             vm.prank(alice);
-            distributor.claim(epochEndDates1, amounts1, proofs1, false);
+            distributor.claim(epochEndDates1, amounts1, proofs1, _encodeClaimParams(false));
         }
 
         assertEq(usds.balanceOf(alice), 200e18);
@@ -502,7 +508,7 @@ contract RewardDistributorUSDSTest is Test {
                     epoch0EndDate + EPOCH_DURATION
                 )
             );
-            distributor.claim(epochEndDates, amounts, proofs, false);
+            distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
         }
 
         // Balance should remain unchanged (only the first claim of 200e18)
@@ -545,7 +551,7 @@ contract RewardDistributorUSDSTest is Test {
                 epochEndDate
             )
         );
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
 
         // Verify nothing was claimed (tx reverted)
         assertEq(usds.balanceOf(alice), 0);
@@ -580,7 +586,7 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
     }
 
     function test_claim_reverts_using_another_users_proof() public {
@@ -616,7 +622,7 @@ contract RewardDistributorUSDSTest is Test {
         // Bob tries to claim using Alice's proof - should fail
         vm.prank(bob);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
 
         // Verify Bob received nothing
         assertEq(usds.balanceOf(bob), 0);
@@ -624,7 +630,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Verify Alice can still claim with her proof
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
         assertEq(usds.balanceOf(alice), amount);
         assertTrue(distributor.hasClaimed(alice, epochEndDate));
     }
@@ -659,7 +665,7 @@ contract RewardDistributorUSDSTest is Test {
                 epochEndDate
             )
         );
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
     }
 
     function test_claim_zero_rewards_reverts() public {
@@ -685,7 +691,7 @@ contract RewardDistributorUSDSTest is Test {
         // Claim should revert with 0 rewards
         vm.prank(alice);
         vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
     }
 
     function test_endEpoch_zero_rewards_merkle_root_succeeds() public {
@@ -735,7 +741,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim as underlying
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, false);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(false));
 
         // Verify user receives exactly the claim amount (not more due to rounding)
         assertEq(usds.balanceOf(alice), claimAmount);
@@ -773,7 +779,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Claim as vault token
         vm.prank(alice);
-        distributor.claim(epochEndDates, amounts, proofs, true);
+        distributor.claim(epochEndDates, amounts, proofs, _encodeClaimParams(true));
 
         // Get the shares received
         uint256 sharesReceived = sUSDS.balanceOf(alice);

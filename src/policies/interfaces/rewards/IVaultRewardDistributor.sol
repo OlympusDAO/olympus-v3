@@ -4,9 +4,17 @@ pragma solidity >=0.8.20;
 import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 
 /// @title IVaultRewardDistributor
-/// @notice Interface for ERC4626 vault-based reward distributors.
-/// @dev Extends IRewardDistributor with vault-specific functionality.
+/// @notice The interface for ERC4626 vault-based reward distributors.
+/// @dev It extends IRewardDistributor with vault-specific functionality.
 interface IVaultRewardDistributor is IRewardDistributor {
+    // ========== STRUCTS ========== //
+
+    /// @notice Parameters for claiming rewards from vault-based distributors.
+    /// @dev Used for encoding/decoding params_ in claim.
+    struct ClaimParams {
+        bool asVaultToken;
+    }
+
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a user successfully claims their rewards
@@ -26,19 +34,18 @@ interface IVaultRewardDistributor is IRewardDistributor {
 
     // ========== USER FUNCTIONS ========== //
 
-    /// @notice Claim rewards for specified epochs
-    ///
-    /// @param  epochEndDates_      The list of epoch end dates being claimed for
-    /// @param  amounts_            The claimable amounts corresponding to the epochs
-    /// @param  proofs_             Merkle proofs corresponding to each epoch
-    /// @param  asVaultToken_       Whether to receive rewards as vault token or as the underlying
-    /// @return rewardToken         The address of the token transferred (vault token if asVaultToken_, otherwise underlying)
-    /// @return tokensTransferred   The amount of tokens transferred (vault shares if asVaultToken_, otherwise underlying)
+    /// @notice Claims rewards for specified epochs.
+    /// @param epochEndDates_ The list of epoch end dates being claimed for.
+    /// @param amounts_ The claimable amounts corresponding to the epochs.
+    /// @param proofs_ The Merkle proofs corresponding to each epoch.
+    /// @param params_ The encoded ClaimParams struct (abi.encode(ClaimParams)).
+    /// @return rewardToken The address of the token transferred.
+    /// @return tokensTransferred The amount of tokens transferred.
     function claim(
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_,
-        bool asVaultToken_
+        bytes calldata params_
     ) external returns (address rewardToken, uint256 tokensTransferred);
 
     // ========== VIEW FUNCTIONS ========== //
