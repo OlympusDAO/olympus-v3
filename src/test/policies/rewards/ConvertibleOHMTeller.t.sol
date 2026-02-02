@@ -13,6 +13,7 @@ import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/Convertible
 import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MaliciousConvertibleOHMToken} from "src/test/mocks/MaliciousConvertibleOHMToken.sol";
@@ -66,13 +67,8 @@ contract ConvertibleOHMTellerTestBase is Test {
         roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
         roles.saveRole(ADMIN_ROLE, address(this));
 
-        // Grant the permission to this test contract to call increaseMintApproval
-        _grantModulePermission(toKeycode("MINTR"), MINTRv1.increaseMintApproval.selector);
-        // Approve the teller to mint OHM (infinite approval)
-        mintr.increaseMintApproval(address(teller), type(uint256).max);
-
-        // Enable the teller policy
-        teller.enable("");
+        // Enable the teller policy with infinite minting cap
+        teller.enable(abi.encode(type(uint256).max));
 
         // Grant the reward distributor role (required for the functions deploy and create)
         roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor);
@@ -631,6 +627,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         uint256 user0UsdsBalBefore = usds.balanceOf(user0);
         uint256 user0OhmBalBefore = ohm.balanceOf(user0);
         uint256 treasuryUsdsBefore = usds.balanceOf(address(trsry));
+        uint256 approvalBefore = teller.remainingMintApproval();
 
         // Exercise convertible tokens
         uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
@@ -665,6 +662,11 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
 
         assertEq(token.balanceOf(user0), 0, "The convertible tokens should be burned");
         assertEq(token.totalSupply(), 0, "The total supply of the convertible token should be 0");
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalBefore - user0InitialBal,
+            "The minting approval should decrease by the exercised amount"
+        );
     }
 
     function test_exercise_partially() external {
@@ -836,8 +838,24 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         teller.exercise(address(token), 0);
     }
 
+    function test_exercise_revertsIfInsufficientMintApproval() external {
+        // 1. Preparation: reduce the minting cap to less than the exercise amount
+        uint256 limitedCap = 50e9; // Only allow 50 OHM to be minted
+        teller.setMintCap(limitedCap);
+        // Warp to the eligible time
+        vm.warp(eligibleTimestamp);
+
+        // 2. Test: try to exercise more than the minting cap allows
+        uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
+        vm.startPrank(user0);
+        usds.approve(address(teller), exerciseCost);
+        vm.expectRevert(MINTRv1.MINTR_NotApproved.selector);
+        teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+    }
+
     function test_exercise_revertsIfPolicyDisabled() external {
-        // 1. Preparation: warp to eligible, disable policy
+        // 1. Preparation: warp to the eligible time, disable the policy
         vm.warp(eligibleTimestamp);
         teller.disable("");
 
@@ -890,6 +908,145 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(admin);
         teller.setMinDuration(7 days);
+    }
+
+    function test_setMintCap_increasesMintApproval() external {
+        // 1. Preparation: reduce the minting cap to 0 first
+        teller.setMintCap(0);
+        assertEq(teller.remainingMintApproval(), 0, "The initial approval should be 0");
+
+        // 2. Test: increase the minting cap
+        uint256 mintCap = 1000e9;
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MintCapUpdated(mintCap, 0);
+        teller.setMintCap(mintCap);
+
+        // Verify
+        assertEq(
+            teller.remainingMintApproval(),
+            mintCap,
+            "The approval should match the minting cap"
+        );
+    }
+
+    function test_setMintCap_decreasesMintApproval() external {
+        // 1. Preparation: set an initial minting cap
+        uint256 initialCap = 1000e9;
+        teller.setMintCap(initialCap);
+        assertEq(teller.remainingMintApproval(), initialCap, "The initial cap should be set");
+
+        // 2. Test: decrease the minting cap
+        uint256 newCap = 500e9;
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MintCapUpdated(newCap, initialCap);
+        teller.setMintCap(newCap);
+
+        // Verify
+        assertEq(teller.remainingMintApproval(), newCap, "The approval should be decreased");
+    }
+
+    function test_setMintCap_notChangeWhenSameValue() external {
+        // 1. Preparation: set an initial minting cap
+        uint256 cap = 1000e9;
+        teller.setMintCap(cap);
+
+        // 2. Test: set the same minting cap again (should emit the event, but not change the approval)
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MintCapUpdated(cap, cap);
+        teller.setMintCap(cap);
+
+        // Verify
+        assertEq(teller.remainingMintApproval(), cap, "The approval should remain unchanged");
+    }
+
+    function test_setMintCap_revertsIfNotAdmin() external {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.prank(user0);
+        teller.setMintCap(1000e9);
+    }
+
+    function test_setMintCap_revertsIfPolicyDisabled() external {
+        // 1. Preparation: disable the policy
+        teller.disable("");
+
+        // 2. Test
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        teller.setMintCap(1000e9);
+    }
+
+    function test_enable_withInitialMintCap() external {
+        // 1. Preparation: deploy a fresh teller (not enabled yet)
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+        // Verify the initial approval is 0
+        assertEq(newTeller.remainingMintApproval(), 0, "The initial approval should be 0");
+
+        // 2. Test: enable with the initial minting cap
+        uint256 initialCap = 1000e9;
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MintCapUpdated(initialCap, 0);
+        newTeller.enable(abi.encode(initialCap));
+
+        // Verify
+        assertEq(
+            newTeller.remainingMintApproval(),
+            initialCap,
+            "The approval should match the initial cap"
+        );
+    }
+
+    function test_enable_withoutInitialMintCap() external {
+        // 1. Preparation: deploy a fresh teller
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        // 2. Test: enable without an initial minting cap (empty data)
+        newTeller.enable("");
+
+        // Verify
+        assertEq(newTeller.remainingMintApproval(), 0, "The approval should remain 0");
+    }
+
+    function test_enable_revertsIfAlreadyEnabled() external {
+        vm.expectRevert(IEnabler.NotDisabled.selector);
+        teller.enable("");
+    }
+
+    function test_enable_revertsIfNotAdmin() external {
+        // 1. Preparation: deploy a fresh teller
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        // 2. Test
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.prank(user0);
+        newTeller.enable("");
+    }
+
+    function test_disable_disablesPolicy() external {
+        // The teller is enabled in the setUp
+        assertTrue(teller.isEnabled(), "The teller should be enabled");
+
+        // Test
+        teller.disable("");
+
+        // Verify
+        assertFalse(teller.isEnabled(), "The teller should be disabled");
+    }
+
+    function test_disable_revertsIfAlreadyDisabled() external {
+        // 1. Preparation: disable the teller
+        teller.disable("");
+
+        // 2. Test
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        teller.disable("");
+    }
+
+    function test_disable_revertsIfNotAdmin() external {
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(user0);
+        teller.disable("");
     }
 }
 
@@ -1044,6 +1201,15 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
             _calcTokenHash(eligibleTimestamp, expiryTimestamp),
             "The hash should match for the rounded timestamps"
         );
+    }
+
+    function test_remainingMintApproval_returnsCorrectValue() external {
+        // 1. Preparation: set a specific minting cap
+        uint256 mintCap = 1000e9;
+        teller.setMintCap(mintCap);
+
+        // 2. Test
+        assertEq(teller.remainingMintApproval(), mintCap, "Should return a correct value");
     }
 }
 

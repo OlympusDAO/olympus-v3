@@ -105,10 +105,16 @@ contract ConvertibleOHMTeller is
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](1);
-        permissions[0] = Permissions({
-            keycode: toKeycode("MINTR"),
-            funcSelector: MINTR.mintOhm.selector
+        Keycode kc = toKeycode("MINTR");
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions({keycode: kc, funcSelector: MINTR.mintOhm.selector});
+        permissions[1] = Permissions({
+            keycode: kc,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
+        permissions[2] = Permissions({
+            keycode: kc,
+            funcSelector: MINTR.decreaseMintApproval.selector
         });
         return permissions;
     }
@@ -116,6 +122,15 @@ contract ConvertibleOHMTeller is
     /// @notice Returns the version of this policy
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         return (1, 0);
+    }
+
+    /// @notice Overrides _enable to accept initial minting cap
+    /// @param enableData_ ABI-encoded (uint256 mintCap)
+    function _enable(bytes calldata enableData_) internal override {
+        if (enableData_.length != 0) {
+            uint256 mintCap = abi.decode(enableData_, (uint256));
+            _setMintCap(mintCap);
+        }
     }
 
     // ========== TOKEN DEPLOYMENTS ========== //
@@ -235,6 +250,22 @@ contract ConvertibleOHMTeller is
     }
 
     /// @inheritdoc IConvertibleOHMTeller
+    function remainingMintApproval() external view override returns (uint256 remaining_) {
+        return MINTR.mintApproval(address(this));
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function getTokenHash(
+        address quoteToken_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) external pure override returns (bytes32) {
+        (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
+        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
     function getToken(
         address quoteToken_,
         uint48 eligible_,
@@ -253,18 +284,21 @@ contract ConvertibleOHMTeller is
         return token;
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
-    function getTokenHash(
-        address quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        uint256 strikePrice_
-    ) external pure override returns (bytes32) {
-        (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
-        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
-    }
-
     // ========== INTERNAL FUNCTIONS ========== //
+
+    /// @notice Sets the minting cap by adjusting MINTR approval
+    /// @param cap_ The target minting cap (in OHM units)
+    function _setMintCap(uint256 cap_) internal {
+        uint256 currentApproval = MINTR.mintApproval(address(this));
+        unchecked {
+            if (cap_ > currentApproval) {
+                MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
+            } else if (cap_ < currentApproval) {
+                MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
+            }
+        }
+        emit MintCapUpdated(cap_, currentApproval);
+    }
 
     function _getOrDeployToken(
         address quoteToken_,
@@ -550,5 +584,10 @@ contract ConvertibleOHMTeller is
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminRole {
+        _setMintCap(cap_);
     }
 }

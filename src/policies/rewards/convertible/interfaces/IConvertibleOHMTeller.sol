@@ -25,6 +25,9 @@ interface IConvertibleOHMTeller {
         uint256 quoteAmount
     );
 
+    /// @notice Emitted when the minting cap is updated.
+    event MintCapUpdated(uint256 newCap, uint256 oldCap);
+
     error Teller_InvalidParams(uint256 index, bytes value);
 
     error Teller_TokenDoesNotExist(bytes32 tokenHash);
@@ -71,6 +74,15 @@ interface IConvertibleOHMTeller {
     ///      The absolute minimum is 1 day due to rounding of eligible and expiry timestamps.
     /// @param duration_ The minimum duration in seconds.
     function setMinDuration(uint48 duration_) external;
+
+    /// @notice Sets the maximum amount of OHM that can be minted via the exercise.
+    /// @dev Only callable by addresses with the admin role.
+    /// @param cap_ The new minting cap in OHM units.
+    function setMintCap(uint256 cap_) external;
+
+    /// @notice Returns the remaining MINTR approval for this contract.
+    /// @return remaining_ The remaining approval amount.
+    function remainingMintApproval() external view returns (uint256 remaining_);
 
     /// @notice Calculates the cost to exercise an amount of convertible tokens.
     /// @param token_ The convertible token to exercise.
