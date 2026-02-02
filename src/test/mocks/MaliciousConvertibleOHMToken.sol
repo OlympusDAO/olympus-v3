@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 
 /// @notice A mock token that mimics ConvertibleOHMToken interface
 ///         for testing with invalid/malicious tokens.
 contract MaliciousConvertibleOHMToken is ERC20 {
-    ERC20 internal _quote;
+    address internal _quote;
     uint48 internal _eligible;
     uint48 internal _expiry;
     address internal _teller;
     uint256 internal _strikePrice;
 
     constructor(
-        ERC20 quote_,
+        address quote_,
         uint48 eligible_,
         uint48 expiry_,
         address teller_,
         uint256 strikePrice_
-    ) ERC20("Malicious Convertible Token", "MCT", 9) {
+    ) ERC20("Malicious Convertible Token", "MCT") {
         _quote = quote_;
         _eligible = eligible_;
         _expiry = expiry_;
@@ -26,11 +26,15 @@ contract MaliciousConvertibleOHMToken is ERC20 {
         _strikePrice = strikePrice_;
     }
 
-    function parameters() external view returns (ERC20, uint48, uint48, uint256) {
+    function decimals() public pure override returns (uint8) {
+        return 9;
+    }
+
+    function parameters() external view returns (address, uint48, uint48, uint256) {
         return (_quote, _eligible, _expiry, _strikePrice);
     }
 
-    function quote() external view returns (ERC20) {
+    function quote() external view returns (address) {
         return _quote;
     }
 

@@ -4,15 +4,14 @@ pragma solidity >=0.8.30;
 // Based on Bond Protocol's `FixedStrikeOptionTeller`:
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
 
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
+import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
+import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -27,7 +26,7 @@ contract ConvertibleOHMTeller is
     PolicyEnabler,
     ReentrancyGuardTransient
 {
-    using TransferHelper for ERC20;
+    using SafeERC20 for IERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
 
@@ -49,7 +48,7 @@ contract ConvertibleOHMTeller is
     address public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
-    ERC20 public immutable OHM;
+    address public immutable OHM;
 
     // ========== STATE VARIABLES ========== //
 
@@ -76,8 +75,9 @@ contract ConvertibleOHMTeller is
         // Deploy the token implementation for cloning (deployments)
         TOKEN_IMPLEMENTATION = address(new ConvertibleOHMToken());
 
-        OHM = ERC20(ohm_);
-        if (OHM.decimals() != _OHM_DECIMALS) revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
+        OHM = ohm_;
+        if (IERC20Metadata(ohm_).decimals() != _OHM_DECIMALS)
+            revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
 
         // Set the minimum duration during which a convertible token must be eligible for exercise to 1 day initially
         minDuration = uint48(1 days);
@@ -155,7 +155,7 @@ contract ConvertibleOHMTeller is
             revert Teller_InvalidParams(0, abi.encodePacked(quoteToken_));
 
         // Revert if strike price is zero or out of bounds
-        uint8 quoteDecimals = ERC20(quoteToken_).decimals();
+        uint8 quoteDecimals = IERC20Metadata(quoteToken_).decimals();
         int8 priceDecimals = _getPriceDecimals(strikePrice_, quoteDecimals);
         // We check that the strike price is not zero and that the price decimals are not less than
         // half the quote decimals to avoid precision loss
@@ -191,7 +191,7 @@ contract ConvertibleOHMTeller is
         _requireNonzeroAmount(1, amount_);
         (
             ConvertibleOHMToken token,
-            ERC20 quoteToken,
+            address quoteToken,
             uint48 eligible,
             uint48 expiry,
             uint256 price
@@ -209,7 +209,7 @@ contract ConvertibleOHMTeller is
         // Check balances before and after transfer to ensure that the correct amount was transferred
         // @audit this does enable potential malicious convertible tokens that can't be exercised
         // However, we view it as a "buyer beware" situation that can handled on the front-end
-        quoteToken.safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
+        IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
 
         // Burn convertible tokens
         token.burn(msg.sender, amount_);
@@ -228,10 +228,10 @@ contract ConvertibleOHMTeller is
         uint256 amount_
     ) external view override returns (address, uint256) {
         _requireNonzeroAmount(1, amount_);
-        (, ERC20 quoteToken, , , uint256 strikePrice) = _requireExistingToken(token_);
+        (, address quoteToken, , , uint256 strikePrice) = _requireExistingToken(token_);
 
         // Calculate and return the amount of quote tokens required to exercise
-        return (address(quoteToken), amount_.mulDivUp(strikePrice, _OHM_PRECISION));
+        return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
     /// @inheritdoc IConvertibleOHMTeller
@@ -244,7 +244,7 @@ contract ConvertibleOHMTeller is
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Calculate a hash from the normalized inputs
-        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
         address token = tokens[tokenHash];
 
         // Revert if the convertible token does not exist
@@ -261,7 +261,7 @@ contract ConvertibleOHMTeller is
         uint256 strikePrice_
     ) external pure override returns (bytes32) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
-        return _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
+        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
@@ -273,17 +273,13 @@ contract ConvertibleOHMTeller is
         uint256 strikePrice_
     ) private returns (address) {
         // Warning. The timestamps should be truncated above to give canonical version of hash
-        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
         address token = tokens[tokenHash];
 
         // If the token doesn't exist, deploy (clone) it
         if (address(token) == address(0)) {
             // Generate name and symbol
-            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(
-                ERC20(quoteToken_),
-                expiry_,
-                strikePrice_
-            );
+            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
 
             // Deploy (clone) the token with immutable args
             token = TOKEN_IMPLEMENTATION.clone(
@@ -312,10 +308,10 @@ contract ConvertibleOHMTeller is
 
     function _requireExistingToken(
         address token_
-    ) internal view returns (ConvertibleOHMToken, ERC20, uint48, uint48, uint256) {
+    ) internal view returns (ConvertibleOHMToken, address, uint48, uint48, uint256) {
         // Load token parameters
         (
-            ERC20 quoteToken,
+            address quoteToken,
             uint48 eligible,
             uint48 expiry,
             uint256 strikePrice
@@ -324,7 +320,7 @@ contract ConvertibleOHMTeller is
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
         ConvertibleOHMToken token = ConvertibleOHMToken(
-            getToken(address(quoteToken), eligible, expiry, strikePrice)
+            getToken(quoteToken, eligible, expiry, strikePrice)
         );
 
         // Revert if provided token address does not match stored token address
@@ -337,7 +333,7 @@ contract ConvertibleOHMTeller is
     // TODO: update comments.
     /// @notice Derive name and symbol of the token
     function _getNameAndSymbol(
-        ERC20 quoteToken_,
+        address quoteToken_,
         uint256 expiry_,
         uint256 strikePrice_
     ) internal view returns (bytes32, bytes32) {
@@ -388,7 +384,7 @@ contract ConvertibleOHMTeller is
         // max length is 11
         bytes memory tokenSymbols;
         {
-            bytes memory quoteSymbol = bytes(quoteToken_.symbol());
+            bytes memory quoteSymbol = bytes(IERC20Metadata(quoteToken_).symbol());
             if (quoteSymbol.length > 5) quoteSymbol = abi.encodePacked(bytes5(quoteSymbol));
 
             // TODO: confirm that this format is right.
@@ -398,7 +394,10 @@ contract ConvertibleOHMTeller is
         // Format strike price
         // Strike price is formatted as scientific notation to 3 significant figures
         // Will either be 8 or 9 bytes, e.g. 1.056e+1 (8) or 9.745e-12 (9)
-        bytes memory strike = _getScientificNotation(strikePrice_, quoteToken_.decimals());
+        bytes memory strike = _getScientificNotation(
+            strikePrice_,
+            IERC20Metadata(quoteToken_).decimals()
+        );
 
         // Construct name/symbol strings.
 
@@ -512,7 +511,7 @@ contract ConvertibleOHMTeller is
     }
 
     function _getTokenHash(
-        ERC20 quoteToken_,
+        address quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_

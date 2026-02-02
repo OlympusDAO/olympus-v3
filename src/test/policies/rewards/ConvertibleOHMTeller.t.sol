@@ -2,7 +2,6 @@
 pragma solidity >=0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions, toKeycode, Keycode} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -116,7 +115,7 @@ contract ConvertibleOHMTellerTestBase is Test {
     ) internal returns (MaliciousConvertibleOHMToken) {
         return
             new MaliciousConvertibleOHMToken(
-                ERC20(address(usds)),
+                address(usds),
                 eligible_,
                 expiry_,
                 teller_,
@@ -188,7 +187,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
         assertEq(token.strike(), STRIKE_PRICE, "The strike price should match");
         assertEq(token.teller(), address(teller), "The teller should match the teller contract");
-        assertEq(address(token.quote()), address(usds), "The quote token should match");
+        assertEq(token.quote(), address(usds), "The quote token should match");
         assertEq(
             keccak256(bytes(token.name())),
             keccak256(abi.encodePacked(bytes32("OHM/USDS 1.500e+1 19700630"))),
@@ -285,8 +284,8 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
             address(token1) != address(token2),
             "Should create a different token for the different quote token"
         );
-        assertEq(address(token1.quote()), address(usds), "The Token1's quote token should be USDS");
-        assertEq(address(token2.quote()), address(usdc), "The Token2's quote token should be USDC");
+        assertEq(token1.quote(), address(usds), "The Token1's quote token should be USDS");
+        assertEq(token2.quote(), address(usdc), "The Token2's quote token should be USDC");
     }
 
     function testFuzz_deploy_existingTokenReturnedForSameRoundedTimestamps_skipOnCoverage(

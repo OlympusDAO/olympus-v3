@@ -5,7 +5,6 @@ pragma solidity ^0.8.30;
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionToken.sol`
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/bases/OptionToken.sol`
 
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20.sol";
 
 /// @title Convertible OHM Token
@@ -46,13 +45,13 @@ contract ConvertibleOHMToken is CloneERC20 {
     // ========== VIEW FUNCTIONS FOR IMMUTABLE PARAMETERS ========== //
 
     /// @notice Returns the token parameters: quote token, eligible timestamp, expiration timestamp, strike price.
-    function parameters() external pure returns (ERC20, uint48, uint48, uint256) {
+    function parameters() external pure returns (address, uint48, uint48, uint256) {
         return (quote(), eligible(), expiry(), strike());
     }
 
     /// @notice Returns the address of the quote token that this convertible token is quoted in.
-    function quote() public pure returns (ERC20) {
-        return ERC20(_getArgAddress(_QUOTE_TOKEN_OFFSET));
+    function quote() public pure returns (address) {
+        return _getArgAddress(_QUOTE_TOKEN_OFFSET);
     }
 
     /// @notice Returns the timestamp when this convertible token can first be exercised.
