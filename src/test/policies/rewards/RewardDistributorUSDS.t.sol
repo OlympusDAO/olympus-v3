@@ -141,7 +141,7 @@ contract RewardDistributorUSDSTest is Test {
         bytes32 root = bytes32(uint256(1));
 
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, root);
+        distributor.endEpoch(epochEndDate, root, "");
 
         assertEq(distributor.epochMerkleRoots(epochEndDate), root);
         assertEq(distributor.lastEpochEndDate(), epochEndDate);
@@ -158,7 +158,7 @@ contract RewardDistributorUSDSTest is Test {
         bytes32 root = bytes32(uint256(n));
 
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, root);
+        distributor.endEpoch(epochEndDate, root, "");
 
         assertEq(distributor.epochMerkleRoots(epochEndDate), root);
         assertEq(distributor.lastEpochEndDate(), epochEndDate);
@@ -176,17 +176,17 @@ contract RewardDistributorUSDSTest is Test {
         vm.startPrank(admin);
 
         // End epoch 1
-        distributor.endEpoch(epoch1EndDate, root1);
+        distributor.endEpoch(epoch1EndDate, root1, "");
         assertEq(distributor.epochMerkleRoots(epoch1EndDate), root1);
         assertEq(distributor.lastEpochEndDate(), epoch1EndDate);
 
         // End epoch 2
-        distributor.endEpoch(epoch2EndDate, root2);
+        distributor.endEpoch(epoch2EndDate, root2, "");
         assertEq(distributor.epochMerkleRoots(epoch2EndDate), root2);
         assertEq(distributor.lastEpochEndDate(), epoch2EndDate);
 
         // End epoch 3
-        distributor.endEpoch(epoch3EndDate, root3);
+        distributor.endEpoch(epoch3EndDate, root3, "");
         assertEq(distributor.epochMerkleRoots(epoch3EndDate), root3);
         assertEq(distributor.lastEpochEndDate(), epoch3EndDate);
 
@@ -208,7 +208,7 @@ contract RewardDistributorUSDSTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
         );
-        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
     }
 
     function testFuzz_endEpoch_reverts_too_early(uint40 secondEpochEndDate) public {
@@ -227,10 +227,10 @@ contract RewardDistributorUSDSTest is Test {
         vm.assume(secondEpochEndDate != firstEpochEndDate);
 
         vm.startPrank(admin);
-        distributor.endEpoch(firstEpochEndDate, bytes32(uint256(1)));
+        distributor.endEpoch(firstEpochEndDate, bytes32(uint256(1)), "");
 
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
-        distributor.endEpoch(secondEpochEndDate, bytes32(uint256(2)));
+        distributor.endEpoch(secondEpochEndDate, bytes32(uint256(2)), "");
         vm.stopPrank();
     }
 
@@ -239,14 +239,14 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.prank(admin);
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
-        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
     }
 
     function test_endEpoch_reverts_already_set() public {
         uint40 epochEndDate = _firstEpochEndDate();
 
         vm.startPrank(admin);
-        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -254,7 +254,7 @@ contract RewardDistributorUSDSTest is Test {
                 epochEndDate
             )
         );
-        distributor.endEpoch(epochEndDate, bytes32(uint256(2)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(2)), "");
         vm.stopPrank();
     }
 
@@ -265,7 +265,7 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.prank(admin);
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
-        distributor.endEpoch(epochEndDate, bytes32(uint256(1)));
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
     }
 
     // ========== Test Claiming Logic ========== //
@@ -280,7 +280,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Prepare claim data
         uint256[] memory epochEndDates = new uint256[](1);
@@ -319,7 +319,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Prepare claim data
         uint256[] memory epochEndDates = new uint256[](1);
@@ -359,13 +359,13 @@ contract RewardDistributorUSDSTest is Test {
         bytes32 leaf1 = _generateLeaf(alice, epoch0EndDate, amount1);
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epoch0EndDate, leaf1);
+        distributor.endEpoch(epoch0EndDate, leaf1, "");
 
         // Setup epoch 1
         bytes32 leaf2 = _generateLeaf(alice, epoch1EndDate, amount2);
         vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epoch1EndDate, leaf2);
+        distributor.endEpoch(epoch1EndDate, leaf2, "");
 
         // Prepare claim data
         uint256[] memory epochEndDates = new uint256[](2);
@@ -405,7 +405,7 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         uint256[] memory epochEndDates = new uint256[](1);
         epochEndDates[0] = epochEndDate;
@@ -444,14 +444,15 @@ contract RewardDistributorUSDSTest is Test {
         // Setup first epoch (100e18)
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epoch0EndDate, _generateLeaf(alice, epoch0EndDate, 100e18));
+        distributor.endEpoch(epoch0EndDate, _generateLeaf(alice, epoch0EndDate, 100e18), "");
 
         // Setup epoch 1 (200e18)
         vm.warp(startTimestamp + 2 * EPOCH_DURATION);
         vm.prank(admin);
         distributor.endEpoch(
             epoch0EndDate + EPOCH_DURATION,
-            _generateLeaf(alice, epoch0EndDate + EPOCH_DURATION, 200e18)
+            _generateLeaf(alice, epoch0EndDate + EPOCH_DURATION, 200e18),
+            ""
         );
 
         // Setup epoch 2 (300e18)
@@ -459,7 +460,8 @@ contract RewardDistributorUSDSTest is Test {
         vm.prank(admin);
         distributor.endEpoch(
             epoch0EndDate + 2 * EPOCH_DURATION,
-            _generateLeaf(alice, epoch0EndDate + 2 * EPOCH_DURATION, 300e18)
+            _generateLeaf(alice, epoch0EndDate + 2 * EPOCH_DURATION, 300e18),
+            ""
         );
 
         // Claim epoch 1 first
@@ -521,7 +523,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Prepare claim data with duplicate epoch
         uint256[] memory epochEndDates = new uint256[](2);
@@ -557,7 +559,7 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         uint256[] memory epochEndDates = new uint256[](1);
         epochEndDates[0] = epochEndDate;
@@ -591,7 +593,7 @@ contract RewardDistributorUSDSTest is Test {
 
         vm.warp(startTimestamp + EPOCH_DURATION);
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Prepare claim data using Alice's proof
         uint256[] memory epochEndDates = new uint256[](1);
@@ -670,7 +672,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Prepare claim data
         uint256[] memory epochEndDates = new uint256[](1);
@@ -694,7 +696,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Should succeed - setting root is valid even for zero rewards
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         assertEq(distributor.epochMerkleRoots(epochEndDate), leaf);
         assertEq(distributor.lastEpochEndDate(), epochEndDate);
@@ -718,7 +720,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Simulate yield accruing to the vault by minting additional USDS
         usds.mint(address(sUSDS), yieldAmount);
@@ -756,7 +758,7 @@ contract RewardDistributorUSDSTest is Test {
 
         // Set root
         vm.prank(admin);
-        distributor.endEpoch(epochEndDate, leaf);
+        distributor.endEpoch(epochEndDate, leaf, "");
 
         // Simulate yield accruing to the vault by minting additional USDS
         usds.mint(address(sUSDS), yieldAmount);

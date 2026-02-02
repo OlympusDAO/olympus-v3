@@ -17,6 +17,12 @@ interface IRewardDistributor is IERC165 {
     /// @param merkleRoot The Merkle root containing accumulated rewards for that epoch.
     event MerkleRootSet(uint256 indexed epochEndDate, bytes32 merkleRoot);
 
+    /// @notice Emitted when an epoch ends with rewards configured.
+    /// @param epochEndDate The end of the completed epoch (23:59:59 UTC).
+    /// @param token The reward token address for this epoch.
+    /// @param params Implementation-specific parameters (abi.encoded).
+    event EpochEnded(uint256 indexed epochEndDate, address indexed token, bytes params);
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when the Merkle root for an epoch is already set
@@ -57,6 +63,19 @@ interface IRewardDistributor is IERC165 {
     ///
     /// @param  epochEndDate    The epoch end date that was already claimed
     error RewardDistributor_AlreadyClaimed(uint256 epochEndDate);
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Ends an epoch and sets its Merkle root.
+    /// @param epochEndDate_ The epoch end date (23:59:59 UTC timestamp).
+    /// @param merkleRoot_ The Merkle root to be set.
+    /// @param params_ Implementation-specific parameters (abi.encoded).
+    /// @return token The token address for this epoch's rewards.
+    function endEpoch(
+        uint40 epochEndDate_,
+        bytes32 merkleRoot_,
+        bytes calldata params_
+    ) external returns (address token);
 
     // ========== VIEW FUNCTIONS ========== //
 

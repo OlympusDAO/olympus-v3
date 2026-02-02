@@ -9,13 +9,6 @@ import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistrib
 interface IVaultRewardDistributor is IRewardDistributor {
     // ========== EVENTS ========== //
 
-    /// @notice Emitted when an epoch ends with vault token rewards.
-    /// @dev Emitted alongside MerkleRootSet to provide token-specific info.
-    ///
-    /// @param epochEndDate The end of the completed epoch (23:59:59 UTC).
-    /// @param rewardToken The address of the reward token.
-    event EpochEnded(uint256 indexed epochEndDate, address indexed rewardToken);
-
     /// @notice Emitted when a user successfully claims their rewards
     /// @dev    If `vaultShares` is 0, the user claimed as underlying token.
     ///         If `vaultShares` > 0, the user claimed as vault token.
@@ -30,15 +23,6 @@ interface IVaultRewardDistributor is IRewardDistributor {
         uint256 vaultShares,
         uint256[] epochEndDates
     );
-
-    // ========== ADMIN FUNCTIONS ========== //
-
-    /// @notice End an epoch and set its Merkle root
-    /// @dev    The epochEndDate must be at 23:59:59 UTC (end of day)
-    ///
-    /// @param  epochEndDate_   The epoch end date (23:59:59 UTC timestamp)
-    /// @param  merkleRoot_     The Merkle root to be set
-    function endEpoch(uint40 epochEndDate_, bytes32 merkleRoot_) external;
 
     // ========== USER FUNCTIONS ========== //
 

@@ -166,6 +166,24 @@ contract RewardDistributorConvertibleTestBase is Test {
         // Example: cost = 100e9 * 15e18 / 1e9 = 1500e18 USDS
         return (convertibleTokens * STRIKE_PRICE + 1e9 - 1) / 1e9; // Round up
     }
+
+    // Encodes IRewardDistributorConvertible.EndEpochParams
+    function _encodeParams(
+        address quoteToken,
+        uint48 eligible,
+        uint48 expiry,
+        uint256 strikePrice
+    ) internal pure returns (bytes memory) {
+        return
+            abi.encode(
+                IRewardDistributorConvertible.EndEpochParams({
+                    quoteToken: quoteToken,
+                    eligible: eligible,
+                    expiry: expiry,
+                    strikePrice: strikePrice
+                })
+            );
+    }
 }
 
 contract RewardDistributorConvertibleConstructorTests is RewardDistributorConvertibleTestBase {
@@ -195,26 +213,23 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
     function test_endEpoch_deploysConvertibleTokenAndSetsMerkleRoot() external {
         uint40 epochEndDate = _firstEpochEndDate();
         bytes32 merkleRoot = bytes32(uint256(1));
-
-        vm.prank(admin);
-        vm.expectEmit(true, false, true, true);
-        emit IRewardDistributorConvertible.EpochEnded(
-            epochEndDate,
-            address(0), // Address not known yet
+        bytes memory params = _encodeParams(
             address(usds),
             eligibleTimestamp,
             expiryTimestamp,
             STRIKE_PRICE
         );
+
+        vm.prank(admin);
+        // Use checkTopic2=false because token address is not known before deploy
+        vm.expectEmit(true, false, false, true);
+        emit IRewardDistributor.EpochEnded(
+            epochEndDate,
+            address(0), // Address not checked (checkTopic2=false)
+            params
+        );
         ConvertibleOHMToken token = ConvertibleOHMToken(
-            distributor.endEpoch(
-                epochEndDate,
-                merkleRoot,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
-            )
+            distributor.endEpoch(epochEndDate, merkleRoot, params)
         );
 
         // Verify state
@@ -248,10 +263,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         assertEq(distributor.epochMerkleRoots(epochEndDate), leaf, "Root should be set");
@@ -273,10 +285,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -305,10 +314,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
         assertEq(distributor.epochMerkleRoots(epoch1EndDate), root1, "Root1 should be set");
@@ -323,10 +329,12 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE + 1e18
+                _encodeParams(
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE + 1e18
+                )
             )
         );
         assertEq(distributor.epochMerkleRoots(epoch2EndDate), root2, "Root2 should be set");
@@ -341,10 +349,12 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             distributor.endEpoch(
                 epoch3EndDate,
                 root3,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE + 2e18
+                _encodeParams(
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE + 2e18
+                )
             )
         );
         assertEq(distributor.epochMerkleRoots(epoch3EndDate), root3, "Root3 should be set");
@@ -374,20 +384,14 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE * 2
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2)
             )
         );
         vm.stopPrank();
@@ -413,10 +417,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
@@ -434,20 +435,14 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             firstEpochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
         distributor.endEpoch(
             secondEpochEndDate,
             bytes32(uint256(2)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         vm.stopPrank();
     }
@@ -460,10 +455,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
@@ -474,10 +466,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         vm.expectRevert(
@@ -489,10 +478,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(2)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         vm.stopPrank();
     }
@@ -505,10 +491,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
@@ -522,10 +505,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            invalidExpiry,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, invalidExpiry, STRIKE_PRICE)
         );
     }
 
@@ -540,10 +520,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 }
@@ -571,10 +548,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
                 distributor.endEpoch(
                     epochEndDate,
                     leaf,
-                    address(usds),
-                    eligibleTimestamp,
-                    expiryTimestamp,
-                    STRIKE_PRICE
+                    _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
                 )
             );
     }
@@ -631,10 +605,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -644,10 +615,12 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE + 5e18 // Different strike = different token
+                _encodeParams(
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE + 5e18
+                ) // Different strike = different token
             )
         );
 
@@ -695,10 +668,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -708,10 +678,12 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE + 1e18 // Different strike price to create a different token
+                _encodeParams(
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE + 1e18
+                ) // Different strike price to create a different token
             )
         );
 
@@ -764,10 +736,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -818,20 +787,14 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE * 2 // Different strike
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2) // Different strike
             )
         );
         vm.stopPrank();
@@ -869,10 +832,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -916,10 +876,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -929,10 +886,12 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE + 1e18 // Different strike = different token
+                _encodeParams(
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE + 1e18
+                ) // Different strike = different token
             )
         );
 
@@ -974,10 +933,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         distributor.endEpoch(
             epochEndDate,
             leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         distributor.disable("");
@@ -1094,26 +1050,17 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         distributor.endEpoch(
             epoch1EndDate,
             _generateLeaf(user0, epoch1EndDate, 100e9),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         distributor.endEpoch(
             epoch2EndDate,
             _generateLeaf(user0, epoch2EndDate, 200e9),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         distributor.endEpoch(
             epoch3EndDate,
             _generateLeaf(user0, epoch3EndDate, 300e9),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         vm.stopPrank();
 
@@ -1278,10 +1225,7 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1314,10 +1258,7 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         distributor.endEpoch(
             epochEndDate,
             leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         uint256[] memory epochEndDates = new uint256[](1);
@@ -1353,10 +1294,7 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         distributor.endEpoch(
             epochEndDate,
             leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         uint256[] memory epochEndDates = new uint256[](1);
@@ -1426,10 +1364,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1475,10 +1410,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1489,10 +1421,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1562,10 +1491,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epochEndDate,
                 root,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1620,10 +1546,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 
@@ -1689,27 +1612,18 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epoch1EndDate,
                 _generateLeaf(user0, epoch1EndDate, amount1),
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
         distributor.endEpoch(
             epoch2EndDate,
             _generateLeaf(user0, epoch2EndDate, amount2),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         distributor.endEpoch(
             epoch3EndDate,
             _generateLeaf(user0, epoch3EndDate, amount3),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
         vm.stopPrank();
 
@@ -1758,10 +1672,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
 

@@ -5,6 +5,7 @@ pragma solidity >=0.8.30;
 import {BaseRewardDistributor} from "./BaseRewardDistributor.sol";
 
 // Interfaces
+import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {IVaultRewardDistributor} from "src/policies/interfaces/rewards/IVaultRewardDistributor.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -90,16 +91,18 @@ abstract contract BaseVaultRewardDistributor is BaseRewardDistributor, IVaultRew
 
     // ========== ADMIN FUNCTIONS FOR MERKLE ROOT MANAGEMENT ========== //
 
-    /// @inheritdoc IVaultRewardDistributor
+    /// @inheritdoc IRewardDistributor
     function endEpoch(
         uint40 epochEndDate_,
-        bytes32 merkleRoot_
-    ) external virtual onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled {
+        bytes32 merkleRoot_,
+        bytes calldata
+    ) external virtual onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (address token) {
         // Set merkle root (validates and emits MerkleRootSet)
         _setMerkleRoot(epochEndDate_, merkleRoot_);
 
-        // Emit vault-specific event
-        emit EpochEnded(epochEndDate_, address(REWARD_TOKEN));
+        token = address(REWARD_TOKEN);
+        emit EpochEnded(epochEndDate_, token, new bytes(0));
+        return token;
     }
 
     // ========== CLAIM FUNCTIONS ========== //

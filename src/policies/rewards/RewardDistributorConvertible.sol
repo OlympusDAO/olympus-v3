@@ -5,6 +5,7 @@ pragma solidity >=0.8.30;
 import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.sol";
 
 // Interfaces
+import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
@@ -64,31 +65,34 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @inheritdoc IRewardDistributorConvertible
+    /// @inheritdoc IRewardDistributor
     function endEpoch(
         uint40 epochEndDate_,
         bytes32 merkleRoot_,
-        address quoteToken_,
-        uint48 eligible_,
-        uint48 expiry_,
-        uint256 strikePrice_
+        bytes calldata params_
     ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (address token) {
+        IRewardDistributorConvertible.EndEpochParams memory p = abi.decode(
+            params_,
+            (IRewardDistributorConvertible.EndEpochParams)
+        );
+
         // Validate that the token expires after the end of the epoch (users need time to claim their tokens)
         // Note: The teller rounds expiry_ to the nearest day at 0000 UTC, since
         // convertible tokens are only unique to a day, not a specific timestamp
-        if (uint48(expiry_ / 1 days) * 1 days <= epochEndDate_)
+        if (uint48(p.expiry / 1 days) * 1 days <= epochEndDate_)
             revert RewardDistributor_InvalidToken();
 
         // Set and validate the merkle root
         _setMerkleRoot(epochEndDate_, merkleRoot_);
 
         // Deploy the new convertible token via the teller
-        token = TELLER.deploy(quoteToken_, eligible_, expiry_, strikePrice_);
+        token = TELLER.deploy(p.quoteToken, p.eligible, p.expiry, p.strikePrice);
 
         // Store the convertible token for this epoch
         epochConvertibleTokens[epochEndDate_] = token;
 
-        emit EpochEnded(epochEndDate_, token, quoteToken_, eligible_, expiry_, strikePrice_);
+        emit EpochEnded(epochEndDate_, token, params_);
+        return token;
     }
 
     // ========== USER FUNCTIONS ========== //
