@@ -119,11 +119,11 @@ contract ConvertibleOHMTeller is
 
     /// @inheritdoc IConvertibleOHMTeller
     function deploy(
-        ERC20 quoteToken_,
+        address quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external override onlyEnabled nonReentrant returns (ConvertibleOHMToken) {
+    ) external override onlyEnabled nonReentrant returns (address) {
         _requireRewardDistributor();
 
         // If eligible is zero, use the current timestamp
@@ -143,11 +143,11 @@ contract ConvertibleOHMTeller is
             revert Teller_InvalidParams(2, abi.encodePacked(expiry_));
 
         // Revert if the quote token address is the zero address or does not have a bytecode
-        if (address(quoteToken_) == address(0) || address(quoteToken_).code.length == 0)
+        if (quoteToken_ == address(0) || quoteToken_.code.length == 0)
             revert Teller_InvalidParams(0, abi.encodePacked(quoteToken_));
 
         // Revert if strike price is zero or out of bounds
-        uint8 quoteDecimals = quoteToken_.decimals();
+        uint8 quoteDecimals = ERC20(quoteToken_).decimals();
         int8 priceDecimals = _getPriceDecimals(strikePrice_, quoteDecimals);
         // We check that the strike price is not zero and that the price decimals are not less than
         // half the quote decimals to avoid precision loss
@@ -157,13 +157,17 @@ contract ConvertibleOHMTeller is
 
         // Create the token if one doesn't already exist
         // Timestamps are truncated above to give canonical version of hash
-        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
         ConvertibleOHMToken token = tokens[tokenHash];
 
         // If the token doesn't exist, deploy (clone) it
         if (address(token) == address(0)) {
             // Generate name and symbol
-            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
+            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(
+                ERC20(quoteToken_),
+                expiry_,
+                strikePrice_
+            );
 
             // Deploy (clone) the token with immutable args
             token = ConvertibleOHMToken(
@@ -187,16 +191,22 @@ contract ConvertibleOHMTeller is
             // Store token
             tokens[tokenHash] = token;
 
-            emit ConvertibleTokenCreated(token, quoteToken_, eligible_, expiry_, strikePrice_);
+            emit ConvertibleTokenCreated(
+                address(token),
+                quoteToken_,
+                eligible_,
+                expiry_,
+                strikePrice_
+            );
         }
-        return token;
+        return address(token);
     }
 
     // ========== TOKEN MINTING ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
     function create(
-        ConvertibleOHMToken token_,
+        address token_,
         address to_,
         uint256 amount_
     ) external override onlyEnabled nonReentrant {
@@ -213,10 +223,7 @@ contract ConvertibleOHMTeller is
     // ========== TOKEN EXERCISE ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
-    function exercise(
-        ConvertibleOHMToken token_,
-        uint256 amount_
-    ) external override onlyEnabled nonReentrant {
+    function exercise(address token_, uint256 amount_) external override onlyEnabled nonReentrant {
         _requireNonzeroAmount(1, amount_);
         (
             ConvertibleOHMToken token,
@@ -246,51 +253,51 @@ contract ConvertibleOHMTeller is
         // Mint OHM to user
         MINTR.mintOhm(msg.sender, amount_);
 
-        emit ConvertibleTokenExercised(token, msg.sender, amount_, quoteAmount);
+        emit ConvertibleTokenExercised(address(token), msg.sender, amount_, quoteAmount);
     }
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
     function exerciseCost(
-        ConvertibleOHMToken token_,
+        address token_,
         uint256 amount_
-    ) external view override returns (ERC20, uint256) {
+    ) external view override returns (address, uint256) {
         _requireNonzeroAmount(1, amount_);
         (, ERC20 quoteToken, , , uint256 strikePrice) = _requireExistingToken(token_);
 
         // Calculate and return the amount of quote tokens required to exercise
-        return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
+        return (address(quoteToken), amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
     /// @inheritdoc IConvertibleOHMTeller
     function getToken(
-        ERC20 quoteToken_,
+        address quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) public view override returns (ConvertibleOHMToken) {
+    ) public view override returns (address) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Calculate a hash from the normalized inputs
-        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
         ConvertibleOHMToken token = tokens[tokenHash];
 
         // Revert if the convertible token does not exist
         if (address(token) == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
 
-        return token;
+        return address(token);
     }
 
     /// @inheritdoc IConvertibleOHMTeller
     function getTokenHash(
-        ERC20 quoteToken_,
+        address quoteToken_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
     ) external pure override returns (bytes32) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
-        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        return _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
@@ -300,18 +307,24 @@ contract ConvertibleOHMTeller is
     }
 
     function _requireExistingToken(
-        ConvertibleOHMToken token_
+        address token_
     ) internal view returns (ConvertibleOHMToken, ERC20, uint48, uint48, uint256) {
         // Load token parameters
-        (ERC20 quoteToken, uint48 eligible, uint48 expiry, uint256 strikePrice) = token_
-            .parameters();
+        (
+            ERC20 quoteToken,
+            uint48 eligible,
+            uint48 expiry,
+            uint256 strikePrice
+        ) = ConvertibleOHMToken(token_).parameters();
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
-        ConvertibleOHMToken token = getToken(quoteToken, eligible, expiry, strikePrice);
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            getToken(address(quoteToken), eligible, expiry, strikePrice)
+        );
 
         // Revert if provided token address does not match stored token address
-        if (address(token_) != address(token)) revert Teller_UnsupportedToken(address(token_));
+        if (token_ != address(token)) revert Teller_UnsupportedToken(token_);
 
         return (token, quoteToken, eligible, expiry, strikePrice);
     }

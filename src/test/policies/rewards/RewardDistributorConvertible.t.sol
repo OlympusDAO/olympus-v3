@@ -200,19 +200,21 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.expectEmit(true, false, true, true);
         emit IRewardDistributorConvertible.EpochEnded(
             epochEndDate,
-            ConvertibleOHMToken(address(0)), // Address not known yet
+            address(0), // Address not known yet
             address(usds),
             eligibleTimestamp,
             expiryTimestamp,
             STRIKE_PRICE
         );
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            merkleRoot,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                merkleRoot,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Verify state
@@ -267,13 +269,15 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         bytes32 merkleRoot = bytes32(uint256(n));
 
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            merkleRoot,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                merkleRoot,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         assertEq(
@@ -297,13 +301,15 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.startPrank(admin);
 
         // End epoch 1
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            root1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                root1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
         assertEq(distributor.epochMerkleRoots(epoch1EndDate), root1, "Root1 should be set");
         assertEq(
@@ -313,13 +319,15 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
 
         // End epoch 2
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            root2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE + 1e18
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                root2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE + 1e18
+            )
         );
         assertEq(distributor.epochMerkleRoots(epoch2EndDate), root2, "Root2 should be set");
         assertEq(
@@ -329,13 +337,15 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
 
         // End epoch 3
-        ConvertibleOHMToken token3 = distributor.endEpoch(
-            epoch3EndDate,
-            root3,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE + 2e18
+        ConvertibleOHMToken token3 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch3EndDate,
+                root3,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE + 2e18
+            )
         );
         assertEq(distributor.epochMerkleRoots(epoch3EndDate), root3, "Root3 should be set");
         assertEq(
@@ -360,21 +370,25 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
 
         // End epochs with different strike prices
         vm.startPrank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            root1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                root1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            root2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE * 2
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                root2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE * 2
+            )
         );
         vm.stopPrank();
 
@@ -553,13 +567,15 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         vm.prank(admin);
         return
-            distributor.endEpoch(
-                epochEndDate,
-                leaf,
-                address(usds),
-                eligibleTimestamp,
-                expiryTimestamp,
-                STRIKE_PRICE
+            ConvertibleOHMToken(
+                distributor.endEpoch(
+                    epochEndDate,
+                    leaf,
+                    address(usds),
+                    eligibleTimestamp,
+                    expiryTimestamp,
+                    STRIKE_PRICE
+                )
             );
     }
 
@@ -580,11 +596,11 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         vm.expectEmit(true, true, true, true);
         emit IRewardDistributorConvertible.ConvertibleTokensClaimed(
             user0,
-            token,
+            address(token),
             amount,
             epochEndDate
         );
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
+        (address[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
             epochEndDates,
             amounts,
             proofs
@@ -611,24 +627,28 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            leaf1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                leaf1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            leaf2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE + 5e18 // Different strike = different token
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                leaf2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE + 5e18 // Different strike = different token
+            )
         );
 
         // 2. Test: claim both epochs
@@ -643,7 +663,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[1] = new bytes32[](0);
 
         vm.prank(user0);
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
+        (address[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
             epochEndDates,
             amounts,
             proofs
@@ -671,24 +691,28 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, zeroAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            leaf1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                leaf1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, normalAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            leaf2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE + 1e18 // Different strike price to create a different token
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                leaf2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE + 1e18 // Different strike price to create a different token
+            )
         );
 
         // 2. Test: claim both epochs in one call
@@ -703,7 +727,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[1] = new bytes32[](0);
 
         vm.prank(user0);
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
+        (address[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
             epochEndDates,
             amounts,
             proofs
@@ -736,13 +760,15 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         bytes32 merkleRoot = _generateRoot(user0Leaf, user1Leaf);
 
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            merkleRoot,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                merkleRoot,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // User0 claims with User1's leaf as proof
@@ -788,21 +814,25 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         bytes32 root2 = _generateLeaf(user0, epoch2EndDate, amount2);
 
         vm.startPrank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            root1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                root1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            root2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE * 2 // Different strike
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                root2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE * 2 // Different strike
+            )
         );
         vm.stopPrank();
 
@@ -820,7 +850,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         // Claim both epochs
         vm.prank(user0);
-        (ConvertibleOHMToken[] memory tokens, ) = distributor.claim(epochEndDates, amounts, proofs);
+        (address[] memory tokens, ) = distributor.claim(epochEndDates, amounts, proofs);
 
         // Verify
         assertEq(address(tokens[0]), address(token1), "First token should match");
@@ -835,13 +865,15 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         // Setup epoch with fuzzed amount
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                leaf,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Claim
@@ -853,7 +885,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
+        (address[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
             epochEndDates,
             amounts,
             proofs
@@ -880,24 +912,28 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         // Setup epochs with different strike prices to get different tokens
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            leaf1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                leaf1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            leaf2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE + 1e18 // Different strike = different token
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                leaf2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE + 1e18 // Different strike = different token
+            )
         );
 
         // Claim both epochs
@@ -912,7 +948,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[1] = new bytes32[](0);
 
         vm.prank(user0);
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
+        (address[] memory tokens, uint256[] memory mintedAmounts) = distributor.claim(
             epochEndDates,
             amounts,
             proofs
@@ -1238,13 +1274,15 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
 
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                leaf,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         uint256[] memory epochEndDates = new uint256[](1);
@@ -1255,8 +1293,12 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         proofs[0] = new bytes32[](0);
 
         // Preview before claiming
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts) = distributor
-            .previewClaim(user0, epochEndDates, amounts, proofs);
+        (address[] memory tokens, uint256[] memory claimableAmounts) = distributor.previewClaim(
+            user0,
+            epochEndDates,
+            amounts,
+            proofs
+        );
 
         assertEq(tokens.length, 1, "Should return one token");
         assertEq(address(tokens[0]), address(token), "Token should match");
@@ -1290,8 +1332,12 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         distributor.claim(epochEndDates, amounts, proofs);
 
         // Preview after claiming
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts) = distributor
-            .previewClaim(user0, epochEndDates, amounts, proofs);
+        (address[] memory tokens, uint256[] memory claimableAmounts) = distributor.previewClaim(
+            user0,
+            epochEndDates,
+            amounts,
+            proofs
+        );
 
         assertEq(claimableAmounts[0], 0, "Claimable amount should be 0 after claiming");
         // Token is still returned but amount is 0
@@ -1340,8 +1386,12 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         bytes32[][] memory proofs = new bytes32[][](1);
         proofs[0] = new bytes32[](0);
 
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts) = distributor
-            .previewClaim(user0, epochEndDates, amounts, proofs);
+        (address[] memory tokens, uint256[] memory claimableAmounts) = distributor.previewClaim(
+            user0,
+            epochEndDates,
+            amounts,
+            proofs
+        );
 
         assertEq(claimableAmounts[0], 0, "Claimable amount should be 0 when root not set");
         assertEq(address(tokens[0]), address(0), "Token should be zero address when not set");
@@ -1352,8 +1402,12 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
         uint256[] memory amounts = new uint256[](0);
         bytes32[][] memory proofs = new bytes32[][](0);
 
-        (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts) = distributor
-            .previewClaim(user0, epochEndDates, amounts, proofs);
+        (address[] memory tokens, uint256[] memory claimableAmounts) = distributor.previewClaim(
+            user0,
+            epochEndDates,
+            amounts,
+            proofs
+        );
 
         assertEq(tokens.length, 0, "Should return empty tokens array");
         assertEq(claimableAmounts.length, 0, "Should return empty amounts array");
@@ -1368,13 +1422,15 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Setup epoch
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            leaf,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                leaf,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Claim
@@ -1397,7 +1453,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 exerciseCost = _calcExpectedCost(amount);
         vm.startPrank(user0);
         usds.approve(address(teller), exerciseCost);
-        teller.exercise(token, amount);
+        teller.exercise(address(token), amount);
         vm.stopPrank();
 
         // Verify
@@ -1415,25 +1471,29 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Setup epoch 1
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = distributor.endEpoch(
-            epoch1EndDate,
-            leaf1,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                leaf1,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Setup epoch 2 (same token params = same token)
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = distributor.endEpoch(
-            epoch2EndDate,
-            leaf2,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch2EndDate,
+                leaf2,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Both epochs use the same token params, so they return the same token
@@ -1467,7 +1527,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 exerciseCost = _calcExpectedCost(totalAmount);
         vm.startPrank(user0);
         usds.approve(address(teller), exerciseCost);
-        teller.exercise(token1, totalAmount);
+        teller.exercise(address(token1), totalAmount);
         vm.stopPrank();
 
         // Verify
@@ -1498,13 +1558,15 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         root = keccak256(abi.encodePacked(leftLeaf, rightLeaf));
 
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            root,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                root,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // User0 claims
@@ -1554,13 +1616,15 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         // End epoch
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            merkleRoot,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                merkleRoot,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // User0 claims
@@ -1595,13 +1659,13 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 user0Cost = _calcExpectedCost(user0Amount);
         vm.startPrank(user0);
         usds.approve(address(teller), user0Cost);
-        teller.exercise(token, user0Amount);
+        teller.exercise(address(token), user0Amount);
         vm.stopPrank();
 
         uint256 user1Cost = _calcExpectedCost(user1Amount);
         vm.startPrank(user1);
         usds.approve(address(teller), user1Cost);
-        teller.exercise(token, user1Amount);
+        teller.exercise(address(token), user1Amount);
         vm.stopPrank();
 
         // Verify final state
@@ -1621,13 +1685,15 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         // Set up merkle roots for each epoch (same token params = same token)
         vm.startPrank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epoch1EndDate,
-            _generateLeaf(user0, epoch1EndDate, amount1),
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epoch1EndDate,
+                _generateLeaf(user0, epoch1EndDate, amount1),
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
         distributor.endEpoch(
             epoch2EndDate,
@@ -1673,7 +1739,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 totalCost = _calcExpectedCost(totalTokens);
         vm.startPrank(user0);
         usds.approve(address(teller), totalCost);
-        teller.exercise(token, totalTokens);
+        teller.exercise(address(token), totalTokens);
         vm.stopPrank();
 
         // Verify final state
@@ -1688,13 +1754,15 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         bytes32 merkleRoot = _generateLeaf(user0, epochEndDate, claimAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token = distributor.endEpoch(
-            epochEndDate,
-            merkleRoot,
-            address(usds),
-            eligibleTimestamp,
-            expiryTimestamp,
-            STRIKE_PRICE
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            distributor.endEpoch(
+                epochEndDate,
+                merkleRoot,
+                address(usds),
+                eligibleTimestamp,
+                expiryTimestamp,
+                STRIKE_PRICE
+            )
         );
 
         // Claim
@@ -1714,7 +1782,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 partialCost = _calcExpectedCost(exerciseAmount);
         vm.startPrank(user0);
         usds.approve(address(teller), partialCost);
-        teller.exercise(token, exerciseAmount);
+        teller.exercise(address(token), exerciseAmount);
         vm.stopPrank();
         // Verify partial state
         assertEq(ohm.balanceOf(user0), exerciseAmount, "User0 should have partial OHM");
@@ -1728,7 +1796,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         uint256 remainingCost = _calcExpectedCost(claimAmount - exerciseAmount);
         vm.startPrank(user0);
         usds.approve(address(teller), remainingCost);
-        teller.exercise(token, claimAmount - exerciseAmount);
+        teller.exercise(address(token), claimAmount - exerciseAmount);
         vm.stopPrank();
 
         // Verify final state

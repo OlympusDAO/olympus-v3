@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 
 /// @title IRewardDistributorConvertible
 /// @notice The interface for reward distributors for Convertible OHM Tokens.
@@ -21,7 +19,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     /// @param strikePrice The strike price of the convertible token (in units of the `quoteToken_` per OHM).
     event EpochEnded(
         uint256 indexed epochEndDate,
-        ConvertibleOHMToken indexed convertibleToken,
+        address indexed convertibleToken,
         address indexed quoteToken,
         uint48 eligible,
         uint48 expiry,
@@ -35,7 +33,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     /// @param epochEndDate The epoch end date claimed for.
     event ConvertibleTokensClaimed(
         address indexed user,
-        ConvertibleOHMToken indexed convertibleToken,
+        address indexed convertibleToken,
         uint256 amount,
         uint256 indexed epochEndDate
     );
@@ -49,7 +47,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
 
     /// @notice Ends an epoch, deploys a new convertible token, and sets a merkle root.
     /// @dev The epochEndDate_ should be at 23:59:59 UTC (end of day).
-    ///      Creates a new ConvertibleOHMToken via the teller.
+    ///      Creates a new address via the teller.
     /// @param epochEndDate_ The epoch end date (23:59:59 UTC timestamp).
     /// @param merkleRoot_ The Merkle root to be set.
     /// @param quoteToken_ The ERC20 token that the user will need to provide on exercise.
@@ -64,7 +62,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external returns (ConvertibleOHMToken token);
+    ) external returns (address token);
 
     // ========== USER FUNCTIONS ========== //
 
@@ -78,7 +76,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
-    ) external returns (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts);
+    ) external returns (address[] memory tokens, uint256[] memory mintedAmounts);
 
     // ========== VIEW FUNCTIONS ========== //
 
@@ -94,15 +92,10 @@ interface IRewardDistributorConvertible is IRewardDistributor {
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
-    )
-        external
-        view
-        returns (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts);
+    ) external view returns (address[] memory tokens, uint256[] memory claimableAmounts);
 
     /// @notice Returns a convertible OHM token for a specific epoch.
     /// @param epochEndDate_ The epoch end date.
     /// @return The address of the convertible OHM token.
-    function epochConvertibleTokens(
-        uint256 epochEndDate_
-    ) external view returns (ConvertibleOHMToken);
+    function epochConvertibleTokens(uint256 epochEndDate_) external view returns (address);
 }

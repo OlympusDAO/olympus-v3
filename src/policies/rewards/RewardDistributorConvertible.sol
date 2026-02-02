@@ -8,8 +8,6 @@ import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.
 import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // Bophades
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -33,13 +31,13 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
     // ========== STATE VARIABLES ========== //
 
     /// @inheritdoc IRewardDistributorConvertible
-    mapping(uint256 epochEndDate => ConvertibleOHMToken) public epochConvertibleTokens;
+    mapping(uint256 epochEndDate => address) public epochConvertibleTokens;
 
     // ========== CONSTRUCTOR ========== //
 
     /// @param kernel_ The kernel address
     /// @param epochStartDate_ The timestamp of the beginning of the first epoch (00:00:00 UTC)
-    /// @param teller_ The address of the Convertible OHM Teller.
+    /// @param teller_ The address of the Convertible OHM Teller
     constructor(
         address kernel_,
         uint256 epochStartDate_,
@@ -74,10 +72,10 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (ConvertibleOHMToken token) {
+    ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (address token) {
         // Validate that the token expires after the end of the epoch (users need time to claim their tokens)
         // Note: The teller rounds expiry_ to the nearest day at 0000 UTC, since
-        // convertible tokens are only unique to a day, not a specific timestamp.
+        // convertible tokens are only unique to a day, not a specific timestamp
         if (uint48(expiry_ / 1 days) * 1 days <= epochEndDate_)
             revert RewardDistributor_InvalidToken();
 
@@ -85,7 +83,7 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         _setMerkleRoot(epochEndDate_, merkleRoot_);
 
         // Deploy the new convertible token via the teller
-        token = TELLER.deploy(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
+        token = TELLER.deploy(quoteToken_, eligible_, expiry_, strikePrice_);
 
         // Store the convertible token for this epoch
         epochConvertibleTokens[epochEndDate_] = token;
@@ -100,23 +98,19 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
-    )
-        external
-        onlyEnabled
-        returns (ConvertibleOHMToken[] memory tokens, uint256[] memory mintedAmounts)
-    {
+    ) external onlyEnabled returns (address[] memory tokens, uint256[] memory mintedAmounts) {
         _validateClaimArrays(epochEndDates_, amounts_, proofs_);
 
         uint256 len = epochEndDates_.length;
-        tokens = new ConvertibleOHMToken[](len);
+        tokens = new address[](len);
         mintedAmounts = new uint256[](len);
 
         // Process claims for each epoch by verifying proofs, marking as claimed and minting convertible tokens
         bool hasMinted = false;
         for (uint256 i = 0; i < len; ++i) {
             // Get the convertible token for this epoch
-            ConvertibleOHMToken convertibleToken = epochConvertibleTokens[epochEndDates_[i]];
-            if (address(convertibleToken) == address(0)) revert RewardDistributor_InvalidToken();
+            address convertibleToken = epochConvertibleTokens[epochEndDates_[i]];
+            if (convertibleToken == address(0)) revert RewardDistributor_InvalidToken();
 
             // Validate preconditions, verify proof, and mark as claimed
             _validateAndMarkClaimed(msg.sender, epochEndDates_[i], amounts_[i], proofs_[i]);
@@ -150,16 +144,12 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
         bytes32[][] calldata proofs_
-    )
-        external
-        view
-        returns (ConvertibleOHMToken[] memory tokens, uint256[] memory claimableAmounts)
-    {
+    ) external view returns (address[] memory tokens, uint256[] memory claimableAmounts) {
         uint256 len = epochEndDates_.length;
         if (len == 0 || len != amounts_.length || len != proofs_.length)
             return (tokens, claimableAmounts);
 
-        tokens = new ConvertibleOHMToken[](len);
+        tokens = new address[](len);
         claimableAmounts = new uint256[](len);
 
         for (uint256 i = 0; i < len; ++i) {

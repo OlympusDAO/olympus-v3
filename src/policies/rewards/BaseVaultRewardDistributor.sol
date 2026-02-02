@@ -118,7 +118,7 @@ abstract contract BaseVaultRewardDistributor is BaseRewardDistributor, IVaultRew
         }
 
         for (uint256 i = 0; i < len; ++i) {
-            // Skip epochs without merkle roots set.
+            // Skip epochs without merkle roots set
             if (_isClaimable(user_, epochEndDates_[i], amounts_[i], proofs_[i])) {
                 claimableAmount += amounts_[i];
             }
