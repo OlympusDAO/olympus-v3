@@ -180,7 +180,7 @@ contract ConvertibleOHMTeller is
         (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
         if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
 
-        token.mint(to_, amount_);
+        token.mintFor(to_, amount_);
         emit ConvertibleTokenMinted(token_, to_, amount_);
     }
 
@@ -212,7 +212,7 @@ contract ConvertibleOHMTeller is
         IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
 
         // Burn convertible tokens
-        token.burn(msg.sender, amount_);
+        token.burnFrom(msg.sender, amount_);
 
         // Mint OHM to user
         MINTR.mintOhm(msg.sender, amount_);

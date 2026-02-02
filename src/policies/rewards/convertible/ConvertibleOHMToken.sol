@@ -83,17 +83,19 @@ contract ConvertibleOHMToken is CloneERC20 {
 
     /// @notice Mints convertible tokens.
     /// @dev Only callable by the teller that created this token.
+    ///      Implements IERC20BurnableMintable.mintFor interface.
     /// @param to_ The address to mint to.
     /// @param amount_ The amount to mint.
-    function mint(address to_, uint256 amount_) external onlyTeller {
+    function mintFor(address to_, uint256 amount_) external onlyTeller {
         _mint(to_, amount_);
     }
 
     /// @notice Burns convertible tokens.
     /// @dev Only callable by the teller that created this token.
+    ///      Implements IERC20BurnableMintable.burnFrom interface.
     /// @param from_ The address to burn from.
     /// @param amount_ The amount to burn.
-    function burn(address from_, uint256 amount_) external onlyTeller {
+    function burnFrom(address from_, uint256 amount_) external onlyTeller {
         _burn(from_, amount_);
     }
 }
