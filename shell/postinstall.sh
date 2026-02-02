@@ -7,9 +7,6 @@ echo "*** Clearing dependencies"
 rm -rf dependencies/
 rm -rf lib/
 
-echo "*** Installing dependencies using pnpm"
-pnpm install
-
 echo "*** Setting up submodules"
 git submodule init
 git submodule update
@@ -30,6 +27,3 @@ forge soldeer update
 # This must happen after the dependencies are installed, otherwise it may complain
 echo "*** Cleaning build artifacts"
 forge clean
-
-echo "*** Running forge build"
-forge build

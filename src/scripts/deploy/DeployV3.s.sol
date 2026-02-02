@@ -27,6 +27,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
 import {RewardDistributorUSDS} from "src/policies/rewards/RewardDistributorUSDS.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
@@ -286,6 +287,34 @@ contract DeployV3 is WithEnvironment {
     ) internal view returns (uint256) {
         return
             sequenceFile.readUint(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
+    function _readDeploymentArgUint8Array(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (uint8[] memory) {
+        string memory jsonPath = string.concat(
+            ".sequence[?(@.name == '",
+            deploymentName_,
+            "')].args.",
+            key_
+        );
+        uint256[] memory uint256Array = sequenceFile.readUintArray(jsonPath);
+        uint8[] memory uint8Array = new uint8[](uint256Array.length);
+        for (uint256 i = 0; i < uint256Array.length; i++) {
+            uint8Array[i] = SafeCast.encodeUInt8(uint256Array[i]);
+        }
+        return uint8Array;
+    }
+
+    function _readDeploymentArgAddressArray(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (address[] memory) {
+        return
+            sequenceFile.readAddressArray(
                 string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
             );
     }
@@ -766,6 +795,63 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(activator), "olympus.periphery");
+    }
+
+    function deployConvertibleDepositAuctioneerLimitOrders()
+        public
+        returns (address, string memory)
+    {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address owner = _getAddressNotZero("olympus.multisig.dao");
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+        address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
+        address usds = _getAddressNotZero("external.tokens.USDS");
+        address sUsds = _getAddressNotZero("external.tokens.sUSDS");
+        address positionNft = _getAddressNotZero("olympus.modules.OlympusDepositPositionManager");
+        address yieldRecipient = _getAddressNotZero("olympus.modules.OlympusTreasury");
+
+        // Read arrays from args
+        uint8[] memory depositPeriods = _readDeploymentArgUint8Array(
+            "ConvertibleDepositAuctioneerLimitOrders",
+            "depositPeriods"
+        );
+        address[] memory receiptTokens = _readDeploymentArgAddressArray(
+            "ConvertibleDepositAuctioneerLimitOrders",
+            "receiptTokens"
+        );
+
+        // Log parameters
+        console2.log("ConvertibleDepositAuctioneerLimitOrders parameters:");
+        console2.log("  owner", owner);
+        console2.log("  depositManager", depositManager);
+        console2.log("  cdAuctioneer", cdAuctioneer);
+        console2.log("  usds", usds);
+        console2.log("  sUsds", sUsds);
+        console2.log("  positionNft", positionNft);
+        console2.log("  yieldRecipient", yieldRecipient);
+        console2.log("  depositPeriods count", depositPeriods.length);
+        console2.log("  receiptTokens count", receiptTokens.length);
+        for (uint256 i; i < depositPeriods.length; i++) {
+            console2.log("  depositPeriod", depositPeriods[i]);
+            console2.log("  receiptToken", receiptTokens[i]);
+        }
+
+        // Deploy
+        vm.broadcast();
+        CDAuctioneerLimitOrders limitOrders = new CDAuctioneerLimitOrders(
+            owner,
+            depositManager,
+            cdAuctioneer,
+            usds,
+            sUsds,
+            positionNft,
+            yieldRecipient,
+            depositPeriods,
+            receiptTokens
+        );
+
+        return (address(limitOrders), "olympus.periphery");
     }
 
     function deployRewardDistributorUSDS() public returns (address, string memory) {
