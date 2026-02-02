@@ -106,7 +106,10 @@ contract ConvertibleOHMTeller is
         returns (Permissions[] memory permissions)
     {
         permissions = new Permissions[](1);
-        permissions[0] = Permissions(toKeycode("MINTR"), MINTR.mintOhm.selector);
+        permissions[0] = Permissions({
+            keycode: toKeycode("MINTR"),
+            funcSelector: MINTR.mintOhm.selector
+        });
         return permissions;
     }
 
