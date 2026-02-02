@@ -64,7 +64,7 @@ contract ConvertibleOHMTellerTestBase is Test {
         // Grant the permission to this test contract to call saveRole
         _grantModulePermission(toKeycode("ROLES"), ROLESv1.saveRole.selector);
         // Setup roles
-        roles.saveRole("convertible_admin", admin);
+        roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
         roles.saveRole(ADMIN_ROLE, address(this));
 
         // Grant the permission to this test contract to call increaseMintApproval
@@ -75,9 +75,8 @@ contract ConvertibleOHMTellerTestBase is Test {
         // Enable the teller policy
         teller.enable("");
 
-        // Set the reward distributor (required for the functions deploy and create)
-        vm.prank(admin);
-        teller.setRewardDistributor(rewardDistributor);
+        // Grant the reward distributor role (required for the functions deploy and create)
+        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor);
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -412,7 +411,12 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
     }
 
     function test_deploy_revertsIfNotRewardDistributor() external {
-        vm.expectRevert(IConvertibleOHMTeller.Teller_OnlyRewardDistributor.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                teller.ROLE_REWARD_DISTRIBUTOR()
+            )
+        );
         vm.prank(user0);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
@@ -565,7 +569,12 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         ConvertibleOHMToken token = _deployConvertibleToken();
 
         // 2. Test
-        vm.expectRevert(IConvertibleOHMTeller.Teller_OnlyRewardDistributor.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                teller.ROLE_REWARD_DISTRIBUTOR()
+            )
+        );
         vm.prank(user0);
         teller.create(address(token), user0, 100e9);
     }
@@ -866,47 +875,6 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(admin);
         teller.setMinDuration(7 days);
-    }
-
-    function test_setRewardDistributor_updatesRewardDistributor() external {
-        address newDistributor = makeAddr("newDistributor");
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, false);
-        emit IConvertibleOHMTeller.RewardDistributorSet(newDistributor);
-        teller.setRewardDistributor(newDistributor);
-        assertEq(
-            teller.rewardDistributor(),
-            newDistributor,
-            "The reward distributor should be updated"
-        );
-    }
-
-    function test_setRewardDistributor_revertsIfZeroAddress() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleOHMTeller.Teller_InvalidParams.selector,
-                0,
-                abi.encodePacked(address(0))
-            )
-        );
-        vm.prank(admin);
-        teller.setRewardDistributor(address(0));
-    }
-
-    function test_setRewardDistributor_revertsIfNotAdmin() external {
-        vm.expectRevert();
-        vm.prank(user0);
-        teller.setRewardDistributor(user1);
-    }
-
-    function test_setRewardDistributor_revertsIfPolicyDisabled() external {
-        // 1. Preparation: disable the policy
-        teller.disable("");
-
-        // 2. Test
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(admin);
-        teller.setRewardDistributor(user1);
     }
 }
 

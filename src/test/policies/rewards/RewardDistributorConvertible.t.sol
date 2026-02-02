@@ -43,9 +43,6 @@ contract RewardDistributorConvertibleTestBase is Test {
     uint48 eligibleTimestamp;
     uint48 expiryTimestamp;
 
-    // Roles
-    bytes32 constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
-
     function setUp() public virtual {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp to a reasonable date (roughly Jan 1, 2021) at midnight UTC
         startTimestamp = uint40(vm.getBlockTimestamp());
@@ -79,7 +76,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         mintr.increaseMintApproval(address(teller), type(uint256).max);
 
         // Setup roles for teller
-        roles.saveRole("convertible_admin", admin);
+        roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
 
         // Enable the teller policy
         roles.saveRole(ADMIN_ROLE, address(this));
@@ -93,12 +90,11 @@ contract RewardDistributorConvertibleTestBase is Test {
         );
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
-        // Set the distributor as the reward distributor on the teller
-        vm.prank(admin);
-        teller.setRewardDistributor(address(distributor));
+        // Grant the reward distributor role to the distributor policy
+        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), address(distributor));
 
         // Setup roles for distributor
-        roles.saveRole(ROLE_MERKLE_UPDATER, admin);
+        roles.saveRole(distributor.ROLE_MERKLE_UPDATER(), admin);
 
         // Enable the distributor policy
         distributor.enable("");
@@ -410,10 +406,13 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
 
         uint40 epochEndDate = _firstEpochEndDate();
 
-        vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                distributor.ROLE_MERKLE_UPDATER()
+            )
         );
+        vm.prank(caller);
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),

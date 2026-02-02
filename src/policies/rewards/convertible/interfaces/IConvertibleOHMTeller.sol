@@ -25,9 +25,6 @@ interface IConvertibleOHMTeller {
         uint256 quoteAmount
     );
 
-    /// @notice Emitted when the reward distributor is set.
-    event RewardDistributorSet(address indexed rewardDistributor);
-
     error Teller_InvalidParams(uint256 index, bytes value);
 
     error Teller_TokenDoesNotExist(bytes32 tokenHash);
@@ -38,10 +35,8 @@ interface IConvertibleOHMTeller {
 
     error Teller_NotEligible(uint48 eligible);
 
-    error Teller_OnlyRewardDistributor();
-
     /// @notice Deploys a new convertible token and returns its address.
-    /// @dev Only callable by the reward distributor.
+    /// @dev Only callable by addresses with the reward distributor role.
     ///      If a convertible token already exists for the parameters, it returns that address.
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
@@ -58,7 +53,7 @@ interface IConvertibleOHMTeller {
     ) external returns (address token);
 
     /// @notice Mints convertible tokens to the `to`.
-    /// @dev Only callable by the reward distributor.
+    /// @dev Only callable by addresses with the reward distributor role.
     /// @param token_ The convertible token to mint.
     /// @param to_ The recipient address.
     /// @param amount_ The amount of tokens to mint.
@@ -76,12 +71,6 @@ interface IConvertibleOHMTeller {
     ///      The absolute minimum is 1 day due to rounding of eligible and expiry timestamps.
     /// @param duration_ The minimum duration in seconds.
     function setMinDuration(uint48 duration_) external;
-
-    /// @notice Sets the address of the reward distributor responsible for deploying new convertible tokens and
-    ///         minting existing convertible tokens to users.
-    /// @dev Only callable by addresses that have the convertible admin role.
-    /// @param rewardDistributor_ The address of the reward distributor.
-    function setRewardDistributor(address rewardDistributor_) external;
 
     /// @notice Calculates the cost to exercise an amount of convertible tokens.
     /// @param token_ The convertible token to exercise.
@@ -123,10 +112,6 @@ interface IConvertibleOHMTeller {
         uint48 expiry_,
         uint256 strikePrice_
     ) external view returns (bytes32 hash);
-
-    /// @notice Returns the address of the reward distributor responsible for deploying new convertible tokens and
-    ///         minting existing convertible tokens to users.
-    function rewardDistributor() external view returns (address);
 
     /// @notice Returns the minimum duration in seconds during which a convertible token must be eligible for exercise.
     function minDuration() external view returns (uint48);

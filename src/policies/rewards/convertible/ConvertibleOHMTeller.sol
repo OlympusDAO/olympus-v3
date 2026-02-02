@@ -36,6 +36,9 @@ contract ConvertibleOHMTeller is
     /// @notice The role for configuration
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
 
+    /// @notice The role for reward distribution (deploying and minting convertible tokens)
+    bytes32 public constant ROLE_REWARD_DISTRIBUTOR = "convertible_distributor";
+
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
 
@@ -51,16 +54,13 @@ contract ConvertibleOHMTeller is
     // ========== STATE VARIABLES ========== //
 
     /// @notice Convertible tokens (hash of parameters to address)
-    mapping(bytes32 token_ => ConvertibleOHMToken) public tokens;
+    mapping(bytes32 token_ => address) public tokens;
 
     /// @notice The minter module for minting OHM
     MINTRv1 public MINTR;
 
     /// @notice The treasury module for receiving quote tokens
     TRSRYv1 public TRSRY;
-
-    /// @inheritdoc IConvertibleOHMTeller
-    address public override rewardDistributor;
 
     /// @inheritdoc IConvertibleOHMTeller
     uint48 public override minDuration;
@@ -126,9 +126,14 @@ contract ConvertibleOHMTeller is
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external override onlyEnabled nonReentrant returns (address) {
-        _requireRewardDistributor();
-
+    )
+        external
+        override
+        onlyEnabled
+        onlyRole(ROLE_REWARD_DISTRIBUTOR)
+        nonReentrant
+        returns (address)
+    {
         // If eligible is zero, use the current timestamp
         if (eligible_ == 0) eligible_ = uint48(block.timestamp);
 
@@ -159,50 +164,7 @@ contract ConvertibleOHMTeller is
             revert Teller_InvalidParams(3, abi.encodePacked(strikePrice_));
 
         // Create the token if one doesn't already exist
-        // Timestamps are truncated above to give canonical version of hash
-        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
-        ConvertibleOHMToken token = tokens[tokenHash];
-
-        // If the token doesn't exist, deploy (clone) it
-        if (address(token) == address(0)) {
-            // Generate name and symbol
-            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(
-                ERC20(quoteToken_),
-                expiry_,
-                strikePrice_
-            );
-
-            // Deploy (clone) the token with immutable args
-            token = ConvertibleOHMToken(
-                TOKEN_IMPLEMENTATION.clone(
-                    abi.encodePacked(
-                        name, // 0x00: bytes32
-                        symbol, // 0x20: bytes32
-                        _OHM_DECIMALS, // 0x40: uint8
-                        quoteToken_, // 0x41: address
-                        eligible_, // 0x55: uint48
-                        expiry_, // 0x5b: uint48
-                        address(this), // 0x61: address
-                        strikePrice_ // 0x75: uint256
-                    )
-                )
-            );
-
-            // Set the domain separator for the token on creation to save gas on permit approvals
-            token.updateDomainSeparator();
-
-            // Store token
-            tokens[tokenHash] = token;
-
-            emit ConvertibleTokenCreated(
-                address(token),
-                quoteToken_,
-                eligible_,
-                expiry_,
-                strikePrice_
-            );
-        }
-        return address(token);
+        return _getOrDeployToken(quoteToken_, eligible_, expiry_, strikePrice_);
     }
 
     // ========== TOKEN MINTING ========== //
@@ -212,8 +174,7 @@ contract ConvertibleOHMTeller is
         address token_,
         address to_,
         uint256 amount_
-    ) external override onlyEnabled nonReentrant {
-        _requireRewardDistributor();
+    ) external override onlyEnabled onlyRole(ROLE_REWARD_DISTRIBUTOR) nonReentrant {
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
         (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
@@ -284,12 +245,12 @@ contract ConvertibleOHMTeller is
 
         // Calculate a hash from the normalized inputs
         bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
-        ConvertibleOHMToken token = tokens[tokenHash];
+        address token = tokens[tokenHash];
 
         // Revert if the convertible token does not exist
-        if (address(token) == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
+        if (token == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
 
-        return address(token);
+        return token;
     }
 
     /// @inheritdoc IConvertibleOHMTeller
@@ -305,8 +266,48 @@ contract ConvertibleOHMTeller is
 
     // ========== INTERNAL FUNCTIONS ========== //
 
-    function _requireRewardDistributor() internal view {
-        if (msg.sender != address(rewardDistributor)) revert Teller_OnlyRewardDistributor();
+    function _getOrDeployToken(
+        address quoteToken_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) private returns (address) {
+        // Warning. The timestamps should be truncated above to give canonical version of hash
+        bytes32 tokenHash = _getTokenHash(ERC20(quoteToken_), eligible_, expiry_, strikePrice_);
+        address token = tokens[tokenHash];
+
+        // If the token doesn't exist, deploy (clone) it
+        if (address(token) == address(0)) {
+            // Generate name and symbol
+            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(
+                ERC20(quoteToken_),
+                expiry_,
+                strikePrice_
+            );
+
+            // Deploy (clone) the token with immutable args
+            token = TOKEN_IMPLEMENTATION.clone(
+                abi.encodePacked(
+                    name, // 0x00: bytes32
+                    symbol, // 0x20: bytes32
+                    _OHM_DECIMALS, // 0x40: uint8
+                    quoteToken_, // 0x41: address
+                    eligible_, // 0x55: uint48
+                    expiry_, // 0x5b: uint48
+                    address(this), // 0x61: address
+                    strikePrice_ // 0x75: uint256
+                )
+            );
+
+            // Set the domain separator for the token on creation to save gas on permit approvals
+            ConvertibleOHMToken(token).updateDomainSeparator();
+
+            // Store token
+            tokens[tokenHash] = token;
+
+            emit ConvertibleTokenCreated(token, quoteToken_, eligible_, expiry_, strikePrice_);
+        }
+        return token;
     }
 
     function _requireExistingToken(
@@ -542,15 +543,6 @@ contract ConvertibleOHMTeller is
     }
 
     // ========== ADMIN CONFIG ========== //
-
-    /// @inheritdoc IConvertibleOHMTeller
-    function setRewardDistributor(
-        address rewardDistributor_
-    ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {
-        _requireNonzeroAddress(0, rewardDistributor_);
-        rewardDistributor = rewardDistributor_;
-        emit RewardDistributorSet(rewardDistributor_);
-    }
 
     /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(

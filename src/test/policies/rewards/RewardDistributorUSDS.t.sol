@@ -30,8 +30,6 @@ contract RewardDistributorUSDSTest is Test {
     address internal bob = address(0x2);
     address internal admin = address(0x3);
 
-    bytes32 internal constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
-
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021
         startTimestamp = uint40(block.timestamp);
@@ -81,7 +79,7 @@ contract RewardDistributorUSDSTest is Test {
         trsry.increaseWithdrawApproval(address(distributor), sUSDS, type(uint256).max);
 
         // Setup roles
-        roles.saveRole(ROLE_MERKLE_UPDATER, admin);
+        roles.saveRole(distributor.ROLE_MERKLE_UPDATER(), admin);
         roles.saveRole(ADMIN_ROLE, address(this));
 
         // Enable distributor
@@ -210,10 +208,13 @@ contract RewardDistributorUSDSTest is Test {
 
         uint40 epochEndDate = _firstEpochEndDate();
 
-        vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_MERKLE_UPDATER)
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                distributor.ROLE_MERKLE_UPDATER()
+            )
         );
+        vm.prank(caller);
         distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
     }
 
