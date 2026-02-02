@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
@@ -19,7 +20,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///      - Provides internal building blocks for epoch and merkle management.
 ///      - Derived contracts define their own public API.
 ///      - No assumptions about reward token type.
-abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistributor {
+abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistributor, IVersioned {
     // ========== CONSTANTS & IMMUTABLES ========== //
 
     /// @notice Role that can update merkle roots
@@ -265,6 +266,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     ) public view virtual override(PolicyEnabler, IERC165) returns (bool) {
         return
             interfaceId == type(IRewardDistributor).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }

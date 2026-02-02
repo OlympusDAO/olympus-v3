@@ -8,6 +8,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
 import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
@@ -24,6 +25,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 contract ConvertibleOHMTeller is
     IConvertibleOHMTeller,
+    IVersioned,
     Policy,
     PolicyEnabler,
     ReentrancyGuardTransient
@@ -226,18 +228,16 @@ contract ConvertibleOHMTeller is
         // Calculate amount of quote tokens equivalent to amount at price
         uint256 quoteAmount = amount_.mulDivUp(price, _OHM_PRECISION);
 
-        // Transfer in quote tokens equivalent to the amount of convertible tokens being exercised * price
-        // Transfer proceeds from user
-        // Check balances before and after transfer to ensure that the correct amount was transferred
-        // @audit this does enable potential malicious convertible tokens that can't be exercised
-        // However, we view it as a "buyer beware" situation that can handled on the front-end
-        IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
-
         // Burn convertible tokens
         token.burnFrom(msg.sender, amount_);
 
         // Mint OHM to user
         MINTR.mintOhm(msg.sender, amount_);
+
+        // Transfer quote tokens from user
+        // @audit this does enable potential malicious convertible tokens that can't be exercised
+        // However, we view it as a "buyer beware" situation that can handled on the front-end
+        IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
 
         emit ConvertibleTokenExercised(address(token), msg.sender, amount_, quoteAmount);
     }
@@ -567,5 +567,17 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminRole {
         _setMintCap(cap_);
+    }
+
+    // ========== IERC165 ========== //
+
+    /// @inheritdoc PolicyEnabler
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(PolicyEnabler) returns (bool) {
+        return
+            interfaceId == type(IConvertibleOHMTeller).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }
