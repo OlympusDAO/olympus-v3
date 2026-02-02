@@ -12,8 +12,6 @@ import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
-import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -29,7 +27,6 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
@@ -39,7 +36,9 @@ contract OlympusPricev1_2ForkTest is Test {
     using FullMath for uint256;
 
     // Constants
-    uint256 internal constant FORK_BLOCK = 23831097 + 1;
+    /// @dev Fork block after CD deployment, specified so that YRF and EM are at particular epochs
+    /// @dev YRF epoch 4, EM epoch 1
+    uint256 internal constant FORK_BLOCK = 24330812 + 1;
     address public constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
     address public constant KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
     address public constant HEART = 0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB;
@@ -49,8 +48,6 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CONVERTIBLE_DEPOSIT_AUCTIONEER =
         0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
-    address public constant CONVERTIBLE_DEPOSIT_ACTIVATOR =
-        0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public constant PYTH = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6;
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
@@ -88,7 +85,6 @@ contract OlympusPricev1_2ForkTest is Test {
     );
 
     function setUp() public {
-        // Fork mainnet at block 23831097
         vm.createSelectFork("mainnet", FORK_BLOCK);
 
         // Get system contracts
@@ -97,53 +93,16 @@ contract OlympusPricev1_2ForkTest is Test {
         oldPrice = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
         rolesAdmin = RolesAdmin(ROLES_ADMIN);
 
-        // Enable the Heart, EmissionManager and YRF
-        // This would be done by the ConvertibleDepositProposal
-        vm.startPrank(TIMELOCK);
-        {
-            // Revoke heart from old Heart policy (v1.6)
-            address OLD_HEART = 0xf7602C0421c283A2fc113172EBDf64C30F21654D;
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            rolesAdmin.revokeRole(bytes32("heart"), OLD_HEART);
-
-            // Disable the old Heart policy
-            IHeart_v1_6(OLD_HEART).deactivate();
-
-            // Disable the old EmissionManager policy
-            address OLD_EMISSION_MANAGER = 0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2;
-            IEmissionManager_v1_1(OLD_EMISSION_MANAGER).shutdown();
-        }
-
-        // Grant cd_emissionmanager role to EmissionManager
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("cd_emissionmanager"), EMISSION_MANAGER);
-
-        // Grant heart role to Heart contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("heart"), HEART);
-
-        // Grant admin role to ConvertibleDepositActivator contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("admin"), CONVERTIBLE_DEPOSIT_ACTIVATOR);
-
-        // Run the activator contract
-        ConvertibleDepositActivator(CONVERTIBLE_DEPOSIT_ACTIVATOR).activate();
-
-        // Revoke admin role from ConvertibleDepositActivator contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.revokeRole(bytes32("admin"), CONVERTIBLE_DEPOSIT_ACTIVATOR);
-        vm.stopPrank();
-
         // Get Heart, EmissionManager, YRF
         heart = OlympusHeart(HEART);
         emissionManager = EmissionManager(EMISSION_MANAGER);
         cdAuctioneer = ConvertibleDepositAuctioneer(CONVERTIBLE_DEPOSIT_AUCTIONEER);
         yrf = YieldRepurchaseFacility(YIELD_REPO);
 
-        // Approve the EmissionManager as callback on BondFixedTermAuctioneer
-        vm.startPrank(0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969);
-        emissionManager.bondAuctioneer().setCallbackAuthStatus(EMISSION_MANAGER, true);
-        vm.stopPrank();
+        // Ensure that the EmissionManager's bond market capacity scalar is set to 1e18 (100%)
+        // This is disabled (0) at the time of the fork
+        vm.prank(TIMELOCK);
+        emissionManager.setBondMarketCapacityScalar(1e18);
 
         // Get observation frequency from old PRICE module
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
@@ -180,6 +139,7 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.stopPrank();
 
         // Install submodules (requires admin or price_admin role)
+        // We assume that the DAO MS has the price_admin role
         vm.startPrank(DAO_MS);
         priceConfig.installSubmodule(address(chainlinkPrice));
         priceConfig.installSubmodule(address(pythPrice));
@@ -368,8 +328,6 @@ contract OlympusPricev1_2ForkTest is Test {
         public
         givenOhmPrice(24e8) // Above 50% premium
         warpToNextHeartbeat
-        beat // Epoch 1
-        warpToNextHeartbeat
         beat // Epoch 2
         givenOhmPrice(17e8) // Below 50% premium
         warpToNextHeartbeat
@@ -413,8 +371,6 @@ contract OlympusPricev1_2ForkTest is Test {
         givenBondMarketCapacityScalar(1e18)
         givenOhmPrice(24e8)
         warpToNextHeartbeat
-        beat // Epoch 1
-        warpToNextHeartbeat
         beat // Epoch 2
         givenOhmPrice(24e8)
         warpToNextHeartbeat
@@ -427,7 +383,7 @@ contract OlympusPricev1_2ForkTest is Test {
         warpToNextHeartbeat
     {
         uint256 expectedInitialPrice = 24e36; // Bond market scaling
-        uint256 expectedMarketId = 625 + 1;
+        uint256 expectedMarketId = 695 + 1;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -467,7 +423,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // = 42955326460481099
         // Adjusted by 1e17 for bond market scaling
         uint256 expectedInitialPrice = 42955326460481099 * 1e17;
-        uint256 expectedMarketId = 623 + 1;
+        uint256 expectedMarketId = 693 + 1;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
