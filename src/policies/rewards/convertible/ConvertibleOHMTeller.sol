@@ -181,7 +181,7 @@ contract ConvertibleOHMTeller is
             revert Teller_InvalidParams(3, abi.encodePacked(strikePrice_));
 
         // Create the token if one doesn't already exist
-        return _getOrDeployToken(quoteToken_, eligible_, expiry_, strikePrice_);
+        return _getOrDeployToken(quoteToken_, msg.sender, eligible_, expiry_, strikePrice_);
     }
 
     // ========== TOKEN MINTING ========== //
@@ -194,8 +194,12 @@ contract ConvertibleOHMTeller is
     ) external override onlyEnabled onlyRole(ROLE_REWARD_DISTRIBUTOR) nonReentrant {
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
-        (ConvertibleOHMToken token, , , uint48 expiry, ) = _requireExistingToken(token_);
+        (ConvertibleOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
+            token_
+        );
         if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
+        // Only the creator (RewardDistributor) that deployed this token can mint more
+        if (msg.sender != creator) revert Teller_NotTokenCreator(msg.sender, creator);
 
         token.mintFor(to_, amount_);
         emit ConvertibleTokenMinted(token_, to_, amount_);
@@ -209,6 +213,7 @@ contract ConvertibleOHMTeller is
         (
             ConvertibleOHMToken token,
             address quoteToken,
+            ,
             uint48 eligible,
             uint48 expiry,
             uint256 price
@@ -245,7 +250,7 @@ contract ConvertibleOHMTeller is
         uint256 amount_
     ) external view override returns (address, uint256) {
         _requireNonzeroAmount(1, amount_);
-        (, address quoteToken, , , uint256 strikePrice) = _requireExistingToken(token_);
+        (, address quoteToken, , , , uint256 strikePrice) = _requireExistingToken(token_);
 
         // Calculate and return the amount of quote tokens required to exercise
         return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
@@ -259,17 +264,19 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     function getTokenHash(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
     ) external pure override returns (bytes32) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
-        return _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        return _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
     }
 
     /// @inheritdoc IConvertibleOHMTeller
     function getToken(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
@@ -277,7 +284,7 @@ contract ConvertibleOHMTeller is
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Calculate a hash from the normalized inputs
-        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
         address token = tokens[tokenHash];
 
         // Revert if the convertible token does not exist
@@ -304,50 +311,68 @@ contract ConvertibleOHMTeller is
 
     function _getOrDeployToken(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
     ) private returns (address) {
         // Warning. The timestamps should be truncated above to give canonical version of hash
-        bytes32 tokenHash = _getTokenHash(quoteToken_, eligible_, expiry_, strikePrice_);
+        bytes32 tokenHash = _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
         address token = tokens[tokenHash];
 
         // If the token doesn't exist, deploy (clone) it
         if (address(token) == address(0)) {
-            // Generate name and symbol
-            (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
-
-            // Deploy (clone) the token with immutable args
-            token = TOKEN_IMPLEMENTATION.clone(
-                abi.encodePacked(
-                    name, // 0x00: bytes32
-                    symbol, // 0x20: bytes32
-                    _OHM_DECIMALS, // 0x40: uint8
-                    quoteToken_, // 0x41: address
-                    eligible_, // 0x55: uint48
-                    expiry_, // 0x5b: uint48
-                    address(this), // 0x61: address
-                    strikePrice_ // 0x75: uint256
-                )
-            );
-
-            // Set the domain separator for the token on creation to save gas on permit approvals
-            ConvertibleOHMToken(token).updateDomainSeparator();
-
-            // Store token
+            token = _deployToken(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
             tokens[tokenHash] = token;
-
-            emit ConvertibleTokenCreated(token, quoteToken_, eligible_, expiry_, strikePrice_);
+            emit ConvertibleTokenCreated(
+                token,
+                quoteToken_,
+                creator_,
+                eligible_,
+                expiry_,
+                strikePrice_
+            );
         }
         return token;
     }
 
+    function _deployToken(
+        address quoteToken_,
+        address creator_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) private returns (address token) {
+        // Generate name and symbol
+        (bytes32 name, bytes32 symbol) = _getNameAndSymbol(quoteToken_, expiry_, strikePrice_);
+
+        // Build immutable args for cloning
+        bytes memory immutableArgs = abi.encodePacked(
+            name, // 0x00: bytes32
+            symbol, // 0x20: bytes32
+            _OHM_DECIMALS, // 0x40: uint8
+            quoteToken_, // 0x41: address
+            eligible_, // 0x55: uint48
+            expiry_, // 0x5b: uint48
+            address(this), // 0x61: address
+            creator_, // 0x75: address
+            strikePrice_ // 0x89: uint256
+        );
+
+        // Deploy (clone) the token with immutable args
+        token = TOKEN_IMPLEMENTATION.clone(immutableArgs);
+
+        // Set the domain separator for the token on creation to save gas on permit approvals
+        ConvertibleOHMToken(token).updateDomainSeparator();
+    }
+
     function _requireExistingToken(
         address token_
-    ) internal view returns (ConvertibleOHMToken, address, uint48, uint48, uint256) {
+    ) internal view returns (ConvertibleOHMToken, address, address, uint48, uint48, uint256) {
         // Load token parameters
         (
             address quoteToken,
+            address creator,
             uint48 eligible,
             uint48 expiry,
             uint256 strikePrice
@@ -356,13 +381,13 @@ contract ConvertibleOHMTeller is
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist
         ConvertibleOHMToken token = ConvertibleOHMToken(
-            getToken(quoteToken, eligible, expiry, strikePrice)
+            getToken(quoteToken, creator, eligible, expiry, strikePrice)
         );
 
         // Revert if provided token address does not match stored token address
         if (token_ != address(token)) revert Teller_UnsupportedToken(token_);
 
-        return (token, quoteToken, eligible, expiry, strikePrice);
+        return (token, quoteToken, creator, eligible, expiry, strikePrice);
     }
 
     // TODO: optimize this algorithm and packing.
@@ -498,11 +523,12 @@ contract ConvertibleOHMTeller is
 
     function _getTokenHash(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(quoteToken_, eligible_, expiry_, strikePrice_));
+        return keccak256(abi.encodePacked(quoteToken_, creator_, eligible_, expiry_, strikePrice_));
     }
 
     // Truncates the timestamp to the nearest day at 0000 UTC (in seconds).

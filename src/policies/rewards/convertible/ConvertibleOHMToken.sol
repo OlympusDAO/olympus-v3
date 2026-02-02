@@ -17,7 +17,7 @@ import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20
 ///      Exercise is permitted any time between the eligible timestamp and the expiry timestamp.
 ///
 ///      Each token instance has immutable parameters.
-///      Memory layout of immutable args (total: 149 bytes / 0x95):
+///      Memory layout of immutable args (total: 169 bytes / 0xA9):
 ///      [0x00:0x20]  name (bytes32)
 ///      [0x20:0x40]  symbol (bytes32)
 ///      [0x40:0x41]  decimals (uint8)
@@ -25,7 +25,8 @@ import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20
 ///      [0x55:0x5b]  eligible (uint48)
 ///      [0x5b:0x61]  expiry (uint48)
 ///      [0x61:0x75]  teller (address)
-///      [0x75:0x95]  strikePrice (uint256)
+///      [0x75:0x89]  creator (address)
+///      [0x89:0xA9]  strikePrice (uint256)
 contract ConvertibleOHMToken is CloneERC20 {
     // ========== ERRORS ========== //
 
@@ -40,13 +41,14 @@ contract ConvertibleOHMToken is CloneERC20 {
     uint8 private constant _ELIGIBLE_TIMESTAMP_OFFSET = 0x55;
     uint8 private constant _EXPIRATION_TIMESTAMP_OFFSET = 0x5b;
     uint8 private constant _TELLER_OFFSET = 0x61;
-    uint8 private constant _STRIKE_PRICE_OFFSET = 0x75;
+    uint8 private constant _CREATOR_OFFSET = 0x75;
+    uint8 private constant _STRIKE_PRICE_OFFSET = 0x89;
 
     // ========== VIEW FUNCTIONS FOR IMMUTABLE PARAMETERS ========== //
 
-    /// @notice Returns the token parameters: quote token, eligible timestamp, expiration timestamp, strike price.
-    function parameters() external pure returns (address, uint48, uint48, uint256) {
-        return (quote(), eligible(), expiry(), strike());
+    /// @notice Returns the token parameters: quote token, creator, eligible timestamp, expiration timestamp, strike price.
+    function parameters() external pure returns (address, address, uint48, uint48, uint256) {
+        return (quote(), creator(), eligible(), expiry(), strike());
     }
 
     /// @notice Returns the address of the quote token that this convertible token is quoted in.
@@ -67,6 +69,11 @@ contract ConvertibleOHMToken is CloneERC20 {
     /// @notice Returns the address of the Convertible OHM Teller that created this convertible token.
     function teller() public pure returns (address) {
         return _getArgAddress(_TELLER_OFFSET);
+    }
+
+    /// @notice Returns the address of the contract that deployed this convertible token.
+    function creator() public pure returns (address) {
+        return _getArgAddress(_CREATOR_OFFSET);
     }
 
     /// @notice Returns the strike price specified in the amount of quote tokens per OHM.

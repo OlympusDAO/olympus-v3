@@ -9,8 +9,9 @@ interface IConvertibleOHMTeller {
     event ConvertibleTokenCreated(
         address indexed token,
         address indexed quoteToken,
+        address indexed creator,
         uint48 eligible,
-        uint48 indexed expiry,
+        uint48 expiry,
         uint256 strikePrice
     );
 
@@ -33,6 +34,8 @@ interface IConvertibleOHMTeller {
     error Teller_TokenDoesNotExist(bytes32 tokenHash);
 
     error Teller_UnsupportedToken(address token);
+
+    error Teller_NotTokenCreator(address caller, address creator);
 
     error Teller_TokenExpired(uint48 expiry);
 
@@ -97,6 +100,7 @@ interface IConvertibleOHMTeller {
     /// @notice Returns the address of a convertible token corresponding to specified parameters,
     ///         reverts if no token exists.
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
+    /// @param creator_ The address of the contract that deployed the convertible token.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
     ///        (rounded to the nearest day in UTC).
     /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
@@ -105,6 +109,7 @@ interface IConvertibleOHMTeller {
     /// @return token The address of the convertible token.
     function getToken(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
@@ -112,6 +117,7 @@ interface IConvertibleOHMTeller {
 
     /// @notice Returns the hash ID of a convertible token corresponding to specified parameters.
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
+    /// @param creator_ The address of the contract that deployed the convertible token.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
     ///        (rounded to the nearest day in UTC).
     /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
@@ -120,10 +126,11 @@ interface IConvertibleOHMTeller {
     /// @return hash The hash ID of the convertible token.
     function getTokenHash(
         address quoteToken_,
+        address creator_,
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) external view returns (bytes32 hash);
+    ) external pure returns (bytes32 hash);
 
     /// @notice Returns the minimum duration in seconds during which a convertible token must be eligible for exercise.
     function minDuration() external view returns (uint48);
