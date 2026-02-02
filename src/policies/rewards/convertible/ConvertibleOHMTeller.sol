@@ -2,7 +2,16 @@
 pragma solidity >=0.8.30;
 
 // Based on Bond Protocol's `FixedStrikeOptionTeller`:
-// `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
+// https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol
+//
+// Key changes from the original:
+// - Integrated into the Olympus Kernel-Module-Policy framework with role-based access control.
+// - Simplified to OHM-only call options: removed payoutToken, receiver, and call/put parameters.
+// - Minting via MINTR module on exercise (no pre-deposited collateral); quote tokens sent to TRSRY.
+// - Only the deploying RewardDistributor (creator) can mint tokens via create().
+// - Removed reclaim(), protocol fees, and collateral tracking.
+// - Added mint cap management via MINTR approval.
+// - Token naming uses decimal notation (e.g., "15.50") with "cOHM-" prefix.
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
