@@ -2,8 +2,8 @@
 pragma solidity >=0.8.30;
 
 import {Test} from "forge-std/Test.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions, toKeycode, Keycode} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
