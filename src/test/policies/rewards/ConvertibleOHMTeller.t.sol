@@ -189,6 +189,22 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         assertEq(token.strike(), STRIKE_PRICE, "The strike price should match");
         assertEq(token.teller(), address(teller), "The teller should match the teller contract");
         assertEq(address(token.quote()), address(usds), "The quote token should match");
+        assertEq(
+            keccak256(bytes(token.name())),
+            keccak256(abi.encodePacked(bytes32("OHM/USDS 1.500e+1 19700630"))),
+            "The name should match"
+        );
+        assertEq(
+            keccak256(bytes(token.symbol())),
+            keccak256(abi.encodePacked(bytes32("cOHM-19700630"))),
+            "The symbol should match"
+        );
+        assertEq(
+            teller.tokens(_calcTokenHash(eligibleTimestamp, expiryTimestamp)),
+            address(token),
+            "The token should be stored in the mapping"
+        );
+        assertEq(token.chainId(), block.chainid, "The chainId should match");
     }
 
     function test_deploy_createsTokenWithZeroEligibleUsingCurrentTimestamp() external {
