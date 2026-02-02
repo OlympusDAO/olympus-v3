@@ -5,6 +5,8 @@ pragma solidity >=0.8.30;
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionTeller.sol`
 
 import {FullMath} from "src/libraries/FullMath.sol";
+import {Timestamp} from "src/libraries/Timestamp.sol";
+import {uint2str} from "src/libraries/Uint2Str.sol";
 import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {ClonesWithImmutableArgs} from "src/policies/rewards/convertible/lib/clones/ClonesWithImmutableArgs.sol";
 import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
@@ -385,33 +387,8 @@ contract ConvertibleOHMTeller is
         // To ensure uniqueness, the convertible token address and hash identifier should be used.
 
         // Get the date format from the expiry timestamp.
-        // Convert a number of days into a human-readable date, courtesy of BokkyPooBah.
-        // Source: https://github.com/bokkypoobah/BokkyPooBahsDateTimeLibrary/blob/master/contracts/BokkyPooBahsDateTimeLibrary.sol
-        string memory yearStr;
-        string memory monthStr;
-        string memory dayStr;
-        {
-            int256 __days = int256(expiry_ / 1 days);
-
-            int256 num1 = __days + 68569 + 2440588; // 2440588 = OFFSET19700101
-            int256 num2 = (4 * num1) / 146097;
-            num1 = num1 - (146097 * num2 + 3) / 4;
-            int256 _year = (4000 * (num1 + 1)) / 1461001;
-            num1 = num1 - (1461 * _year) / 4 + 31;
-            int256 _month = (80 * num1) / 2447;
-            int256 _day = num1 - (2447 * _month) / 80;
-            num1 = _month / 11;
-            _month = _month + 2 - 12 * num1;
-            _year = 100 * (num2 - 49) + _year + num1;
-
-            yearStr = _uint2str(uint256(_year) % 10000);
-            monthStr = uint256(_month) < 10
-                ? string(abi.encodePacked("0", _uint2str(uint256(_month))))
-                : _uint2str(uint256(_month));
-            dayStr = uint256(_day) < 10
-                ? string(abi.encodePacked("0", _uint2str(uint256(_day))))
-                : _uint2str(uint256(_day));
-        }
+        (string memory yearStr, string memory monthStr, string memory dayStr) = Timestamp
+            .toPaddedString(uint48(expiry_));
 
         // Format token symbols
         // Symbols longer than 5 characters are truncated, min length would be 1 if tokens have no symbols,
@@ -498,16 +475,16 @@ contract ConvertibleOHMTeller is
         bytes memory decStr;
         if (priceDecimals < 0) {
             uint256 decimals = uint256(uint8(-priceDecimals));
-            decStr = bytes.concat("e-", bytes(_uint2str(decimals)));
+            decStr = bytes.concat("e-", bytes(uint2str(decimals)));
         } else {
             uint256 decimals = uint256(uint8(priceDecimals));
-            decStr = bytes.concat("e+", bytes(_uint2str(decimals)));
+            decStr = bytes.concat("e+", bytes(uint2str(decimals)));
         }
 
         // 3. Get a string of the leading digits with decimal point
         uint8 priceMagnitude = uint8(int8(tokenDecimals_) + priceDecimals);
         uint256 digits = price_ / (10 ** (priceMagnitude < 3 ? 0 : priceMagnitude - 3));
-        bytes memory digitStr = bytes(_uint2str(digits));
+        bytes memory digitStr = bytes(uint2str(digits));
         uint256 len = bytes(digitStr).length;
         bytes memory leadingStr = bytes.concat(digitStr[0], ".");
         for (uint256 i = 1; i < len; ++i) {
@@ -517,31 +494,6 @@ contract ConvertibleOHMTeller is
         // 4. Combine and return
         // The bytes string should be at most 9 bytes (e.g. 1.056e-10)
         return bytes.concat(leadingStr, decStr);
-    }
-
-    // Some fancy math to convert a uint into a string, courtesy of Provable Things.
-    // Updated to work with solc 0.8.0.
-    // https://github.com/provable-things/ethereum-api/blob/master/provableAPI_0.6.sol
-    function _uint2str(uint256 _i) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        }
-        uint256 j = _i;
-        uint256 len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint256 k = len;
-        while (_i != 0) {
-            k = k - 1;
-            uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
     }
 
     function _getTokenHash(
