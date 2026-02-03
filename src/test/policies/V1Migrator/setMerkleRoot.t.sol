@@ -44,10 +44,13 @@ contract V1MigratorSetMerkleRootTest is V1MigratorTest {
     }
 
     // given caller has legacy_migration_admin or admin role
-    //  when the merkle root is any bytes32 value
+    //  when the merkle root is any bytes32 value except current
     //   [X] it sets the merkle root
 
     function test_fuzz(bytes32 newRoot_) public {
+        // Exclude current root (would revert with SameMerkleRoot)
+        vm.assume(newRoot_ != migrator.merkleRoot());
+
         // Call function
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot_);
