@@ -173,17 +173,6 @@ contract V1MigratorTest is StdInvariant, Test {
         }
     }
 
-    /// @dev Refresh the merkle tree with the same allocations (simulates root update)
-    /// @dev    Use _refreshMerkleTreeWithDifferentAllocations() for tests that need
-    ///         a different root after the SameMerkleRoot guard was added
-    function _refreshMerkleTree() internal {
-        _generateMerkleTree();
-
-        // Update the contract's merkle root
-        vm.prank(legacyMigrationAdmin);
-        migrator.setMerkleRoot(merkleRoot);
-    }
-
     /// @dev Refresh the merkle tree with modified allocations to produce a different root
     /// @dev    This is needed after SameMerkleRoot guard prevents setting identical roots.
     ///         Bob's allowance is modified while Alice's stays the same to keep tests working.
@@ -319,12 +308,6 @@ contract V1MigratorTest is StdInvariant, Test {
         bytes32 newRoot = bytes32(uint256(1));
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot);
-        _;
-    }
-
-    /// @dev Modifier to set state where the merkle root has been updated to same allocations (refreshes tree)
-    modifier givenMerkleRootRefreshed() {
-        _refreshMerkleTree();
         _;
     }
 
