@@ -328,8 +328,9 @@ contract MigrationProposalTest is ProposalTest {
     ///      Attempts to transfer OHMv2 to timelock if source has balance. Regardless,
     ///      validation should pass because timelock OHMv2 balance is no longer checked.
     function test_validate_passesWhenTimelockHasOHMv2() public {
-        // Try to transfer OHMv2 to timelock from a holder (may have 0 balance after proposal)
-        address ohmv2Holder = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
+        // Try to transfer OHMv2 to timelock from an external holder (simulates griefer)
+        // Using a known OHM/DAI Uniswap V3 pool address that holds OHMv2
+        address ohmv2Holder = 0x905dfCd5649343956c564A899Bbc391C767DCe34;
         uint256 balanceBefore = IERC20(address(OHMv2)).balanceOf(ohmv2Holder);
         if (balanceBefore > 1e18) {
             vm.prank(ohmv2Holder);
