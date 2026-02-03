@@ -212,38 +212,28 @@ contract MigrationProposal is GovernorBravoProposal {
             "MigrationProposalHelper should not have burner_admin role"
         );
 
-        // 5. Validate that there is no gOHM left in the Timelock or the MigrationProposalHelper contract
-        address timelock = addresses.getAddress("olympus-timelock");
-        require(
-            IERC20(GOHM).balanceOf(timelock) == 0,
-            "There should be no gOHM left in the Timelock"
-        );
+        // 5. Validate that there is no gOHM, OHMv2, or OHMv1 left in the MigrationProposalHelper contract
+        // Note: Timelock balance checks are intentionally omitted to prevent griefing. An attacker could
+        // donate 1 wei of these tokens to the timelock address while the proposal is queued, causing
+        // validation to fail when the proposal executes. These tokens could also legitimately exist
+        // in the timelock for unrelated reasons (they're not migration-specific). The helper contract
+        // is responsible for burning all migration-related tokens it receives during activation.
         require(
             IERC20(GOHM).balanceOf(address(_migrationProposalHelper)) == 0,
             "There should be no gOHM left in the MigrationProposalHelper contract"
         );
-
-        // 6. Validate that there is no OHMv2 left in the Timelock or the MigrationProposalHelper contract
-        require(
-            IERC20(OHMv2).balanceOf(timelock) == 0,
-            "There should be no OHMv2 left in the Timelock"
-        );
         require(
             IERC20(OHMv2).balanceOf(address(_migrationProposalHelper)) == 0,
             "There should be no OHMv2 left in the MigrationProposalHelper contract"
-        );
-
-        // 7. Validate that there is no OHMv1 left in the Timelock or the MigrationProposalHelper contract
-        require(
-            IERC20(OHMv1).balanceOf(timelock) == 0,
-            "There should be no OHMv1 left in the Timelock"
         );
         require(
             IERC20(OHMv1).balanceOf(address(_migrationProposalHelper)) == 0,
             "There should be no OHMv1 left in the MigrationProposalHelper contract"
         );
 
-        // 7. Validate that there is no tempOHM left in the Timelock or the MigrationProposalHelper contract
+        // 6. Validate that there is no tempOHM left in the Timelock or the MigrationProposalHelper contract
+        // tempOHM is migration-specific and should be zero in both places
+        address timelock = addresses.getAddress("olympus-timelock");
         require(
             IERC20(tempOHM).balanceOf(timelock) == 0,
             "There should be no tempOHM left in the Timelock"
@@ -253,7 +243,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no tempOHM left in the MigrationProposalHelper contract"
         );
 
-        // 8. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
+        // 7. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
         require(
             IERC20(tempOHM).allowance(address(timelock), address(_migrationProposalHelper)) == 0,
             "There should be no dangling approval for tempOHM to be spent by the MigrationProposalHelper"
