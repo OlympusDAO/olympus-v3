@@ -309,9 +309,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     ///         This resets all previous migrations without needing to iterate over users.
     ///         The new merkle tree should reflect the amount each user can migrate going
     ///         forward (i.e., their current OHM v1 balance).
-    function setMerkleRoot(
-        bytes32 merkleRoot_
-    ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+    function setMerkleRoot(bytes32 merkleRoot_) external onlyAdminOrLegacyMigrationAdmin {
         // Guard against setting the same root (would reset nonce and allow re-migration)
         if (merkleRoot_ == merkleRoot) revert SameMerkleRoot();
 
@@ -324,7 +322,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     }
 
     /// @inheritdoc IV1Migrator
-    function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
+    function setMigrationCap(uint256 cap_) external onlyAdminRole {
         _setMigrationCap(cap_);
     }
 }

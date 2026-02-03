@@ -24,15 +24,15 @@ contract V1MigratorSetMigrationCapTest is V1MigratorTest {
     // ========== SET MIGRATION CAP TESTS ========== //
 
     //  given contract is disabled
-    //   [X] it reverts
+    //   [X] admin can still set migration cap
 
-    function test_givenDisabled_reverts() public givenContractDisabled {
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-
-        // Call function
+    function test_givenDisabled_succeeds() public givenContractDisabled {
+        // Call function - should succeed even when disabled
         vm.prank(adminUser);
         migrator.setMigrationCap(NEW_CAP);
+
+        // Assert state
+        assertEq(migrator.remainingMintApproval(), NEW_CAP, "Migration cap should be updated");
     }
 
     // given caller does not have admin role

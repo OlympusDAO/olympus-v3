@@ -13,17 +13,17 @@ contract V1MigratorSetMerkleRootTest is V1MigratorTest {
     // ========== SET MERKLE ROOT TESTS ========== //
 
     // given the contract is disabled
-    //  [X] it reverts
+    //  [X] admin can still set merkle root
 
-    function test_givenDisabled_reverts() public givenContractDisabled {
+    function test_givenDisabled_succeeds() public givenContractDisabled {
         bytes32 newRoot = bytes32(uint256(1));
 
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-
-        // Call function
+        // Call function - should succeed even when disabled
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot);
+
+        // Assert state
+        assertEq(migrator.merkleRoot(), newRoot, "Merkle root should be updated");
     }
 
     // given caller does not have legacy_migration_admin or admin role
