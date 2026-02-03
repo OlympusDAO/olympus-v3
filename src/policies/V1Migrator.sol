@@ -14,6 +14,8 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 // ============  LIBRARIES ============ //
 
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // ============  EXTERNAL CONTRACTS ============ //
 
@@ -47,6 +49,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - enable/disable: Emergency pause/resume
 contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migrator {
     using MerkleProof for bytes32[];
+    using SafeTransferLib for ERC20;
 
     // =========  CONSTANTS ========= //
 
@@ -338,6 +341,18 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     /// @inheritdoc IV1Migrator
     function setMigrationCap(uint256 cap_) external onlyAdminRole {
         _setMigrationCap(cap_);
+    }
+
+    /// @inheritdoc IV1Migrator
+    /// @dev    Only callable by admin or legacy migration admin. Sweeps entire balance to caller.
+    function rescue(IERC20 token_) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+        if (address(token_) == address(0)) revert ZeroAddress();
+
+        uint256 balance = token_.balanceOf(address(this));
+        if (balance == 0) revert ZeroAmount();
+
+        ERC20(address(token_)).safeTransfer(msg.sender, balance);
+        emit Rescued(address(token_), msg.sender, balance);
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
