@@ -312,6 +312,9 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     function setMerkleRoot(
         bytes32 merkleRoot_
     ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+        // Guard against setting the same root (would reset nonce and allow re-migration)
+        if (merkleRoot_ == merkleRoot) revert SameMerkleRoot();
+
         // Increment nonce to reset all previous migrations
         _currentMerkleNonce++;
 

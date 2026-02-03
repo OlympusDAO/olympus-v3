@@ -57,6 +57,9 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @notice Thrown when an address parameter is zero
     error ZeroAddress();
 
+    /// @notice Thrown when attempting to set the same merkle root that is already set
+    error SameMerkleRoot();
+
     // ============ STATE VARIABLES ============ //
 
     /// @notice The OHM v1 token contract
