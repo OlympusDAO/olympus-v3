@@ -563,8 +563,8 @@ contract V1MigratorMigrateTest is V1MigratorTest {
             "Alice should have migrated partial amount"
         );
 
-        // Refresh the merkle tree (same allocations, new root/proofs)
-        _refreshMerkleTree();
+        // Refresh the merkle tree with modified allocation to produce different root
+        _refreshMerkleTreeWithDifferentAllocations();
 
         // Verify reset
         assertEq(migrator.migratedAmounts(alice), 0, "Alice should be reset after root change");
