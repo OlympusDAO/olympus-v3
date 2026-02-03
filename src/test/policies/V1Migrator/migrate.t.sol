@@ -157,6 +157,23 @@ contract V1MigratorMigrateTest is V1MigratorTest {
         uint256 thirdExpected = _expectedOHMv2(thirdAmount);
         uint256 totalExpected = firstExpected + secondExpected + thirdExpected;
 
+        // Verify previewMigrate matches expected for each amount
+        assertEq(
+            migrator.previewMigrate(firstAmount),
+            firstExpected,
+            "Preview should match first expected"
+        );
+        assertEq(
+            migrator.previewMigrate(secondAmount),
+            secondExpected,
+            "Preview should match second expected"
+        );
+        assertEq(
+            migrator.previewMigrate(thirdAmount),
+            thirdExpected,
+            "Preview should match third expected"
+        );
+
         // First migration
         vm.prank(alice);
         migrator.migrate(firstAmount, aliceProof, ALICE_ALLOWANCE);
@@ -239,6 +256,12 @@ contract V1MigratorMigrateTest is V1MigratorTest {
             _expectedOHMv2(500e9) + _expectedOHMv2(amount_),
             "Alice should receive partial OHM v2"
         );
+        // Verify previewMigrate is consistent
+        assertEq(
+            migrator.previewMigrate(amount_),
+            _expectedOHMv2(amount_),
+            "Preview should match expected helper"
+        );
     }
 
     //  when the user attempts to migrate their entire allocation
@@ -277,6 +300,12 @@ contract V1MigratorMigrateTest is V1MigratorTest {
             MINTR.mintApproval(address(migrator)),
             initialApproval - expectedOHMv2,
             "MINTR approval should decrease by migrated amount"
+        );
+        // Verify previewMigrate matches actual
+        assertEq(
+            migrator.previewMigrate(ALICE_ALLOWANCE),
+            expectedOHMv2,
+            "Preview should match actual migrated amount"
         );
     }
 
@@ -468,6 +497,17 @@ contract V1MigratorMigrateTest is V1MigratorTest {
             initialApproval - expectedAliceOHMv2 - expectedBobOHMv2,
             "MINTR approval should decrease by total migrated amount"
         );
+        // Verify previewMigrate matches actual for both users
+        assertEq(
+            migrator.previewMigrate(ALICE_ALLOWANCE),
+            expectedAliceOHMv2,
+            "Alice preview should match actual"
+        );
+        assertEq(
+            migrator.previewMigrate(BOB_ALLOWANCE),
+            expectedBobOHMv2,
+            "Bob preview should match actual"
+        );
     }
 
     function test_givenMultipleUsers_partialMigrationsTrackedIndependently()
@@ -609,6 +649,63 @@ contract V1MigratorMigrateTest is V1MigratorTest {
 
         // Assert state
         assertEq(migrator.migratedAmounts(alice), amount_, "Migrated amount should match input");
+    }
+
+    // ========== PREVIEW MIGRATE TESTS ========== //
+
+    // given the contract is enabled
+    //   when the amount is zero
+    //     [X] it returns zero
+    //   when the amount is non-zero
+    //     [X] it returns the converted amount
+    //     [X] the converted amount matches what migrate() actually mints
+    //   when the gOHM index causes rounding
+    //     [X] it returns the rounded amount
+    //     [X] small amounts may return zero
+
+    function test_previewMigrate_whenAmountIsZero_returnsZero() public {
+        assertEq(migrator.previewMigrate(0), 0, "Should return 0 for zero amount");
+    }
+
+    function test_previewMigrate_whenAmountIsNonZero_returnsConvertedAmount() public {
+        uint256 amount = 1000e9;
+        uint256 expected = _expectedOHMv2(amount);
+        uint256 actual = migrator.previewMigrate(amount);
+
+        assertEq(actual, expected, "Preview should match expected OHM v2");
+    }
+
+    function test_previewMigrate_matchesHelperFunction() public {
+        uint256 amount = 500e9;
+
+        assertEq(
+            migrator.previewMigrate(amount),
+            _expectedOHMv2(amount),
+            "Preview should match test helper function"
+        );
+    }
+
+    function test_fuzz_previewMigrate_matchesMigrate(uint256 amount_) public {
+        // Minimum of 3 ensures gOHM conversion produces non-zero result
+        amount_ = bound(amount_, 3, ALICE_ALLOWANCE);
+
+        uint256 previewAmount = migrator.previewMigrate(amount_);
+        uint256 expectedAmount = _expectedOHMv2(amount_);
+
+        assertEq(
+            previewAmount,
+            expectedAmount,
+            "Preview should match expected for all valid amounts"
+        );
+    }
+
+    function test_previewMigrate_smallAmountsMayRoundToZero() public {
+        // At MockGohm index of 269238508004, values < 2 round to 0
+        assertEq(migrator.previewMigrate(0), 0, "0 should return 0");
+        assertEq(migrator.previewMigrate(1), 0, "1 should round to 0");
+        // 2 produces 1 due to rounding behavior
+        assertEq(migrator.previewMigrate(2), 1, "2 should return 1");
+        assertGt(migrator.previewMigrate(3), 0, "3 should return non-zero");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -124,6 +124,21 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
         migratedAmount_ = _migratedAmounts[account_][_currentMerkleNonce];
     }
 
+    /// @notice Calculate OHM v2 amount from OHM v1 amount using gOHM conversion
+    /// @dev    Used by both migrate() and previewMigrate() to ensure consistency
+    /// @param amount_ The OHM v1 amount (9 decimals)
+    /// @return ohmV2Amount_ The OHM v2 amount (9 decimals), or 0 if conversion rounds to zero
+    function _calculateOHMv2Amount(uint256 amount_) internal view returns (uint256 ohmV2Amount_) {
+        // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
+        uint256 gohmAmount = _GOHM.balanceTo(amount_);
+        ohmV2Amount_ = _GOHM.balanceFrom(gohmAmount);
+    }
+
+    /// @inheritdoc IV1Migrator
+    function previewMigrate(uint256 amount_) external view returns (uint256 ohmV2Amount_) {
+        ohmV2Amount_ = _calculateOHMv2Amount(amount_);
+    }
+
     // =========  POLICY SETUP ========= //
 
     /// @inheritdoc Policy
@@ -277,8 +292,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
 
         // Calculate OHM v2 amount using gOHM conversion to match the migration flow
         // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
-        uint256 gohmAmount = _GOHM.balanceTo(amount_);
-        uint256 ohmV2Amount = _GOHM.balanceFrom(gohmAmount);
+        uint256 ohmV2Amount = _calculateOHMv2Amount(amount_);
 
         // Check that OHM v2 amount is not zero (may happen due to gOHM rounding)
         if (ohmV2Amount == 0) revert ZeroAmount();
