@@ -70,7 +70,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
 
     // ========== POLICY VERSION ========== //
 
-    function VERSION() external pure virtual returns (uint8 major, uint8 minor) {
+    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
         return (major, minor);

@@ -133,7 +133,7 @@ contract ConvertibleOHMTeller is
     }
 
     /// @notice Returns the version of this policy
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -175,8 +175,10 @@ contract ConvertibleOHMTeller is
 
         // Revert if the difference between eligible and expiry is less than min duration or eligible is after expiry
         // Don't need to check expiry against current timestamp since eligible is already checked
-        if (eligible_ > expiry_ || expiry_ - eligible_ < minDuration)
-            revert Teller_InvalidParams(2, abi.encodePacked(expiry_));
+        unchecked {
+            if (eligible_ > expiry_ || expiry_ - eligible_ < minDuration)
+                revert Teller_InvalidParams(2, abi.encodePacked(expiry_));
+        }
 
         // Revert if the quote token address is the zero address or does not have a bytecode
         if (quoteToken_ == address(0) || quoteToken_.code.length == 0)
@@ -401,8 +403,8 @@ contract ConvertibleOHMTeller is
 
     /// @notice Derives a name and symbol of the convertible token
     /// @dev Examples:
-    ///      - Strike 15.50 USDS, expiry 2025-06-01: Name "OHM/USDS 15.5 20250601", Symbol "cOHM-20250601"
-    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150 20251231",  Symbol "cOHM-20251231"
+    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "cOHM-20250601"
+    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "cOHM-20251231"
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
@@ -418,7 +420,7 @@ contract ConvertibleOHMTeller is
         bytes memory quoteSymbol = bytes(IERC20Metadata(quoteToken_).symbol());
         if (quoteSymbol.length > 5) quoteSymbol = abi.encodePacked(bytes5(quoteSymbol));
 
-        // Format the strike price as decimal with up to 2 fractional digits (e.g., "15.00")
+        // Format the strike price as decimal with up to 2 fractional digits (e.g., "21.42")
         bytes memory price = _formatPrice(strikePrice_, IERC20Metadata(quoteToken_).decimals());
 
         // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "cOHM-YYYYMMDD"
@@ -432,20 +434,14 @@ contract ConvertibleOHMTeller is
     /// @dev Requires tokenDecimals_ >= 2 to avoid underflow
     /// @param price_ The price in token decimals
     /// @param tokenDecimals_ The number of decimals in the quote token
-    /// @return The formatted price as bytes (e.g., "15.00", "15.50", "15.05")
+    /// @return The formatted price as bytes (e.g., "21.00", "21.42", "21.07")
     function _formatPrice(
         uint256 price_,
         uint8 tokenDecimals_
     ) internal pure returns (bytes memory) {
-        uint256 wholePart = price_ / (10 ** tokenDecimals_);
-        uint256 fracPart = (price_ % (10 ** tokenDecimals_)) / (10 ** (tokenDecimals_ - 2));
-        return
-            abi.encodePacked(
-                uint2str(wholePart),
-                ".",
-                fracPart < 10 ? "0" : "",
-                uint2str(fracPart)
-            );
+        uint256 whole = price_ / (10 ** tokenDecimals_);
+        uint256 frac = (price_ % (10 ** tokenDecimals_)) / (10 ** (tokenDecimals_ - 2));
+        return abi.encodePacked(uint2str(whole), ".", frac < 10 ? "0" : "", uint2str(frac));
     }
 
     /// @notice Calculates a number of price decimals in the provided price
@@ -457,7 +453,9 @@ contract ConvertibleOHMTeller is
         int8 decimals;
         while (price_ >= 10) {
             price_ = price_ / 10;
-            decimals++;
+            unchecked {
+                ++decimals;
+            }
         }
         return decimals - int8(tokenDecimals_);
     }
@@ -513,9 +511,7 @@ contract ConvertibleOHMTeller is
     // ========== IERC165 ========== //
 
     /// @inheritdoc PolicyEnabler
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view virtual override(PolicyEnabler) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
             interfaceId == type(IConvertibleOHMTeller).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
