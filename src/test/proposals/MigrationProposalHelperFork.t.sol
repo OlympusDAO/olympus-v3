@@ -198,6 +198,47 @@ contract MigrationProposalHelperForkTest is Test {
     }
 
     // ======================================================================
+    // Category Idempotency Tests
+    // ======================================================================
+
+    // given the migration category already exists in Burner
+    //  when activate is called
+    //    [X] it does not revert
+    //    [X] it completes successfully
+
+    function test_activate_givenCategoryExists_succeeds() public {
+        // Pre-add the migration category to Burner via DAO_MS
+        bytes32 migrationCategory = helper.MIGRATION_CATEGORY();
+        vm.prank(TIMELOCK);
+        rolesAdmin.grantRole("burner_admin", TIMELOCK);
+        vm.prank(TIMELOCK);
+        burner.addCategory(migrationCategory);
+
+        // Verify category exists
+        assertTrue(
+            burner.categoryApproved(migrationCategory),
+            "Migration category should be approved"
+        );
+
+        // Revoke burner_admin from TIMELOCK
+        vm.prank(TIMELOCK);
+        rolesAdmin.revokeRole("burner_admin", TIMELOCK);
+
+        // Now setup for activation (grants burner_admin to helper)
+        _setupForActivation();
+
+        // Activate should succeed despite category already existing
+        vm.prank(TIMELOCK);
+        helper.activate();
+
+        // Verify activation completed
+        assertTrue(helper.isActivated(), "Helper should be activated");
+
+        // Verify no tokens remain
+        _assertAllTokenBalancesAreZero();
+    }
+
+    // ======================================================================
     // TempOHM Approval Tests
     // ======================================================================
 
