@@ -204,7 +204,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
         assertEq(
             keccak256(bytes(token.symbol())),
-            keccak256(abi.encodePacked(bytes32("cOHM-19700630"))),
+            keccak256(abi.encodePacked(bytes32("convOHM-19700630"))),
             "The symbol should match"
         );
         assertEq(

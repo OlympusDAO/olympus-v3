@@ -11,7 +11,7 @@ pragma solidity >=0.8.30;
 // - Only the deploying RewardDistributor (creator) can mint tokens via create().
 // - Removed reclaim(), protocol fees, and collateral tracking.
 // - Added mint cap management via MINTR approval.
-// - Token naming uses decimal notation (e.g., "15.50") with "cOHM-" prefix.
+// - Token naming uses decimal notation (e.g., "15.50") with "convOHM-" prefix.
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
@@ -403,8 +403,8 @@ contract ConvertibleOHMTeller is
 
     /// @notice Derives a name and symbol of the convertible token
     /// @dev Examples:
-    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "cOHM-20250601"
-    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "cOHM-20251231"
+    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "convOHM-20250601"
+    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "convOHM-20251231"
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
@@ -423,10 +423,9 @@ contract ConvertibleOHMTeller is
         // Format the strike price as decimal with up to 2 fractional digits (e.g., "21.42")
         bytes memory price = _formatPrice(strikePrice_, IERC20Metadata(quoteToken_).decimals());
 
-        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "cOHM-YYYYMMDD"
+        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "convOHM-YYYYMMDD"
         name = bytes32(abi.encodePacked("OHM/", quoteSymbol, " ", price, " ", date));
-        // TODO: decide what prefix should be used.
-        symbol = bytes32(abi.encodePacked("cOHM-", date));
+        symbol = bytes32(abi.encodePacked("convOHM-", date));
         return (name, symbol);
     }
 
