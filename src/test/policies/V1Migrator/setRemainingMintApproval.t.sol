@@ -3,7 +3,6 @@
 pragma solidity >=0.8.15;
 
 import {V1MigratorTest} from "./V1MigratorTest.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
 contract V1MigratorSetRemainingMintApprovalTest is V1MigratorTest {

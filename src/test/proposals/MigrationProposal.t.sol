@@ -10,13 +10,16 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {Burner} from "src/policies/Burner.sol";
 import {V1Migrator} from "src/policies/V1Migrator.sol";
-import {ERC20 as SolmateERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {IOlympusTreasury} from "src/interfaces/IOlympusTreasury.sol";
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 
 // MigrationProposal imports
 import {MigrationProposal} from "src/proposals/MigrationProposal.sol";
 import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+
+using SafeTransferLib for ERC20;
 
 contract MigrationProposalTest is ProposalTest {
     /// @dev Block the migration should be executed at
@@ -101,7 +104,7 @@ contract MigrationProposalTest is ProposalTest {
             console2.log("burner policy already deployed");
         } else {
             // Deploy burner
-            burner = new Burner(kernel, SolmateERC20(address(OHMv2)));
+            burner = new Burner(kernel, ERC20(address(OHMv2)));
             vm.label(address(burner), "burner");
             addresses.addAddress("olympus-policy-burner", address(burner));
 
@@ -332,7 +335,7 @@ contract MigrationProposalTest is ProposalTest {
         uint256 balanceBefore = IERC20(address(OHMv2)).balanceOf(ohmv2Holder);
         if (balanceBefore > 1e18) {
             vm.prank(ohmv2Holder);
-            IERC20(address(OHMv2)).transfer(TIMELOCK, 1e18);
+            ERC20(address(OHMv2)).safeTransfer(TIMELOCK, 1e18);
         }
 
         // Validation should pass because timelock OHMv2 balance is not checked (L-03 fix)
@@ -349,7 +352,7 @@ contract MigrationProposalTest is ProposalTest {
         uint256 balanceBefore = IERC20(GOHM).balanceOf(gohmHolder);
         if (balanceBefore > 1e18) {
             vm.prank(gohmHolder);
-            IERC20(GOHM).transfer(TIMELOCK, 1e18);
+            ERC20(GOHM).safeTransfer(TIMELOCK, 1e18);
         }
 
         // Validation should pass because timelock gOHM balance is not checked (L-03 fix)
@@ -366,7 +369,7 @@ contract MigrationProposalTest is ProposalTest {
         uint256 balanceBefore = IERC20(address(OHMv1)).balanceOf(ohmv1Holder);
         if (balanceBefore > 1e9) {
             vm.prank(ohmv1Holder);
-            IERC20(address(OHMv1)).transfer(TIMELOCK, 1e9);
+            ERC20(address(OHMv1)).safeTransfer(TIMELOCK, 1e9);
         }
 
         // Validation should pass because timelock OHMv1 balance is not checked (L-03 fix)

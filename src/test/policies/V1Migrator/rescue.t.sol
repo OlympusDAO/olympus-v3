@@ -2,19 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
-import {Test} from "forge-std/Test.sol";
-
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {V1Migrator} from "src/policies/V1Migrator.sol";
-import {Hashes} from "@openzeppelin-5.3.0/utils/cryptography/Hashes.sol";
 
 import {V1MigratorTest} from "src/test/policies/V1Migrator/V1MigratorTest.sol";
 
