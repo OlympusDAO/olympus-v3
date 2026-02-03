@@ -98,6 +98,9 @@ contract MigrationProposalHelper is Owned {
     ///         - The caller (owner) has approved tempOHM to this contract
     ///         - The caller (owner) has tempOHM balance
     ///
+    ///         Any tempOHM in excess of OHMv1ToMigrate * 1e9 will be burned.
+    ///         This is intentional: tempOHM has no utility after migration completes.
+    ///
     ///         This function reverts if:
     ///         - The caller is not the owner
     ///         - The function has already been run
@@ -125,7 +128,9 @@ contract MigrationProposalHelper is Owned {
         emit Activated(msg.sender);
     }
 
-    /// @notice Deposit tempOHM to treasury to receive OHMv1
+    /// @notice Transfer all tempOHM from owner and deposit the calculated amount to treasury
+    /// @dev    Transfers ALL tempOHM from owner but deposits only getTempOHMToDeposit().
+    ///         Excess is burned by _burnExcess() (tempOHM has no post-migration utility).
     /// @return ohmV1Minted The amount of OHM v1 minted from the deposit
     function _depositTempOHMToTreasury() internal returns (uint256 ohmV1Minted) {
         // Transfer all of the tempOHM from the owner to this contract
@@ -156,9 +161,9 @@ contract MigrationProposalHelper is Owned {
         );
     }
 
-    /// @notice Burn any excess tempOHM and OHM v1 in this contract
-    /// @dev    Any remaining tokens in this contract are burned directly.
-    ///         Uses standard ERC20 burn() for both tokens.
+    /// @notice Burn any excess tempOHM and OHM v1 remaining after migration
+    /// @dev    Intentional cleanup: tempOHM has no utility after gOHM migration.
+    ///         Also burns any OHM v1 left from partial migration failures.
     function _burnExcess() internal {
         // Burn excess tempOHM
         uint256 excessTempOHM = ERC20(TEMPOHM).balanceOf(address(this));
