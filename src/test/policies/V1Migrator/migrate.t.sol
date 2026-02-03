@@ -377,12 +377,12 @@ contract V1MigratorMigrateTest is V1MigratorTest {
     //   [X] it shows the correct remaining amount
 
     function test_givenPartialMigration_exceedsRemainingApproval_reverts() public {
-        uint256 cap = 1500e9; // Cap between alice and bob's allowances
-        uint256 alicePartial = 1000e9; // Alice uses most of the cap
+        uint256 cap = 1500e9; // Remaining approval between alice and bob's allowances
+        uint256 alicePartial = 1000e9; // Alice uses most of the approval
 
-        // Set cap
+        // Set remaining approval
         vm.prank(adminUser);
-        migrator.setMigrationCap(cap);
+        migrator.setRemainingMintApproval(cap);
 
         // Approve and verify initial MINTR approval
         assertEq(

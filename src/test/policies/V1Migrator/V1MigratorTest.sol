@@ -289,17 +289,17 @@ contract V1MigratorTest is StdInvariant, Test {
         _;
     }
 
-    /// @dev Modifier to set state where the migration cap is set to a specific value
+    /// @dev Modifier to set state where the remaining mint approval is set to a specific value
     modifier givenCapSet(uint256 newCap_) {
         vm.prank(adminUser);
-        migrator.setMigrationCap(newCap_);
+        migrator.setRemainingMintApproval(newCap_);
         _;
     }
 
     /// @dev Modifier to set state where the cap is reached (set to 0)
     modifier givenCapReached() {
         vm.prank(adminUser);
-        migrator.setMigrationCap(0);
+        migrator.setRemainingMintApproval(0);
         _;
     }
 

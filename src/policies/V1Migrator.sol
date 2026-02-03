@@ -45,7 +45,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///
 ///         Admin functions:
 ///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
-///         - setMigrationCap: Update global cap and MINTR approval
+///         - setRemainingMintApproval: Update remaining MINTR approval for migration
 ///         - enable/disable: Emergency pause/resume
 contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migrator {
     using MerkleProof for bytes32[];
@@ -182,39 +182,41 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
 
     // =========  ENABLE/DISABLE OVERRIDES ========= //
 
-    /// @notice Override _enable to accept initial migration cap
-    /// @dev    The enableData should be ABI-encoded as (uint256 migrationCap)
+    /// @notice Override _enable to accept initial remaining mint approval
+    /// @dev    The enableData should be ABI-encoded as (uint256 remainingApproval)
     ///
-    ///         This allows setting the initial migration cap when enabling the contract.
+    ///         This allows setting the initial remaining mint approval when enabling the contract.
     ///         The merkle root is set in the constructor and cannot be changed via enable().
     ///
-    ///         On re-enable, the MINTR approval is adjusted to match the provided cap.
+    ///         On re-enable, the MINTR approval is adjusted to match the provided remaining approval.
     ///
-    /// @param enableData_ ABI-encoded (uint256 migrationCap)
+    /// @param enableData_ ABI-encoded (uint256 remainingApproval)
     function _enable(bytes calldata enableData_) internal override {
-        // Decode enableData: (uint256 migrationCap)
-        uint256 migrationCap = abi.decode(enableData_, (uint256));
-        _setMigrationCap(migrationCap);
+        // Decode enableData: (uint256 remainingApproval)
+        uint256 remainingApproval = abi.decode(enableData_, (uint256));
+        _setRemainingMintApproval(remainingApproval);
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
 
-    /// @notice Internal function to set the migration cap by adjusting MINTR approval
-    /// @dev    Gets current MINTR approval and increases or decreases to reach target cap
-    /// @param cap_ The target migration cap (in OHM v2 units)
-    function _setMigrationCap(uint256 cap_) internal {
+    /// @notice Internal function to set the remaining MINTR mint approval
+    /// @dev    This sets the remaining allowance (not a lifetime total). The MINTR approval
+    ///         represents how much OHM v2 can still be minted. When users migrate, the
+    ///         approval decreases. This function synchronizes the approval to a target value.
+    /// @param approval_ The target remaining mint approval (in OHM v2 units)
+    function _setRemainingMintApproval(uint256 approval_) internal {
         // Get current MINTR approval
         uint256 currentApproval = MINTR.mintApproval(address(this));
 
-        // Increase or decrease MINTR approval to reach the target cap
-        if (cap_ > currentApproval) {
-            MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
-        } else if (cap_ < currentApproval) {
-            MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
+        // Increase or decrease MINTR approval to reach the target approval
+        if (approval_ > currentApproval) {
+            MINTR.increaseMintApproval(address(this), approval_ - currentApproval);
+        } else if (approval_ < currentApproval) {
+            MINTR.decreaseMintApproval(address(this), currentApproval - approval_);
         }
 
         // Emit event
-        emit MigrationCapUpdated(cap_, currentApproval);
+        emit RemainingMintApprovalUpdated(approval_, currentApproval);
     }
 
     // =========  VERSION ========= //
@@ -239,8 +241,9 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     // =========  MODIFIERS ========= //
 
     function _onlyAdminOrLegacyMigrationAdmin() internal view {
-        if (!ROLES.hasRole(msg.sender, LEGACY_MIGRATION_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!ROLES.hasRole(msg.sender, LEGACY_MIGRATION_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
+        }
     }
 
     modifier onlyAdminOrLegacyMigrationAdmin() {
@@ -339,8 +342,8 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     }
 
     /// @inheritdoc IV1Migrator
-    function setMigrationCap(uint256 cap_) external onlyAdminRole {
-        _setMigrationCap(cap_);
+    function setRemainingMintApproval(uint256 approval_) external onlyAdminRole {
+        _setRemainingMintApproval(approval_);
     }
 
     /// @inheritdoc IV1Migrator
