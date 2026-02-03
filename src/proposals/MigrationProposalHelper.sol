@@ -107,8 +107,10 @@ contract MigrationProposalHelper is Owned {
         if (isActivated) revert AlreadyActivated();
         isActivated = true;
 
-        // Step 1: Add burner category "migration"
-        Burner(BURNER).addCategory(MIGRATION_CATEGORY);
+        // Step 1: Add burner category "migration" if it doesn't exist
+        if (!Burner(BURNER).categoryApproved(MIGRATION_CATEGORY)) {
+            Burner(BURNER).addCategory(MIGRATION_CATEGORY);
+        }
 
         // Step 2: Deposit tempOHM to treasury, receive OHM v1
         uint256 ohmV1Minted = _depositTempOHMToTreasury();
