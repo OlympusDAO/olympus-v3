@@ -176,7 +176,7 @@ abstract contract OlyBatch is BatchScript {
                     "{",
                     '"callArgs": {',
                     '"from": "',
-                    vm.toString(daoMS),
+                    vm.toString(safe),
                     '", "to": "',
                     vm.toString(actionsTo[i]),
                     '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
