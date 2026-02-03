@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 import {ProposalTest} from "./ProposalTest.sol";
+import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {console2} from "forge-std/console2.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
@@ -33,6 +34,8 @@ contract MigrationProposalTest is ProposalTest {
     Burner public burner;
     MigrationProposalHelper public migrationProposalHelper;
     V1Migrator public v1Migrator;
+    MigrationProposal public proposal;
+    MigrationProposalTestWrapper public proposalWrapper;
 
     bool public constant IS_TEMP_OHM_DEPLOYED = false;
     bool public constant IS_BURNER_SETUP = false;
@@ -47,13 +50,14 @@ contract MigrationProposalTest is ProposalTest {
 
         // ========== PROPOSAL SETUP ==========
 
-        // Deploy proposal under test (no constructor parameters needed)
-        MigrationProposal proposal = new MigrationProposal();
-
         // Set to true once the proposal has been submitted on-chain to enforce calldata matching
         hasBeenSubmitted = false;
 
-        // Create TestSuite
+        // Deploy proposal under test (no constructor parameters needed)
+        proposal = new MigrationProposal();
+        proposalWrapper = new MigrationProposalTestWrapper();
+
+        // Create TestSuite (this initializes addresses)
         _setupSuite(address(proposal));
 
         // ========== Other scaffolding ==========
@@ -236,6 +240,9 @@ contract MigrationProposalTest is ProposalTest {
         // Simulate the proposal
         _simulateProposal();
 
+        // Deploy wrapper with updated addresses (after simulation)
+        proposalWrapper.deploy(addresses, address(this));
+
         // ========== VERIFY MIGRATION HELPER ACTIVATION ==========
 
         _verifyMigrationProposalHelperActivation();
@@ -261,5 +268,167 @@ contract MigrationProposalTest is ProposalTest {
         console2.log("MigrationProposalHelper activated:", migrationProposalHelper.isActivated());
         console2.log("Migration category approved:", burner.categoryApproved(migrationCategory));
     }
+
+    // ========================================================================
+    // End State Tests
+    // ========================================================================
+
+    /// @notice Test that the proposal execution leaves the system in the correct end state
+    function test_proposalEndState() public view {
+        // Verify V1Migrator is enabled
+        assertTrue(v1Migrator.isEnabled(), "V1Migrator should be enabled");
+
+        // Verify MigrationProposalHelper is activated
+        assertTrue(
+            migrationProposalHelper.isActivated(),
+            "MigrationProposalHelper should be activated"
+        );
+
+        // Verify migration category is approved in Burner
+        bytes32 migrationCategory = migrationProposalHelper.MIGRATION_CATEGORY();
+        assertTrue(
+            burner.categoryApproved(migrationCategory),
+            "Migration category should be approved in Burner"
+        );
+
+        // Verify helper has no tokens left (all burned)
+        assertEq(
+            IERC20(GOHM).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 gOHM"
+        );
+        assertEq(
+            IERC20(address(OHMv2)).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 OHMv2"
+        );
+        assertEq(
+            IERC20(address(OHMv1)).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 OHMv1"
+        );
+        assertEq(
+            IERC20(address(tempOHM)).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 tempOHM"
+        );
+
+        // Verify timelock has no tempOHM left
+        assertEq(IERC20(address(tempOHM)).balanceOf(TIMELOCK), 0, "Timelock should have 0 tempOHM");
+    }
+
+    // ========================================================================
+    // Griefing Protection Tests (L-03 fix)
+    // ========================================================================
+
+    /// @notice Test that validation passes when timelock has OHMv2 balance
+    /// @dev This tests that the fix prevents griefing via OHMv2 donation to timelock.
+    ///      Attempts to transfer OHMv2 to timelock if source has balance. Regardless,
+    ///      validation should pass because timelock OHMv2 balance is no longer checked.
+    function test_validate_passesWhenTimelockHasOHMv2() public {
+        // Try to transfer OHMv2 to timelock from an external holder (simulates griefer)
+        // Using a known OHM/DAI Uniswap V3 pool address that holds OHMv2
+        address ohmv2Holder = 0x905dfCd5649343956c564A899Bbc391C767DCe34;
+        uint256 balanceBefore = IERC20(address(OHMv2)).balanceOf(ohmv2Holder);
+        if (balanceBefore > 1e18) {
+            vm.prank(ohmv2Holder);
+            IERC20(address(OHMv2)).transfer(TIMELOCK, 1e18);
+        }
+
+        // Validation should pass because timelock OHMv2 balance is not checked (L-03 fix)
+        proposalWrapper.validate(addresses, address(this));
+    }
+
+    /// @notice Test that validation passes when timelock has gOHM balance
+    /// @dev This tests that the fix prevents griefing via gOHM donation to timelock.
+    ///      Attempts to transfer gOHM to timelock if source has balance. Regardless,
+    ///      validation should pass because timelock gOHM balance is no longer checked.
+    function test_validate_passesWhenTimelockHasGOHM() public {
+        // Try to transfer gOHM to timelock from a holder (may have 0 balance after proposal)
+        address gohmHolder = 0x31F8Cc382c9898b273eff4e0b7626a6987C846E8; // Legacy treasury
+        uint256 balanceBefore = IERC20(GOHM).balanceOf(gohmHolder);
+        if (balanceBefore > 1e18) {
+            vm.prank(gohmHolder);
+            IERC20(GOHM).transfer(TIMELOCK, 1e18);
+        }
+
+        // Validation should pass because timelock gOHM balance is not checked (L-03 fix)
+        proposalWrapper.validate(addresses, address(this));
+    }
+
+    /// @notice Test that validation passes when timelock has OHMv1 balance
+    /// @dev This tests that the fix prevents griefing via OHMv1 donation to timelock.
+    ///      Attempts to transfer OHMv1 to timelock if source has balance. Regardless,
+    ///      validation should pass because timelock OHMv1 balance is no longer checked.
+    function test_validate_passesWhenTimelockHasOHMv1() public {
+        // Try to transfer OHMv1 to timelock from a holder (may have 0 balance after proposal)
+        address ohmv1Holder = 0x31F8Cc382c9898b273eff4e0b7626a6987C846E8; // Legacy treasury
+        uint256 balanceBefore = IERC20(address(OHMv1)).balanceOf(ohmv1Holder);
+        if (balanceBefore > 1e9) {
+            vm.prank(ohmv1Holder);
+            IERC20(address(OHMv1)).transfer(TIMELOCK, 1e9);
+        }
+
+        // Validation should pass because timelock OHMv1 balance is not checked (L-03 fix)
+        proposalWrapper.validate(addresses, address(this));
+    }
+
+    /// @notice Test that validation passes when helper has 0 gOHM balance (proper cleanup)
+    /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
+    ///      simulation, helper has 0 gOHM (properly burned). This test verifies validation
+    ///      passes when helper is properly cleaned up.
+    function test_validate_passesWhenHelperHasZeroGOHM() public {
+        // After proposal simulation, helper should have 0 gOHM
+        assertEq(
+            IERC20(GOHM).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 gOHM"
+        );
+
+        // Validation should pass when helper is properly cleaned up
+        proposalWrapper.validate(addresses, address(this));
+    }
+
+    /// @notice Test that validation passes when helper has 0 OHMv2 balance (proper cleanup)
+    /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
+    ///      simulation, helper has 0 OHMv2 (properly burned).
+    function test_validate_passesWhenHelperHasZeroOHMv2() public {
+        // After proposal simulation, helper should have 0 OHMv2
+        assertEq(
+            IERC20(address(OHMv2)).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 OHMv2"
+        );
+
+        // Validation should pass when helper is properly cleaned up
+        proposalWrapper.validate(addresses, address(this));
+    }
+
+    /// @notice Test that validation passes when helper has 0 OHMv1 balance (proper cleanup)
+    /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
+    ///      simulation, helper has 0 OHMv1 (properly burned).
+    function test_validate_passesWhenHelperHasZeroOHMv1() public {
+        // After proposal simulation, helper should have 0 OHMv1
+        assertEq(
+            IERC20(address(OHMv1)).balanceOf(address(migrationProposalHelper)),
+            0,
+            "Helper should have 0 OHMv1"
+        );
+
+        // Validation should pass when helper is properly cleaned up
+        proposalWrapper.validate(addresses, address(this));
+    }
 }
+
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
+
+/// @notice Test wrapper to expose internal _validate function for testing
+contract MigrationProposalTestWrapper is MigrationProposal {
+    function validate(Addresses addresses, address caller) external view {
+        _validate(addresses, caller);
+    }
+
+    function deploy(Addresses addresses, address deployer) external {
+        _deploy(addresses, deployer);
+    }
+}
