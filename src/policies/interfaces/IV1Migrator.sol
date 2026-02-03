@@ -31,6 +31,13 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @param oldCap The old migration cap
     event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
 
+    /// @notice Emitted when tokens are rescued from the contract
+    ///
+    /// @param token The rescued token address
+    /// @param to The recipient address
+    /// @param amount The amount rescued
+    event Rescued(address indexed token, address indexed to, uint256 amount);
+
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the provided merkle proof is invalid
@@ -119,6 +126,12 @@ interface IV1Migrator is IEnabler, IVersioned {
     ///
     /// @param cap_ The new migration cap (9 decimals)
     function setMigrationCap(uint256 cap_) external;
+
+    /// @notice Rescue accidentally sent tokens
+    /// @dev    Only callable by admin or legacy migration admin. Sweeps entire balance to caller.
+    ///
+    /// @param token_ The ERC20 token to rescue
+    function rescue(IERC20 token_) external;
 
     /// @notice Verify if a claim is valid for a given account and allocated amount
     ///
