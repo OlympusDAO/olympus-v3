@@ -5,6 +5,7 @@ import {V1MigratorTest} from "./V1MigratorTest.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
 contract V1MigratorSetMerkleRootTest is V1MigratorTest {
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
@@ -43,10 +44,13 @@ contract V1MigratorSetMerkleRootTest is V1MigratorTest {
     }
 
     // given caller has legacy_migration_admin or admin role
-    //  when the merkle root is any bytes32 value
+    //  when the merkle root is any bytes32 value except current
     //   [X] it sets the merkle root
 
     function test_fuzz(bytes32 newRoot_) public {
+        // Exclude current root (would revert with SameMerkleRoot)
+        vm.assume(newRoot_ != migrator.merkleRoot());
+
         // Call function
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot_);
@@ -84,5 +88,19 @@ contract V1MigratorSetMerkleRootTest is V1MigratorTest {
         // Assert new state
         assertEq(migrator.merkleRoot(), newRoot, "Merkle root should be updated");
         assertEq(migrator.migratedAmounts(alice), 0, "Alice should be reset after root change");
+    }
+
+    // given the merkle root is set to the same value
+    //  [X] it reverts
+
+    function test_givenSameMerkleRoot_reverts() public {
+        bytes32 currentRoot = migrator.merkleRoot();
+
+        // Expect revert
+        vm.expectRevert(abi.encodeWithSelector(IV1Migrator.SameMerkleRoot.selector));
+
+        // Call function with same root
+        vm.prank(legacyMigrationAdmin);
+        migrator.setMerkleRoot(currentRoot);
     }
 }
