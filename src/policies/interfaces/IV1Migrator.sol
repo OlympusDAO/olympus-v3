@@ -25,11 +25,11 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @param updater The address that updated the root
     event MerkleRootUpdated(bytes32 indexed newRoot, address indexed updater);
 
-    /// @notice Emitted when the migration cap is updated
+    /// @notice Emitted when the remaining mint approval is updated
     ///
-    /// @param newCap The new migration cap
-    /// @param oldCap The old migration cap
-    event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
+    /// @param newApproval The new remaining mint approval
+    /// @param oldApproval The old remaining mint approval
+    event RemainingMintApprovalUpdated(uint256 indexed newApproval, uint256 indexed oldApproval);
 
     // ============ ERRORS ============ //
 
@@ -125,12 +125,14 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @param merkleRoot_ The new merkle root
     function setMerkleRoot(bytes32 merkleRoot_) external;
 
-    /// @notice Update the migration cap
-    /// @dev    Queries the current MINTR approval and adjusts it to the target cap.
-    ///         This ensures the cap is always in sync with MINTR state.
+    /// @notice Set the remaining MINTR mint approval for migration
+    /// @dev    This sets the remaining amount that can be minted, NOT a lifetime total.
+    ///         If you want 1000 OHM v2 to be available for migration and 600 has already
+    ///         been minted, call this with 1000 (not 400). Queries the current MINTR
+    ///         approval and adjusts it to the target approval.
     ///
-    /// @param cap_ The new migration cap (9 decimals)
-    function setMigrationCap(uint256 cap_) external;
+    /// @param approval_ The target remaining mint approval (9 decimals)
+    function setRemainingMintApproval(uint256 approval_) external;
 
     /// @notice Verify if a claim is valid for a given account and allocated amount
     ///
