@@ -97,6 +97,15 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @return totalMigrated_ The total migrated amount
     function totalMigrated() external view returns (uint256 totalMigrated_);
 
+    /// @notice Preview the OHM v2 amount that will be received for a given OHM v1 amount
+    /// @dev    Performs the same gOHM conversion as migrate() without state changes.
+    ///         Users migrating multiple times will lose dust on each transaction.
+    ///         Recommended: migrate full allocation in one transaction.
+    ///
+    /// @param amount_ The amount of OHM v1 to preview (9 decimals)
+    /// @return ohmV2Amount_ The amount of OHM v2 that would be received (9 decimals), or 0 if conversion rounds to zero
+    function previewMigrate(uint256 amount_) external view returns (uint256 ohmV2Amount_);
+
     // ============ FUNCTIONS ============ //
 
     /// @notice Migrate OHM v1 to OHM v2
