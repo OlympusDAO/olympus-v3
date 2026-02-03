@@ -43,12 +43,19 @@ contract MigrationProposalHelper is Owned {
     /// @notice True if the activation has been performed
     bool public isActivated = false;
 
+    // =========  EVENTS  ========= //
+
     event Activated(address caller);
     event OHMv1ToMigrateUpdated(uint256 newMax);
+    event Rescued(address indexed token, address indexed to, uint256 amount);
+
+    // =========  ERRORS  ========= //
 
     error AlreadyActivated();
     error InvalidParams(string reason);
     error Unauthorized();
+
+    // =========  CONSTRUCTOR  ========= //
 
     constructor(
         address owner_,
@@ -84,6 +91,17 @@ contract MigrationProposalHelper is Owned {
     function setOHMv1ToMigrate(uint256 maxOHMv1_) external onlyOwnerOrAdmin {
         OHMv1ToMigrate = maxOHMv1_;
         emit OHMv1ToMigrateUpdated(maxOHMv1_);
+    }
+
+    /// @notice Rescue accidentally sent tokens
+    /// @dev    Only callable by owner or admin. Sweeps entire token balance to caller.
+    /// @param token_ The ERC20 token to rescue
+    function rescue(IERC20 token_) external onlyOwnerOrAdmin {
+        if (address(token_) == address(0)) revert InvalidParams("token");
+        uint256 balance = token_.balanceOf(address(this));
+        if (balance == 0) revert InvalidParams("balance");
+        ERC20(address(token_)).safeTransfer(msg.sender, balance);
+        emit Rescued(address(token_), msg.sender, balance);
     }
 
     /// @notice Calculate the amount of tempOHM to deposit

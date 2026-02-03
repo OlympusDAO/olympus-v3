@@ -31,6 +31,13 @@ interface IV1Migrator is IEnabler, IVersioned {
     /// @param oldApproval The old remaining mint approval
     event RemainingMintApprovalUpdated(uint256 indexed newApproval, uint256 indexed oldApproval);
 
+    /// @notice Emitted when tokens are rescued from the contract
+    ///
+    /// @param token The rescued token address
+    /// @param to The recipient address
+    /// @param amount The amount rescued
+    event Rescued(address indexed token, address indexed to, uint256 amount);
+
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the provided merkle proof is invalid
@@ -133,6 +140,12 @@ interface IV1Migrator is IEnabler, IVersioned {
     ///
     /// @param approval_ The target remaining mint approval (9 decimals)
     function setRemainingMintApproval(uint256 approval_) external;
+
+    /// @notice Rescue accidentally sent tokens
+    /// @dev    Only callable by admin or legacy migration admin. Sweeps entire balance to caller.
+    ///
+    /// @param token_ The ERC20 token to rescue
+    function rescue(IERC20 token_) external;
 
     /// @notice Verify if a claim is valid for a given account and allocated amount
     ///
