@@ -88,6 +88,10 @@ contract MigrationProposalHelperForkTest is Test {
         vm.prank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(burner));
 
+        // Enable burner by admin
+        vm.prank(TIMELOCK);
+        burner.enable(abi.encode(""));
+
         // Deploy helper
         helper = new MigrationProposalHelper(
             TIMELOCK, // owner

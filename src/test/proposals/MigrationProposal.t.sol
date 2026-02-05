@@ -281,6 +281,9 @@ contract MigrationProposalTest is ProposalTest {
         // Verify V1Migrator is enabled
         assertTrue(v1Migrator.isEnabled(), "V1Migrator should be enabled");
 
+        // Verify Burner is enabled
+        assertTrue(burner.isEnabled(), "Burner should be enabled");
+
         // Verify MigrationProposalHelper is activated
         assertTrue(
             migrationProposalHelper.isActivated(),
