@@ -22,7 +22,6 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 // ============  INTERNAL CONTRACTS ============ //
 
 import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
@@ -47,7 +46,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
 ///         - setRemainingMintApproval: Update remaining MINTR approval for migration
 ///         - enable/disable: Emergency pause/resume
-contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migrator {
+contract V1Migrator is Policy, PolicyEnabler, IVersioned, IV1Migrator {
     using MerkleProof for bytes32[];
     using SafeTransferLib for ERC20;
 
@@ -61,7 +60,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     /// @notice The MINTR module reference for minting OHM v2
     MINTRv1 internal MINTR;
 
-    // ROLES is already declared in RolesConsumer
+    // ROLES is already declared in PolicyAdmin/PolicyEnabler
 
     /// @notice The gOHM token contract used for OHM v2 amount calculation
     IgOHM internal immutable _GOHM;
@@ -97,6 +96,8 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
         // Set the merkle root
         merkleRoot = merkleRoot_;
         emit MerkleRootUpdated(merkleRoot_, msg.sender);
+
+        // Disabled by default
     }
 
     // =========  INTERFACE GETTERS ========= //
