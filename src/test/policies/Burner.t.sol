@@ -11,6 +11,9 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {Burner} from "policies/Burner.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Kernel, Keycode, Permissions, Actions, fromKeycode, toKeycode} from "src/Kernel.sol";
+
+// =========== INTERFACES ===========
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -464,31 +467,31 @@ contract BurnerTest is Test {
     // [X] Remove category when disabled
 
     function test_burnFromTreasury_whenDisabled_reverts() public givenDisabled {
-        vm.expectRevert(bytes("NotEnabled()"));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(guardian);
         burner.burnFromTreasury(100, "TEST_CATEGORY_1");
     }
 
     function test_burnFrom_whenDisabled_reverts() public givenDisabled {
-        vm.expectRevert(bytes("NotEnabled()"));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(guardian);
         burner.burnFrom(alice, 100, "TEST_CATEGORY_1");
     }
 
     function test_burn_whenDisabled_reverts() public givenDisabled {
-        vm.expectRevert(bytes("NotEnabled()"));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(guardian);
         burner.burn(100, "TEST_CATEGORY_1");
     }
 
     function test_addCategory_whenDisabled_reverts() public givenDisabled {
-        vm.expectRevert(bytes("NotEnabled()"));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(guardian);
         burner.addCategory("NEW_CATEGORY");
     }
 
     function test_removeCategory_whenDisabled_reverts() public givenDisabled {
-        vm.expectRevert(bytes("NotEnabled()"));
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(guardian);
         burner.removeCategory("TEST_CATEGORY_1");
     }
