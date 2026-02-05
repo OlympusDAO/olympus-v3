@@ -217,26 +217,29 @@ contract MigrationProposal is GovernorBravoProposal {
         // 1. Validate that V1Migrator is enabled
         require(_v1Migrator.isEnabled() == true, "V1Migrator should be enabled");
 
-        // 2. Validate that MigrationProposalHelper is marked as activated
+        // 2. Validate that Burner is enabled
+        require(_burner.isEnabled() == true, "Burner should be enabled");
+
+        // 3. Validate that MigrationProposalHelper is marked as activated
         require(
             _migrationProposalHelper.isActivated() == true,
             "MigrationProposalHelper should be activated"
         );
 
-        // 3. Validate that "migration" category exists in Burner
+        // 4. Validate that "migration" category exists in Burner
         bytes32 migrationCategory = _migrationProposalHelper.MIGRATION_CATEGORY();
         require(
             Burner(burner).categoryApproved(migrationCategory) == true,
             "Migration category should be approved in Burner"
         );
 
-        // 4. Validate that burner_admin role was revoked from MigrationProposalHelper
+        // 5. Validate that burner_admin role was revoked from MigrationProposalHelper
         require(
             roles.hasRole(address(_migrationProposalHelper), BURNER_ADMIN_ROLE) == false,
             "MigrationProposalHelper should not have burner_admin role"
         );
 
-        // 5. Validate that there is no gOHM, OHMv2, or OHMv1 left in the MigrationProposalHelper contract
+        // 6. Validate that there is no gOHM, OHMv2, or OHMv1 left in the MigrationProposalHelper contract
         // Note: Timelock balance checks are intentionally omitted to prevent griefing. An attacker could
         // donate 1 wei of these tokens to the timelock address while the proposal is queued, causing
         // validation to fail when the proposal executes. These tokens could also legitimately exist
