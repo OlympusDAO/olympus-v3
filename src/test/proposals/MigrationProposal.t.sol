@@ -380,7 +380,7 @@ contract MigrationProposalTest is ProposalTest {
     /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
     ///      simulation, helper has 0 gOHM (properly burned). This test verifies validation
     ///      passes when helper is properly cleaned up.
-    function test_validate_passesWhenHelperHasZeroGOHM() public {
+    function test_validate_passesWhenHelperHasZeroGOHM() public view {
         // After proposal simulation, helper should have 0 gOHM
         assertEq(
             IERC20(GOHM).balanceOf(address(migrationProposalHelper)),
@@ -395,7 +395,7 @@ contract MigrationProposalTest is ProposalTest {
     /// @notice Test that validation passes when helper has 0 OHMv2 balance (proper cleanup)
     /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
     ///      simulation, helper has 0 OHMv2 (properly burned).
-    function test_validate_passesWhenHelperHasZeroOHMv2() public {
+    function test_validate_passesWhenHelperHasZeroOHMv2() public view {
         // After proposal simulation, helper should have 0 OHMv2
         assertEq(
             IERC20(address(OHMv2)).balanceOf(address(migrationProposalHelper)),
@@ -410,7 +410,7 @@ contract MigrationProposalTest is ProposalTest {
     /// @notice Test that validation passes when helper has 0 OHMv1 balance (proper cleanup)
     /// @dev This ensures helper contract IS checked for proper cleanup. After proposal
     ///      simulation, helper has 0 OHMv1 (properly burned).
-    function test_validate_passesWhenHelperHasZeroOHMv1() public {
+    function test_validate_passesWhenHelperHasZeroOHMv1() public view {
         // After proposal simulation, helper should have 0 OHMv1
         assertEq(
             IERC20(address(OHMv1)).balanceOf(address(migrationProposalHelper)),
