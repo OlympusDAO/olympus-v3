@@ -24,17 +24,18 @@ contract MigrationProposal is GovernorBravoProposal {
     address internal _kernel;
     // V1Migrator and MigrationProposalHelper deployed separately, retrieved from addresses
     V1Migrator internal _v1Migrator;
+    Burner internal _burner;
     MigrationProposalHelper internal _migrationProposalHelper;
 
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 public constant BURNER_ADMIN_ROLE = bytes32("burner_admin");
 
     /// @notice Initial migration cap for V1Migrator (in OHM v1, 9 decimals)
-    /// @dev    TODO: Update migration cap before mainnet deployment
-    uint256 public constant INITIAL_MIGRATION_CAP = 1000e9;
+    uint256 public constant INITIAL_MIGRATION_CAP = 352614824540487;
 
     error InvalidV1Migrator();
     error InvalidMigrationProposalHelper();
+    error InvalidBurner();
 
     constructor() {
         // Addresses will be retrieved from Addresses in _deploy()
@@ -63,19 +64,31 @@ contract MigrationProposal is GovernorBravoProposal {
                 "## Background\n\n",
                 "The OHM v1 TokenMigrator was used to migrate OHM v1 to gOHM.\n"
                 "This migrator contains a surplus of gOHM (which inflates supply), and serves as technical debt.\n",
-                "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n",
+                "This proposal extracts all gOHM from the TokenMigrator, unstakes it to OHM v2 and burns it.\n\n",
                 "The proposed V1Migrator policy replaces the old TokenMigrator.\n",
                 "It uses a merkle tree to verify eligible OHM v1 holders, and allows them to migrate their tokens to OHM v2.\n\n",
+                "## Affected Contracts\n\n",
+                "- V1Migrator policy (new - 1.0)\n",
+                "- Burner policy (new - 1.0)\n\n",
+                "## Resources\n\n",
+                "- [View the audit report (Guardian)](TODO)\n",
+                "- [View the pull request](https://github.com/OlympusDAO/olympus-v3/pull/196)\n\n",
+                "## Pre-requisites\n\n",
+                "- DAO MS has installed the V1Migrator and Burner policies in the kernel\n",
+                "- DAO MS has queued and enabled TempOHM as a reserve token in the legacy treasury\n",
+                "- DAO MS has queued and enabled MigrationProposalHelper as a reserve depositor in the legacy treasury\n",
+                "- DAO MS has minted tempOHM to the timelock\n\n",
                 "## Steps\n\n",
-                "1. Enable V1Migrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of XXX OHM v1\n", // TODO add initial migration cap
-                "2. Grant `burner_admin` role to MigrationProposalHelper\n",
-                "3. Grant MigrationProposalHelper permission to spend tempOHM\n",
-                "4. Call MigrationProposalHelper.activate() which:\n",
+                "1. Enable V1Migrator policy (allows users to migrate OHM v1 to OHM v2) with an initial migration cap of ~352,614 OHM v1\n",
+                "2. Enable Burner policy\n",
+                "3. Grant `burner_admin` role to MigrationProposalHelper\n",
+                "4. Grant MigrationProposalHelper permission to spend tempOHM\n",
+                "5. Call MigrationProposalHelper.activate() which:\n",
                 '   - Adds burner category "migration"\n',
                 "   - Deposits a dummy asset (tempOHM) into the legacy treasury, in order to mint the maximum amount of OHM v1 that can be migrated\n",
                 "   - Migrates OHM v1 to gOHM\n",
                 "   - Burns gOHM to receive OHM v2\n",
-                "5. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
+                "6. Revoke `burner_admin` role from MigrationProposalHelper\n\n",
                 "## Additional Steps\n\n",
                 "1. DAO MS to update the merkle root for the V1Migrator policy\n",
                 "2. DAO MS to remove tempOHM as a reserve token from the legacy treasury\n",
@@ -89,10 +102,14 @@ contract MigrationProposal is GovernorBravoProposal {
         // Store the kernel address in state
         _kernel = addresses.getAddress("olympus-kernel");
 
-        // Retrieve V1Migrator and MigrationProposalHelper from addresses
+        // Retrieve V1Migrator, Burner and MigrationProposalHelper from addresses
         address v1MigratorAddr = addresses.getAddress("olympus-policy-v1-migrator");
         if (v1MigratorAddr == address(0)) revert InvalidV1Migrator();
         _v1Migrator = V1Migrator(v1MigratorAddr);
+
+        address burnerAddr = addresses.getAddress("olympus-policy-burner");
+        if (burnerAddr == address(0)) revert InvalidBurner();
+        _burner = Burner(burnerAddr);
 
         address migrationProposalHelperAddr = addresses.getAddress(
             "olympus-periphery-migration-proposal-helper"
@@ -116,7 +133,14 @@ contract MigrationProposal is GovernorBravoProposal {
             "Enable V1Migrator policy"
         );
 
-        // STEP 2: Grant "burner_admin" role to MigrationProposalHelper
+        // STEP 2: Enable Burner policy
+        _pushAction(
+            address(_burner),
+            abi.encodeWithSelector(IEnabler.enable.selector, abi.encode("")),
+            "Enable Burner policy"
+        );
+
+        // STEP 3: Grant "burner_admin" role to MigrationProposalHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -128,7 +152,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "Grant burner_admin role to MigrationProposalHelper"
         );
 
-        // STEP 3: Grant MigrationProposalHelper permission to spend all tempOHM
+        // STEP 4: Grant MigrationProposalHelper permission to spend all tempOHM
         uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
         _pushAction(
             address(tempOHM),
@@ -140,14 +164,14 @@ contract MigrationProposal is GovernorBravoProposal {
             "Grant MigrationProposalHelper permission to spend tempOHM"
         );
 
-        // STEP 4: Call MigrationProposalHelper.activate()
+        // STEP 5: Call MigrationProposalHelper.activate()
         _pushAction(
             address(_migrationProposalHelper),
             abi.encodeWithSelector(MigrationProposalHelper.activate.selector),
             "Execute gOHM burn via MigrationProposalHelper"
         );
 
-        // STEP 5: Revoke "burner_admin" role from MigrationProposalHelper
+        // STEP 6: Revoke "burner_admin" role from MigrationProposalHelper
         _pushAction(
             rolesAdmin,
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -159,7 +183,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "Revoke burner_admin role from MigrationProposalHelper"
         );
 
-        // STEP 6. Revoke any spending approval for tempOHM
+        // STEP 7. Revoke any spending approval for tempOHM
         _pushAction(
             address(tempOHM),
             abi.encodeWithSelector(IERC20.approve.selector, address(_migrationProposalHelper), 0),
