@@ -43,8 +43,8 @@ This is the legacy flow — unchanged from before.
 Read the provided Solidity file and extract:
 
 1. **Owner (multisig type)**:
-   - `setUpEmergency(...)` → `"owner": "emergency"`
-   - `setUp(true, ...)` → `"owner": "dao"`
+   - Look for the `setUpEmergency` modifier (on the `run` function) → `"owner": "emergency"`
+   - Look for the `setUp` modifier (on the `run` function) with `true` as the first argument → `"owner": "dao"`
 
 2. **Contract keys and function calls** from `addToBatch()` calls:
    ```solidity
@@ -57,7 +57,7 @@ Read the provided Solidity file and extract:
    - `signature`: e.g., `"functionName(bool)"` (derive from selector/interface)
    - `args`: extract argument values if present
 
-3. **Component ID**: derive from contract name in kebab-case (e.g., `YieldRepurchaseFacility.sol` → `yield-repurchase-facility`)
+3. **Component ID**: derive from the script filename (without `.sol`) in kebab-case (e.g., `YieldRepurchaseFacility.sol` → `yield-repurchase-facility`)
 
 #### B2: Determine ABI Key
 
@@ -79,7 +79,7 @@ Analyze the contract source in this order. Stop at the first match:
 
 **Level 1 — PolicyEnabler**
 - Grep for `is PolicyEnabler` or `is.*PolicyEnabler` in the inheritance declaration
-- Also check if the contract inherits from a base that itself inherits PolicyEnabler (read the base contract if needed)
+- Check for indirect inheritance: if the contract inherits from a base contract, read that base contract to see if *it* inherits PolicyEnabler. For example, `ConvertibleDepositFacility` inherits `BaseDepositFacility` which inherits `PolicyEnabler` — this counts as Level 1.
 - Result:
   - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
   - ABI: `periphery_enabler`
@@ -133,9 +133,15 @@ jq -r '.current.mainnet.olympus.policies.OlympusHeart // empty' src/scripts/env.
 jq -r '.current.sepolia.olympus.policies.OlympusHeart // empty' src/scripts/env.json
 ```
 
+For a periphery contract like `CCIPCrossChainBridge`:
+```bash
+jq -r '.current.mainnet.olympus.periphery.CCIPCrossChainBridge // empty' src/scripts/env.json
+jq -r '.current.sepolia.olympus.periphery.CCIPCrossChainBridge // empty' src/scripts/env.json
+```
+
 Build `availableOn` array from chains where address exists and is not the zero address.
 
-**Important:** The contract name in env.json may differ from the filename. Look at the `contract` declaration in the `.sol` file to get the actual name, then search env.json for that name.
+**Important:** The contract name in env.json may differ from the filename. Look at the `contract` declaration in the `.sol` file to get the actual name, then search env.json for that name. If the exact contract name is not found in env.json for expected chains, also search for partial matches or check existing emergency scripts' `_envAddressNotZero` calls for the actual env key used (e.g., source says `contract CoolerComposites` but mainnet env.json uses `CoolerV2Composites`).
 
 #### C4: Ask User for Metadata
 
@@ -163,20 +169,26 @@ Use AskUserQuestion to gather:
 
 6. **Dependencies** (optional): Other component IDs to shutdown together
 
+#### C4.5: Derive Component ID
+
+Suggest a short, descriptive kebab-case component ID for the contract and confirm with the user via AskUserQuestion. Do NOT simply kebab-case the Solidity contract name — many contracts have prefixes like `Olympus` that should be dropped (e.g., `OlympusHeart` → `heart`, not `olympus-heart`). Look at existing component IDs in the config for style guidance.
+
 #### C5: Update emergency-config.json
 
 **Important:** Use `jq` for ALL reads and writes to `emergency-config.json`. Do NOT try to manually edit or write JSON — this will corrupt the file.
 
-1. Read current `documentation/emergency/emergency-config.json`
+1. Check if a component with the same ID or same `contractKey` already exists in the `components` array. If so, use AskUserQuestion to ask the user whether to update the existing entry or create a new component.
 
-2. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
+2. Read current `documentation/emergency/emergency-config.json`
+
+3. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
    ```bash
-   jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > tmp.json && mv tmp.json documentation/emergency/emergency-config.json
+   jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
-3. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
+4. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
 
-4. Add new component to `components` array (build the component JSON and use `jq` to append):
+5. Add new component to `components` array (build the component JSON and use `jq` to append):
 ```json
 {
   "id": "<kebab-case-id>",
@@ -205,13 +217,13 @@ Use AskUserQuestion to gather:
    - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns)
    - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` if not provided by user
 
-5. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
+6. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
    ```bash
    jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
      '.version |= (split(".") | .[2] = (.[2] | tonumber + 1 | tostring) | join(".")) |
       .lastUpdated = $ts |
       .updatedBy = "claude-code"' \
-     documentation/emergency/emergency-config.json > tmp.json && mv tmp.json documentation/emergency/emergency-config.json
+     documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
 #### C6: Validate
@@ -250,6 +262,8 @@ Match function signatures to ABI keys in `documentation/emergency/emergency-abis
 | `shutdown(address[])` | `yield_repurchase_facility` |
 | `withdrawLiquidity(uint256)` | `ccip_lock_release_pool` |
 | `emergencyShutdownFixedExpiryMarket(uint256)` | `bond_manager` |
+
+**Disambiguation:** If a function signature matches multiple ABI keys (e.g., `shutdown()` maps to both `emergency` and `emission_manager`; `deactivate()` maps to both `heart` and `reserve_migrator`), determine the correct key by checking which ABI contains the full set of functions used by the contract. If still ambiguous, ask the user.
 
 If no match is found, ask the user if a new ABI entry is needed in `emergency-abis.json`.
 
@@ -304,7 +318,7 @@ For `src/policies/Heart.sol` which has `contract OlympusHeart is PolicyEnabler`:
   "availableOn": ["mainnet", "sepolia"]
 }
 ```
-Note: no `batchScript` field.
+Note: no `batchScript` field. A legacy batch script exists at `src/scripts/emergency/Heart.sol`, but since `OlympusHeart` inherits `PolicyEnabler` (Level 1), the config is derived directly from the contract source and `batchScript` is omitted.
 
 ### Example 2: Script with dynamic args (script mode)
 
