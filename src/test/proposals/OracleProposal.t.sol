@@ -31,6 +31,12 @@ import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 // Oracle Proposal
 import {OracleProposal} from "src/proposals/OracleProposal.sol";
 
+// Role and access control imports
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {ADMIN_ROLE, ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 /// @notice Test contract for Oracle Proposal: Enable Oracle Policies and Deploy OHM/USDS Oracles
 /// @dev    Simulates the proposal after the PRICE system has been deployed
 contract OracleProposalTest is ProposalTest {
@@ -499,6 +505,57 @@ contract OracleProposalTest is ProposalTest {
         vm.stopPrank();
 
         console2.log("Installed submodule:", key_);
+    }
+
+    // ========== STATE VALIDATION ========== //
+
+    /// @notice Validates the post-execution state of the Oracle proposal
+    function testProposal_validateState() public view {
+        // Get addresses
+        ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
+        address timelock = addresses.getAddress("olympus-timelock");
+        address daoMS = addresses.getAddress("olympus-multisig-dao");
+        address ohm = addresses.getAddress("olympus-legacy-ohm");
+        address usds = addresses.getAddress("external-tokens-usds");
+
+        address chainlinkFactory = addresses.getAddress(
+            "olympus-policy-chainlink-oracle-factory-1_0"
+        );
+        address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
+
+        // Verify roles
+        assertTrue(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
+        assertTrue(
+            roles.hasRole(daoMS, ORACLE_MANAGER_ROLE),
+            "DAO MS does not have oracle_manager role"
+        );
+        assertTrue(
+            roles.hasRole(timelock, ORACLE_MANAGER_ROLE),
+            "Timelock does not have oracle_manager role"
+        );
+
+        // Verify policies enabled
+        assertTrue(
+            IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-1_0")).isEnabled(),
+            "ERC7726Oracle not enabled"
+        );
+        assertTrue(IEnabler(chainlinkFactory).isEnabled(), "ChainlinkOracleFactory not enabled");
+        assertTrue(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
+
+        // Verify oracles deployed
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds);
+        assertTrue(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
+        assertTrue(
+            IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
+            "Chainlink oracle not enabled"
+        );
+
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds);
+        assertTrue(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
+        assertTrue(
+            IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
+            "Morpho oracle not enabled"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
