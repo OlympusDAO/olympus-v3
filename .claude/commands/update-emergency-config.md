@@ -123,14 +123,15 @@ Analyze the contract source in this order. Stop at the first match:
 
 #### C3: Resolve Addresses from env.json
 
-Read `src/scripts/env.json` and for each chain, resolve the contract's env key to get addresses.
+Use `jq` to read `src/scripts/env.json` and resolve the contract's env key to get addresses per chain. Do NOT try to parse env.json manually — always use `jq`.
 
 The contract key follows the pattern `olympus.policies.ContractName` or `olympus.periphery.ContractName` — determine the correct path based on the file location.
 
 For example, if the contract is at `src/policies/Heart.sol` and the contract name is `OlympusHeart`:
-- Check `env.json` → `current.mainnet.olympus.policies.OlympusHeart`
-- Check `env.json` → `current.sepolia.olympus.policies.OlympusHeart`
-- etc. for all chains
+```bash
+jq -r '.current.mainnet.olympus.policies.OlympusHeart // empty' src/scripts/env.json
+jq -r '.current.sepolia.olympus.policies.OlympusHeart // empty' src/scripts/env.json
+```
 
 Build `availableOn` array from chains where address exists and is not the zero address.
 
@@ -164,13 +165,18 @@ Use AskUserQuestion to gather:
 
 #### C5: Update emergency-config.json
 
+**Important:** Use `jq` for ALL reads and writes to `emergency-config.json`. Do NOT try to manually edit or write JSON — this will corrupt the file.
+
 1. Read current `documentation/emergency/emergency-config.json`
 
-2. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`)
+2. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
+   ```bash
+   jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > tmp.json && mv tmp.json documentation/emergency/emergency-config.json
+   ```
 
 3. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
 
-4. Add new component to `components` array:
+4. Add new component to `components` array (build the component JSON and use `jq` to append):
 ```json
 {
   "id": "<kebab-case-id>",
@@ -199,11 +205,14 @@ Use AskUserQuestion to gather:
    - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns)
    - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` if not provided by user
 
-5. Update `version` (bump patch version)
-
-6. Update `lastUpdated` to current ISO 8601 timestamp
-
-7. Update `updatedBy` to `"claude-code"`
+5. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
+   ```bash
+   jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+     '.version |= (split(".") | .[2] = (.[2] | tonumber + 1 | tostring) | join(".")) |
+      .lastUpdated = $ts |
+      .updatedBy = "claude-code"' \
+     documentation/emergency/emergency-config.json > tmp.json && mv tmp.json documentation/emergency/emergency-config.json
+   ```
 
 #### C6: Validate
 

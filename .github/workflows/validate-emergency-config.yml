@@ -6,6 +6,7 @@ on:
             - emergency
             - master
             - main
+            - develop
         paths:
             - "documentation/emergency/**"
             - "src/scripts/emergency/**"
