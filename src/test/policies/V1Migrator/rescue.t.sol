@@ -111,9 +111,9 @@ contract V1MigratorRescueTest is V1MigratorTest {
 
     // given contract is disabled
     //  given caller is admin
-    //    [X] it reverts
+    //    [X] it transfers entire balance to admin
 
-    function test_rescue_givenDisabled_reverts() public {
+    function test_rescue_givenDisabled_givenAdmin() public {
         // Disable the contract
         vm.prank(emergencyUser);
         migrator.disable("");
@@ -122,10 +122,19 @@ contract V1MigratorRescueTest is V1MigratorTest {
         uint256 amount = 100e18;
         randomToken.mint(address(migrator), amount);
 
-        // Expect revert when trying to rescue while disabled
-        vm.expectRevert();
+        uint256 balanceBefore = randomToken.balanceOf(adminUser);
+
+        // Rescue as admin while contract is disabled
         vm.prank(adminUser);
         migrator.rescue(IERC20(address(randomToken)));
+
+        // Verify balance transferred
+        assertEq(
+            randomToken.balanceOf(adminUser),
+            balanceBefore + amount,
+            "Admin should receive rescued tokens even while disabled"
+        );
+        assertEq(randomToken.balanceOf(address(migrator)), 0, "Migrator should have zero balance");
     }
 
     // given contract is enabled

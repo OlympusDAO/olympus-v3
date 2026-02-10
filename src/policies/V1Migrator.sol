@@ -348,7 +348,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
 
     /// @inheritdoc IV1Migrator
     /// @dev    Only callable by admin or legacy migration admin. Sweeps entire balance to caller.
-    function rescue(IERC20 token_) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+    function rescue(IERC20 token_) external onlyAdminOrLegacyMigrationAdmin {
         if (address(token_) == address(0)) revert ZeroAddress();
 
         uint256 balance = token_.balanceOf(address(this));
