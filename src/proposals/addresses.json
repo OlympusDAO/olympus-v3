@@ -233,5 +233,30 @@
         "addr": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
         "chainId": 1,
         "name": "olympus-periphery-convertible-deposit-activator"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-module-price-1_2"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-erc7726-oracle-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-chainlink-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-morpho-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-price-config-2_0"
     }
 ]
