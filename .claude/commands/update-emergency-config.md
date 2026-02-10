@@ -1,44 +1,44 @@
 # Update Emergency Config
 
-This skill updates `emergency-config.json` based on an existing Solidity emergency script and `env.json`.
+This skill updates `documentation/emergency/emergency-config.json` by analyzing contract source code or existing batch scripts.
 
-## Prerequisites
-
-Before using this skill, ensure:
-1. The Solidity batch script exists in `src/scripts/emergency/`
-2. Contract addresses are deployed and present in `src/scripts/env.json`
-
-## Workflow
+## Three Invocation Modes
 
 ```
-[Solidity script exists] + [Contract deployed in env.json]
-                    ↓
-         Run this skill with script path
-                    ↓
-         Parses script → extracts calls, owner
-                    ↓
-         Reads env.json → gets addresses per chain
-                    ↓
-         Generates component for emergency-config.json
-                    ↓
-         Asks for metadata (severity, category, etc.)
-                    ↓
-         Updates emergency-config.json
-                    ↓
-         Runs validation
+/update-emergency-config                              → scan mode
+/update-emergency-config src/policies/NewThing.sol    → contract mode
+/update-emergency-config src/scripts/emergency/X.sol  → script mode (legacy)
 ```
 
-## Usage
-
-```
-/update-emergency-config src/scripts/emergency/YourComponent.sol
-```
+**Mode detection:**
+- No argument → **scan mode**
+- Argument contains `src/scripts/emergency/` → **script mode**
+- Argument is any other `.sol` file → **contract mode**
 
 ## Instructions for Claude
 
-When this skill is invoked:
+### Mode A: Scan Mode (no argument)
 
-### Step 1: Parse the Solidity Script
+#### A1: Discover uncovered contracts
+
+1. Grep `src/policies/` and `src/periphery/` for concrete contracts that inherit `PolicyEnabler`, `PeripheryEnabler`, or `IEnabler`:
+   - Use `Grep` with patterns like `is PolicyEnabler`, `is PeripheryEnabler`, `is IEnabler`
+   - Search for `is.*PolicyEnabler`, `is.*PeripheryEnabler`, `is.*IEnabler` to catch multi-inheritance
+2. Skip abstract contracts — grep each matched file for `abstract contract`; if found, skip it
+3. Read `documentation/emergency/emergency-config.json` and extract `contractRegistry` array
+4. Cross-reference: for each discovered contract, check if the contract name is already in `contractRegistry`
+5. Present the list of uncovered contracts to the user, showing:
+   - Contract name
+   - File path
+   - Detected pattern (PolicyEnabler / PeripheryEnabler / IEnabler)
+6. Use AskUserQuestion to let the user select which contracts to add
+7. For each selected contract, run the **Detection Hierarchy** (see below), then proceed to **Resolve Addresses**, **Ask Metadata**, **Update Config**, and **Validate** (Steps C3–C7)
+
+### Mode B: Script Mode (argument is `src/scripts/emergency/*.sol`)
+
+This is the legacy flow — unchanged from before.
+
+#### B1: Parse the Solidity Script
 
 Read the provided Solidity file and extract:
 
@@ -59,36 +59,84 @@ Read the provided Solidity file and extract:
 
 3. **Component ID**: derive from contract name in kebab-case (e.g., `YieldRepurchaseFacility.sol` → `yield-repurchase-facility`)
 
-### Step 2: Read env.json for Addresses
+#### B2: Determine ABI Key
 
-Read `src/scripts/env.json` and for each chain, resolve the contractKey to get addresses.
+Match the function signature to existing ABIs in `documentation/emergency/emergency-abis.json` using the **ABI Lookup Table** below.
 
-For example, if contractKey is `"olympus.policies.OlympusHeart"`:
-- Check `env.json.current.mainnet.olympus.policies.OlympusHeart`
-- Check `env.json.current.sepolia.olympus.policies.OlympusHeart`
-- etc.
+#### B3–B7: Continue with Resolve Addresses, Ask Metadata, Update Config, Validate, Summary
 
-Build `availableOn` array from chains where address exists and is not zero address.
+Same as Steps C3–C7 below, but include `"batchScript": "<path to solidity script>"` in the generated component.
 
-### Step 3: Determine ABI Key
+### Mode C: Contract Mode (argument is any other `.sol` file)
 
-Match the function signature to existing ABIs in `emergency-abis.json`:
+#### C1: Read the Contract Source
 
-| Function Pattern | ABI Key |
-|------------------|---------|
-| `disable(bytes)` | `periphery_enabler` |
-| `enable(bytes)` | `periphery_enabler` |
-| `shutdownWithdrawals()`, `shutdownMinting()`, `shutdown()`, `restart()` | `emergency` |
-| `setBorrowPaused(bool)`, `setLiquidationsPaused(bool)` | `cooler_v2` |
-| `setBridgeStatus(bool)` | `cross_chain_bridge` |
-| `deactivate()`, `activate()` | `reserve_migrator` |
-| `shutdown(address[])` | `yield_repurchase_facility` |
-| `withdrawLiquidity(uint256)` | `ccip_lock_release_pool` |
-| `emergencyShutdownFixedExpiryMarket(uint256)` | `bond_manager` |
+Read the specified `.sol` file.
 
-If no match found, ask user if a new ABI entry is needed.
+#### C2: Run the Detection Hierarchy
 
-### Step 4: Ask User for Metadata
+Analyze the contract source in this order. Stop at the first match:
+
+**Level 1 — PolicyEnabler**
+- Grep for `is PolicyEnabler` or `is.*PolicyEnabler` in the inheritance declaration
+- Also check if the contract inherits from a base that itself inherits PolicyEnabler (read the base contract if needed)
+- Result:
+  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+  - ABI: `periphery_enabler`
+  - Owner: `emergency` (PolicyEnabler grants `onlyEmergencyOrAdminRole` on disable)
+  - `batchScript`: omit
+
+**Level 2 — PeripheryEnabler**
+- Grep for `is PeripheryEnabler` or `is.*PeripheryEnabler`
+- Result:
+  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+  - ABI: `periphery_enabler`
+  - Owner: `dao` (PeripheryEnabler uses `_onlyOwner()`, typically DAO multisig)
+  - `batchScript`: omit
+
+**Level 3 — Direct IEnabler**
+- Grep for `is IEnabler` or `IEnabler` in inheritance, but only if NOT already matched by Level 1 or 2
+- Result:
+  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+  - ABI: `periphery_enabler`
+  - Owner: **ask user** (use AskUserQuestion with options `emergency` and `dao`)
+  - `batchScript`: omit
+
+**Level 4 — Known emergency functions**
+- Scan the source for known emergency function definitions: `shutdown`, `deactivate`, `setBorrowPaused`, `setLiquidationsPaused`, `setBridgeStatus`, `emergencyShutdown*`
+- Extract full function signatures from the source
+- Match to ABI keys using the **ABI Lookup Table** below
+- Owner: **ask user**
+- For each arg: determine if a static value can be inferred from context
+  - If any arg is dynamic (can't determine a static value from the source), check for a matching script in `src/scripts/emergency/` that references this contract
+  - If a matching script exists, parse it for arg values and link `batchScript`
+  - If no matching script exists, flag to user and ask how to resolve
+
+**Level 5 — Matching batch script exists**
+- Check `src/scripts/emergency/` for a script that references this contract (grep for the contract name)
+- If found, fall back to **Script Mode** flow (B1–B2) to parse the script
+- Include `batchScript` in the generated component
+
+**Level 6 — None of the above**
+- Use AskUserQuestion to ask the user what the emergency action should be for this contract
+- Ask for: function name, signature, args, ABI key, owner
+
+#### C3: Resolve Addresses from env.json
+
+Read `src/scripts/env.json` and for each chain, resolve the contract's env key to get addresses.
+
+The contract key follows the pattern `olympus.policies.ContractName` or `olympus.periphery.ContractName` — determine the correct path based on the file location.
+
+For example, if the contract is at `src/policies/Heart.sol` and the contract name is `OlympusHeart`:
+- Check `env.json` → `current.mainnet.olympus.policies.OlympusHeart`
+- Check `env.json` → `current.sepolia.olympus.policies.OlympusHeart`
+- etc. for all chains
+
+Build `availableOn` array from chains where address exists and is not the zero address.
+
+**Important:** The contract name in env.json may differ from the filename. Look at the `contract` declaration in the `.sol` file to get the actual name, then search env.json for that name.
+
+#### C4: Ask User for Metadata
 
 Use AskUserQuestion to gather:
 
@@ -114,11 +162,11 @@ Use AskUserQuestion to gather:
 
 6. **Dependencies** (optional): Other component IDs to shutdown together
 
-### Step 5: Update emergency-config.json
+#### C5: Update emergency-config.json
 
 1. Read current `documentation/emergency/emergency-config.json`
 
-2. Add contract to `contractRegistry` if not present (extract contract name from contractKey, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`)
+2. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`)
 
 3. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
 
@@ -131,21 +179,25 @@ Use AskUserQuestion to gather:
   "category": "<from user>",
   "severity": "<from user>",
   "owner": "<emergency|dao>",
-  "shutdownCriteria": ["<from user>"],
+  "shutdownCriteria": ["<from user, if provided>"],
   "calls": [
     {
-      "contractKey": "<from script>",
-      "function": "<from script>",
-      "signature": "<from script>",
-      "args": [<from script>],
+      "contractKey": "<resolved env key>",
+      "function": "<function name>",
+      "signature": "<full signature>",
+      "args": [{"name": "<arg name>", "type": "<arg type>", "value": "<arg value>"}],
       "abi": "<matched abi key>"
     }
   ],
   "availableOn": ["<chains from env.json>"],
-  "postShutdownSteps": ["<from user>"],
-  "batchScript": "<path to solidity script>"
+  "postShutdownSteps": ["<from user, if provided>"],
+  "dependencies": ["<from user, if provided>"],
+  "batchScript": "<only if script mode or Level 4/5 detection>"
 }
 ```
+
+   - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns)
+   - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` if not provided by user
 
 5. Update `version` (bump patch version)
 
@@ -153,7 +205,7 @@ Use AskUserQuestion to gather:
 
 7. Update `updatedBy` to `"claude-code"`
 
-### Step 6: Validate
+#### C6: Validate
 
 Run validation:
 ```bash
@@ -162,28 +214,68 @@ node shell/validate-emergency-config.js
 
 If validation fails, fix the issues and re-run.
 
-### Step 7: Summary
+#### C7: Summary
 
 Report to user:
 - Component ID added
+- Detection method used (e.g., "Detected PolicyEnabler — using disable(bytes)")
 - Chains where available
 - Owner (emergency/dao MS)
+- Whether batchScript was linked or omitted
 - Reminder to test with `./shell/shutdown.sh <component-id> --list`
 
-## Example
+## ABI Lookup Table
 
-For `src/scripts/emergency/Heart.sol`:
+Match function signatures to ABI keys in `documentation/emergency/emergency-abis.json`:
 
-**Parsed from script:**
-- Owner: `emergency` (uses `setUpEmergency`)
-- ContractKey: `olympus.policies.OlympusHeart`
-- Function: `disable(bytes)` with empty bytes arg
-- ABI: `periphery_enabler`
+| Function Pattern | ABI Key |
+|------------------|---------|
+| `disable(bytes)` | `periphery_enabler` |
+| `enable(bytes)` | `periphery_enabler` |
+| `shutdownWithdrawals()`, `shutdownMinting()`, `shutdown()`, `restart()` | `emergency` |
+| `shutdown()`, `restart()` (EmissionManager) | `emission_manager` |
+| `setBorrowPaused(bool)`, `setLiquidationsPaused(bool)` | `cooler_v2` |
+| `setBridgeStatus(bool)` | `cross_chain_bridge` |
+| `deactivate()`, `activate()` (Heart) | `heart` |
+| `deactivate()`, `activate()` (ReserveMigrator) | `reserve_migrator` |
+| `shutdown(address[])` | `yield_repurchase_facility` |
+| `withdrawLiquidity(uint256)` | `ccip_lock_release_pool` |
+| `emergencyShutdownFixedExpiryMarket(uint256)` | `bond_manager` |
 
-**From env.json:**
-- mainnet: `0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB`
-- sepolia: `0x1dc2c4E15189a7aa61Eff2b3DD3D5EAe8fA03377`
+If no match is found, ask the user if a new ABI entry is needed in `emergency-abis.json`.
 
+## Detection Hierarchy Summary
+
+```
+Contract source file
+    │
+    ├─ Level 1: inherits PolicyEnabler?
+    │   → disable(bytes), owner=emergency, no batchScript
+    │
+    ├─ Level 2: inherits PeripheryEnabler?
+    │   → disable(bytes), owner=dao, no batchScript
+    │
+    ├─ Level 3: inherits IEnabler directly?
+    │   → disable(bytes), owner=ask user, no batchScript
+    │
+    ├─ Level 4: has known emergency functions?
+    │   → extract signatures, match ABI, owner=ask user
+    │   → if dynamic args: check for matching script
+    │
+    ├─ Level 5: matching batch script in src/scripts/emergency/?
+    │   → parse script (legacy flow), link batchScript
+    │
+    └─ Level 6: none detected
+        → ask user for everything
+```
+
+## Examples
+
+### Example 1: PolicyEnabler contract (contract mode)
+
+For `src/policies/Heart.sol` which has `contract OlympusHeart is PolicyEnabler`:
+
+**Detected:** Level 1 — PolicyEnabler
 **Generated component:**
 ```json
 {
@@ -200,14 +292,27 @@ For `src/scripts/emergency/Heart.sol`:
     "args": [{"name": "disableData_", "type": "bytes", "value": ""}],
     "abi": "periphery_enabler"
   }],
-  "availableOn": ["mainnet", "sepolia"],
-  "batchScript": "src/scripts/emergency/Heart.sol"
+  "availableOn": ["mainnet", "sepolia"]
+}
+```
+Note: no `batchScript` field.
+
+### Example 2: Script with dynamic args (script mode)
+
+For `src/scripts/emergency/CCIPTokenPoolMainnet.sol`:
+
+**Detected:** Script mode (legacy)
+**Generated component includes:**
+```json
+{
+  "batchScript": "src/scripts/emergency/CCIPTokenPoolMainnet.sol"
 }
 ```
 
 ## Notes
 
-- Most new contracts implement `IEnabler` interface and use `periphery_enabler` ABI
+- Most new contracts implement `IEnabler` via `PolicyEnabler` or `PeripheryEnabler` — the skill can derive config directly from the contract source without needing a batch script
+- Batch scripts are only needed for edge cases with dynamic/on-chain args (e.g., `CCIPTokenPoolMainnet`)
 - Only add new ABI entries if the function signature is truly unique
 - Dynamic args (like `withdrawLiquidity(uint256)`) should use `"value": "dynamic"` with `"envKey"` for resolution
 - Keep component IDs kebab-case and descriptive
