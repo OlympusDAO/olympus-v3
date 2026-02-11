@@ -7,11 +7,12 @@ import {fromSubKeycode} from "src/Submodules.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 /// @title      OlympusPriceV2
 /// @author     Oighty
 /// @notice     Provides current and historical prices for assets
-contract OlympusPricev2 is PRICEv2 {
+contract OlympusPricev2 is PRICEv2, IVersioned {
     // DONE
     // [X] Update functions for asset price feeds, strategies, etc.
     // [X] Toggle MA on and off for an asset
@@ -46,13 +47,24 @@ contract OlympusPricev2 is PRICEv2 {
         return toKeycode("PRICE");
     }
 
-    /// @inheritdoc Module
-    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
+    /// @inheritdoc IVersioned
+    function VERSION()
+        external
+        pure
+        virtual
+        override(IVersioned, Module)
+        returns (uint8 major, uint8 minor)
+    {
         major = 2;
         minor = 0;
     }
 
-    // ========== MODIFIERS ========== //
+    // ========== ERC165 FUNCTIONS ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+        return
+            interfaceId_ == type(IVersioned).interfaceId || super.supportsInterface(interfaceId_);
+    }
 
     ////////////////////////////////////////////////////////////////
     //                      DATA FUNCTIONS                        //

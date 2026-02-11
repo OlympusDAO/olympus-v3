@@ -230,6 +230,8 @@ abstract contract Submodule is IVersioned, ISubmodule {
         _;
     }
 
+    // ========== SUBMODULE FUNCTIONS ========== //
+
     /// @notice 5 byte identifier for the parent module.
     function PARENT() public pure virtual returns (Keycode) {}
 
@@ -238,6 +240,8 @@ abstract contract Submodule is IVersioned, ISubmodule {
 
     /// @inheritdoc IVersioned
     function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {}
+
+    // ========== ERC165 FUNCTIONS ========== //
 
     /// @notice Query if a contract implements an interface
     ///

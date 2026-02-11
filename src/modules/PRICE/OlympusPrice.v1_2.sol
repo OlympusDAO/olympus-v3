@@ -165,11 +165,10 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         return _observationFrequency;
     }
 
-    function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
-        return
-            interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IPRICEv1).interfaceId ||
-            interfaceId == type(IPRICEv2).interfaceId;
+    // ========== ERC165 FUNCTIONS ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+        return interfaceId_ == type(IPRICEv1).interfaceId || super.supportsInterface(interfaceId_);
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

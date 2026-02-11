@@ -13,7 +13,7 @@ import {ModuleWithSubmodules, Submodule} from "src/Submodules.sol";
 
 /// @notice     Abstract Bophades module for price resolution
 /// @author     Oighty
-abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2 {
+abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
     // ========== STATIC VARIABLES ========== //
 
     /// @notice     The frequency of price observations (in seconds)
@@ -40,14 +40,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2 {
         return _decimals;
     }
 
-    /// @notice Returns the version of the PRICEv2 module
-    function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
-        return (2, 0);
-    }
+    // ========== ERC165 FUNCTIONS ========== //
 
-    function supportsInterface(bytes4 interfaceId) external view virtual returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public view virtual returns (bool) {
         return
-            interfaceId == type(IERC165).interfaceId || interfaceId == type(IPRICEv2).interfaceId;
+            interfaceId_ == type(IERC165).interfaceId || interfaceId_ == type(IPRICEv2).interfaceId;
     }
 }
 
