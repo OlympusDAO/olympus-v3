@@ -163,6 +163,12 @@ interface IPRICEv2 {
         bool useMovingAverage_
     );
 
+    /// @notice         A strategy was provided for a single price source
+    /// @dev            Strategy is unnecessary and will not be used
+    ///
+    /// @param asset_   The asset being configured
+    error PRICE_ParamsStrategyNotSupported(address asset_);
+
     /// @notice         The variant provided in the parameters is invalid
     /// @dev            See the `Variant` enum for valid variants
     ///

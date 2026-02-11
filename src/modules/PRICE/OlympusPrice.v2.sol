@@ -472,17 +472,21 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         if (useMovingAverage_ && !storeMovingAverage_)
             revert PRICE_ParamsStoreMovingAverageRequired(asset_);
 
-        // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
-        if (
-            (feeds_.length + (useMovingAverage_ ? 1 : 0)) > 1 &&
-            fromSubKeycode(strategy_.target) == bytes20(0)
-        )
+        // Determine the number of price feeds (including the moving average)
+        uint256 numFeeds = feeds_.length + (useMovingAverage_ ? 1 : 0);
+
+        // Strategy is required if there is more than one price feed
+        if (numFeeds > 1 && fromSubKeycode(strategy_.target) == bytes20(0))
             revert PRICE_ParamsStrategyInsufficient(
                 asset_,
                 abi.encode(strategy_),
                 feeds_.length,
                 useMovingAverage_
             );
+
+        // Strategy is not supported if there is only one price feed
+        if (numFeeds == 1 && fromSubKeycode(strategy_.target) != bytes20(0))
+            revert PRICE_ParamsStrategyNotSupported(asset_);
 
         // Update asset strategy data
         _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);

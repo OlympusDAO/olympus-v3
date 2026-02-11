@@ -3059,11 +3059,7 @@ contract PriceV2Test is Test {
             uint32(16 hours), // uint32 movingAverageDuration_
             0, // uint48 lastObservationTime_
             obs, // uint256[] memory observations_
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
-                abi.encode(0) // no params required
-            ), // Component memory strategy_
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
             feeds //
         );
     }
@@ -3349,6 +3345,51 @@ contract PriceV2Test is Test {
             medianStrategy,
             feeds
         );
+    }
+
+    function test_addAsset_withStrategy_singlePriceFeed_reverts() public {
+        // Bug #2 test: Strategy with single price source should be rejected
+        // Currently this test demonstrates the bug - the configuration is accepted
+        // when it should revert with PRICE_ParamsStrategyNotSupported
+        // Using getFirstNonZeroPrice which would support a single price feed,
+        // but the strategy should still be rejected since it's unnecessary
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmFeedOneParams)
+        );
+
+        IPRICEv2.Component memory strategies = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            abi.encode(0)
+        );
+
+        // Expect a revert as the strategy is not supported
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ParamsStrategyNotSupported.selector,
+                address(weth)
+            )
+        );
+
+        vm.startPrank(priceWriter);
+        price.addAsset(
+            address(weth),
+            false, // storeMovingAverage
+            false, // useMovingAverage
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            strategies, // Strategy provided but only 1 input source
+            feeds
+        );
+
+        vm.stopPrank();
     }
 
     function test_addAsset_withAverageStrategy_withMovingAverage_singlePriceFeed(
