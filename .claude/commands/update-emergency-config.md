@@ -139,7 +139,7 @@ jq -r '.current.mainnet.olympus.periphery.CCIPCrossChainBridge // empty' src/scr
 jq -r '.current.sepolia.olympus.periphery.CCIPCrossChainBridge // empty' src/scripts/env.json
 ```
 
-Build `availableOn` array from chains where address exists and is not the zero address.
+Discard any chain where the address is empty or the zero address (`0x0000000000000000000000000000000000000000`). Build the `availableOn` array from the remaining chains only. Do NOT write zero addresses into the config for any purpose (contracts, multisigs, or otherwise).
 
 **Important:** The contract name in env.json may differ from the filename. Look at the `contract` declaration in the `.sol` file to get the actual name, then search env.json for that name. If the exact contract name is not found in env.json for expected chains, also search for partial matches or check existing emergency scripts' `_envAddressNotZero` calls for the actual env key used (e.g., source says `contract CoolerComposites` but mainnet env.json uses `CoolerV2Composites`).
 
@@ -186,7 +186,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
    jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
-4. Add/update contract addresses in `chains.*.contracts` for each chain where the contract exists
+4. Add/update contract addresses in `chains.*.contracts` only for chains in the `availableOn` array (i.e., skip chains with zero or missing addresses)
 
 5. Add new component to `components` array (build the component JSON and use `jq` to append):
 ```json

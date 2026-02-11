@@ -157,6 +157,25 @@ function validate() {
       }
     }
   }
+  // 4b. Validate that chains with emergency-owned components have a non-zero emergency multisig
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+  for (const [chainName, chainConfig] of Object.entries(config.chains)) {
+    const emergencyAddr = chainConfig.multisigs && chainConfig.multisigs.emergency;
+    const hasEmergencyComponent = config.components.some(
+      (c) => c.owner === "emergency" && c.availableOn.includes(chainName)
+    );
+    if (hasEmergencyComponent && (!emergencyAddr || emergencyAddr === ZERO_ADDRESS)) {
+      errors.push(
+        `Chain "${chainName}" has emergency-owned components but no valid emergency multisig address`
+      );
+    }
+    if (emergencyAddr && emergencyAddr === ZERO_ADDRESS) {
+      warnings.push(
+        `Chain "${chainName}" has a zero-address emergency multisig — remove or replace it`
+      );
+    }
+  }
+
   log.success("All addresses validated");
 
   // 5. Check for duplicate component IDs
