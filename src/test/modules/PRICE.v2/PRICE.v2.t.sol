@@ -3240,6 +3240,57 @@ contract PriceV2Test is Test {
         assertEq(asset.feeds, abi.encode(feeds));
     }
 
+    function test_addAsset_withMedianStrategy_twoFeeds_noMovingAverage_reverts() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmFeedOneParams)
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(ohmFeedTwoParams)
+        );
+
+        IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getMedianPrice.selector, // Requires 3 inputs
+            abi.encode(true) // strict mode
+        );
+
+        // Expect a revert as the strategy requires 3 inputs
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_StrategyFailed.selector,
+                address(weth),
+                abi.encodeWithSelector(
+                    SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+                    2,
+                    3
+                )
+            )
+        );
+
+        vm.startPrank(priceWriter);
+        price.addAsset(
+            address(weth),
+            false, // storeMovingAverage
+            false, // useMovingAverage
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            medianStrategy,
+            feeds
+        );
+    }
+
     function testRevert_addAsset_invalidPriceFeed() public {
         // Set up a new feed that will revert when run
         ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
