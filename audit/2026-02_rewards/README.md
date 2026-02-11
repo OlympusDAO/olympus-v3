@@ -105,7 +105,7 @@ Given the Bond Protocol fork, the audit effort should be weighted as follows:
 
 ### Inheritance Hierarchy
 
-```
+```text
 Policy (Bophades)
   |
   +-- BaseRewardDistributor (abstract)
