@@ -7,7 +7,8 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Mocks
-import {MockBalancerComposableStablePool, MockBalancerStablePool, MockBalancerVault, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
+import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
+import {MockBalancerComposableStablePool, MockBalancerStablePool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 // Interfaces
