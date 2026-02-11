@@ -14,7 +14,7 @@ import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      UniswapV3Price

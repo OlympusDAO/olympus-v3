@@ -13,7 +13,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PRICEv2, PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PRICEv2, PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      UniswapV2PoolTokenPrice

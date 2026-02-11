@@ -11,7 +11,7 @@ import {QuickSort} from "src/libraries/QuickSort.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      SimplePriceFeedStrategy

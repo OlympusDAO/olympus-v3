@@ -3,23 +3,22 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Mocks
+import {MockBalancerComposableStablePool, MockBalancerStablePool, MockBalancerVault, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
-import {MockBalancerStablePool, MockBalancerWeightedPool, MockBalancerComposableStablePool} from "test/mocks/MockBalancerPool.sol";
-import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
+import {BalancerPoolTokenPrice, IStablePool} from "src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {Kernel} from "src/Kernel.sol";
-import {BalancerPoolTokenPrice, IStablePool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 
 contract BalancerPoolTokenPriceStableTest is Test {
     using FullMath for uint256;

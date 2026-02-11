@@ -3,14 +3,14 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      ChainlinkPriceFeeds

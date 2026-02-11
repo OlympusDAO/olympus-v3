@@ -4,8 +4,8 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Bophades
 import {Keycode, toKeycode} from "src/Kernel.sol";

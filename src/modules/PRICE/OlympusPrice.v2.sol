@@ -2,12 +2,17 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
-import {fromSubKeycode} from "src/Submodules.sol";
-import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {SafeCast} from "src/libraries/SafeCast.sol";
+// Interfaces
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
+import {SafeCast} from "src/libraries/SafeCast.sol";
+
+// Bophades
+import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
+import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {fromSubKeycode} from "src/Submodules.sol";
 
 /// @title      OlympusPriceV2
 /// @author     Oighty

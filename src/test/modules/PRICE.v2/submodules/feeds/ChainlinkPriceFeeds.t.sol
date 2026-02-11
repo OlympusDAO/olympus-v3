@@ -3,23 +3,23 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Mocks
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 // Interfaces
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {Kernel} from "src/Kernel.sol";
-import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;
