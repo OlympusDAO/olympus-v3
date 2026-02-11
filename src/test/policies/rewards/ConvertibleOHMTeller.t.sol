@@ -1039,10 +1039,37 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         assertEq(teller.remainingMintApproval(), cap, "The approval should remain unchanged");
     }
 
-    function test_setMintCap_revertsIfNotAdmin() external {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+    function test_setMintCap_revertsIfNotAdminOrTellerAdmin() external {
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(user0);
         teller.setMintCap(1000e9);
+    }
+
+    function test_setMintCap_succeeds_givenTellerAdminRole() external {
+        // `admin` has ROLE_TELLER_ADMIN (setUp line 67), but NOT ADMIN_ROLE
+        uint256 mintCap = 500e9;
+        vm.prank(admin);
+        teller.setMintCap(mintCap);
+
+        // Verify
+        assertEq(
+            teller.remainingMintApproval(),
+            mintCap,
+            "The teller admin should be able to set the mint cap"
+        );
+    }
+
+    function test_setMintCap_succeeds_givenAdminRole() external {
+        // `address(this)` has ADMIN_ROLE (setUp line 68), but NOT ROLE_TELLER_ADMIN
+        uint256 mintCap = 750e9;
+        teller.setMintCap(mintCap);
+
+        // Verify
+        assertEq(
+            teller.remainingMintApproval(),
+            mintCap,
+            "The admin should be able to set the mint cap"
+        );
     }
 
     function test_setMintCap_revertsIfPolicyDisabled() external {

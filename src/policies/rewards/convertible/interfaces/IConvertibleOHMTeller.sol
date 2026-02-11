@@ -79,7 +79,7 @@ interface IConvertibleOHMTeller {
     function setMinDuration(uint48 duration_) external;
 
     /// @notice Sets the maximum amount of OHM that can be minted via the exercise.
-    /// @dev Only callable by addresses with the admin role.
+    /// @dev Only callable by addresses with the admin or convertible_admin role.
     /// @param cap_ The new minting cap in OHM units.
     function setMintCap(uint256 cap_) external;
 

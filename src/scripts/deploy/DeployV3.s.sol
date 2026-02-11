@@ -28,7 +28,6 @@ import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
-import {RewardDistributorUSDS} from "src/policies/rewards/RewardDistributorUSDS.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
@@ -852,34 +851,5 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(limitOrders), "olympus.periphery");
-    }
-
-    function deployRewardDistributorUSDS() public returns (address, string memory) {
-        // Dependencies
-        console2.log("Checking dependencies");
-        address kernel = _getAddressNotZero("olympus.Kernel");
-        address rewardTokenVault = _getAddressNotZero("external.tokens.sUSDS");
-
-        // Input parameters
-        uint256 startTimestamp = _readDeploymentArgUint256(
-            "RewardDistributorUSDS",
-            "startTimestamp"
-        );
-
-        // Log parameters
-        console2.log("RewardDistributorUSDS parameters:");
-        console2.log("  kernel", kernel);
-        console2.log("  rewardTokenVault", rewardTokenVault);
-        console2.log("  startTimestamp", startTimestamp);
-
-        // Deploy
-        vm.broadcast();
-        RewardDistributorUSDS distributor = new RewardDistributorUSDS(
-            kernel,
-            rewardTokenVault,
-            startTimestamp
-        );
-
-        return (address(distributor), "olympus.policies");
     }
 }

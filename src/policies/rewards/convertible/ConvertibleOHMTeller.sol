@@ -493,6 +493,17 @@ contract ConvertibleOHMTeller is
 
     // ========== ADMIN CONFIG ========== //
 
+    /// @notice Reverts if the caller does not have the admin or convertible_admin role
+    function _onlyAdminOrTellerAdminRole() internal view {
+        if (!_isAdmin(msg.sender) && !ROLES.hasRole(msg.sender, ROLE_TELLER_ADMIN))
+            revert NotAuthorised();
+    }
+
+    modifier onlyAdminOrTellerAdminRole() {
+        _onlyAdminOrTellerAdminRole();
+        _;
+    }
+
     /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(
         uint48 duration_
@@ -503,7 +514,7 @@ contract ConvertibleOHMTeller is
     }
 
     /// @inheritdoc IConvertibleOHMTeller
-    function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminRole {
+    function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminOrTellerAdminRole {
         _setMintCap(cap_);
     }
 

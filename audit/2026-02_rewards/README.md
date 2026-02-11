@@ -14,19 +14,11 @@ The Rewards Distribution system incentivises participation in protocol activitie
 
 Users earn "Drachma" points off-chain by engaging with the protocol. At the end of each epoch, accumulated points determine each user's share of a reward pool. An off-chain backend computes a Merkle tree of cumulative entitlements, and the root is posted on-chain. Users then submit Merkle proofs to claim their rewards.
 
-The system supports two reward types through separate distributor contracts:
+The system currently supports one reward type:
 
 | Reward Type | Distributor | Token | Mechanism |
 |---|---|---|---|
-| USDS Vault Rewards | `RewardDistributorUSDS` | sUSDS / USDS | Treasury withdrawal of vault tokens |
 | Convertible OHM Rewards | `RewardDistributorConvertible` | convOHM | Fixed-strike call options on OHM |
-
-### USDS Vault Rewards
-
-The USDS reward distributor withdraws sUSDS (the ERC4626 vault token for USDS) from the Olympus Treasury to fulfil claims. Users may choose to receive:
-
-- **sUSDS** (vault token) -- transferred directly from treasury
-- **USDS** (underlying) -- sUSDS is withdrawn from treasury, unwrapped via the vault, and the underlying USDS is transferred to the user. Any leftover vault shares from rounding are returned to the treasury.
 
 ### Convertible OHM Rewards (convOHM)
 
@@ -76,14 +68,11 @@ The contracts in scope for this audit are:
     - [policies/](../../src/policies/)
         - [rewards/](../../src/policies/rewards/)
             - [BaseRewardDistributor.sol](../../src/policies/rewards/BaseRewardDistributor.sol)
-            - [BaseVaultRewardDistributor.sol](../../src/policies/rewards/BaseVaultRewardDistributor.sol)
             - [RewardDistributorConvertible.sol](../../src/policies/rewards/RewardDistributorConvertible.sol)
-            - [RewardDistributorUSDS.sol](../../src/policies/rewards/RewardDistributorUSDS.sol)
         - [interfaces/](../../src/policies/interfaces/)
             - [rewards/](../../src/policies/interfaces/rewards/)
                 - [IRewardDistributor.sol](../../src/policies/interfaces/rewards/IRewardDistributor.sol)
                 - [IRewardDistributorConvertible.sol](../../src/policies/interfaces/rewards/IRewardDistributorConvertible.sol)
-                - [IVaultRewardDistributor.sol](../../src/policies/interfaces/rewards/IVaultRewardDistributor.sol)
 
 #### Convertible Token System (Forked from Bond Protocol)
 
@@ -100,27 +89,17 @@ The contracts in scope for this audit are:
                         - [Clone.sol](../../src/policies/rewards/convertible/lib/clones/Clone.sol)
                         - [CloneERC20.sol](../../src/policies/rewards/convertible/lib/clones/CloneERC20.sol)
 
-See the [solidity-metrics.html](./solidity-metrics.html) report for a summary of the code metrics for these contracts.
-
 ### Audit Priority
 
 Given the Bond Protocol fork, the audit effort should be weighted as follows:
 
 | Priority | Contracts | Rationale |
 |---|---|---|
-| **High** | `BaseRewardDistributor`, `BaseVaultRewardDistributor`, `RewardDistributorConvertible`, `RewardDistributorUSDS` | Entirely new code; Merkle tree logic, treasury interactions, claim flows |
+| **High** | `BaseRewardDistributor`, `RewardDistributorConvertible` | Entirely new code; Merkle tree logic, claim flows |
 | **High** | `ConvertibleOHMTeller` (deltas from Bond Protocol) | Kernel integration, MINTR minting model, removed features, creator isolation |
 | **Medium** | `ConvertibleOHMToken` (deltas from Bond Protocol) | Reduced immutable layout, added creator field, renamed mint/burn |
 | **Low** | `Clone.sol`, `CloneERC20.sol` | Verbatim copies from audited Bond Protocol code |
 | **Low** | Interface files | Type definitions, events, errors (no logic) |
-
-### Out-of-Scope
-
-- Off-chain Merkle tree generation (Drachma point calculation, pool sizing, tree construction)
-- Deployment scripts (`src/scripts/`)
-- Proposal contracts (`src/proposals/`)
-- Test files (`src/test/`)
-- Existing Bophades modules (Kernel, MINTR, TRSRY, ROLES) -- previously audited
 
 ## Architecture
 
@@ -132,13 +111,6 @@ Policy (Bophades)
   +-- BaseRewardDistributor (abstract)
   |     |   implements IRewardDistributor, IVersioned, PolicyEnabler
   |     |   provides: epoch management, Merkle verification, claim tracking
-  |     |
-  |     +-- BaseVaultRewardDistributor (abstract)
-  |     |     |   implements IVaultRewardDistributor
-  |     |     |   provides: vault token handling, treasury withdrawal, claim/preview
-  |     |     |
-  |     |     +-- RewardDistributorUSDS (concrete)
-  |     |           provides: sUSDS/USDS transfer logic
   |     |
   |     +-- RewardDistributorConvertible (concrete)
   |           implements IRewardDistributorConvertible
@@ -171,7 +143,6 @@ flowchart TD
     end
 
     subgraph Reward Distributors
-        DistUSDS["RewardDistributorUSDS"]
         DistConv["RewardDistributorConvertible"]
     end
 
@@ -180,21 +151,17 @@ flowchart TD
         ConvToken["convOHM Tokens\n(cloned per epoch)"]
     end
 
-    Admin((rewards_merkle_updater)) -->|"endEpoch()"| DistUSDS
-    Admin -->|"endEpoch()"| DistConv
+    Admin((rewards_merkle_updater)) -->|"endEpoch()"| DistConv
 
     DistConv -->|"deploy(), create()"| Teller
     Teller -->|"clone()"| ConvToken
 
-    User((User)) -->|"claim() with proof"| DistUSDS
-    User -->|"claim() with proof"| DistConv
+    User((User)) -->|"claim() with proof"| DistConv
     User -->|"exercise()"| Teller
 
-    DistUSDS -->|"withdrawReserves()"| TRSRY
     Teller -->|"mintOhm()"| MINTR
     Teller -->|"quote tokens"| TRSRY
 
-    DistUSDS -.->|"role check"| ROLES
     DistConv -.->|"role check"| ROLES
     Teller -.->|"role check"| ROLES
 ```
@@ -205,7 +172,7 @@ flowchart TD
 |---|---|---|
 | `rewards_merkle_updater` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
 | `convertible_distributor` | `RewardDistributorConvertible` | Call `deploy()` and `create()` on `ConvertibleOHMTeller` |
-| `convertible_admin` | Multisig / governance | Call `setMinDuration()` on `ConvertibleOHMTeller` |
+| `convertible_admin` | Multisig / governance | Call `setMinDuration()` and `setMintCap()` on `ConvertibleOHMTeller` |
 | Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()` |
 | Emergency role (PolicyEnabler) | Emergency multisig | Disable distributors and teller |
 
@@ -214,34 +181,14 @@ flowchart TD
 | Contract | ROLES | MINTR | TRSRY |
 |---|---|---|---|
 | `BaseRewardDistributor` | Yes (via derived) | - | - |
-| `BaseVaultRewardDistributor` | Yes | - | Yes |
-| `RewardDistributorUSDS` | Yes | - | Yes |
 | `RewardDistributorConvertible` | Yes | - | - |
 | `ConvertibleOHMTeller` | Yes | Yes | Yes |
 
 ## Processes
 
-### Ending an Epoch (USDS Rewards)
-
-An authorised caller posts the Merkle root for a completed epoch. The epoch end date must be at a day boundary (23:59:59 UTC) and at least `MIN_EPOCH_DURATION` (1 day) after the previous epoch.
-
-```mermaid
-sequenceDiagram
-    participant Admin as rewards_merkle_updater
-    participant DistUSDS as RewardDistributorUSDS
-    participant ROLES
-
-    Admin->>DistUSDS: endEpoch(epochEndDate, merkleRoot, params)
-    DistUSDS->>ROLES: requireRole(ROLE_MERKLE_UPDATER, msg.sender)
-    DistUSDS->>DistUSDS: validate epoch timestamp and ordering
-    DistUSDS->>DistUSDS: store epochMerkleRoots[epochEndDate] = merkleRoot
-    DistUSDS->>DistUSDS: emit MerkleRootSet(epochEndDate, merkleRoot)
-    DistUSDS->>DistUSDS: emit EpochEnded(epochEndDate, REWARD_TOKEN, "")
-```
-
 ### Ending an Epoch (Convertible Rewards)
 
-Similar to USDS, but also deploys a new convOHM token for the epoch via the teller.
+When an epoch ends, the admin posts the Merkle root and deploys a new convOHM token for the epoch via the teller.
 
 ```mermaid
 sequenceDiagram
@@ -263,40 +210,6 @@ sequenceDiagram
     Teller-->>DistConv: token address
     DistConv->>DistConv: store epochConvertibleTokens[epochEndDate] = token
     DistConv->>DistConv: emit MerkleRootSet, EpochEnded
-```
-
-### Claiming USDS Rewards
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant DistUSDS as RewardDistributorUSDS
-    participant TRSRY
-    participant Vault as sUSDS Vault
-
-    User->>DistUSDS: claim(epochEndDates, amounts, proofs, params)
-    Note over DistUSDS: params = abi.encode(ClaimParams{asVaultToken})
-    loop For each epoch
-        DistUSDS->>DistUSDS: verify Merkle proof
-        DistUSDS->>DistUSDS: mark hasClaimed[user][epoch] = true
-        DistUSDS->>DistUSDS: accumulate totalAmount
-    end
-
-    alt asVaultToken = true (claim as sUSDS)
-        DistUSDS->>Vault: convertToShares(totalAmount)
-        DistUSDS->>TRSRY: withdrawReserves(sUSDS, shares)
-        DistUSDS->>User: transfer sUSDS
-    else asVaultToken = false (claim as USDS)
-        DistUSDS->>Vault: previewWithdraw(totalAmount)
-        DistUSDS->>TRSRY: withdrawReserves(sUSDS, sharesNeeded)
-        DistUSDS->>Vault: withdraw(totalAmount, user, this)
-        Note over DistUSDS: User receives USDS directly from vault
-        opt leftover shares > 0
-            DistUSDS->>TRSRY: return leftover sUSDS
-        end
-    end
-
-    DistUSDS->>DistUSDS: emit RewardsClaimed(user, amount, vaultShares, epochs)
 ```
 
 ### Claiming Convertible Rewards
@@ -349,15 +262,12 @@ All distributors and the teller use the `PolicyEnabler` pattern for lifecycle ma
 
 ```mermaid
 flowchart TD
-    admin((admin)) -->|"enable()"| DistUSDS["RewardDistributorUSDS"]
-    admin -->|"enable()"| DistConv["RewardDistributorConvertible"]
+    admin((admin)) -->|"enable()"| DistConv["RewardDistributorConvertible"]
     admin -->|"enable()"| Teller["ConvertibleOHMTeller"]
-    emergency((emergency)) -->|"disable()"| DistUSDS
-    emergency -->|"disable()"| DistConv
+    emergency((emergency)) -->|"disable()"| DistConv
     emergency -->|"disable()"| Teller
 
     subgraph Policies
-        DistUSDS
         DistConv
         Teller
     end
@@ -369,7 +279,7 @@ The `ConvertibleOHMTeller` manages its own MINTR approval to enforce a protocol-
 
 ```mermaid
 sequenceDiagram
-    participant Admin as admin
+    participant Admin as admin / convertible_admin
     participant Teller as ConvertibleOHMTeller
     participant MINTR
 
