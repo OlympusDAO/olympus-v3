@@ -28,9 +28,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title V1Migrator
 /// @notice Policy to allow OHM v1 holders to migrate to OHM v2 via merkle proof verification
-/// @dev    Inherits from Policy, RolesConsumer, PolicyEnabler, IVersioned, and IV1Migrator
-///
-///         Migration flow (partial migrations allowed):
+/// @dev    Migration flow (partial migrations allowed):
 ///         1. User has OHM v1 balance
 ///         2. User proves eligibility via merkle proof with their allocated amount
 ///         3. User can migrate any amount up to their allocation in multiple transactions
