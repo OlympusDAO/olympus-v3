@@ -198,6 +198,47 @@ contract MigrationProposalHelperForkTest is Test {
     }
 
     // ======================================================================
+    // Category Idempotency Tests
+    // ======================================================================
+
+    // given the migration category already exists in Burner
+    //  when activate is called
+    //    [X] it does not revert
+    //    [X] it completes successfully
+
+    function test_activate_givenCategoryExists_succeeds() public {
+        // Pre-add the migration category to Burner via DAO_MS
+        bytes32 migrationCategory = helper.MIGRATION_CATEGORY();
+        vm.prank(TIMELOCK);
+        rolesAdmin.grantRole("burner_admin", TIMELOCK);
+        vm.prank(TIMELOCK);
+        burner.addCategory(migrationCategory);
+
+        // Verify category exists
+        assertTrue(
+            burner.categoryApproved(migrationCategory),
+            "Migration category should be approved"
+        );
+
+        // Revoke burner_admin from TIMELOCK
+        vm.prank(TIMELOCK);
+        rolesAdmin.revokeRole("burner_admin", TIMELOCK);
+
+        // Now setup for activation (grants burner_admin to helper)
+        _setupForActivation();
+
+        // Activate should succeed despite category already existing
+        vm.prank(TIMELOCK);
+        helper.activate();
+
+        // Verify activation completed
+        assertTrue(helper.isActivated(), "Helper should be activated");
+
+        // Verify no tokens remain
+        _assertAllTokenBalancesAreZero();
+    }
+
+    // ======================================================================
     // TempOHM Approval Tests
     // ======================================================================
 
@@ -424,6 +465,144 @@ contract MigrationProposalHelperForkTest is Test {
             helper.getTempOHMToDeposit(),
             expectedTempOHM,
             "getTempOHMToDeposit should return OHMv1ToMigrate * 1e9"
+        );
+    }
+
+    // ======================================================================
+    // Rescue Function Tests
+    // ======================================================================
+
+    // when owner calls rescue
+    //  [X] it transfers entire balance to owner
+
+    function test_rescue_givenOwner_transfersToOwner() public {
+        // Deal random tokens to helper
+        uint256 amount = 100e18;
+        deal(OHMV2, address(helper), amount);
+
+        uint256 balanceBefore = ohmV2.balanceOf(TIMELOCK);
+
+        // Rescue as owner
+        vm.prank(TIMELOCK);
+        helper.rescue(IERC20(OHMV2));
+
+        // Verify balance transferred
+        assertEq(
+            ohmV2.balanceOf(TIMELOCK),
+            balanceBefore + amount,
+            "Owner should receive rescued tokens"
+        );
+        assertEq(ohmV2.balanceOf(address(helper)), 0, "Helper should have zero balance");
+    }
+
+    // when admin calls rescue
+    //  [X] it transfers entire balance to admin
+
+    function test_rescue_givenAdmin_transfersToAdmin() public {
+        // Deal random tokens to helper
+        uint256 amount = 100e18;
+        deal(OHMV2, address(helper), amount);
+
+        uint256 balanceBefore = ohmV2.balanceOf(DAO_MS);
+
+        // Rescue as admin
+        vm.prank(DAO_MS);
+        helper.rescue(IERC20(OHMV2));
+
+        // Verify balance transferred
+        assertEq(
+            ohmV2.balanceOf(DAO_MS),
+            balanceBefore + amount,
+            "Admin should receive rescued tokens"
+        );
+        assertEq(ohmV2.balanceOf(address(helper)), 0, "Helper should have zero balance");
+    }
+
+    // given caller is not owner and not admin
+    //  when attempting to rescue
+    //    [X] it reverts
+
+    function test_rescue_givenUnauthorized_reverts(address caller_) public {
+        vm.assume(caller_ != TIMELOCK && caller_ != DAO_MS);
+
+        // Deal random tokens to helper
+        uint256 amount = 100e18;
+        deal(OHMV2, address(helper), amount);
+
+        // Expect revert when unauthorized user tries to rescue
+        vm.expectRevert(MigrationProposalHelper.Unauthorized.selector);
+        vm.prank(caller_);
+        helper.rescue(IERC20(OHMV2));
+    }
+
+    // given token is zero address
+    //  when attempting to rescue
+    //    [X] it reverts
+
+    function test_rescue_givenZeroToken_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(MigrationProposalHelper.InvalidParams.selector, "token")
+        );
+        vm.prank(TIMELOCK);
+        helper.rescue(IERC20(address(0)));
+    }
+
+    // given contract has no token balance
+    //  when attempting to rescue
+    //    [X] it reverts
+
+    function test_rescue_givenZeroBalance_reverts() public {
+        // Don't deal any tokens to helper
+
+        vm.expectRevert(
+            abi.encodeWithSelector(MigrationProposalHelper.InvalidParams.selector, "balance")
+        );
+        vm.prank(TIMELOCK);
+        helper.rescue(IERC20(OHMV2));
+    }
+
+    // when owner calls rescue
+    //  [X] it emits Rescued event
+
+    function test_rescue_givenOwner_emitsRescuedEvent() public {
+        // Deal random tokens to helper
+        uint256 amount = 100e18;
+        deal(OHMV2, address(helper), amount);
+
+        // Expect Rescued event
+        vm.expectEmit(true, true, false, true);
+        emit MigrationProposalHelper.Rescued(OHMV2, TIMELOCK, amount);
+
+        // Rescue as owner
+        vm.prank(TIMELOCK);
+        helper.rescue(IERC20(OHMV2));
+    }
+
+    // given contract has been activated
+    //  when owner calls rescue
+    //    [X] it still works (rescue is independent of activation state)
+
+    function test_rescue_givenActivated_stillWorks() public {
+        // Setup and activate
+        _setupForActivation();
+        vm.prank(TIMELOCK);
+        helper.activate();
+
+        // Deal random tokens to helper (simulating accidental send)
+        uint256 amount = 100e18;
+        deal(OHMV2, address(helper), amount);
+
+        uint256 balanceBefore = ohmV2.balanceOf(TIMELOCK);
+
+        // Rescue as owner
+        vm.prank(TIMELOCK);
+        helper.rescue(IERC20(OHMV2));
+
+        // Verify balance transferred
+        assertEq(
+            ohmV2.balanceOf(TIMELOCK),
+            balanceBefore + amount,
+            "Owner should receive rescued tokens after activation"
         );
     }
 }

@@ -14,6 +14,8 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 // ============  LIBRARIES ============ //
 
 import {MerkleProof} from "@openzeppelin-5.3.0/utils/cryptography/MerkleProof.sol";
+import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // ============  EXTERNAL CONTRACTS ============ //
 
@@ -43,10 +45,11 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///
 ///         Admin functions:
 ///         - setMerkleRoot: Update eligibility tree (resets all migrated amounts)
-///         - setMigrationCap: Update global cap and MINTR approval
+///         - setRemainingMintApproval: Update remaining MINTR approval for migration
 ///         - enable/disable: Emergency pause/resume
 contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migrator {
     using MerkleProof for bytes32[];
+    using SafeTransferLib for ERC20;
 
     // =========  CONSTANTS ========= //
 
@@ -124,6 +127,21 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
         migratedAmount_ = _migratedAmounts[account_][_currentMerkleNonce];
     }
 
+    /// @notice Calculate OHM v2 amount from OHM v1 amount using gOHM conversion
+    /// @dev    Used by both migrate() and previewMigrate() to ensure consistency
+    /// @param amount_ The OHM v1 amount (9 decimals)
+    /// @return ohmV2Amount_ The OHM v2 amount (9 decimals), or 0 if conversion rounds to zero
+    function _calculateOHMv2Amount(uint256 amount_) internal view returns (uint256 ohmV2Amount_) {
+        // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
+        uint256 gohmAmount = _GOHM.balanceTo(amount_);
+        ohmV2Amount_ = _GOHM.balanceFrom(gohmAmount);
+    }
+
+    /// @inheritdoc IV1Migrator
+    function previewMigrate(uint256 amount_) external view returns (uint256 ohmV2Amount_) {
+        ohmV2Amount_ = _calculateOHMv2Amount(amount_);
+    }
+
     // =========  POLICY SETUP ========= //
 
     /// @inheritdoc Policy
@@ -164,39 +182,41 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
 
     // =========  ENABLE/DISABLE OVERRIDES ========= //
 
-    /// @notice Override _enable to accept initial migration cap
-    /// @dev    The enableData should be ABI-encoded as (uint256 migrationCap)
+    /// @notice Override _enable to accept initial remaining mint approval
+    /// @dev    The enableData should be ABI-encoded as (uint256 remainingApproval)
     ///
-    ///         This allows setting the initial migration cap when enabling the contract.
+    ///         This allows setting the initial remaining mint approval when enabling the contract.
     ///         The merkle root is set in the constructor and cannot be changed via enable().
     ///
-    ///         On re-enable, the MINTR approval is adjusted to match the provided cap.
+    ///         On re-enable, the MINTR approval is adjusted to match the provided remaining approval.
     ///
-    /// @param enableData_ ABI-encoded (uint256 migrationCap)
+    /// @param enableData_ ABI-encoded (uint256 remainingApproval)
     function _enable(bytes calldata enableData_) internal override {
-        // Decode enableData: (uint256 migrationCap)
-        uint256 migrationCap = abi.decode(enableData_, (uint256));
-        _setMigrationCap(migrationCap);
+        // Decode enableData: (uint256 remainingApproval)
+        uint256 remainingApproval = abi.decode(enableData_, (uint256));
+        _setRemainingMintApproval(remainingApproval);
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
 
-    /// @notice Internal function to set the migration cap by adjusting MINTR approval
-    /// @dev    Gets current MINTR approval and increases or decreases to reach target cap
-    /// @param cap_ The target migration cap (in OHM v2 units)
-    function _setMigrationCap(uint256 cap_) internal {
+    /// @notice Internal function to set the remaining MINTR mint approval
+    /// @dev    This sets the remaining allowance (not a lifetime total). The MINTR approval
+    ///         represents how much OHM v2 can still be minted. When users migrate, the
+    ///         approval decreases. This function synchronizes the approval to a target value.
+    /// @param approval_ The target remaining mint approval (in OHM v2 units)
+    function _setRemainingMintApproval(uint256 approval_) internal {
         // Get current MINTR approval
         uint256 currentApproval = MINTR.mintApproval(address(this));
 
-        // Increase or decrease MINTR approval to reach the target cap
-        if (cap_ > currentApproval) {
-            MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
-        } else if (cap_ < currentApproval) {
-            MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
+        // Increase or decrease MINTR approval to reach the target approval
+        if (approval_ > currentApproval) {
+            MINTR.increaseMintApproval(address(this), approval_ - currentApproval);
+        } else if (approval_ < currentApproval) {
+            MINTR.decreaseMintApproval(address(this), currentApproval - approval_);
         }
 
         // Emit event
-        emit MigrationCapUpdated(cap_, currentApproval);
+        emit RemainingMintApprovalUpdated(approval_, currentApproval);
     }
 
     // =========  VERSION ========= //
@@ -221,8 +241,9 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     // =========  MODIFIERS ========= //
 
     function _onlyAdminOrLegacyMigrationAdmin() internal view {
-        if (!ROLES.hasRole(msg.sender, LEGACY_MIGRATION_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!ROLES.hasRole(msg.sender, LEGACY_MIGRATION_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
+        }
     }
 
     modifier onlyAdminOrLegacyMigrationAdmin() {
@@ -277,8 +298,7 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
 
         // Calculate OHM v2 amount using gOHM conversion to match the migration flow
         // Migration flow: OHM v1 -> gOHM (balanceTo) -> OHM v2 (balanceFrom)
-        uint256 gohmAmount = _GOHM.balanceTo(amount_);
-        uint256 ohmV2Amount = _GOHM.balanceFrom(gohmAmount);
+        uint256 ohmV2Amount = _calculateOHMv2Amount(amount_);
 
         // Check that OHM v2 amount is not zero (may happen due to gOHM rounding)
         if (ohmV2Amount == 0) revert ZeroAmount();
@@ -309,9 +329,10 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     ///         This resets all previous migrations without needing to iterate over users.
     ///         The new merkle tree should reflect the amount each user can migrate going
     ///         forward (i.e., their current OHM v1 balance).
-    function setMerkleRoot(
-        bytes32 merkleRoot_
-    ) external onlyEnabled onlyAdminOrLegacyMigrationAdmin {
+    function setMerkleRoot(bytes32 merkleRoot_) external onlyAdminOrLegacyMigrationAdmin {
+        // Guard against setting the same root (would reset nonce and allow re-migration)
+        if (merkleRoot_ == merkleRoot) revert SameMerkleRoot();
+
         // Increment nonce to reset all previous migrations
         _currentMerkleNonce++;
 
@@ -321,8 +342,20 @@ contract V1Migrator is Policy, RolesConsumer, PolicyEnabler, IVersioned, IV1Migr
     }
 
     /// @inheritdoc IV1Migrator
-    function setMigrationCap(uint256 cap_) external onlyEnabled onlyAdminRole {
-        _setMigrationCap(cap_);
+    function setRemainingMintApproval(uint256 approval_) external onlyAdminRole {
+        _setRemainingMintApproval(approval_);
+    }
+
+    /// @inheritdoc IV1Migrator
+    /// @dev    Only callable by admin or legacy migration admin. Sweeps entire balance to caller.
+    function rescue(IERC20 token_) external onlyAdminOrLegacyMigrationAdmin {
+        if (address(token_) == address(0)) revert ZeroAddress();
+
+        uint256 balance = token_.balanceOf(address(this));
+        if (balance == 0) revert ZeroAmount();
+
+        ERC20(address(token_)).safeTransfer(msg.sender, balance);
+        emit Rescued(address(token_), msg.sender, balance);
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

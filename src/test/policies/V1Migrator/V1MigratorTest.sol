@@ -173,13 +173,44 @@ contract V1MigratorTest is StdInvariant, Test {
         }
     }
 
-    /// @dev Refresh the merkle tree with the same allocations (simulates root update)
-    function _refreshMerkleTree() internal {
-        _generateMerkleTree();
+    /// @dev Refresh the merkle tree with modified allocations to produce a different root
+    /// @dev    This is needed after SameMerkleRoot guard prevents setting identical roots.
+    ///         Bob's allowance is modified while Alice's stays the same to keep tests working.
+    function _refreshMerkleTreeWithDifferentAllocations() internal {
+        _generateMerkleTreeWithAllocations(ALICE_ALLOWANCE, BOB_ALLOWANCE + 1);
 
         // Update the contract's merkle root
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(merkleRoot);
+    }
+
+    /// @dev Generate merkle tree with custom allocations for alice and bob
+    function _generateMerkleTreeWithAllocations(
+        uint256 aliceAllowance_,
+        uint256 bobAllowance_
+    ) internal {
+        bytes32[] memory leaves = new bytes32[](2);
+        leaves[0] = _leaf(alice, aliceAllowance_);
+        leaves[1] = _leaf(bob, bobAllowance_);
+        _sortBytes32Array(leaves);
+
+        // Compute root using OpenZeppelin's commutative hashing
+        merkleRoot = Hashes.commutativeKeccak256(leaves[0], leaves[1]);
+
+        // Generate proofs for alice and bob
+        bytes32 aliceLeaf = _leaf(alice, aliceAllowance_);
+
+        aliceProof = new bytes32[](1);
+        bobProof = new bytes32[](1);
+
+        // Each proof is the sibling leaf
+        if (leaves[0] == aliceLeaf) {
+            aliceProof[0] = leaves[1]; // Alice's sibling is Bob
+            bobProof[0] = leaves[0]; // Bob's sibling is Alice
+        } else {
+            aliceProof[0] = leaves[0]; // Alice's sibling is Bob
+            bobProof[0] = leaves[1]; // Bob's sibling is Alice
+        }
     }
 
     /// @dev Generate double-hashed leaves for alice and bob
@@ -258,17 +289,17 @@ contract V1MigratorTest is StdInvariant, Test {
         _;
     }
 
-    /// @dev Modifier to set state where the migration cap is set to a specific value
+    /// @dev Modifier to set state where the remaining mint approval is set to a specific value
     modifier givenCapSet(uint256 newCap_) {
         vm.prank(adminUser);
-        migrator.setMigrationCap(newCap_);
+        migrator.setRemainingMintApproval(newCap_);
         _;
     }
 
     /// @dev Modifier to set state where the cap is reached (set to 0)
     modifier givenCapReached() {
         vm.prank(adminUser);
-        migrator.setMigrationCap(0);
+        migrator.setRemainingMintApproval(0);
         _;
     }
 
@@ -277,12 +308,6 @@ contract V1MigratorTest is StdInvariant, Test {
         bytes32 newRoot = bytes32(uint256(1));
         vm.prank(legacyMigrationAdmin);
         migrator.setMerkleRoot(newRoot);
-        _;
-    }
-
-    /// @dev Modifier to set state where the merkle root has been updated to same allocations (refreshes tree)
-    modifier givenMerkleRootRefreshed() {
-        _refreshMerkleTree();
         _;
     }
 

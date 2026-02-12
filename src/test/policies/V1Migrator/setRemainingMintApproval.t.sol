@@ -3,11 +3,10 @@
 pragma solidity >=0.8.15;
 
 import {V1MigratorTest} from "./V1MigratorTest.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";
 
-contract V1MigratorSetMigrationCapTest is V1MigratorTest {
-    event MigrationCapUpdated(uint256 indexed newCap, uint256 indexed oldCap);
+contract V1MigratorSetRemainingMintApprovalTest is V1MigratorTest {
+    event RemainingMintApprovalUpdated(uint256 indexed newApproval, uint256 indexed oldApproval);
 
     uint256 internal constant NEW_CAP = 20000e9;
 
@@ -21,18 +20,22 @@ contract V1MigratorSetMigrationCapTest is V1MigratorTest {
         ohmV2Amount_ = gOHM.balanceFrom(gohmAmount);
     }
 
-    // ========== SET MIGRATION CAP TESTS ========== //
+    // ========== SET REMAINING MINT APPROVAL TESTS ========== //
 
     //  given contract is disabled
-    //   [X] it reverts
+    //   [X] admin can still set remaining mint approval
 
-    function test_givenDisabled_reverts() public givenContractDisabled {
-        // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-
-        // Call function
+    function test_givenDisabled_succeeds() public givenContractDisabled {
+        // Call function - should succeed even when disabled
         vm.prank(adminUser);
-        migrator.setMigrationCap(NEW_CAP);
+        migrator.setRemainingMintApproval(NEW_CAP);
+
+        // Assert state
+        assertEq(
+            migrator.remainingMintApproval(),
+            NEW_CAP,
+            "Remaining mint approval should be updated"
+        );
     }
 
     // given caller does not have admin role
@@ -51,64 +54,76 @@ contract V1MigratorSetMigrationCapTest is V1MigratorTest {
 
         // Call function
         vm.prank(caller_);
-        migrator.setMigrationCap(NEW_CAP);
+        migrator.setRemainingMintApproval(NEW_CAP);
     }
 
     // given caller has admin role
-    //  given new cap is higher than old cap
+    //  given new approval is higher than old approval
     //   [X] it increases MINTR approval
-    //   [X] it sets the migration cap
+    //   [X] it sets the remaining mint approval
 
-    function test_givenAdmin_setsHigherCap_increasesApproval() public {
+    function test_givenAdmin_setsHigherApproval_increasesApproval() public {
         uint256 newCap = INITIAL_CAP + 1000e9;
 
         // Expect emit
         vm.expectEmit(true, true, true, true);
-        emit MigrationCapUpdated(newCap, INITIAL_CAP);
+        emit RemainingMintApprovalUpdated(newCap, INITIAL_CAP);
 
         // Call function
         vm.prank(adminUser);
-        migrator.setMigrationCap(newCap);
+        migrator.setRemainingMintApproval(newCap);
 
         // Assert state
-        assertEq(migrator.remainingMintApproval(), newCap, "Migration cap should be updated");
+        assertEq(
+            migrator.remainingMintApproval(),
+            newCap,
+            "Remaining mint approval should be updated"
+        );
     }
 
-    //  given new cap is lower than old cap
+    //  given new approval is lower than old approval
     //   [X] it decreases MINTR approval
-    //   [X] it sets the migration cap
+    //   [X] it sets the remaining mint approval
 
-    function test_givenAdmin_setsLowerCap_decreasesApproval() public {
+    function test_givenAdmin_setsLowerApproval_decreasesApproval() public {
         uint256 newCap = INITIAL_CAP - 1000e9;
 
         vm.expectEmit(true, true, true, true);
-        emit MigrationCapUpdated(newCap, INITIAL_CAP);
+        emit RemainingMintApprovalUpdated(newCap, INITIAL_CAP);
 
         vm.prank(adminUser);
-        migrator.setMigrationCap(newCap);
+        migrator.setRemainingMintApproval(newCap);
 
-        assertEq(migrator.remainingMintApproval(), newCap, "Migration cap should be updated");
+        assertEq(
+            migrator.remainingMintApproval(),
+            newCap,
+            "Remaining mint approval should be updated"
+        );
     }
 
-    // given any uint256 cap value
-    //  [X] admin can set it as migration cap
+    // given any uint256 approval value
+    //  [X] admin can set it as remaining mint approval
 
     function test_givenAdmin_fuzz(uint256 newCap_) public {
         vm.prank(adminUser);
-        migrator.setMigrationCap(newCap_);
+        migrator.setRemainingMintApproval(newCap_);
 
-        assertEq(migrator.remainingMintApproval(), newCap_, "Migration cap should match input");
+        assertEq(
+            migrator.remainingMintApproval(),
+            newCap_,
+            "Remaining mint approval should match input"
+        );
     }
 
-    // ========== CAP SYNC TESTS ========== //
+    // ========== APPROVAL SYNC TESTS ========== //
 
-    // given the cap is set to 0
+    // given the approval is set to 0
     //  [X] migrations are blocked
 
-    function test_givenCapSetToZero_migrationsBlocked() public givenAliceApproved {
-        // Set cap to 0
+    function test_givenApprovalSetToZero_migrationsBlocked() public givenAliceApproved {
+        // Set approval to 0
         vm.prank(adminUser);
-        migrator.setMigrationCap(0);
+        migrator.setRemainingMintApproval(0);
 
         // Verify MINTR approval is 0
         assertEq(MINTR.mintApproval(address(migrator)), 0, "MINTR approval should be 0");
@@ -127,18 +142,18 @@ contract V1MigratorSetMigrationCapTest is V1MigratorTest {
         migrator.migrate(amount, aliceProof, ALICE_ALLOWANCE);
     }
 
-    // given the cap is set to a specific value X
+    // given the approval is set to a specific value X
     //  [X] migrations up to X work
     //  [X] migrations exceeding X fail
 
-    function test_givenCapSetToX_amountXWorks_amountXPlusOneFails() public givenAliceApproved {
+    function test_givenApprovalSetToX_amountXWorks_amountXPlusOneFails() public givenAliceApproved {
         uint256 X = 200e9;
         uint256 expectedOHMv2 = _expectedOHMv2(X);
         uint256 remaining = X - expectedOHMv2; // Rounding loss leaves some approval
 
-        // Set cap to X
+        // Set approval to X
         vm.prank(adminUser);
-        migrator.setMigrationCap(X);
+        migrator.setRemainingMintApproval(X);
 
         // Alice can migrate exactly X OHM v1 (which mints expectedOHMv2 OHM v2)
         vm.prank(alice);
@@ -167,26 +182,26 @@ contract V1MigratorSetMigrationCapTest is V1MigratorTest {
         migrator.migrate(extraAmount, aliceProof, ALICE_ALLOWANCE);
     }
 
-    // given the cap is set multiple times
-    //  [X] migrationCap always reflects current MINTR approval
+    // given the approval is set multiple times
+    //  [X] remainingMintApproval always reflects current MINTR approval
 
-    function test_givenMultipleCapChanges_migrationCapReflectsMINTR() public {
-        // Initially, migrationCap should equal INITIAL_CAP
-        assertEq(migrator.remainingMintApproval(), INITIAL_CAP, "Initial cap should match");
+    function test_givenMultipleApprovalChanges_remainingMintApprovalReflectsMINTR() public {
+        // Initially, remainingMintApproval should equal INITIAL_CAP
+        assertEq(migrator.remainingMintApproval(), INITIAL_CAP, "Initial approval should match");
         assertEq(MINTR.mintApproval(address(migrator)), INITIAL_CAP, "MINTR should match");
 
-        // Set cap to a lower value
+        // Set approval to a lower value
         uint256 lowerCap = INITIAL_CAP - 500e9;
         vm.prank(adminUser);
-        migrator.setMigrationCap(lowerCap);
-        assertEq(migrator.remainingMintApproval(), lowerCap, "Cap should be lower");
+        migrator.setRemainingMintApproval(lowerCap);
+        assertEq(migrator.remainingMintApproval(), lowerCap, "Approval should be lower");
         assertEq(MINTR.mintApproval(address(migrator)), lowerCap, "MINTR should match");
 
-        // Set cap to a higher value
+        // Set approval to a higher value
         uint256 higherCap = lowerCap + 1000e9;
         vm.prank(adminUser);
-        migrator.setMigrationCap(higherCap);
-        assertEq(migrator.remainingMintApproval(), higherCap, "Cap should be higher");
+        migrator.setRemainingMintApproval(higherCap);
+        assertEq(migrator.remainingMintApproval(), higherCap, "Approval should be higher");
         assertEq(MINTR.mintApproval(address(migrator)), higherCap, "MINTR should match");
     }
 }

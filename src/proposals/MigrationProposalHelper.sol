@@ -43,12 +43,19 @@ contract MigrationProposalHelper is Owned {
     /// @notice True if the activation has been performed
     bool public isActivated = false;
 
+    // =========  EVENTS  ========= //
+
     event Activated(address caller);
     event OHMv1ToMigrateUpdated(uint256 newMax);
+    event Rescued(address indexed token, address indexed to, uint256 amount);
+
+    // =========  ERRORS  ========= //
 
     error AlreadyActivated();
     error InvalidParams(string reason);
     error Unauthorized();
+
+    // =========  CONSTRUCTOR  ========= //
 
     constructor(
         address owner_,
@@ -86,6 +93,17 @@ contract MigrationProposalHelper is Owned {
         emit OHMv1ToMigrateUpdated(maxOHMv1_);
     }
 
+    /// @notice Rescue accidentally sent tokens
+    /// @dev    Only callable by owner or admin. Sweeps entire token balance to caller.
+    /// @param token_ The ERC20 token to rescue
+    function rescue(IERC20 token_) external onlyOwnerOrAdmin {
+        if (address(token_) == address(0)) revert InvalidParams("token");
+        uint256 balance = token_.balanceOf(address(this));
+        if (balance == 0) revert InvalidParams("balance");
+        ERC20(address(token_)).safeTransfer(msg.sender, balance);
+        emit Rescued(address(token_), msg.sender, balance);
+    }
+
     /// @notice Calculate the amount of tempOHM to deposit
     /// @dev    This is based on the OHMv1ToMigrate amount, converted to 1e18 decimals
     function getTempOHMToDeposit() public view returns (uint256) {
@@ -98,6 +116,9 @@ contract MigrationProposalHelper is Owned {
     ///         - The caller (owner) has approved tempOHM to this contract
     ///         - The caller (owner) has tempOHM balance
     ///
+    ///         Any tempOHM in excess of OHMv1ToMigrate * 1e9 will be burned.
+    ///         This is intentional: tempOHM has no utility after migration completes.
+    ///
     ///         This function reverts if:
     ///         - The caller is not the owner
     ///         - The function has already been run
@@ -107,8 +128,10 @@ contract MigrationProposalHelper is Owned {
         if (isActivated) revert AlreadyActivated();
         isActivated = true;
 
-        // Step 1: Add burner category "migration"
-        Burner(BURNER).addCategory(MIGRATION_CATEGORY);
+        // Step 1: Add burner category "migration" if it doesn't exist
+        if (!Burner(BURNER).categoryApproved(MIGRATION_CATEGORY)) {
+            Burner(BURNER).addCategory(MIGRATION_CATEGORY);
+        }
 
         // Step 2: Deposit tempOHM to treasury, receive OHM v1
         uint256 ohmV1Minted = _depositTempOHMToTreasury();
@@ -125,7 +148,9 @@ contract MigrationProposalHelper is Owned {
         emit Activated(msg.sender);
     }
 
-    /// @notice Deposit tempOHM to treasury to receive OHMv1
+    /// @notice Transfer all tempOHM from owner and deposit the calculated amount to treasury
+    /// @dev    Transfers ALL tempOHM from owner but deposits only getTempOHMToDeposit().
+    ///         Excess is burned by _burnExcess() (tempOHM has no post-migration utility).
     /// @return ohmV1Minted The amount of OHM v1 minted from the deposit
     function _depositTempOHMToTreasury() internal returns (uint256 ohmV1Minted) {
         // Transfer all of the tempOHM from the owner to this contract
@@ -156,9 +181,9 @@ contract MigrationProposalHelper is Owned {
         );
     }
 
-    /// @notice Burn any excess tempOHM and OHM v1 in this contract
-    /// @dev    Any remaining tokens in this contract are burned directly.
-    ///         Uses standard ERC20 burn() for both tokens.
+    /// @notice Burn any excess tempOHM and OHM v1 remaining after migration
+    /// @dev    Intentional cleanup: tempOHM has no utility after gOHM migration.
+    ///         Also burns any OHM v1 left from partial migration failures.
     function _burnExcess() internal {
         // Burn excess tempOHM
         uint256 excessTempOHM = ERC20(TEMPOHM).balanceOf(address(this));
