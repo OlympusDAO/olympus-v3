@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {PriceV2Test} from "../PRICE.v2.t.sol";
+import {PriceV2Test} from "./PRICE.v2.t.sol";
 
 // Interfaces
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
