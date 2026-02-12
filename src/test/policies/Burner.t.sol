@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
 // =========== TEST CONTRACTS ===========
@@ -10,6 +11,9 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {Burner} from "policies/Burner.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Kernel, Keycode, Permissions, Actions, fromKeycode, toKeycode} from "src/Kernel.sol";
+
+// =========== INTERFACES ===========
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -25,6 +29,7 @@ contract BurnerTest is Test {
     address internal alice;
     address internal bob;
     address internal guardian;
+    address internal admin;
 
     MockOhm internal ohm;
 
@@ -43,15 +48,17 @@ contract BurnerTest is Test {
         userCreator = new UserFactory();
         {
             // Create users
-            address[] memory users = userCreator.create(3);
+            address[] memory users = userCreator.create(4);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
+            admin = users[3];
 
             // Label users
             vm.label(alice, "alice");
             vm.label(bob, "bob");
             vm.label(guardian, "guardian");
+            vm.label(admin, "admin");
         }
 
         {
@@ -103,7 +110,14 @@ contract BurnerTest is Test {
 
             // Burner ROLES
             rolesAdmin.grantRole("burner_admin", guardian);
+
+            // Admin role
+            rolesAdmin.grantRole("admin", admin);
         }
+
+        // Enable burner
+        vm.prank(admin);
+        burner.enable(abi.encode(""));
 
         // Mint tokens to users, TRSRY, and burner for testing
         uint256 testOhm = 1_000_000 * 1e9;
@@ -436,4 +450,50 @@ contract BurnerTest is Test {
         assertEq(categories[1], "TEST_CATEGORY_2");
         assertEq(categories[2], "TEST_CATEGORY_3");
     }
+
+    // ========== DISABLED STATE TESTS ========== //
+
+    // Modifier to establish disabled state
+    modifier givenDisabled() {
+        vm.prank(admin);
+        burner.disable(abi.encode(""));
+        _;
+    }
+
+    // [X] Burn from Treasury when disabled
+    // [X] Burn from address when disabled
+    // [X] Burn when disabled
+    // [X] Add category when disabled
+    // [X] Remove category when disabled
+
+    function test_burnFromTreasury_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burnFromTreasury(100, "TEST_CATEGORY_1");
+    }
+
+    function test_burnFrom_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burnFrom(alice, 100, "TEST_CATEGORY_1");
+    }
+
+    function test_burn_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burn(100, "TEST_CATEGORY_1");
+    }
+
+    function test_addCategory_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.addCategory("NEW_CATEGORY");
+    }
+
+    function test_removeCategory_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.removeCategory("TEST_CATEGORY_1");
+    }
 }
+/// forge-lint: disable-end(unwrapped-modifier-logic)

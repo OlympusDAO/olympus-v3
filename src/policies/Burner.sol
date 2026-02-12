@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
+
+// ============  INTERFACES ============ //
+
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // =========== LIBRARIES ===========
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -7,17 +13,17 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // =========== CONTRACTS ===========
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title Olympus Burner Policy
 /// @notice Olympus Burner Policy Contract
 /// @dev This policy is to enable burning of OHM by the DAO MS to support test runs of new products which have not been automated yet.
 ///      This policy will be removed once the protocol completes feature development and the DAO no longer needs to test products.
 ///      This policy requires categories to be created to designate the purpose for burned OHM, which can be tracked externally from automated systems.
-contract Burner is Policy, RolesConsumer {
+contract Burner is Policy, PolicyEnabler, IVersioned {
     using TransferHelper for ERC20;
 
     // ========== ERRORS ========== //
@@ -39,6 +45,8 @@ contract Burner is Policy, RolesConsumer {
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
+    // ROLES is already declared in PolicyAdmin/PolicyEnabler
+
     // Olympus contract dependencies
     /// @notice OHM token
     ERC20 public immutable OHM;
@@ -57,6 +65,8 @@ contract Burner is Policy, RolesConsumer {
 
     constructor(Kernel kernel_, ERC20 ohm_) Policy(kernel_) {
         OHM = ohm_;
+
+        // Disabled by default
     }
 
     /// @inheritdoc Policy
@@ -116,7 +126,7 @@ contract Burner is Policy, RolesConsumer {
     function burnFromTreasury(
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Withdraw OHM from the treasury
         TRSRY.increaseWithdrawApproval(address(this), OHM, amount_);
         TRSRY.withdrawReserves(address(this), OHM, amount_);
@@ -138,7 +148,7 @@ contract Burner is Policy, RolesConsumer {
         address from_,
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Transfer OHM from the user to this contract
         OHM.safeTransferFrom(from_, address(this), amount_);
 
@@ -154,7 +164,7 @@ contract Burner is Policy, RolesConsumer {
     function burn(
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
 
@@ -166,7 +176,7 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Add a category to the list of approved burn categories
     /// @param category_ Category to add
-    function addCategory(bytes32 category_) external onlyRole("burner_admin") {
+    function addCategory(bytes32 category_) external onlyEnabled onlyRole("burner_admin") {
         if (categoryApproved[category_]) revert Burner_CategoryApproved();
         categories.push(category_);
         categoryApproved[category_] = true;
@@ -176,7 +186,7 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Remove a category from the list of approved burn categories
     /// @param category_ Category to remove
-    function removeCategory(bytes32 category_) external onlyRole("burner_admin") {
+    function removeCategory(bytes32 category_) external onlyEnabled onlyRole("burner_admin") {
         if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
         uint256 len = categories.length;
         for (uint256 i; i < len; ++i) {
@@ -191,6 +201,24 @@ contract Burner is Policy, RolesConsumer {
         emit CategoryRemoved(category_);
     }
 
+    // =========  VERSION ========= //
+
+    /// @inheritdoc IVersioned
+    function VERSION() external pure returns (uint8, uint8) {
+        return (1, 0);
+    }
+
+    // =========  ERC165 ========= //
+
+    /// @notice ERC165 interface support
+    /// @dev    Supports IERC165, IVersioned, and IEnabler (via PolicyEnabler)
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId);
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Get the list of approved burn categories
@@ -198,3 +226,4 @@ contract Burner is Policy, RolesConsumer {
         return categories;
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
