@@ -153,13 +153,13 @@ contract MigrationProposal is GovernorBravoProposal {
         );
 
         // STEP 4: Grant MigrationProposalHelper permission to spend all tempOHM
-        uint256 tempOHMBalance = IERC20(tempOHM).balanceOf(timelock);
+        // Approve max uint256 to handle any balance changes between proposal submission and execution
         _pushAction(
             address(tempOHM),
             abi.encodeWithSelector(
                 IERC20.approve.selector,
                 address(_migrationProposalHelper),
-                tempOHMBalance
+                type(uint256).max
             ),
             "Grant MigrationProposalHelper permission to spend tempOHM"
         );
@@ -258,7 +258,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no OHMv1 left in the MigrationProposalHelper contract"
         );
 
-        // 6. Validate that there is no tempOHM left in the Timelock or the MigrationProposalHelper contract
+        // 7. Validate that there is no tempOHM left in the Timelock or the MigrationProposalHelper contract
         // tempOHM is migration-specific and should be zero in both places
         address timelock = addresses.getAddress("olympus-timelock");
         require(
@@ -270,7 +270,7 @@ contract MigrationProposal is GovernorBravoProposal {
             "There should be no tempOHM left in the MigrationProposalHelper contract"
         );
 
-        // 7. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
+        // 8. Validate that there is no dangling approval for tempOHM to be spent by the MigrationProposalHelper
         require(
             IERC20(tempOHM).allowance(address(timelock), address(_migrationProposalHelper)) == 0,
             "There should be no dangling approval for tempOHM to be spent by the MigrationProposalHelper"
