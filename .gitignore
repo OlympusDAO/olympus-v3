@@ -18,3 +18,5 @@ dependencies/
 # Override any global ignore rules for LLM tools
 !AGENTS.md
 !CLAUDE.md
+!.claude/
+.claude/settings.local.json

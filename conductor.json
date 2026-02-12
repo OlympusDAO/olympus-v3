@@ -1,0 +1,6 @@
+{
+    "scripts": {
+        "run": "pnpm run test:unit",
+        "setup": "pnpm install"
+    }
+}
