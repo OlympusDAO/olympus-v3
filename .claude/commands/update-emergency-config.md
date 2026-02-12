@@ -143,31 +143,66 @@ Discard any chain where the address is empty or the zero address (`0x00000000000
 
 **Important:** The contract name in env.json may differ from the filename. Look at the `contract` declaration in the `.sol` file to get the actual name, then search env.json for that name. If the exact contract name is not found in env.json for expected chains, also search for partial matches or check existing emergency scripts' `_envAddressNotZero` calls for the actual env key used (e.g., source says `contract CoolerComposites` but mainnet env.json uses `CoolerV2Composites`).
 
-#### C4: Ask User for Metadata
+#### C4: Generate and Confirm Metadata
 
-Use AskUserQuestion to gather:
+Before asking the user, **generate suggested values** for all metadata fields by analyzing:
+- The contract source code (what it does, what it interacts with)
+- The detection level (PolicyEnabler → emergency-owned, PeripheryEnabler → dao-owned, etc.)
+- Similar existing components in `emergency-config.json` (read the config, find components with the same category or related contracts, and use their patterns as a reference)
+- The contract name, its imports, and any inherited contracts
 
-1. **Category** (required):
-   - `treasury` - TRSRY, MINTR related
-   - `lending` - Cooler, loans
-   - `bridge` - Cross-chain bridges
+**Step 1: Generate suggestions for all fields:**
+
+1. **Category** — infer from contract path, name, and imports:
+   - `treasury` - TRSRY, MINTR, Treasury related
+   - `lending` - Cooler, loans, borrower
+   - `bridge` - Cross-chain bridges, CCIP, LayerZero
    - `emissions` - EmissionManager, bonds
    - `core` - Heart, fundamental operations
-   - `reserve` - Reserve management
+   - `reserve` - Reserve management, migrator, wrapper
 
-2. **Severity** (required):
-   - `critical` - Immediate shutdown, funds at risk
-   - `high` - Urgent, significant vulnerability
-   - `medium` - Important but not urgent
-   - `low` - Monitor, precautionary
+2. **Severity** — infer from owner and contract role:
+   - `critical` - Emergency-owned + handles funds directly (treasury, lending core)
+   - `high` - Emergency-owned + important but not direct fund custody
+   - `medium` - DAO-owned or supporting contracts
+   - `low` - Periphery helpers, non-critical paths
 
-3. **Description** (required): What this shutdown does (1-2 sentences)
+3. **Description** — generate a 1-2 sentence description of what the shutdown does, based on the contract's purpose and the function being called (e.g., "Disables the X policy that manages Y")
 
-4. **Shutdown Criteria** (optional): When to trigger (list of conditions)
+4. **Shutdown Criteria** (recommended — all existing components include this) — generate 2-4 conditions based on:
+   - What could go wrong with this contract (exploit, manipulation, compromise)
+   - What dependencies might trigger this shutdown (e.g., "Core Cooler V2 paused and this is still active")
+   - Reference similar components' criteria for style
 
-5. **Post-Shutdown Steps** (optional): Steps after shutdown (list)
+5. **Post-Shutdown Steps** (recommended — all existing components include this) — generate 2-4 steps based on:
+   - How to verify the shutdown worked (e.g., "Verify policy is disabled via isActive()")
+   - What dependent systems to check
+   - What monitoring to do post-shutdown
+   - Reference similar components' steps for style
 
-6. **Dependencies** (optional): Other component IDs to shutdown together
+6. **Dependencies** (optional): Other component IDs that should be shutdown together — check if any existing components reference related contracts
+
+**Step 2: Present all suggestions to the user for confirmation:**
+
+Use AskUserQuestion to present the generated values. Format the suggestions clearly so the user can approve, modify, or skip each one. For example:
+
+> I've generated the following metadata based on the contract analysis:
+>
+> - **Category:** lending
+> - **Severity:** critical
+> - **Description:** "Disables the CoolerTreasuryBorrower policy that manages borrowing from the treasury for Cooler V2 loans"
+> - **Shutdown Criteria:**
+>   1. "Treasury borrowing exploit detected"
+>   2. "Unauthorized loan origination"
+>   3. "Cooler V2 core paused and treasury borrower still active"
+> - **Post-Shutdown Steps:**
+>   1. "Verify policy is disabled via isActive()"
+>   2. "Check no pending treasury borrows in flight"
+>   3. "Consider pausing dependent Cooler V2 core if not already paused"
+>
+> Accept these suggestions or provide modifications?
+
+If the user accepts, use the suggested values. If the user wants to modify, apply their changes. If the user explicitly skips shutdownCriteria or postShutdownSteps, omit them — but always generate and present suggestions first.
 
 #### C4.5: Derive Component ID
 
@@ -214,8 +249,8 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 }
 ```
 
-   - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns)
-   - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` if not provided by user
+   - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns). These contracts are disabled via `disable(bytes)` directly — no batch script is needed. Even if a legacy batch script exists in `src/scripts/emergency/`, do NOT include `batchScript` for Level 1–3 contracts.
+   - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` only if the user explicitly chose to skip them (the skill should always suggest values first)
 
 6. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
    ```bash

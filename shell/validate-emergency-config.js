@@ -229,6 +229,39 @@ function validate() {
         `Component "${component.id}" has invalid severity: "${component.severity}"`
       );
     }
+
+    // Check batchScript path exists if specified.
+    // Note: batchScript is intentionally absent for contracts using IEnabler patterns
+    // (PolicyEnabler, PeripheryEnabler, direct IEnabler) — these are disabled via
+    // disable(bytes) directly and do not need a batch script.
+    if (component.batchScript) {
+      const scriptPath = path.join(__dirname, "..", component.batchScript);
+      if (!fs.existsSync(scriptPath)) {
+        errors.push(
+          `Component "${component.id}" references non-existent batchScript: "${component.batchScript}"`
+        );
+      }
+    }
+
+    // Check for recommended fields (shutdownCriteria, postShutdownSteps)
+    if (
+      !component.shutdownCriteria ||
+      !Array.isArray(component.shutdownCriteria) ||
+      component.shutdownCriteria.length === 0
+    ) {
+      warnings.push(
+        `Component "${component.id}" is missing shutdownCriteria — all other components include this field`
+      );
+    }
+    if (
+      !component.postShutdownSteps ||
+      !Array.isArray(component.postShutdownSteps) ||
+      component.postShutdownSteps.length === 0
+    ) {
+      warnings.push(
+        `Component "${component.id}" is missing postShutdownSteps — all other components include this field`
+      );
+    }
   }
   log.success("All component validations passed");
 
