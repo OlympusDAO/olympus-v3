@@ -31,6 +31,7 @@ contract MigrationProposal is GovernorBravoProposal {
     bytes32 public constant BURNER_ADMIN_ROLE = bytes32("burner_admin");
 
     /// @notice Initial migration cap for V1Migrator (in OHM v1, 9 decimals)
+    /// @dev    This is determined off-chain as the amount of OHM v1 outstanding
     uint256 public constant INITIAL_MIGRATION_CAP = 352614824540487;
 
     error InvalidV1Migrator();
