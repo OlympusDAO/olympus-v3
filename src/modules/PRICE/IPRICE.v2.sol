@@ -201,6 +201,11 @@ interface IPRICEv2 {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
+    /// @notice         Thrown when updateAsset is called with all update flags set to false
+    ///
+    /// @param asset_   The address of the asset
+    error PRICE_NoUpdatesRequested(address asset_);
+
     // ========== STATE ========== //
 
     /// @notice         Struct to hold the configuration for calling a function on a contract
@@ -382,5 +387,48 @@ interface IPRICEv2 {
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
         uint256[] memory observations_
+    ) external;
+
+    /// @notice                     Parameters for updating an asset configuration
+    /// @dev                        Only updates components flagged in the struct
+    ///
+    /// @param updateFeeds              Whether to update price feeds
+    /// @param updateStrategy           Whether to update strategy
+    /// @param updateMovingAverage      Whether to update moving average configuration
+    /// @param feeds                    New price feeds (only read if updateFeeds=true)
+    /// @param strategy                 New strategy (only read if updateStrategy=true)
+    /// @param useMovingAverage         New useMovingAverage flag (only read if updateStrategy=true)
+    /// @param storeMovingAverage       New storeMovingAverage flag (only read if updateMovingAverage=true)
+    /// @param movingAverageDuration    New MA duration (only read if updateMovingAverage=true)
+    /// @param lastObservationTime      New last observation time (only read if updateMovingAverage=true)
+    /// @param observations             New observations (only read if updateMovingAverage=true)
+    struct UpdateAssetParams {
+        bool updateFeeds;
+        bool updateStrategy;
+        bool updateMovingAverage;
+        Component[] feeds;
+        Component strategy;
+        bool useMovingAverage;
+        bool storeMovingAverage;
+        uint32 movingAverageDuration;
+        uint48 lastObservationTime;
+        uint256[] observations;
+    }
+
+    /// @notice         Updates an asset configuration atomically
+    /// @dev            Only updates components flagged in params_
+    /// @dev            Validates entire configuration atomically after updates
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is not approved
+    /// @dev            - The caller is not permissioned
+    /// @dev            - Any updated submodule is not installed
+    /// @dev            - The final configuration is invalid
+    /// @dev            - All update flags are false (no-op)
+    ///
+    /// @param asset_   The address of the asset to update
+    /// @param params_  Update parameters with flags
+    function updateAsset(
+        address asset_,
+        UpdateAssetParams memory params_
     ) external;
 }

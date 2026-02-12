@@ -870,5 +870,14 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             asset.cumulativeObs = 0;
         }
     }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Empty implementation - revert only
+    function updateAsset(
+        address asset_,
+        UpdateAssetParams memory params_
+    ) external override permissioned {
+        revert("Not implemented");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
