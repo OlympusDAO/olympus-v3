@@ -47,5 +47,3 @@ Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
 safe-smart-account/=dependencies/safe-smart-account-1.4.1/contracts/
 
 solidity-http/=dependencies/solidity-http-0.0.7/src/
-
-@olympus-contracts-2.1.0/=dependencies/olympus-contracts-2.1.0/contracts/

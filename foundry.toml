@@ -76,4 +76,3 @@ openzeppelin-new = { version = "5.3.0", git = "https://github.com/OpenZeppelin/o
 forge-proposal-simulator = { version = "1.0.1", git = "https://github.com/OlympusDAO/forge-proposal-simulator.git", rev = "76374f3bf3b032dfb5c685c5a969ca20d0776384" }
 safe-smart-account = { version = "1.4.1", git = "https://github.com/safe-global/safe-smart-account.git", rev = "bf943f80fec5ac647159d26161446ac5d716a294" }
 solidity-http = { version = "0.0.7", git = "https://github.com/Recon-Fuzz/solidity-http.git", rev = "c1bdafefa34e4a5e581f4227dfed4efecc0d6d0e" }
-olympus-contracts = { version = "2.1.0", git = "https://github.com/OlympusDAO/olympus-contracts.git", rev = "92864570011fa2a3b30222c9602cf0ad0f6149fd" }
