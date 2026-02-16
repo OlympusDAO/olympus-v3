@@ -11,8 +11,8 @@ import {IStaking} from "src/interfaces/IStaking.sol";
 
 /// @title Verify Legacy Staking Contracts
 /// @notice Verifies that deployed legacy contracts (sOHM, gOHM, Staking) are correctly configured
-/// @dev This script does NOT deploy contracts - it only verifies existing deployments and updates env.json
-/// @dev Usage: forge script VerifyLegacyStaking.s.sol --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> --rpc-url $RPC_URL
+/// @dev This script reads addresses from env.json and verifies on-chain configuration
+/// @dev Usage: forge script VerifyLegacyStaking.s.sol --rpc-url sepolia
 contract VerifyLegacyStaking is Script {
     using stdJson for string;
 
@@ -28,21 +28,12 @@ contract VerifyLegacyStaking is Script {
     address public newGOHM;
     address public newStaking;
 
-    function run(address sOHM_, address gOHM_, address staking_) external {
+    function run() external {
         chain = ChainUtils._getChainName(block.chainid);
-        newSOHM = sOHM_;
-        newGOHM = gOHM_;
-        newStaking = staking_;
-
-        console2.log("\n=== Verifying Legacy Staking Deployment ===");
-        console2.log("Chain:", chain);
-        console2.log("sOHM:", newSOHM);
-        console2.log("gOHM:", newGOHM);
-        console2.log("Staking:", newStaking);
 
         _loadEnv();
+        _printHeader();
         _verifyContracts();
-        _updateEnvJson();
         _printSummary();
     }
 
@@ -50,9 +41,19 @@ contract VerifyLegacyStaking is Script {
         console2.log("\n=== Loading Environment ===");
         env = vm.readFile("./src/scripts/env.json");
 
+        // Load new legacy contract addresses
+        newSOHM = _envAddress("olympus.legacy.sOHM");
+        newGOHM = _envAddress("olympus.legacy.gOHM");
+        newStaking = _envAddress("olympus.legacy.Staking");
+
+        // Load existing addresses
         ohm = _envAddress("olympus.legacy.OHM");
         treasury = _envAddress("olympus.legacy.Treasury");
 
+        console2.log("Chain:", chain);
+        console2.log("sOHM:", newSOHM);
+        console2.log("gOHM:", newGOHM);
+        console2.log("Staking:", newStaking);
         console2.log("OHM:", ohm);
         console2.log("Treasury:", treasury);
     }
@@ -60,6 +61,10 @@ contract VerifyLegacyStaking is Script {
     function _envAddress(string memory key_) internal view returns (address) {
         string memory fullKey = string.concat(".current.", chain, ".", key_);
         return env.readAddress(fullKey);
+    }
+
+    function _printHeader() internal view {
+        console2.log("\n=== Verifying Legacy Staking Deployment ===");
     }
 
     function _verifyContracts() internal view {
@@ -125,29 +130,6 @@ contract VerifyLegacyStaking is Script {
         console2.log("\nAll verifications passed!");
     }
 
-    function _updateEnvJson() internal {
-        console2.log("\n=== Updating env.json ===");
-
-        _writeToEnv("olympus.legacy.sOHM", newSOHM);
-        console2.log("Updated olympus.legacy.sOHM:", newSOHM);
-
-        _writeToEnv("olympus.legacy.gOHM", newGOHM);
-        console2.log("Updated olympus.legacy.gOHM:", newGOHM);
-
-        _writeToEnv("olympus.legacy.Staking", newStaking);
-        console2.log("Updated olympus.legacy.Staking:", newStaking);
-
-        console2.log("env.json updated successfully");
-    }
-
-    function _writeToEnv(string memory key_, address value_) internal {
-        string[] memory inputs = new string[](3);
-        inputs[0] = "./src/scripts/deploy/write_deployment.sh";
-        inputs[1] = string.concat("current.", chain, ".", key_);
-        inputs[2] = vm.toString(value_);
-        vm.ffi(inputs);
-    }
-
     function _printSummary() internal view {
         console2.log("\n========================================");
         console2.log("         VERIFICATION SUMMARY");
@@ -159,7 +141,6 @@ contract VerifyLegacyStaking is Script {
         console2.log("\nConfiguration:");
         console2.log("  Index:   ", EXPECTED_INDEX);
         console2.log("  Chain:   ", chain);
-        console2.log("\nenv.json has been updated with new addresses.");
         console2.log("========================================");
     }
 }

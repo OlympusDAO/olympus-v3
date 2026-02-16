@@ -68,28 +68,22 @@ Source the environment:
 source .env
 ```
 
-Choose **one** of the following environments:
+### Anvil Fork (Optional)
 
-### Option A: Sepolia (Production)
-
-```bash
-export RPC_URL=https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY
-```
-
-### Option B: Anvil Fork (Local Testing)
+For local testing, start an Anvil fork of Sepolia:
 
 ```bash
-# Terminal 1: Start Anvil fork of Sepolia
+# Terminal 1: Start Anvil fork
 anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --chain-id 11155111
 
-# Terminal 2: Set environment
-export RPC_URL=http://localhost:8545
+# Terminal 2: Override PRIVATE_KEY with Anvil's default account
 export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-**Anvil-specific notes:**
+Notes:
 
--   Uses Anvil's default account 0 (publicly known key)
+-   Scripts detect the chain from `block.chainid` and use the appropriate RPC URL
+-   Anvil uses account 0's publicly known key
 -   Can impersonate any address using `--from` with `cast`
 -   Reset state by restarting Anvil and running `git checkout src/scripts/env.json`
 
@@ -167,11 +161,11 @@ npm
 
 ### 1b. Configure Network
 
-Add localhost network to `hardhat.config.ts` (required for Anvil fork):
+Add sepoliaAnvil network to `hardhat.config.ts` (required for Anvil fork):
 
 ```typescript
 // In hardhat.config.ts, add to networks section:
-localhost: {
+sepoliaAnvil: {
     url: "http://127.0.0.1:8545",
     chainId: 11155111  // Match Anvil's --chain-id
 }
@@ -275,7 +269,7 @@ npx hardhat run scripts/deploy-staking-only.js --network sepolia
 **Anvil Fork:**
 
 ```bash
-# Ensure Anvil is running and RPC_URL is set (see Environment Setup)
+# Ensure Anvil is running (see Environment Setup)
 npx hardhat run scripts/deploy-staking-only.js --network localhost
 ```
 
@@ -283,16 +277,35 @@ Record the deployed addresses (sOHM, gOHM, Staking).
 
 ---
 
-## Step 2: Verify and Update env.json
+## Step 2: Update env.json and Verify
 
-Run the verification script from the Bophades repo:
+### 2a. Update env.json
 
-**Sepolia:**
+Add the deployed addresses to `src/scripts/env.json`:
+
+```json
+{
+    "current": {
+        "sepolia": {
+            "olympus": {
+                "legacy": {
+                    "Staking": "0x...",
+                    "gOHM": "0x...",
+                    "sOHM": "0x..."
+                }
+            }
+        }
+    }
+}
+```
+
+### 2b. Verify Contracts
+
+Run the verification script:
 
 ```bash
 forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
-    --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> \
-    --rpc-url $RPC_URL \
+    --rpc-url sepolia \
     -vvv
 ```
 
@@ -300,16 +313,15 @@ forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
 
 ```bash
 forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
-    --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> \
-    --rpc-url $RPC_URL \
+    --rpc-url http://localhost:8545 \
     -vvv
 ```
 
 This script:
 
+-   Reads sOHM, gOHM, Staking addresses from env.json
 -   Verifies sOHM index is set correctly (269238508004)
--   Verifies contract references are correct
--   Updates env.json with new addresses
+-   Verifies all contract references are correct
 
 ---
 
@@ -320,7 +332,8 @@ Grant `minter_admin` role if not already granted:
 **Sepolia:**
 
 ```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
+forge script src/scripts/ops/Roles.s.sol:RolesScript \
+    --rpc-url sepolia \
     --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --broadcast
 ```
@@ -333,7 +346,7 @@ cast send 0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86 \
     "grantRole(bytes32,address)" \
     $(cast keccak "minter_admin") \
     0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
-    --rpc-url $RPC_URL \
+    --rpc-url http://localhost:8545 \
     --from 0xf33133E5356B9534e794468dAcD424D11007f1cF
 ```
 
@@ -349,7 +362,7 @@ Deploy new module and policies:
 
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
-    --rpc-url $RPC_URL \
+    --rpc-url sepolia \
     --broadcast \
     --verify \
     -vvv
@@ -359,7 +372,7 @@ forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
 
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
-    --rpc-url $RPC_URL \
+    --rpc-url http://localhost:8545 \
     --broadcast \
     --unlocked \
     --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
@@ -418,19 +431,19 @@ MONOCOOLER=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.policies
 KERNEL=0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E
 
 # Check sOHM index
-cast call $SOHM "index()" --rpc-url $RPC_URL
+cast call $SOHM "index()" --rpc-url sepolia
 # Expected: 269238508004
 
 # Check gOHM index (should match sOHM)
-cast call $GOHM "index()" --rpc-url $RPC_URL
+cast call $GOHM "index()" --rpc-url sepolia
 # Expected: 269238508004
 
 # Verify new MonoCooler is active in Kernel
-cast call $KERNEL "isPolicyActive(address)(bool)" $MONOCOOLER --rpc-url $RPC_URL
+cast call $KERNEL "isPolicyActive(address)(bool)" $MONOCOOLER --rpc-url sepolia
 # Expected: true
 
 # Verify old MonoCooler is deactivated
-cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c --rpc-url $RPC_URL
+cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c --rpc-url sepolia
 # Expected: false
 ```
 
@@ -441,11 +454,11 @@ cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B82
 ```
 1. olympus-contracts repo (0.7.5)
    └── Deploy sOHM → gOHM → Staking → setIndex → setgOHM → initialize → migrate
-       └── Record deployed addresses
+   └── Add addresses to env.json
 
 2. Bophades repo - VerifyLegacyStaking (0.8.15)
-   └── Verify contracts → Update env.json
-   └── Usage: forge script src/scripts/ops/VerifyLegacyStaking.s.sol --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING>
+   └── Reads from env.json → Verifies on-chain configuration
+   └── Usage: forge script src/scripts/ops/VerifyLegacyStaking.s.sol --rpc-url sepolia
 
 3. Bophades repo - ReplaceStaking (0.8.15)
    ├── Phase 1: Deactivate old policies
@@ -471,8 +484,10 @@ The sOHM `setIndex()` function can only be called once. If the index is wrong, y
 The script automatically adds the `test` category if it doesn't exist. If this fails, ensure the executor has `minter_admin` role:
 
 ```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
-    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --broadcast
+forge script src/scripts/ops/Roles.s.sol:RolesScript \
+    --rpc-url sepolia \
+    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --broadcast
 ```
 
 ### "ROLES_RequireRole"
@@ -480,8 +495,10 @@ forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
 Ensure the executor has `minter_admin` role:
 
 ```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
-    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --broadcast
+forge script src/scripts/ops/Roles.s.sol:RolesScript \
+    --rpc-url sepolia \
+    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --broadcast
 ```
 
 ### "Kernel_OnlyExecutor"
@@ -498,5 +515,5 @@ Staking needs OHM balance for `unstake()`. Ensure Phase 6 (seeding) completed su
 
 -   **Existing positions will be lost**: Old MonoCooler loans and Clearinghouse positions will not be migrated. This is acceptable for a testnet.
 -   **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
--   **env.json**: Both scripts automatically update env.json. Verify the updates after each step.
+-   **env.json**: Manually update env.json after Step 1. ReplaceStaking automatically updates policy addresses.
 -   **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
