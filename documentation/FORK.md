@@ -2,21 +2,31 @@
 
 This guide covers the complete workflow for testing protocol changes against a local Anvil fork, avoiding the 20-block limit of Tenderly VNet.
 
-## Flag Distinction: `--tenderly` vs `--fork`
+## Anvil vs Tenderly
 
-| Flag | Purpose | RPC Target | Execution Method | Use Case |
-|------|---------|------------|------------------|----------|
-| `--tenderly true` | Execute on actual testnet | Testnet RPC (e.g., Base Sepolia) | Tenderly VNet HTTP API | Actual testnet deployment |
-| `--fork true` | Execute on local Anvil fork | `http://localhost:8545` | Foundry `vm.startBroadcast()` | Local testing/dev |
+| Feature     | Anvil Fork              | Tenderly VNet    |
+| ----------- | ----------------------- | ---------------- |
+| RPC Target  | `http://localhost:8545` | Tenderly RPC URL |
+| Block limit | None                    | 20 blocks        |
+| Setup       | Requires local Anvil    | Cloud-based      |
+| Use case    | Local testing/dev       | Shared testnet   |
 
-**Key differences:**
+## RPC URLs
 
-- `--tenderly` connects to the real testnet and uses Tenderly's VNet API to simulate transactions
-- `--fork` connects to a local Anvil fork and executes transactions directly using Foundry broadcast
-- `--fork` requires Anvil running locally; `--tenderly` does not
-- `--fork` has no block limit; `--tenderly` (via Tenderly) has 20-block limit
+Pass the RPC URL with `--chain`:
 
-**Both can be used together** (e.g., `--tenderly true --fork true`) - this means "use the testnet deployment state but execute via local fork"
+```bash
+# Anvil fork
+--chain http://localhost:8545
+
+# Tenderly VNet
+--chain https://rpc.tenderly.co/vnet/...
+
+# Mainnet (uses foundry.toml endpoint)
+--chain mainnet
+```
+
+The script automatically detects localhost URLs and applies the `--legacy` flag for EIP-1559 compatibility.
 
 ## Prerequisites
 
@@ -33,10 +43,10 @@ Deploy new or updated contracts to the Anvil fork:
 
 ```bash
 ./shell/deployV3.sh \
-  --account <ACCOUNT> \
-  --sequence src/scripts/deploy/savedDeployments/<SEQUENCE>.json \
-  --chain http://localhost:8545 \
-  --broadcast true
+    --account my_wallet \
+    --sequence src/scripts/deploy/savedDeployments/my_sequence.json \
+    --chain http://localhost:8545 \
+    --broadcast true
 ```
 
 ### Phase 2: Execute MS Batch
@@ -45,13 +55,13 @@ Activate/configure the deployed contracts via multisig batch:
 
 ```bash
 ./shell/safeBatchV2.sh \
-  --contract MyBatchScript \
-  --function functionName \
-  --chain mainnet \
-  --account my_wallet \
-  --multisig true \
-  --broadcast true \
-  --fork true
+    --contract MyBatchScript \
+    --function functionName \
+    --chain mainnet \
+    --account my_wallet \
+    --multisig true \
+    --broadcast true \
+    --fork true
 ```
 
 **Note:** `--chain mainnet` is still required so the script can look up addresses from `env.json`. When `--fork true` is used, the RPC is automatically overridden to `http://localhost:8545`.
@@ -61,15 +71,24 @@ Activate/configure the deployed contracts via multisig batch:
 For governance actions, create and test an OCG proposal:
 
 ```bash
+# Using a cast wallet
 src/scripts/proposals/submitProposal.sh \
-  --file src/proposals/MyProposal.sol \
-  --contract MyProposal \
-  --account my_wallet \
-  --fork true \
-  --broadcast true
+    --file src/proposals/MyProposal.sol \
+    --contract MyProposal \
+    --account my_wallet \
+    --chain http://localhost:8545 \
+    --broadcast true
+
+# Using a Ledger
+src/scripts/proposals/submitProposal.sh \
+    --file src/proposals/MyProposal.sol \
+    --contract MyProposal \
+    --ledger 0 \
+    --chain http://localhost:8545 \
+    --broadcast true
 ```
 
-**Note:** When `--fork true` is used, the script automatically overrides `RPC_URL` to `http://localhost:8545`. No need to set it manually.
+**Note:** Pass `--chain http://localhost:8545` to use the local Anvil fork.
 
 ### Phase 4: Execute Proposal on Fork
 
@@ -77,8 +96,8 @@ Execute the proposal actions via Anvil fork:
 
 ```bash
 src/scripts/proposals/executeOnAnvilFork.sh \
-  --file src/proposals/MyProposal.sol \
-  --contract MyProposal
+    --file src/proposals/MyProposal.sol \
+    --contract MyProposal
 ```
 
 ## Complete Workflow Example
@@ -89,13 +108,17 @@ pnpm run anvil:fork
 
 # Terminal 2: Run full test workflow
 # 1. Deploy
-./shell/deployV3.sh --target PRICE --chain http://localhost:8545 --broadcast true
+./shell/deployV3.sh \
+    --account tester \
+    --sequence src/scripts/deploy/savedDeployments/price.json \
+    --chain http://localhost:8545 \
+    --broadcast true
 
 # 2. MS Batch to activate
 ./shell/safeBatchV2.sh --contract PriceDeploy --function run --chain mainnet --account tester --fork true --broadcast true
 
 # 3. Create proposal
-src/scripts/proposals/submitProposal.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice --account tester --fork true --broadcast true
+src/scripts/proposals/submitProposal.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice --account tester --chain http://localhost:8545 --broadcast true
 
 # 4. Execute proposal
 src/scripts/proposals/executeOnAnvilFork.sh --file src/proposals/UpdatePrice.sol --contract UpdatePrice
@@ -107,13 +130,13 @@ After each phase, verify state changes:
 
 ```bash
 # Check deployed contract
-cast code <deployed_address> --rpc-url http://localhost:8545
+cast code 0x1234... --rpc-url http://localhost:8545
 
 # Check module activation in Kernel
-cast call <kernel_address> "getModuleForKeycode(bytes5)" "(0x5052494345)" --rpc-url http://localhost:8545
+cast call 0xKERNEL... "getModuleForKeycode(bytes5)" 0x5052494345 --rpc-url http://localhost:8545
 
 # Check proposal state
-cast call <governor_address> "proposals(uint256)" "<proposal_id>" --rpc-url http://localhost:8545
+cast call 0xGOVERNOR... "proposals(uint256)" 1 --rpc-url http://localhost:8545
 ```
 
 ## Mining Blocks (Warping Forward)
@@ -136,7 +159,7 @@ To deal 15 gOHM to a wallet and set up voting checkpoints (useful for testing go
 
 ```bash
 # Deal 15 gOHM to a wallet
-./shell/anvil/deal_gohm.sh <wallet_address>
+./shell/anvil/deal_gohm.sh 0x1234...
 ```
 
 The script will:
@@ -153,11 +176,9 @@ Just restart `anvil`.
 
 ## Environment Variables
 
-| Variable | For Anvil Mode | For Tenderly Mode |
-|----------|----------------|-------------------|
-| `USE_TENDERLY_FORK` | ✗ | set by `--tenderly` |
-| `USE_ANVIL_FORK` | set by `--fork` | ✗ |
-| `TENDERLY_*` | ✗ | ✓ |
-| `RPC_URL` | auto-set to localhost by `--fork` | ✓ |
+| Variable     | For Anvil Mode       | For Tenderly Mode |
+| ------------ | -------------------- | ----------------- |
+| `TENDERLY_*` | ✗                    | ✓                 |
+| `RPC_URL`    | Passed via `--chain` | ✓                 |
 
 **Note:** `anvil:fork` uses the `mainnet` RPC endpoint defined in `foundry.toml`. To fork from a different network, set the `TESTNET_RPC_URL` environment variable and run `anvil --fork-url $TESTNET_RPC_URL --port 8545 --auto-impersonate` directly.
