@@ -86,14 +86,14 @@ localhost: {
 }
 ```
 
-Then deploy using the same script from Step 1:
+Then deploy using the script from Step 1:
 
 ```bash
 # In olympus-contracts repo
-npx hardhat run scripts/deploy-sepolia.js --network localhost
+npx hardhat run scripts/deploy-staking-only.js --network localhost
 ```
 
-See Step 1c for full details on the deployment script.
+See Step 1 for full details on the deployment script.
 
 ### Verify Legacy Contracts on Fork
 
@@ -212,65 +212,40 @@ git checkout src/scripts/env.json
 
 The legacy contracts (sOHM, gOHM, Staking) must be deployed from the `olympus-contracts` repository since they require Solidity 0.7.5.
 
-### Option A: Use the sepolia Branch (Recommended)
-
-The `sepolia` branch of olympus-contracts already has Sepolia support configured:
-
-```bash
-git clone https://github.com/OlympusDAO/olympus-contracts.git
-cd olympus-contracts
-git checkout sepolia
-npm install
-```
-
-**Key differences from main branch:**
-
-| Change          | Description                                                         |
-| --------------- | ------------------------------------------------------------------- |
-| `INITIAL_INDEX` | Set to `269340000000` (≈269.34) instead of mainnet's `269238508004` |
-| Distributor     | Reward rate set to `0` (no rebases)                                 |
-| Migrator        | Uses simplified `NewMigrator.sol` instead of `OlympusTokenMigrator` |
-| Alchemy URL     | Updated to `g.alchemy.com` format                                   |
-
-**Important:** The sepolia branch's `INITIAL_INDEX` is `269340000000`, which is **not** the exact mainnet index (`269238508004`). If you need the exact mainnet index, use **Option B** below.
-
-Run the deployment:
-
-```bash
-# Set environment variables
-export PRIVATE_KEY=<your_private_key>
-export ALCHEMY_API_KEY=<your_api_key>
-
-# Deploy
-npm run deploy:sepolia
-
-# Verify on Etherscan (optional)
-npm run etherscan:sepolia
-```
-
-### Option B: Custom Deployment Script (For Exact Mainnet Index)
-
-If you need the exact mainnet index of `269238508004`, use a custom script:
+We use a **custom deployment script** to deploy only the necessary contracts (sOHM, gOHM, Staking) with the exact mainnet index.
 
 ### 1a. Clone and Setup olympus-contracts
 
 ```bash
 git clone https://github.com/OlympusDAO/olympus-contracts.git
 cd olympus-contracts
-git checkout 92864570011fa2a3b30222c9602cf0ad0f6149fd
+git checkout sepolia # Has updated dependencies and Sepolia config
 npm install
 ```
 
-### 1b. Create Deployment Script
+### 1b. Configure Network
 
-Create a deployment script in the olympus-contracts repo (e.g., `scripts/deploy-sepolia.js`). This script uses the **exact mainnet index** (`269238508004`):
+Add localhost network to `hardhat.config.ts` (for Anvil fork testing):
+
+```typescript
+// In hardhat.config.ts, add to networks section:
+localhost: {
+    url: "http://127.0.0.1:8545",
+    chainId: 11155111  // Match Anvil's --chain-id
+}
+```
+
+### 1c. Create Deployment Script
+
+Create `scripts/deploy-staking-only.js` in the olympus-contracts repo:
 
 ```javascript
-// scripts/deploy-sepolia.js
+// scripts/deploy-staking-only.js
+// Deploys only sOHM, gOHM, and Staking contracts (no other legacy contracts)
 const {ethers} = require("hardhat");
 
 async function main() {
-    const INDEX = 269238508004; // EXACT mainnet index
+    const INDEX = 269238508004; // Exact mainnet index
     const EPOCH_LENGTH = 28800; // 8 hours
     const OHM = "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc";
     const TREASURY = "0x7D7406e4E5Fdb636C888cF17aBb42B5edE8B3722";
@@ -278,24 +253,29 @@ async function main() {
 
     const [deployer] = await ethers.getSigners();
     console.log("Deploying with:", deployer.address);
+    console.log("Network:", network.name);
 
     // Deploy sOHM
+    console.log("\n--- Deploying sOHM ---");
     const SOHM = await ethers.getContractFactory("sOlympus");
     const sOHM = await SOHM.deploy();
     await sOHM.deployed();
     console.log("sOHM deployed:", sOHM.address);
 
     // Set index
+    console.log("\n--- Setting Index ---");
     await sOHM.setIndex(INDEX);
     console.log("Index set to:", INDEX);
 
     // Deploy gOHM
+    console.log("\n--- Deploying gOHM ---");
     const GOHM = await ethers.getContractFactory("gOHM");
     const gOHM = await GOHM.deploy(deployer.address, sOHM.address);
     await gOHM.deployed();
     console.log("gOHM deployed:", gOHM.address);
 
     // Deploy Staking
+    console.log("\n--- Deploying Staking ---");
     const Staking = await ethers.getContractFactory("OlympusStaking");
     const staking = await Staking.deploy(
         OHM,
@@ -310,6 +290,7 @@ async function main() {
     console.log("Staking deployed:", staking.address);
 
     // Set gOHM on sOHM
+    console.log("\n--- Configuring Contracts ---");
     await sOHM.setgOHM(gOHM.address);
     console.log("gOHM set on sOHM");
 
@@ -321,10 +302,14 @@ async function main() {
     await gOHM.migrate(staking.address, sOHM.address);
     console.log("gOHM migrated");
 
-    console.log("\n=== Deployment Summary ===");
-    console.log("sOHM:", sOHM.address);
-    console.log("gOHM:", gOHM.address);
-    console.log("Staking:", staking.address);
+    console.log("\n========================================");
+    console.log("         DEPLOYMENT SUMMARY");
+    console.log("========================================");
+    console.log("sOHM:    ", sOHM.address);
+    console.log("gOHM:    ", gOHM.address);
+    console.log("Staking: ", staking.address);
+    console.log("Index:   ", INDEX);
+    console.log("========================================");
 }
 
 main()
@@ -335,34 +320,31 @@ main()
     });
 ```
 
-### 1c. Run Deployment
+### 1d. Run Deployment
 
-**For Sepolia:**
-
-```bash
-# In olympus-contracts repo
-npx hardhat run scripts/deploy-sepolia.js --network sepolia
-```
-
-**For Anvil Fork:**
-
-First, ensure `hardhat.config.ts` has localhost configured (or add it):
-
-```typescript
-networks: {
-    localhost: {
-        url: "http://127.0.0.1:8545",
-        chainId: 11155111  // Match Anvil's --chain-id
-    },
-    sepolia: getChainConfig("sepolia"),
-}
-```
-
-Then deploy to the fork:
+**For Sepolia (actual network):**
 
 ```bash
-# In olympus-contracts repo
-npx hardhat run scripts/deploy-sepolia.js --network localhost
+# Set environment variables
+export PRIVATE_KEY=<your_private_key>
+export ALCHEMY_API_KEY=<your_api_key>
+
+# Deploy to Sepolia
+npx hardhat run scripts/deploy-staking-only.js --network sepolia
+```
+
+**For Anvil Fork (local testing):**
+
+```bash
+# Terminal 1: Start Anvil fork
+anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY \
+    --chain-id 11155111
+
+# Terminal 2: Set environment (use Anvil's default key)
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+# Deploy to localhost (Anvil fork)
+npx hardhat run scripts/deploy-staking-only.js --network localhost
 ```
 
 Record the deployed addresses (sOHM, gOHM, Staking).
