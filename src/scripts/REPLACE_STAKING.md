@@ -1,0 +1,565 @@
+# Replace sOHM/Staking Contracts on Sepolia
+
+## Overview
+
+This document describes how to replace the legacy staking contracts (sOHM, gOHM, Staking) and all dependent Bophades contracts on Sepolia to update the sOHM index to the mainnet value (269.24).
+
+The sOHM index is immutable after initialization, so changing it requires deploying entirely new contracts.
+
+## Contracts Replaced
+
+### Legacy Contracts (olympus-contracts)
+
+| Contract | Reason                                     | Address (Old)                                |
+| -------- | ------------------------------------------ | -------------------------------------------- |
+| sOHM     | Index is immutable after initialization    | `0x89631595649Cc6dEBa249A8012a5b2d88C8ddE48` |
+| gOHM     | Already migrated, sOHM reference immutable | `0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5` |
+| Staking  | sOHM/gOHM references are immutable         | `0x40a5F12aD1114608037ce80f028DDCF7C922Ef07` |
+
+### Bophades Modules
+
+| Contract                     | Reason                              | Address (Old)                                |
+| ---------------------------- | ----------------------------------- | -------------------------------------------- |
+| OlympusGovDelegation (DLGTE) | `_gOHM` is immutable in constructor | `0xca59A85a9B87cba6c706d12E60C1CB4ea61e97C9` |
+
+### Bophades Policies
+
+| Contract              | Reason                                                     | Address (Old)                                |
+| --------------------- | ---------------------------------------------------------- | -------------------------------------------- |
+| CoolerV2LtvOracle     | `_COLLATERAL_TOKEN` (gOHM) and `_DEBT_TOKEN` are immutable | `0x1Cb7f32fF640fC4a2A161c3d1f1a188a6670787d` |
+| CoolerV2 (MonoCooler) | `_COLLATERAL_TOKEN`, `_OHM`, `_STAKING` are immutable      | `0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c` |
+| Clearinghouse         | `gohm`, `ohm`, `staking` are immutable                     | `0x71b8f7c55C799182CC4351a20851A0214baE0ff7` |
+| ZeroDistributor       | `staking` is immutable                                     | `0x0db48Fa20894273cF6bB559644d63713E98FE67b` |
+| EmissionManager       | `gohm` is immutable                                        | `0x84785E392BfD02F97A9b84F85d86DEc11933ef81` |
+
+### Contracts NOT Replaced
+
+| Contract                     | Reason                                               |
+| ---------------------------- | ---------------------------------------------------- |
+| CoolerV2TreasuryBorrower     | Uses USDS/sUSDS, not gOHM/OHM                        |
+| OlympusClearinghouseRegistry | No immutable token refs, just needs new CH activated |
+| V1Migrator                   | Not deployed on Sepolia                              |
+| Distributor                  | Not deployed on Sepolia                              |
+| Burner                       | Not deployed on Sepolia                              |
+| BLVault\* contracts          | Not deployed on Sepolia                              |
+
+## Prerequisites
+
+-   Foundry installed
+-   `ALCHEMY_API_KEY` environment variable set
+-   Private key for executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`)
+-   Clone of `olympus-contracts` repo: https://github.com/OlympusDAO/olympus-contracts
+
+---
+
+## Testing on Anvil Fork (Recommended)
+
+Before running on Sepolia, test the entire deployment process on a local Anvil fork. This allows safe testing without affecting real contracts.
+
+### Start Anvil Fork
+
+```bash
+# Terminal 1: Start Anvil fork of Sepolia
+anvil --fork-url sepolia --port 8545
+
+# Keep this terminal running
+```
+
+### Set Environment Variables
+
+```bash
+# Terminal 2: Set up environment
+export RPC_URL=http://localhost:8545
+export EXECUTOR_ADDRESS=0x1A5309F208f161a393E8b5A253de8Ab894A67188
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # Anvil default account 0
+```
+
+### Deploy Legacy Contracts on Fork
+
+Configure `hardhat.config.ts` to use localhost:
+
+```typescript
+// In hardhat.config.ts networks section
+localhost: {
+    url: "http://127.0.0.1:8545",
+    chainId: 11155111  // Match Anvil's --chain-id
+}
+```
+
+Then deploy using the same script from Step 1:
+
+```bash
+# In olympus-contracts repo
+npx hardhat run scripts/deploy-sepolia.js --network localhost
+```
+
+See Step 1c for full details on the deployment script.
+
+### Verify Legacy Contracts on Fork
+
+```bash
+forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
+    --sig "run(address,address,address)" $SOHM $GOHM $STAKING \
+    --rpc-url $RPC_URL \
+    -vvv
+```
+
+### Grant Permissions on Fork
+
+```bash
+# Grant minter_admin role (impersonating executor)
+cast send 0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86 \
+    "grantRole(bytes32,address)" \
+    $(cast keccak "minter_admin") \
+    $EXECUTOR_ADDRESS \
+    --rpc-url $RPC_URL \
+    --from 0xf33133E5356B9534e794468dAcD424D11007f1cF # RolesAdmin
+```
+
+### Run ReplaceStaking on Fork
+
+```bash
+forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+    --rpc-url $RPC_URL \
+    --broadcast \
+    --unlocked \
+    --sender $EXECUTOR_ADDRESS \
+    -vvv
+```
+
+### Verify on Fork
+
+```bash
+# Check new contracts
+cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.sOHM') "index()" --rpc-url $RPC_URL
+cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM') "index()" --rpc-url $RPC_URL
+
+# Verify staking worked
+cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM') "balanceOf(address)" $EXECUTOR_ADDRESS --rpc-url $RPC_URL
+```
+
+### Reset for Re-testing
+
+```bash
+# Kill Anvil (Ctrl+C in Terminal 1)
+# Restart with fresh fork
+anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY \
+    --fork-block-number 7700000 \
+    --chain-id 11155111
+
+# Reset env.json to original state (git checkout)
+git checkout src/scripts/env.json
+```
+
+---
+
+## Configuration Reference
+
+| Parameter      | Value                                        | Source           |
+| -------------- | -------------------------------------------- | ---------------- |
+| Index          | 269238508004                                 | Mainnet          |
+| Epoch Length   | 28800 (8 hrs)                                | Standard         |
+| Test OHM       | 1,000 OHM                                    | For staking test |
+| KernelExecutor | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` | env.json         |
+
+## Key Addresses (Sepolia)
+
+### Legacy Contracts
+
+| Contract         | Address                                      |
+| ---------------- | -------------------------------------------- |
+| OHM              | `0x784cA0C006b8651BAB183829A99fA46BeCe50dBc` |
+| Treasury (V2)    | `0x7D7406e4E5Fdb636C888cF17aBb42B5edE8B3722` |
+| OlympusAuthority | `0x81057Bef097462957B9388D8DCB7D4AB0699cADB` |
+
+### Bophades Core
+
+| Contract       | Address                                      |
+| -------------- | -------------------------------------------- |
+| Kernel         | `0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E` |
+| KernelExecutor | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` |
+
+### Modules
+
+| Contract                     | Address                                      |
+| ---------------------------- | -------------------------------------------- |
+| MINTR                        | `0x203C46cbB4FCC18977f521a9f7fdE007E1A564f6` |
+| ROLES                        | `0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86` |
+| OlympusClearinghouseRegistry | `0x38038bdd78602e5AA2accd0Ce07557369e21a6c1` |
+
+### Policies
+
+| Contract                 | Address                                      |
+| ------------------------ | -------------------------------------------- |
+| RolesAdmin               | `0xf33133E5356B9534e794468dAcD424D11007f1cF` |
+| Minter                   | `0x556B5fA9f8aa6E38e5E8FB0AD9Cb978bcAf33913` |
+| CoolerV2TreasuryBorrower | `0x74FeAEde88962139f4d36A2f1998BcF56088d519` |
+
+### External Contracts
+
+| Contract                     | Address                                      |
+| ---------------------------- | -------------------------------------------- |
+| CoolerFactory                | `0x6F448eA89cD897ad1aEdB5Cd8Bf221d50B9A7C6C` |
+| sDAI                         | `0xefffab0Aa61828c4af926E039ee754e3edE10dAc` |
+| USDS                         | `0xDd668BdDb4241F4fAFBB0BC0d75b49EbEE88B4FC` |
+| BondFixedTermAuctioneer      | `0x007A66A2a13415DB3613C1a4dd1C942A285902d1` |
+| BondFixedTermTeller          | `0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6` |
+| ConvertibleDepositAuctioneer | `0x247f1989aDc0F63D07b91Bf645De879b9de06fbB` |
+
+---
+
+## Step 1: Deploy Legacy Contracts from olympus-contracts Repo
+
+The legacy contracts (sOHM, gOHM, Staking) must be deployed from the `olympus-contracts` repository since they require Solidity 0.7.5.
+
+### Option A: Use the sepolia Branch (Recommended)
+
+The `sepolia` branch of olympus-contracts already has Sepolia support configured:
+
+```bash
+git clone https://github.com/OlympusDAO/olympus-contracts.git
+cd olympus-contracts
+git checkout sepolia
+npm install
+```
+
+**Key differences from main branch:**
+
+| Change          | Description                                                         |
+| --------------- | ------------------------------------------------------------------- |
+| `INITIAL_INDEX` | Set to `269340000000` (≈269.34) instead of mainnet's `269238508004` |
+| Distributor     | Reward rate set to `0` (no rebases)                                 |
+| Migrator        | Uses simplified `NewMigrator.sol` instead of `OlympusTokenMigrator` |
+| Alchemy URL     | Updated to `g.alchemy.com` format                                   |
+
+**Important:** The sepolia branch's `INITIAL_INDEX` is `269340000000`, which is **not** the exact mainnet index (`269238508004`). If you need the exact mainnet index, use **Option B** below.
+
+Run the deployment:
+
+```bash
+# Set environment variables
+export PRIVATE_KEY=<your_private_key>
+export ALCHEMY_API_KEY=<your_api_key>
+
+# Deploy
+npm run deploy:sepolia
+
+# Verify on Etherscan (optional)
+npm run etherscan:sepolia
+```
+
+### Option B: Custom Deployment Script (For Exact Mainnet Index)
+
+If you need the exact mainnet index of `269238508004`, use a custom script:
+
+### 1a. Clone and Setup olympus-contracts
+
+```bash
+git clone https://github.com/OlympusDAO/olympus-contracts.git
+cd olympus-contracts
+git checkout 92864570011fa2a3b30222c9602cf0ad0f6149fd
+npm install
+```
+
+### 1b. Create Deployment Script
+
+Create a deployment script in the olympus-contracts repo (e.g., `scripts/deploy-sepolia.js`). This script uses the **exact mainnet index** (`269238508004`):
+
+```javascript
+// scripts/deploy-sepolia.js
+const {ethers} = require("hardhat");
+
+async function main() {
+    const INDEX = 269238508004; // EXACT mainnet index
+    const EPOCH_LENGTH = 28800; // 8 hours
+    const OHM = "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc";
+    const TREASURY = "0x7D7406e4E5Fdb636C888cF17aBb42B5edE8B3722";
+    const AUTHORITY = "0x81057Bef097462957B9388D8DCB7D4AB0699cADB";
+
+    const [deployer] = await ethers.getSigners();
+    console.log("Deploying with:", deployer.address);
+
+    // Deploy sOHM
+    const SOHM = await ethers.getContractFactory("sOlympus");
+    const sOHM = await SOHM.deploy();
+    await sOHM.deployed();
+    console.log("sOHM deployed:", sOHM.address);
+
+    // Set index
+    await sOHM.setIndex(INDEX);
+    console.log("Index set to:", INDEX);
+
+    // Deploy gOHM
+    const GOHM = await ethers.getContractFactory("gOHM");
+    const gOHM = await GOHM.deploy(deployer.address, sOHM.address);
+    await gOHM.deployed();
+    console.log("gOHM deployed:", gOHM.address);
+
+    // Deploy Staking
+    const Staking = await ethers.getContractFactory("OlympusStaking");
+    const staking = await Staking.deploy(
+        OHM,
+        sOHM.address,
+        gOHM.address,
+        EPOCH_LENGTH,
+        0,
+        Math.floor(Date.now() / 1000),
+        AUTHORITY,
+    );
+    await staking.deployed();
+    console.log("Staking deployed:", staking.address);
+
+    // Set gOHM on sOHM
+    await sOHM.setgOHM(gOHM.address);
+    console.log("gOHM set on sOHM");
+
+    // Initialize sOHM
+    await sOHM.initialize(staking.address, TREASURY);
+    console.log("sOHM initialized");
+
+    // Migrate gOHM
+    await gOHM.migrate(staking.address, sOHM.address);
+    console.log("gOHM migrated");
+
+    console.log("\n=== Deployment Summary ===");
+    console.log("sOHM:", sOHM.address);
+    console.log("gOHM:", gOHM.address);
+    console.log("Staking:", staking.address);
+}
+
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });
+```
+
+### 1c. Run Deployment
+
+**For Sepolia:**
+
+```bash
+# In olympus-contracts repo
+npx hardhat run scripts/deploy-sepolia.js --network sepolia
+```
+
+**For Anvil Fork:**
+
+First, ensure `hardhat.config.ts` has localhost configured (or add it):
+
+```typescript
+networks: {
+    localhost: {
+        url: "http://127.0.0.1:8545",
+        chainId: 11155111  // Match Anvil's --chain-id
+    },
+    sepolia: getChainConfig("sepolia"),
+}
+```
+
+Then deploy to the fork:
+
+```bash
+# In olympus-contracts repo
+npx hardhat run scripts/deploy-sepolia.js --network localhost
+```
+
+Record the deployed addresses (sOHM, gOHM, Staking).
+
+---
+
+## Step 2: Verify and Update env.json
+
+Run the verification script from the Bophades repo:
+
+```bash
+forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
+    --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> \
+    --rpc-url $RPC_URL \
+    -vvv
+```
+
+For example:
+
+```bash
+forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
+    --sig "run(address,address,address)" \
+    0x1234... 0x5678... 0x9abc... \
+    --rpc-url $RPC_URL \
+    -vvv
+```
+
+This script:
+
+-   Verifies sOHM index is set correctly (269238508004)
+-   Verifies contract references are correct
+-   Updates env.json with new addresses
+
+---
+
+## Step 3: Setup Minter Permissions
+
+Grant `minter_admin` role if not already granted:
+
+```bash
+# Check if executor has minter_admin role
+forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
+    --sig "hasRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188
+
+# Grant minter_admin role if needed
+forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
+    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --broadcast
+```
+
+Note: The `test` mint category will be added automatically by the ReplaceStaking script if it doesn't exist.
+
+---
+
+## Step 4: Deploy New Bophades Contracts
+
+Deploy new module and policies:
+
+```bash
+forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+    --rpc-url $RPC_URL \
+    --broadcast \
+    --verify \
+    -vvv
+```
+
+This script:
+
+### Phase 1: Deactivate Old Policies
+
+-   Deactivates old MonoCooler, Clearinghouse, ZeroDistributor, EmissionManager, LtvOracle
+
+### Phase 2: Upgrade DLGTE Module
+
+-   Deploys new `OlympusGovDelegation` (DLGTE) with new gOHM address
+-   Upgrades module in Kernel
+
+### Phase 3: Deploy New Policies
+
+-   Deploys new `CoolerV2LtvOracle` with new gOHM as collateral
+-   Deploys new `MonoCooler` (CoolerV2) with new gOHM and Staking
+-   Deploys new `Clearinghouse` with new gOHM and Staking
+-   Deploys new `ZeroDistributor` with new Staking
+-   Deploys new `EmissionManager` with new gOHM
+
+### Phase 4: Activate New Policies
+
+-   Activates all new policies in Kernel
+
+### Phase 5: Update ClearinghouseRegistry
+
+-   Deactivates old Clearinghouse in CHREG module
+-   Activates new Clearinghouse in CHREG module
+
+### Phase 6: Test Staking
+
+-   Mints 1,000 OHM to the deployer
+-   Approves Staking to spend OHM
+-   Stakes OHM to receive gOHM
+-   Verifies that staking is working correctly
+
+### Phase 7: Update env.json
+
+-   Automatically updates all policy addresses
+
+---
+
+## Step 5: Verify Deployment
+
+```bash
+# Set variables from env.json
+SOHM=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.sOHM')
+GOHM=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM')
+STAKING=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.Staking')
+MONOCOOLER=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.policies.CoolerV2')
+KERNEL=0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E
+
+# Check sOHM index
+cast call $SOHM "index()" --rpc-url $RPC_URL
+# Expected: 269238508004
+
+# Check gOHM index (should match sOHM)
+cast call $GOHM "index()" --rpc-url $RPC_URL
+# Expected: 269238508004
+
+# Verify new MonoCooler is active in Kernel
+cast call $KERNEL "isPolicyActive(address)(bool)" $MONOCOOLER --rpc-url $RPC_URL
+# Expected: true
+
+# Verify old MonoCooler is deactivated
+cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c --rpc-url $RPC_URL
+# Expected: false
+```
+
+---
+
+## Deployment Order Summary
+
+```
+1. olympus-contracts repo (0.7.5)
+   └── Deploy sOHM → gOHM → Staking → setIndex → setgOHM → initialize → migrate
+       └── Record deployed addresses
+
+2. Bophades repo - VerifyLegacyStaking (0.8.15)
+   └── Verify contracts → Update env.json
+   └── Usage: forge script src/scripts/ops/VerifyLegacyStaking.s.sol --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING>
+
+3. Bophades repo - ReplaceStaking (0.8.15)
+   ├── Phase 1: Deactivate old policies
+   ├── Phase 2: Upgrade DLGTE module
+   ├── Phase 3: Deploy new policies
+   ├── Phase 4: Activate new policies
+   ├── Phase 5: Update ClearinghouseRegistry
+   ├── Phase 6: Test staking (mint and stake sample OHM)
+   └── Phase 7: Update env.json
+   └── Usage: forge script src/scripts/ops/ReplaceStaking.s.sol --broadcast
+```
+
+---
+
+## Troubleshooting
+
+### "sOHM index not set correctly"
+
+The sOHM `setIndex()` function can only be called once. If the index is wrong, you must redeploy sOHM.
+
+### "Minter_CategoryNotApproved"
+
+The script automatically adds the `test` category if it doesn't exist. If this fails, ensure the executor has `minter_admin` role:
+
+```bash
+forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
+    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --broadcast
+```
+
+### "ROLES_RequireRole"
+
+Ensure the executor has `minter_admin` role:
+
+```bash
+forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
+    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --broadcast
+```
+
+### "Kernel_OnlyExecutor"
+
+The script must be run from the executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`).
+
+### "Insufficient OHM balance in contract"
+
+Staking needs OHM balance for `unstake()`. Ensure Phase 6 (seeding) completed successfully.
+
+---
+
+## Notes
+
+-   **Existing positions will be lost**: Old MonoCooler loans and Clearinghouse positions will not be migrated. This is acceptable for a testnet.
+-   **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
+-   **env.json**: Both scripts automatically update env.json. Verify the updates after each step.
+-   **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
