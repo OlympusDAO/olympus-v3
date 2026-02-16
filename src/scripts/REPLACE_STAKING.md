@@ -46,13 +46,27 @@ The sOHM index is immutable after initialization, so changing it requires deploy
 ## Prerequisites
 
 -   Foundry installed
--   `ALCHEMY_API_KEY` environment variable set
--   Private key for executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`)
+-   `.env` file with:
+    -   `ALCHEMY_API_KEY` - Alchemy API key for RPC access
+    -   `PRIVATE_KEY` - Private key for executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`)
 -   Clone of `olympus-contracts` repo: https://github.com/OlympusDAO/olympus-contracts
 
 ---
 
 ## Environment Setup
+
+Ensure your `.env` file contains:
+
+```bash
+ALCHEMY_API_KEY=your_alchemy_api_key
+PRIVATE_KEY=your_executor_private_key
+```
+
+Source the environment:
+
+```bash
+source .env
+```
 
 Choose **one** of the following environments:
 
@@ -60,7 +74,6 @@ Choose **one** of the following environments:
 
 ```bash
 export RPC_URL=https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY
-export PRIVATE_KEY=<your_executor_private_key>
 ```
 
 ### Option B: Anvil Fork (Local Testing)
@@ -149,7 +162,7 @@ We use a **custom deployment script** to deploy only the necessary contracts (sO
 git clone https://github.com/OlympusDAO/olympus-contracts.git
 cd olympus-contracts
 git checkout sepolia # Has updated dependencies and Sepolia config
-npm install
+npm
 ```
 
 ### 1b. Configure Network
@@ -251,19 +264,18 @@ main()
 
 ### 1d. Run Deployment
 
+Ensure environment is sourced (see Environment Setup).
+
 **Sepolia:**
 
 ```bash
-export ALCHEMY_API_KEY=<your_api_key>
-export PRIVATE_KEY=<your_private_key>
 npx hardhat run scripts/deploy-staking-only.js --network sepolia
 ```
 
 **Anvil Fork:**
 
 ```bash
-# Ensure Anvil is running (see Environment Setup)
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+# Ensure Anvil is running and RPC_URL is set (see Environment Setup)
 npx hardhat run scripts/deploy-staking-only.js --network localhost
 ```
 
