@@ -52,104 +52,33 @@ The sOHM index is immutable after initialization, so changing it requires deploy
 
 ---
 
-## Testing on Anvil Fork (Recommended)
+## Environment Setup
 
-Before running on Sepolia, test the entire deployment process on a local Anvil fork. This allows safe testing without affecting real contracts.
+Choose **one** of the following environments:
 
-### Start Anvil Fork
+### Option A: Sepolia (Production)
+
+```bash
+export RPC_URL=https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY
+export PRIVATE_KEY=<your_executor_private_key>
+```
+
+### Option B: Anvil Fork (Local Testing)
 
 ```bash
 # Terminal 1: Start Anvil fork of Sepolia
-anvil --fork-url sepolia --port 8545
+anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --chain-id 11155111
 
-# Keep this terminal running
-```
-
-### Set Environment Variables
-
-```bash
-# Terminal 2: Set up environment
+# Terminal 2: Set environment
 export RPC_URL=http://localhost:8545
-export EXECUTOR_ADDRESS=0x1A5309F208f161a393E8b5A253de8Ab894A67188
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 # Anvil default account 0
+export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
-### Deploy Legacy Contracts on Fork
+**Anvil-specific notes:**
 
-Configure `hardhat.config.ts` to use localhost:
-
-```typescript
-// In hardhat.config.ts networks section
-localhost: {
-    url: "http://127.0.0.1:8545",
-    chainId: 11155111  // Match Anvil's --chain-id
-}
-```
-
-Then deploy using the script from Step 1:
-
-```bash
-# In olympus-contracts repo
-npx hardhat run scripts/deploy-staking-only.js --network localhost
-```
-
-See Step 1 for full details on the deployment script.
-
-### Verify Legacy Contracts on Fork
-
-```bash
-forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
-    --sig "run(address,address,address)" $SOHM $GOHM $STAKING \
-    --rpc-url $RPC_URL \
-    -vvv
-```
-
-### Grant Permissions on Fork
-
-```bash
-# Grant minter_admin role (impersonating executor)
-cast send 0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86 \
-    "grantRole(bytes32,address)" \
-    $(cast keccak "minter_admin") \
-    $EXECUTOR_ADDRESS \
-    --rpc-url $RPC_URL \
-    --from 0xf33133E5356B9534e794468dAcD424D11007f1cF # RolesAdmin
-```
-
-### Run ReplaceStaking on Fork
-
-```bash
-forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
-    --rpc-url $RPC_URL \
-    --broadcast \
-    --unlocked \
-    --sender $EXECUTOR_ADDRESS \
-    -vvv
-```
-
-### Verify on Fork
-
-```bash
-# Check new contracts
-cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.sOHM') "index()" --rpc-url $RPC_URL
-cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM') "index()" --rpc-url $RPC_URL
-
-# Verify staking worked
-cast call $(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM') "balanceOf(address)" $EXECUTOR_ADDRESS --rpc-url $RPC_URL
-```
-
-### Reset for Re-testing
-
-```bash
-# Kill Anvil (Ctrl+C in Terminal 1)
-# Restart with fresh fork
-anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY \
-    --fork-block-number 7700000 \
-    --chain-id 11155111
-
-# Reset env.json to original state (git checkout)
-git checkout src/scripts/env.json
-```
+-   Uses Anvil's default account 0 (publicly known key)
+-   Can impersonate any address using `--from` with `cast`
+-   Reset state by restarting Anvil and running `git checkout src/scripts/env.json`
 
 ---
 
@@ -225,7 +154,7 @@ npm install
 
 ### 1b. Configure Network
 
-Add localhost network to `hardhat.config.ts` (for Anvil fork testing):
+Add localhost network to `hardhat.config.ts` (required for Anvil fork):
 
 ```typescript
 // In hardhat.config.ts, add to networks section:
@@ -322,28 +251,19 @@ main()
 
 ### 1d. Run Deployment
 
-**For Sepolia (actual network):**
+**Sepolia:**
 
 ```bash
-# Set environment variables
-export PRIVATE_KEY=<your_private_key>
 export ALCHEMY_API_KEY=<your_api_key>
-
-# Deploy to Sepolia
+export PRIVATE_KEY=<your_private_key>
 npx hardhat run scripts/deploy-staking-only.js --network sepolia
 ```
 
-**For Anvil Fork (local testing):**
+**Anvil Fork:**
 
 ```bash
-# Terminal 1: Start Anvil fork
-anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY \
-    --chain-id 11155111
-
-# Terminal 2: Set environment (use Anvil's default key)
+# Ensure Anvil is running (see Environment Setup)
 export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-
-# Deploy to localhost (Anvil fork)
 npx hardhat run scripts/deploy-staking-only.js --network localhost
 ```
 
@@ -355,6 +275,8 @@ Record the deployed addresses (sOHM, gOHM, Staking).
 
 Run the verification script from the Bophades repo:
 
+**Sepolia:**
+
 ```bash
 forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
     --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> \
@@ -362,12 +284,11 @@ forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
     -vvv
 ```
 
-For example:
+**Anvil Fork:**
 
 ```bash
 forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
-    --sig "run(address,address,address)" \
-    0x1234... 0x5678... 0x9abc... \
+    --sig "run(address,address,address)" <SOHM> <GOHM> <STAKING> \
     --rpc-url $RPC_URL \
     -vvv
 ```
@@ -384,15 +305,24 @@ This script:
 
 Grant `minter_admin` role if not already granted:
 
-```bash
-# Check if executor has minter_admin role
-forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
-    --sig "hasRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188
+**Sepolia:**
 
-# Grant minter_admin role if needed
+```bash
 forge script src/scripts/ops/Roles.s.sol:RolesScript --rpc-url $RPC_URL \
     --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --broadcast
+```
+
+**Anvil Fork:**
+
+```bash
+# Grant minter_admin role by impersonating RolesAdmin
+cast send 0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86 \
+    "grantRole(bytes32,address)" \
+    $(cast keccak "minter_admin") \
+    0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --rpc-url $RPC_URL \
+    --from 0xf33133E5356B9534e794468dAcD424D11007f1cF
 ```
 
 Note: The `test` mint category will be added automatically by the ReplaceStaking script if it doesn't exist.
@@ -403,11 +333,24 @@ Note: The `test` mint category will be added automatically by the ReplaceStaking
 
 Deploy new module and policies:
 
+**Sepolia:**
+
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url $RPC_URL \
     --broadcast \
     --verify \
+    -vvv
+```
+
+**Anvil Fork:**
+
+```bash
+forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+    --rpc-url $RPC_URL \
+    --broadcast \
+    --unlocked \
+    --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     -vvv
 ```
 
