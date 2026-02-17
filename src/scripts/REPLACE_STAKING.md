@@ -327,18 +327,31 @@ This script:
 
 ## Step 3: Setup Minter Permissions
 
-Grant `minter_admin` role if not already granted:
+Grant `minter_admin` role to the executor address if not already granted:
 
-**Sepolia:**
+**Using cast wallet:**
 
 ```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript \
-    --rpc-url sepolia \
-    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
-    --broadcast
+./shell/roles/grantRole.sh \
+    --role minter_admin \
+    --to 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --chain sepolia \
+    --account \
+    true < your_cast_wallet > --broadcast
 ```
 
-**Anvil Fork:**
+**Using Ledger:**
+
+```bash
+./shell/roles/grantRole.sh \
+    --role minter_admin \
+    --to 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --chain sepolia \
+    --ledger 0 \
+    --broadcast true
+```
+
+**Anvil Fork (impersonation):**
 
 ```bash
 # Grant minter_admin role by impersonating RolesAdmin
@@ -479,26 +492,10 @@ cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B82
 
 The sOHM `setIndex()` function can only be called once. If the index is wrong, you must redeploy sOHM.
 
-### "Minter_CategoryNotApproved"
+### "Minter_CategoryNotApproved" or "ROLES_RequireRole"
 
-The script automatically adds the `test` category if it doesn't exist. If this fails, ensure the executor has `minter_admin` role:
+The script automatically adds the `test` category if it doesn't exist. If this fails, ensure the executor has `minter_admin` role (see Step 3).
 
-```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript \
-    --rpc-url sepolia \
-    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
-    --broadcast
-```
-
-### "ROLES_RequireRole"
-
-Ensure the executor has `minter_admin` role:
-
-```bash
-forge script src/scripts/ops/Roles.s.sol:RolesScript \
-    --rpc-url sepolia \
-    --sig "grantRole(string,string,address)" sepolia minter_admin 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
-    --broadcast
 ```
 
 ### "Kernel_OnlyExecutor"
@@ -517,3 +514,4 @@ Staking needs OHM balance for `unstake()`. Ensure Phase 6 (seeding) completed su
 -   **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
 -   **env.json**: Manually update env.json after Step 1. ReplaceStaking automatically updates policy addresses.
 -   **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
+```
