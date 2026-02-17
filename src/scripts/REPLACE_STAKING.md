@@ -370,24 +370,39 @@ Note: The `test` mint category will be added automatically by the ReplaceStaking
 
 Deploy new module and policies:
 
-**Sepolia:**
+**Using cast wallet:**
 
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url sepolia \
+    --account <<wallet>> \
+    --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --broadcast \
     --verify \
     -vvv
 ```
 
-**Anvil Fork:**
+**Using Ledger:**
+
+```bash
+forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
+    --rpc-url sepolia \
+    --ledger \
+    --mnemonic-indexes <<index>> \
+    --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --broadcast \
+    --verify \
+    -vvv
+```
+
+**Anvil Fork (using Anvil account 0):**
 
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url http://localhost:8545 \
+    --account <<account>> \
+    --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
     --broadcast \
-    --unlocked \
-    --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     -vvv
 ```
 
@@ -430,34 +445,12 @@ This script:
 
 -   Automatically updates all policy addresses
 
----
+### Phase 8: Verify Deployment
 
-## Step 5: Verify Deployment
-
-```bash
-# Set variables from env.json
-SOHM=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.sOHM')
-GOHM=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.gOHM')
-STAKING=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.legacy.Staking')
-MONOCOOLER=$(cat src/scripts/env.json | jq -r '.current.sepolia.olympus.policies.CoolerV2')
-KERNEL=0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E
-
-# Check sOHM index
-cast call $SOHM "index()" --rpc-url sepolia
-# Expected: 269238508004
-
-# Check gOHM index (should match sOHM)
-cast call $GOHM "index()" --rpc-url sepolia
-# Expected: 269238508004
-
-# Verify new MonoCooler is active in Kernel
-cast call $KERNEL "isPolicyActive(address)(bool)" $MONOCOOLER --rpc-url sepolia
-# Expected: true
-
-# Verify old MonoCooler is deactivated
-cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B827A6c49BaEE9c --rpc-url sepolia
-# Expected: false
-```
+-   Verifies sOHM and gOHM indices
+-   Verifies new MonoCooler is active in Kernel
+-   Verifies old MonoCooler is deactivated
+-   Verifies new Clearinghouse is active in registry
 
 ---
 
@@ -479,8 +472,8 @@ cast call $KERNEL "isPolicyActive(address)(bool)" 0x19b787549A05f7a3f8f20ED55B82
    ├── Phase 4: Activate new policies
    ├── Phase 5: Update ClearinghouseRegistry
    ├── Phase 6: Test staking (mint and stake sample OHM)
-   └── Phase 7: Update env.json
-   └── Usage: forge script src/scripts/ops/ReplaceStaking.s.sol --broadcast
+   ├── Phase 7: Update env.json
+   └── Phase 8: Verify deployment
 ```
 
 ---
@@ -495,11 +488,9 @@ The sOHM `setIndex()` function can only be called once. If the index is wrong, y
 
 The script automatically adds the `test` category if it doesn't exist. If this fails, ensure the executor has `minter_admin` role (see Step 3).
 
-```
-
 ### "Kernel_OnlyExecutor"
 
-The script must be run from the executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`).
+The script must be run from the executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`). Ensure `--sender` is set correctly.
 
 ### "Insufficient OHM balance in contract"
 

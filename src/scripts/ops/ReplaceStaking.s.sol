@@ -127,6 +127,9 @@ contract ReplaceStaking is Script, WithEnvironment {
         // Phase 7: Update env.json
         _updateEnvJson();
 
+        // Phase 8: Verify deployment
+        _verifyDeployment();
+
         // Print summary
         _printSummary();
     }
@@ -427,6 +430,39 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("env.json updated successfully");
     }
 
+    // ========== PHASE 8: VERIFY DEPLOYMENT ========== //
+
+    function _verifyDeployment() internal view {
+        console2.log("\n=== Phase 8: Verifying Deployment ===");
+
+        // Verify sOHM index
+        uint256 sOHMIndex = IgOHM(newSOHM).index();
+        require(sOHMIndex == 269238508004, "sOHM index mismatch");
+        console2.log("OK: sOHM index:", sOHMIndex);
+
+        // Verify gOHM index
+        uint256 gOHMIndex = IgOHM(newGOHM).index();
+        require(gOHMIndex == 269238508004, "gOHM index mismatch");
+        console2.log("OK: gOHM index:", gOHMIndex);
+
+        // Verify new MonoCooler is active
+        bool monoCoolerActive = Kernel(kernel).isPolicyActive(Policy(newMonoCooler));
+        require(monoCoolerActive, "New MonoCooler not active");
+        console2.log("OK: New MonoCooler is active");
+
+        // Verify old MonoCooler is deactivated
+        bool oldMonoCoolerActive = Kernel(kernel).isPolicyActive(Policy(oldMonoCooler));
+        require(!oldMonoCoolerActive, "Old MonoCooler still active");
+        console2.log("OK: Old MonoCooler is deactivated");
+
+        // Verify new Clearinghouse is active
+        bool clearhinghouseActive = Kernel(kernel).isPolicyActive(Policy(newClearinghouse));
+        require(clearhinghouseActive, "New Clearinghouse not active");
+        console2.log("OK: New Clearinghouse is active");
+
+        console2.log("\nAll verifications passed!");
+    }
+
     function _writeToEnv(string memory key_, address value_) internal {
         string[] memory inputs = new string[](3);
         inputs[0] = "./src/scripts/deploy/write_deployment.sh";
@@ -453,9 +489,6 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("  Clearinghouse:   ", newClearinghouse);
         console2.log("  ZeroDistributor: ", newZeroDistributor);
         console2.log("  EmissionManager: ", newEmissionManager);
-        console2.log("\nVerification Commands:");
-        console2.log("  cast call", newSOHM, "'index()' --rpc-url", chain);
-        console2.log("  cast call", newGOHM, "'index()' --rpc-url", chain);
         console2.log("========================================");
     }
 }
