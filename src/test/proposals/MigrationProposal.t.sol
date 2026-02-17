@@ -23,7 +23,7 @@ using SafeTransferLib for ERC20;
 
 contract MigrationProposalTest is ProposalTest {
     /// @dev Block the migration should be executed at
-    uint256 public constant BLOCK = 24070000;
+    uint256 public constant BLOCK = 24475000;
 
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
@@ -40,12 +40,12 @@ contract MigrationProposalTest is ProposalTest {
     MigrationProposal public proposal;
     MigrationProposalTestWrapper public proposalWrapper;
 
-    bool public constant IS_TEMP_OHM_DEPLOYED = false;
-    bool public constant IS_BURNER_SETUP = false;
-    bool public constant IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED = false;
-    bool public constant IS_V1_MIGRATOR_SETUP = false;
-    bool public constant IS_LEGACY_TREASURY_SETUP = false;
-    bool public constant IS_TEMP_OHM_MINTED = false;
+    bool public constant IS_TEMP_OHM_DEPLOYED = true;
+    bool public constant IS_BURNER_SETUP = true;
+    bool public constant IS_MIGRATION_PROPOSAL_HELPER_DEPLOYED = true;
+    bool public constant IS_V1_MIGRATOR_SETUP = true;
+    bool public constant IS_LEGACY_TREASURY_SETUP = true;
+    bool public constant IS_TEMP_OHM_MINTED = true;
 
     function setUp() public virtual {
         // Mainnet fork at a fixed block prior to proposal execution to ensure deterministic state
@@ -54,7 +54,7 @@ contract MigrationProposalTest is ProposalTest {
         // ========== PROPOSAL SETUP ==========
 
         // Set to true once the proposal has been submitted on-chain to enforce calldata matching
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         // Deploy proposal under test (no constructor parameters needed)
         proposal = new MigrationProposal();
