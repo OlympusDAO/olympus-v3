@@ -24,8 +24,8 @@ interface IStaking {
     function stake(
         address to_,
         uint256 amount_,
-        bool claim_,
-        bool rebasing_
+        bool rebasing_,
+        bool claim_
     ) external returns (uint256);
 
     function unstake(

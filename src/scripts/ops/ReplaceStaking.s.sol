@@ -377,12 +377,12 @@ contract ReplaceStaking is Script, WithEnvironment {
         uint256 initialGOHMBalance = ERC20(newGOHM).balanceOf(deployer);
         console2.log("Initial gOHM balance:", initialGOHMBalance);
 
-        // Stake OHM to get gOHM (claim = false, rebasing = true to get gOHM)
+        // Stake OHM to get gOHM
         uint256 stakedAmount = IStaking(newStaking).stake(
             deployer, // to_
             SAMPLE_OHM_AMOUNT, // amount_
-            false, // claim_ (don't claim from warmup)
-            true // rebasing_ (get gOHM, not sOHM)
+            false, // rebasing_ (get gOHM, not sOHM)
+            true // claim_ (no warmup)
         );
         console2.log("Staked OHM, received gOHM:", stakedAmount);
 
