@@ -6,10 +6,10 @@ This directory contains scripts for submitting proposals to the Olympus Governor
 
 The following are required:
 
--   `bash` shell
--   A [foundry](https://getfoundry.sh/) installation
--   A `.env` file with the following environment variables:
-    -   `ALCHEMY_API_KEY`: The API key for the Alchemy RPC endpoint.
+- `bash` shell
+- A [foundry](https://getfoundry.sh/) installation
+- A `.env` file with the following environment variables:
+    - `ALCHEMY_API_KEY`: The API key for the Alchemy RPC endpoint.
 
 ## Creating a Proposal Script
 
@@ -41,6 +41,7 @@ It is possible to test proposal submission (and execution) on a forked chain. To
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 3. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
     - Using a cast wallet:
+
         ```bash
         ./src/scripts/proposals/submitProposal.sh \
             --file src/proposals/ContractRegistryProposal.sol \
@@ -50,7 +51,9 @@ It is possible to test proposal submission (and execution) on a forked chain. To
             --broadcast true \
             --env .env
         ```
+
     - Using a Ledger:
+
         ```bash
         ./src/scripts/proposals/submitProposal.sh \
             --file src/proposals/ContractRegistryProposal.sol \
