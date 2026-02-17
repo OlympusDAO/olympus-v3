@@ -21,6 +21,7 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @title Replace Staking and Dependent Contracts
 /// @notice Deploys new DLGTE module and all policies dependent on gOHM/Staking
@@ -53,6 +54,12 @@ contract ReplaceStaking is Script, WithEnvironment {
     address public oldEmissionManager;
     address public oldLtvOracle;
 
+    // Existing policies (not replaced)
+    address public coolerTreasuryBorrower;
+
+    // External addresses
+    address public susds; // sUSDS for CoolerTreasuryBorrower
+
     // External addresses
     address public ohm;
     address public coolerFactory;
@@ -75,13 +82,8 @@ contract ReplaceStaking is Script, WithEnvironment {
     uint96 public interestRateWad;
     uint256 public minDebtRequired;
 
-    // LTV Oracle parameters (queried from old contract)
-    uint96 public initialOriginationLtv;
-    uint96 public maxOriginationLtvDelta;
-    uint32 public minOriginationLtvTargetTimeDelta;
-    uint96 public maxOriginationLtvRateOfChange;
-    uint16 public maxLiquidationLtvPremiumBps;
-    uint16 public liquidationLtvPremiumBps;
+    // LTV Oracle parameters (mainnet values)
+    uint96 public constant MAINNET_ORIGINATION_LTV = 2983996738135602133120; // ~11.08 USDS/OHM
 
     // ========== RUN ========== //
 
@@ -93,7 +95,7 @@ contract ReplaceStaking is Script, WithEnvironment {
         _queryChainParameters();
 
         // Verify new legacy contracts are deployed
-        _verifyLegacyContracts();
+        _verifyLegacyContractsPreDeployment();
 
         vm.startBroadcast();
 
@@ -109,15 +111,18 @@ contract ReplaceStaking is Script, WithEnvironment {
         // Phase 4: Activate new policies
         _activateNewPolicies();
 
-        // Phase 5: Test staking (mint sample OHM and stake to gOHM)
+        // Phase 5: Enable CoolerTreasuryBorrower
+        _enableCoolerTreasuryBorrower();
+
+        // Phase 6: Test staking (mint sample OHM and stake to gOHM)
         _testStaking();
 
         vm.stopBroadcast();
 
-        // Phase 6: Update env.json
+        // Phase 7: Update env.json
         _updateEnvJson();
 
-        // Phase 7: Verify deployment
+        // Phase 8: Verify deployment
         _verifyDeployment();
 
         // Print summary
@@ -145,12 +150,14 @@ contract ReplaceStaking is Script, WithEnvironment {
         oldZeroDistributor = _envAddressNotZero("olympus.policies.ZeroDistributor");
         oldEmissionManager = _envAddressNotZero("olympus.policies.EmissionManager");
         oldLtvOracle = _envAddressNotZero("olympus.policies.CoolerV2LtvOracle");
+        coolerTreasuryBorrower = _envAddressNotZero("olympus.policies.CoolerV2TreasuryBorrower");
 
         // External
         ohm = _envAddressNotZero("olympus.legacy.OHM");
         coolerFactory = _envAddressNotZero("external.cooler.CoolerFactory");
         sReserve = _envAddressNotZero("external.tokens.sDAI");
         reserve = _envAddressNotZero("external.tokens.USDS");
+        susds = _envAddressNotZero("external.tokens.sUSDS");
         bondAuctioneer = _envAddressNotZero("external.bond-protocol.BondFixedTermAuctioneer");
         bondTeller = _envAddressNotZero("external.bond-protocol.BondFixedTermTeller");
         cdAuctioneer = _envAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
@@ -160,26 +167,16 @@ contract ReplaceStaking is Script, WithEnvironment {
     }
 
     function _queryChainParameters() internal {
-        // Query MonoCooler parameters
         interestRateWad = MonoCooler(oldMonoCooler).interestRateWad();
         minDebtRequired = MonoCooler(oldMonoCooler).minDebtRequired();
-
-        // Query LTV Oracle parameters
-        CoolerLtvOracle ltvOracle = CoolerLtvOracle(oldLtvOracle);
-        initialOriginationLtv = ltvOracle.currentOriginationLtv();
-        maxOriginationLtvDelta = ltvOracle.maxOriginationLtvDelta();
-        minOriginationLtvTargetTimeDelta = ltvOracle.minOriginationLtvTargetTimeDelta();
-        maxOriginationLtvRateOfChange = ltvOracle.maxOriginationLtvRateOfChange();
-        maxLiquidationLtvPremiumBps = ltvOracle.maxLiquidationLtvPremiumBps();
-        liquidationLtvPremiumBps = ltvOracle.liquidationLtvPremiumBps();
 
         console2.log("Queried chain parameters:");
         console2.log("  interestRateWad:", interestRateWad);
         console2.log("  minDebtRequired:", minDebtRequired);
-        console2.log("  initialOriginationLtv:", initialOriginationLtv);
+        console2.log("  Using mainnet origination LTV:", MAINNET_ORIGINATION_LTV);
     }
 
-    function _verifyLegacyContracts() internal view {
+    function _verifyLegacyContractsPreDeployment() internal view {
         uint256 index = IgOHM(newGOHM).index();
         require(index == 269238508004, "gOHM index not set correctly");
         console2.log("Legacy contracts verified - gOHM index:", index);
@@ -251,12 +248,12 @@ contract ReplaceStaking is Script, WithEnvironment {
             kernel, // kernel_
             newGOHM, // collateralToken_ (gOHM)
             reserve, // debtToken_ (USDS)
-            initialOriginationLtv, // initialOriginationLtv_
-            maxOriginationLtvDelta, // maxOriginationLtvDelta_
-            minOriginationLtvTargetTimeDelta, // minOriginationLtvTargetTimeDelta_
-            maxOriginationLtvRateOfChange, // maxOriginationLtvRateOfChange_
-            maxLiquidationLtvPremiumBps, // maxLiquidationLtvPremiumBps_
-            liquidationLtvPremiumBps // liquidationLtvPremiumBps_
+            MAINNET_ORIGINATION_LTV, // initialOriginationLtv_ (from mainnet)
+            500e18, // maxOriginationLtvDelta_ (500 USDS)
+            1 weeks, // minOriginationLtvTargetTimeDelta_
+            uint96(0.1e18) / 1 days, // maxOriginationLtvRateOfChange_ (0.1 USDS/day)
+            333, // maxLiquidationLtvPremiumBps_ (3.33%)
+            100 // liquidationLtvPremiumBps_ (1%)
         );
         newLtvOracle = address(ltvOracle);
         console2.log("Deployed CoolerLtvOracle:", newLtvOracle);
@@ -338,10 +335,23 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("Activated new EmissionManager:", newEmissionManager);
     }
 
-    // ========== PHASE 5: TEST STAKING ========== //
+    // ========== PHASE 5: ENABLE COOLER TREASURY BORROWER ========== //
+
+    function _enableCoolerTreasuryBorrower() internal {
+        console2.log("\n=== Phase 5: Enabling CoolerTreasuryBorrower ===");
+
+        if (IEnabler(coolerTreasuryBorrower).isEnabled()) {
+            console2.log("CoolerTreasuryBorrower already enabled:", coolerTreasuryBorrower);
+        } else {
+            IEnabler(coolerTreasuryBorrower).enable("");
+            console2.log("Enabled CoolerTreasuryBorrower:", coolerTreasuryBorrower);
+        }
+    }
+
+    // ========== PHASE 6: TEST STAKING ========== //
 
     function _testStaking() internal {
-        console2.log("\n=== Phase 5: Testing Staking ===");
+        console2.log("\n=== Phase 6: Testing Staking ===");
 
         address deployer = msg.sender;
         console2.log("Deployer address:", deployer);
@@ -384,10 +394,10 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("OK: Staking verified - OHM can be staked to gOHM");
     }
 
-    // ========== PHASE 6: UPDATE ENV.JSON ========== //
+    // ========== PHASE 7: UPDATE ENV.JSON ========== //
 
     function _updateEnvJson() internal {
-        console2.log("\n=== Phase 6: Updating env.json ===");
+        console2.log("\n=== Phase 7: Updating env.json ===");
 
         _writeToEnv("olympus.modules.OlympusGovDelegation", newDLGTE);
         _writeToEnv("olympus.policies.CoolerV2LtvOracle", newLtvOracle);
@@ -399,37 +409,70 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("env.json updated successfully");
     }
 
-    // ========== PHASE 7: VERIFY DEPLOYMENT ========== //
+    // ========== PHASE 8: VERIFY DEPLOYMENT ========== //
 
     function _verifyDeployment() internal view {
-        console2.log("\n=== Phase 7: Verifying Deployment ===");
+        console2.log("\n=== Phase 8: Verifying Deployment ===");
 
-        // Verify sOHM index
+        _verifyLegacyContracts();
+        _verifyKernelStatus();
+        _verifyLtvValues();
+        _reportEnabledStatus();
+
+        console2.log("\nAll verifications passed!");
+    }
+
+    function _verifyLegacyContracts() internal view {
         uint256 sOHMIndex = IgOHM(newSOHM).index();
         require(sOHMIndex == 269238508004, "sOHM index mismatch");
         console2.log("OK: sOHM index:", sOHMIndex);
 
-        // Verify gOHM index
         uint256 gOHMIndex = IgOHM(newGOHM).index();
         require(gOHMIndex == 269238508004, "gOHM index mismatch");
         console2.log("OK: gOHM index:", gOHMIndex);
+    }
 
-        // Verify new MonoCooler is active
+    function _verifyKernelStatus() internal view {
         bool monoCoolerActive = Kernel(kernel).isPolicyActive(Policy(newMonoCooler));
         require(monoCoolerActive, "New MonoCooler not active");
-        console2.log("OK: New MonoCooler is active");
+        console2.log("OK: New MonoCooler is active in Kernel");
 
-        // Verify old MonoCooler is deactivated
         bool oldMonoCoolerActive = Kernel(kernel).isPolicyActive(Policy(oldMonoCooler));
         require(!oldMonoCoolerActive, "Old MonoCooler still active");
-        console2.log("OK: Old MonoCooler is deactivated");
+        console2.log("OK: Old MonoCooler is deactivated in Kernel");
 
-        // Verify new Clearinghouse is active
         bool clearhinghouseActive = Kernel(kernel).isPolicyActive(Policy(newClearinghouse));
         require(clearhinghouseActive, "New Clearinghouse not active");
-        console2.log("OK: New Clearinghouse is active");
+        console2.log("OK: New Clearinghouse is active in Kernel");
+    }
 
-        console2.log("\nAll verifications passed!");
+    function _verifyLtvValues() internal view {
+        (uint96 oLtv, uint96 lLtv) = CoolerLtvOracle(newLtvOracle).currentLtvs();
+        console2.log("LTV Oracle values:");
+        console2.log("  Origination LTV:", oLtv);
+        console2.log("  Liquidation LTV:", lLtv);
+        require(oLtv == MAINNET_ORIGINATION_LTV, "Origination LTV mismatch");
+        console2.log("OK: Origination LTV matches mainnet");
+    }
+
+    function _reportEnabledStatus() internal view {
+        console2.log("\nEnabled Status:");
+
+        bool clearinghouseActive = Clearinghouse(newClearinghouse).active();
+        console2.log("  Clearinghouse.active:", clearinghouseActive);
+
+        bool emissionManagerEnabled = IEnabler(newEmissionManager).isEnabled();
+        console2.log("  EmissionManager.isEnabled:", emissionManagerEnabled);
+
+        bool treasuryBorrowerEnabled = IEnabler(coolerTreasuryBorrower).isEnabled();
+        console2.log("  CoolerTreasuryBorrower.isEnabled:", treasuryBorrowerEnabled);
+
+        bool monoCoolerBorrowsPaused = MonoCooler(newMonoCooler).borrowsPaused();
+        console2.log("  MonoCooler.borrowsPaused:", monoCoolerBorrowsPaused);
+
+        console2.log("\nNote:");
+        console2.log("  - MonoCooler and CoolerLtvOracle are enabled by default");
+        console2.log("  - Clearinghouse and EmissionManager must be enabled by admin");
     }
 
     function _writeToEnv(string memory key_, address value_) internal {
@@ -458,6 +501,8 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("  Clearinghouse:   ", newClearinghouse);
         console2.log("  ZeroDistributor: ", newZeroDistributor);
         console2.log("  EmissionManager: ", newEmissionManager);
+        console2.log("\nLTV Configuration:");
+        console2.log("  Origination LTV: ", MAINNET_ORIGINATION_LTV, "(mainnet value)");
         console2.log("========================================");
     }
 }

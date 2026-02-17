@@ -91,12 +91,24 @@ Notes:
 
 ## Configuration Reference
 
-| Parameter      | Value                                        | Source           |
-| -------------- | -------------------------------------------- | ---------------- |
-| Index          | 269238508004                                 | Mainnet          |
-| Epoch Length   | 28800 (8 hrs)                                | Standard         |
-| Test OHM       | 1,000 OHM                                    | For staking test |
-| KernelExecutor | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` | env.json         |
+| Parameter        | Value                                        | Source           |
+| ---------------- | -------------------------------------------- | ---------------- |
+| Index            | 269238508004                                 | Mainnet          |
+| Origination LTV  | 2983996738135602133120 (~11.08 USDS/OHM)     | Mainnet          |
+| Epoch Length     | 28800 (8 hrs)                                | Standard         |
+| Test OHM         | 1,000 OHM                                    | For staking test |
+| KernelExecutor   | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` | env.json         |
+
+### LTV Oracle Parameters
+
+| Parameter                        | Value                  | Description                                    |
+| -------------------------------- | ---------------------- | ---------------------------------------------- |
+| Initial Origination LTV          | 2983996738135602133120 | From mainnet (~11.08 USDS/OHM)                 |
+| Max Origination LTV Delta        | 500e18 (500 USDS)      | Max change per `setOriginationLtvAt()` call    |
+| Min Target Time Delta            | 1 week                 | Min time to reach target LTV                   |
+| Max Rate of Change               | 0.1 USDS/day           | Max LTV increase rate                          |
+| Max Liquidation LTV Premium      | 333 bps (3.33%)        | Max premium above origination LTV              |
+| Liquidation LTV Premium          | 100 bps (1%)           | Actual premium above origination LTV           |
 
 ## Key Addresses (Sepolia)
 
@@ -429,22 +441,29 @@ This script:
 
 -   Activates all new policies in Kernel
 
-### Phase 5: Test Staking
+### Phase 5: Enable CoolerTreasuryBorrower
+
+-   Enables the CoolerTreasuryBorrower policy (required for MonoCooler to borrow from Treasury)
+
+### Phase 6: Test Staking
 
 -   Mints 1,000 OHM to the deployer
 -   Approves Staking to spend OHM
 -   Stakes OHM to receive gOHM
 -   Verifies that staking is working correctly
 
-### Phase 6: Update env.json
+### Phase 7: Update env.json
 
 -   Automatically updates all policy addresses
 
-### Phase 7: Verify Deployment
+### Phase 8: Verify Deployment
 
 -   Verifies sOHM and gOHM indices
 -   Verifies new MonoCooler is active in Kernel
 -   Verifies old MonoCooler is deactivated
+-   Verifies Origination LTV matches mainnet value
+-   Reports enabled status of Clearinghouse, EmissionManager, CoolerTreasuryBorrower, and MonoCooler (borrowsPaused)
+-   Note: MonoCooler and CoolerLtvOracle are enabled by default
 
 ---
 
@@ -464,9 +483,10 @@ This script:
    ├── Phase 2: Upgrade DLGTE module
    ├── Phase 3: Deploy new policies
    ├── Phase 4: Activate new policies
-   ├── Phase 5: Test staking (mint and stake sample OHM)
-   ├── Phase 6: Update env.json
-   └── Phase 7: Verify deployment
+   ├── Phase 5: Enable CoolerTreasuryBorrower
+   ├── Phase 6: Test staking (mint and stake sample OHM)
+   ├── Phase 7: Update env.json
+   └── Phase 8: Verify deployment
 ```
 
 ---
@@ -487,7 +507,7 @@ The script must be run from the executor address (`0x1A5309F208f161a393E8b5A253d
 
 ### "Insufficient OHM balance in contract"
 
-Staking needs OHM balance for `unstake()`. Ensure Phase 5 (staking test) completed successfully.
+Staking needs OHM balance for `unstake()`. Ensure Phase 6 (staking test) completed successfully.
 
 ---
 
@@ -497,4 +517,9 @@ Staking needs OHM balance for `unstake()`. Ensure Phase 5 (staking test) complet
 -   **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
 -   **env.json**: Manually update env.json after Step 1. ReplaceStaking automatically updates policy addresses.
 -   **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
+-   **Enabled Status**:
+    -   MonoCooler: Enabled by default, check `borrowsPaused` (should be false for borrows to work)
+    -   CoolerLtvOracle: Enabled by default
+    -   CoolerTreasuryBorrower: Enabled in Phase 5 by the script (if not already enabled)
+    -   Clearinghouse and EmissionManager: Must be enabled by admin after deployment
 ```
