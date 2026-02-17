@@ -41,9 +41,17 @@ Grant the minter admin role:
 ./shell/roles/grantRole.sh --role minter_admin --to <address> --chain <chain> --account <wallet> --broadcast true
 ```
 
-Run `./shell/mint/addCategory.sh --category test`.
+Add a minting category:
 
-Run `./shell/mint/mint.sh --category test`.
+```bash
+./shell/mint/addCategory.sh --category test --chain <chain> --account <wallet> --broadcast true
+```
+
+Mint OHM:
+
+```bash
+./shell/mint/mint.sh --to <recipient> --amount <amount> --category test --chain <chain> --account <wallet> --broadcast true
+```
 
 ## Wrapping OHM to gOHM
 
