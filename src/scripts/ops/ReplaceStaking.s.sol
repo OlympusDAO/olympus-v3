@@ -441,8 +441,8 @@ contract ReplaceStaking is Script, WithEnvironment {
         require(!oldMonoCoolerActive, "Old MonoCooler still active");
         console2.log("OK: Old MonoCooler is deactivated in Kernel");
 
-        bool clearhinghouseActive = Kernel(kernel).isPolicyActive(Policy(newClearinghouse));
-        require(clearhinghouseActive, "New Clearinghouse not active");
+        bool clearinghouseActive = Kernel(kernel).isPolicyActive(Policy(newClearinghouse));
+        require(clearinghouseActive, "New Clearinghouse not active");
         console2.log("OK: New Clearinghouse is active in Kernel");
     }
 

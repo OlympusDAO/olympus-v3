@@ -74,10 +74,7 @@ For local testing, start an Anvil fork of Sepolia:
 
 ```bash
 # Terminal 1: Start Anvil fork
-anvil --fork-url https://eth-sepolia.g.alchemy.com/v2/$ALCHEMY_API_KEY --chain-id 11155111
-
-# Terminal 2: Override PRIVATE_KEY with Anvil's default account
-export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+anvil --fork-url sepolia
 ```
 
 Notes:
@@ -168,7 +165,7 @@ We use a **custom deployment script** to deploy only the necessary contracts (sO
 git clone https://github.com/OlympusDAO/olympus-contracts.git
 cd olympus-contracts
 git checkout sepolia # Has updated dependencies and Sepolia config
-npm
+yarn
 ```
 
 ### 1b. Configure Network
