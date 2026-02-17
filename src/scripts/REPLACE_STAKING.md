@@ -45,11 +45,11 @@ The sOHM index is immutable after initialization, so changing it requires deploy
 
 ## Prerequisites
 
--   Foundry installed
--   `.env` file with:
-    -   `ALCHEMY_API_KEY` - Alchemy API key for RPC access
-    -   `PRIVATE_KEY` - Private key for executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`)
--   Clone of `olympus-contracts` repo: https://github.com/OlympusDAO/olympus-contracts
+- Foundry installed
+- `.env` file with:
+    - `ALCHEMY_API_KEY` - Alchemy API key for RPC access
+    - `PRIVATE_KEY` - Private key for executor address (`0x1A5309F208f161a393E8b5A253de8Ab894A67188`)
+- Clone of `olympus-contracts` repo: <https://github.com/OlympusDAO/olympus-contracts>
 
 ---
 
@@ -82,10 +82,10 @@ export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f
 
 Notes:
 
--   Scripts detect the chain from `block.chainid` and use the appropriate RPC URL
--   Anvil uses account 0's publicly known key
--   Can impersonate any address using `--from` with `cast`
--   Reset state by restarting Anvil and running `git checkout src/scripts/env.json`
+- Scripts detect the chain from `block.chainid` and use the appropriate RPC URL
+- Anvil uses account 0's publicly known key
+- Can impersonate any address using `--from` with `cast`
+- Reset state by restarting Anvil and running `git checkout src/scripts/env.json`
 
 ---
 
@@ -331,9 +331,9 @@ forge script src/scripts/ops/VerifyLegacyStaking.s.sol:VerifyLegacyStaking \
 
 This script:
 
--   Reads sOHM, gOHM, Staking addresses from env.json
--   Verifies sOHM index is set correctly (269238508004)
--   Verifies all contract references are correct
+- Reads sOHM, gOHM, Staking addresses from env.json
+- Verifies sOHM index is set correctly (269238508004)
+- Verifies all contract references are correct
 
 ---
 
@@ -422,54 +422,54 @@ This script:
 
 ### Phase 1: Deactivate Old Policies
 
--   Deactivates old MonoCooler, Clearinghouse, ZeroDistributor, EmissionManager, LtvOracle
+- Deactivates old MonoCooler, Clearinghouse, ZeroDistributor, EmissionManager, LtvOracle
 
 ### Phase 2: Upgrade DLGTE Module
 
--   Deploys new `OlympusGovDelegation` (DLGTE) with new gOHM address
--   Upgrades module in Kernel
+- Deploys new `OlympusGovDelegation` (DLGTE) with new gOHM address
+- Upgrades module in Kernel
 
 ### Phase 3: Deploy New Policies
 
--   Deploys new `CoolerV2LtvOracle` with new gOHM as collateral
--   Deploys new `MonoCooler` (CoolerV2) with new gOHM and Staking
--   Deploys new `Clearinghouse` with new gOHM and Staking
--   Deploys new `ZeroDistributor` with new Staking
--   Deploys new `EmissionManager` with new gOHM
+- Deploys new `CoolerV2LtvOracle` with new gOHM as collateral
+- Deploys new `MonoCooler` (CoolerV2) with new gOHM and Staking
+- Deploys new `Clearinghouse` with new gOHM and Staking
+- Deploys new `ZeroDistributor` with new Staking
+- Deploys new `EmissionManager` with new gOHM
 
 ### Phase 4: Activate New Policies
 
--   Activates all new policies in Kernel
+- Activates all new policies in Kernel
 
 ### Phase 5: Enable CoolerTreasuryBorrower
 
--   Enables the CoolerTreasuryBorrower policy (required for MonoCooler to borrow from Treasury)
+- Enables the CoolerTreasuryBorrower policy (required for MonoCooler to borrow from Treasury)
 
 ### Phase 6: Test Staking
 
--   Mints 1,000 OHM to the deployer
--   Approves Staking to spend OHM
--   Stakes OHM to receive gOHM
--   Verifies that staking is working correctly
+- Mints 1,000 OHM to the deployer
+- Approves Staking to spend OHM
+- Stakes OHM to receive gOHM
+- Verifies that staking is working correctly
 
 ### Phase 7: Update env.json
 
--   Automatically updates all policy addresses
+- Automatically updates all policy addresses
 
 ### Phase 8: Verify Deployment
 
--   Verifies sOHM and gOHM indices
--   Verifies new MonoCooler is active in Kernel
--   Verifies old MonoCooler is deactivated
--   Verifies Origination LTV matches mainnet value
--   Reports enabled status of Clearinghouse, EmissionManager, CoolerTreasuryBorrower, and MonoCooler (borrowsPaused)
--   Note: MonoCooler and CoolerLtvOracle are enabled by default
+- Verifies sOHM and gOHM indices
+- Verifies new MonoCooler is active in Kernel
+- Verifies old MonoCooler is deactivated
+- Verifies Origination LTV matches mainnet value
+- Reports enabled status of Clearinghouse, EmissionManager, CoolerTreasuryBorrower, and MonoCooler (borrowsPaused)
+- Note: MonoCooler and CoolerLtvOracle are enabled by default
 
 ---
 
 ## Deployment Order Summary
 
-```
+```text
 1. olympus-contracts repo (0.7.5)
    └── Deploy sOHM → gOHM → Staking → setIndex → setgOHM → initialize → migrate
    └── Add addresses to env.json
@@ -513,13 +513,12 @@ Staking needs OHM balance for `unstake()`. Ensure Phase 6 (staking test) complet
 
 ## Notes
 
--   **Existing positions will be lost**: Old MonoCooler loans and Clearinghouse positions will not be migrated. This is acceptable for a testnet.
--   **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
--   **env.json**: Manually update env.json after Step 1. ReplaceStaking automatically updates policy addresses.
--   **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
--   **Enabled Status**:
-    -   MonoCooler: Enabled by default, check `borrowsPaused` (should be false for borrows to work)
-    -   CoolerLtvOracle: Enabled by default
-    -   CoolerTreasuryBorrower: Enabled in Phase 5 by the script (if not already enabled)
-    -   Clearinghouse and EmissionManager: Must be enabled by admin after deployment
-```
+- **Existing positions will be lost**: Old MonoCooler loans and Clearinghouse positions will not be migrated. This is acceptable for a testnet.
+- **gOHM holders**: Existing gOHM tokens on Sepolia will reference the old sOHM contract and will not work with the new staking system. Users will need new gOHM.
+- **env.json**: Manually update env.json after Step 1. ReplaceStaking automatically updates policy addresses.
+- **CoolerV2TreasuryBorrower**: Does NOT need redeployment - it only uses USDS/sUSDS, not gOHM or OHM.
+- **Enabled Status**:
+    - MonoCooler: Enabled by default, check `borrowsPaused` (should be false for borrows to work)
+    - CoolerLtvOracle: Enabled by default
+    - CoolerTreasuryBorrower: Enabled in Phase 5 by the script (if not already enabled)
+    - Clearinghouse and EmissionManager: Must be enabled by admin after deployment
