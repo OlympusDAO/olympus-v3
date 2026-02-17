@@ -395,13 +395,13 @@ forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     -vvv
 ```
 
-**Anvil Fork (using Anvil account 0):**
+**Anvil Fork:**
 
 ```bash
 forge script src/scripts/ops/ReplaceStaking.s.sol:ReplaceStaking \
     --rpc-url http://localhost:8545 \
     --account <<account>> \
-    --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+    --sender 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --broadcast \
     -vvv
 ```
