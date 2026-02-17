@@ -6,9 +6,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
-import {Kernel, Actions, Policy, Keycode, toKeycode} from "src/Kernel.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
@@ -21,7 +19,6 @@ import {EmissionManager} from "policies/EmissionManager.sol";
 import {Minter} from "policies/Minter.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
@@ -46,9 +43,6 @@ contract ReplaceStaking is Script, WithEnvironment {
 
     // Existing addresses from env.json
     address public kernel;
-    address public executor;
-    address public roles;
-    address public mintr;
     address public chreg;
     address public minter;
 
@@ -58,7 +52,6 @@ contract ReplaceStaking is Script, WithEnvironment {
     address public oldZeroDistributor;
     address public oldEmissionManager;
     address public oldLtvOracle;
-    address public oldDLGTE;
 
     // External addresses
     address public ohm;
@@ -116,18 +109,15 @@ contract ReplaceStaking is Script, WithEnvironment {
         // Phase 4: Activate new policies
         _activateNewPolicies();
 
-        // Phase 5: Update ClearinghouseRegistry
-        _updateClearinghouseRegistry();
-
-        // Phase 6: Test staking (mint sample OHM and stake to gOHM)
+        // Phase 5: Test staking (mint sample OHM and stake to gOHM)
         _testStaking();
 
         vm.stopBroadcast();
 
-        // Phase 7: Update env.json
+        // Phase 6: Update env.json
         _updateEnvJson();
 
-        // Phase 8: Verify deployment
+        // Phase 7: Verify deployment
         _verifyDeployment();
 
         // Print summary
@@ -144,13 +134,9 @@ contract ReplaceStaking is Script, WithEnvironment {
 
         // Core
         kernel = _envAddressNotZero("olympus.Kernel");
-        executor = _envAddressNotZero("olympus.config.KernelExecutor");
 
         // Modules
-        roles = _envAddressNotZero("olympus.modules.OlympusRoles");
-        mintr = _envAddressNotZero("olympus.modules.OlympusMinter");
         chreg = _envAddressNotZero("olympus.modules.OlympusClearinghouseRegistry");
-        oldDLGTE = _envAddressNotZero("olympus.modules.OlympusGovDelegation");
 
         // Policies
         minter = _envAddressNotZero("olympus.policies.Minter");
@@ -204,20 +190,20 @@ contract ReplaceStaking is Script, WithEnvironment {
     function _deactivateOldPolicies() internal {
         console2.log("\n=== Phase 1: Deactivating Old Policies ===");
 
-        Kernel(kernel).executeAction(Actions.DeactivatePolicy, oldMonoCooler);
-        console2.log("Deactivated old MonoCooler:", oldMonoCooler);
+        _deactivatePolicyIfActive(oldMonoCooler, "MonoCooler");
+        _deactivatePolicyIfActive(oldClearinghouse, "Clearinghouse");
+        _deactivatePolicyIfActive(oldZeroDistributor, "ZeroDistributor");
+        _deactivatePolicyIfActive(oldEmissionManager, "EmissionManager");
+        _deactivatePolicyIfActive(oldLtvOracle, "LtvOracle");
+    }
 
-        Kernel(kernel).executeAction(Actions.DeactivatePolicy, oldClearinghouse);
-        console2.log("Deactivated old Clearinghouse:", oldClearinghouse);
-
-        Kernel(kernel).executeAction(Actions.DeactivatePolicy, oldZeroDistributor);
-        console2.log("Deactivated old ZeroDistributor:", oldZeroDistributor);
-
-        Kernel(kernel).executeAction(Actions.DeactivatePolicy, oldEmissionManager);
-        console2.log("Deactivated old EmissionManager:", oldEmissionManager);
-
-        Kernel(kernel).executeAction(Actions.DeactivatePolicy, oldLtvOracle);
-        console2.log("Deactivated old LtvOracle:", oldLtvOracle);
+    function _deactivatePolicyIfActive(address policy_, string memory name_) internal {
+        if (Kernel(kernel).isPolicyActive(Policy(policy_))) {
+            Kernel(kernel).executeAction(Actions.DeactivatePolicy, policy_);
+            console2.log("Deactivated old", name_, ":", policy_);
+        } else {
+            console2.log("Skipped", name_, "(not active):", policy_);
+        }
     }
 
     // ========== PHASE 2: UPGRADE DLGTE MODULE ========== //
@@ -348,31 +334,14 @@ contract ReplaceStaking is Script, WithEnvironment {
         Kernel(kernel).executeAction(Actions.ActivatePolicy, newClearinghouse);
         console2.log("Activated new Clearinghouse:", newClearinghouse);
 
-        Kernel(kernel).executeAction(Actions.ActivatePolicy, newZeroDistributor);
-        console2.log("Activated new ZeroDistributor:", newZeroDistributor);
-
         Kernel(kernel).executeAction(Actions.ActivatePolicy, newEmissionManager);
         console2.log("Activated new EmissionManager:", newEmissionManager);
     }
 
-    // ========== PHASE 5: UPDATE CLEARINGHOUSE REGISTRY ========== //
-
-    function _updateClearinghouseRegistry() internal {
-        console2.log("\n=== Phase 5: Updating ClearinghouseRegistry ===");
-
-        // Deactivate old Clearinghouse
-        CHREGv1(chreg).deactivateClearinghouse(oldClearinghouse);
-        console2.log("Deactivated old Clearinghouse in registry:", oldClearinghouse);
-
-        // Activate new Clearinghouse
-        CHREGv1(chreg).activateClearinghouse(newClearinghouse);
-        console2.log("Activated new Clearinghouse in registry:", newClearinghouse);
-    }
-
-    // ========== PHASE 6: TEST STAKING ========== //
+    // ========== PHASE 5: TEST STAKING ========== //
 
     function _testStaking() internal {
-        console2.log("\n=== Phase 6: Testing Staking ===");
+        console2.log("\n=== Phase 5: Testing Staking ===");
 
         address deployer = msg.sender;
         console2.log("Deployer address:", deployer);
@@ -415,10 +384,10 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("OK: Staking verified - OHM can be staked to gOHM");
     }
 
-    // ========== PHASE 7: UPDATE ENV.JSON ========== //
+    // ========== PHASE 6: UPDATE ENV.JSON ========== //
 
     function _updateEnvJson() internal {
-        console2.log("\n=== Phase 7: Updating env.json ===");
+        console2.log("\n=== Phase 6: Updating env.json ===");
 
         _writeToEnv("olympus.modules.OlympusGovDelegation", newDLGTE);
         _writeToEnv("olympus.policies.CoolerV2LtvOracle", newLtvOracle);
@@ -430,10 +399,10 @@ contract ReplaceStaking is Script, WithEnvironment {
         console2.log("env.json updated successfully");
     }
 
-    // ========== PHASE 8: VERIFY DEPLOYMENT ========== //
+    // ========== PHASE 7: VERIFY DEPLOYMENT ========== //
 
     function _verifyDeployment() internal view {
-        console2.log("\n=== Phase 8: Verifying Deployment ===");
+        console2.log("\n=== Phase 7: Verifying Deployment ===");
 
         // Verify sOHM index
         uint256 sOHMIndex = IgOHM(newSOHM).index();

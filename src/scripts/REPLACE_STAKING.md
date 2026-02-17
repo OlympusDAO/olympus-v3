@@ -429,28 +429,22 @@ This script:
 
 -   Activates all new policies in Kernel
 
-### Phase 5: Update ClearinghouseRegistry
-
--   Deactivates old Clearinghouse in CHREG module
--   Activates new Clearinghouse in CHREG module
-
-### Phase 6: Test Staking
+### Phase 5: Test Staking
 
 -   Mints 1,000 OHM to the deployer
 -   Approves Staking to spend OHM
 -   Stakes OHM to receive gOHM
 -   Verifies that staking is working correctly
 
-### Phase 7: Update env.json
+### Phase 6: Update env.json
 
 -   Automatically updates all policy addresses
 
-### Phase 8: Verify Deployment
+### Phase 7: Verify Deployment
 
 -   Verifies sOHM and gOHM indices
 -   Verifies new MonoCooler is active in Kernel
 -   Verifies old MonoCooler is deactivated
--   Verifies new Clearinghouse is active in registry
 
 ---
 
@@ -470,10 +464,9 @@ This script:
    ├── Phase 2: Upgrade DLGTE module
    ├── Phase 3: Deploy new policies
    ├── Phase 4: Activate new policies
-   ├── Phase 5: Update ClearinghouseRegistry
-   ├── Phase 6: Test staking (mint and stake sample OHM)
-   ├── Phase 7: Update env.json
-   └── Phase 8: Verify deployment
+   ├── Phase 5: Test staking (mint and stake sample OHM)
+   ├── Phase 6: Update env.json
+   └── Phase 7: Verify deployment
 ```
 
 ---
@@ -494,7 +487,7 @@ The script must be run from the executor address (`0x1A5309F208f161a393E8b5A253d
 
 ### "Insufficient OHM balance in contract"
 
-Staking needs OHM balance for `unstake()`. Ensure Phase 6 (seeding) completed successfully.
+Staking needs OHM balance for `unstake()`. Ensure Phase 5 (staking test) completed successfully.
 
 ---
 

@@ -9,10 +9,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract RolesScript is WithEnvironment {
-    function hasRole(
-        string calldata role_,
-        address to_
-    ) external returns (bool) {
+    function hasRole(string calldata role_, address to_) external returns (bool) {
         string memory chain = ChainUtils._getChainName(block.chainid);
         _loadEnv(chain);
 
