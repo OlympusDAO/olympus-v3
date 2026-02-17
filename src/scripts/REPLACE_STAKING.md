@@ -336,8 +336,8 @@ Grant `minter_admin` role to the executor address if not already granted:
     --role minter_admin \
     --to 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --chain sepolia \
-    --account \
-    true < your_cast_wallet > --broadcast
+    --account <<wallet>> \
+    --broadcast true
 ```
 
 **Using Ledger:**
@@ -347,20 +347,19 @@ Grant `minter_admin` role to the executor address if not already granted:
     --role minter_admin \
     --to 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
     --chain sepolia \
-    --ledger 0 \
+    --ledger <<index>> \
     --broadcast true
 ```
 
-**Anvil Fork (impersonation):**
+**Anvil Fork:**
 
 ```bash
-# Grant minter_admin role by impersonating RolesAdmin
-cast send 0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86 \
-    "grantRole(bytes32,address)" \
-    $(cast keccak "minter_admin") \
-    0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
-    --rpc-url http://localhost:8545 \
-    --from 0xf33133E5356B9534e794468dAcD424D11007f1cF
+./shell/roles/grantRole.sh \
+    --role minter_admin \
+    --to 0x1A5309F208f161a393E8b5A253de8Ab894A67188 \
+    --chain http://localhost:8545 \
+    --account <<wallet>> \
+    --broadcast true
 ```
 
 Note: The `test` mint category will be added automatically by the ReplaceStaking script if it doesn't exist.

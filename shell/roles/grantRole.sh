@@ -5,9 +5,7 @@
 # Usage:
 # ./grantRole.sh --role <role name> --to <recipient address> --chain <chain name> --account <cast wallet> OR --ledger <mnemonic-index> --broadcast <false> --env <file>
 #
-# Environment variables:
-# RPC_URL (optional if chain is in foundry.toml)
-# CHAIN (optional if --chain is provided)
+# The chain is determined automatically from block.chainid. The --chain parameter specifies the RPC URL (from foundry.toml).
 #
 # Examples:
 # Using cast wallet:
@@ -42,15 +40,9 @@ source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
 validate_and_set_account "$account" "$ledger"
 
-# Set RPC URL from chain if not provided
-if [ -z "$RPC_URL" ]; then
-    RPC_URL=$chain
-fi
-
 echo ""
 echo "Summary:"
 echo "  Chain: $chain"
-echo "  Using RPC at URL: $RPC_URL"
 echo "  Role: $role"
 echo "  To: $to"
 
@@ -58,8 +50,8 @@ echo "  To: $to"
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Roles.s.sol:RolesScript \
-    --sig "grantRole(string,string,address)()" $chain $role $to \
-    --rpc-url $RPC_URL $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv \
+    --sig "grantRole(string,address)()" $role $to \
+    --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG
 
