@@ -80,7 +80,7 @@ abstract contract PriceV2BaseTest is Test {
     event AssetPriceStrategyUpdated(address indexed asset_);
     event AssetMovingAverageUpdated(address indexed asset_);
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
         {
