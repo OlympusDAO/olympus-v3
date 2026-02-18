@@ -427,8 +427,5 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset to update
     /// @param params_  Update parameters with flags
-    function updateAsset(
-        address asset_,
-        UpdateAssetParams memory params_
-    ) external;
+    function updateAsset(address asset_, UpdateAssetParams memory params_) external;
 }
