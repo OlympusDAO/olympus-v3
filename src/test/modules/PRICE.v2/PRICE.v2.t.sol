@@ -809,7 +809,7 @@ contract PriceV2Test is Test {
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(
             assetStrategy.selector,
-            SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector
+            ISimplePriceFeedStrategy.getMedianPriceIfDeviation.selector
         );
         assertEq(
             assetStrategy.params,
@@ -1296,7 +1296,7 @@ contract PriceV2Test is Test {
             observations, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -2289,7 +2289,7 @@ contract PriceV2Test is Test {
             observations, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -2378,7 +2378,7 @@ contract PriceV2Test is Test {
             observations, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -2664,7 +2664,7 @@ contract PriceV2Test is Test {
             new uint256[](0), // uint256[] memory observations_
             IPRICEv2.Component( // Add a strategy so that addAsset has no other reason to revert
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getAveragePrice.selector,
+                    ISimplePriceFeedStrategy.getAveragePrice.selector,
                     abi.encode(0) // no params required
                 ), // Component memory strategy_
             feeds //
@@ -2920,7 +2920,7 @@ contract PriceV2Test is Test {
             _makeRandomObservations(weth, feeds[0], nonce_, uint256(2)), // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
@@ -2970,7 +2970,7 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
@@ -3018,7 +3018,7 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
@@ -3113,7 +3113,7 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
@@ -3169,7 +3169,7 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
@@ -3189,7 +3189,7 @@ contract PriceV2Test is Test {
 
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAveragePrice.selector,
+            ISimplePriceFeedStrategy.getAveragePrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3260,7 +3260,7 @@ contract PriceV2Test is Test {
 
         IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getMedianPrice.selector,
+            ISimplePriceFeedStrategy.getMedianPrice.selector,
             abi.encode(0)
         );
 
@@ -3317,7 +3317,7 @@ contract PriceV2Test is Test {
 
         IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getMedianPrice.selector, // Requires 3 inputs
+            ISimplePriceFeedStrategy.getMedianPrice.selector, // Requires 3 inputs
             abi.encode(true) // strict mode
         );
 
@@ -3327,7 +3327,7 @@ contract PriceV2Test is Test {
                 IPRICEv2.PRICE_StrategyFailed.selector,
                 address(weth),
                 abi.encodeWithSelector(
-                    SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+                    ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
                     2,
                     3
                 )
@@ -3365,7 +3365,7 @@ contract PriceV2Test is Test {
 
         IPRICEv2.Component memory strategies = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
@@ -3407,7 +3407,7 @@ contract PriceV2Test is Test {
 
         IPRICEv2.Component memory strategies = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAveragePrice.selector, // Requires 2+ inputs
+            ISimplePriceFeedStrategy.getAveragePrice.selector, // Requires 2+ inputs
             abi.encode(0)
         );
 
@@ -3753,7 +3753,7 @@ contract PriceV2Test is Test {
         // Set up the asset strategy to get the average (so it supports two feeds)
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAveragePrice.selector,
+            ISimplePriceFeedStrategy.getAveragePrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3800,7 +3800,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3833,7 +3833,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3853,7 +3853,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3874,7 +3874,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLENEW"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -3979,7 +3979,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
+            ISimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
             abi.encode(0) // will revert due to missing parameters
         );
 
@@ -4007,7 +4007,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         IPRICEv2.Component memory firstPriceStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
