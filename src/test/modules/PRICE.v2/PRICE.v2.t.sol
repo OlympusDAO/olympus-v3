@@ -97,6 +97,7 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 //      [X] reverts if moving average is used, but not stored
 //      [X] reverts if a non-functioning configuration is provided
 //      [X] reverts if a submodule call fails when attempting to get the price feeds
+//      [ ] reverts if there are duplicate price feeds
 //      [X] all asset data is stored correctly
 //      [X] asset added to assets array
 //      [X] asset added with no strategy, moving average disabled, single feed
