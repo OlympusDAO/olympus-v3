@@ -249,6 +249,8 @@ contract MockPrice is PRICEv2 {
         uint256[] memory observations_
     ) external override {}
 
+    function updateAsset(address asset_, UpdateAssetParams memory params_) external override {}
+
     function storeObservations() external virtual override {
         // Iterate over all assets
         for (uint256 i = 0; i < _assets.length; i++) {
