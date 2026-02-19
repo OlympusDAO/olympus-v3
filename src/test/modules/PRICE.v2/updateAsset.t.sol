@@ -409,7 +409,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
     //       [X] it replaces the price feed configuration
     //       [X] it emits an AssetPriceFeedsUpdated event
 
-    function test_whenUpdatingPriceFeeds_whenSingleFeed_givenMovingAverageUsed_givenStrategyNotEmpty()
+    function test_whenUpdatingPriceFeeds_whenSingleFeed_givenMovingAverageUsed_whenNotUpdatingStrategy_givenStrategyNotEmpty()
         public
         givenAsset_SingleFeed_Strategy_WithMA
     {
@@ -691,34 +691,51 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         price.updateAsset(asset_SingleFeed_NoStrategy_NoMA, params);
     }
 
-    //     when the strategy configuration is being updated
-    //      when the updated strategy configuration is empty
-    //       [ ] it reverts - strategy required
-    //      when the updated strategy configuration is not empty
-    //       [ ] it replaces the price feed configuration
-    //       [ ] it replaces the strategy configuration
-    //       [ ] it emits an AssetPriceFeedsUpdated event
-    //       [ ] it emits an AssetStrategyUpdated event
-    //    given the moving average is not used
-    //     when the strategy configuration is not being updated
-    //      given the existing strategy configuration is empty
-    //       [ ] it replaces the price feed configuration
-    //       [ ] it emits an AssetPriceFeedsUpdated event
-    //      given the existing strategy configuration is not empty
-    //       not possible
-    //     when the strategy configuration is being updated
-    //      when the updated strategy configuration is empty
-    //       [ ] it replaces the price feed configuration
-    //       [ ] it replaces the strategy configuration
-    //       [ ] it emits an AssetPriceFeedsUpdated event
-    //       [ ] it emits an AssetStrategyUpdated event
-    //      when the updated strategy configuration is not empty
-    //       [ ] it reverts - strategy not supported
     //   when the moving average configuration is being updated
     //    when the moving average is used
     //     when the strategy configuration is not being updated
     //      given the existing strategy configuration is empty
-    //       [ ] it reverts - strategy required
+    //       [X] it reverts - strategy required
+
+    function test_whenUpdatingPriceFeeds_whenSingleFeed_whenUpdatingMovingAverage_whenMovingAverageUsed_whenNotUpdatingStrategy_givenStrategyEmpty_reverts()
+        public
+        givenAsset_SingleFeed_NoStrategy_NoMA
+    {
+        // Update feeds and MA, keep strategy
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
+        newFeeds[0] = _singleFeed(alphaUsdPriceFeed);
+
+        uint256[] memory newObs = new uint256[](3);
+        newObs[0] = 100e18;
+        newObs[1] = 110e18;
+        newObs[2] = 120e18;
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: true,
+            feeds: newFeeds,
+            strategy: _emptyStrategy(),
+            useMovingAverage: true,
+            storeMovingAverage: true,
+            movingAverageDuration: uint32(3 * OBSERVATION_FREQUENCY),
+            lastObservationTime: uint48(block.timestamp),
+            observations: newObs
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ParamsStrategyInsufficient.selector,
+                asset_SingleFeed_NoStrategy_NoMA,
+                bytes(""),
+                uint256(1), // 1 feed
+                true // useMovingAverage
+            )
+        );
+        vm.prank(priceWriter);
+        price.updateAsset(asset_SingleFeed_NoStrategy_NoMA, params);
+    }
+
     //      given the existing strategy configuration is not empty
     //       [X] it replaces the price feed configuration
     //       [X] it replaces the moving average configuration
@@ -958,7 +975,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
     //      given the existing strategy configuration is not empty
     //       [X] it reverts - strategy not supported
 
-    function test_whenUpdatingPriceFeeds_whenSingleFeed_whenUpdatingMovingAverage_whenMovingAverageNotUsed_whenNotUpdatingStrategy_givenStrategyNotEmpty()
+    function test_whenUpdatingPriceFeeds_whenSingleFeed_whenUpdatingMovingAverage_whenMovingAverageNotUsed_whenNotUpdatingStrategy_givenStrategyNotEmpty_reverts()
         public
         givenAsset_SingleFeed_NoStrategy_NoMA
     {
@@ -1214,14 +1231,15 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
     //   when the strategy configuration is being updated
     //    when the updated strategy configuration is empty
-    //     [ ] it reverts - strategy required
+    //     [X] it reverts - strategy required
 
-    function test_givenMultipleFeedsWithStrategy_whenUpdatingPriceFeedsAndEmptyStrategy_reverts()
+    function test_whenUpdatingPriceFeeds_whenMultipleFeeds_whenUpdatingStrategy_whenStrategyEmpty_reverts()
         public
         givenAsset_MultipleFeeds_Strategy_StoreMA
     {
-        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](2);
         newFeeds[0] = _singleFeed(onemaUsdPriceFeed);
+        newFeeds[1] = _singleFeed(twomaEthPriceFeed);
 
         IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
             updateFeeds: true,
@@ -1241,7 +1259,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
                 IPRICEv2.PRICE_ParamsStrategyInsufficient.selector,
                 asset_MultipleFeeds_Strategy_StoreMA,
                 bytes(""),
-                uint256(1), // 1 feed
+                uint256(2), // 1 feed
                 false // useMovingAverage
             )
         );
@@ -1250,17 +1268,23 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
     }
 
     //    when the updated strategy configuration is not empty
-    //     [ ] it replaces the price feed configuration
-    //     [ ] it replaces the strategy configuration
-    //     [ ] it emits an AssetPriceFeedsUpdated event
-    //     [ ] it emits an AssetStrategyUpdated event
+    //     [X] it replaces the price feed configuration
+    //     [X] it replaces the strategy configuration
+    //     [X] it emits an AssetPriceFeedsUpdated event
+    //     [X] it emits an AssetStrategyUpdated event
 
-    function test_givenMultipleFeedsWithStrategy_whenUpdatingPriceFeedsAndStrategy_replacesBothAndEmitsEvents()
+    function test_whenUpdatingPriceFeeds_whenMultipleFeeds_whenUpdatingStrategy_whenStrategyNotEmpty()
         public
         givenAsset_MultipleFeeds_Strategy_StoreMA
     {
-        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
+        // Get old asset values
+        IPRICEv2.Asset memory oldAssetData = price.getAssetData(
+            asset_MultipleFeeds_Strategy_StoreMA
+        );
+
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](2);
         newFeeds[0] = _singleFeed(onemaUsdPriceFeed);
+        newFeeds[1] = _singleFeed(twomaEthPriceFeed);
 
         IPRICEv2.Component memory newStrategy = _simpleStrategyFirstNonZero();
 
@@ -1297,6 +1321,9 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             "Strategy target not updated"
         );
         assertEq(strategy.selector, newStrategy.selector, "Strategy selector not updated");
+
+        // Verify moving average was not updated
+        _assertMovingAverageUnchanged(oldAssetData, assetData);
     }
 
     // when the asset strategy configuration is being updated
