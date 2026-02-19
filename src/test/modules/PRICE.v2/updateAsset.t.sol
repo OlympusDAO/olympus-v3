@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
 import {PriceV2BaseTest} from "./PriceV2BaseTest.sol";
 
 // Mocks
@@ -11,15 +10,15 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 // Interfaces
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
-import {Kernel, Module} from "src/Kernel.sol";
-import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
+import {Module} from "src/Kernel.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {toSubKeycode, fromSubKeycode} from "src/Submodules.sol";
 
 contract PriceV2UpdateAssetTest is PriceV2BaseTest {
