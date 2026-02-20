@@ -60,6 +60,9 @@ contract ConvertibleOHMTeller is
     /// @notice Expected byte length of enableData_ (one ABI-encoded uint256)
     uint256 private constant _ENABLE_DATA_LENGTH = 32;
 
+    /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
+    uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
+
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
@@ -187,8 +190,13 @@ contract ConvertibleOHMTeller is
         if (quoteToken_ == address(0) || quoteToken_.code.length == 0)
             revert Teller_InvalidParams(0, abi.encodePacked(quoteToken_));
 
-        // Revert if strike price is zero or out of bounds
+        // Revert if the quote token has fewer than _MIN_QUOTE_TOKEN_DECIMALS decimals
+        // (required by _formatPrice which computes 10 ** (decimals - 2))
         uint8 quoteDecimals = IERC20Metadata(quoteToken_).decimals();
+        if (quoteDecimals < _MIN_QUOTE_TOKEN_DECIMALS)
+            revert Teller_InvalidParams(0, abi.encodePacked(quoteToken_));
+
+        // Revert if strike price is zero or out of bounds
         int8 priceDecimals = _getPriceDecimals(strikePrice_, quoteDecimals);
         // We check that the strike price is not zero and that the price decimals are not less than
         // half the quote decimals to avoid precision loss

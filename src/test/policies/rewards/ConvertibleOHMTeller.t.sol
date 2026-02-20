@@ -388,6 +388,21 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         teller.deploy(address(0), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
+    function test_deploy_revertsIfQuoteTokenDecimalsTooLow() external {
+        // Deploy a token with 1 decimal (below minimum of 2)
+        MockERC20 lowDecToken = new MockERC20("LOW", "LOW", 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(address(lowDecToken))
+            )
+        );
+        vm.prank(rewardDistributor);
+        teller.deploy(address(lowDecToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
+    }
+
     function test_deploy_revertsIfQuoteTokenIsNotContract() external {
         vm.expectRevert(
             abi.encodeWithSelector(
