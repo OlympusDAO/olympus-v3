@@ -110,7 +110,7 @@ interface IConvertibleOHMTeller {
     /// @param token_ The convertible token to exercise.
     /// @param amount_ The amount of the convertible token to exercise.
     /// @return quoteToken The quote token required to exercise.
-    /// @return cost The amount of the convertible token required to exercise.
+    /// @return cost The amount of quote tokens required to exercise.
     function exerciseCost(
         address token_,
         uint256 amount_
