@@ -566,6 +566,18 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
     }
 
+    function test_endEpoch_revertsIfZeroMerkleRoot() external {
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        vm.prank(admin);
+        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidMerkleRoot.selector);
+        distributor.endEpoch(
+            epochEndDate,
+            bytes32(0),
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
+        );
+    }
+
     function test_endEpoch_revertsIfDisabled() external {
         // Disable the distributor
         distributor.disable("");

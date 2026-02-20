@@ -85,7 +85,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @param merkleRoot_ The Merkle root for the epoch's distribution.
     function _setMerkleRoot(uint40 epochEndDate_, bytes32 merkleRoot_) internal virtual {
         // Validate input
-        if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidProof();
+        if (merkleRoot_ == bytes32(0)) revert RewardDistributor_InvalidMerkleRoot();
 
         // Ensure the epoch hasn't already been set
         if (epochMerkleRoots[epochEndDate_] != bytes32(0))

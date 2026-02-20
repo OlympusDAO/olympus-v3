@@ -33,6 +33,9 @@ interface IRewardDistributor is IERC165 {
     /// @notice Thrown when an invalid Merkle proof is submitted
     error RewardDistributor_InvalidProof();
 
+    /// @notice Thrown when a zero Merkle root is provided
+    error RewardDistributor_InvalidMerkleRoot();
+
     /// @notice Thrown when no epochs are specified for a claim
     error RewardDistributor_NoEpochsSpecified();
 
