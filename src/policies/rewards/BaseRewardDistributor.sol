@@ -149,44 +149,32 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         return keccak256(bytes.concat(keccak256(abi.encode(user_, epochEndDate_, amount_))));
     }
 
-    /// @notice Verify Merkle proof without modifying state
+    /// @notice Verifies Merkle proof and claimed status.
+    /// @dev When `revertOnFailure_` is true, reverts with specific errors.
+    ///      When false, returns a boolean instead.
     ///
-    /// @param  user_           The user address
-    /// @param  epochEndDate_   The epoch end date
-    /// @param  amount_         The amount to verify
-    /// @param  proof_          The Merkle proof
+    /// @param user_ The user address.
+    /// @param epochEndDate_ The epoch end date.
+    /// @param amount_ The amount to verify.
+    /// @param proof_ The Merkle proof.
+    /// @param revertOnFailure_ If true, revert on invalid proof or already claimed; if false, return bool.
+    /// @return isValid True if proof is valid and not yet claimed.
     function _verifyProof(
         address user_,
         uint256 epochEndDate_,
         uint256 amount_,
-        bytes32[] calldata proof_
-    ) internal view virtual {
-        bytes32 leaf = _computeLeaf(user_, epochEndDate_, amount_);
-
-        if (!MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf)) {
-            revert RewardDistributor_InvalidProof();
-        }
-    }
-
-    /// @notice Verify Merkle proof without reverting on failure
-    ///
-    /// @param  user_           The user address
-    /// @param  epochEndDate_   The epoch end date
-    /// @param  amount_         The amount to verify
-    /// @param  proof_          The Merkle proof
-    /// @return isValid         True if proof is valid and claimable, false otherwise
-    function _verifyProofSafe(
-        address user_,
-        uint256 epochEndDate_,
-        uint256 amount_,
-        bytes32[] calldata proof_
+        bytes32[] calldata proof_,
+        bool revertOnFailure_
     ) internal view virtual returns (bool isValid) {
-        // Check if already claimed
-        if (hasClaimed[user_][epochEndDate_]) return false;
+        if (hasClaimed[user_][epochEndDate_]) {
+            if (revertOnFailure_) revert RewardDistributor_AlreadyClaimed(epochEndDate_);
+            return false;
+        }
 
         bytes32 leaf = _computeLeaf(user_, epochEndDate_, amount_);
+        isValid = MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf);
 
-        return MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf);
+        if (!isValid && revertOnFailure_) revert RewardDistributor_InvalidProof();
     }
 
     /// @notice Checks if a claim is valid without modifying state.
@@ -204,33 +192,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         bytes32[] calldata proof_
     ) internal view virtual returns (bool) {
         if (epochMerkleRoots[epochEndDate_] == bytes32(0)) return false;
-        return _verifyProofSafe(user_, epochEndDate_, amount_, proof_);
+        return _verifyProof(user_, epochEndDate_, amount_, proof_, false);
     }
 
-    /// @notice Verify Merkle proof and mark epoch as claimed for user
-    ///
-    /// @param  user_           The user address
-    /// @param  epochEndDate_   The epoch end date
-    /// @param  amount_         The amount to verify
-    /// @param  proof_          The Merkle proof
-    function _verifyAndMarkClaimed(
-        address user_,
-        uint256 epochEndDate_,
-        uint256 amount_,
-        bytes32[] calldata proof_
-    ) internal virtual {
-        // Verify proof first
-        _verifyProof(user_, epochEndDate_, amount_, proof_);
-
-        // Mark as claimed
-        hasClaimed[user_][epochEndDate_] = true;
-    }
-
-    /// @notice Validates claim preconditions, verify proof, and mark as claimed.
+    /// @notice Validates claim preconditions, verifies proof, and marks as claimed.
     /// @dev Combines common validation logic:
-    ///      1. Check not already claimed.
-    ///      2. Check merkle root is set.
-    ///      3. Verify proof and mark claimed.
+    ///      1. Check merkle root is set.
+    ///      2. Verify not already claimed and proof is valid (reverts on failure).
+    ///      3. Mark as claimed.
     ///
     /// @param user_ The address of the user.
     /// @param epochEndDate_ The epoch end date.
@@ -242,12 +211,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
         uint256 amount_,
         bytes32[] calldata proof_
     ) internal virtual {
-        if (hasClaimed[user_][epochEndDate_])
-            revert RewardDistributor_AlreadyClaimed(epochEndDate_);
         if (epochMerkleRoots[epochEndDate_] == bytes32(0))
             revert RewardDistributor_MerkleRootNotSet(epochEndDate_);
 
-        _verifyAndMarkClaimed(user_, epochEndDate_, amount_, proof_);
+        // Verify proof and claimed status (reverts on failure)
+        _verifyProof(user_, epochEndDate_, amount_, proof_, true);
+
+        // Mark as claimed
+        hasClaimed[user_][epochEndDate_] = true;
     }
 
     // ========== ERC165 ========== //
