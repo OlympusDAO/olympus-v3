@@ -142,10 +142,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
         // 6. Enable ConvertibleOHMTeller (with initial mint cap)
         _pushAction(
             convertibleOHMTeller,
-            abi.encodeWithSelector(
-                PolicyEnabler.enable.selector,
-                abi.encode(INITIAL_MINT_CAP)
-            ),
+            abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(INITIAL_MINT_CAP)),
             "Enable ConvertibleOHMTeller policy"
         );
 

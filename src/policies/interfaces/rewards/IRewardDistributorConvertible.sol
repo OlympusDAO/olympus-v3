@@ -70,5 +70,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     /// @notice Returns a convertible OHM token for a specific epoch.
     /// @param epochEndDate_ The epoch end date.
     /// @return convertibleToken The address of the convertible OHM token.
-    function epochConvertibleTokens(uint256 epochEndDate_) external view returns (address convertibleToken);
+    function epochConvertibleTokens(
+        uint256 epochEndDate_
+    ) external view returns (address convertibleToken);
 }
