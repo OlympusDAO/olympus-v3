@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, stdError} from "forge-std/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions, toKeycode, Keycode} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -714,6 +714,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // Exercise convertible tokens
         uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
         vm.startPrank(user0);
+        token.approve(address(teller), user0InitialBal);
         usds.approve(address(teller), exerciseCost);
         vm.expectEmit(true, true, false, true);
         emit IConvertibleOHMTeller.ConvertibleTokenExercised(
@@ -760,6 +761,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         uint256 exerciseAmount = (user0InitialBal * 4) / 10;
         uint256 exerciseCost = _exerciseCost(token, exerciseAmount);
         vm.startPrank(user0);
+        token.approve(address(teller), exerciseAmount);
         usds.approve(address(teller), exerciseCost);
         teller.exercise(address(token), exerciseAmount);
         vm.stopPrank();
@@ -780,6 +782,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // 2. Test
         uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
         vm.startPrank(user0);
+        token.approve(address(teller), user0InitialBal);
         usds.approve(address(teller), exerciseCost);
         // User0 should still be able to exercise even near the expiry time
         teller.exercise(address(token), user0InitialBal);
@@ -801,12 +804,14 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // Both users exercise
         uint256 user0ExerciseCost = _exerciseCost(token, user0InitialBal);
         vm.startPrank(user0);
+        token.approve(address(teller), user0InitialBal);
         usds.approve(address(teller), user0ExerciseCost);
         teller.exercise(address(token), user0InitialBal);
         vm.stopPrank();
 
         uint256 user1ExerciseCost = _exerciseCost(token, user1InitialBal);
         vm.startPrank(user1);
+        token.approve(address(teller), user1InitialBal);
         usds.approve(address(teller), user1ExerciseCost);
         teller.exercise(address(token), user1InitialBal);
         vm.stopPrank();
@@ -829,6 +834,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // User1 exercises
         uint256 exerciseCost = _exerciseCost(token, user1Amount);
         vm.startPrank(user1);
+        token.approve(address(teller), user1Amount);
         usds.approve(address(teller), exerciseCost);
         teller.exercise(address(token), user1Amount);
         vm.stopPrank();
@@ -932,6 +938,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // 2. Test: try to exercise more than the minting cap allows
         uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
         vm.startPrank(user0);
+        token.approve(address(teller), user0InitialBal);
         usds.approve(address(teller), exerciseCost);
         vm.expectRevert(MINTRv1.MINTR_NotApproved.selector);
         teller.exercise(address(token), user0InitialBal);
@@ -968,6 +975,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         uint256 actualReceived = quoteAmount - fee;
 
         vm.startPrank(user0);
+        fotConvToken.approve(address(teller), user0InitialBal);
         fotToken.approve(address(teller), type(uint256).max);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1471,6 +1479,150 @@ contract ConvertibleOHMTellerClonedTokenBasicTests is ConvertibleOHMTellerTestBa
             "The allowance should be reduced"
         );
     }
+
+    function test_parameters() external view {
+        (
+            address quoteToken,
+            address creator_,
+            uint48 eligible_,
+            uint48 expiry_,
+            uint256 strike_
+        ) = token.parameters();
+
+        assertEq(quoteToken, address(usds), "Quote token should be USDS");
+        assertEq(creator_, rewardDistributor, "Creator should be reward distributor");
+        assertEq(eligible_, _roundToDay(eligibleTimestamp), "Eligible should match");
+        assertEq(expiry_, _roundToDay(expiryTimestamp), "Expiry should match");
+        assertEq(strike_, STRIKE_PRICE, "Strike price should match");
+    }
+
+    function test_quote() external view {
+        assertEq(token.quote(), address(usds), "Quote token should be USDS");
+    }
+
+    function test_eligible() external view {
+        assertEq(
+            token.eligible(),
+            _roundToDay(eligibleTimestamp),
+            "Eligible timestamp should match"
+        );
+    }
+
+    function test_expiry() external view {
+        assertEq(token.expiry(), _roundToDay(expiryTimestamp), "Expiry timestamp should match");
+    }
+
+    function test_teller() external view {
+        assertEq(token.teller(), address(teller), "Teller should match");
+    }
+
+    function test_creator() external view {
+        assertEq(token.creator(), rewardDistributor, "Creator should be reward distributor");
+    }
+
+    function test_strike() external view {
+        assertEq(token.strike(), STRIKE_PRICE, "Strike price should match");
+    }
+
+    function test_mintFor_updatesTotalSupplyAndBalance() external {
+        // Mint additional tokens to User1
+        uint256 mintAmount = 50e9;
+        uint256 totalSupplyBefore = token.totalSupply();
+
+        vm.prank(rewardDistributor);
+        teller.create(address(token), user1, mintAmount);
+
+        // Verify
+        assertEq(token.balanceOf(user1), mintAmount, "User1 should receive minted tokens");
+        assertEq(
+            token.totalSupply(),
+            totalSupplyBefore + mintAmount,
+            "Total supply should increase by minted amount"
+        );
+    }
+
+    function test_mintFor_revertsIfNotTeller() external {
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
+        vm.prank(user0);
+        token.mintFor(user0, 100e9);
+    }
+
+    function test_burnFrom_revertsIfNotTeller() external {
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
+        vm.prank(user0);
+        token.burnFrom(user0, user0InitialBal);
+    }
+
+    function test_burnFrom_revertsIfInsufficientAllowance() external {
+        // 1. Preparation: User0 approves less than the burn amount
+        uint256 approvedAmount = user0InitialBal / 2;
+        vm.prank(user0);
+        token.approve(address(teller), approvedAmount);
+
+        // 2. Test: teller tries to burn more than approved (via exercise)
+        vm.warp(eligibleTimestamp);
+        uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
+        vm.startPrank(user0);
+        usds.approve(address(teller), exerciseCost);
+        vm.expectRevert(stdError.arithmeticError);
+        teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+    }
+
+    function test_burnFrom_revertsIfNoAllowance() external {
+        // 1. Preparation: warp to eligible, no token approval given
+        vm.warp(eligibleTimestamp);
+
+        // 2. Test: exercise without approving the teller for convertible tokens
+        uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
+        vm.startPrank(user0);
+        usds.approve(address(teller), exerciseCost);
+        vm.expectRevert(stdError.arithmeticError);
+        teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+    }
+
+    function test_burnFrom_succeedsWithExactAllowance() external {
+        // 1. Preparation: User0 approves exact amount
+        vm.warp(eligibleTimestamp);
+        uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
+
+        // 2. Test
+        vm.startPrank(user0);
+        token.approve(address(teller), user0InitialBal);
+        usds.approve(address(teller), exerciseCost);
+        teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+
+        // Verify: allowance should be fully consumed
+        assertEq(
+            token.allowance(user0, address(teller)),
+            0,
+            "Allowance should be zero after exact burn"
+        );
+        assertEq(token.balanceOf(user0), 0, "All tokens should be burned");
+    }
+
+    function test_burnFrom_succeedsWithMaxAllowance() external {
+        // 1. Preparation: User0 approves max (infinite approval)
+        vm.warp(eligibleTimestamp);
+        uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
+
+        // 2. Test
+        vm.startPrank(user0);
+        token.approve(address(teller), type(uint256).max);
+        usds.approve(address(teller), exerciseCost);
+        teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+
+        // Verify: max allowance should not be decremented
+        assertEq(
+            token.allowance(user0, address(teller)),
+            type(uint256).max,
+            "Max allowance should not be decremented"
+        );
+        assertEq(token.balanceOf(user0), 0, "All tokens should be burned");
+    }
 }
 
 contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
@@ -1497,6 +1649,7 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
         // Exercise
         uint256 exerciseCost = _exerciseCost(token, mintAmount);
         vm.startPrank(user0);
+        token.approve(address(teller), mintAmount);
         usds.approve(address(teller), exerciseCost);
         teller.exercise(address(token), mintAmount);
         vm.stopPrank();
@@ -1532,8 +1685,10 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
         // Exercise both convertible tokens
         uint256 exerciseCost1 = _exerciseCost(token1, amount1);
         vm.startPrank(user0);
+        token1.approve(address(teller), amount1);
         usds.approve(address(teller), exerciseCost1);
         teller.exercise(address(token1), amount1);
+        token2.approve(address(teller), amount2);
         uint256 exerciseCost2 = _exerciseCost(token2, amount2);
         usds.approve(address(teller), exerciseCost2);
         teller.exercise(address(token2), amount2);

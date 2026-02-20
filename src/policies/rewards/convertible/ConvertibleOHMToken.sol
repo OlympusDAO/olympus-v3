@@ -97,12 +97,16 @@ contract ConvertibleOHMToken is CloneERC20Permit {
         _mint(to_, amount_);
     }
 
-    /// @notice Burns convertible tokens.
+    /// @notice Burns convertible tokens from the specified address.
     /// @dev Only callable by the teller that created this token.
+    ///      Requires the caller (teller) to have sufficient allowance from `from_`.
+    ///      Follows the same allowance pattern as ERC20 transferFrom.
     ///      Implements IERC20BurnableMintable.burnFrom interface.
     /// @param from_ The address to burn from.
     /// @param amount_ The amount to burn.
     function burnFrom(address from_, uint256 amount_) external onlyTeller {
+        uint256 allowed = allowance[from_][msg.sender];
+        if (allowed != type(uint256).max) allowance[from_][msg.sender] = allowed - amount_;
         _burn(from_, amount_);
     }
 }
