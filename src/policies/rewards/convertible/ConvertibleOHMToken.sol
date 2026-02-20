@@ -5,7 +5,7 @@ pragma solidity ^0.8.30;
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/fixed-strike/FixedStrikeOptionToken.sol`
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/bases/OptionToken.sol`
 
-import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20.sol";
+import {CloneERC20Permit} from "src/external/clones/CloneERC20Permit.sol";
 
 /// @title Convertible OHM Token
 /// @notice The ERC20-compatible token representing a call option on OHM with a fixed strike price.
@@ -27,7 +27,7 @@ import {CloneERC20} from "src/policies/rewards/convertible/lib/clones/CloneERC20
 ///      [0x61:0x75]  teller (address)
 ///      [0x75:0x89]  creator (address)
 ///      [0x89:0xA9]  strikePrice (uint256)
-contract ConvertibleOHMToken is CloneERC20 {
+contract ConvertibleOHMToken is CloneERC20Permit {
     // ========== ERRORS ========== //
 
     error ConvertibleOHMToken_OnlyTeller();
