@@ -237,7 +237,7 @@
     {
         "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
         "chainId": 1,
-        "name": "olympus-multisig-reward_distributor"
+        "name": "olympus-multisig-reward-distributor"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
