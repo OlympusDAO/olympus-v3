@@ -30,6 +30,9 @@ contract ConvertibleOHMTellerTestBase is Test {
 
     ConvertibleOHMTeller teller;
 
+    // Constants
+    uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
+
     // Test accounts
     address rewardDistributor = makeAddr("rewardDistributor"); // False contract
     address admin = makeAddr("admin");
@@ -996,7 +999,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         assertEq(teller.remainingMintApproval(), 0, "The initial approval should be 0");
 
         // 2. Test: increase the minting cap
-        uint256 mintCap = 1000e9;
+        uint256 mintCap = _DEFAULT_MINT_CAP;
         vm.expectEmit(true, true, false, true);
         emit IConvertibleOHMTeller.MintCapUpdated(mintCap, 0);
         teller.setMintCap(mintCap);
@@ -1011,7 +1014,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
 
     function test_setMintCap_decreasesMintApproval() external {
         // 1. Preparation: set an initial minting cap
-        uint256 initialCap = 1000e9;
+        uint256 initialCap = _DEFAULT_MINT_CAP;
         teller.setMintCap(initialCap);
         assertEq(teller.remainingMintApproval(), initialCap, "The initial cap should be set");
 
@@ -1027,7 +1030,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
 
     function test_setMintCap_notChangeWhenSameValue() external {
         // 1. Preparation: set an initial minting cap
-        uint256 cap = 1000e9;
+        uint256 cap = _DEFAULT_MINT_CAP;
         teller.setMintCap(cap);
 
         // 2. Test: set the same minting cap again (should emit the event, but not change the approval)
@@ -1042,7 +1045,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     function test_setMintCap_revertsIfNotAdminOrTellerAdmin() external {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(user0);
-        teller.setMintCap(1000e9);
+        teller.setMintCap(_DEFAULT_MINT_CAP);
     }
 
     function test_setMintCap_succeeds_givenTellerAdminRole() external {
@@ -1078,7 +1081,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
 
         // 2. Test
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        teller.setMintCap(1000e9);
+        teller.setMintCap(_DEFAULT_MINT_CAP);
     }
 
     function test_enable_withInitialMintCap() external {
@@ -1089,7 +1092,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         assertEq(newTeller.remainingMintApproval(), 0, "The initial approval should be 0");
 
         // 2. Test: enable with the initial minting cap
-        uint256 initialCap = 1000e9;
+        uint256 initialCap = _DEFAULT_MINT_CAP;
         vm.expectEmit(true, true, false, true);
         emit IConvertibleOHMTeller.MintCapUpdated(initialCap, 0);
         newTeller.enable(abi.encode(initialCap));
@@ -1102,21 +1105,39 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function test_enable_withoutInitialMintCap() external {
+    function test_enable_revertsIfNoMintCap() external {
         // 1. Preparation: deploy a fresh teller
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: enable without an initial minting cap (empty data)
+        // 2. Test: enable without an initial minting cap (empty data) should revert
+        bytes memory emptyData = "";
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                emptyData
+            )
+        );
         newTeller.enable("");
+    }
 
-        // Verify
-        assertEq(newTeller.remainingMintApproval(), 0, "The approval should remain 0");
+    function test_enable_revertsIfInvalidDataLength() external {
+        // 1. Preparation: deploy a fresh teller
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        // 2. Test: enable with incorrect data length should revert
+        bytes memory badData = abi.encodePacked(uint128(_DEFAULT_MINT_CAP));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleOHMTeller.Teller_InvalidParams.selector, 0, badData)
+        );
+        newTeller.enable(badData);
     }
 
     function test_enable_revertsIfAlreadyEnabled() external {
         vm.expectRevert(IEnabler.NotDisabled.selector);
-        teller.enable("");
+        teller.enable(abi.encode(uint256(_DEFAULT_MINT_CAP)));
     }
 
     function test_enable_revertsIfNotAdmin() external {
@@ -1127,7 +1148,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // 2. Test
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(user0);
-        newTeller.enable("");
+        newTeller.enable(abi.encode(uint256(_DEFAULT_MINT_CAP)));
     }
 
     function test_disable_disablesPolicy() external {
@@ -1334,7 +1355,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
 
     function test_remainingMintApproval_returnsCorrectValue() external {
         // 1. Preparation: set a specific minting cap
-        uint256 mintCap = 1000e9;
+        uint256 mintCap = _DEFAULT_MINT_CAP;
         teller.setMintCap(mintCap);
 
         // 2. Test

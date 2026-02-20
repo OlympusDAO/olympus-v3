@@ -77,9 +77,9 @@ contract RewardDistributorConvertibleTestBase is Test {
         // Setup roles for teller
         roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
 
-        // Enable the teller policy
+        // Enable the teller policy with infinite minting cap
         roles.saveRole(ADMIN_ROLE, address(this));
-        teller.enable("");
+        teller.enable(abi.encode(type(uint256).max));
 
         // Deploy the distributor
         distributor = new RewardDistributorConvertible(

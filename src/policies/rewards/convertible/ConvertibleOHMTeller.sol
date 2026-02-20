@@ -57,6 +57,9 @@ contract ConvertibleOHMTeller is
     /// @notice The OHM token decimals
     uint8 private constant _OHM_DECIMALS = 9;
 
+    /// @notice Expected byte length of enableData_ (one ABI-encoded uint256)
+    uint256 private constant _ENABLE_DATA_LENGTH = 32;
+
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
@@ -137,13 +140,13 @@ contract ConvertibleOHMTeller is
         return (1, 0);
     }
 
-    /// @notice Overrides _enable to accept initial minting cap
+    /// @notice Overrides _enable to set the initial minting cap
     /// @param enableData_ ABI-encoded (uint256 mintCap)
     function _enable(bytes calldata enableData_) internal override {
-        if (enableData_.length != 0) {
-            uint256 mintCap = abi.decode(enableData_, (uint256));
-            _setMintCap(mintCap);
-        }
+        if (enableData_.length != _ENABLE_DATA_LENGTH) revert Teller_InvalidParams(0, enableData_);
+
+        uint256 mintCap = abi.decode(enableData_, (uint256));
+        _setMintCap(mintCap);
     }
 
     // ========== TOKEN DEPLOYMENTS ========== //
@@ -505,9 +508,7 @@ contract ConvertibleOHMTeller is
     }
 
     /// @inheritdoc IConvertibleOHMTeller
-    function setMinDuration(
-        uint48 duration_
-    ) external override onlyEnabled onlyAdminRole {
+    function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;

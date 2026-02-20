@@ -27,7 +27,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
 
     /// TODO: Decide on the initial mint cap
     /// @notice Initial mint cap for the ConvertibleOHMTeller (in OHM units, 9 decimals)
-    uint256 internal constant INITIAL_MINT_CAP = 1000;
+    uint256 internal constant INITIAL_MINT_CAP = 1000e9;
 
     // ========== PROPOSAL ========== //
 
@@ -51,6 +51,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
                 "1. Grant `convertible_distributor` role to RewardDistributorConvertible.\n",
                 "2. Grant `convertible_admin` role to DAO MS.\n",
                 "3. Grant `rewards_manager` role to Distributor MS.\n",
+                // TODO: specify the specific minting cap value when it becomes known
                 "4. Enable the ConvertibleOHMTeller policy (with initial mint cap).\n",
                 "5. Enable the RewardDistributorConvertible policy.\n\n",
                 "## Result\n\n",
@@ -79,7 +80,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
         );
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
-        address distributorMS = addresses.getAddress("olympus-multisig-reward_distributor");
+        address distributorMS = addresses.getAddress("olympus-multisig-reward-distributor");
 
         // 1. Activate ConvertibleOHMTeller policy
         _pushAction(
@@ -172,7 +173,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
             "olympus-policy-reward-distributor-convertible"
         );
         address daoMS = addresses.getAddress("olympus-multisig-dao");
-        address distributorMS = addresses.getAddress("olympus-multisig-reward_distributor");
+        address distributorMS = addresses.getAddress("olympus-multisig-reward-distributor");
 
         // Validate ConvertibleOHMTeller is active
         require(
@@ -211,6 +212,12 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
         require(
             ConvertibleOHMTeller(convertibleOHMTeller).isEnabled(),
             "ConvertibleOHMTeller is not enabled"
+        );
+
+        // Validate the teller's mint cap was set to INITIAL_MINT_CAP via enable(bytes)
+        require(
+            ConvertibleOHMTeller(convertibleOHMTeller).remainingMintApproval() == INITIAL_MINT_CAP,
+            "ConvertibleOHMTeller mint cap does not match INITIAL_MINT_CAP"
         );
 
         // Validate RewardDistributorConvertible is enabled
