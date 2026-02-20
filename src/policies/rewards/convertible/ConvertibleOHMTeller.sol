@@ -251,7 +251,11 @@ contract ConvertibleOHMTeller is
         // Transfer quote tokens from user
         // @audit this does enable potential malicious convertible tokens that can't be exercised
         // However, we view it as a "buyer beware" situation that can handled on the front-end
+        uint256 balanceBefore = IERC20(quoteToken).balanceOf(address(TRSRY));
         IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
+        uint256 balanceAfter = IERC20(quoteToken).balanceOf(address(TRSRY));
+        if (balanceAfter - balanceBefore < quoteAmount)
+            revert Teller_FeeOnTransfer(quoteAmount, balanceAfter - balanceBefore);
 
         emit ConvertibleTokenExercised(address(token), msg.sender, amount_, quoteAmount);
     }

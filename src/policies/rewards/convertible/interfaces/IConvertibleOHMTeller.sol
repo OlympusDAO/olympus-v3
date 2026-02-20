@@ -55,6 +55,11 @@ interface IConvertibleOHMTeller {
     /// @param eligible The eligible timestamp of the token.
     error Teller_NotEligible(uint48 eligible);
 
+    /// @notice Thrown when a fee-on-transfer token is detected (received less than expected).
+    /// @param expected The expected amount to be received.
+    /// @param actual The actual amount received.
+    error Teller_FeeOnTransfer(uint256 expected, uint256 actual);
+
     /// @notice Deploys a new convertible token and returns its address.
     /// @dev Only callable by addresses with the reward distributor role.
     ///      If a convertible token already exists for the parameters, it returns that address.

@@ -16,6 +16,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 import {MaliciousConvertibleOHMToken} from "src/test/mocks/MaliciousConvertibleOHMToken.sol";
 
 contract ConvertibleOHMTellerTestBase is Test {
@@ -934,6 +935,48 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         usds.approve(address(teller), exerciseCost);
         vm.expectRevert(MINTRv1.MINTR_NotApproved.selector);
         teller.exercise(address(token), user0InitialBal);
+        vm.stopPrank();
+    }
+
+    function test_exercise_revertsIfFeeOnTransfer() external {
+        // 1. Preparation: deploy a fee-on-transfer token as the quote token
+        address feeRecipient = makeAddr("feeRecipient");
+        MockERC20FeeOnTransfer fotToken = new MockERC20FeeOnTransfer("FOT", "FOT", feeRecipient);
+
+        // Deploy a convertible token with the fee-on-transfer quote token
+        vm.prank(rewardDistributor);
+        ConvertibleOHMToken fotConvToken = ConvertibleOHMToken(
+            teller.deploy(address(fotToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
+        );
+
+        // Mint convertible tokens to user0
+        vm.prank(rewardDistributor);
+        teller.create(address(fotConvToken), user0, user0InitialBal);
+
+        // Fund user0 with fee-on-transfer tokens
+        fotToken.mint(user0, 1_000_000e18);
+
+        // Warp to eligible time
+        vm.warp(eligibleTimestamp);
+
+        // 2. Test: exercise should revert because the treasury receives less than expected
+        // quoteAmount = ceil(100e9 * 15e18 / 1e9) = 1500e18
+        uint256 quoteAmount = _exerciseCost(fotConvToken, user0InitialBal);
+        // fee = 1500e18 * 1000 / 10000 = 150e18
+        // Treasury receives 1500e18 - 150e18 = 1350e18
+        uint256 fee = (quoteAmount * 1000) / 100e2;
+        uint256 actualReceived = quoteAmount - fee;
+
+        vm.startPrank(user0);
+        fotToken.approve(address(teller), type(uint256).max);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_FeeOnTransfer.selector,
+                quoteAmount,
+                actualReceived
+            )
+        );
+        teller.exercise(address(fotConvToken), user0InitialBal);
         vm.stopPrank();
     }
 
