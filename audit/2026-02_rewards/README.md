@@ -54,7 +54,7 @@ Key changes from the Bond Protocol originals:
 | Mint cap management | Added MINTR approval management to control total OHM minting |
 | Reentrancy guard | Upgraded from `ReentrancyGuard` to `ReentrancyGuardTransient` (gas optimized) |
 
-The clone libraries (`Clone.sol`, `CloneERC20.sol`) are **verbatim copies** from Bond Protocol and are included for completeness but should require minimal review.
+The existing `CloneERC20` (in `src/external/clones/`, previously audited for convertible deposits) now inherits from a new `Clone` wrapper (`src/external/clones/Clone.sol`) that extends the `@clones-with-immutable-args` dependency with a `_getArgUint48` reader. EIP-2612 permit support is provided by `CloneERC20Permit` (`src/external/clones/CloneERC20Permit.sol`), a new extension of `CloneERC20` with permit logic adopted from Bond Protocol's [CloneERC20.sol](https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol) (previously [audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit)). `ConvertibleOHMToken` inherits from `CloneERC20Permit`.
 
 ## Scope
 
@@ -84,10 +84,11 @@ The contracts in scope for this audit are:
                 - [ConvertibleOHMToken.sol](../../src/policies/rewards/convertible/ConvertibleOHMToken.sol)
                 - [interfaces/](../../src/policies/rewards/convertible/interfaces/)
                     - [IConvertibleOHMTeller.sol](../../src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol)
-                - [lib/](../../src/policies/rewards/convertible/lib/)
-                    - [clones/](../../src/policies/rewards/convertible/lib/clones/)
-                        - [Clone.sol](../../src/policies/rewards/convertible/lib/clones/Clone.sol)
-                        - [CloneERC20.sol](../../src/policies/rewards/convertible/lib/clones/CloneERC20.sol)
+    - [external/](../../src/external/)
+        - [clones/](../../src/external/clones/)
+            - [Clone.sol](../../src/external/clones/Clone.sol)
+            - [CloneERC20.sol](../../src/external/clones/CloneERC20.sol)
+            - [CloneERC20Permit.sol](../../src/external/clones/CloneERC20Permit.sol)
 
 ### Audit Priority
 
@@ -98,7 +99,9 @@ Given the Bond Protocol fork, the audit effort should be weighted as follows:
 | **High** | `BaseRewardDistributor`, `RewardDistributorConvertible` | Entirely new code; Merkle tree logic, claim flows |
 | **High** | `ConvertibleOHMTeller` (deltas from Bond Protocol) | Kernel integration, MINTR minting model, removed features, creator isolation |
 | **Medium** | `ConvertibleOHMToken` (deltas from Bond Protocol) | Reduced immutable layout, added creator field, renamed mint/burn |
-| **Low** | `Clone.sol`, `CloneERC20.sol` | Verbatim copies from audited Bond Protocol code |
+| **Low** | `Clone.sol` | Thin wrapper over `@clones-with-immutable-args` dependency, adds only `_getArgUint48` |
+| **Low** | `CloneERC20.sol` | Previously audited; only change is metadata visibility (`external` → `public`) |
+| **Low** | `CloneERC20Permit.sol` | EIP-2612 permit logic adopted from audited Bond Protocol code |
 | **Low** | Interface files | Type definitions, events, errors (no logic) |
 
 ## Architecture
@@ -120,10 +123,14 @@ Policy (Bophades)
         implements IConvertibleOHMTeller, IVersioned, PolicyEnabler, ReentrancyGuardTransient
         provides: token deployment, minting, exercise, mint cap management
 
-CloneERC20 (standalone, from Bond Protocol)
+Clone (extends @clones-with-immutable-args, adds _getArgUint48)
   |
-  +-- ConvertibleOHMToken
-        provides: immutable-args ERC20 with mint/burn gated to teller
+  +-- CloneERC20 (src/external/clones/, previously audited)
+        |
+        +-- CloneERC20Permit (EIP-2612 permit extension)
+              |
+              +-- ConvertibleOHMToken
+                    provides: immutable-args ERC20 with permit, mint/burn gated to teller
 ```
 
 ### System Overview
