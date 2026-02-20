@@ -1434,6 +1434,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Exercise
         uint256 exerciseCost = _calcExpectedCost(amount);
         vm.startPrank(user0);
+        token.approve(address(teller), amount);
         usds.approve(address(teller), exerciseCost);
         teller.exercise(address(token), amount);
         vm.stopPrank();
@@ -1502,6 +1503,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Exercise all
         uint256 exerciseCost = _calcExpectedCost(totalAmount);
         vm.startPrank(user0);
+        token1.approve(address(teller), totalAmount);
         usds.approve(address(teller), exerciseCost);
         teller.exercise(address(token1), totalAmount);
         vm.stopPrank();
@@ -1628,12 +1630,14 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         uint256 user0Cost = _calcExpectedCost(user0Amount);
         vm.startPrank(user0);
+        token.approve(address(teller), user0Amount);
         usds.approve(address(teller), user0Cost);
         teller.exercise(address(token), user0Amount);
         vm.stopPrank();
 
         uint256 user1Cost = _calcExpectedCost(user1Amount);
         vm.startPrank(user1);
+        token.approve(address(teller), user1Amount);
         usds.approve(address(teller), user1Cost);
         teller.exercise(address(token), user1Amount);
         vm.stopPrank();
@@ -1699,6 +1703,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         uint256 totalCost = _calcExpectedCost(totalTokens);
         vm.startPrank(user0);
+        token.approve(address(teller), totalTokens);
         usds.approve(address(teller), totalCost);
         teller.exercise(address(token), totalTokens);
         vm.stopPrank();
@@ -1739,6 +1744,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         uint256 partialCost = _calcExpectedCost(exerciseAmount);
         vm.startPrank(user0);
+        token.approve(address(teller), exerciseAmount);
         usds.approve(address(teller), partialCost);
         teller.exercise(address(token), exerciseAmount);
         vm.stopPrank();
@@ -1753,6 +1759,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Exercise remaining
         uint256 remainingCost = _calcExpectedCost(claimAmount - exerciseAmount);
         vm.startPrank(user0);
+        token.approve(address(teller), claimAmount - exerciseAmount);
         usds.approve(address(teller), remainingCost);
         teller.exercise(address(token), claimAmount - exerciseAmount);
         vm.stopPrank();
