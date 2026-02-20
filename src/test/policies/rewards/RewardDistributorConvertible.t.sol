@@ -3,7 +3,7 @@ pragma solidity >=0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {Kernel, Actions, toKeycode, Keycode} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode, Keycode, Policy} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
@@ -118,6 +118,11 @@ contract RewardDistributorConvertibleTestBase is Test {
             )
         );
         vm.store(address(kernel), slot, bytes32(uint256(1)));
+        // Validate that the hardcoded slot matches the actual storage layout
+        require(
+            kernel.modulePermissions(keycode, Policy(address(this)), selector),
+            "Storage slot mismatch: modulePermissions slot may have changed"
+        );
     }
 
     // Returns the end date of the first epoch
