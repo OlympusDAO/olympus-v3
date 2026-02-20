@@ -55,16 +55,14 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     /// @notice Constructor
     ///
     /// @param  kernel_             The Kernel address
-    /// @param  epochStartDate_     The timestamp when first epoch begins (00:00:00 UTC)
-    constructor(address kernel_, uint256 epochStartDate_) Policy(Kernel(kernel_)) {
-        if (epochStartDate_ == 0) revert RewardDistributor_EpochIsZero();
-        _validateEpochStartOfDay(epochStartDate_);
+    /// @param  lastEpochEndDate_   The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
+    constructor(address kernel_, uint256 lastEpochEndDate_) Policy(Kernel(kernel_)) {
+        if (lastEpochEndDate_ == 0) revert RewardDistributor_EpochIsZero();
+        _validateEpochEndOfDay(lastEpochEndDate_);
 
-        // Note: epochStartDate_ is truncated to uint40. Max uint40 is ~year 36812.
-        EPOCH_START_DATE = uint40(epochStartDate_);
-        // Initialize to 23:59:59 UTC of the day before EPOCH_START_DATE
-        // This allows the first endEpoch call to use epochEndDate = EPOCH_START_DATE + 1 days - 1
-        lastEpochEndDate = EPOCH_START_DATE - 1;
+        // Note: lastEpochEndDate_ is truncated to uint40. Max uint40 is ~year 36812.
+        lastEpochEndDate = uint40(lastEpochEndDate_);
+        EPOCH_START_DATE = lastEpochEndDate + 1;
         // Disabled by default by PolicyEnabler
     }
 
@@ -111,13 +109,6 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     }
 
     // ========== INTERNAL HELPERS ========== //
-
-    /// @notice Validate that an epoch start date is at 00:00:00 UTC (midnight / start of day)
-    ///
-    /// @param  epochStartDate_ The epoch start date to validate
-    function _validateEpochStartOfDay(uint256 epochStartDate_) internal pure {
-        if (epochStartDate_ % 1 days != 0) revert RewardDistributor_InvalidEpochTimestamp();
-    }
 
     /// @notice Validate that an epoch end date is at 23:59:59 UTC (end of day)
     ///

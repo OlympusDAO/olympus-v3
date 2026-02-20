@@ -7,7 +7,7 @@
         {
             "name": "RewardDistributorConvertible",
             "args": {
-                "startTimestamp": 1753999200
+                "lastEpochEndDate": 1753919999
             }
         }
     ]

@@ -37,13 +37,13 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
     // ========== CONSTRUCTOR ========== //
 
     /// @param kernel_ The kernel address
-    /// @param epochStartDate_ The timestamp of the beginning of the first epoch (00:00:00 UTC)
+    /// @param lastEpochEndDate_ The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
     /// @param teller_ The address of the Convertible OHM Teller
     constructor(
         address kernel_,
-        uint256 epochStartDate_,
+        uint256 lastEpochEndDate_,
         address teller_
-    ) BaseRewardDistributor(kernel_, epochStartDate_) {
+    ) BaseRewardDistributor(kernel_, lastEpochEndDate_) {
         if (teller_ == address(0)) revert RewardDistributor_InvalidAddress();
         TELLER = IConvertibleOHMTeller(teller_);
     }

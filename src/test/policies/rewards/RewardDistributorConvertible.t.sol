@@ -84,7 +84,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         // Deploy the distributor
         distributor = new RewardDistributorConvertible(
             address(kernel),
-            startTimestamp,
+            startTimestamp - 1,
             address(teller)
         );
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
@@ -189,7 +189,7 @@ contract RewardDistributorConvertibleConstructorTests is RewardDistributorConver
 
     function test_constructor_rejectsZeroTeller() external {
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
-        new RewardDistributorConvertible(address(kernel), startTimestamp, address(0));
+        new RewardDistributorConvertible(address(kernel), startTimestamp - 1, address(0));
     }
 
     function test_constructor_rejectsZeroStartTimestamp() external {
@@ -197,10 +197,10 @@ contract RewardDistributorConvertibleConstructorTests is RewardDistributorConver
         new RewardDistributorConvertible(address(kernel), 0, address(teller));
     }
 
-    function test_constructor_rejectsEpochNotStartOfDay() external {
-        uint256 notStartOfDay = startTimestamp + 12 hours;
+    function test_constructor_rejectsEpochNotEndOfDay() external {
+        uint256 notEndOfDay = startTimestamp; // Midnight is not end-of-day (23:59:59)
         vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
-        new RewardDistributorConvertible(address(kernel), notStartOfDay, address(teller));
+        new RewardDistributorConvertible(address(kernel), notEndOfDay, address(teller));
     }
 }
 

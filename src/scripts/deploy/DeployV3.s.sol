@@ -884,28 +884,28 @@ contract DeployV3 is WithEnvironment {
         address teller = _getAddressNotZero("olympus.policies.ConvertibleOHMTeller");
 
         // Input parameters
-        uint256 startTimestamp = _readDeploymentArgUint256(
+        uint256 lastEpochEndDate = _readDeploymentArgUint256(
             "RewardDistributorConvertible",
-            "startTimestamp"
+            "lastEpochEndDate"
         );
 
-        // Validate startTimestamp is not stale (more than 90 days in the past)
+        // Validate lastEpochEndDate is not stale (more than 90 days in the past)
         require(
-            startTimestamp + 90 days >= block.timestamp,
-            "startTimestamp is more than 90 days in the past -- update savedDeployments config"
+            lastEpochEndDate + 90 days >= block.timestamp,
+            "lastEpochEndDate is more than 90 days in the past -- update savedDeployments config"
         );
 
         // Log parameters
         console2.log("RewardDistributorConvertible parameters:");
         console2.log("  kernel", kernel);
-        console2.log("  startTimestamp", startTimestamp);
+        console2.log("  lastEpochEndDate", lastEpochEndDate);
         console2.log("  teller", teller);
 
         // Deploy
         vm.broadcast();
         RewardDistributorConvertible distributor = new RewardDistributorConvertible(
             kernel,
-            startTimestamp,
+            lastEpochEndDate,
             teller
         );
 
