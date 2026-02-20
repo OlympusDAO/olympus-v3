@@ -73,7 +73,7 @@ interface IConvertibleOHMTeller {
     function exercise(address token_, uint256 amount_) external;
 
     /// @notice Sets the minimum duration to exercise a convertible token.
-    /// @dev Only callable by addresses that have the convertible admin role.
+    /// @dev Only callable by admin.
     ///      The absolute minimum is 1 day due to rounding of eligible and expiry timestamps.
     /// @param duration_ The minimum duration in seconds.
     function setMinDuration(uint48 duration_) external;

@@ -435,7 +435,6 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
 
     function test_deploy_revertsIfDurationLessThanMinDuration() external {
         // 1. Preparation: set min duration to 5 days
-        vm.prank(admin);
         teller.setMinDuration(uint48(5 days));
 
         // 2. Test
@@ -949,7 +948,6 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
 contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     function test_setMinDuration_updatesMinDuration() external {
         uint48 newDuration = 7 days;
-        vm.prank(admin);
         teller.setMinDuration(newDuration);
         assertEq(teller.minDuration(), newDuration, "The minimum duration should be updated");
     }
@@ -957,7 +955,6 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     function testFuzz_setMinDuration_skipOnCoverage(uint48 duration_) external {
         duration_ = uint48(bound(duration_, 1 days, type(uint48).max));
 
-        vm.prank(admin);
         teller.setMinDuration(duration_);
         assertEq(teller.minDuration(), duration_, "The minimum duration should be updated");
     }
@@ -970,7 +967,6 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(uint48(1 days - 1))
             )
         );
-        vm.prank(admin);
         teller.setMinDuration(uint48(1 days - 1));
     }
 
@@ -980,13 +976,19 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         teller.setMinDuration(7 days);
     }
 
+    function test_setMinDuration_revertsIfTellerAdminRole() external {
+        // admin has ROLE_TELLER_ADMIN but not ADMIN_ROLE, so should revert
+        vm.expectRevert();
+        vm.prank(admin);
+        teller.setMinDuration(7 days);
+    }
+
     function test_setMinDuration_revertsIfPolicyDisabled() external {
         // 1. Preparation: disable the policy
         teller.disable("");
 
         // 2. Test
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(admin);
         teller.setMinDuration(7 days);
     }
 

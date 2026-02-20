@@ -507,7 +507,7 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(
         uint48 duration_
-    ) external override onlyEnabled onlyRole(ROLE_TELLER_ADMIN) {
+    ) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
