@@ -70,7 +70,7 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         uint40 epochEndDate_,
         bytes32 merkleRoot_,
         bytes calldata params_
-    ) external onlyAuthorized(ROLE_MERKLE_UPDATER) onlyEnabled returns (address token) {
+    ) external onlyAuthorized(ROLE_REWARDS_MANAGER) onlyEnabled returns (address token) {
         IRewardDistributorConvertible.EndEpochParams memory p = abi.decode(
             params_,
             (IRewardDistributorConvertible.EndEpochParams)

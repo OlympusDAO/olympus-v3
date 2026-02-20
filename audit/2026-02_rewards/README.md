@@ -151,7 +151,7 @@ flowchart TD
         ConvToken["convOHM Tokens\n(cloned per epoch)"]
     end
 
-    Admin((rewards_merkle_updater)) -->|"endEpoch()"| DistConv
+    Admin((rewards_manager)) -->|"endEpoch()"| DistConv
 
     DistConv -->|"deploy(), create()"| Teller
     Teller -->|"clone()"| ConvToken
@@ -170,7 +170,7 @@ flowchart TD
 
 | Role | Holder | Permissions |
 |---|---|---|
-| `rewards_merkle_updater` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
+| `rewards_manager` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
 | `convertible_distributor` | `RewardDistributorConvertible` | Call `deploy()` and `create()` on `ConvertibleOHMTeller` |
 | `convertible_admin` | Multisig / governance | Call `setMinDuration()` and `setMintCap()` on `ConvertibleOHMTeller` |
 | Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()` |
@@ -192,7 +192,7 @@ When an epoch ends, the admin posts the Merkle root and deploys a new convOHM to
 
 ```mermaid
 sequenceDiagram
-    participant Admin as rewards_merkle_updater
+    participant Admin as rewards_manager
     participant DistConv as RewardDistributorConvertible
     participant Teller as ConvertibleOHMTeller
     participant ConvToken as convOHM Token (clone)

@@ -24,7 +24,7 @@ abstract contract BaseRewardDistributor is Policy, PolicyEnabler, IRewardDistrib
     // ========== CONSTANTS & IMMUTABLES ========== //
 
     /// @notice Role that can update merkle roots
-    bytes32 public constant ROLE_MERKLE_UPDATER = "rewards_merkle_updater";
+    bytes32 public constant ROLE_REWARDS_MANAGER = "rewards_manager";
 
     /// @notice Minimum epoch duration
     uint40 public constant MIN_EPOCH_DURATION = 1 days;

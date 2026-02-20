@@ -49,7 +49,7 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
                 "2. Activate the RewardDistributorConvertible policy in the Kernel.\n",
                 "3. Grant `convertible_distributor` role to RewardDistributorConvertible.\n",
                 "4. Grant `convertible_admin` role to DAO MS.\n",
-                "5. Grant `rewards_merkle_updater` role to Distributor MS.\n",
+                "5. Grant `rewards_manager` role to Distributor MS.\n",
                 "6. Enable the ConvertibleOHMTeller policy (with initial mint cap).\n",
                 "7. Enable the RewardDistributorConvertible policy.\n",
                 "8. Set initial mint cap amount for OHM tokens to 1000.\n",
@@ -123,16 +123,16 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
             "Grant convertible_admin role to DAO MS"
         );
 
-        // 5. Grant rewards_merkle_updater role to Distributor MS
+        // 5. Grant rewards_manager role to Distributor MS
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
                 /// forge-lint: disable-next-line(unsafe-typecast)
-                bytes32("rewards_merkle_updater"),
+                bytes32("rewards_manager"),
                 distributorMS
             ),
-            "Grant rewards_merkle_updater role to Distributor MS"
+            "Grant rewards_manager role to Distributor MS"
         );
 
         // 6. Enable ConvertibleOHMTeller (with initial mint cap)
@@ -196,11 +196,11 @@ contract RewardDistributorProposalConvertible is GovernorBravoProposal {
             "DAO MS does not have convertible_admin role"
         );
 
-        // Validate Distributor MS has the rewards_merkle_updater role
+        // Validate Distributor MS has the rewards_manager role
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(distributorMS, bytes32("rewards_merkle_updater")),
-            "Distributor MS does not have rewards_merkle_updater role"
+            roles.hasRole(distributorMS, bytes32("rewards_manager")),
+            "Distributor MS does not have rewards_manager role"
         );
 
         // Validate ConvertibleOHMTeller is enabled

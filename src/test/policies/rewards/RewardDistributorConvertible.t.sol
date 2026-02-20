@@ -93,7 +93,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), address(distributor));
 
         // Setup roles for distributor
-        roles.saveRole(distributor.ROLE_MERKLE_UPDATER(), admin);
+        roles.saveRole(distributor.ROLE_REWARDS_MANAGER(), admin);
 
         // Enable the distributor policy
         distributor.enable("");
@@ -408,7 +408,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
-                distributor.ROLE_MERKLE_UPDATER()
+                distributor.ROLE_REWARDS_MANAGER()
             )
         );
         vm.prank(caller);
