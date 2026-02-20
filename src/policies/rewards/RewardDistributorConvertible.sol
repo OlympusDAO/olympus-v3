@@ -29,6 +29,9 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
     /// @notice The teller contract for deploying and minting convertible tokens
     IConvertibleOHMTeller public immutable TELLER;
 
+    /// @notice Expected byte length of ABI-encoded EndEpochParams (4 slots × 32 bytes)
+    uint256 private constant _END_EPOCH_PARAMS_LENGTH = 128;
+
     // ========== STATE VARIABLES ========== //
 
     /// @inheritdoc IRewardDistributorConvertible
@@ -71,6 +74,9 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         bytes32 merkleRoot_,
         bytes calldata params_
     ) external onlyAuthorized(ROLE_REWARDS_MANAGER) onlyEnabled returns (address token) {
+        if (params_.length != _END_EPOCH_PARAMS_LENGTH)
+            revert RewardDistributor_InvalidParamsLength(_END_EPOCH_PARAMS_LENGTH, params_.length);
+
         IRewardDistributorConvertible.EndEpochParams memory p = abi.decode(
             params_,
             (IRewardDistributorConvertible.EndEpochParams)

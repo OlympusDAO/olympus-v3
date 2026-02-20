@@ -507,6 +507,60 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
     }
 
+    function test_endEpoch_revertsIfParamsTooShort() external {
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        // 96 bytes instead of 128 (missing strikePrice)
+        bytes memory shortParams = abi.encode(address(usds), eligibleTimestamp, expiryTimestamp);
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                128,
+                shortParams.length
+            )
+        );
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), shortParams);
+    }
+
+    function test_endEpoch_revertsIfParamsTooLong() external {
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        // 160 bytes instead of 128 (extra uint256)
+        bytes memory longParams = abi.encode(
+            address(usds),
+            eligibleTimestamp,
+            expiryTimestamp,
+            STRIKE_PRICE,
+            uint256(42)
+        );
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                128,
+                longParams.length
+            )
+        );
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), longParams);
+    }
+
+    function test_endEpoch_revertsIfParamsEmpty() external {
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                128,
+                0
+            )
+        );
+        distributor.endEpoch(epochEndDate, bytes32(uint256(1)), "");
+    }
+
     function test_endEpoch_revertsIfDisabled() external {
         // Disable the distributor
         distributor.disable("");

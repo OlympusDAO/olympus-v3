@@ -34,6 +34,12 @@ interface IRewardDistributorConvertible is IRewardDistributor {
 
     // ========== ERRORS ========== //
 
+    /// @notice Thrown when the encoded parameters have an unexpected byte length.
+    ///
+    /// @param  expected    The expected byte length.
+    /// @param  actual      The actual byte length.
+    error RewardDistributor_InvalidParamsLength(uint256 expected, uint256 actual);
+
     /// @notice Thrown when an invalid token is referenced.
     error RewardDistributor_InvalidToken();
 
