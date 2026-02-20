@@ -29,16 +29,30 @@ interface IConvertibleOHMTeller {
     /// @notice Emitted when the minting cap is updated.
     event MintCapUpdated(uint256 newCap, uint256 oldCap);
 
+    /// @notice Thrown when invalid parameters are provided.
+    /// @param index The index of the invalid parameter.
+    /// @param value The invalid value.
     error Teller_InvalidParams(uint256 index, bytes value);
 
+    /// @notice Thrown when referencing a token that does not exist.
+    /// @param tokenHash The hash of the non-existent token.
     error Teller_TokenDoesNotExist(bytes32 tokenHash);
 
+    /// @notice Thrown when the provided token is not supported.
+    /// @param token The unsupported token address.
     error Teller_UnsupportedToken(address token);
 
+    /// @notice Thrown when the caller is not the token's creator.
+    /// @param caller The address of the caller.
+    /// @param creator The expected creator address.
     error Teller_NotTokenCreator(address caller, address creator);
 
+    /// @notice Thrown when attempting to exercise an expired token.
+    /// @param expiry The expiry timestamp of the token.
     error Teller_TokenExpired(uint48 expiry);
 
+    /// @notice Thrown when attempting to exercise a token before its eligible date.
+    /// @param eligible The eligible timestamp of the token.
     error Teller_NotEligible(uint48 eligible);
 
     /// @notice Deploys a new convertible token and returns its address.
@@ -133,5 +147,6 @@ interface IConvertibleOHMTeller {
     ) external pure returns (bytes32 hash);
 
     /// @notice Returns the minimum duration in seconds during which a convertible token must be eligible for exercise.
-    function minDuration() external view returns (uint48);
+    /// @return duration The minimum duration in seconds.
+    function minDuration() external view returns (uint48 duration);
 }

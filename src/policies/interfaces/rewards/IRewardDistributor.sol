@@ -81,24 +81,24 @@ interface IRewardDistributor is IERC165 {
 
     /// @notice Returns the start timestamp for first epoch (00:00:00 UTC)
     ///
-    /// @return The timestamp when first epoch starts
-    function EPOCH_START_DATE() external view returns (uint40);
+    /// @return epochStartDate The timestamp when first epoch starts
+    function EPOCH_START_DATE() external view returns (uint40 epochStartDate);
 
     /// @notice Returns the Merkle root for a given epoch
     ///
     /// @param  epochEndDate    The epoch end date to get the Merkle root for
-    /// @return                 The Merkle root bytes32 value
-    function epochMerkleRoots(uint256 epochEndDate) external view returns (bytes32);
+    /// @return merkleRoot      The Merkle root bytes32 value
+    function epochMerkleRoots(uint256 epochEndDate) external view returns (bytes32 merkleRoot);
 
     /// @notice Returns whether a user has already claimed rewards for a given epoch
     ///
     /// @param  user            The user address to check for
     /// @param  epochEndDate    The epoch end date to check for
-    /// @return                 Whether the user has claimed for this epoch
-    function hasClaimed(address user, uint256 epochEndDate) external view returns (bool);
+    /// @return claimed         Whether the user has claimed for this epoch
+    function hasClaimed(address user, uint256 epochEndDate) external view returns (bool claimed);
 
     /// @notice Returns the last epoch end date for which a merkle root was set
     ///
-    /// @return                 The last epoch end date
-    function lastEpochEndDate() external view returns (uint40);
+    /// @return epochEndDate    The last epoch end date
+    function lastEpochEndDate() external view returns (uint40 epochEndDate);
 }
