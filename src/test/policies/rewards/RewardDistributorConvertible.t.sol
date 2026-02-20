@@ -1015,12 +1015,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_NoEpochsSpecified.selector,
-                epochEndDate
-            )
-        );
+        vm.expectRevert(IRewardDistributor.RewardDistributor_NoEpochsSpecified.selector);
         distributor.claim(new uint256[](0), amounts, proofs);
     }
 
@@ -1036,12 +1031,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_ArrayLengthMismatch.selector,
-                epochEndDate
-            )
-        );
+        vm.expectRevert(IRewardDistributor.RewardDistributor_ArrayLengthMismatch.selector);
         distributor.claim(epochEndDates, new uint256[](0), proofs);
     }
 
