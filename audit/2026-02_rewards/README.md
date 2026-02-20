@@ -40,7 +40,7 @@ Each convOHM token is named with the format:
 
 #### Forked from Bond Protocol
 
-The `ConvertibleOHMTeller` and `ConvertibleOHMToken` contracts are forked from [Bond Protocol's option-contracts](https://github.com/Bond-Protocol/option-contracts) (`FixedStrikeOptionTeller` and `FixedStrikeOptionToken`), which have been [previously audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit) and battle-tested in production.
+The `ConvertibleOHMTeller` and `ConvertibleOHMToken` contracts are forked from Bond Protocol's option-contracts (`FixedStrikeOptionTeller` and `FixedStrikeOptionToken`) at commit [b8ce2ca](https://github.com/Bond-Protocol/option-contracts/commit/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c), which have been [previously audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit) and battle-tested in production.
 
 Key changes from the Bond Protocol originals:
 
