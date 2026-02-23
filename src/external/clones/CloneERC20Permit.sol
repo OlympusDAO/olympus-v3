@@ -1,10 +1,13 @@
-// SPDX-License-Identifier: BSD
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
 import {CloneERC20} from "src/external/clones/CloneERC20.sol";
 
 /// @notice EIP-2612 permit extension for CloneERC20 tokens.
-/// @author Adapted from Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/tokens/ERC20.sol)
+/// @author Adapted from Bond Protocol's option contracts CloneERC20
+///         (https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol).
+/// @dev This is EIP-2612 functionality extracted from Bond Protocol's CloneERC20 into a separate abstract contract.
+///      Changes: require strings replaced with custom errors.
 abstract contract CloneERC20Permit is CloneERC20 {
     /*///////////////////////////////////////////////////////////////
                                 ERRORS
