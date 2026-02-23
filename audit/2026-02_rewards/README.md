@@ -179,8 +179,8 @@ flowchart TD
 |---|---|---|
 | `rewards_manager` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
 | `convertible_distributor` | `RewardDistributorConvertible` | Call `deploy()` and `create()` on `ConvertibleOHMTeller` |
-| `convertible_admin` | Multisig / governance | Call `setMinDuration()` and `setMintCap()` on `ConvertibleOHMTeller` |
-| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()` |
+| `convertible_admin` | Multisig / governance | Call `setMintCap()` on `ConvertibleOHMTeller` |
+| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()`, `setMinDuration()` on `ConvertibleOHMTeller` |
 | Emergency role (PolicyEnabler) | Emergency multisig | Disable distributors and teller |
 
 ### Module Dependencies
@@ -300,5 +300,7 @@ sequenceDiagram
         Teller->>MINTR: decreaseMintApproval(address(this), currentApproval - newCap)
     end
 
-    Teller->>Teller: emit MintCapUpdated(newCap, currentApproval)
+    Teller->>MINTR: mintApproval(address(this))
+    Note over Teller: newApproval = actual approval stored in MINTR after change
+    Teller->>Teller: emit MintCapUpdated(newApproval)
 ```
