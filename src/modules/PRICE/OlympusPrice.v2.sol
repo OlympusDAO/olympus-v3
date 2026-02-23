@@ -872,12 +872,97 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
-    /// @dev        Empty implementation - revert only
+    /// @dev        Implements the following logic:
+    /// @dev        - Validates that at least one update flag is true
+    /// @dev        - Validates that asset is approved
+    /// @dev        - Calculates final state (before any updates)
+    /// @dev        - Validates the final configuration atomically
+    /// @dev        - Validates submodules are installed for updated components
+    /// @dev        - Calls update functions for flagged updates
+    /// @dev        - Validates final configuration with `_getCurrentPrice()`
+    /// @dev        - Emits events based on which updates occurred
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - All update flags are false (no-op)
+    /// @dev        - `asset_` is not approved
+    /// @dev        - The final configuration is invalid
+    /// @dev        - Any updated submodule is not installed
     function updateAsset(
         address asset_,
         UpdateAssetParams memory params_
     ) external override permissioned {
-        revert("Not implemented");
+        // Validate at least one update flag is true
+        if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
+            revert PRICE_NoUpdatesRequested(asset_);
+
+        // Validate asset is approved
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+
+        // Get current asset state
+        Asset storage asset = _assetData[asset_];
+
+        // Calculate final state (use new values if updating, otherwise keep existing)
+        Component[] memory finalFeeds = params_.updateFeeds
+            ? params_.feeds
+            : abi.decode(asset.feeds, (Component[]));
+        Component memory finalStrategy = params_.updateStrategy
+            ? params_.strategy
+            : abi.decode(asset.strategy, (Component));
+        bool finalUseMA = params_.updateStrategy
+            ? params_.useMovingAverage
+            : asset.useMovingAverage;
+        bool finalStoreMA = params_.updateMovingAverage
+            ? params_.storeMovingAverage
+            : asset.storeMovingAverage;
+
+        // Validate the end state (before any updates)
+
+        // MA usage requires storage
+        if (finalUseMA && !finalStoreMA) revert PRICE_ParamsStoreMovingAverageRequired(asset_);
+
+        // Calculate effective number of feeds (including the moving average if used)
+        uint256 numFeeds = finalFeeds.length + (finalUseMA ? 1 : 0);
+
+        // Strategy is required if there is more than one price feed
+        if (numFeeds > 1 && fromSubKeycode(finalStrategy.target) == bytes20(0))
+            revert PRICE_ParamsStrategyInsufficient(
+                asset_,
+                abi.encode(finalStrategy),
+                finalFeeds.length,
+                finalUseMA
+            );
+
+        // Strategy is not supported if there is only one price feed
+        if (numFeeds == 1 && fromSubKeycode(finalStrategy.target) != bytes20(0))
+            revert PRICE_ParamsStrategyNotSupported(asset_);
+
+        // Call update functions (only after validation passes)
+        if (params_.updateFeeds) {
+            _updateAssetPriceFeeds(asset_, params_.feeds);
+        }
+
+        if (params_.updateStrategy) {
+            _updateAssetPriceStrategy(asset_, params_.strategy, params_.useMovingAverage);
+        }
+
+        if (params_.updateMovingAverage) {
+            _updateAssetMovingAverage(
+                asset_,
+                params_.storeMovingAverage,
+                params_.movingAverageDuration,
+                params_.lastObservationTime,
+                params_.observations
+            );
+        }
+
+        // Validate final configuration atomically
+        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
+
+        // Emit events (based on which updates occurred)
+        if (params_.updateFeeds) emit AssetPriceFeedsUpdated(asset_);
+        if (params_.updateStrategy) emit AssetPriceStrategyUpdated(asset_);
+        if (params_.updateMovingAverage) emit AssetMovingAverageUpdated(asset_);
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
