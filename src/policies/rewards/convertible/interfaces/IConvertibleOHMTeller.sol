@@ -27,7 +27,7 @@ interface IConvertibleOHMTeller {
     );
 
     /// @notice Emitted when the minting cap is updated.
-    event MintCapUpdated(uint256 newCap, uint256 oldCap);
+    event MintCapUpdated(uint256 newCap);
 
     /// @notice Thrown when invalid parameters are provided.
     /// @param index The index of the invalid parameter.

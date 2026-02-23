@@ -1072,7 +1072,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // 2. Test: increase the minting cap
         uint256 mintCap = _DEFAULT_MINT_CAP;
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(mintCap, 0);
+        emit IConvertibleOHMTeller.MintCapUpdated(mintCap);
         teller.setMintCap(mintCap);
 
         // Verify
@@ -1092,7 +1092,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // 2. Test: decrease the minting cap
         uint256 newCap = 500e9;
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(newCap, initialCap);
+        emit IConvertibleOHMTeller.MintCapUpdated(newCap);
         teller.setMintCap(newCap);
 
         // Verify
@@ -1106,11 +1106,46 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
 
         // 2. Test: set the same minting cap again (should emit the event, but not change the approval)
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(cap, cap);
+        emit IConvertibleOHMTeller.MintCapUpdated(cap);
         teller.setMintCap(cap);
 
         // Verify
         assertEq(teller.remainingMintApproval(), cap, "The approval should remain unchanged");
+    }
+
+    function test_setMintCap_emitsActualPostApproval() external {
+        // 1. Preparation: set an initial cap and exercise some tokens to reduce the approval
+        uint256 initialCap = _DEFAULT_MINT_CAP;
+        teller.setMintCap(initialCap);
+
+        // Deploy a convertible token and mint some to user0
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        uint256 mintAmount = 100e9;
+        vm.prank(rewardDistributor);
+        teller.create(address(token), user0, mintAmount);
+
+        // Exercise tokens to consume some mint approval (mintOhm reduces mintApproval)
+        vm.warp(eligibleTimestamp);
+        uint256 cost = _exerciseCost(token, mintAmount);
+        vm.startPrank(user0);
+        token.approve(address(teller), mintAmount);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), mintAmount);
+        vm.stopPrank();
+
+        // Now the MINTR approval is reduced by `mintAmount`
+        // currentApproval = initialCap - mintAmount = 900e9
+        uint256 approvalAfterExercise = teller.remainingMintApproval();
+        assertEq(approvalAfterExercise, initialCap - mintAmount, "Approval should be reduced");
+
+        // 2. Test: set a new cap and verify the event emits the actual post-approval from MINTR
+        uint256 newCap = 2000e9;
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MintCapUpdated(newCap);
+        teller.setMintCap(newCap);
+
+        // Verify the actual approval matches
+        assertEq(teller.remainingMintApproval(), newCap, "Post-approval should match new cap");
     }
 
     function test_setMintCap_revertsIfNotAdminOrTellerAdmin() external {
@@ -1165,7 +1200,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // 2. Test: enable with the initial minting cap
         uint256 initialCap = _DEFAULT_MINT_CAP;
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(initialCap, 0);
+        emit IConvertibleOHMTeller.MintCapUpdated(initialCap);
         newTeller.enable(abi.encode(initialCap));
 
         // Verify

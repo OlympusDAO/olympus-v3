@@ -324,7 +324,7 @@ contract ConvertibleOHMTeller is
                 MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
             }
         }
-        emit MintCapUpdated(cap_, currentApproval);
+        emit MintCapUpdated(MINTR.mintApproval(address(this)));
     }
 
     function _getOrDeployToken(
