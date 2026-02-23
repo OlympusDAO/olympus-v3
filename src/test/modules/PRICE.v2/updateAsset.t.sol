@@ -20,7 +20,6 @@ import {FullMath} from "src/libraries/FullMath.sol";
 // Bophades
 import {Module} from "src/Kernel.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {toSubKeycode, fromSubKeycode} from "src/Submodules.sol";
 
 contract PriceV2UpdateAssetTest is PriceV2BaseTest {
@@ -192,7 +191,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         return
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0)
             );
     }
@@ -202,7 +201,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         return
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
                 abi.encode(0)
             );
     }
@@ -1022,7 +1021,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
     {
         IPRICEv2.Component memory invalidStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.NONEXISTENT"), // Invalid submodule
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
@@ -1058,7 +1057,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
     {
         IPRICEv2.Component memory revertStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getMedianPrice.selector,
+            ISimplePriceFeedStrategy.getMedianPrice.selector,
             abi.encode("") // Missing params
         );
 
