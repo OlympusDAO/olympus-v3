@@ -92,6 +92,7 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
 
         // Deploy the new convertible token via the teller
         token = TELLER.deploy(p.quoteToken, p.eligible, p.expiry, p.strikePrice);
+        if (token == address(0)) revert RewardDistributor_InvalidToken();
 
         // Store the convertible token for this epoch
         epochConvertibleTokens[epochEndDate_] = token;

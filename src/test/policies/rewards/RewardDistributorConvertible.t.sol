@@ -14,8 +14,10 @@ import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleO
 import {RewardDistributorConvertible} from "src/policies/rewards/RewardDistributorConvertible.sol";
 import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
 import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
+import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockConvertibleOHMTellerZeroDeploy} from "src/test/mocks/MockConvertibleOHMTellerZeroDeploy.sol";
 
 contract RewardDistributorConvertibleTestBase is Test {
     // Contracts
@@ -575,6 +577,31 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             bytes32(0),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
+    }
+
+    function test_endEpoch_revertsIfTellerReturnsZeroAddress() external {
+        // Deploy a separate distributor backed by a mock teller that returns address(0)
+        MockConvertibleOHMTellerZeroDeploy mockTeller = new MockConvertibleOHMTellerZeroDeploy();
+        RewardDistributorConvertible mockDistributor = new RewardDistributorConvertible(
+            address(kernel),
+            startTimestamp - 1,
+            address(mockTeller)
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(mockDistributor));
+        // admin already has ROLE_REWARDS_MANAGER from setUp
+        mockDistributor.enable("");
+
+        uint40 epochEndDate = _firstEpochEndDate();
+        bytes memory params = _encodeParams(
+            address(usds),
+            eligibleTimestamp,
+            expiryTimestamp,
+            STRIKE_PRICE
+        );
+
+        vm.prank(admin);
+        vm.expectRevert(IRewardDistributorConvertible.RewardDistributor_InvalidToken.selector);
+        mockDistributor.endEpoch(epochEndDate, bytes32(uint256(1)), params);
     }
 
     function test_endEpoch_revertsIfDisabled() external {
