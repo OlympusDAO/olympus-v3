@@ -8,10 +8,14 @@ pragma solidity >=0.8.30;
 // - Integrated into the Olympus Kernel-Module-Policy framework with role-based access control.
 // - Simplified to OHM-only call options: removed payoutToken, receiver, and call/put parameters.
 // - Minting via MINTR module on exercise (no pre-deposited collateral); quote tokens sent to TRSRY.
-// - Only the deploying RewardDistributor (creator) can mint tokens via create().
+// - Only the deploying RewardDistributor (creator) can mint tokens via create();
+//   token hash includes creator to scope tokens per deployer.
 // - Removed reclaim(), protocol fees, and collateral tracking.
-// - Added mint cap management via MINTR approval.
+// - Added mint cap management via MINTR approval; PolicyEnabler lifecycle for enable/disable.
 // - Token naming uses decimal notation (e.g., "15.50") with "convOHM-" prefix.
+// - burnFrom deducts allowance (original burn did not).
+// - Solidity >=0.8.30; OZ SafeERC20/ReentrancyGuardTransient replaces solmate equivalents.
+// - CloneERC20 split into CloneERC20 (reused existing) + CloneERC20Permit.
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
