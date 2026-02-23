@@ -353,10 +353,10 @@ contract OracleProposalTest is ProposalTest {
         address chainlinkUsdsUsd = 0xfF30586cD0F29eD462364C7e81375FC0C71219b1;
         vm.label(chainlinkUsdsUsd, "chainlinkUsdsUsd");
 
-        // Create strategy component: getFirstNonZeroPrice
+        // Create strategy component: empty (single price feed)
         IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            selector: SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            target: toSubKeycode(""),
+            selector: bytes4(0),
             params: abi.encode("")
         });
 
@@ -395,10 +395,10 @@ contract OracleProposalTest is ProposalTest {
     function _configureSusds(address priceConfig_, address susds_) internal {
         console2.log("Configuring sUSDS asset");
 
-        // Create strategy component: getFirstNonZeroPrice
+        // Create strategy component: empty (single price feed)
         IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            selector: SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            target: toSubKeycode(""),
+            selector: bytes4(0),
             params: abi.encode("")
         });
 
@@ -436,10 +436,10 @@ contract OracleProposalTest is ProposalTest {
         IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(0x0858e2B0F9D75f7300B38D64482aC2C8DF06a755);
         vm.label(address(ohmSusdsPool), "ohmSusdsPool");
 
-        // Create strategy component: getFirstNonZeroPrice
+        // Create strategy component: empty (single price feed)
         IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            selector: SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+            target: toSubKeycode(""),
+            selector: bytes4(0),
             params: abi.encode("")
         });
 
