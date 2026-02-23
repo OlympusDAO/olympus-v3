@@ -256,8 +256,12 @@ abstract contract PriceV2BaseTest is Test {
             /// forge-lint: disable-next-line(unsafe-typecast)
             obs[i - 1] = uint256(fetchedPrice);
 
-            /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
+            /// Calculate a random percentage change from -10% to +10% using the nonce and observation number
+            /// change ∈ [-1000, +1000] where CHANGE_DECIMALS = 1e4, giving ±10%
+            int256 range = 1000;
+            change =
+                (int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % (2 * range + 1)) -
+                range;
 
             /// Calculate the new ohmEth price
             fetchedPrice = (fetchedPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
