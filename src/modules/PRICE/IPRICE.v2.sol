@@ -133,6 +133,7 @@ interface IPRICEv2 {
     );
 
     /// @notice                 The number of provided price feeds is insufficient
+    ///
     /// @param asset_           The address of the asset
     /// @param feedCount_       The number of price feeds provided
     /// @param feedCountRequired_    The minimum number of price feeds required
@@ -210,25 +211,67 @@ interface IPRICEv2 {
 
     /// @notice         Struct to hold the configuration for calling a function on a contract
     /// @dev            Used to configure strategy and fees in the `Asset` struct
+    ///
+    /// @param target   SubKeycode for the target submodule
+    /// @param selector The selector of the contract's function
+    /// @param params   The parameters to be passed to the function
     struct Component {
-        SubKeycode target; // submodule keycode
-        bytes4 selector; // the function selector of the contract's get() function
-        bytes params; // the parameters to be passed to the contract's get() function
+        SubKeycode target;
+        bytes4 selector;
+        bytes params;
     }
 
-    /// @notice         Struct to hold the configuration for an asset
+    /// @notice                         Struct to hold the configuration for an asset
+    ///
+    /// @param approved                 Whether the asset is approved for use in the system
+    /// @param storeMovingAverage       Whether the moving average should be stored on heartbeats
+    /// @param useMovingAverage         Whether the moving average should be provided as an argument to the strategy
+    /// @param movingAverageDuration    The duration of the moving average
+    /// @param nextObsIndex             The index of obs at which the next observation will be stored
+    /// @param numObservations          The number of observations stored
+    /// @param lastObservationTime      The last time the moving average was updated
+    /// @param cumulativeObs            The cumulative sum of observations
+    /// @param obs                      The array of stored observations
+    /// @param strategy                 Aggregates feed data into a single price result
+    /// @param feeds                    Price feeds stored in order of priority (primary feed in slot 0)
     struct Asset {
-        bool approved; // whether the asset is approved for use in the system
-        bool storeMovingAverage; // whether the moving average should be stored on heartbeats
-        bool useMovingAverage; // whether the moving average should be provided as an argument to the strategy
-        uint32 movingAverageDuration; // the duration of the moving average
-        uint16 nextObsIndex; // the index of obs at which the next observation will be stored
+        bool approved;
+        bool storeMovingAverage;
+        bool useMovingAverage;
+        uint32 movingAverageDuration;
+        uint16 nextObsIndex;
         uint16 numObservations;
-        uint48 lastObservationTime; // the last time the moving average was updated
+        uint48 lastObservationTime;
         uint256 cumulativeObs;
         uint256[] obs;
-        bytes strategy; // aggregates feed data into a single price result
-        bytes feeds; // price feeds are stored in order of priority, e.g. a primary feed should be stored in the zero slot
+        bytes strategy;
+        bytes feeds;
+    }
+
+    /// @notice                         Parameters for updating an asset configuration
+    /// @dev                            Only updates components flagged in the struct
+    ///
+    /// @param updateFeeds              Whether to update price feeds
+    /// @param updateStrategy           Whether to update strategy
+    /// @param updateMovingAverage      Whether to update moving average configuration
+    /// @param feeds                    New price feeds (only read if updateFeeds=true)
+    /// @param strategy                 New strategy (only read if updateStrategy=true)
+    /// @param useMovingAverage         New useMovingAverage flag (only read if updateStrategy=true)
+    /// @param storeMovingAverage       New storeMovingAverage flag (only read if updateMovingAverage=true)
+    /// @param movingAverageDuration    New MA duration (only read if updateMovingAverage=true)
+    /// @param lastObservationTime      New last observation time (only read if updateMovingAverage=true)
+    /// @param observations             New observations (only read if updateMovingAverage=true)
+    struct UpdateAssetParams {
+        bool updateFeeds;
+        bool updateStrategy;
+        bool updateMovingAverage;
+        Component[] feeds;
+        Component strategy;
+        bool useMovingAverage;
+        bool storeMovingAverage;
+        uint32 movingAverageDuration;
+        uint48 lastObservationTime;
+        uint256[] observations;
     }
 
     /// @notice         Variant of price to retrieve
@@ -388,32 +431,6 @@ interface IPRICEv2 {
         uint48 lastObservationTime_,
         uint256[] memory observations_
     ) external;
-
-    /// @notice                     Parameters for updating an asset configuration
-    /// @dev                        Only updates components flagged in the struct
-    ///
-    /// @param updateFeeds              Whether to update price feeds
-    /// @param updateStrategy           Whether to update strategy
-    /// @param updateMovingAverage      Whether to update moving average configuration
-    /// @param feeds                    New price feeds (only read if updateFeeds=true)
-    /// @param strategy                 New strategy (only read if updateStrategy=true)
-    /// @param useMovingAverage         New useMovingAverage flag (only read if updateStrategy=true)
-    /// @param storeMovingAverage       New storeMovingAverage flag (only read if updateMovingAverage=true)
-    /// @param movingAverageDuration    New MA duration (only read if updateMovingAverage=true)
-    /// @param lastObservationTime      New last observation time (only read if updateMovingAverage=true)
-    /// @param observations             New observations (only read if updateMovingAverage=true)
-    struct UpdateAssetParams {
-        bool updateFeeds;
-        bool updateStrategy;
-        bool updateMovingAverage;
-        Component[] feeds;
-        Component strategy;
-        bool useMovingAverage;
-        bool storeMovingAverage;
-        uint32 movingAverageDuration;
-        uint48 lastObservationTime;
-        uint256[] observations;
-    }
 
     /// @notice         Updates an asset configuration atomically
     /// @dev            Only updates components flagged in params_
