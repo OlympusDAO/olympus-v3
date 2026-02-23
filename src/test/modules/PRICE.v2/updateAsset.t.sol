@@ -65,6 +65,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             "Strategy target"
         );
         assertEq(strategy.selector, oldStrategy.selector, "Strategy selector");
+        assertEq(strategy.params, oldStrategy.params, "Strategy params");
         assertEq(newAsset.useMovingAverage, oldAsset.useMovingAverage, "useMovingAverage");
     }
 
@@ -91,6 +92,12 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, expectedFeeds.length, "feed count");
         for (uint256 i = 0; i < expectedFeeds.length; i++) {
+            assertEq(
+                fromSubKeycode(feeds[i].target),
+                fromSubKeycode(expectedFeeds[i].target),
+                "Feed target not updated"
+            );
+            assertEq(feeds[i].selector, expectedFeeds[i].selector, "Feed selector not updated");
             assertEq(feeds[i].params, expectedFeeds[i].params, "Feed params not updated");
         }
     }
@@ -104,6 +111,12 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         IPRICEv2.Component[] memory newFeeds = abi.decode(newAsset.feeds, (IPRICEv2.Component[]));
         assertEq(newFeeds.length, oldFeeds.length, "Feed count should not change");
         for (uint256 i = 0; i < oldFeeds.length; i++) {
+            assertEq(
+                fromSubKeycode(newFeeds[i].target),
+                fromSubKeycode(oldFeeds[i].target),
+                "Feed target should not change"
+            );
+            assertEq(newFeeds[i].selector, oldFeeds[i].selector, "Feed selector should not change");
             assertEq(newFeeds[i].params, oldFeeds[i].params, "Feed params should not change");
         }
     }
@@ -121,6 +134,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             "Strategy target not updated"
         );
         assertEq(strategy.selector, expectedStrategy.selector, "Strategy selector not updated");
+        assertEq(strategy.params, expectedStrategy.params, "Strategy params not updated");
         assertEq(asset.useMovingAverage, useMovingAverage, "useMovingAverage");
     }
 
