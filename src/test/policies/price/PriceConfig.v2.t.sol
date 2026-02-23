@@ -881,10 +881,11 @@ contract PriceConfigv2Test is Test {
         // Add a new asset to PRICEv2 that doesn't have a moving average
         MockERC20 fohm = new MockERC20("Fake OHM", "FOHM", 9);
 
+        // Use empty strategy since with only 1 feed, strategy is not supported
         IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-            abi.encode(0)
+            SubKeycode.wrap(bytes20(0)),
+            bytes4(0),
+            bytes("")
         );
 
         IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](1);
