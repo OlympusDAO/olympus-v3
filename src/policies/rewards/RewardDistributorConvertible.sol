@@ -83,10 +83,9 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         );
 
         // Validate that the token expires after the end of the epoch (users need time to claim their tokens)
-        // Note: The teller rounds expiry_ to the nearest day at 0000 UTC, since
-        // convertible tokens are only unique to a day, not a specific timestamp
-        if (uint48(p.expiry / 1 days) * 1 days <= epochEndDate_)
-            revert RewardDistributor_InvalidToken();
+        // Note: epochEndDate_ is always 23:59:59 UTC (validated by _setMerkleRoot), so
+        // p.expiry > epochEndDate_ guarantees expiry falls on a strictly later day
+        if (p.expiry <= epochEndDate_) revert RewardDistributor_InvalidToken();
 
         // Set and validate the merkle root
         _setMerkleRoot(epochEndDate_, merkleRoot_);

@@ -306,17 +306,9 @@ contract ConvertibleOHMTeller is
         uint48 eligible_,
         uint48 expiry_,
         uint256 strikePrice_
-    ) public view override returns (address) {
+    ) external view override returns (address) {
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
-
-        // Calculate a hash from the normalized inputs
-        bytes32 tokenHash = _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
-        address token = tokens[tokenHash];
-
-        // Revert if the convertible token does not exist
-        if (token == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
-
-        return token;
+        return _getToken(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
@@ -405,9 +397,9 @@ contract ConvertibleOHMTeller is
         ) = ConvertibleOHMToken(token_).parameters();
 
         // Retrieve the internally stored convertible token with this configuration
-        // Reverts internally if token doesn't exist
+        // Reverts internally if token doesn't exist (timestamps are already truncated)
         ConvertibleOHMToken token = ConvertibleOHMToken(
-            getToken(quoteToken, creator, eligible, expiry, strikePrice)
+            _getToken(quoteToken, creator, eligible, expiry, strikePrice)
         );
 
         // Revert if provided token address does not match stored token address
@@ -474,6 +466,19 @@ contract ConvertibleOHMTeller is
         return decimals - int8(tokenDecimals_);
     }
 
+    function _getToken(
+        address quoteToken_,
+        address creator_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) internal view returns (address) {
+        bytes32 tokenHash = _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
+        address token = tokens[tokenHash];
+        if (token == address(0)) revert Teller_TokenDoesNotExist(tokenHash);
+        return token;
+    }
+
     function _getTokenHash(
         address quoteToken_,
         address creator_,
@@ -484,17 +489,19 @@ contract ConvertibleOHMTeller is
         return keccak256(abi.encodePacked(quoteToken_, creator_, eligible_, expiry_, strikePrice_));
     }
 
-    // Truncates the timestamp to the nearest day at 0000 UTC (in seconds).
+    /// @notice Truncates a timestamp to 00:00:00 UTC of its day.
+    /// @dev This produces canonical timestamps for token hash computation.
+    ///      Tokens are identified by day, not by exact second, so all timestamps
+    ///      within the same UTC day are mapped to the same hash.
     function _truncateToUTCDay(uint48 timestamp) internal pure returns (uint48) {
         return uint48(timestamp / 1 days) * 1 days;
     }
 
+    /// @dev Convenience wrapper that truncates both eligible and expiry to 00:00:00 UTC.
     function _truncateBothToUTCDay(
         uint48 eligible_,
         uint48 expiry_
     ) private pure returns (uint48, uint48) {
-        // Eligible and Expiry are rounded to the nearest day at 0000 UTC (in seconds) since
-        // convertible tokens are only unique to a day, not a specific timestamp.
         return (_truncateToUTCDay(eligible_), _truncateToUTCDay(expiry_));
     }
 

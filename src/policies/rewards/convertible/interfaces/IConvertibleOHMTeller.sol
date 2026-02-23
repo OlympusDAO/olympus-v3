@@ -63,11 +63,17 @@ interface IConvertibleOHMTeller {
     /// @notice Deploys a new convertible token and returns its address.
     /// @dev Only callable by addresses with the reward distributor role.
     ///      If a convertible token already exists for the parameters, it returns that address.
+    ///
+    ///      Both `eligible_` and `expiry_` are truncated to 00:00:00 UTC of their respective day.
+    ///      This ensures a canonical token hash (the same UTC day corresponds to the same token),
+    ///      i.e. no more than one token per day for identical parameters.
+    ///      Also, if `eligible_` is 0 the contract substitutes `block.timestamp`, which is never day-aligned.
+    ///
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC). Pass 0 to use the current day.
     /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC).
     /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
     /// @return token The address of the convertible token being created.
     function deploy(
@@ -118,12 +124,14 @@ interface IConvertibleOHMTeller {
 
     /// @notice Returns the address of a convertible token corresponding to specified parameters,
     ///         reverts if no token exists.
+    /// @dev Timestamps are truncated to 00:00:00 UTC before lookup, so any timestamp within the
+    ///      same UTC day will resolve to the same token.
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
     /// @param creator_ The address of the contract that deployed the convertible token.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC).
     /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC).
     /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
     /// @return token The address of the convertible token.
     function getToken(
@@ -135,12 +143,14 @@ interface IConvertibleOHMTeller {
     ) external view returns (address token);
 
     /// @notice Returns the hash ID of a convertible token corresponding to specified parameters.
+    /// @dev Timestamps are truncated to 00:00:00 UTC before hashing, so any timestamp within the
+    ///      same UTC day will produce the same hash.
     /// @param quoteToken_ The address token used that the purchaser will need to provide on exercise.
     /// @param creator_ The address of the contract that deployed the convertible token.
     /// @param eligible_ The timestamp at which the convertible token can first be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC).
     /// @param expiry_ The timestamp at which the convertible token can no longer be exercised
-    ///        (rounded to the nearest day in UTC).
+    ///        (truncated to 00:00:00 UTC).
     /// @param strikePrice_ The strike price of the convertible token (in units of the `quoteToken_` per OHM).
     /// @return hash The hash ID of the convertible token.
     function getTokenHash(
