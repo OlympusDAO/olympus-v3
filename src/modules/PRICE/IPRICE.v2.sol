@@ -400,38 +400,6 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external;
 
-    /// @notice             Updates the price feeds for an asset
-    ///
-    /// @param asset_       The address of the asset
-    /// @param feeds_       The new price feeds to be used to calculate the price
-    function updateAssetPriceFeeds(address asset_, Component[] memory feeds_) external;
-
-    /// @notice                     Updates the price aggregation strategy for an asset
-    ///
-    /// @param asset_               The address of the asset
-    /// @param strategy_            The new strategy to be used to aggregate price feeds
-    /// @param useMovingAverage_    Whether the moving average should be used as an argument to the strategy
-    function updateAssetPriceStrategy(
-        address asset_,
-        Component memory strategy_,
-        bool useMovingAverage_
-    ) external;
-
-    /// @notice                         Updates the moving average configuration for an asset
-    ///
-    /// @param asset_                   The address of the asset
-    /// @param storeMovingAverage_      Whether the moving average should be stored periodically
-    /// @param movingAverageDuration_   The duration of the moving average in seconds
-    /// @param lastObservationTime_     The timestamp of the last observation
-    /// @param observations_            The observations to be used to initialize the moving average
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external;
-
     /// @notice         Updates an asset configuration atomically
     /// @dev            Only updates components flagged in params_
     /// @dev            Validates entire configuration atomically after updates

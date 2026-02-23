@@ -74,7 +74,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](6);
         // PRICE Permissions
         requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
         requests[1] = Permissions({
@@ -83,25 +83,17 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         });
         requests[2] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceFeeds.selector
+            funcSelector: PRICE.updateAsset.selector
         });
         requests[3] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceStrategy.selector
+            funcSelector: PRICE.installSubmodule.selector
         });
         requests[4] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetMovingAverage.selector
-        });
-        requests[5] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.installSubmodule.selector
-        });
-        requests[6] = Permissions({
-            keycode: PRICE_KEYCODE,
             funcSelector: PRICE.upgradeSubmodule.selector
         });
-        requests[7] = Permissions({
+        requests[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
         });
@@ -157,37 +149,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
-    function updateAssetPriceFeeds(
+    function updateAsset(
         address asset_,
-        IPRICEv2.Component[] memory feeds_
+        IPRICEv2.UpdateAssetParams memory params_
     ) external override onlyEnabled onlyPriceOrAdminRole {
-        PRICE.updateAssetPriceFeeds(asset_, feeds_);
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function updateAssetPriceStrategy(
-        address asset_,
-        IPRICEv2.Component memory strategy_,
-        bool useMovingAverage_
-    ) external override onlyEnabled onlyPriceOrAdminRole {
-        PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external override onlyEnabled onlyPriceOrAdminRole {
-        PRICE.updateAssetMovingAverage(
-            asset_,
-            storeMovingAverage_,
-            movingAverageDuration_,
-            lastObservationTime_,
-            observations_
-        );
+        PRICE.updateAsset(asset_, params_);
     }
 
     // ========== SUBMODULE MANAGEMENT ========== //
