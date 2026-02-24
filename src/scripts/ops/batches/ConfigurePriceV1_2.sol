@@ -352,8 +352,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Read strict mode and observation window from args file
         bool ohmStrictMode = _readBatchArgUint256("configurePriceV1_2", "ohmStrictMode") == 1;
 
+        // Load initial price from args file (18 decimals, represents USD price)
+        uint256 ohmInitialPrice = _readBatchArgUint256("configurePriceV1_2", "ohmInitialPrice");
+
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
+        console2.log("OHM initial price:", ohmInitialPrice);
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
@@ -387,10 +391,30 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             )
         );
 
-        // Add asset via PriceConfig
-        _addAsset(priceConfig_, _ohm, strategy, feeds);
+        // Create pre-populated observations array (21 observations for 7-day moving average)
+        // Observation frequency is 8 hours, so 7 days = 21 observations
+        uint256[] memory ohmObservations = new uint256[](21);
+        for (uint256 i = 0; i < 21; i++) {
+            ohmObservations[i] = ohmInitialPrice;
+        }
 
-        console2.log("OHM asset configured");
+        // Set last observation time to current time
+        uint48 ohmLastObservationTime = uint48(block.timestamp);
+
+        // Add asset via PriceConfig with moving average configuration
+        _addAssetWithMA(
+            priceConfig_,
+            _ohm,
+            true, // storeMovingAverage
+            false, // useMovingAverage
+            604800, // movingAverageDuration (7 days in seconds)
+            ohmLastObservationTime,
+            ohmObservations,
+            strategy,
+            feeds
+        );
+
+        console2.log("OHM asset configured with 7-day moving average");
     }
 
     /// @notice Add an asset to the PRICE module via PriceConfig
@@ -414,6 +438,43 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 uint32(0), // movingAverageDuration
                 uint48(0), // lastObservationTime
                 new uint256[](0), // observations
+                strategy_,
+                feeds_
+            )
+        );
+    }
+
+    /// @notice Add an asset to the PRICE module with moving average configuration
+    /// @param priceConfig_ Address of the PriceConfig v2 policy
+    /// @param asset_ Address of the asset to add
+    /// @param storeMovingAverage_ Whether to store moving average observations
+    /// @param useMovingAverage_ Whether to use moving average in price strategy
+    /// @param movingAverageDuration_ Duration of the moving average window in seconds
+    /// @param lastObservationTime_ Timestamp of the last observation
+    /// @param observations_ Array of pre-populated observations
+    /// @param strategy_ Strategy component
+    /// @param feeds_ Array of feed components
+    function _addAssetWithMA(
+        address priceConfig_,
+        address asset_,
+        bool storeMovingAverage_,
+        bool useMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_,
+        IPRICEv2.Component memory strategy_,
+        IPRICEv2.Component[] memory feeds_
+    ) internal {
+        addToBatch(
+            priceConfig_,
+            abi.encodeWithSelector(
+                PriceConfigv2.addAssetPrice.selector,
+                asset_,
+                storeMovingAverage_,
+                useMovingAverage_,
+                movingAverageDuration_,
+                lastObservationTime_,
+                observations_,
                 strategy_,
                 feeds_
             )

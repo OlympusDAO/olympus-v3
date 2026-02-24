@@ -183,8 +183,8 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(ohmUsdParams)
         );
 
-        uint256[] memory observations = new uint256[](90); // 30 days / 8 hours = 90 observations
-        for (uint256 i = 0; i < 90; i++) {
+        uint256[] memory observations = new uint256[](21); // 7 days / 8 hours = 21 observations
+        for (uint256 i = 0; i < 21; i++) {
             observations[i] = OHM_USD_PRICE;
         }
 
@@ -192,7 +192,7 @@ contract OlympusPricev1_2ForkTest is Test {
             address(OHM),
             true, // storeMovingAverage
             false, // useMovingAverage
-            uint32(30 days), // movingAverageDuration
+            uint32(7 days), // movingAverageDuration
             uint48(block.timestamp), // lastObservationTime
             observations,
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // strategy
