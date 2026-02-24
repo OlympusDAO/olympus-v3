@@ -56,6 +56,12 @@ contract OlympusPricev1_2ForkTest is Test {
     bytes32 internal constant ETH_USD_FEED_ID =
         0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
 
+    // Price validation bounds (18 decimals)
+    uint256 internal constant ETH_MIN_PRICE = 2900e18;
+    uint256 internal constant ETH_MAX_PRICE = 3000e18;
+    uint256 internal constant OHM_MIN_PRICE = 20e18;
+    uint256 internal constant OHM_MAX_PRICE = 21e18;
+
     // System contracts
     Kernel public kernel;
     PRICEv1 public oldPrice;
@@ -233,6 +239,28 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         vm.stopPrank();
+    }
+
+    /// @notice Validates that a price is within a reasonable range
+    function _assertPriceInRange(
+        uint256 price_,
+        uint256 minPrice_,
+        uint256 maxPrice_,
+        string memory assetName_
+    ) internal pure {
+        assertGe(price_, minPrice_, string.concat(assetName_, " price below minimum"));
+        assertLe(price_, maxPrice_, string.concat(assetName_, " price above maximum"));
+    }
+
+    /// @notice Validates that configured prices are within reasonable bounds
+    function test_priceValidation_assetPricesAreSane() public view {
+        // Validate WETH price (uses real Pyth feed)
+        uint256 wethPrice = price.getPrice(WETH);
+        _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "WETH");
+
+        // Validate OHM price (uses mock feed set to 20e18 in setUp)
+        uint256 ohmPrice = price.getPrice(OHM);
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 
     function _warpToNextHeartbeat() internal {

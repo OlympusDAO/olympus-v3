@@ -39,6 +39,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @notice Configuration parameters (loaded from args)
     uint32 internal _ohmObservationWindow;
 
+    // ========== PRICE VALIDATION CONSTANTS ========== //
+
+    // TODO adjust price bounds at time of deployment
+    /// @notice Price validation bounds (18 decimals)
+    /// @dev    These are sanity bounds to catch misconfigured feeds
+    uint256 internal constant USDS_MIN_PRICE = 0.99e18;
+    uint256 internal constant USDS_MAX_PRICE = 1.01e18;
+    uint256 internal constant ETH_MIN_PRICE = 1500e18;
+    uint256 internal constant ETH_MAX_PRICE = 2000e18;
+    uint256 internal constant OHM_MIN_PRICE = 17e18;
+    uint256 internal constant OHM_MAX_PRICE = 22e18;
+
     // ========== CONFIGURATION FUNCTIONS ========== //
 
     /// @notice Configure PRICE v1.2 module with all assets
@@ -456,6 +468,58 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         bytes memory params_
     ) internal pure returns (IPRICEv2.Component memory feed_) {
         feed_ = IPRICEv2.Component({target: target_, selector: selector_, params: params_});
+    }
+
+    // ========== POST-BATCH VALIDATION ========== //
+
+    /// @notice Validates that configured prices are within reasonable bounds
+    /// @dev    Call this function after the batch has been executed to verify prices
+    /// @param priceModule_ Address of the PRICE v1.2 module
+    function validatePricesAreSane(address priceModule_) external {
+        console2.log("\n=== Validating Asset Prices ===");
+
+        IPRICEv2 price = IPRICEv2(priceModule_);
+
+        // Load asset addresses from env
+        address usds = _envAddressNotZero("external.tokens.USDS");
+        address weth = _envAddressNotZero("external.tokens.wETH");
+        address ohm = _envAddressNotZero("olympus.legacy.OHM");
+
+        // Validate USDS price
+        uint256 usdsPrice = price.getPrice(usds);
+        console2.log("USDS price:", usdsPrice);
+        _assertPriceInRange(usdsPrice, USDS_MIN_PRICE, USDS_MAX_PRICE, "USDS");
+
+        // Validate wETH price
+        uint256 wethPrice = price.getPrice(weth);
+        console2.log("wETH price:", wethPrice);
+        _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "wETH");
+
+        // Validate OHM price
+        uint256 ohmPrice = price.getPrice(ohm);
+        console2.log("OHM price:", ohmPrice);
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+
+        console2.log("All prices are within reasonable bounds");
+    }
+
+    /// @notice Asserts that a price is within a reasonable range
+    /// @param price_ The price to validate
+    /// @param minPrice_ Minimum acceptable price
+    /// @param maxPrice_ Maximum acceptable price
+    /// @param assetName_ Name of the asset (for error message)
+    function _assertPriceInRange(
+        uint256 price_,
+        uint256 minPrice_,
+        uint256 maxPrice_,
+        string memory assetName_
+    ) internal pure {
+        if (price_ < minPrice_) {
+            revert(string.concat(assetName_, " price below minimum"));
+        }
+        if (price_ > maxPrice_) {
+            revert(string.concat(assetName_, " price above maximum"));
+        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
