@@ -543,51 +543,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         emit AssetRemoved(asset_);
     }
 
-    /// @inheritdoc IPRICEv2
-    /// @dev        Implements the following logic:
-    /// @dev        - Performs basic checks on the parameters
-    /// @dev        - Sets the price feeds using `_updateAssetPriceFeeds()`
-    /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
-    ///
-    /// @dev        Will revert if:
-    /// @dev        - `asset_` is not approved
-    /// @dev        - The caller is not permissioned
-    /// @dev        - `_updateAssetPriceFeeds()` reverts
-    /// @dev        - `_getCurrentPrice()` reverts
-    /// @dev        - The asset strategy is not compatible with the number of feeds
-    function updateAssetPriceFeeds(
-        address asset_,
-        Component[] memory feeds_
-    ) external override permissioned {
-        // Ensure asset is already added
-        Asset storage assetData = _assetData[asset_];
-        if (!assetData.approved) revert PRICE_AssetNotApproved(asset_);
-
-        // Check if the strategy and price feeds are still compatible
-        {
-            Component memory strategy = abi.decode(assetData.strategy, (Component));
-
-            if (
-                (feeds_.length + (assetData.useMovingAverage ? 1 : 0)) > 1 &&
-                fromSubKeycode(strategy.target) == bytes20(0)
-            )
-                revert PRICE_ParamsStrategyInsufficient(
-                    asset_,
-                    assetData.strategy,
-                    feeds_.length,
-                    assetData.useMovingAverage
-                );
-        }
-
-        _updateAssetPriceFeeds(asset_, feeds_);
-
-        // Validate the configuration
-        _getCurrentPrice(asset_, true);
-
-        // Emit event
-        emit AssetPriceFeedsUpdated(asset_);
-    }
-
     /// @notice         Updates the price feeds for the asset
     /// @dev            Implements the following logic:
     /// @dev            - Performs basic checks on the parameters
@@ -635,51 +590,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         _assetData[asset_].feeds = abi.encode(feeds_);
     }
 
-    /// @inheritdoc IPRICEv2
-    /// @dev        Implements the following logic:
-    /// @dev        - Performs basic checks on the parameters
-    /// @dev        - Sets the price strategy using `_updateAssetPriceStrategy()`
-    /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
-    ///
-    /// @dev        Will revert if:
-    /// @dev        - `asset_` is not approved
-    /// @dev        - The caller is not permissioned
-    /// @dev        - The moving average is used, but is not stored
-    /// @dev        - An empty strategy was specified, but the number of feeds requires a strategy
-    function updateAssetPriceStrategy(
-        address asset_,
-        Component memory strategy_,
-        bool useMovingAverage_
-    ) external override permissioned {
-        // Ensure asset is already added
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
-
-        // Validate that the moving average is stored for the asset to use in strategy
-        if (useMovingAverage_ && !_assetData[asset_].storeMovingAverage)
-            revert PRICE_ParamsStoreMovingAverageRequired(asset_);
-
-        // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
-        Component[] memory feeds = abi.decode(_assetData[asset_].feeds, (Component[]));
-        if (
-            (feeds.length + (useMovingAverage_ ? 1 : 0)) > 1 &&
-            fromSubKeycode(strategy_.target) == bytes20(0)
-        )
-            revert PRICE_ParamsStrategyInsufficient(
-                asset_,
-                abi.encode(strategy_),
-                feeds.length,
-                useMovingAverage_
-            );
-
-        _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
-
-        // Validate
-        _getCurrentPrice(asset_, true);
-
-        // Emit event
-        emit AssetPriceStrategyUpdated(asset_);
-    }
-
     /// @notice                     Updates the price strategy for the asset
     /// @dev                        Implements the following logic:
     /// @dev                        - Performs basic checks on the parameters
@@ -710,49 +620,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
         // Update whether the strategy uses a moving average (should be checked that the moving average is stored for the asset prior to sending to this function)
         _assetData[asset_].useMovingAverage = useMovingAverage_;
-    }
-
-    /// @inheritdoc                     IPRICEv2
-    /// @dev                            Implements the following logic:
-    /// @dev                            - Performs basic checks on the parameters
-    /// @dev                            - Sets the moving average data using `_updateAssetMovingAverage()`
-    ///
-    /// @dev                            Will revert if:
-    /// @dev                            - `asset_` is not approved
-    /// @dev                            - The caller is not permissioned
-    /// @dev                            - The moving average is used, but is not stored
-    ///
-    /// @param asset_                   Asset to update the moving average data for
-    /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
-    /// @param movingAverageDuration_   Duration of the moving average
-    /// @param lastObservationTime_     Timestamp of the last observation
-    /// @param observations_            Array of observations to store
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external override permissioned {
-        // Ensure asset is already added
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
-
-        // If not storing the moving average, validate that it's not being used by the strategy.
-        // If it is, then you are moving from storing a moving average to not storing a moving average.
-        // First, change the strategy to not use the moving average, then update the moving average data.
-        if (_assetData[asset_].useMovingAverage && !storeMovingAverage_)
-            revert PRICE_ParamsStoreMovingAverageRequired(asset_);
-
-        _updateAssetMovingAverage(
-            asset_,
-            storeMovingAverage_,
-            movingAverageDuration_,
-            lastObservationTime_,
-            observations_
-        );
-
-        // Emit event
-        emit AssetMovingAverageUpdated(asset_);
     }
 
     /// @notice                         Updates the moving average data for the asset
@@ -869,6 +736,100 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             // We don't track cumulativeObs when not storing the moving average, even though there is one data point in the array for caching
             asset.cumulativeObs = 0;
         }
+    }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Implements the following logic:
+    /// @dev        - Validates that at least one update flag is true
+    /// @dev        - Validates that asset is approved
+    /// @dev        - Calculates final state (before any updates)
+    /// @dev        - Validates the final configuration atomically
+    /// @dev        - Validates submodules are installed for updated components
+    /// @dev        - Calls update functions for flagged updates
+    /// @dev        - Validates final configuration with `_getCurrentPrice()`
+    /// @dev        - Emits events based on which updates occurred
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - All update flags are false (no-op)
+    /// @dev        - `asset_` is not approved
+    /// @dev        - The final configuration is invalid
+    /// @dev        - Any updated submodule is not installed
+    function updateAsset(
+        address asset_,
+        UpdateAssetParams memory params_
+    ) external override permissioned {
+        // Validate at least one update flag is true
+        if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
+            revert PRICE_NoUpdatesRequested(asset_);
+
+        // Validate asset is approved
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+
+        // Get current asset state
+        Asset storage asset = _assetData[asset_];
+
+        // Calculate final state (use new values if updating, otherwise keep existing)
+        Component[] memory finalFeeds = params_.updateFeeds
+            ? params_.feeds
+            : abi.decode(asset.feeds, (Component[]));
+        Component memory finalStrategy = params_.updateStrategy
+            ? params_.strategy
+            : abi.decode(asset.strategy, (Component));
+        bool finalUseMA = params_.updateStrategy
+            ? params_.useMovingAverage
+            : asset.useMovingAverage;
+        bool finalStoreMA = params_.updateMovingAverage
+            ? params_.storeMovingAverage
+            : asset.storeMovingAverage;
+
+        // Validate the end state (before any updates)
+
+        // MA usage requires storage
+        if (finalUseMA && !finalStoreMA) revert PRICE_ParamsStoreMovingAverageRequired(asset_);
+
+        // Calculate effective number of feeds (including the moving average if used)
+        uint256 numFeeds = finalFeeds.length + (finalUseMA ? 1 : 0);
+
+        // Strategy is required if there is more than one price feed
+        if (numFeeds > 1 && fromSubKeycode(finalStrategy.target) == bytes20(0))
+            revert PRICE_ParamsStrategyInsufficient(
+                asset_,
+                abi.encode(finalStrategy),
+                finalFeeds.length,
+                finalUseMA
+            );
+
+        // Strategy is not supported if there is only one price feed
+        if (numFeeds == 1 && fromSubKeycode(finalStrategy.target) != bytes20(0))
+            revert PRICE_ParamsStrategyNotSupported(asset_);
+
+        // Call update functions (only after validation passes)
+        if (params_.updateFeeds) {
+            _updateAssetPriceFeeds(asset_, params_.feeds);
+        }
+
+        if (params_.updateStrategy) {
+            _updateAssetPriceStrategy(asset_, params_.strategy, params_.useMovingAverage);
+        }
+
+        if (params_.updateMovingAverage) {
+            _updateAssetMovingAverage(
+                asset_,
+                params_.storeMovingAverage,
+                params_.movingAverageDuration,
+                params_.lastObservationTime,
+                params_.observations
+            );
+        }
+
+        // Validate final configuration atomically
+        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
+
+        // Emit events (based on which updates occurred)
+        if (params_.updateFeeds) emit AssetPriceFeedsUpdated(asset_);
+        if (params_.updateStrategy) emit AssetPriceStrategyUpdated(asset_);
+        if (params_.updateMovingAverage) emit AssetMovingAverageUpdated(asset_);
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

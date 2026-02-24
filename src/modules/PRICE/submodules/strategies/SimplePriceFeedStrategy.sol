@@ -30,19 +30,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
     /// @notice     Represents a 100% deviation, which is invalid
     uint256 internal constant DEVIATION_MAX = 10_000;
 
-    // ========== ERRORS ========== //
-
-    /// @notice                 Indicates that the number of prices provided to the strategy is invalid
-    ///
-    /// @param priceCount_      The number of prices provided to the strategy
-    /// @param minPriceCount_   The minimum number of prices required by the strategy
-    error SimpleStrategy_PriceCountInvalid(uint256 priceCount_, uint256 minPriceCount_);
-
-    /// @notice                 Indicates that the parameters provided to the strategy are invalid
-    ///
-    /// @param params_          The parameters provided to the strategy
-    error SimpleStrategy_ParamsInvalid(bytes params_);
-
     // ========== CONSTRUCTOR ========== //
 
     constructor(Module parent_) Submodule(parent_) {}
@@ -132,14 +119,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     // ========== STRATEGY FUNCTIONS ========== //
 
-    /// @notice         Returns the first non-zero price in the array.
-    /// @dev            Reverts if:
-    /// @dev            - The length of prices_ array is 0, which would represent a mis-configuration.
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev        Reverts if:
+    /// @dev        - The length of prices_ array is 0, which would represent a mis-configuration.
     ///
-    /// @dev            If a non-zero price cannot be found, 0 will be returned.
-    ///
-    /// @param  prices_  Array of prices
-    /// @return uint256  The resolved price
+    /// @dev        If a non-zero price cannot be found, 0 will be returned.
     function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory

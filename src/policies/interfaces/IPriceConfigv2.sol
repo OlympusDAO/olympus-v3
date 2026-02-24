@@ -53,40 +53,13 @@ interface IPriceConfigv2 {
     /// @dev    After removal, calls to PRICEv2 for the asset's price will revert
     function removeAssetPrice(address asset_) external;
 
-    /// @notice Update the price feeds for an asset on the PRICE module
-    /// @dev    See PRICEv2 for more details on the Component struct
-    ///
-    /// @param  asset_  The address of the asset to update
-    /// @param  feeds_  The array of price feeds to use for this asset
-    function updateAssetPriceFeeds(address asset_, IPRICEv2.Component[] memory feeds_) external;
-
-    /// @notice Update the price resolution strategy for an asset on the PRICE module
-    /// @dev    See PRICEv2 for more details on the Component struct
+    /// @notice                     Update an asset configuration atomically
+    /// @dev                        Only updates components flagged in params_
+    /// @dev                        See PRICEv2 for more details on the UpdateAssetParams struct
     ///
     /// @param  asset_              The address of the asset to update
-    /// @param  strategy_           The price resolution strategy to use for this asset
-    /// @param  useMovingAverage_   Whether to use the moving average as part of the price resolution strategy for this asset - moving average must be stored to use
-    function updateAssetPriceStrategy(
-        address asset_,
-        IPRICEv2.Component memory strategy_,
-        bool useMovingAverage_
-    ) external;
-
-    /// @notice Update the moving average data for an asset on the PRICE module
-    /// @dev    See PRICEv2 for more details on the caching behavior when no moving average is stored and component interface
-    ///
-    /// @param  asset_                  The address of the asset to update
-    /// @param  storeMovingAverage_     Whether to store the moving average for this asset - cannot remove moving average if being used by strategy (change strategy first)
-    /// @param  movingAverageDuration_  The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
-    /// @param  lastObservationTime_    The timestamp of the last observation
-    /// @param  observations_           The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external;
+    /// @param  params_             Update parameters with flags indicating which components to update
+    function updateAsset(address asset_, IPRICEv2.UpdateAssetParams memory params_) external;
 
     // ========================= //
     // SUBMODULE MANAGEMENT      //

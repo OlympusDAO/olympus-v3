@@ -49,18 +49,10 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.removeAsset are correct
-// [X] updateAssetPriceFeeds
+// [X] updateAsset
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
-//     [X] inputs to IPRICEv2.updateAssetPriceFeeds are correct
-// [X] updateAssetPriceStrategy
-//     [X] only when contract is enabled
-//     [X] only admin or price_admin role can call
-//     [X] inputs to IPRICEv2.updateAssetPriceStrategy are correct
-// [X] updateAssetMovingAverage
-//     [X] only when contract is enabled
-//     [X] only admin or price_admin role can call
-//     [X] inputs to IPRICEv2.updateAssetMovingAverage are correct
+//     [X] inputs to IPRICEv2.updateAsset are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
@@ -301,7 +293,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](8);
+        Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
@@ -315,25 +307,17 @@ contract PriceConfigv2Test is Test {
         });
         expectedPerms[2] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceFeeds.selector
+            funcSelector: PRICE.updateAsset.selector
         });
         expectedPerms[3] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceStrategy.selector
+            funcSelector: PRICE.installSubmodule.selector
         });
         expectedPerms[4] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetMovingAverage.selector
-        });
-        expectedPerms[5] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.installSubmodule.selector
-        });
-        expectedPerms[6] = Permissions({
-            keycode: PRICE_KEYCODE,
             funcSelector: PRICE.upgradeSubmodule.selector
         });
-        expectedPerms[7] = Permissions({
+        expectedPerms[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
         });
@@ -616,49 +600,72 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, bytes(""));
     }
 
-    function test_updateAssetPriceFeeds_notEnabled_reverts() public givenDisabled {
-        // Setup data to update feeds
-        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](0);
+    /* ========== updateAsset ========== */
+
+    function test_updateAsset_notEnabled_reverts() public givenDisabled {
+        // Prepare update params
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](0),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
 
         // Expect revert
         _expectRevertNotEnabled();
 
-        // Update feeds
+        // Call function
         vm.prank(priceManager);
-        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAsset(address(ohm), params);
     }
 
-    function test_updateAssetPriceFeeds_unauthorizedUser_reverts(address user_) public {
+    function test_updateAsset_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
         _addBaseAssets();
 
-        // Confirm that ohm current has two feeds
+        // Confirm that ohm currently has two feeds
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
-        // Setup data to update feeds
-        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
-        newFeeds[0] = feeds[0];
+        // Setup params to update feeds
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
 
-        // Try to update feeds for asset on PRICEv2 with unauthorized account, expect revert
+        // Try to update asset with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
 
-        // Call function
         vm.prank(user_);
-        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAsset(address(ohm), params);
 
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
-        // Try to update feeds for asset on PRICEv2 with priceManager account, expect success
+        // Try with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAsset(address(ohm), params);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -666,280 +673,44 @@ contract PriceConfigv2Test is Test {
         assertEq(feeds.length, 1);
     }
 
-    function test_updateAssetPriceFeeds(uint8 role_) public {
+    function test_updateAsset(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
         // Add base assets to PRICEv2
         _addBaseAssets();
 
-        // Confirm that ohm current has two feeds
+        // Confirm that ohm currently has two feeds
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2);
 
-        // Setup data to update feeds
-        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
-        newFeeds[0] = feeds[0];
+        // Setup params to update feeds
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
 
-        // Update feeds using authorized caller
+        // Update asset using authorized caller
         vm.prank(caller);
-        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAsset(address(ohm), params);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 1);
-        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(newFeeds[0].target));
-        assertEq(feeds[0].selector, newFeeds[0].selector);
-        assertEq(feeds[0].params, newFeeds[0].params);
-    }
-
-    function test_updateAssetPriceStrategy_notEnabled_reverts() public givenDisabled {
-        // Prepare arguments
-        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
-            strategy.SUBKEYCODE(),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-            abi.encode(1)
-        );
-
-        // Expect revert
-        _expectRevertNotEnabled();
-
-        // Call function
-        vm.prank(priceManager);
-        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
-    }
-
-    function test_updateAssetPriceStrategy_unauthorizedUser_reverts(address user_) public {
-        vm.assume(user_ != admin && user_ != priceManager);
-
-        // Add base assets to PRICEv2
-        _addBaseAssets();
-
-        // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
-        assertEq(strat.params, abi.encode(0));
-
-        // Setup data to update strategy
-        MockStrategy newStrategy = new MockStrategy(PRICE);
-        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
-            newStrategy.SUBKEYCODE(),
-            newStrategy.getOnePrice.selector,
-            abi.encode(1)
-        );
-        vm.prank(admin);
-        priceConfig.installSubmodule(address(newStrategy));
-
-        // Try to update strategy for asset on PRICEv2 with unauthorized account, expect revert
-        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
-        vm.expectRevert(err);
-
-        // Call function
-        vm.prank(user_);
-        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
-
-        // Confirm strategy was not updated
-        asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
-        assertEq(strat.params, abi.encode(0));
-        assertEq(asset.useMovingAverage, true);
-
-        // Try to update strategy for asset on PRICEv2 with priceManager account, expect success
-        vm.prank(priceManager);
-        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
-
-        // Confirm feeds were updated
-        asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
-        assertEq(fromSubKeycode(strat.target), fromSubKeycode(newStrat.target));
-        assertEq(strat.selector, newStrat.selector);
-        assertEq(strat.params, newStrat.params);
-        assertEq(asset.useMovingAverage, false);
-    }
-
-    function test_updateAssetPriceStrategy(uint8 role_) public {
-        role_ = uint8(bound(role_, 0, 1));
-        address caller = role_ == 0 ? admin : priceManager;
-
-        // Add base assets to PRICEv2
-        _addBaseAssets();
-
-        // Confirm that ohm currently uses the getFirstNonZeroPrice strategy
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        IPRICEv2.Component memory strat = abi.decode(asset.strategy, (IPRICEv2.Component));
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        assertEq(fromSubKeycode(strat.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(strat.selector, SimplePriceFeedStrategy.getFirstNonZeroPrice.selector);
-        assertEq(strat.params, abi.encode(0));
-        assertEq(asset.useMovingAverage, true);
-
-        // Setup data to update strategy
-        MockStrategy newStrategy = new MockStrategy(PRICE);
-        IPRICEv2.Component memory newStrat = IPRICEv2.Component(
-            newStrategy.SUBKEYCODE(),
-            newStrategy.getOnePrice.selector,
-            abi.encode(1)
-        );
-        vm.prank(admin);
-        priceConfig.installSubmodule(address(newStrategy));
-
-        // Update strategy for asset on PRICEv2 with authorized caller
-        vm.prank(caller);
-        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
-
-        // Confirm strategy was updated
-        asset = PRICE.getAssetData(address(ohm));
-        strat = abi.decode(asset.strategy, (IPRICEv2.Component));
-        assertEq(fromSubKeycode(strat.target), fromSubKeycode(newStrat.target));
-        assertEq(strat.selector, newStrat.selector);
-        assertEq(strat.params, newStrat.params);
-        assertEq(asset.useMovingAverage, false);
-    }
-
-    function test_updateAssetMovingAverage_notEnabled_reverts() public givenDisabled {
-        // Prepare arguments
-        uint256[] memory obs = new uint256[](0);
-
-        // Expect revert
-        _expectRevertNotEnabled();
-
-        // Call function
-        vm.prank(priceManager);
-        priceConfig.updateAssetMovingAverage(
-            address(ohm),
-            true,
-            uint32(5 days),
-            uint48(block.timestamp - 1),
-            obs
-        );
-    }
-
-    function test_updateAssetMovingAverage_unauthorizedUser_reverts(address user_) public {
-        vm.assume(user_ != admin && user_ != priceManager);
-
-        // Add base assets to PRICEv2
-        _addBaseAssets();
-
-        // Update ohm strategy to not use a moving average so we can remove it later
-        vm.prank(priceManager);
-        priceConfig.updateAssetPriceStrategy(
-            address(ohm),
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-                abi.encode(0)
-            ),
-            false
-        );
-
-        // Confirm that ohm currently stores a moving average
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.storeMovingAverage, true);
-
-        // Try to update moving average for asset on PRICEv2 with unauthorized account, expect revert
-        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
-        vm.expectRevert(err);
-
-        // Call function
-        vm.prank(user_);
-        priceConfig.updateAssetMovingAverage(
-            address(ohm),
-            false,
-            uint32(0),
-            uint16(0),
-            new uint256[](0)
-        );
-
-        // Confirm moving average was not updated
-        asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.storeMovingAverage, true);
-
-        // Try to update moving average for asset on PRICEv2 with priceManager account, expect success
-        vm.prank(priceManager);
-        priceConfig.updateAssetMovingAverage(
-            address(ohm),
-            false,
-            uint32(0),
-            uint16(0),
-            new uint256[](0)
-        );
-
-        // Confirm moving average was updated
-        asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.storeMovingAverage, false);
-    }
-
-    function test_updateAssetMovingAverage() public {
-        // Add a new asset to PRICEv2 that doesn't have a moving average
-        MockERC20 fohm = new MockERC20("Fake OHM", "FOHM", 9);
-
-        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-            abi.encode(0)
-        );
-
-        IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](1);
-        feedComponents[0] = IPRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(ChainlinkPriceFeeds.OneFeedParams(ohmUsdPriceFeed, uint48(24 hours)))
-        );
-
-        vm.prank(priceManager);
-        priceConfig.addAssetPrice(
-            address(fohm),
-            false,
-            false,
-            uint32(0),
-            uint48(0),
-            new uint256[](0),
-            strategyComponent,
-            feedComponents
-        );
-
-        // Confirm that fohm currently does not store a moving average and other data is zero
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(fohm));
-        assertEq(asset.storeMovingAverage, false);
-        assertEq(asset.movingAverageDuration, uint32(0));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(1)); // 1 because of cached value
-        assertEq(asset.lastObservationTime, uint48(block.timestamp)); // current timestamp because of cached value
-        assertEq(asset.cumulativeObs, uint256(0));
-        assertEq(asset.obs.length, uint256(1)); // cached value
-
-        // Update moving average with priceManager account
-        uint256[] memory obs = _makeObservations(fohm, feedComponents[0], 15);
-        vm.prank(priceManager);
-        priceConfig.updateAssetMovingAverage(
-            address(fohm),
-            true,
-            uint32(5 days),
-            uint48(block.timestamp - 1),
-            obs
-        );
-
-        // Confirm moving average was updated and other data is correct
-        asset = PRICE.getAssetData(address(fohm));
-        assertEq(asset.storeMovingAverage, true);
-        assertEq(asset.movingAverageDuration, uint32(5 days));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(15));
-        assertEq(asset.lastObservationTime, uint48(block.timestamp - 1));
-        uint256 cumObs;
-        for (uint256 i = 0; i < obs.length; i++) {
-            cumObs += obs[i];
-        }
-        assertEq(asset.cumulativeObs, cumObs);
-        assertEq(asset.obs.length, uint256(15));
+        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
+        assertEq(feeds[0].selector, params.feeds[0].selector);
+        assertEq(feeds[0].params, params.feeds[0].params);
     }
 
     /* ========== PRICEv2 Submodule Installation/Upgrade ========== */

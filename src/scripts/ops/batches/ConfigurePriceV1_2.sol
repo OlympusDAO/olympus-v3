@@ -39,6 +39,20 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @notice Configuration parameters (loaded from args)
     uint32 internal _ohmObservationWindow;
 
+    // ========== PRICE VALIDATION CONSTANTS ========== //
+
+    // TODO adjust price bounds at time of deployment
+    /// @notice Price validation bounds (18 decimals)
+    /// @dev    These are sanity bounds to catch misconfigured feeds
+    uint256 internal constant USDS_MIN_PRICE = 0.99e18;
+    uint256 internal constant USDS_MAX_PRICE = 1.01e18;
+    uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
+    uint256 internal constant SUSDS_MAX_PRICE = 1.08e18;
+    uint256 internal constant ETH_MIN_PRICE = 1500e18;
+    uint256 internal constant ETH_MAX_PRICE = 2000e18;
+    uint256 internal constant OHM_MIN_PRICE = 17e18;
+    uint256 internal constant OHM_MAX_PRICE = 22e18;
+
     // ========== CONFIGURATION FUNCTIONS ========== //
 
     /// @notice Configure PRICE v1.2 module with all assets
@@ -340,8 +354,17 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Read strict mode and observation window from args file
         bool ohmStrictMode = _readBatchArgUint256("configurePriceV1_2", "ohmStrictMode") == 1;
 
+        // Load initial price from args file (18 decimals, represents USD price)
+        uint256 ohmInitialPrice = _readBatchArgUint256("configurePriceV1_2", "ohmInitialPrice");
+
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
+        console2.log("OHM initial price:", ohmInitialPrice);
+
+        // Validate initial price before seeding moving average observations
+        if (ohmInitialPrice < OHM_MIN_PRICE || ohmInitialPrice > OHM_MAX_PRICE) {
+            revert("OHM initial price out of bounds");
+        }
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
@@ -375,10 +398,30 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             )
         );
 
-        // Add asset via PriceConfig
-        _addAsset(priceConfig_, _ohm, strategy, feeds);
+        // Create pre-populated observations array (21 observations for 7-day moving average)
+        // Observation frequency is 8 hours, so 7 days = 21 observations
+        uint256[] memory ohmObservations = new uint256[](21);
+        for (uint256 i = 0; i < 21; i++) {
+            ohmObservations[i] = ohmInitialPrice;
+        }
 
-        console2.log("OHM asset configured");
+        // Set last observation time to current time
+        uint48 ohmLastObservationTime = uint48(block.timestamp);
+
+        // Add asset via PriceConfig with moving average configuration
+        _addAssetWithMA(
+            priceConfig_,
+            _ohm,
+            true, // storeMovingAverage
+            false, // useMovingAverage
+            604800, // movingAverageDuration (7 days in seconds)
+            ohmLastObservationTime,
+            ohmObservations,
+            strategy,
+            feeds
+        );
+
+        console2.log("OHM asset configured with 7-day moving average");
     }
 
     /// @notice Add an asset to the PRICE module via PriceConfig
@@ -402,6 +445,43 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 uint32(0), // movingAverageDuration
                 uint48(0), // lastObservationTime
                 new uint256[](0), // observations
+                strategy_,
+                feeds_
+            )
+        );
+    }
+
+    /// @notice Add an asset to the PRICE module with moving average configuration
+    /// @param priceConfig_ Address of the PriceConfig v2 policy
+    /// @param asset_ Address of the asset to add
+    /// @param storeMovingAverage_ Whether to store moving average observations
+    /// @param useMovingAverage_ Whether to use moving average in price strategy
+    /// @param movingAverageDuration_ Duration of the moving average window in seconds
+    /// @param lastObservationTime_ Timestamp of the last observation
+    /// @param observations_ Array of pre-populated observations
+    /// @param strategy_ Strategy component
+    /// @param feeds_ Array of feed components
+    function _addAssetWithMA(
+        address priceConfig_,
+        address asset_,
+        bool storeMovingAverage_,
+        bool useMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_,
+        IPRICEv2.Component memory strategy_,
+        IPRICEv2.Component[] memory feeds_
+    ) internal {
+        addToBatch(
+            priceConfig_,
+            abi.encodeWithSelector(
+                PriceConfigv2.addAssetPrice.selector,
+                asset_,
+                storeMovingAverage_,
+                useMovingAverage_,
+                movingAverageDuration_,
+                lastObservationTime_,
+                observations_,
                 strategy_,
                 feeds_
             )
@@ -456,6 +536,64 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         bytes memory params_
     ) internal pure returns (IPRICEv2.Component memory feed_) {
         feed_ = IPRICEv2.Component({target: target_, selector: selector_, params: params_});
+    }
+
+    // ========== POST-BATCH VALIDATION ========== //
+
+    /// @notice Validates that configured prices are within reasonable bounds
+    /// @dev    Call this function after the batch has been executed to verify prices
+    /// @param priceModule_ Address of the PRICE v1.2 module
+    function validatePricesAreSane(address priceModule_) external view {
+        console2.log("\n=== Validating Asset Prices ===");
+
+        IPRICEv2 price = IPRICEv2(priceModule_);
+
+        // Load asset addresses from env
+        address usds = _envAddressNotZero("external.tokens.USDS");
+        address susds = _envAddressNotZero("external.tokens.sUSDS");
+        address weth = _envAddressNotZero("external.tokens.wETH");
+        address ohm = _envAddressNotZero("olympus.legacy.OHM");
+
+        // Validate USDS price
+        uint256 usdsPrice = price.getPrice(usds);
+        console2.log("USDS price:", usdsPrice);
+        _assertPriceInRange(usdsPrice, USDS_MIN_PRICE, USDS_MAX_PRICE, "USDS");
+
+        // Validate sUSDS price
+        uint256 susdsPrice = price.getPrice(susds);
+        console2.log("sUSDS price:", susdsPrice);
+        _assertPriceInRange(susdsPrice, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE, "sUSDS");
+
+        // Validate wETH price
+        uint256 wethPrice = price.getPrice(weth);
+        console2.log("wETH price:", wethPrice);
+        _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "wETH");
+
+        // Validate OHM price
+        uint256 ohmPrice = price.getPrice(ohm);
+        console2.log("OHM price:", ohmPrice);
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+
+        console2.log("All prices are within reasonable bounds");
+    }
+
+    /// @notice Asserts that a price is within a reasonable range
+    /// @param price_ The price to validate
+    /// @param minPrice_ Minimum acceptable price
+    /// @param maxPrice_ Maximum acceptable price
+    /// @param assetName_ Name of the asset (for error message)
+    function _assertPriceInRange(
+        uint256 price_,
+        uint256 minPrice_,
+        uint256 maxPrice_,
+        string memory assetName_
+    ) internal pure {
+        if (price_ < minPrice_) {
+            revert(string.concat(assetName_, " price below minimum"));
+        }
+        if (price_ > maxPrice_) {
+            revert(string.concat(assetName_, " price above maximum"));
+        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

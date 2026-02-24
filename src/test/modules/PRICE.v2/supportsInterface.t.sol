@@ -2,16 +2,19 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {PriceV2Test} from "../PRICE.v2.t.sol";
+import {PriceV2BaseTest} from "./PriceV2BaseTest.sol";
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Interfaces
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
-contract PriceV2SupportsInterfaceTest is PriceV2Test {
+contract PriceV2SupportsInterfaceTest is PriceV2BaseTest {
     // Single test function checking all interfaces
     function test_supportsInterface_returnsTrueForAllInterfaces() public view {
+        ERC165Helper.validateSupportsInterface(address(price));
+
         // Check IERC165
         bytes4 ierc165 = type(IERC165).interfaceId;
         assertTrue(price.supportsInterface(ierc165), "Should support IERC165");
