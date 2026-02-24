@@ -361,6 +361,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
         console2.log("OHM initial price:", ohmInitialPrice);
 
+        // Validate initial price before seeding moving average observations
+        if (ohmInitialPrice < OHM_MIN_PRICE || ohmInitialPrice > OHM_MAX_PRICE) {
+            revert("OHM initial price out of bounds");
+        }
+
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
 
