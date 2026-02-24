@@ -25,6 +25,7 @@ import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.s
 
 // Oracle policies
 import {ERC7726Oracle} from "src/policies/price/ERC7726Oracle.sol";
+import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
 import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
@@ -45,6 +46,11 @@ contract OracleProposalTest is ProposalTest {
     // Block to fork from (after DAO MS deployment, before OCG proposal)
     // TODO: Update to the block after the DAO MS deployment
     uint48 public constant FORK_BLOCK = 24413007 + 1;
+
+    // Price validation bounds (18 decimals)
+    // TODO adjust the price bounds when updating the fork block
+    uint256 internal constant OHM_MIN_PRICE = 17e18;
+    uint256 internal constant OHM_MAX_PRICE = 18e18;
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -556,6 +562,22 @@ contract OracleProposalTest is ProposalTest {
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
             "Morpho oracle not enabled"
         );
+    }
+
+    /// @notice Validates that the ERC7726Oracle returns a valid OHM price
+    /// @dev    Prices for USDS, wETH, OHM are validated in ConfigurePriceV1_2 batch
+    ///         This test validates that the ERC7726Oracle correctly quotes OHM in USDS
+    function testProposal_validatePricesAreSane() public view {
+        address erc7726Oracle = addresses.getAddress("olympus-policy-erc7726-oracle-1_0");
+        address ohm = addresses.getAddress("olympus-legacy-ohm");
+        address usds = addresses.getAddress("external-tokens-usds");
+
+        // Validate ERC7726Oracle can quote OHM in terms of USDS
+        // Quote 1 OHM (9 decimals) in USDS (18 decimals)
+        uint256 ohmInUsds = IERC7726Oracle(erc7726Oracle).getQuote(1e9, ohm, usds);
+        console2.log("Asset price of OHM:", ohmInUsds);
+        assertGe(ohmInUsds, OHM_MIN_PRICE, "OHM price below minimum");
+        assertLe(ohmInUsds, OHM_MAX_PRICE, "OHM price above maximum");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
