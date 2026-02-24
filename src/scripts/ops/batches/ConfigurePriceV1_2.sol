@@ -475,7 +475,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @notice Validates that configured prices are within reasonable bounds
     /// @dev    Call this function after the batch has been executed to verify prices
     /// @param priceModule_ Address of the PRICE v1.2 module
-    function validatePricesAreSane(address priceModule_) external {
+    function validatePricesAreSane(address priceModule_) external view {
         console2.log("\n=== Validating Asset Prices ===");
 
         IPRICEv2 price = IPRICEv2(priceModule_);
