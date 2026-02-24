@@ -46,6 +46,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @dev    These are sanity bounds to catch misconfigured feeds
     uint256 internal constant USDS_MIN_PRICE = 0.99e18;
     uint256 internal constant USDS_MAX_PRICE = 1.01e18;
+    uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
+    uint256 internal constant SUSDS_MAX_PRICE = 1.08e18;
     uint256 internal constant ETH_MIN_PRICE = 1500e18;
     uint256 internal constant ETH_MAX_PRICE = 2000e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
@@ -543,6 +545,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         // Load asset addresses from env
         address usds = _envAddressNotZero("external.tokens.USDS");
+        address susds = _envAddressNotZero("external.tokens.sUSDS");
         address weth = _envAddressNotZero("external.tokens.wETH");
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
 
@@ -550,6 +553,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint256 usdsPrice = price.getPrice(usds);
         console2.log("USDS price:", usdsPrice);
         _assertPriceInRange(usdsPrice, USDS_MIN_PRICE, USDS_MAX_PRICE, "USDS");
+
+        // Validate sUSDS price
+        uint256 susdsPrice = price.getPrice(susds);
+        console2.log("sUSDS price:", susdsPrice);
+        _assertPriceInRange(susdsPrice, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE, "sUSDS");
 
         // Validate wETH price
         uint256 wethPrice = price.getPrice(weth);
