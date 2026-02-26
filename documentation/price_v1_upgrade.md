@@ -6,7 +6,7 @@ Upgrading PRICE v1 → v1.2 requires configuring new assets (OHM + underlying re
 
 ## Constraints
 
--   **Zero downtime required** — PRICE is critical for Heart and other systems
+- **Zero downtime required** — PRICE is critical for Heart and other systems
 
 ## Approaches Considered
 
@@ -22,9 +22,9 @@ Compiler error (/solidity/libyul/backends/evm/AsmCodeGen.cpp:68): Stack too deep
 
 This is **not** the EVM stack limit — it's a Yul assembler internal limit during code generation. The issue occurs specifically in v1_2 because:
 
--   v1_2 inherits from v2 (multi-asset pricing system)
--   v1_2 implements PRICEv1 compatibility interface (single-asset OHM functions)
--   Complex nested array ABI decoding through multiple inheritance layers exceeds Yul's internal stack
+- v1_2 inherits from v2 (multi-asset pricing system)
+- v1_2 implements PRICEv1 compatibility interface (single-asset OHM functions)
+- Complex nested array ABI decoding through multiple inheritance layers exceeds Yul's internal stack
 
 v2 alone handles these constructor parameters fine. The problem is unique to v1_2's inheritance structure.
 
@@ -40,27 +40,27 @@ Modify PriceConfigv2 to be enabled by default, and DAO MS has `price_admin` role
 
 **Why it works:**
 
--   All actions in same transaction → no Heart heartbeat between operations
--   PriceConfigv2 already has `price_admin` permissions
--   No additional contract complexity or code size pressure
+- All actions in same transaction → no Heart heartbeat between operations
+- PriceConfigv2 already has `price_admin` permissions
+- No additional contract complexity or code size pressure
 
 ## Rollout Steps
 
 ### 1. Pre-Deployment
 
--   Verify `price_admin` role granted to DAO MS
--   Identify all assets required for OHM pricing
--   Prepare price feed addresses and configuration parameters
+- Verify `price_admin` role granted to DAO MS
+- Identify all assets required for OHM pricing
+- Prepare price feed addresses and configuration parameters
 
 **Required Contracts:**
 
--   `OlympusPricev1_2` - PRICE v1.2 module
--   `ChainlinkPriceFeeds` - Chainlink price feed submodule
--   `PythPriceFeeds` - Pyth price feed submodule
--   `UniswapV3Price` - Uniswap V3 price submodule
--   `ERC4626Price` - ERC4626 price submodule
--   `SimplePriceFeedStrategy` - Price strategy submodule
--   `PriceConfigv2` - Configuration policy (auto-enabled on installation)
+- `OlympusPricev1_2` - PRICE v1.2 module
+- `ChainlinkPriceFeeds` - Chainlink price feed submodule
+- `PythPriceFeeds` - Pyth price feed submodule
+- `UniswapV3Price` - Uniswap V3 price submodule
+- `ERC4626Price` - ERC4626 price submodule
+- `SimplePriceFeedStrategy` - Price strategy submodule
+- `PriceConfigv2` - Configuration policy (auto-enabled on installation)
 
 ### 2. Deployment
 
@@ -128,9 +128,9 @@ If oracle factory policies need to be enabled for external integrations:
 
 **Batch actions:**
 
--   Activate ChainlinkOracleFactory policy
--   Activate MorphoOracleFactory policy
--   Activate ERC7726Oracle policy
+- Activate ChainlinkOracleFactory policy
+- Activate MorphoOracleFactory policy
+- Activate ERC7726Oracle policy
 
 ### 5. Oracles OCG Proposal (If Needed)
 
@@ -140,9 +140,9 @@ After oracle policies are activated via MS batch, an OCG proposal is required to
 
 Reference for:
 
--   Granting `oracle_manager` role to DAO MS and Timelock
--   Enabling oracle policies via OCG
--   Deploying token-specific oracles via factories
+- Granting `oracle_manager` role to DAO MS and Timelock
+- Enabling oracle policies via OCG
+- Deploying token-specific oracles via factories
 
 ### 6. Verification
 
@@ -150,17 +150,17 @@ Verification happens automatically as part of the batch script execution (full H
 
 Manual verification (optional):
 
--   Call `price.getCurrentPrice()` — should return valid OHM price
--   Call `price.getAssets()` — verify all expected assets configured
--   Check moving averages are accurate
+- Call `price.getCurrentPrice()` — should return valid OHM price
+- Call `price.getAssets()` — verify all expected assets configured
+- Check moving averages are accurate
 
 ## Ongoing Operations
 
 DAO MS can use **PriceConfigv2** (`src/policies/price/PriceConfigv2.sol`) to:
 
--   Add/remove assets via `addAssetPrice()` / `removeAssetPrice()`
--   Update feeds and strategies via `updateAsset()`
--   Install/upgrade submodules via `installSubmodule()` / `upgradeSubmodule()`
+- Add/remove assets via `addAssetPrice()` / `removeAssetPrice()`
+- Update feeds and strategies via `updateAsset()`
+- Install/upgrade submodules via `installSubmodule()` / `upgradeSubmodule()`
 
 No OCG approval required — only `price_admin` role.
 

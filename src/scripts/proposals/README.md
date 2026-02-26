@@ -40,15 +40,19 @@ It is possible to test proposal submission (and execution) on a forked chain. Tw
 ### Local Anvil Fork
 
 1. Start an Anvil fork:
+
     ```bash
     pnpm run anvil:fork
     ```
+
 2. Create an environment file (e.g., `.env.anvil`) with:
     - `RPC_URL`: `http://localhost:8545` (or omit to use the default)
 3. Deal gOHM to your wallet and set up voting checkpoint:
+
     ```bash
     ./shell/anvil/deal_gohm.sh <your_wallet_address>
     ```
+
 4. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
     - Use `--chain http://localhost:8545` to specify the local Anvil RPC.
 5. Execute the proposal by running `./executeOnAnvilFork.sh` with the appropriate arguments.
