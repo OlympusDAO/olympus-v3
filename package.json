@@ -30,7 +30,7 @@
         "test:proposal": "forge test --match-path 'src/test/proposals/*.t.sol' --no-match-contract 'Fork' --fork-url mainnet -vvv",
         "test:crosschainfork": "forge test --match-contract 'CrossChainBridgeFork|TokenPoolFork' -vvv",
         "test:coverage": "./shell/test_coverage.sh",
-        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --optimizer-runs 4000 --use 0.8.24 --contracts src/modules/PRICE/OlympusPrice.v1_2.sol && forge build --sizes --skip 'src/test/*' --skip 'Operator.sol' --skip 'MonoCooler.sol' --skip 'OlympusPrice.v1_2.sol'",
+        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --skip 'src/test/*' --skip 'Operator.sol' --skip 'MonoCooler.sol' --skip 'OlympusPrice.v1_2.sol'",
         "metrics": "node shell/metrics.js",
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },
