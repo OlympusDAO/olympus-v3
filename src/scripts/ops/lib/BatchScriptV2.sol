@@ -6,10 +6,12 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 
+import {Surl} from "@surl-1.0.0/Surl.sol";
+
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
-import {Safe} from "@safe-utils-0.0.13/Safe.sol";
+import {Safe} from "@safe-utils-0.0.17/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
@@ -20,6 +22,7 @@ import {Kernel, toKeycode} from "src/Kernel.sol";
 abstract contract BatchScriptV2 is WithEnvironment {
     using Safe for *;
     using stdJson for string;
+    using Surl for *;
 
     /// @notice Address of the owner
     /// @dev    This could be a Safe Multisig or an EOA
@@ -55,6 +58,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    Loaded by {_setUpBatchScript}
     ///         If this is provided, the batch will be proposed using the signature instead of asking the sender to sign
     bytes internal _signature;
+
+    /// @notice Optional post-batch validation function selector
+    /// @dev    If set, this function will be called after batch simulation to validate state
+    bytes4 internal _postBatchValidateSelector;
 
     // TODOs
     // [X] Add Ledger signer support
@@ -134,6 +141,12 @@ abstract contract BatchScriptV2 is WithEnvironment {
         } else {
             console2.log("  No Ledger derivation path provided");
         }
+    }
+
+    /// @notice Set the post-batch validation function selector
+    /// @param selector_ The function selector to call after batch simulation
+    function _setPostBatchValidateSelector(bytes4 selector_) internal {
+        _postBatchValidateSelector = selector_;
     }
 
     function addToBatch(address target_, bytes memory data_) public {
@@ -224,21 +237,19 @@ abstract contract BatchScriptV2 is WithEnvironment {
         return txHash;
     }
 
-    function _proposeMultisigBatch() internal {
+    /// @notice Execute batch via Multisig with proposal
+    /// @dev    Simulates, validates, and proposes batch transactions to the multisig
+    function _sendMultisigBatch() internal {
         if (_batchTargets.length == 0) {
-            console2.log("No batch targets to propose");
+            console2.log("No batch targets to execute");
             return;
         }
 
         console2.log("\n");
-        console2.log("Simulating execution of batch");
-        vm.startPrank(_owner);
-        _runBatch();
-        vm.stopPrank();
-        console2.log("Batch simulation completed");
+        console2.log("=== Executing batch via Multisig ===");
 
-        // Validate heart beat after batch execution
-        _validateHeartBeat();
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
 
         // If signOnly, get the signature and return
         if (_signOnly) {
@@ -262,13 +273,13 @@ abstract contract BatchScriptV2 is WithEnvironment {
             return;
         }
 
+        // Check if we're in broadcast mode before proposing
         if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
-            console2.log("Not broadcasting, skipping batch proposal");
+            console2.log("Not broadcasting, skipping multisig proposal");
             return;
         }
 
-        console2.log("\n");
-        console2.log("Proposing batch to multi-sig");
+        console2.log("\nBroadcasting batch to Multisig");
 
         bytes32 txHash = _proposeMultisigBatchTransactions();
 
@@ -276,30 +287,177 @@ abstract contract BatchScriptV2 is WithEnvironment {
         console2.logBytes32(txHash);
     }
 
-    function _proposeEOABatch() internal {
+    /// @notice Execute batch via EOA with broadcast
+    /// @dev    Simulates and validates first, then executes if broadcast mode is enabled
+    function _sendEOABatch() internal {
         if (_batchTargets.length == 0) {
-            console2.log("No batch targets to propose");
+            console2.log("No batch targets to execute");
             return;
         }
 
         console2.log("\n");
-        console2.log("Executing batch as EOA");
+        console2.log("=== Executing batch via EOA ===");
 
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
+
+        // Check if we're in broadcast mode before executing
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping EOA execution");
+            return;
+        }
+
+        // Execute batch on EOA with broadcast
+        console2.log("\nBroadcasting batch to EOA");
         vm.startBroadcast();
 
         _runBatch();
 
         vm.stopBroadcast();
 
-        console2.log("Batch executed");
+        console2.log("Batch executed successfully");
     }
 
     function proposeBatch() public {
-        if (_isMultiSig) {
-            _proposeMultisigBatch();
-        } else {
-            _proposeEOABatch();
+        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
+        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
+
+        // Handle fork modes first
+        if (useAnvilFork) {
+            _sendAnvilBatch();
+            return;
         }
+
+        if (useTenderlyFork) {
+            _sendTenderlyBatch();
+            return;
+        }
+
+        // Normal execution path
+        if (_isMultiSig) {
+            _sendMultisigBatch();
+        } else {
+            _sendEOABatch();
+        }
+    }
+
+    /// @notice Execute batch via Anvil fork with auto-impersonation
+    /// @dev    Uses vm.startBroadcast with the multisig address to impersonate signers
+    function _sendAnvilBatch() private {
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to execute");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log("=== Executing batch via Anvil fork ===");
+
+        // Simulate and validate with snapshot/revert
+        _validateWithSnapshot();
+
+        // Check if we're in broadcast mode before executing on Anvil fork
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Anvil fork execution");
+            return;
+        }
+
+        // Execute batch on Anvil fork with auto-impersonation
+        console2.log("\nBroadcasting batch to Anvil fork");
+        vm.startBroadcast(_owner);
+
+        for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
+            (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
+
+            if (!success) {
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+
+        vm.stopBroadcast();
+        console2.log("Batch executed successfully on Anvil fork");
+    }
+
+    /// @notice Execute batch via Tenderly VNet using HTTP API calls
+    /// @dev    Sends transactions to Tenderly VNet for execution without requiring private keys
+    function _sendTenderlyBatch() private {
+        if (_batchTargets.length == 0) {
+            console2.log("No batch targets to execute");
+            return;
+        }
+
+        console2.log("\n");
+        console2.log("=== Executing batch via Tenderly VNet ===");
+
+        // Simulate and validate with snapshot/revert (newly added)
+        _validateWithSnapshot();
+
+        // Check if we're in broadcast mode before executing on Tenderly VNet
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Tenderly VNet execution");
+            return;
+        }
+
+        // Get the testnet RPC URL and access key
+        string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
+        string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
+        string memory TENDERLY_VNET_ID = vm.envString("TENDERLY_VNET_ID");
+        string memory TENDERLY_ACCESS_KEY = vm.envString("TENDERLY_ACCESS_KEY");
+
+        // Iterate over the batch targets and execute them
+        for (uint256 i; i < _batchTargets.length; i++) {
+            console2.log("  Executing batch target", i);
+            console2.log("  Target", _batchTargets[i]);
+
+            // Construct the API call
+            string[] memory headers = new string[](3);
+            headers[0] = "Accept: application/json";
+            headers[1] = "Content-Type: application/json";
+            headers[2] = string.concat("X-Access-Key: ", TENDERLY_ACCESS_KEY);
+
+            string memory url = string.concat(
+                "https://api.tenderly.co/api/v1/account/",
+                TENDERLY_ACCOUNT_SLUG,
+                "/project/",
+                TENDERLY_PROJECT_SLUG,
+                "/vnets/",
+                TENDERLY_VNET_ID,
+                "/transactions"
+            );
+
+            // Execute the API call
+            (uint256 status, bytes memory response) = url.post(
+                headers,
+                string.concat(
+                    "{",
+                    '"callArgs": {',
+                    '"from": "',
+                    vm.toString(_owner),
+                    '", "to": "',
+                    vm.toString(_batchTargets[i]),
+                    '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',
+                    '"data": "',
+                    vm.toString(_batchData[i]),
+                    '"',
+                    "}}"
+                )
+            );
+
+            string memory responseString = string(response);
+            console2.log("  Response:", responseString);
+
+            // If the response contains "error", exit
+            if (status >= 400 || vm.keyExists(responseString, ".error")) {
+                revert("Error executing batch action on Tenderly VNet");
+            }
+        }
+
+        console2.log("Batch executed successfully on Tenderly VNet");
     }
 
     /// @notice Load arguments from a file (optional)
@@ -472,6 +630,54 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
             lastBeat = uint48(heartContract_.lastBeat());
         }
+    }
+
+    /// @notice Run custom post-batch validation if selector is set
+    /// @dev    Calls the function specified by _postBatchValidateSelector
+    function _runPostBatchValidation() internal {
+        if (_postBatchValidateSelector != bytes4(0)) {
+            console2.log("\n=== Starting post-batch validation ===");
+            console2.log("Calling post-batch validation function");
+            (bool success, bytes memory data) = address(this).call(
+                abi.encodeWithSelector(_postBatchValidateSelector)
+            );
+            if (!success) {
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+            console2.log("Post-batch validation passed");
+        } else {
+            console2.log("\nNo post-batch validation selector set, skipping custom validation");
+        }
+    }
+
+    /// @notice Run simulation and validation with state rollback
+    /// @dev    Creates snapshot before simulation, reverts after validation.
+    ///         This ensures both simulation AND validation state changes are removed.
+    function _validateWithSnapshot() internal {
+        // Create snapshot BEFORE simulation (critical!)
+        uint256 snapshotId = vm.snapshotState();
+        console2.log("Created snapshot before simulation, id:", snapshotId);
+
+        // Simulate batch execution
+        console2.log("Simulating execution of batch");
+        vm.startPrank(_owner);
+        _runBatch();
+        vm.stopPrank();
+        console2.log("Batch simulation completed");
+
+        // Call custom post-batch validation
+        _runPostBatchValidation();
+
+        // Validate heart beat
+        _validateHeartBeat();
+
+        // Revert to snapshot - removes BOTH simulation and validation artifacts
+        vm.revertToStateAndDelete(snapshotId);
+        console2.log("Restored state from snapshot (simulation + validation artifacts removed)");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
