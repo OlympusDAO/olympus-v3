@@ -248,11 +248,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return (price, uint48(block.timestamp), successAllFeeds);
     }
 
-    /// @notice         Gets price with staleness check, returns single value
-    /// @dev            Internal helper for getPriceIn functions
-    /// @param asset_       Asset to get price for
-    /// @param stalenessTime  Staleness threshold (0=exact match, other=min acceptable timestamp)
-    /// @return price    The asset price
+    /// @notice                 Gets price with staleness check, returns single value
+    /// @dev                    Internal helper for getPriceIn functions
+    /// @param asset_           Asset to get price for
+    /// @param stalenessTime    Staleness threshold (0=exact match, other=min acceptable timestamp)
+    /// @return price           The asset price
     function _getPriceStale(
         address asset_,
         uint48 stalenessTime
