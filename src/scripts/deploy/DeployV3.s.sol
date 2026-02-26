@@ -40,6 +40,10 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
+// Reward distribution
+import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
+import {RewardDistributorConvertible} from "src/policies/rewards/RewardDistributorConvertible.sol";
+
 // solhint-disable gas-custom-errors
 
 /// @notice V3 of the deployment script
@@ -851,5 +855,60 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(limitOrders), "olympus.periphery");
+    }
+
+    // ===== REWARD DISTRIBUTION CONTRACTS ===== //
+
+    function deployConvertibleOHMTeller() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log parameters
+        console2.log("ConvertibleOHMTeller parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+
+        // Deploy
+        vm.broadcast();
+        ConvertibleOHMTeller teller = new ConvertibleOHMTeller(kernel, ohm);
+
+        return (address(teller), "olympus.policies");
+    }
+
+    function deployRewardDistributorConvertible() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address teller = _getAddressNotZero("olympus.policies.ConvertibleOHMTeller");
+
+        // Input parameters
+        uint256 lastEpochEndDate = _readDeploymentArgUint256(
+            "RewardDistributorConvertible",
+            "lastEpochEndDate"
+        );
+
+        // Validate lastEpochEndDate is not stale (more than 90 days in the past)
+        require(
+            lastEpochEndDate + 90 days >= block.timestamp,
+            "lastEpochEndDate is more than 90 days in the past -- update savedDeployments config"
+        );
+
+        // Log parameters
+        console2.log("RewardDistributorConvertible parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  lastEpochEndDate", lastEpochEndDate);
+        console2.log("  teller", teller);
+
+        // Deploy
+        vm.broadcast();
+        RewardDistributorConvertible distributor = new RewardDistributorConvertible(
+            kernel,
+            lastEpochEndDate,
+            teller
+        );
+
+        return (address(distributor), "olympus.policies");
     }
 }
