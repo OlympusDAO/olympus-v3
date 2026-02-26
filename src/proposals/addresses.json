@@ -233,5 +233,20 @@
         "addr": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
         "chainId": 1,
         "name": "olympus-periphery-convertible-deposit-activator"
+    },
+    {
+        "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
+        "chainId": 1,
+        "name": "olympus-multisig-reward-distributor"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-convertible-ohm-teller"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-reward-distributor-convertible"
     }
 ]

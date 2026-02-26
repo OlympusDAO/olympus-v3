@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD
 pragma solidity >=0.8.0;
 
-import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {Clone} from "src/external/clones/Clone.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
 /// @notice Modern and gas efficient ERC20 implementation.
@@ -23,15 +23,15 @@ abstract contract CloneERC20 is Clone, IERC20 {
                                METADATA
     //////////////////////////////////////////////////////////////*/
 
-    function name() external pure returns (string memory) {
+    function name() public pure returns (string memory) {
         return string(abi.encodePacked(_getArgUint256(0)));
     }
 
-    function symbol() external pure returns (string memory) {
+    function symbol() public pure returns (string memory) {
         return string(abi.encodePacked(_getArgUint256(0x20)));
     }
 
-    function decimals() external pure returns (uint8) {
+    function decimals() public pure returns (uint8) {
         return _getArgUint8(0x40);
     }
 
