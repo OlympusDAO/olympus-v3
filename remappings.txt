@@ -28,6 +28,7 @@ clones/=dependencies/clones-with-immutable-args-1.1.2/src/
 
 @layer-zero-endpoint-v1-0.0.6/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
 layer-zero/=dependencies/layer-zero-endpoint-v1-0.0.6/contracts/
+@layer-zero-endpoint-v1-1.1.0/=dependencies/layer-zero-endpoint-v1-new-1.1.0/contracts/
 
 @solmate-6.2.0/=dependencies/solmate-6.2.0/src/
 solmate/=dependencies/solmate-6.2.0/src/

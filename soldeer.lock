@@ -48,6 +48,12 @@ git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
 rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
 
 [[dependencies]]
+name = "layer-zero-endpoint-v1-new"
+version = "1.1.0"
+git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
+rev = "cdc93994911829b1348f6ac18000000a43432ef1"
+
+[[dependencies]]
 name = "openzeppelin"
 version = "4.8.0"
 git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git"
