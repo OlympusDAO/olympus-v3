@@ -94,8 +94,7 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     ///             Compatibility function for PRICEv1.
     function getTargetPrice() external view returns (uint256) {
         (uint256 movingAvg, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
-        uint256 min = minimumTargetPrice;
-        return movingAvg > min ? movingAvg : min;
+        return movingAvg > minimumTargetPrice ? movingAvg : minimumTargetPrice;
     }
 
     /// @inheritdoc IPRICEv1
