@@ -312,18 +312,14 @@ contract OracleProposalTest is ProposalTest {
     ///         In production, the DAO MS batch script handles this
     function _configurePriceAssets() internal {
         address priceConfig = addresses.getAddress("olympus-policy-price-config-2_0");
-        address daoMS = addresses.getAddress("olympus-multisig-dao");
         address priceModule = addresses.getAddress("olympus-module-price-1_2");
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
         address susds = addresses.getAddress("external-tokens-susds");
 
-        vm.startPrank(daoMS);
-
         // Check if OHM is already configured (if so, all assets should be configured)
         if (IPRICEv2(priceModule).isAssetApproved(ohm)) {
             console2.log("OHM asset already configured, skipping asset configuration");
-            vm.stopPrank();
             return;
         }
 
@@ -347,8 +343,6 @@ contract OracleProposalTest is ProposalTest {
 
         // Configure OHM with OHM/sUSDS Uniswap V3 pool
         _configureOHM(priceConfig, ohm);
-
-        vm.stopPrank();
     }
 
     /// @notice Configure USDS asset with Chainlink feed

@@ -245,16 +245,20 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     function _configureSusds(address priceConfig_) internal {
         console2.log("\n=== Configuring sUSDS Asset ===");
 
-        // Create strategy component: ERC4626 price (uses underlying USDS price)
-        // Note: Empty params for ERC4626 - it determines the underlying from the asset itself
+        // Empty strategy (single feed, no aggregation needed)
         IPRICEv2.Component memory strategy = IPRICEv2.Component({
+            target: toSubKeycode(""),
+            selector: bytes4(0),
+            params: abi.encode("")
+        });
+
+        // Single ERC4626 feed - derives price from the underlying asset (USDS)
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component({
             target: toSubKeycode("PRICE.ERC4626"),
             selector: ERC4626Price.getPriceFromUnderlying.selector,
             params: "" // Empty params - underlying is derived from the asset being configured
         });
-
-        // No feeds needed for ERC4626 - it uses the underlying asset's price
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](0);
 
         // Add asset via PriceConfig
         _addAsset(priceConfig_, _susds, strategy, feeds);

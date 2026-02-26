@@ -128,21 +128,33 @@ If oracle factory policies need to be enabled for external integrations:
 
 **Batch actions:**
 
-- Activate ChainlinkOracleFactory policy
+The DAO MS batch will **activate** the oracle policies in the Kernel:
+
+- Activate ChainlinkOracleFactory policy (`kernel.executeAction(Actions.ActivatePolicy, address)`)
 - Activate MorphoOracleFactory policy
 - Activate ERC7726Oracle policy
 
+> **Note:** "Activate" registers the policy with the Kernel, but the policy functionality remains disabled until the OCG proposal **enables** it.
+
 ### 5. Oracles OCG Proposal (If Needed)
 
-After oracle policies are activated via MS batch, an OCG proposal is required to enable them on the Kernel.
+After oracle policies are activated via MS batch, a separate OCG proposal is required to **enable** them via `IEnabler.enable()`.
 
 **OCG proposal template:** `src/proposals/OracleProposal.sol`
 
-Reference for:
+**OCG proposal actions:**
 
-- Granting `oracle_manager` role to DAO MS and Timelock
-- Enabling oracle policies via OCG
-- Deploying token-specific oracles via factories
+1. Grant `oracle_manager` role to DAO MS and Timelock (if needed)
+2. **Enable** ERC7726Oracle policy (`IEnabler.enable()`)
+3. **Enable** ChainlinkOracleFactory policy
+4. **Enable** MorphoOracleFactory policy
+5. Deploy OHM/USDS Chainlink oracle (via ChainlinkOracleFactory)
+6. Deploy OHM/USDS Morpho oracle (via MorphoOracleFactory)
+
+> **Distinction:**
+>
+> - **MS Batch "Activate"** (`kernel.executeAction(Actions.ActivatePolicy, address)`): Registers the policy contract with the Kernel module
+> - **OCG "Enable"** (`IEnabler.enable()`): Turns on the policy's functionality via the PolicyEnabler pattern
 
 ### 6. Verification
 
