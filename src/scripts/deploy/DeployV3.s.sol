@@ -734,7 +734,7 @@ contract DeployV3 is WithEnvironment {
         return (address(priceConfig), "olympus.policies");
     }
 
-    function deployOlympusPriceConfigv2() public returns (address, string memory) {
+    function deployOlympusPriceConfigV2() public returns (address, string memory) {
         // Dependencies
         address kernel = _getAddressNotZero("olympus.Kernel");
 
@@ -742,7 +742,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("PriceConfigv2 parameters:");
         console2.log("  kernel", kernel);
 
-        // Deploy PriceConfigv2 policy (auto-enables on deployment)
+        // Deploy PriceConfigV2 policy (auto-enables on deployment)
         vm.broadcast();
         PriceConfigv2 priceConfig = new PriceConfigv2(Kernel(kernel));
 
