@@ -10,6 +10,10 @@ import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/
 import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+
+// Bophades
+import {Kernel, Actions} from "src/Kernel.sol";
 
 // PRICE contracts
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
@@ -70,12 +74,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         // Load dependencies from env
         address kernel = _envAddressNotZero("olympus.Kernel");
-        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfig");
+        address priceModule = _envAddressNotZero("olympus.modules.OlympusPriceV1");
+        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfigV2");
 
         // Load asset addresses from env
         _usds = _envAddressNotZero("external.tokens.USDS");
         _susds = _envAddressNotZero("external.tokens.sUSDS");
-        _weth = _envAddressNotZero("external.tokens.wETH");
+        _weth = _envAddressNotZero("external.tokens.WETH");
         _ohm = _envAddressNotZero("olympus.legacy.OHM");
 
         // Load Pyth contract address from args file (shared by all Pyth feeds)
@@ -92,6 +97,34 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("sUSDS:", _susds);
         console2.log("wETH:", _weth);
         console2.log("OHM:", _ohm);
+
+        // Validate the PRICE version
+        {
+            (uint8 major, uint8 minor) = IVersioned(priceModule).VERSION();
+            if (major != 1 && minor != 2) revert("PRICE module version is unsupported");
+        }
+
+        // Upgrade PRICE v1.2 module in the kernel
+        console2.log("Upgrading PRICE module");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.UpgradeModule,
+                priceModule
+            )
+        );
+
+        // Activate PriceConfig V2 policy in the kernel
+        console2.log("Activating PriceConfig V2 policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                priceConfig
+            )
+        );
 
         // Install submodules first
         _installSubmodules(priceConfig);
@@ -180,7 +213,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint16 usdsDeviationBps = uint16(
             _readBatchArgUint256("configurePriceV1_2", "usdsDeviationBps")
         );
-        bool usdsStrictMode = _readBatchArgUint256("configurePriceV1_2", "usdsStrictMode") == 1;
+        bool usdsStrictMode = _readBatchArgBool("configurePriceV1_2", "usdsStrictMode");
 
         // Read update threshold from args file
         uint48 usdsUpdateThreshold = uint48(
@@ -286,7 +319,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint16 wethDeviationBps = uint16(
             _readBatchArgUint256("configurePriceV1_2", "wethDeviationBps")
         );
-        bool wethStrictMode = _readBatchArgUint256("configurePriceV1_2", "wethStrictMode") == 1;
+        bool wethStrictMode = _readBatchArgBool("configurePriceV1_2", "wethStrictMode");
 
         // Read update threshold from args file
         uint48 wethUpdateThreshold = uint48(
@@ -356,7 +389,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
 
         // Read strict mode and observation window from args file
-        bool ohmStrictMode = _readBatchArgUint256("configurePriceV1_2", "ohmStrictMode") == 1;
+        bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
 
         // Load initial price from args file (18 decimals, represents USD price)
         uint256 ohmInitialPrice = _readBatchArgUint256("configurePriceV1_2", "ohmInitialPrice");
@@ -555,7 +588,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Load asset addresses from env
         address usds = _envAddressNotZero("external.tokens.USDS");
         address susds = _envAddressNotZero("external.tokens.sUSDS");
-        address weth = _envAddressNotZero("external.tokens.wETH");
+        address weth = _envAddressNotZero("external.tokens.WETH");
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
 
         // Validate USDS price

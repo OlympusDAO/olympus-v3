@@ -491,6 +491,22 @@ abstract contract BatchScriptV2 is WithEnvironment {
             );
     }
 
+    /// @notice Get a bool argument for a given function and key
+    /// @param functionName_ Name of the function
+    /// @param key_ Key to look for
+    /// @return bool Returns the bool value
+    function _readBatchArgBool(
+        string memory functionName_,
+        string memory key_
+    ) internal view returns (bool) {
+        // solhint-disable-next-line gas-custom-errors
+        require(bytes(_argsFile).length > 0, "BatchScriptV2: No args file loaded");
+        return
+            _argsFile.readBool(
+                string.concat(".functions[?(@.name == '", functionName_, "')].args.", key_)
+            );
+    }
+
     /// @notice Get a bytes32 argument for a given function and key
     /// @param functionName_ Name of the function
     /// @param key_ Key to look for
