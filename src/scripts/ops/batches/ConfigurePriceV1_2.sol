@@ -200,7 +200,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         // Read price feed addresses from args file
         address chainlinkUsdsUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkUsdsUsd");
-        address redstoneDaiUsd = _readBatchArgAddress("configurePriceV1_2", "redstoneDaiUsd");
         bytes32 pythUsdsUsdId = _readBatchArgBytes32("configurePriceV1_2", "pythUsdsUsdFeedId");
 
         // Read max confidence for Pyth USDS feed from args file
@@ -221,7 +220,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         console2.log("Chainlink USDS/USD:", chainlinkUsdsUsd);
-        console2.log("RedStone DAI/USD:", redstoneDaiUsd);
         console2.logBytes32(pythUsdsUsdId);
         console2.log("Pyth contract:", _pyth);
 
@@ -233,7 +231,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Create feed components using getOneFeedPrice
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
         feeds[0] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -245,16 +243,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             )
         );
         feeds[1] = _encodeFeed(
-            toSubKeycode("PRICE.CHAINLINK"), // RedStone uses Chainlink interface
-            ChainlinkPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(
-                ChainlinkPriceFeeds.OneFeedParams({
-                    feed: AggregatorV2V3Interface(redstoneDaiUsd),
-                    updateThreshold: usdsUpdateThreshold
-                })
-            )
-        );
-        feeds[2] = _encodeFeed(
             toSubKeycode("PRICE.PYTH"),
             PythPriceFeeds.getOneFeedPrice.selector,
             abi.encode(

@@ -20,13 +20,13 @@ Re-configure price resolution in the protocol to utilise multiple price feeds wh
 
 | Asset | Address | Price Feeds | Strategy | Store MA | Use MA | MA Duration |
 | ----- | ------- | ----------- | -------- | -------- | ------ | ----------- |
-| USDS | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [RedStone DAI-USD](https://app.redstone.finance/app/token/DAI/), [Pyth USDS-USD](https://insights.pyth.network/price-feeds/Crypto.USDS%2FUSD) | `getAveragePriceExcludingDeviations()` with 1% deviation from median on strict mode | No | No | 0 |
+| USDS | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [Pyth USDS-USD](https://insights.pyth.network/price-feeds/Crypto.USDS%2FUSD) | `getAveragePriceExcludingDeviations()` with 1% deviation from median on strict mode | No | No | 0 |
 | sUSDS | [0xa39...fbD](https://etherscan.io/address/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | ERC4626 Submodule | None | No | No | 0 |
 | wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD) | `getAveragePriceExcludingDeviations()` with 2% deviation from median on strict mode | No | No | 0 |
 | OHM | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755) | `getAveragePrice()` on strict mode | Yes | No | 604800 (7 days) |
 
 - Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, Redstone and Pyth oracles.
-- The price of USDS will be determined as the average of the price feeds from 3 different vendors.
+- The price of USDS will be determined as the average of the price feeds from 2 different vendors.
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
@@ -72,7 +72,6 @@ sequenceDiagram
     participant User
     participant USDS
     participant CL_USDS as Chainlink USDS-USD
-    participant RS_DAI as RedStone DAI-USD
     participant Pyth_USDS as Pyth USDS-USD
 
     User->>USDS: getPrice(USDS)
@@ -82,9 +81,6 @@ sequenceDiagram
     par Chainlink USDS-USD Path
         USDS->>CL_USDS: latestRoundData()
         CL_USDS-->>USDS: USDS-USD price
-    and RedStone DAI-USD Path
-        USDS->>RS_DAI: latestRoundData()
-        RS_DAI-->>USDS: DAI-USD price
     and Pyth USDS-USD Path
         USDS->>Pyth_USDS: latestRoundData()
         Pyth_USDS-->>USDS: USDS-USD price
@@ -110,7 +106,6 @@ sequenceDiagram
     participant ERC4626 as ERC4626 Submodule
     participant USDS
     participant CL_USDS as Chainlink USDS-USD
-    participant RS_DAI as RedStone DAI-USD
     participant Pyth_USDS as Pyth USDS-USD
 
     User->>OHM: getPrice(OHM)
@@ -151,9 +146,6 @@ sequenceDiagram
         par Chainlink USDS-USD Path
             USDS->>CL_USDS: latestRoundData()
             CL_USDS-->>USDS: USDS-USD price
-        and RedStone DAI-USD Path
-            USDS->>RS_DAI: latestRoundData()
-            RS_DAI-->>USDS: DAI-USD price
         and Pyth USDS-USD Path
             USDS->>Pyth_USDS: latestRoundData()
             Pyth_USDS-->>USDS: USDS-USD price
