@@ -422,7 +422,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @inheritdoc ISimplePriceFeedStrategy
     /// @dev    Validates input parameters and filters outliers before computing average.
-    /// @dev    Reverts if fewer than 3 prices are provided (configuration error).
+    /// @dev    Reverts if fewer than 2 prices are provided (configuration error).
     /// @dev    Reverts if no valid prices remain after filtering (no data error).
     function getAveragePriceExcludingDeviations(
         uint256[] memory prices_,
@@ -433,7 +433,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             =====================
 
             Configuration Issues (always revert):
-            - Input array < 3 elements: misconfiguration
+            - Input array < 2 elements: misconfiguration
             - Invalid params: wrong length or deviationBps out of bounds
 
             Runtime Issues (handled based on revertOnInsufficientCount flag):
@@ -453,7 +453,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         */
 
         // ========== CONFIGURATION VALIDATION ==========
-        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
         // ========== PARAMETER DECODING ==========
         ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);

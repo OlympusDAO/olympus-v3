@@ -64,7 +64,7 @@ interface ISimplePriceFeedStrategy {
     /// @dev    Iteratively filters out deviating prices and returns the average of remaining prices.
     /// @dev    This is a "consensus" strategy - outliers are removed until all remaining prices agree.
     ///
-    /// @param  prices_  Array of prices from multiple feeds (minimum 3 elements)
+    /// @param  prices_  Array of prices from multiple feeds (minimum 2 elements)
     /// @param  params_  Encoded DeviationParams struct (64 bytes)
     /// @return price    The resolved price (average of non-deviating prices)
     function getAveragePriceExcludingDeviations(
