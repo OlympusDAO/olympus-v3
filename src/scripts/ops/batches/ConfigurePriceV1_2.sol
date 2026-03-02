@@ -309,8 +309,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         console2.log("Chainlink ETH/USD:", chainlinkEthUsd);
         console2.log("RedStone ETH/USD:", redstoneEthUsd);
-        console2.logBytes32(pythEthUsdId);
         console2.log("Pyth contract:", _pyth);
+        console2.log("Pyth ETH/USD ID:");
+        console2.logBytes32(pythEthUsdId);
         console2.log("Chainlink BTC/USD:", chainlinkBtcUsd);
         console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
 
