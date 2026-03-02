@@ -22,6 +22,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
+    /// @notice     The expected length of the encoded one feed parameters (address + uint48 = 64 bytes)
+    uint256 internal constant ONE_FEED_PARAMS_LENGTH = 64;
+
+    /// @notice     The expected length of the encoded two feed parameters (2x address + 2x uint48 = 128 bytes)
+    uint256 internal constant TWO_FEED_PARAMS_LENGTH = 128;
+
     /// @notice                 Parameters for a single Chainlink price feed
     ///
     /// @param feed             Address of the Chainlink price feed
@@ -53,6 +59,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     }
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error Chainlink_ParamsInvalid(bytes params_);
 
     /// @notice                 The number of decimals of the price feed is greater than the maximum allowed
     ///
@@ -205,6 +216,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != ONE_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
         if (address(params.feed) == address(0))
@@ -248,6 +262,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (address(params.firstFeed) == address(0))
@@ -312,6 +329,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (address(params.firstFeed) == address(0))

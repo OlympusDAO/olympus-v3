@@ -129,6 +129,94 @@ contract UniswapV3PriceTest is Test {
 
     // ========= TESTS ========= //
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getTokenTWAP_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenTWAP_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(63); // 1 byte short of 64
+        bytes memory params = abi.encode(mockUniPair, OBSERVATION_SECONDS);
+        for (uint256 i = 0; i < 63; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenTWAP_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(128); // Double the expected size
+        bytes memory params = abi.encode(mockUniPair, OBSERVATION_SECONDS);
+        for (uint256 i = 0; i < 64; i++) {
+            longParams[i] = params[i];
+        }
+        // Extra bytes are zeros
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(63); // 1 byte short of 64
+        bytes memory params = abi.encode(mockUniPair, OBSERVATION_SECONDS);
+        for (uint256 i = 0; i < 63; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(128); // Double the expected size
+        bytes memory params = abi.encode(mockUniPair, OBSERVATION_SECONDS);
+        for (uint256 i = 0; i < 64; i++) {
+            longParams[i] = params[i];
+        }
+        // Extra bytes are zeros
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, longParams);
+    }
+
     // [X] getTokenTWAP
     //  [X] Reverts if params.pool is is not a valid Uniswap V3 pool
     //  [X] Reverts if params.observationWindowSeconds is less than TWAP_MINIMUM_OBSERVATION_SECONDS

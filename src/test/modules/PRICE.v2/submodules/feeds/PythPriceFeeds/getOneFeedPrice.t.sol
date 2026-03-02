@@ -15,6 +15,63 @@ import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.
 contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     // =========  ONE FEED TESTS ========= //
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    // given the params are empty
+    //  [X] it reverts with Pyth_ParamsInvalid
+    function test_paramsEmpty_reverts() public {
+        bytes memory err = abi.encodeWithSelector(PythPriceFeeds.Pyth_ParamsInvalid.selector, "");
+        vm.expectRevert(err);
+
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    // given the params are too short
+    //  [X] it reverts with Pyth_ParamsInvalid
+    function test_paramsTooShort_reverts() public {
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        bytes memory shortParams = new bytes(127); // 1 byte short of 128
+        for (uint256 i = 0; i < 127; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    // given the params are too long
+    //  [X] it reverts with Pyth_ParamsInvalid
+    function test_paramsTooLong_reverts() public {
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        bytes memory longParams = new bytes(256); // Double the expected size
+        for (uint256 i = 0; i < 128; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
     // given all parameters are valid
     //  [X] it returns the correct price in output decimals
     function test_success() public view {

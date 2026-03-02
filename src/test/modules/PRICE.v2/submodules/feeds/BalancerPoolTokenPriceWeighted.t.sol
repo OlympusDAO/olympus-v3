@@ -248,6 +248,92 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
     // ========= TOKEN PRICE ========= //
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getWeightedPoolTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getWeightedPoolTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31); // 1 byte short of 32
+        bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getWeightedPoolTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64); // Double the expected size
+        bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTokenPriceFromWeightedPool_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenPriceFromWeightedPool_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31); // 1 byte short of 32
+        bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenPriceFromWeightedPool_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64); // Double the expected size
+        bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, longParams);
+    }
+
     function test_getTokenPriceFromWeightedPool_fuzz(
         uint8 priceDecimals_,
         uint8 poolDecimals_,

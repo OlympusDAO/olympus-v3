@@ -160,6 +160,94 @@ contract UniswapV2PoolTokenPriceTest is Test {
         assertApproxEqAbs(truncatedExpected, truncatedActual, delta);
     }
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getPoolTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getPoolTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory params = abi.encode(address(mockPool));
+        bytes memory shortParams = new bytes(31); // 1 byte short of 32
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getPoolTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64); // Double the expected size
+        bytes memory params = abi.encode(address(mockPool));
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+        // Extra bytes are zeros
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory params = abi.encode(address(mockPool));
+        bytes memory shortParams = new bytes(31); // 1 byte short of 32
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64); // Double the expected size
+        bytes memory params = abi.encode(address(mockPool));
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+        // Extra bytes are zeros
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, longParams);
+    }
+
     // ========= POOL TOKEN PRICE ========= //
 
     function test_getPoolTokenPrice_revertsOnParamsPoolUndefined() public {

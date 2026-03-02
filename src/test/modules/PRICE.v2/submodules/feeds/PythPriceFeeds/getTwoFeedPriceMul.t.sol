@@ -17,6 +17,65 @@ contract PythPriceFeedsGetTwoFeedPriceMulTest is PythPriceFeedsTest {
 
     // =========  TWO FEED TESTS - MUL ========= //
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(PythPriceFeeds.Pyth_ParamsInvalid.selector, "");
+        vm.expectRevert(err);
+
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(255); // 1 byte short of 256
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        for (uint256 i = 0; i < 255; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(512); // Double the expected size
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        for (uint256 i = 0; i < 256; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, longParams);
+    }
+
     // given all parameters are valid for two feeds
     //  [X] it returns the correct multiplied price (first * second) in output decimals
     function test_success() public view {

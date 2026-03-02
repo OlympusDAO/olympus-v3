@@ -34,6 +34,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @notice     Used when calculating the value of a token in a weighted pool
     uint8 internal constant WEIGHTED_POOL_POW_DECIMALS = 18;
 
+    /// @notice     The expected length of the encoded pool parameters (1 address = 32 bytes)
+    uint256 internal constant POOL_PARAMS_LENGTH = 32;
+
     /// @notice             Parameters for a Balancer weighted pool
     ///
     /// @param pool         Address of the Balancer pool
@@ -59,6 +62,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     }
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error Balancer_ParamsInvalid(bytes params_);
 
     /// @notice             The number of decimals of the asset is greater than the maximum allowed
     ///
@@ -380,6 +388,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint8 poolDecimals;
         bytes32 poolId;
         {
+            // Validate params length
+            if (params_.length != POOL_PARAMS_LENGTH) revert Balancer_ParamsInvalid(params_);
+
             // Decode params
             BalancerWeightedPoolParams memory params = abi.decode(
                 params_,
@@ -470,6 +481,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint8 poolDecimals;
         bytes32 poolId;
         {
+            // Validate params length
+            if (params_.length != POOL_PARAMS_LENGTH) revert Balancer_ParamsInvalid(params_);
+
             // Decode params
             BalancerStablePoolParams memory params = abi.decode(
                 params_,
@@ -585,6 +599,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
+
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert Balancer_ParamsInvalid(params_);
 
         // Decode params
         IWeightedPool pool;
@@ -734,6 +751,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
+
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert Balancer_ParamsInvalid(params_);
 
         // Decode params
         IStablePool pool;

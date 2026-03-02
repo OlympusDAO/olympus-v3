@@ -29,6 +29,9 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @notice     The number of balances expected to be in the pool
     uint256 internal constant BALANCES_COUNT = 2;
 
+    /// @notice     The expected length of the encoded pool parameters (1 address = 32 bytes)
+    uint256 internal constant POOL_PARAMS_LENGTH = 32;
+
     /// @notice        UniswapV2 pool parameters
     ///
     /// @param pool    Address of the UniswapV2 pool
@@ -37,6 +40,11 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     }
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_           The encoded parameters
+    error UniswapV2_ParamsInvalid(bytes params_);
 
     /// @notice                 The decimals of the asset are out of bounds
     ///
@@ -199,6 +207,9 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         {
             IUniswapV2Pair pool;
             {
+                // Validate params length
+                if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV2_ParamsInvalid(params_);
+
                 // Decode params
                 UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
                 if (address(params.pool) == address(0))
@@ -305,6 +316,9 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         if (outputDecimals_ > MAX_DECIMALS)
             revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_, MAX_DECIMALS);
+
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV2_ParamsInvalid(params_);
 
         // Decode params
         IUniswapV2Pair pool;

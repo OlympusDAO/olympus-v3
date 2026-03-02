@@ -211,6 +211,92 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
     // ========= TOKEN PRICE ========= //
 
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getStablePoolTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getStablePoolTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getStablePoolTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, longParams);
+    }
+
     function test_getTokenPriceFromStablePool_success() public view {
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
         uint256 price = balancerSubmodule.getTokenPriceFromStablePool(

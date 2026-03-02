@@ -22,6 +22,12 @@ contract PythPriceFeeds is PriceSubmodule {
 
     uint256 internal constant _PRICE_DATA_SIZE = 128;
 
+    /// @notice     The expected length of the encoded one feed parameters (address + bytes32 + uint48 + uint256 = 128 bytes)
+    uint256 internal constant ONE_FEED_PARAMS_LENGTH = 128;
+
+    /// @notice     The expected length of the encoded two feed parameters (2x address + 2x bytes32 + 2x uint48 + 2x uint256 = 256 bytes)
+    uint256 internal constant TWO_FEED_PARAMS_LENGTH = 256;
+
     /// @notice                 Parameters for a single Pyth price feed
     ///
     /// @param pyth             Address of the Pyth contract
@@ -57,6 +63,11 @@ contract PythPriceFeeds is PriceSubmodule {
     }
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error Pyth_ParamsInvalid(bytes params_);
 
     /// @notice                 A Pyth contract address specified in the parameters is invalid
     ///
@@ -294,6 +305,9 @@ contract PythPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != ONE_FEED_PARAMS_LENGTH) revert Pyth_ParamsInvalid(params_);
+
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
         if (params.pyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.pyth);
@@ -331,6 +345,9 @@ contract PythPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Pyth_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (params.firstPyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.firstPyth);
@@ -390,6 +407,9 @@ contract PythPriceFeeds is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Pyth_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (params.firstPyth == address(0)) revert Pyth_ParamsPythInvalid(0, params.firstPyth);

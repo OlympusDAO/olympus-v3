@@ -28,6 +28,9 @@ contract UniswapV3Price is PriceSubmodule {
     /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
     uint8 internal constant BASE_10_MAX_EXPONENT = 30;
 
+    /// @notice     The expected length of the encoded pool parameters (address + uint32 = 64 bytes)
+    uint256 internal constant POOL_PARAMS_LENGTH = 64;
+
     /// @notice                         The parameters for a Uniswap V3 pool
     /// @param pool                     The address of the pool
     /// @param observationWindowSeconds The length of the TWAP observation window in seconds
@@ -42,6 +45,11 @@ contract UniswapV3Price is PriceSubmodule {
     int24 internal constant MAX_TICK = -MIN_TICK;
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error UniswapV3_ParamsInvalid(bytes params_);
 
     /// @notice                 The decimals of the asset are out of bounds
     /// @param asset_           The address of the asset
@@ -127,6 +135,9 @@ contract UniswapV3Price is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
+
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
         (
             address quoteToken,
@@ -173,6 +184,9 @@ contract UniswapV3Price is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
+
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
         (
             address quoteToken,
