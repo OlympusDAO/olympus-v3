@@ -409,26 +409,20 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenPrice.selector,
             abi.encode(
-                _ohm, // lookupToken (OHM)
-                abi.encode(
-                    UniswapV3Price.UniswapV3Params({
-                        pool: IUniswapV3Pool(uniswapOhmWeth),
-                        observationWindowSeconds: _ohmObservationWindow
-                    })
-                )
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmWeth),
+                    observationWindowSeconds: _ohmObservationWindow
+                })
             )
         );
         feeds[1] = _encodeFeed(
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenPrice.selector,
             abi.encode(
-                _ohm, // lookupToken (OHM)
-                abi.encode(
-                    UniswapV3Price.UniswapV3Params({
-                        pool: IUniswapV3Pool(uniswapOhmSusds),
-                        observationWindowSeconds: _ohmObservationWindow
-                    })
-                )
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmSusds),
+                    observationWindowSeconds: _ohmObservationWindow
+                })
             )
         );
 
