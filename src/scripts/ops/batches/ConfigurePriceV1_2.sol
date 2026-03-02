@@ -287,6 +287,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address chainlinkEthUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkEthUsd");
         address redstoneEthUsd = _readBatchArgAddress("configurePriceV1_2", "redstoneEthUsd");
         bytes32 pythEthUsdId = _readBatchArgBytes32("configurePriceV1_2", "pythEthUsdFeedId");
+        address chainlinkBtcUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkBtcUsd");
+        address chainlinkEthBtc = _readBatchArgAddress("configurePriceV1_2", "chainlinkEthBtc");
 
         // Read max confidence for Pyth ETH feed from args file
         uint256 pythEthUsdMaxConfidence = _readBatchArgUint256(
@@ -309,6 +311,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("RedStone ETH/USD:", redstoneEthUsd);
         console2.logBytes32(pythEthUsdId);
         console2.log("Pyth contract:", _pyth);
+        console2.log("Chainlink BTC/USD:", chainlinkBtcUsd);
+        console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
 
         // Create strategy component: getAveragePriceExcludingDeviations
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
@@ -317,8 +321,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             wethStrictMode
         );
 
-        // Create feed components using getOneFeedPrice
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        // Create feed components using getOneFeedPrice for first 3 feeds
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](4);
         feeds[0] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -348,6 +352,19 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                     priceFeedId: pythEthUsdId,
                     updateThreshold: wethUpdateThreshold,
                     maxConfidence: pythEthUsdMaxConfidence
+                })
+            )
+        );
+        // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD
+        feeds[3] = _encodeFeed(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.TwoFeedParams({
+                    firstFeed: AggregatorV2V3Interface(chainlinkEthBtc),
+                    firstUpdateThreshold: wethUpdateThreshold,
+                    secondFeed: AggregatorV2V3Interface(chainlinkBtcUsd),
+                    secondUpdateThreshold: wethUpdateThreshold
                 })
             )
         );

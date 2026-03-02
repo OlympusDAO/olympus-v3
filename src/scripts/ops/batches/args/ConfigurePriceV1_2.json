@@ -2,7 +2,9 @@
     "functions": [
         {
             "args": {
+                "chainlinkBtcUsd": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
                 "chainlinkDaiUsd": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
+                "chainlinkEthBtc": "0xdeb288F737066589598e9214E782fa5A8eD689e8",
                 "chainlinkEthUsd": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
                 "chainlinkUsdsUsd": "0xfF30586cD0F29eD462364C7e81375FC0C71219b1",
                 "ohmInitialPrice": "17000000000000000000",

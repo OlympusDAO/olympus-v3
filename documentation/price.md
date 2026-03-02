@@ -22,15 +22,15 @@ Re-configure price resolution in the protocol to utilise multiple price feeds wh
 | ----- | ------- | ----------- | -------- | -------- | ------ | ----------- |
 | USDS | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [Chainlink DAI-USD](https://etherscan.io/address/0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9) | `getAveragePriceExcludingDeviations()` with 1% deviation from median on strict mode | No | No | 0 |
 | sUSDS | [0xa39...fbD](https://etherscan.io/address/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | ERC4626 Submodule | None | No | No | 0 |
-| wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD) | `getAveragePriceExcludingDeviations()` with 2% deviation from median on strict mode | No | No | 0 |
+| wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD), [ETH-BTC](https://etherscan.io/address/0xdeb288F737066589598e9214E782fa5A8eD689e8)x[BTC-USD](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | `getAveragePriceExcludingDeviations()` with 2% deviation from median on strict mode | No | No | 0 |
 | OHM | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755) | `getAveragePrice()` on strict mode | Yes | No | 604800 (7 days) |
 
-- Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, Redstone and Pyth oracles.
+- Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, Redstone, Pyth and Chainlink-derived (ETH-BTC × BTC-USD) oracles.
 - The price of USDS will be determined as the average of the price feeds from 2 Chainlink feeds (USDS-USD and DAI-USD).
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
-- The price of ETH will be determined as the average of the price feeds from 3 different vendors.
+- The price of ETH will be determined as the average of the price feeds from 4 different sources.
     - After any zero value or deviating values (> 2% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
@@ -45,6 +45,8 @@ sequenceDiagram
     participant CL_ETH as Chainlink ETH-USD
     participant RS_ETH as RedStone ETH-USD
     participant Pyth_ETH as Pyth ETH-USD
+    participant CL_ETHBTC as Chainlink ETH-BTC
+    participant CL_BTCUSD as Chainlink BTC-USD
 
     User->>WETH: getPrice(wETH)
 
@@ -59,6 +61,12 @@ sequenceDiagram
     and Pyth ETH-USD Path
         WETH->>Pyth_ETH: latestRoundData()
         Pyth_ETH-->>WETH: ETH-USD price
+    and Chainlink-derived Path
+        WETH->>CL_ETHBTC: latestRoundData()
+        CL_ETHBTC-->>WETH: ETH-BTC price
+        WETH->>CL_BTCUSD: latestRoundData()
+        CL_BTCUSD-->>WETH: BTC-USD price
+        Note over WETH: Calculate: ETH-BTC × BTC-USD = ETH-USD
     end
 
     Note over WETH: Filter: Exclude zero and values deviating >2% from median<br/>Average: Sum of valid values / count
@@ -102,6 +110,8 @@ sequenceDiagram
     participant CL_ETH as Chainlink ETH-USD
     participant RS_ETH as RedStone ETH-USD
     participant Pyth_ETH as Pyth ETH-USD
+    participant CL_ETHBTC as Chainlink ETH-BTC
+    participant CL_BTCUSD as Chainlink BTC-USD
     participant SUSDS
     participant ERC4626 as ERC4626 Submodule
     participant USDS
@@ -127,6 +137,12 @@ sequenceDiagram
         and Pyth ETH-USD Path
             WETH->>Pyth_ETH: latestRoundData()
             Pyth_ETH-->>WETH: ETH-USD price
+        and Chainlink-derived Path
+            WETH->>CL_ETHBTC: latestRoundData()
+            CL_ETHBTC-->>WETH: ETH-BTC price
+            WETH->>CL_BTCUSD: latestRoundData()
+            CL_BTCUSD-->>WETH: BTC-USD price
+            Note over WETH: Calculate: ETH-BTC × BTC-USD = ETH-USD
         end
 
         Note over WETH: Filter: Exclude zero and values deviating >2% from median<br/>Average: Sum of valid values / count
