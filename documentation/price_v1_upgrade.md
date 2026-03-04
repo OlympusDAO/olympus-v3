@@ -104,7 +104,7 @@ Create an args file with price feed addresses (JSON format with `.functions[].na
 **Batch actions:**
 
 1. Install 5 submodules via `PriceConfigv2.installSubmodule()`
-2. Configure USDS (Chainlink + RedStone + Pyth feeds, deviation-based strategy)
+2. Configure USDS (Chainlink USDS-USD + Chainlink DAI-USD + Pyth feeds, deviation-based strategy)
 3. Configure sUSDS (ERC4626 wrapper, uses USDS price)
 4. Configure wETH (Chainlink + RedStone + Pyth feeds, deviation-based strategy)
 5. Configure OHM (2x Uniswap V3 feeds, average strategy, 7-day moving average)
@@ -139,14 +139,14 @@ No OCG approval required — only `price_admin` role.
 
 ## File Reference
 
-| File                                                         | Purpose                                             |
-| ------------------------------------------------------------ | --------------------------------------------------- |
-| `shell/deployV3.sh`                                          | Deployment shell script                             |
-| `src/scripts/deploy/DeployV3.s.sol`                          | Deployment script                                   |
-| `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence                                 |
-| `shell/safeBatchV2.sh`                                       | Batch execution shell script                        |
-| `src/scripts/ops/batches/ConfigurePriceV1_2.sol`             | PRICE configuration batch                           |
-| `src/policies/price/PriceConfig.v2.sol`                      | Configuration policy (auto-enabled on installation) |
-| `src/modules/PRICE/OlympusPrice.v1_2.sol`                    | PRICE v1.2 module                                   |
+| File | Purpose |
+| ---- | ------- |
+| `shell/deployV3.sh` | Deployment shell script |
+| `src/scripts/deploy/DeployV3.s.sol` | Deployment script |
+| `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence |
+| `shell/safeBatchV2.sh` | Batch execution shell script |
+| `src/scripts/ops/batches/ConfigurePriceV1_2.sol` | PRICE configuration batch |
+| `src/policies/price/PriceConfig.v2.sol` | Configuration policy |
+| `src/modules/PRICE/OlympusPrice.v1_2.sol` | PRICE v1.2 module |
 
 For oracle-related files, see **[Oracle Factories and Policies](oracle_factories.md)**.

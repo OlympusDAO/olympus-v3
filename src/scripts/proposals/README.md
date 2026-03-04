@@ -50,7 +50,7 @@ It is possible to test proposal submission (and execution) on a forked chain. Tw
 3. Deal gOHM to your wallet and set up voting checkpoint:
 
     ```bash
-    ./shell/anvil/deal_gohm.sh <your_wallet_address>
+    shell/anvil/deal_gohm.sh <your_wallet_address>
     ```
 
 4. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
@@ -63,6 +63,7 @@ It is possible to test proposal submission (and execution) on a forked chain. Tw
 2. Delegate your gOHM voting power to your wallet address.
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 3. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
+
     - Using a cast wallet:
 
         ```bash
