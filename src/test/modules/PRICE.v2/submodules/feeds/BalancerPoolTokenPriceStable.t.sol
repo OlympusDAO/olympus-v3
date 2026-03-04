@@ -3,23 +3,23 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Mocks
-import {MockPrice} from "test/mocks/MockPrice.v2.sol";
-import {MockBalancerStablePool, MockBalancerWeightedPool, MockBalancerComposableStablePool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
+import {MockBalancerComposableStablePool, MockBalancerStablePool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
+import {BalancerPoolTokenPrice, IStablePool} from "src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {Kernel} from "src/Kernel.sol";
-import {BalancerPoolTokenPrice, IStablePool} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 
 contract BalancerPoolTokenPriceStableTest is Test {
     using FullMath for uint256;
@@ -210,6 +210,92 @@ contract BalancerPoolTokenPriceStableTest is Test {
     }
 
     // ========= TOKEN PRICE ========= //
+
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getStablePoolTokenPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getStablePoolTokenPrice_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getStablePoolTokenPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, "");
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(31);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 31; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(64);
+        bytes memory params = encodeBalancerPoolParams(mockStablePool);
+        for (uint256 i = 0; i < 32; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, longParams);
+    }
 
     function test_getTokenPriceFromStablePool_success() public view {
         bytes memory params = encodeBalancerPoolParams(mockStablePool);

@@ -30,7 +30,12 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
 
     // ========== POLICY SETUP ========== //
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_) Policy(kernel_) {
+        // Unlike normal policies, we want this to be enabled by default
+        // This allows the "price_admin" to configure assets in the same transaction batch as the module install/upgrade.
+        isEnabled = true;
+        emit Enabled();
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -69,7 +74,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](6);
         // PRICE Permissions
         requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
         requests[1] = Permissions({
@@ -78,25 +83,17 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         });
         requests[2] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceFeeds.selector
+            funcSelector: PRICE.updateAsset.selector
         });
         requests[3] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetPriceStrategy.selector
+            funcSelector: PRICE.installSubmodule.selector
         });
         requests[4] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAssetMovingAverage.selector
-        });
-        requests[5] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.installSubmodule.selector
-        });
-        requests[6] = Permissions({
-            keycode: PRICE_KEYCODE,
             funcSelector: PRICE.upgradeSubmodule.selector
         });
-        requests[7] = Permissions({
+        requests[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
         });
@@ -109,15 +106,15 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
 
     // ========== MODIFIERS ========== //
 
-    function _onlyPriceManagerOrAdminRole() internal view {
+    function _onlyPriceOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, _PRICE_ADMIN_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
         }
     }
 
     /// @notice Modifier that reverts if the caller does not have the admin or price_admin role
-    modifier onlyPriceManagerOrAdminRole() {
-        _onlyPriceManagerOrAdminRole();
+    modifier onlyPriceOrAdminRole() {
+        _onlyPriceOrAdminRole();
         _;
     }
 
@@ -133,7 +130,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
         IPRICEv2.Component[] memory feeds_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
+    ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -147,55 +144,31 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
-    function removeAssetPrice(
-        address asset_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
+    function removeAssetPrice(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.removeAsset(asset_);
     }
 
     /// @inheritdoc IPriceConfigv2
-    function updateAssetPriceFeeds(
+    function updateAsset(
         address asset_,
-        IPRICEv2.Component[] memory feeds_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
-        PRICE.updateAssetPriceFeeds(asset_, feeds_);
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function updateAssetPriceStrategy(
-        address asset_,
-        IPRICEv2.Component memory strategy_,
-        bool useMovingAverage_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
-        PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
-        PRICE.updateAssetMovingAverage(
-            asset_,
-            storeMovingAverage_,
-            movingAverageDuration_,
-            lastObservationTime_,
-            observations_
-        );
+        IPRICEv2.UpdateAssetParams memory params_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.updateAsset(asset_, params_);
     }
 
     // ========== SUBMODULE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
-    function installSubmodule(address submodule_) external override onlyEnabled onlyAdminRole {
+    function installSubmodule(
+        address submodule_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.installSubmodule(Submodule(submodule_));
     }
 
     /// @inheritdoc IPriceConfigv2
-    function upgradeSubmodule(address submodule_) external override onlyEnabled onlyAdminRole {
+    function upgradeSubmodule(
+        address submodule_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.upgradeSubmodule(Submodule(submodule_));
     }
 
@@ -203,7 +176,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external override onlyEnabled onlyPriceManagerOrAdminRole {
+    ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
 

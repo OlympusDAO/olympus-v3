@@ -6,7 +6,6 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 // Bophades
 import {Kernel, Module} from "src/Kernel.sol";
@@ -95,8 +94,7 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     ///             Compatibility function for PRICEv1.
     function getTargetPrice() external view returns (uint256) {
         (uint256 movingAvg, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
-        uint256 min = minimumTargetPrice;
-        return movingAvg > min ? movingAvg : min;
+        return movingAvg > minimumTargetPrice ? movingAvg : minimumTargetPrice;
     }
 
     /// @inheritdoc IPRICEv1
@@ -165,11 +163,10 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         return _observationFrequency;
     }
 
-    function supportsInterface(bytes4 interfaceId) external view virtual override returns (bool) {
-        return
-            interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IPRICEv1).interfaceId ||
-            interfaceId == type(IPRICEv2).interfaceId;
+    // ========== ERC165 FUNCTIONS ========== //
+
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+        return interfaceId_ == type(IPRICEv1).interfaceId || super.supportsInterface(interfaceId_);
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

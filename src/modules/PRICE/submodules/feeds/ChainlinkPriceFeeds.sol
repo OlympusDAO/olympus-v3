@@ -3,14 +3,14 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      ChainlinkPriceFeeds
@@ -21,6 +21,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+
+    /// @notice     The expected length of the encoded one feed parameters (address + uint48 = 64 bytes)
+    uint256 internal constant ONE_FEED_PARAMS_LENGTH = 64;
+
+    /// @notice     The expected length of the encoded two feed parameters (2x address + 2x uint48 = 128 bytes)
+    uint256 internal constant TWO_FEED_PARAMS_LENGTH = 128;
 
     /// @notice                 Parameters for a single Chainlink price feed
     ///
@@ -53,6 +59,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     }
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error Chainlink_ParamsInvalid(bytes params_);
 
     /// @notice                 The number of decimals of the price feed is greater than the maximum allowed
     ///
@@ -159,7 +170,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param updateThreshold_         The maximum number of seconds elapsed since the last price feed update
     /// @param feedDecimals_            The number of decimals of the price feed
     /// @param outputDecimals_          The number of decimals to return the price in
-    /// @return                         The validated price in the scale of `outputDecimals_`
+    /// @return uint256                 The validated price in the scale of `outputDecimals_`
     function _getFeedPrice(
         AggregatorV2V3Interface feed_,
         uint256 updateThreshold_,
@@ -199,12 +210,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `OneFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
         address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != ONE_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
         if (address(params.feed) == address(0))
@@ -242,12 +256,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`.
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTwoFeedPriceDiv(
         address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (address(params.firstFeed) == address(0))
@@ -306,12 +323,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`.
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTwoFeedPriceMul(
         address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != TWO_FEED_PARAMS_LENGTH) revert Chainlink_ParamsInvalid(params_);
+
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         if (address(params.firstFeed) == address(0))

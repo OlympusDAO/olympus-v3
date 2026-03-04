@@ -3,6 +3,21 @@ pragma solidity >=0.8.15;
 
 /// @title Interface for simple price aggregation strategies
 interface ISimplePriceFeedStrategy {
+    // ========== ERRORS ========== //
+
+    /// @notice                 Indicates that the number of prices provided to the strategy is invalid
+    ///
+    /// @param priceCount_      The number of prices provided to the strategy
+    /// @param minPriceCount_   The minimum number of prices required by the strategy
+    error SimpleStrategy_PriceCountInvalid(uint256 priceCount_, uint256 minPriceCount_);
+
+    /// @notice                 Indicates that the parameters provided to the strategy are invalid
+    ///
+    /// @param params_          The parameters provided to the strategy
+    error SimpleStrategy_ParamsInvalid(bytes params_);
+
+    // ========== STRUCTS ========== //
+
     /// @notice Parameters for deviation-based price aggregation strategies
     ///
     /// @param  deviationBps                Deviation threshold in basis points (100 = 1%, max 9999)
@@ -11,6 +26,18 @@ interface ISimplePriceFeedStrategy {
         uint16 deviationBps;
         bool revertOnInsufficientCount;
     }
+
+    // ========== FUNCTIONS ========== //
+
+    /// @notice         Returns the first non-zero price in the array.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Ignored
+    /// @return price   The resolved price
+    function getFirstNonZeroPrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) external pure returns (uint256 price);
 
     /// @notice Returns the average of non-zero prices in the array
     ///
@@ -37,7 +64,7 @@ interface ISimplePriceFeedStrategy {
     /// @dev    Iteratively filters out deviating prices and returns the average of remaining prices.
     /// @dev    This is a "consensus" strategy - outliers are removed until all remaining prices agree.
     ///
-    /// @param  prices_  Array of prices from multiple feeds (minimum 3 elements)
+    /// @param  prices_  Array of prices from multiple feeds (minimum 2 elements)
     /// @param  params_  Encoded DeviationParams struct (64 bytes)
     /// @return price    The resolved price (average of non-deviating prices)
     function getAveragePriceExcludingDeviations(

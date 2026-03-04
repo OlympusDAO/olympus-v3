@@ -31,7 +31,7 @@ contract MockSubmoduleNoERC165 is IVersioned {
         return (1, 0);
     }
 
-    function INIT() external {
+    function INIT() external view {
         if (msg.sender != address(parent)) revert Submodule_OnlyParent(msg.sender);
     }
 

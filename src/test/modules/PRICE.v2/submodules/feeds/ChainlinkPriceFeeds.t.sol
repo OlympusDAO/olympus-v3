@@ -3,23 +3,23 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Mocks
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 // Interfaces
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {Kernel} from "src/Kernel.sol";
-import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;
@@ -113,6 +113,154 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     // =========  ONE FEED TESTS ========= //
+
+    // ========= PARAMS LENGTH VALIDATION ========= //
+
+    function test_getOneFeedPrice_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getOneFeedPrice_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(63); // 1 byte short of 64
+        bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
+        for (uint256 i = 0; i < 63; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getOneFeedPrice_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(128); // Double the expected size
+        bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
+        for (uint256 i = 0; i < 64; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(127); // 1 byte short of 128
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        for (uint256 i = 0; i < 127; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(256); // Double the expected size
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        for (uint256 i = 0; i < 128; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, longParams);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsEmpty() public {
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            ""
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, "");
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsTooShort() public {
+        bytes memory shortParams = new bytes(127); // 1 byte short of 128
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        for (uint256 i = 0; i < 127; i++) {
+            shortParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            shortParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, shortParams);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsTooLong() public {
+        bytes memory longParams = new bytes(256); // Double the expected size
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        for (uint256 i = 0; i < 128; i++) {
+            longParams[i] = params[i];
+        }
+
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsInvalid.selector,
+            longParams
+        );
+        vm.expectRevert(err);
+
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, longParams);
+    }
 
     function test_getOneFeedPrice_success() public view {
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);

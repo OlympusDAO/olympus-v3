@@ -19,7 +19,7 @@ test/lib=src/test/lib
 @forge-std-1.9.6/=dependencies/forge-std-1.9.6/src/
 forge-std/=dependencies/forge-std-1.9.6/src/
 
-@safe-utils-0.0.13/=dependencies/safe-utils-0.0.13/src/
+@safe-utils-0.0.17/=dependencies/safe-utils-0.0.17/src/
 
 @base58-solidity-1.0.3/=dependencies/base58-solidity-1.0.3/contracts/
 
@@ -46,7 +46,7 @@ Governors/=dependencies/forge-proposal-simulator-1.0.1/Governors/
 
 safe-smart-account/=dependencies/safe-smart-account-1.4.1/contracts/
 
-solidity-http/=dependencies/solidity-http-0.0.6/src/
+solidity-http/=dependencies/solidity-http-0.0.7/src/
 
 @uniswap-v3-core-1.0.1/=dependencies/uniswap-v3-core-1.0.1/contracts/
 @uniswap/v3-core/contracts/=dependencies/uniswap-v3-core-1.0.1/contracts/

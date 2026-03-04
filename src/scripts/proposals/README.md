@@ -17,9 +17,11 @@ The OCG proposal must have a separate contract that inherits from `ProposalScrip
 
 ## Fork Testing
 
-It is possible to test proposal submission (and execution) on a forked chain. To do so, follow these steps:
+It is possible to test proposal submission (and execution) on a forked chain. Two options are available: Tenderly VNet or local Anvil fork.
 
-1. Create a fork of the chain you wish to test on. Tenderly will be used in the examples.
+### Tenderly VNet
+
+1. Create a fork of the chain you wish to test on using Tenderly.
 2. Create an environment file (e.g., `.env.tenderly`) and set the environment variables.
     - `RPC_URL`: Your fork's RPC URL.
     - `TENDERLY_ACCOUNT_SLUG`: Your Tenderly account slug.
@@ -32,7 +34,28 @@ It is possible to test proposal submission (and execution) on a forked chain. To
 5. Delegate your gOHM voting power to your wallet address.
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 6. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
-7. Alternatively, you can execute the proposal (as if the proposal has passed) by running `./executeOnTestnet.sh` with the appropriate arguments.
+    - Use `--chain <rpc-url>` to specify the fork's RPC URL.
+7. Alternatively, you can execute the proposal (as if the proposal has passed) by running `./executeOnTenderly.sh` with the appropriate arguments.
+
+### Local Anvil Fork
+
+1. Start an Anvil fork:
+
+    ```bash
+    pnpm run anvil:fork
+    ```
+
+2. Create an environment file (e.g., `.env.anvil`) with:
+    - `RPC_URL`: `http://localhost:8545` (or omit to use the default)
+3. Deal gOHM to your wallet and set up voting checkpoint:
+
+    ```bash
+    shell/anvil/deal_gohm.sh <your_wallet_address>
+    ```
+
+4. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
+    - Use `--chain http://localhost:8545` to specify the local Anvil RPC.
+5. Execute the proposal by running `./executeOnAnvilFork.sh` with the appropriate arguments.
 
 ## Submitting a Proposal
 
@@ -40,4 +63,27 @@ It is possible to test proposal submission (and execution) on a forked chain. To
 2. Delegate your gOHM voting power to your wallet address.
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 3. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
-    - Example: `./src/scripts/proposals/submitProposal.sh --file src/proposals/ContractRegistryProposal.sol --contract ContractRegistryProposalScript --account <cast wallet name> --broadcast true --env .env`
+
+    - Using a cast wallet:
+
+        ```bash
+        ./src/scripts/proposals/submitProposal.sh \
+            --file src/proposals/ContractRegistryProposal.sol \
+            --contract ContractRegistryProposalScript \
+            --account my_wallet \
+            --chain mainnet \
+            --broadcast true \
+            --env .env
+        ```
+
+    - Using a Ledger:
+
+        ```bash
+        ./src/scripts/proposals/submitProposal.sh \
+            --file src/proposals/ContractRegistryProposal.sol \
+            --contract ContractRegistryProposalScript \
+            --ledger 0 \
+            --chain mainnet \
+            --broadcast true \
+            --env .env
+        ```

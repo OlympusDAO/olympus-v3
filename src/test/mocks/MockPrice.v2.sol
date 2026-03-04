@@ -233,21 +233,7 @@ contract MockPrice is PRICEv2 {
 
     function removeAsset(address asset_) external override {}
 
-    function updateAssetPriceFeeds(address asset_, Component[] memory feeds_) external override {}
-
-    function updateAssetPriceStrategy(
-        address asset_,
-        Component memory strategy_,
-        bool useMovingAverage_
-    ) external override {}
-
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external override {}
+    function updateAsset(address asset_, UpdateAssetParams memory params_) external override {}
 
     function storeObservations() external virtual override {
         // Iterate over all assets

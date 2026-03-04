@@ -18,7 +18,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
     // INPUT VALIDATION TESTS (Configuration Issues - always revert)
     // ============================================================================
     //
-    // when input array has less than 3 elements
+    // when input array has less than 2 elements
     //   [X] it reverts with PriceCountInvalid
     //
 
@@ -26,7 +26,7 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         uint256[] memory prices = new uint256[](0);
         bytes memory params = _encodeDeviationParams(1000, false);
 
-        _expectRevertPriceCount(0, 3);
+        _expectRevertPriceCount(0, 2);
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
@@ -35,32 +35,32 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         prices[0] = 1000e18;
         bytes memory params = _encodeDeviationParams(1000, false);
 
-        _expectRevertPriceCount(1, 3);
+        _expectRevertPriceCount(1, 2);
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
-    function test_whenInputArrayLengthTwo_reverts() public {
+    function test_whenInputArrayLengthTwo_works() public view {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1000e18;
         prices[1] = 1050e18;
         bytes memory params = _encodeDeviationParams(1000, false);
 
-        _expectRevertPriceCount(2, 3);
-        strategy.getAveragePriceExcludingDeviations(prices, params);
+        uint256 result = strategy.getAveragePriceExcludingDeviations(prices, params);
+
+        // Expected: (1000e18 + 1050e18) / 2 = 1025e18
+        assertEq(result, 1025e18, "should return average of 2 prices");
     }
 
-    function test_whenInputArrayLengthLessThanThree_reverts_fuzz(
+    function test_whenInputArrayLengthLessThanTwo_reverts_fuzz(
         uint8 length,
-        uint256 price1,
-        uint256 price2
+        uint256 price1
     ) public {
-        vm.assume(length < 3);
+        vm.assume(length < 2);
         uint256[] memory prices = new uint256[](length);
         if (length > 0) prices[0] = price1;
-        if (length > 1) prices[1] = price2;
         bytes memory params = _encodeDeviationParams(1000, false);
 
-        _expectRevertPriceCount(length, 3);
+        _expectRevertPriceCount(length, 2);
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 

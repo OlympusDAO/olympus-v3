@@ -11,7 +11,7 @@ import {QuickSort} from "src/libraries/QuickSort.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      SimplePriceFeedStrategy
@@ -29,19 +29,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @notice     Represents a 100% deviation, which is invalid
     uint256 internal constant DEVIATION_MAX = 10_000;
-
-    // ========== ERRORS ========== //
-
-    /// @notice                 Indicates that the number of prices provided to the strategy is invalid
-    ///
-    /// @param priceCount_      The number of prices provided to the strategy
-    /// @param minPriceCount_   The minimum number of prices required by the strategy
-    error SimpleStrategy_PriceCountInvalid(uint256 priceCount_, uint256 minPriceCount_);
-
-    /// @notice                 Indicates that the parameters provided to the strategy are invalid
-    ///
-    /// @param params_          The parameters provided to the strategy
-    error SimpleStrategy_ParamsInvalid(bytes params_);
 
     // ========== CONSTRUCTOR ========== //
 
@@ -132,14 +119,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     // ========== STRATEGY FUNCTIONS ========== //
 
-    /// @notice         Returns the first non-zero price in the array.
-    /// @dev            Reverts if:
-    /// @dev            - The length of prices_ array is 0, which would represent a mis-configuration.
+    /// @inheritdoc ISimplePriceFeedStrategy
+    /// @dev        Reverts if:
+    /// @dev        - The length of prices_ array is 0, which would represent a mis-configuration.
     ///
-    /// @dev            If a non-zero price cannot be found, 0 will be returned.
-    ///
-    /// @param  prices_  Array of prices
-    /// @return uint256  The resolved price
+    /// @dev        If a non-zero price cannot be found, 0 will be returned.
     function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory
@@ -438,7 +422,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
     /// @inheritdoc ISimplePriceFeedStrategy
     /// @dev    Validates input parameters and filters outliers before computing average.
-    /// @dev    Reverts if fewer than 3 prices are provided (configuration error).
+    /// @dev    Reverts if fewer than 2 prices are provided (configuration error).
     /// @dev    Reverts if no valid prices remain after filtering (no data error).
     function getAveragePriceExcludingDeviations(
         uint256[] memory prices_,
@@ -449,7 +433,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             =====================
 
             Configuration Issues (always revert):
-            - Input array < 3 elements: misconfiguration
+            - Input array < 2 elements: misconfiguration
             - Invalid params: wrong length or deviationBps out of bounds
 
             Runtime Issues (handled based on revertOnInsufficientCount flag):
@@ -469,7 +453,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         */
 
         // ========== CONFIGURATION VALIDATION ==========
-        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
         // ========== PARAMETER DECODING ==========
         ISimplePriceFeedStrategy.DeviationParams memory params = _decodeDeviationParams(params_);

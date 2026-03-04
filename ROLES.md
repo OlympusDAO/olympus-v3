@@ -17,7 +17,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
-| admin | PriceConfig v2 | Install/upgrade/exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration, enable/disable contract |
+| admin | PriceConfig v2 | Add/remove asset configuration, update asset price feed/strategy/moving average configuration, install/upgrade submodules, exec on submodules, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
@@ -63,7 +63,7 @@ This document describes the roles that are used in the Olympus protocol.
 | oracle_manager | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | oracle_manager | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
-| price_admin | PriceConfig v2 | Exec on submodules, add/remove asset configuration, update asset price feed/strategy/moving average configuration |
+| price_admin | PriceConfig v2 | Add/remove asset configuration, update asset price feed/strategy/moving average configuration, exec on submodules, install/upgrade submodules |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 

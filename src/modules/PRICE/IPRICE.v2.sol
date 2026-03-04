@@ -133,6 +133,7 @@ interface IPRICEv2 {
     );
 
     /// @notice                 The number of provided price feeds is insufficient
+    ///
     /// @param asset_           The address of the asset
     /// @param feedCount_       The number of price feeds provided
     /// @param feedCountRequired_    The minimum number of price feeds required
@@ -162,6 +163,12 @@ interface IPRICEv2 {
         uint256 feedCount_,
         bool useMovingAverage_
     );
+
+    /// @notice         A strategy was provided for a single price source
+    /// @dev            Strategy is unnecessary and will not be used
+    ///
+    /// @param asset_   The asset being configured
+    error PRICE_ParamsStrategyNotSupported(address asset_);
 
     /// @notice         The variant provided in the parameters is invalid
     /// @dev            See the `Variant` enum for valid variants
@@ -195,29 +202,76 @@ interface IPRICEv2 {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
+    /// @notice         Thrown when updateAsset is called with all update flags set to false
+    ///
+    /// @param asset_   The address of the asset
+    error PRICE_NoUpdatesRequested(address asset_);
+
     // ========== STATE ========== //
 
     /// @notice         Struct to hold the configuration for calling a function on a contract
     /// @dev            Used to configure strategy and fees in the `Asset` struct
+    ///
+    /// @param target   SubKeycode for the target submodule
+    /// @param selector The selector of the contract's function
+    /// @param params   The parameters to be passed to the function
     struct Component {
-        SubKeycode target; // submodule keycode
-        bytes4 selector; // the function selector of the contract's get() function
-        bytes params; // the parameters to be passed to the contract's get() function
+        SubKeycode target;
+        bytes4 selector;
+        bytes params;
     }
 
-    /// @notice         Struct to hold the configuration for an asset
+    /// @notice                         Struct to hold the configuration for an asset
+    ///
+    /// @param approved                 Whether the asset is approved for use in the system
+    /// @param storeMovingAverage       Whether the moving average should be stored on heartbeats
+    /// @param useMovingAverage         Whether the moving average should be provided as an argument to the strategy
+    /// @param movingAverageDuration    The duration of the moving average
+    /// @param nextObsIndex             The index of obs at which the next observation will be stored
+    /// @param numObservations          The number of observations stored
+    /// @param lastObservationTime      The last time the moving average was updated
+    /// @param cumulativeObs            The cumulative sum of observations
+    /// @param obs                      The array of stored observations
+    /// @param strategy                 Aggregates feed data into a single price result
+    /// @param feeds                    Price feeds stored in order of priority (primary feed in slot 0)
     struct Asset {
-        bool approved; // whether the asset is approved for use in the system
-        bool storeMovingAverage; // whether the moving average should be stored on heartbeats
-        bool useMovingAverage; // whether the moving average should be provided as an argument to the strategy
-        uint32 movingAverageDuration; // the duration of the moving average
-        uint16 nextObsIndex; // the index of obs at which the next observation will be stored
+        bool approved;
+        bool storeMovingAverage;
+        bool useMovingAverage;
+        uint32 movingAverageDuration;
+        uint16 nextObsIndex;
         uint16 numObservations;
-        uint48 lastObservationTime; // the last time the moving average was updated
+        uint48 lastObservationTime;
         uint256 cumulativeObs;
         uint256[] obs;
-        bytes strategy; // aggregates feed data into a single price result
-        bytes feeds; // price feeds are stored in order of priority, e.g. a primary feed should be stored in the zero slot
+        bytes strategy;
+        bytes feeds;
+    }
+
+    /// @notice                         Parameters for updating an asset configuration
+    /// @dev                            Only updates components flagged in the struct
+    ///
+    /// @param updateFeeds              Whether to update price feeds
+    /// @param updateStrategy           Whether to update strategy
+    /// @param updateMovingAverage      Whether to update moving average configuration
+    /// @param feeds                    New price feeds (only read if updateFeeds=true)
+    /// @param strategy                 New strategy (only read if updateStrategy=true)
+    /// @param useMovingAverage         New useMovingAverage flag (only read if updateStrategy=true)
+    /// @param storeMovingAverage       New storeMovingAverage flag (only read if updateMovingAverage=true)
+    /// @param movingAverageDuration    New MA duration (only read if updateMovingAverage=true)
+    /// @param lastObservationTime      New last observation time (only read if updateMovingAverage=true)
+    /// @param observations             New observations (only read if updateMovingAverage=true)
+    struct UpdateAssetParams {
+        bool updateFeeds;
+        bool updateStrategy;
+        bool updateMovingAverage;
+        Component[] feeds;
+        Component strategy;
+        bool useMovingAverage;
+        bool storeMovingAverage;
+        uint32 movingAverageDuration;
+        uint48 lastObservationTime;
+        uint256[] observations;
     }
 
     /// @notice         Variant of price to retrieve
@@ -237,40 +291,40 @@ interface IPRICEv2 {
 
     /// @notice         Provides a list of registered assets
     ///
-    /// @return         The addresses of registered assets
-    function getAssets() external view returns (address[] memory);
+    /// @return assets  The addresses of registered assets
+    function getAssets() external view returns (address[] memory assets);
 
     /// @notice         Provides the configuration of a specific asset
     ///
     /// @param asset_   The address of the asset
-    /// @return         The asset configuration as an `Asset` struct
-    function getAssetData(address asset_) external view returns (Asset memory);
+    /// @return data    The asset configuration as an `Asset` struct
+    function getAssetData(address asset_) external view returns (Asset memory data);
 
-    /// @notice         Indicates whether `asset_` has been registered
+    /// @notice             Indicates whether `asset_` has been registered
     ///
-    /// @param asset_   The address of the asset
-    /// @return         Whether the asset is approved
-    function isAssetApproved(address asset_) external view returns (bool);
+    /// @param asset_       The address of the asset
+    /// @return approved    Whether the asset is approved
+    function isAssetApproved(address asset_) external view returns (bool approved);
 
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account
     ///
     /// @param asset_   The address of the asset
-    /// @return         The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_) external view returns (uint256);
+    /// @return price   The USD price of the asset in the scale of `decimals`
+    function getPrice(address asset_) external view returns (uint256 price);
 
     /// @notice         Returns a price no older than the provided age in the system unit of account
     ///
     /// @param asset_   The address of the asset
     /// @param maxAge_  The maximum age (seconds) of the price
-    /// @return         The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256);
+    /// @return price   The USD price of the asset in the scale of `decimals`
+    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
 
-    /// @notice         Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
+    /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     ///
-    /// @param asset_   The address of the asset
-    /// @param variant_ The variant of the price to return
+    /// @param asset_       The address of the asset
+    /// @param variant_     The variant of the price to return
     /// @return _price      The USD price of the asset in the scale of `decimals`
     /// @return _timestamp  The timestamp at which the price was calculated
     function getPrice(
@@ -282,20 +336,20 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset
     /// @param base_    The address of the base asset that the price will be calculated in
-    /// @return         The price of the asset in units of `base_`
-    function getPriceIn(address asset_, address base_) external view returns (uint256);
+    /// @return price   The price of the asset in units of `base_`
+    function getPriceIn(address asset_, address base_) external view returns (uint256 price);
 
     /// @notice             Returns the price of the asset in terms of the base asset, no older than the max age
     ///
     /// @param asset_       The address of the asset
     /// @param base_        The address of the base asset that the price will be calculated in
     /// @param maxAge_      The maximum age (seconds) of the price
-    /// @return             The price of the asset in units of `base_`
+    /// @return price       The price of the asset in units of `base_`
     function getPriceIn(
         address asset_,
         address base_,
         uint48 maxAge_
-    ) external view returns (uint256);
+    ) external view returns (uint256 price);
 
     /// @notice             Returns the requested variant of the asset price in terms of the base asset
     ///
@@ -346,35 +400,17 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external;
 
-    /// @notice             Updates the price feeds for an asset
+    /// @notice         Updates an asset configuration atomically
+    /// @dev            Only updates components flagged in params_
+    /// @dev            Validates entire configuration atomically after updates
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is not approved
+    /// @dev            - The caller is not permissioned
+    /// @dev            - Any updated submodule is not installed
+    /// @dev            - The final configuration is invalid
+    /// @dev            - All update flags are false (no-op)
     ///
-    /// @param asset_       The address of the asset
-    /// @param feeds_       The new price feeds to be used to calculate the price
-    function updateAssetPriceFeeds(address asset_, Component[] memory feeds_) external;
-
-    /// @notice                     Updates the price aggregation strategy for an asset
-    ///
-    /// @param asset_               The address of the asset
-    /// @param strategy_            The new strategy to be used to aggregate price feeds
-    /// @param useMovingAverage_    Whether the moving average should be used as an argument to the strategy
-    function updateAssetPriceStrategy(
-        address asset_,
-        Component memory strategy_,
-        bool useMovingAverage_
-    ) external;
-
-    /// @notice                         Updates the moving average configuration for an asset
-    ///
-    /// @param asset_                   The address of the asset
-    /// @param storeMovingAverage_      Whether the moving average should be stored periodically
-    /// @param movingAverageDuration_   The duration of the moving average in seconds
-    /// @param lastObservationTime_     The timestamp of the last observation
-    /// @param observations_            The observations to be used to initialize the moving average
-    function updateAssetMovingAverage(
-        address asset_,
-        bool storeMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_
-    ) external;
+    /// @param asset_   The address of the asset to update
+    /// @param params_  Update parameters with flags
+    function updateAsset(address asset_, UpdateAssetParams memory params_) external;
 }

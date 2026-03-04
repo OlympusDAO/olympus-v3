@@ -14,7 +14,7 @@ import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary
 
 // Bophades
 import {Module} from "src/Kernel.sol";
-import {PriceSubmodule} from "modules/PRICE/PRICE.v2.sol";
+import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 /// @title      UniswapV3Price
@@ -27,6 +27,12 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
     uint8 internal constant BASE_10_MAX_EXPONENT = 30;
+
+    /// @notice     The expected length of the encoded pool parameters (address + uint32 = 64 bytes)
+    uint256 internal constant POOL_PARAMS_LENGTH = 64;
+
+    /// @notice     The expected length of the encoded pool address (32 bytes)
+    uint256 internal constant POOL_ADDRESS_LENGTH = 32;
 
     /// @notice                         The parameters for a Uniswap V3 pool
     /// @param pool                     The address of the pool
@@ -42,6 +48,11 @@ contract UniswapV3Price is PriceSubmodule {
     int24 internal constant MAX_TICK = -MIN_TICK;
 
     // ========== ERRORS ========== //
+
+    /// @notice                 The provided parameters are invalid
+    ///
+    /// @param params_          The encoded parameters
+    error UniswapV3_ParamsInvalid(bytes params_);
 
     /// @notice                 The decimals of the asset are out of bounds
     /// @param asset_           The address of the asset
@@ -121,12 +132,15 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pool parameters of type `UniswapV3Params`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenTWAP(
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Validate params length
+        if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
+
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
         (
             address quoteToken,
@@ -154,11 +168,9 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The value of `params.observationWindowSeconds` is less than `UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
     ///                         - `lookupToken_` is not in the pool
-    ///                         - The calculated time-weighted tick is outside the bounds of int24
     ///
     ///                         NOTE: as a UniswapV3 pool can be manipulated using multi-block MEV, the TWAP values
     ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -166,25 +178,28 @@ contract UniswapV3Price is PriceSubmodule {
     ///
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
-    /// @param params_          Pool parameters of type `UniswapV3Params`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @param params_          Encoded Uniswap V3 pool address (32 bytes)
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
-        UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
+        // Validate params length (32 bytes for pool address only)
+        if (params_.length != POOL_ADDRESS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
+
+        IUniswapV3Pool pool = abi.decode(params_, (IUniswapV3Pool));
         (
             address quoteToken,
             uint8 quoteTokenDecimals,
             uint8 lookupTokenDecimals
-        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
+        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, pool);
 
         // Get the current price of the lookup token in terms of the quote token
-        (, int24 currentTick, , , , , bool unlocked) = params.pool.slot0();
+        (, int24 currentTick, , , , , bool unlocked) = pool.slot0();
 
         // Check for re-entrancy
-        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(params.pool));
+        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(pool));
 
         uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
             currentTick,
@@ -214,7 +229,9 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of
     /// @param outputDecimals_  The decimals of `baseToken`
     /// @param pool_            The Uniswap V3 pool to use
-    /// @return                 The `quoteToken`, its decimals, and the decimals of `lookupToken_`
+    /// @return address         Quote token
+    /// @return uint8           Quote token decimals
+    /// @return uint8           Lookup token decimals
     function _checkPoolAndTokenParams(
         address lookupToken_,
         uint8 outputDecimals_,

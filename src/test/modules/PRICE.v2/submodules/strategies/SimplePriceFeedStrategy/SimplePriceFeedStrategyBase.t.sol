@@ -66,7 +66,7 @@ abstract contract SimplePriceFeedStrategyBase is Test {
 
     function _expectRevertParams(bytes memory params_) internal {
         bytes memory err = abi.encodeWithSelector(
-            SimplePriceFeedStrategy.SimpleStrategy_ParamsInvalid.selector,
+            ISimplePriceFeedStrategy.SimpleStrategy_ParamsInvalid.selector,
             params_
         );
         vm.expectRevert(err);
@@ -74,7 +74,7 @@ abstract contract SimplePriceFeedStrategyBase is Test {
 
     function _expectRevertPriceCount(uint256 pricesLen_, uint256 minPricesLen_) internal {
         bytes memory err = abi.encodeWithSelector(
-            SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+            ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
             pricesLen_,
             minPricesLen_
         );

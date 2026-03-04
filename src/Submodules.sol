@@ -230,20 +230,21 @@ abstract contract Submodule is IVersioned, ISubmodule {
         _;
     }
 
+    // ========== SUBMODULE FUNCTIONS ========== //
+
     /// @notice 5 byte identifier for the parent module.
     function PARENT() public pure virtual returns (Keycode) {}
 
     /// @notice 20 byte identifier for the submodule. First 5 bytes must match PARENT().
     function SUBKEYCODE() public pure virtual returns (SubKeycode) {}
 
-    /// @notice Returns which semantic version of a submodule is being implemented.
-    /// @return major - Major version upgrade indicates breaking change to the interface.
-    /// @dev    A major (breaking) change may require the parent module to be updated as well.
-    /// @return minor - Minor version change retains backward-compatible interface.
     /// @inheritdoc IVersioned
     function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {}
 
+    // ========== ERC165 FUNCTIONS ========== //
+
     /// @notice Query if a contract implements an interface
+    ///
     /// @param interfaceId The interface identifier, as specified in ERC-165
     /// @return bool True if the contract supports interfaceId_
     function supportsInterface(bytes4 interfaceId) public pure virtual returns (bool) {

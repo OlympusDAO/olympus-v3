@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 // Uniswap V3
 import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";
@@ -16,8 +16,8 @@ library UniswapV3Positions {
     /// @param tickLower_   The lower tick of the position
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
-    /// @return             The amount of token0
-    /// @return             The amount of token1
+    /// @return uint256     The amount of token0
+    /// @return uint256     The amount of token1
     function getPositionAmounts(
         IUniswapV3Pool pool_,
         int24 tickLower_,
@@ -49,8 +49,8 @@ library UniswapV3Positions {
     /// @param tickLower_   The lower tick of the position
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
-    /// @return             The amount of token0 fees accrued
-    /// @return             The amount of token1 fees accrued
+    /// @return uint128     The amount of token0 fees accrued
+    /// @return uint128     The amount of token1 fees accrued
     function getPositionFees(
         IUniswapV3Pool pool_,
         int24 tickLower_,
@@ -70,7 +70,7 @@ library UniswapV3Positions {
     /// @param tickLower_   The lower tick of the position
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
-    /// @return             The amount of liquidity
+    /// @return uint128     The amount of liquidity
     function getPositionLiquidity(
         IUniswapV3Pool pool_,
         int24 tickLower_,
@@ -90,7 +90,7 @@ library UniswapV3Positions {
     /// @param tickLower_   The lower tick of the position
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
-    /// @return             True if the position has liquidity
+    /// @return bool        True if the position has liquidity
     function positionHasLiquidity(
         IUniswapV3Pool pool_,
         int24 tickLower_,

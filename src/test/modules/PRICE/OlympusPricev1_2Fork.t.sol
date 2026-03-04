@@ -6,43 +6,39 @@ pragma solidity ^0.8.20;
 // Test
 import {Test} from "@forge-std-1.9.6/Test.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IHeart as IHeart_v1_6} from "src/policies/interfaces/IHeart_v1_6.sol";
-import {IEmissionManager as IEmissionManager_v1_1} from "src/policies/interfaces/IEmissionManager_v1_1.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {toSubKeycode} from "src/Submodules.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
-import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {PythPriceFeeds} from "modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 
-import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
 
 contract OlympusPricev1_2ForkTest is Test {
-    using ModuleTestFixtureGenerator for OlympusPricev1_2;
     using FullMath for uint256;
 
     // Constants
-    uint256 internal constant FORK_BLOCK = 23831097 + 1;
+    /// @dev Fork block after CD deployment, specified so that YRF and EM are at particular epochs
+    /// @dev YRF epoch 4, EM epoch 1
+    uint256 internal constant FORK_BLOCK = 24330812 + 1;
     address public constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
     address public constant KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
     address public constant HEART = 0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB;
@@ -52,14 +48,19 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CONVERTIBLE_DEPOSIT_AUCTIONEER =
         0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
-    address public constant CONVERTIBLE_DEPOSIT_ACTIVATOR =
-        0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public constant PYTH = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6;
+    address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
 
     uint256 internal constant OHM_USD_PRICE = 20e18;
     bytes32 internal constant ETH_USD_FEED_ID =
         0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+
+    // Price validation bounds (18 decimals)
+    uint256 internal constant ETH_MIN_PRICE = 2900e18;
+    uint256 internal constant ETH_MAX_PRICE = 3000e18;
+    uint256 internal constant OHM_MIN_PRICE = 20e18;
+    uint256 internal constant OHM_MAX_PRICE = 21e18;
 
     // System contracts
     Kernel public kernel;
@@ -70,6 +71,7 @@ contract OlympusPricev1_2ForkTest is Test {
     YieldRepurchaseFacility public yrf;
     ConvertibleDepositAuctioneer public cdAuctioneer;
     RolesAdmin public rolesAdmin;
+    PriceConfigv2 public priceConfig;
     MockPriceFeed public ohmUsdPriceFeed;
 
     // Submodules
@@ -78,9 +80,6 @@ contract OlympusPricev1_2ForkTest is Test {
     SimplePriceFeedStrategy public strategy;
 
     // Permissioned addresses
-    address public moduleWriter;
-    address public priceWriterV1_2;
-    address public priceWriterV2;
     address public kernelExecutor;
 
     event MarketCreated(
@@ -92,7 +91,6 @@ contract OlympusPricev1_2ForkTest is Test {
     );
 
     function setUp() public {
-        // Fork mainnet at block 23831097
         vm.createSelectFork("mainnet", FORK_BLOCK);
 
         // Get system contracts
@@ -101,53 +99,16 @@ contract OlympusPricev1_2ForkTest is Test {
         oldPrice = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
         rolesAdmin = RolesAdmin(ROLES_ADMIN);
 
-        // Enable the Heart, EmissionManager and YRF
-        // This would be done by the ConvertibleDepositProposal
-        vm.startPrank(TIMELOCK);
-        {
-            // Revoke heart from old Heart policy (v1.6)
-            address OLD_HEART = 0xf7602C0421c283A2fc113172EBDf64C30F21654D;
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            rolesAdmin.revokeRole(bytes32("heart"), OLD_HEART);
-
-            // Disable the old Heart policy
-            IHeart_v1_6(OLD_HEART).deactivate();
-
-            // Disable the old EmissionManager policy
-            address OLD_EMISSION_MANAGER = 0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2;
-            IEmissionManager_v1_1(OLD_EMISSION_MANAGER).shutdown();
-        }
-
-        // Grant cd_emissionmanager role to EmissionManager
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("cd_emissionmanager"), EMISSION_MANAGER);
-
-        // Grant heart role to Heart contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("heart"), HEART);
-
-        // Grant admin role to ConvertibleDepositActivator contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.grantRole(bytes32("admin"), CONVERTIBLE_DEPOSIT_ACTIVATOR);
-
-        // Run the activator contract
-        ConvertibleDepositActivator(CONVERTIBLE_DEPOSIT_ACTIVATOR).activate();
-
-        // Revoke admin role from ConvertibleDepositActivator contract
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        rolesAdmin.revokeRole(bytes32("admin"), CONVERTIBLE_DEPOSIT_ACTIVATOR);
-        vm.stopPrank();
-
         // Get Heart, EmissionManager, YRF
         heart = OlympusHeart(HEART);
         emissionManager = EmissionManager(EMISSION_MANAGER);
         cdAuctioneer = ConvertibleDepositAuctioneer(CONVERTIBLE_DEPOSIT_AUCTIONEER);
         yrf = YieldRepurchaseFacility(YIELD_REPO);
 
-        // Approve the EmissionManager as callback on BondFixedTermAuctioneer
-        vm.startPrank(0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969);
-        emissionManager.bondAuctioneer().setCallbackAuthStatus(EMISSION_MANAGER, true);
-        vm.stopPrank();
+        // Ensure that the EmissionManager's bond market capacity scalar is set to 1e18 (100%)
+        // This is disabled (0) at the time of the fork
+        vm.prank(TIMELOCK);
+        emissionManager.setBondMarketCapacityScalar(1e18);
 
         // Get observation frequency from old PRICE module
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
@@ -157,44 +118,44 @@ contract OlympusPricev1_2ForkTest is Test {
         // Deploy new PRICE v1.2 module
         price = new OlympusPricev1_2(kernel, OHM, observationFrequency, minimumTargetPrice);
 
-        // Deploy permissioned fixtures
-        moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
-        priceWriterV1_2 = price.generateGodmodeFixture(type(OlympusPricev1_2).name);
-        priceWriterV2 = price.generateGodmodeFixture(type(OlympusPricev2).name);
+        // Deploy PriceConfigv2 policy
+        priceConfig = new PriceConfigv2(kernel);
 
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
         pythPrice = new PythPriceFeeds(price);
         strategy = new SimplePriceFeedStrategy(price);
 
-        // Upgrade PRICE module to v1.2
-        vm.startPrank(kernelExecutor);
-        kernel.executeAction(Actions.UpgradeModule, address(price));
-        vm.stopPrank();
-
-        // Activate permissioned fixtures
-        vm.startPrank(kernelExecutor);
-        kernel.executeAction(Actions.ActivatePolicy, address(moduleWriter));
-        kernel.executeAction(Actions.ActivatePolicy, address(priceWriterV1_2));
-        kernel.executeAction(Actions.ActivatePolicy, address(priceWriterV2));
-        vm.stopPrank();
-
-        // Install submodules
-        vm.startPrank(moduleWriter);
-        price.installSubmodule(chainlinkPrice);
-        price.installSubmodule(pythPrice);
-        price.installSubmodule(strategy);
-        vm.stopPrank();
-
-        // TODO remove Chainlink mock price feed
-
+        // Deploy mock price feed
         ohmUsdPriceFeed = new MockPriceFeed();
         ohmUsdPriceFeed.setDecimals(8);
 
-        // Configure OHM asset with MA tracking and OHM-ETH/ETH-USD feeds
+        // ========== SAME-BATCH PRICE v1.2 UPGRADE ==========
+        // All operations happen in the same transaction (via kernelExecutor),
+        // ensuring no Heart heartbeat occurs between upgrade and configuration.
+        // This is the production pattern for zero-downtime upgrades.
+        vm.startPrank(kernelExecutor);
+        {
+            // Step 1: Upgrade PRICE module to v1.2
+            kernel.executeAction(Actions.UpgradeModule, address(price));
+
+            // Step 2: Activate PriceConfigv2 policy
+            kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+        }
+        vm.stopPrank();
+
+        // Install submodules (requires admin or price_admin role)
+        // We assume that the DAO MS has the price_admin role
+        vm.startPrank(DAO_MS);
+        priceConfig.installSubmodule(address(chainlinkPrice));
+        priceConfig.installSubmodule(address(pythPrice));
+        priceConfig.installSubmodule(address(strategy));
+        vm.stopPrank();
+
+        // ========== CONFIGURE ASSETS (Same Batch Pattern) ==========
+        // In production, this would be done by DAO MS in the same batch.
         _configureOhmAsset();
 
-        // Configure WETH asset with Pyth feed
         _configureWethAsset();
     }
 
@@ -207,7 +168,7 @@ contract OlympusPricev1_2ForkTest is Test {
         ohmUsdPriceFeed.setRoundId(1);
         ohmUsdPriceFeed.setAnsweredInRound(1);
 
-        vm.startPrank(priceWriterV2);
+        vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
         // Configure OHM with one feed
         ChainlinkPriceFeeds.OneFeedParams memory ohmUsdParams = ChainlinkPriceFeeds.OneFeedParams(
@@ -222,16 +183,16 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(ohmUsdParams)
         );
 
-        uint256[] memory observations = new uint256[](90); // 30 days / 8 hours = 90 observations
-        for (uint256 i = 0; i < 90; i++) {
+        uint256[] memory observations = new uint256[](21); // 7 days / 8 hours = 21 observations
+        for (uint256 i = 0; i < 21; i++) {
             observations[i] = OHM_USD_PRICE;
         }
 
-        price.addAsset(
+        priceConfig.addAssetPrice(
             address(OHM),
             true, // storeMovingAverage
             false, // useMovingAverage
-            uint32(30 days), // movingAverageDuration
+            uint32(7 days), // movingAverageDuration
             uint48(block.timestamp), // lastObservationTime
             observations,
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // strategy
@@ -248,7 +209,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // This value allows for $10 difference
         uint256 maxConfidence = 10e18;
 
-        vm.startPrank(priceWriterV2);
+        vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
         // Configure WETH with Pyth feed
         PythPriceFeeds.OneFeedParams memory ethUsdParams = PythPriceFeeds.OneFeedParams(
@@ -266,7 +227,7 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // This will revert if calling the Pyth feed fails
-        price.addAsset(
+        priceConfig.addAssetPrice(
             address(WETH),
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -278,6 +239,28 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         vm.stopPrank();
+    }
+
+    /// @notice Validates that a price is within a reasonable range
+    function _assertPriceInRange(
+        uint256 price_,
+        uint256 minPrice_,
+        uint256 maxPrice_,
+        string memory assetName_
+    ) internal pure {
+        assertGe(price_, minPrice_, string.concat(assetName_, " price below minimum"));
+        assertLe(price_, maxPrice_, string.concat(assetName_, " price above maximum"));
+    }
+
+    /// @notice Validates that configured prices are within reasonable bounds
+    function test_priceValidation_assetPricesAreSane() public view {
+        // Validate WETH price (uses real Pyth feed)
+        uint256 wethPrice = price.getPrice(WETH);
+        _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "WETH");
+
+        // Validate OHM price (uses mock feed set to 20e18 in setUp)
+        uint256 ohmPrice = price.getPrice(OHM);
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 
     function _warpToNextHeartbeat() internal {
@@ -373,8 +356,6 @@ contract OlympusPricev1_2ForkTest is Test {
         public
         givenOhmPrice(24e8) // Above 50% premium
         warpToNextHeartbeat
-        beat // Epoch 1
-        warpToNextHeartbeat
         beat // Epoch 2
         givenOhmPrice(17e8) // Below 50% premium
         warpToNextHeartbeat
@@ -418,8 +399,6 @@ contract OlympusPricev1_2ForkTest is Test {
         givenBondMarketCapacityScalar(1e18)
         givenOhmPrice(24e8)
         warpToNextHeartbeat
-        beat // Epoch 1
-        warpToNextHeartbeat
         beat // Epoch 2
         givenOhmPrice(24e8)
         warpToNextHeartbeat
@@ -432,7 +411,7 @@ contract OlympusPricev1_2ForkTest is Test {
         warpToNextHeartbeat
     {
         uint256 expectedInitialPrice = 24e36; // Bond market scaling
-        uint256 expectedMarketId = 625 + 1;
+        uint256 expectedMarketId = 695 + 1;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
@@ -472,7 +451,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // = 42955326460481099
         // Adjusted by 1e17 for bond market scaling
         uint256 expectedInitialPrice = 42955326460481099 * 1e17;
-        uint256 expectedMarketId = 623 + 1;
+        uint256 expectedMarketId = 693 + 1;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
