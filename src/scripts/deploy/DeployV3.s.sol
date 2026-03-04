@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function)
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.24;
 
 // Scripting
@@ -13,8 +13,10 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Interfaces
+import {IERC20 as ChainlinkIERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 // Contracts
@@ -65,6 +67,13 @@ import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 // Test mocks
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
+// Migration contracts
+import {OwnedERC20} from "src/external/OwnedERC20.sol";
+import {Burner} from "src/policies/Burner.sol";
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
@@ -113,12 +122,12 @@ contract DeployV3 is WithEnvironment {
             return;
         } else if (len == 1) {
             // Only one deployment
-            string memory name = abi.decode(sequenceFile.parseRaw(".sequence..name"), (string));
+            string memory name = abi.decode(sequenceFile.parseRaw(".sequence[*].name"), (string));
             deployments.push(name);
         } else {
             // More than one deployment
             string[] memory names = abi.decode(
-                sequenceFile.parseRaw(".sequence..name"),
+                sequenceFile.parseRaw(".sequence[*].name"),
                 (string[])
             );
             for (uint256 i = 0; i < len; i++) {
@@ -418,7 +427,7 @@ contract DeployV3 is WithEnvironment {
         // Deploy LockReleaseTokenPool
         vm.broadcast();
         LockReleaseTokenPool lockReleaseTokenPool = new LockReleaseTokenPool(
-            IERC20(ohm),
+            ChainlinkIERC20(ohm),
             ohmDecimals,
             allowlist,
             rmnProxy,
@@ -1057,5 +1066,106 @@ contract DeployV3 is WithEnvironment {
 
         return (address(limitOrders), "olympus.periphery");
     }
+
+    // ===== MIGRATION CONTRACTS ===== //
+
+    function deployTempOHM() public returns (address, string memory) {
+        // Input parameters
+        string memory name = _readDeploymentArgString("TempOHM", "name");
+        string memory symbol = _readDeploymentArgString("TempOHM", "symbol");
+        address initialOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        // Log parameters
+        console2.log("TempOHM parameters:");
+        console2.log("  name", name);
+        console2.log("  symbol", symbol);
+        console2.log("  initialOwner", initialOwner);
+
+        // Deploy
+        vm.broadcast();
+        OwnedERC20 tempOHM = new OwnedERC20(name, symbol, initialOwner);
+
+        return (address(tempOHM), "external.tokens");
+    }
+
+    function deployBurner() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log parameters
+        console2.log("Burner parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+
+        // Deploy
+        vm.broadcast();
+        Burner burner = new Burner(Kernel(kernel), ERC20(ohm));
+
+        return (address(burner), "olympus.policies");
+    }
+
+    function deployMigrationProposalHelper() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address owner = _getAddressNotZero("olympus.governance.Timelock");
+        address admin = _getAddressNotZero("olympus.multisig.dao");
+        address burner = _getAddressNotZero("olympus.policies.Burner");
+        address tempOHM = _getAddressNotZero("external.tokens.TempOHM");
+
+        // Read OHMv1ToMigrate from args
+        uint256 OHMv1ToMigrate = _readDeploymentArgUint256(
+            "MigrationProposalHelper",
+            "OHMv1ToMigrate"
+        );
+
+        // Log parameters
+        console2.log("MigrationProposalHelper parameters:");
+        console2.log("  owner", owner);
+        console2.log("  admin", admin);
+        console2.log("  burner", burner);
+        console2.log("  tempOHM", tempOHM);
+        console2.log("  OHMv1ToMigrate", OHMv1ToMigrate);
+
+        // Deploy
+        vm.broadcast();
+        MigrationProposalHelper helper = new MigrationProposalHelper(
+            owner,
+            admin,
+            burner,
+            tempOHM,
+            OHMv1ToMigrate
+        );
+
+        return (address(helper), "olympus.periphery");
+    }
+
+    function deployV1Migrator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohmV1 = _getAddressNotZero("olympus.legacy.OHMv1");
+        address gohm = _getAddressNotZero("olympus.legacy.gOHM");
+        bytes32 merkleRoot = bytes32(0); // Set to zero, will be set to a valid root after the proposal is executed
+
+        // Log parameters
+        console2.log("V1Migrator parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohmV1", ohmV1);
+        console2.log("  gohm", gohm);
+        console2.log("  merkleRoot", vm.toString(merkleRoot));
+
+        // Deploy
+        vm.broadcast();
+        V1Migrator migrator = new V1Migrator(
+            Kernel(kernel),
+            IERC20(ohmV1),
+            IgOHM(gohm),
+            merkleRoot
+        );
+
+        return (address(migrator), "olympus.policies");
+    }
 }
-/// forge-lint: disable-end(mixed-case-function)
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

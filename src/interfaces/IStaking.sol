@@ -15,7 +15,12 @@ interface IStaking {
 
     function rebase() external returns (uint256);
 
-    function unstake(address, uint256, bool _trigger, bool) external returns (uint256);
+    function unstake(
+        address to_,
+        uint256 amount_,
+        bool trigger_,
+        bool rebasing_
+    ) external returns (uint256);
 
     /* ========== ADMIN FUNCTIONS ========== */
 

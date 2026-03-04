@@ -1,27 +1,35 @@
 // SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
+// =========== TEST CONTRACTS ===========
+import {Test} from "@forge-std-1.9.6/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-import "src/Kernel.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
+// =========== CONTRACTS ===========
 import {Burner} from "policies/Burner.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {Kernel, Keycode, Permissions, Actions, fromKeycode, toKeycode} from "src/Kernel.sol";
+
+// =========== INTERFACES ===========
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 
 // solhint-disable-next-line max-states-count
 contract BurnerTest is Test {
+    /// forge-lint: disable-start(mixed-case-variable)
+
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 constant BURNER_ADMIN = bytes32("burner_admin");
+
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
     address internal guardian;
+    address internal admin;
 
     MockOhm internal ohm;
 
@@ -33,20 +41,24 @@ contract BurnerTest is Test {
     RolesAdmin internal rolesAdmin;
     Burner internal burner;
 
+    /// forge-lint: disable-end(mixed-case-variable)
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
         {
             // Create users
-            address[] memory users = userCreator.create(3);
+            address[] memory users = userCreator.create(4);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
+            admin = users[3];
 
             // Label users
             vm.label(alice, "alice");
             vm.label(bob, "bob");
             vm.label(guardian, "guardian");
+            vm.label(admin, "admin");
         }
 
         {
@@ -98,7 +110,14 @@ contract BurnerTest is Test {
 
             // Burner ROLES
             rolesAdmin.grantRole("burner_admin", guardian);
+
+            // Admin role
+            rolesAdmin.grantRole("admin", admin);
         }
+
+        // Enable burner
+        vm.prank(admin);
+        burner.enable(abi.encode(""));
 
         // Mint tokens to users, TRSRY, and burner for testing
         uint256 testOhm = 1_000_000 * 1e9;
@@ -135,13 +154,22 @@ contract BurnerTest is Test {
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
-    function test_requestPermissions() public {
+    function test_requestPermissions() public view {
         Permissions[] memory expectedPerms = new Permissions[](3);
-        Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
-        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        Keycode mintrKeycode = toKeycode("MINTR");
+        Keycode trsryKeycode = toKeycode("TRSRY");
+        expectedPerms[0] = Permissions({
+            keycode: mintrKeycode,
+            funcSelector: MINTR.burnOhm.selector
+        });
+        expectedPerms[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
+        expectedPerms[2] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
 
         Permissions[] memory perms = burner.requestPermissions();
         // Check: permission storage
@@ -227,10 +255,7 @@ contract BurnerTest is Test {
 
     function testRevert_burnFromTreasury_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burnFromTreasury(1, "TEST_CATEGORY_1");
@@ -295,10 +320,7 @@ contract BurnerTest is Test {
 
     function testRevert_burnFrom_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burnFrom(alice, 1, "TEST_CATEGORY_1");
@@ -347,10 +369,7 @@ contract BurnerTest is Test {
 
     function testRevert_burn_accessControl() public {
         // Attempt to burn without burner_admin role and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("burner_admin")
-        );
+        bytes memory err = abi.encodeWithSignature("ROLES_RequireRole(bytes32)", BURNER_ADMIN);
         vm.expectRevert(err);
         vm.prank(alice);
         burner.burn(1, "TEST_CATEGORY_1");
@@ -423,7 +442,7 @@ contract BurnerTest is Test {
 
     // [X] Get Categories
 
-    function test_getCategories() public {
+    function test_getCategories() public view {
         bytes32[] memory categories = burner.getCategories();
 
         assertEq(categories.length, 3);
@@ -431,4 +450,50 @@ contract BurnerTest is Test {
         assertEq(categories[1], "TEST_CATEGORY_2");
         assertEq(categories[2], "TEST_CATEGORY_3");
     }
+
+    // ========== DISABLED STATE TESTS ========== //
+
+    // Modifier to establish disabled state
+    modifier givenDisabled() {
+        vm.prank(admin);
+        burner.disable(abi.encode(""));
+        _;
+    }
+
+    // [X] Burn from Treasury when disabled
+    // [X] Burn from address when disabled
+    // [X] Burn when disabled
+    // [X] Add category when disabled
+    // [X] Remove category when disabled
+
+    function test_burnFromTreasury_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burnFromTreasury(100, "TEST_CATEGORY_1");
+    }
+
+    function test_burnFrom_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burnFrom(alice, 100, "TEST_CATEGORY_1");
+    }
+
+    function test_burn_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.burn(100, "TEST_CATEGORY_1");
+    }
+
+    function test_addCategory_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.addCategory("NEW_CATEGORY");
+    }
+
+    function test_removeCategory_whenDisabled_reverts() public givenDisabled {
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        vm.prank(guardian);
+        burner.removeCategory("TEST_CATEGORY_1");
+    }
 }
+/// forge-lint: disable-end(unwrapped-modifier-logic)

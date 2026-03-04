@@ -4,12 +4,12 @@ This directory contains batch scripts for the Olympus DAO multisig.
 
 ## Fork Testing
 
-To run the scripts on a testnet/forked chain, provide the `--testnet` flag to the `batch.sh` script. This requires certain environment variables to be set, which are documented in the `batch.sh` file.
+To run the scripts on an anvil fork, provide the `--fork` flag to the `safeBatchV2.sh` script. This requires certain environment variables to be set, which are documented in the `batch.sh` file.
 
 For example:
 
 ```bash
-./shell/safeBatch.sh --contract ContractRegistryInstall --batch script1_install --broadcast true --testnet true --env .env.testnet
+./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --broadcast true --fork true --env .env.testnet
 ```
 
 ## Ledger Device Support
@@ -31,7 +31,7 @@ The previous approach would fail because:
 First, run the script with `--signonly true` to generate the signature data:
 
 ```bash
-./shell/safeBatchV2.sh --contract YourContract --batch your_batch --signonly true --multisig true --ledger mnemonic_index
+./shell/safeBatchV2.sh --contract YourContract --function function_name --signonly true --multisig true --ledger mnemonic_index
 ```
 
 This will:
@@ -46,7 +46,7 @@ This will:
 Take the generated signature from Step 1 and submit it using the `--signature` flag:
 
 ```bash
-./shell/safeBatchV2.sh --contract YourContract --batch your_batch --signature <generated_signature> --multisig true --ledger mnemonic_index
+./shell/safeBatchV2.sh --contract YourContract --function function_name --signature generated_signature --multisig true --ledger mnemonic_index
 ```
 
 This will:

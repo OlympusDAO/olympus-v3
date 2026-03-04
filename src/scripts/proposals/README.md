@@ -23,7 +23,6 @@ It is possible to test proposal submission (and execution) on a forked chain. Tw
 
 1. Create a fork of the chain you wish to test on using Tenderly.
 2. Create an environment file (e.g., `.env.tenderly`) and set the environment variables.
-    - `RPC_URL`: Your fork's RPC URL.
     - `TENDERLY_ACCOUNT_SLUG`: Your Tenderly account slug.
     - `TENDERLY_PROJECT_SLUG`: Your Tenderly project slug.
     - `TENDERLY_VNET_ID`: Your Tenderly vNet ID. This is the random string in the URL of the testnet in the Tenderly dashboard. It is NOT the same as the random string in the `RPC_URL`. e.g. `https://dashboard.tenderly.co/{TENDERLY_ACCOUNT_SLUG}/{TENDERLY_PROJECT_SLUG}/testnet/{TENDERLY_VNET_ID}`
@@ -63,7 +62,6 @@ It is possible to test proposal submission (and execution) on a forked chain. Tw
 2. Delegate your gOHM voting power to your wallet address.
     - This can be done by running `./delegate.sh` with the appropriate arguments, or through the Tenderly dashboard.
 3. Submit your proposal by running `./submitProposal.sh` with the appropriate arguments.
-
     - Using a cast wallet:
 
         ```bash

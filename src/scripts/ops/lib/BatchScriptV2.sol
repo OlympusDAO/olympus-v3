@@ -586,7 +586,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     ///         State is restored by _validateWithSnapshot() which calls vm.revertToStateAndDelete
     function _validateHeartBeat() internal {
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
-        console2.log("\nValidating heart beat (full 24-hour cycle - 3 beats)");
+        console2.log("\n=== Validating heart beat (full 24-hour cycle - 3 beats) ===");
         console2.log("Heart address:", heart);
 
         OlympusHeart heartContract = OlympusHeart(heart);

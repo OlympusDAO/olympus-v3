@@ -1,0 +1,6 @@
+{
+    "external.tokens.TempOHM": "0x6D94B3745B0eCF908B3B467907b947b43Fba5f15",
+    "olympus.periphery.MigrationProposalHelper": "0x62633B567ED4FC4078Db75A5cb4B896B3d44A5D4",
+    "olympus.policies.Burner": "0x9f08c2603e919a46d6D98289C9ADA5250b310558",
+    "olympus.policies.V1Migrator": "0x5131654eFCd63f7b797e00118792e0d0dD90B8B0"
+}
