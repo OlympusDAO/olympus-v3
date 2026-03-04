@@ -13,6 +13,8 @@
                 "pyth": "0x4305FB66699C3B2702D4d05CF36551390A4c69C6",
                 "pythEthUsdFeedId": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
                 "pythEthUsdMaxConfidence": 10000000000000000000,
+                "pythUsdsUsdFeedId": "0x77f0971af11cc8bac224917275c1bf55f2319ed5c654a1ca955c82fa2d297ea1",
+                "pythUsdsUsdMaxConfidence": 10000000000000000,
                 "redstoneEthUsd": "0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4",
                 "uniswapOhmSusds": "0x0858e2b0f9d75f7300b38d64482ac2c8df06a755",
                 "uniswapOhmWeth": "0x88051b0eea095007d3bef21ab287be961f3d8598",

@@ -213,8 +213,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _readBatchArgUint256("configurePriceV1_2", "usdsUpdateThreshold")
         );
 
+        // Read Pyth feed parameters from args file
+        bytes32 pythUsdsUsdId = _readBatchArgBytes32("configurePriceV1_2", "pythUsdsUsdFeedId");
+        uint256 pythUsdsUsdMaxConfidence = _readBatchArgUint256(
+            "configurePriceV1_2",
+            "pythUsdsUsdMaxConfidence"
+        );
+
         console2.log("Chainlink USDS/USD:", chainlinkUsdsUsd);
         console2.log("Chainlink DAI/USD:", chainlinkDaiUsd);
+        console2.log("Pyth contract:", _pyth);
+        console2.log("Pyth USDS/USD ID:");
+        console2.logBytes32(pythUsdsUsdId);
 
         // Create strategy component: getAveragePriceExcludingDeviations
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
@@ -224,7 +234,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Create feed components using getOneFeedPrice
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
         feeds[0] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -242,6 +252,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 ChainlinkPriceFeeds.OneFeedParams({
                     feed: AggregatorV2V3Interface(chainlinkDaiUsd),
                     updateThreshold: usdsUpdateThreshold
+                })
+            )
+        );
+        feeds[2] = _encodeFeed(
+            toSubKeycode("PRICE.PYTH"),
+            PythPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(
+                PythPriceFeeds.OneFeedParams({
+                    pyth: _pyth,
+                    priceFeedId: pythUsdsUsdId,
+                    updateThreshold: usdsUpdateThreshold,
+                    maxConfidence: pythUsdsUsdMaxConfidence
                 })
             )
         );
