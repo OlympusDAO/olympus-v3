@@ -185,35 +185,18 @@ Enable oracle policies and deploy initial oracles via On-Chain Governance propos
 6. Deploy OHM/USDS Chainlink oracle (via `ChainlinkOracleFactory.createOracle()`)
 7. Deploy OHM/USDS Morpho oracle (via `MorphoOracleFactory.createOracle()`)
 
-**Proposal execution steps**:
+**Proposal Submission**:
 
-1. **Create proposal draft** (modify OracleProposal.sol for your target oracles):
+  ```bash
+  src/scripts/proposals/submitProposal.sh \
+    --file src/proposals/OracleProposal.sol \
+    --contract OracleProposalScript \
+    --account <wallet> \
+    --chain mainnet \
+    --broadcast true
+  ```
 
-   ```bash
-   # Edit the proposal to include your specific oracle deployments
-   # Modify _build() function to deploy your target token pairs
-   ```
-
-2. **Simulate proposal**:
-
-   ```bash
-   pnpm run test:proposal
-   ```
-
-3. **Submit proposal to OCG**:
-
-   ```bash
-   src/scripts/proposals/submitProposal.sh \
-     --file src/proposals/OracleProposal.sol \
-     --contract OracleProposalScript \
-     --account <wallet> \
-     --chain mainnet \
-     --broadcast true
-   ```
-
-   The proposal ID will be output after submission.
-
-4. **Vote and execute** (follow Olympus governance process)
+  The proposal ID will be output after submission.
 
 ## Deploying New Oracles
 
