@@ -15,7 +15,7 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 // Interfaces
 import {IERC20 as ChainlinkIERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
-import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
