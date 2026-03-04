@@ -53,7 +53,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
     uint256 internal constant SUSDS_MAX_PRICE = 1.10e18;
     uint256 internal constant ETH_MIN_PRICE = 1500e18;
-    uint256 internal constant ETH_MAX_PRICE = 2000e18;
+    uint256 internal constant ETH_MAX_PRICE = 2100e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 22e18;
 
