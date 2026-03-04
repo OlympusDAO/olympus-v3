@@ -425,11 +425,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
 
-        // Create feed components for the two Uniswap pools using getTokenPrice
+        // Create feed components for the two Uniswap pools using getTokenTWAP
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
         feeds[0] = _encodeFeed(
             toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenPrice.selector,
+            UniswapV3Price.getTokenTWAP.selector,
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmWeth),
@@ -439,7 +439,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
         feeds[1] = _encodeFeed(
             toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenPrice.selector,
+            UniswapV3Price.getTokenTWAP.selector,
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmSusds),
