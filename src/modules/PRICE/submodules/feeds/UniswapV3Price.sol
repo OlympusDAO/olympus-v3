@@ -31,6 +31,9 @@ contract UniswapV3Price is PriceSubmodule {
     /// @notice     The expected length of the encoded pool parameters (address + uint32 = 64 bytes)
     uint256 internal constant POOL_PARAMS_LENGTH = 64;
 
+    /// @notice     The expected length of the encoded pool address (32 bytes)
+    uint256 internal constant POOL_ADDRESS_LENGTH = 32;
+
     /// @notice                         The parameters for a Uniswap V3 pool
     /// @param pool                     The address of the pool
     /// @param observationWindowSeconds The length of the TWAP observation window in seconds
@@ -175,28 +178,28 @@ contract UniswapV3Price is PriceSubmodule {
     ///
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
-    /// @param params_          Pool parameters of type `UniswapV3Params`
+    /// @param params_          Encoded Uniswap V3 pool address (32 bytes)
     /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
-        // Validate params length
-        if (params_.length != POOL_PARAMS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
+        // Validate params length (32 bytes for pool address only)
+        if (params_.length != POOL_ADDRESS_LENGTH) revert UniswapV3_ParamsInvalid(params_);
 
-        UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
+        IUniswapV3Pool pool = abi.decode(params_, (IUniswapV3Pool));
         (
             address quoteToken,
             uint8 quoteTokenDecimals,
             uint8 lookupTokenDecimals
-        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
+        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, pool);
 
         // Get the current price of the lookup token in terms of the quote token
-        (, int24 currentTick, , , , , bool unlocked) = params.pool.slot0();
+        (, int24 currentTick, , , , , bool unlocked) = pool.slot0();
 
         // Check for re-entrancy
-        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(params.pool));
+        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(pool));
 
         uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
             currentTick,
