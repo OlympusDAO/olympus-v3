@@ -447,7 +447,7 @@ contract OracleProposalTest is ProposalTest {
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
         feeds[0] = IPRICEv2.Component({
             target: toSubKeycode("PRICE.UNIV3"),
-            selector: UniswapV3Price.getTokenPrice.selector,
+            selector: UniswapV3Price.getTokenTWAP.selector,
             params: abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: ohmSusdsPool,
