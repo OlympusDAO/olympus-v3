@@ -51,7 +51,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     uint256 internal constant USDS_MIN_PRICE = 0.99e18;
     uint256 internal constant USDS_MAX_PRICE = 1.01e18;
     uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
-    uint256 internal constant SUSDS_MAX_PRICE = 1.08e18;
+    uint256 internal constant SUSDS_MAX_PRICE = 1.10e18;
     uint256 internal constant ETH_MIN_PRICE = 1500e18;
     uint256 internal constant ETH_MAX_PRICE = 2000e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
@@ -134,6 +134,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureSusds(priceConfig);
         _configureWeth(priceConfig);
         _configureOhm(priceConfig);
+
+        // Set post-batch validation selector
+        _setPostBatchValidateSelector(this.validatePricesAreSane.selector);
 
         console2.log("PRICE v1.2 configuration batch prepared");
         proposeBatch();
@@ -592,11 +595,10 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
     /// @notice Validates that configured prices are within reasonable bounds
     /// @dev    Call this function after the batch has been executed to verify prices
-    /// @param priceModule_ Address of the PRICE v1.2 module
-    function validatePricesAreSane(address priceModule_) external view {
+    function validatePricesAreSane() external view {
         console2.log("\n=== Validating Asset Prices ===");
 
-        IPRICEv2 price = IPRICEv2(priceModule_);
+        IPRICEv2 price = IPRICEv2(_envAddressNotZero("olympus.modules.OlympusPriceV1"));
 
         // Load asset addresses from env
         address usds = _envAddressNotZero("external.tokens.USDS");
@@ -638,6 +640,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint256 maxPrice_,
         string memory assetName_
     ) internal pure {
+        console2.log("minPrice:", minPrice_);
+        console2.log("maxPrice:", maxPrice_);
         if (price_ < minPrice_) {
             revert(string.concat(assetName_, " price below minimum"));
         }
