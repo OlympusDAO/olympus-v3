@@ -111,52 +111,13 @@ Create an args file with price feed addresses (JSON format with `.functions[].na
 
 **Automatic validation:** The batch script simulates a full 24-hour Heart cycle (3 beats) to validate PRICE configuration before proposing the batch.
 
-### 4. Oracles MS Batch (If Needed)
+### 4. Oracle Factories (If Needed)
 
-If oracle factory policies need to be enabled for external integrations:
+If oracle factory policies are required for external protocol integrations (Chainlink, Morpho, ERC7726), see **[Oracle Factories and Policies](oracle_factories.md)** for the complete deployment flow.
 
-**Batch script:** `src/scripts/ops/batches/ConfigureOracles.sol`
+**Note:** Oracle factories require PRICE v1.2+ (already satisfied by this upgrade).
 
-```bash
-./shell/safeBatchV2.sh \
-    --contract ConfigureOracles \
-    --function configureOracles \
-    --chain mainnet \
-    --multisig true \
-    --broadcast true
-```
-
-**Batch actions:**
-
-The DAO MS batch will **activate** the oracle policies in the Kernel:
-
-- Activate ChainlinkOracleFactory policy (`kernel.executeAction(Actions.ActivatePolicy, address)`)
-- Activate MorphoOracleFactory policy
-- Activate ERC7726Oracle policy
-
-> **Note:** "Activate" registers the policy with the Kernel, but the policy functionality remains disabled until the OCG proposal **enables** it.
-
-### 5. Oracles OCG Proposal (If Needed)
-
-After oracle policies are activated via MS batch, a separate OCG proposal is required to **enable** them via `IEnabler.enable()`.
-
-**OCG proposal template:** `src/proposals/OracleProposal.sol`
-
-**OCG proposal actions:**
-
-1. Grant `oracle_manager` role to DAO MS and Timelock (if needed)
-2. **Enable** ERC7726Oracle policy (`IEnabler.enable()`)
-3. **Enable** ChainlinkOracleFactory policy
-4. **Enable** MorphoOracleFactory policy
-5. Deploy OHM/USDS Chainlink oracle (via ChainlinkOracleFactory)
-6. Deploy OHM/USDS Morpho oracle (via MorphoOracleFactory)
-
-> **Distinction:**
->
-> - **MS Batch "Activate"** (`kernel.executeAction(Actions.ActivatePolicy, address)`): Registers the policy contract with the Kernel module
-> - **OCG "Enable"** (`IEnabler.enable()`): Turns on the policy's functionality via the PolicyEnabler pattern
-
-### 6. Verification
+### 5. Verification
 
 Verification happens automatically as part of the batch script execution (full Heart cycle simulation).
 
@@ -185,7 +146,7 @@ No OCG approval required — only `price_admin` role.
 | `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence                                 |
 | `shell/safeBatchV2.sh`                                       | Batch execution shell script                        |
 | `src/scripts/ops/batches/ConfigurePriceV1_2.sol`             | PRICE configuration batch                           |
-| `src/scripts/ops/batches/ConfigureOracles.sol`               | Oracle activation batch                             |
-| `src/proposals/OracleProposal.sol`                           | OCG proposal template for oracles                   |
 | `src/policies/price/PriceConfigv2.sol`                       | Configuration policy (auto-enabled on installation) |
 | `src/modules/PRICE/OlympusPrice.v1_2.sol`                    | PRICE v1.2 module                                   |
+
+For oracle-related files, see **[Oracle Factories and Policies](oracle_factories.md)**.
