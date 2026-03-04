@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 // Test
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
@@ -28,10 +27,12 @@ contract OracleTest is Test {
         // tickCumulative1 - tickCumulative0 should be < 0
         int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
         int56 tickCumulative1 = int56(bound(tickCumulative1_, MIN_TICK, MAX_TICK));
+        // forge-lint: disable-start(unsafe-typecast)
         vm.assume(
             tickCumulative1 < tickCumulative0 &&
                 (tickCumulative1 - tickCumulative0) % int56(int32(period)) != 0
         );
+        // forge-lint: disable-end(unsafe-typecast)
 
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = tickCumulative0;
@@ -40,6 +41,7 @@ contract OracleTest is Test {
 
         // Round down towards negative infinity
         // See: https://github.com/Uniswap/v3-periphery/blob/697c2474757ea89fec12a4e6db16a574fe259610/contracts/libraries/OracleLibrary.sol#L35
+        // forge-lint: disable-next-line(unsafe-typecast)
         int56 expectedTick = (tickCumulative1 - tickCumulative0) / int56(int32(period)) - 1;
 
         // Get the time-weighted tick
@@ -62,6 +64,7 @@ contract OracleTest is Test {
         uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Round down towards negative infinity
+        // forge-lint: disable-next-line(unsafe-typecast)
         int56 expectedTick = (tickCumulative1 - tickCumulative0) / int56(int32(period));
 
         // Get the time-weighted tick

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity ^0.8.15;
 
 // Uniswap V3
@@ -87,12 +88,16 @@ library UniswapV3OracleHelper {
             uint160[] memory
         ) {
             int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
+            // forge-lint: disable-start(unsafe-typecast)
             timeWeightedTick = (tickCumulativesDelta) / int32(period_);
+            // forge-lint: disable-end(unsafe-typecast)
 
             // If the time-weighted tick is negative, round down towards negative infinity
             // Matches the Uniswap V3 library: https://github.com/Uniswap/v3-periphery/blob/697c2474757ea89fec12a4e6db16a574fe259610/contracts/libraries/OracleLibrary.sol#L35
+            // forge-lint: disable-start(unsafe-typecast)
             if (tickCumulativesDelta < 0 && tickCumulativesDelta % int32(period_) != 0)
                 timeWeightedTick--;
+            // forge-lint: disable-end(unsafe-typecast)
         } catch (bytes memory) {
             // This function will revert if the observation window is longer than the oldest observation in the pool
             // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
@@ -126,12 +131,14 @@ library UniswapV3OracleHelper {
 
         // Quantity of token1 for 1 unit of token0 at the time-weighted tick
         // Scale: token1 decimals
+        // forge-lint: disable-start(unsafe-typecast)
         uint256 baseInQuote = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** token0.decimals()), // 1 unit of token0
             address(token0),
             address(token1)
         );
+        // forge-lint: disable-end(unsafe-typecast)
 
         return baseInQuote;
     }
@@ -155,13 +162,16 @@ library UniswapV3OracleHelper {
 
         // Quantity of quoteToken_ for 1 unit of baseToken_ at the time-weighted tick
         // Scale: token1 decimals
+        // forge-lint: disable-start(unsafe-typecast)
         uint256 baseInQuote = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** baseTokenDecimals_), // 1 unit of baseToken_
             baseToken_,
             quoteToken_
         );
+        // forge-lint: disable-end(unsafe-typecast)
 
         return baseInQuote;
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
