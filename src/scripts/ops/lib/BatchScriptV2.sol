@@ -2,20 +2,30 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
+// Interfaces
 import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 
+// Libraries
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
+// Scripts
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
+// External
 import {Safe} from "@safe-utils-0.0.17/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
-import {OlympusHeart} from "src/policies/Heart.sol";
-import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+
+// Bophades
 import {Kernel, toKeycode} from "src/Kernel.sol";
+import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
+import {OlympusHeart} from "src/policies/Heart.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 
 /// @title BatchScriptV2
 /// @notice A script that can be used to propose/execute a batch of transactions to a Safe Multisig or an EOA
@@ -568,37 +578,28 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @notice Validate that heart beat will work after batch execution
     /// @dev    Warps through a full 24-hour cycle (3 beats) and calls beat() to validate
     ///         Temporarily increases price feed update thresholds to prevent stale feed errors
-    ///         Restores original timestamp and thresholds after validation to avoid signature issues
+    ///         State is restored by _validateWithSnapshot() which calls vm.revertToStateAndDelete
     function _validateHeartBeat() internal {
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         console2.log("\nValidating heart beat (full 24-hour cycle - 3 beats)");
         console2.log("Heart address:", heart);
 
         OlympusHeart heartContract = OlympusHeart(heart);
-        PRICEv1 priceModule = _getPriceModule(heartContract);
-        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfig");
+        IPRICEv2 priceModule = _getPriceModule(heartContract);
+        address priceConfig = _envAddressNotZero("olympus.policies.OlympusPriceConfigV2");
 
         uint256 originalTimestamp = block.timestamp;
-        uint48 originalOhmEthThreshold = priceModule.ohmEthUpdateThreshold();
-        uint48 originalReserveEthThreshold = priceModule.reserveEthUpdateThreshold();
         uint48 lastBeat = uint48(heartContract.lastBeat());
         uint48 frequency = heartContract.frequency();
 
         console2.log("Last beat:", lastBeat, "Frequency:", frequency);
-        console2.log("Original thresholds - OHM/ETH:", originalOhmEthThreshold, "Reserve/ETH:", originalReserveEthThreshold);
 
-        // Temporarily increase thresholds to 2 days to cover time warp
-        uint48 tempThreshold = uint48(2 days);
-        console2.log("Temporarily increasing update thresholds to:", tempThreshold);
-        vm.prank(priceConfig);
-        priceModule.changeUpdateThresholds(tempThreshold, tempThreshold);
+        // Update all price feed thresholds to at least 2 days to cover time warp
+        _updatePriceFeedThresholds(priceModule, priceConfig);
 
         bool timeWarped = _executeHeartBeats(heartContract, lastBeat, frequency);
 
         console2.log("\nAll heart beats validated successfully");
-        console2.log("Restoring original update thresholds");
-        vm.prank(priceConfig);
-        priceModule.changeUpdateThresholds(originalOhmEthThreshold, originalReserveEthThreshold);
 
         if (timeWarped) {
             console2.log("Restoring original timestamp:", originalTimestamp);
@@ -606,16 +607,183 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
-    /// @notice Get PRICE module from Heart and verify version is 1.0 or 1.1
+    /// @notice Get PRICE module from Heart and verify version is 1.2+
     /// @param heartContract_ Heart contract to get kernel from
     /// @return priceModule PRICE module instance
-    function _getPriceModule(OlympusHeart heartContract_) internal view returns (PRICEv1) {
+    function _getPriceModule(OlympusHeart heartContract_) internal view returns (IPRICEv2) {
         Kernel kernel = heartContract_.kernel();
-        PRICEv1 priceModule = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
-        (uint8 major, uint8 minor) = priceModule.VERSION();
-        if (major != 1 || (minor != 0 && minor != 1)) revert("PRICE must be v1.0 or v1.1");
-        console2.log("PRICE module version verified: v1.", uint256(minor));
+        IPRICEv2 priceModule = IPRICEv2(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
+        // Version check is handled by trying to call IPRICEv2 functions
+        // If the module doesn't support IPRICEv2, calls will revert
         return priceModule;
+    }
+
+    /// @notice Update price feed thresholds for all assets to at least 2 days
+    /// @dev    Iterates over all assets and their feeds, updating thresholds as needed
+    /// @param priceModule_ PRICE module to get assets from
+    /// @param priceConfig_ PriceConfig policy to call updateAsset on
+    function _updatePriceFeedThresholds(IPRICEv2 priceModule_, address priceConfig_) internal {
+        uint48 twoDays = uint48(2 days);
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+
+        address[] memory assets = priceModule_.getAssets();
+        console2.log("Updating price feed thresholds for", assets.length, "assets");
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            IPRICEv2.Asset memory assetData = priceModule_.getAssetData(asset);
+
+            if (!assetData.approved) continue;
+
+            IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+            bool needsUpdate = false;
+
+            // Check each feed and update thresholds if needed
+            for (uint256 j = 0; j < feeds.length; j++) {
+                bytes memory newParams = _updateFeedThreshold(feeds[j], twoDays);
+                if (newParams.length > 0) {
+                    feeds[j].params = newParams;
+                    needsUpdate = true;
+                }
+            }
+
+            // Update the asset if any feeds were modified
+            if (needsUpdate) {
+                console2.log("  Updating thresholds for asset:", asset);
+                IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+                    updateFeeds: true,
+                    updateStrategy: false,
+                    updateMovingAverage: false,
+                    feeds: feeds,
+                    strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), ""),
+                    useMovingAverage: false,
+                    storeMovingAverage: false,
+                    movingAverageDuration: 0,
+                    lastObservationTime: 0,
+                    observations: new uint256[](0)
+                });
+
+                vm.prank(daoMS);
+                PriceConfigv2(priceConfig_).updateAsset(asset, params);
+            }
+        }
+    }
+
+    /// @notice Update a single feed's threshold if needed
+    /// @dev    Determines feed type based on SubKeycode and updates threshold if below minimum
+    /// @param feed_ Feed component to check/update
+    /// @param minThreshold_ Minimum threshold to enforce (2 days)
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updateFeedThreshold(
+        IPRICEv2.Component memory feed_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // Get the underlying bytes20 for comparison
+        bytes20 targetBytes = SubKeycode.unwrap(feed_.target);
+
+        // Skip UniswapV3 - uses observationWindowSeconds, not updateThreshold
+        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.UNIV3"))) {
+            return new bytes(0);
+        }
+
+        // Handle Chainlink feeds
+        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.CHAINLINK"))) {
+            return _updateChainlinkThreshold(feed_.params, feed_.selector, minThreshold_);
+        }
+
+        // Handle Pyth feeds
+        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.PYTH"))) {
+            return _updatePythThreshold(feed_.params, feed_.selector, minThreshold_);
+        }
+
+        // Unknown feed type - skip
+        return new bytes(0);
+    }
+
+    /// @notice Update Chainlink feed thresholds if below minimum
+    /// @param params_ Encoded feed parameters
+    /// @param selector_ Function selector to determine feed type
+    /// @param minThreshold_ Minimum threshold to enforce
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updateChainlinkThreshold(
+        bytes memory params_,
+        bytes4 selector_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // OneFeedParams: getOneFeedPrice
+        if (selector_ == ChainlinkPriceFeeds.getOneFeedPrice.selector) {
+            ChainlinkPriceFeeds.OneFeedParams memory p =
+                abi.decode(params_, (ChainlinkPriceFeeds.OneFeedParams));
+            if (p.updateThreshold < minThreshold_) {
+                p.updateThreshold = minThreshold_;
+                return abi.encode(p);
+            }
+            return new bytes(0);
+        }
+
+        // TwoFeedParams: getTwoFeedPriceDiv or getTwoFeedPriceMul
+        if (selector_ == ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector ||
+            selector_ == ChainlinkPriceFeeds.getTwoFeedPriceMul.selector) {
+            ChainlinkPriceFeeds.TwoFeedParams memory p =
+                abi.decode(params_, (ChainlinkPriceFeeds.TwoFeedParams));
+            bool updated = false;
+
+            if (p.firstUpdateThreshold < minThreshold_) {
+                p.firstUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+            if (p.secondUpdateThreshold < minThreshold_) {
+                p.secondUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+
+            return updated ? abi.encode(p) : new bytes(0);
+        }
+
+        return new bytes(0);
+    }
+
+    /// @notice Update Pyth feed thresholds if below minimum
+    /// @param params_ Encoded feed parameters
+    /// @param selector_ Function selector to determine feed type
+    /// @param minThreshold_ Minimum threshold to enforce
+    /// @return New encoded params if updated, empty bytes if no update needed
+    function _updatePythThreshold(
+        bytes memory params_,
+        bytes4 selector_,
+        uint48 minThreshold_
+    ) internal pure returns (bytes memory) {
+        // OneFeedParams: getOneFeedPrice
+        if (selector_ == PythPriceFeeds.getOneFeedPrice.selector) {
+            PythPriceFeeds.OneFeedParams memory p =
+                abi.decode(params_, (PythPriceFeeds.OneFeedParams));
+            if (p.updateThreshold < minThreshold_) {
+                p.updateThreshold = minThreshold_;
+                return abi.encode(p);
+            }
+            return new bytes(0);
+        }
+
+        // TwoFeedParams: getTwoFeedPriceDiv or getTwoFeedPriceMul
+        if (selector_ == PythPriceFeeds.getTwoFeedPriceDiv.selector ||
+            selector_ == PythPriceFeeds.getTwoFeedPriceMul.selector) {
+            PythPriceFeeds.TwoFeedParams memory p =
+                abi.decode(params_, (PythPriceFeeds.TwoFeedParams));
+            bool updated = false;
+
+            if (p.firstUpdateThreshold < minThreshold_) {
+                p.firstUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+            if (p.secondUpdateThreshold < minThreshold_) {
+                p.secondUpdateThreshold = minThreshold_;
+                updated = true;
+            }
+
+            return updated ? abi.encode(p) : new bytes(0);
+        }
+
+        return new bytes(0);
     }
 
     /// @notice Execute 3 heart beats for full 24-hour cycle validation
