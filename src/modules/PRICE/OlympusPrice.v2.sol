@@ -177,9 +177,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ///
     /// @param asset_                   Asset to get the price of
     /// @param includeMovingAverage_    Flag to indicate if the moving average should be included in the price calculation
-    /// @return                         The price of the asset
-    /// @return                         The current block timestamp
-    /// @return                         Flag to indicate if all feeds were successful
+    /// @return uint256                 The price of the asset
+    /// @return uint48                  The current block timestamp
+    /// @return bool                    Flag to indicate if all feeds were successful
     function _getCurrentPrice(
         address asset_,
         bool includeMovingAverage_

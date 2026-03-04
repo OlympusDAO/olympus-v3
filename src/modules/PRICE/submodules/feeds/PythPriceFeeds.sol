@@ -299,7 +299,7 @@ contract PythPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pyth feed parameters of type `OneFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
         address,
         uint8 outputDecimals_,

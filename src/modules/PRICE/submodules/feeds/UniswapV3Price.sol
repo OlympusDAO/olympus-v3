@@ -129,7 +129,7 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pool parameters of type `UniswapV3Params`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenTWAP(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -165,11 +165,9 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The value of `params.observationWindowSeconds` is less than `UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
     ///                         - `lookupToken_` is not in the pool
-    ///                         - The calculated time-weighted tick is outside the bounds of int24
     ///
     ///                         NOTE: as a UniswapV3 pool can be manipulated using multi-block MEV, the TWAP values
     ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -178,7 +176,7 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pool parameters of type `UniswapV3Params`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -228,7 +226,9 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of
     /// @param outputDecimals_  The decimals of `baseToken`
     /// @param pool_            The Uniswap V3 pool to use
-    /// @return                 The `quoteToken`, its decimals, and the decimals of `lookupToken_`
+    /// @return address         Quote token
+    /// @return uint8           Quote token decimals
+    /// @return uint8           Lookup token decimals
     function _checkPoolAndTokenParams(
         address lookupToken_,
         uint8 outputDecimals_,

@@ -25,7 +25,7 @@ library UniswapV3PoolLibrary {
     /// @notice         Determines if `pool_` is a valid Uniswap V3 pool
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    /// @return         true if `pool_` is a valid Uniswap V3 pool, otherwise false
+    /// @return bool    True if `pool_` is a valid Uniswap V3 pool, otherwise false
     function isValidPool(address pool_) public view returns (bool) {
         bool isValid = false;
 
@@ -50,8 +50,8 @@ library UniswapV3PoolLibrary {
     /// @notice         Gets the tokens for the given Uniswap V3 pool
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    /// @return         The address of token0
-    /// @return         The address of token1
+    /// @return address The address of token0
+    /// @return address The address of token1
     function getPoolTokens(address pool_) public view returns (address, address) {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
 
@@ -59,6 +59,15 @@ library UniswapV3PoolLibrary {
     }
 
     /// @notice         Gets the ordered token amounts for the given Uniswap V3 pool
+    ///
+    /// @param pool_            The address of the Uniswap V3 pool
+    /// @param tokenA_          The address of the token to swap
+    /// @param amountA_         The amount of tokenA_ to swap
+    /// @param amountB_         The amount of tokenB_ to swap
+    /// @return token0Address   The address of token0
+    /// @return token1Address   The address of token1
+    /// @return token0Amount    The amount of token0
+    /// @return token1Amount    The amount of token1
     function getPoolTokenAmounts(
         address pool_,
         address tokenA_,
@@ -93,7 +102,7 @@ library UniswapV3PoolLibrary {
     ///
     /// @param amount_      The amount of tokens to calculate the minimum for
     /// @param slippageBps_ The maximum percentage slippage allowed in basis points (100 = 1%)
-    /// @return             The minimum amount of tokens to receive
+    /// @return uint256     The minimum amount of tokens to receive
     function getAmountMin(uint256 amount_, uint16 slippageBps_) public pure returns (uint256) {
         // Check bounds
         if (slippageBps_ > SLIPPAGE_SCALE) revert InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);

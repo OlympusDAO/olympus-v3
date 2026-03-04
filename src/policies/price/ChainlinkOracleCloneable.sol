@@ -73,21 +73,21 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
 
     /// @inheritdoc AggregatorV3Interface
     ///
-    /// @return     uint8   The number of decimals
+    /// @return uint8   The number of decimals
     function decimals() external pure override returns (uint8) {
         return _priceDecimals();
     }
 
     /// @inheritdoc AggregatorV3Interface
     ///
-    /// @return     string  The oracle name
+    /// @return string  The oracle name
     function description() external pure override returns (string memory) {
         return name();
     }
 
     /// @inheritdoc AggregatorV3Interface
     ///
-    /// @return     uint256 The version number
+    /// @return uint256 The version number
     function version() external pure override returns (uint256) {
         return _VERSION;
     }
@@ -205,7 +205,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
 
     /// @inheritdoc AggregatorInterface
     ///
-    /// @return     int256 The latest price
+    /// @return int256  The latest price
     function latestAnswer() external view override returns (int256) {
         (, int256 answer, , , ) = this.latestRoundData();
         return answer;
@@ -213,7 +213,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
 
     /// @inheritdoc AggregatorInterface
     ///
-    /// @return     uint256 The latest timestamp
+    /// @return uint256 The latest timestamp
     function latestTimestamp() external view override returns (uint256) {
         (, , , uint256 updatedAt, ) = this.latestRoundData();
         return updatedAt;
@@ -221,7 +221,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
 
     /// @inheritdoc AggregatorInterface
     ///
-    /// @return     uint256 The latest round ID
+    /// @return uint256 The latest round ID
     function latestRound() external view override returns (uint256) {
         (uint80 roundId, , , , ) = this.latestRoundData();
         return uint256(roundId);
@@ -231,7 +231,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
     /// @dev        Only supports the latest round. For any other round ID, reverts with ChainlinkOracle_NoDataPresent().
     ///
     /// @param      roundId_    The round ID to query
-    /// @return     int256      The answer for the given round ID
+    /// @return int256  The answer for the given round ID
     function getAnswer(uint256 roundId_) external view override returns (int256) {
         (, int256 answer, , , ) = this.getRoundData(roundId_.safeCastTo80());
         return answer;
@@ -241,7 +241,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
     /// @dev        Only supports the latest round. For any other round ID, reverts with ChainlinkOracle_NoDataPresent().
     ///
     /// @param      roundId_    The round ID to query
-    /// @return     uint256     The timestamp for the given round ID
+    /// @return uint256 The timestamp for the given round ID
     function getTimestamp(uint256 roundId_) external view override returns (uint256) {
         (, , , uint256 updatedAt, ) = this.getRoundData(roundId_.safeCastTo80());
         return updatedAt;

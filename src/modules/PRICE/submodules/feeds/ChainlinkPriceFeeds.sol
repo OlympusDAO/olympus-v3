@@ -170,7 +170,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param updateThreshold_         The maximum number of seconds elapsed since the last price feed update
     /// @param feedDecimals_            The number of decimals of the price feed
     /// @param outputDecimals_          The number of decimals to return the price in
-    /// @return                         The validated price in the scale of `outputDecimals_`
+    /// @return uint256                 The validated price in the scale of `outputDecimals_`
     function _getFeedPrice(
         AggregatorV2V3Interface feed_,
         uint256 updateThreshold_,
@@ -210,7 +210,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `OneFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
         address,
         uint8 outputDecimals_,
@@ -256,7 +256,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`.
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTwoFeedPriceDiv(
         address,
         uint8 outputDecimals_,
@@ -323,7 +323,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
-    /// @return                 Price in the scale of `outputDecimals_`.
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTwoFeedPriceMul(
         address,
         uint8 outputDecimals_,

@@ -291,40 +291,40 @@ interface IPRICEv2 {
 
     /// @notice         Provides a list of registered assets
     ///
-    /// @return         The addresses of registered assets
-    function getAssets() external view returns (address[] memory);
+    /// @return assets  The addresses of registered assets
+    function getAssets() external view returns (address[] memory assets);
 
     /// @notice         Provides the configuration of a specific asset
     ///
     /// @param asset_   The address of the asset
-    /// @return         The asset configuration as an `Asset` struct
-    function getAssetData(address asset_) external view returns (Asset memory);
+    /// @return data    The asset configuration as an `Asset` struct
+    function getAssetData(address asset_) external view returns (Asset memory data);
 
-    /// @notice         Indicates whether `asset_` has been registered
+    /// @notice             Indicates whether `asset_` has been registered
     ///
-    /// @param asset_   The address of the asset
-    /// @return         Whether the asset is approved
-    function isAssetApproved(address asset_) external view returns (bool);
+    /// @param asset_       The address of the asset
+    /// @return approved    Whether the asset is approved
+    function isAssetApproved(address asset_) external view returns (bool approved);
 
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account
     ///
     /// @param asset_   The address of the asset
-    /// @return         The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_) external view returns (uint256);
+    /// @return price   The USD price of the asset in the scale of `decimals`
+    function getPrice(address asset_) external view returns (uint256 price);
 
     /// @notice         Returns a price no older than the provided age in the system unit of account
     ///
     /// @param asset_   The address of the asset
     /// @param maxAge_  The maximum age (seconds) of the price
-    /// @return         The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256);
+    /// @return price   The USD price of the asset in the scale of `decimals`
+    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
 
-    /// @notice         Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
+    /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     ///
-    /// @param asset_   The address of the asset
-    /// @param variant_ The variant of the price to return
+    /// @param asset_       The address of the asset
+    /// @param variant_     The variant of the price to return
     /// @return _price      The USD price of the asset in the scale of `decimals`
     /// @return _timestamp  The timestamp at which the price was calculated
     function getPrice(
@@ -336,20 +336,20 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset
     /// @param base_    The address of the base asset that the price will be calculated in
-    /// @return         The price of the asset in units of `base_`
-    function getPriceIn(address asset_, address base_) external view returns (uint256);
+    /// @return price   The price of the asset in units of `base_`
+    function getPriceIn(address asset_, address base_) external view returns (uint256 price);
 
     /// @notice             Returns the price of the asset in terms of the base asset, no older than the max age
     ///
     /// @param asset_       The address of the asset
     /// @param base_        The address of the base asset that the price will be calculated in
     /// @param maxAge_      The maximum age (seconds) of the price
-    /// @return             The price of the asset in units of `base_`
+    /// @return price       The price of the asset in units of `base_`
     function getPriceIn(
         address asset_,
         address base_,
         uint48 maxAge_
-    ) external view returns (uint256);
+    ) external view returns (uint256 price);
 
     /// @notice             Returns the requested variant of the asset price in terms of the base asset
     ///

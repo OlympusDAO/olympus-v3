@@ -135,7 +135,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @notice             Returns the tokens of a UniswapV2 pool in an array
     ///
     /// @param pool_        UniswapV2 pool
-    /// @return             Array of length 2 containing token addresses
+    /// @return address[]   Array of length 2 containing token addresses
     function _getTokens(IUniswapV2Pair pool_) internal view returns (address[] memory) {
         address[] memory tokens = new address[](2);
         tokens[0] = pool_.token0();
@@ -148,7 +148,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @dev                This function reverts if the pool does not have the `getReserves()` function.
     ///
     /// @param pool_        UniswapV2 pool
-    /// @return             Reserves of the pool in their native decimals
+    /// @return uint112[]   Reserves of the pool in their native decimals
     function _getReserves(IUniswapV2Pair pool_) internal view returns (uint112[] memory) {
         try pool_.getReserves() returns (uint112 token0Reserves, uint112 token1Reserves, uint32) {
             uint112[] memory balances = new uint112[](2);
@@ -168,7 +168,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @param value_               Value in native ERC20 token decimals
     /// @param token_               The address of the ERC20 token
     /// @param outputDecimals_      The resulting number of decimals
-    /// @return                     Value in the scale of `outputDecimals_`
+    /// @return uint256             Value in the scale of `outputDecimals_`
     function _convertERC20Decimals(
         uint112 value_,
         address token_,
@@ -190,7 +190,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          UniswapV2 pool parameters of type `UniswapV2PoolParams`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getPoolTokenPrice(
         address,
         uint8 outputDecimals_,
@@ -307,7 +307,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_     The token to determine the price of
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          UniswapV2 pool parameters of type `UniswapV2PoolParams`
-    /// @return                 Price in the scale of `outputDecimals_`
+    /// @return uint256         Price in the scale of `outputDecimals_`
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,
