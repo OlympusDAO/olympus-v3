@@ -332,6 +332,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
         bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
         bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
 
+        // Reject mutually exclusive fork flags
+        if (useAnvilFork && useTenderlyFork) {
+            revert("BatchScriptV2: USE_ANVIL_FORK and USE_TENDERLY_FORK are mutually exclusive");
+        }
+
         // Handle fork modes first
         if (useAnvilFork) {
             _sendAnvilBatch();

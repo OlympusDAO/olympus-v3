@@ -101,7 +101,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Validate the PRICE version
         {
             (uint8 major, uint8 minor) = IVersioned(priceModule).VERSION();
-            if (major != 1 && minor != 2) revert("PRICE module version is unsupported");
+
+            // Needs to be at least v1.2
+            // If major is 1, minor must be at least 2
+            if (major < 1) revert("PRICE module version is unsupported");
+            if (major == 1 && minor < 2) revert("PRICE module version is unsupported");
         }
 
         // Upgrade PRICE v1.2 module in the kernel

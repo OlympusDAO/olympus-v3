@@ -187,6 +187,11 @@ contract DeployOracles is BatchScriptV2 {
         _quoteToken = _readBatchArgAddress(functionName_, "quoteToken");
         _minPrice = _readBatchArgUint256(functionName_, "minPrice");
         _maxPrice = _readBatchArgUint256(functionName_, "maxPrice");
+
+        // Validate that minPrice does not exceed maxPrice
+        if (_minPrice > _maxPrice) {
+            revert("DeployOracles: minPrice cannot exceed maxPrice");
+        }
     }
 
     /// @notice Deploy a Chainlink oracle for a token pair
