@@ -146,7 +146,7 @@ No OCG approval required — only `price_admin` role.
 | `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence                                 |
 | `shell/safeBatchV2.sh`                                       | Batch execution shell script                        |
 | `src/scripts/ops/batches/ConfigurePriceV1_2.sol`             | PRICE configuration batch                           |
-| `src/policies/price/PriceConfig.v2.sol`                       | Configuration policy (auto-enabled on installation) |
+| `src/policies/price/PriceConfig.v2.sol`                      | Configuration policy (auto-enabled on installation) |
 | `src/modules/PRICE/OlympusPrice.v1_2.sol`                    | PRICE v1.2 module                                   |
 
 For oracle-related files, see **[Oracle Factories and Policies](oracle_factories.md)**.
