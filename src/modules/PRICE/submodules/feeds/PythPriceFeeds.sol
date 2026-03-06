@@ -148,6 +148,17 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @param expo_            The exponent from the price feed (must be <= 0)
     error Pyth_ExponentPositive(address pyth_, bytes32 priceFeedId_, int32 expo_);
 
+    /// @notice                 The exponent from the price feed is too negative, which results in overflow
+    /// @dev                    Exponents more negative than -30 would cause 10**-expo to overflow uint256
+    ///
+    /// @param pyth_            The address of the Pyth contract
+    /// @param priceFeedId_     The price feed ID
+    /// @param expo_            The exponent from the price feed
+    error Pyth_ExponentTooLarge(address pyth_, bytes32 priceFeedId_, int32 expo_);
+
+    /// @notice                 The maximum negative exponent allowed to prevent overflow in 10**-expo calculation
+    int32 private constant MAX_NEGATIVE_EXPONENT = -30;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(Module parent_) Submodule(parent_) {}
@@ -261,6 +272,11 @@ contract PythPriceFeeds is PriceSubmodule {
         // Therefore, it is not supported
         if (priceData.expo > 0) {
             revert Pyth_ExponentPositive(pyth_, priceFeedId_, priceData.expo);
+        }
+
+        // Reject exponents that are too negative, which would cause 10**-expo to overflow uint256
+        if (priceData.expo < MAX_NEGATIVE_EXPONENT) {
+            revert Pyth_ExponentTooLarge(pyth_, priceFeedId_, priceData.expo);
         }
 
         // Convert maxConfidence from output decimals scale to Pyth feed scale (10^expo)
