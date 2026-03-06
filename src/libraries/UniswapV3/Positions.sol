@@ -43,15 +43,15 @@ library UniswapV3Positions {
         return (amount0, amount1);
     }
 
-    /// @notice             Gets the fees accrued for the position
+    /// @notice             Gets the tokens owed (collected but unwithdrawn) for the position
     ///
     /// @param pool_        The address of the Uniswap V3 pool
     /// @param tickLower_   The lower tick of the position
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
-    /// @return uint128     The amount of token0 fees accrued
-    /// @return uint128     The amount of token1 fees accrued
-    function getPositionFees(
+    /// @return uint128     The amount of token0 tokens owed
+    /// @return uint128     The amount of token1 tokens owed
+    function getPositionTokensOwed(
         IUniswapV3Pool pool_,
         int24 tickLower_,
         int24 tickUpper_,
