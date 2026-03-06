@@ -293,7 +293,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](6);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
@@ -320,6 +320,14 @@ contract PriceConfigv2Test is Test {
         expectedPerms[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
+        });
+        expectedPerms[6] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.storePrice.selector
+        });
+        expectedPerms[7] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.storeObservations.selector
         });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
@@ -906,6 +914,104 @@ contract PriceConfigv2Test is Test {
                 bytes("")
             )
         );
+    }
+
+    /* ========== PRICE STORAGE ========== */
+
+    function test_storePrice_notEnabled_reverts() public givenDisabled {
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(priceManager);
+        priceConfig.storePrice(address(ohm));
+    }
+
+    function test_storePrice_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
+
+        // Add base assets to PRICEv2
+        _addBaseAssets();
+
+        // Try to store price with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        priceConfig.storePrice(address(ohm));
+
+        // Try with priceManager account, expect success
+        vm.prank(priceManager);
+        priceConfig.storePrice(address(ohm));
+
+        // Verify price was stored by checking Variant.LAST returns a price
+        (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(price, 0, "Price should be stored");
+        assertGt(timestamp, 0, "Timestamp should be set");
+    }
+
+    function test_storePrice(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
+        // Add base assets to PRICEv2
+        _addBaseAssets();
+
+        // Store price using authorized caller
+        vm.prank(caller);
+        priceConfig.storePrice(address(ohm));
+
+        // Verify price was stored by checking Variant.LAST returns a price
+        (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(price, 0, "Price should be stored");
+        assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
+    }
+
+    function test_storeObservations_notEnabled_reverts() public givenDisabled {
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(priceManager);
+        priceConfig.storeObservations();
+    }
+
+    function test_storeObservations_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
+
+        // Add base assets to PRICEv2
+        _addBaseAssets();
+
+        // Try to store observations with unauthorized account, expect revert
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        priceConfig.storeObservations();
+
+        // Try with priceManager account, expect success
+        vm.prank(priceManager);
+        priceConfig.storeObservations();
+
+        // Verify observations were stored by checking Variant.LAST returns a price
+        (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(price, 0, "Price should be stored");
+        assertGt(timestamp, 0, "Timestamp should be set");
+    }
+
+    function test_storeObservations(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
+        // Add base assets to PRICEv2
+        _addBaseAssets();
+
+        // Store observations using authorized caller
+        vm.prank(caller);
+        priceConfig.storeObservations();
+
+        // Verify observations were stored by checking Variant.LAST returns a price
+        (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(price, 0, "Price should be stored");
+        assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
     }
 
     function test_supportsInterface() public view {

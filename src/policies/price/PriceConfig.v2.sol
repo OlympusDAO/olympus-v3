@@ -74,7 +74,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](6);
+        requests = new Permissions[](8);
         // PRICE Permissions
         requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
         requests[1] = Permissions({
@@ -96,6 +96,14 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         requests[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
+        });
+        requests[6] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.storePrice.selector
+        });
+        requests[7] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.storeObservations.selector
         });
     }
 
@@ -154,6 +162,16 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         IPRICEv2.UpdateAssetParams memory params_
     ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.updateAsset(asset_, params_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    function storePrice(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.storePrice(asset_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    function storeObservations() external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.storeObservations();
     }
 
     // ========== SUBMODULE MANAGEMENT ========== //
