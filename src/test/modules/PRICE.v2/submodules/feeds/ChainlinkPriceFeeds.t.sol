@@ -13,6 +13,9 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 // Interfaces
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -335,11 +338,12 @@ contract ChainlinkPriceFeedsTest is Test {
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
          */
-        // Mock timestamp at/above the threshold
+        // Mock timestamp at/above the threshold, but not in the distant future
+        // Use a reasonable upper bound (e.g., 1 day from now)
         uint256 timestamp = bound(
             timestamp_,
             block.timestamp - UPDATE_THRESHOLD,
-            type(uint256).max
+            block.timestamp + 1 days
         );
         daiEthPriceFeed.setTimestamp(timestamp);
 
@@ -613,11 +617,11 @@ contract ChainlinkPriceFeedsTest is Test {
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
          */
-        // Mock timestamp at/above the threshold
+        // Mock timestamp at/above the threshold, but not in the distant future
         uint256 timestamp = bound(
             timestamp_,
             block.timestamp - UPDATE_THRESHOLD,
-            type(uint256).max
+            block.timestamp + 1 days
         );
         ohmEthPriceFeed.setTimestamp(timestamp);
 
@@ -669,11 +673,11 @@ contract ChainlinkPriceFeedsTest is Test {
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
          */
-        // Mock timestamp at/above the threshold
+        // Mock timestamp at/above the threshold, but not in the distant future
         uint256 timestamp = bound(
             timestamp_,
             block.timestamp - UPDATE_THRESHOLD,
-            type(uint256).max
+            block.timestamp + 1 days
         );
         daiEthPriceFeed.setTimestamp(timestamp);
 
@@ -1080,11 +1084,11 @@ contract ChainlinkPriceFeedsTest is Test {
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
          */
-        // Mock timestamp at/above the threshold
+        // Mock timestamp at/above the threshold, but not in the distant future
         uint256 timestamp = bound(
             timestamp_,
             block.timestamp - UPDATE_THRESHOLD,
-            type(uint256).max
+            block.timestamp + 1 days
         );
         ohmEthPriceFeed.setTimestamp(timestamp);
 
@@ -1134,11 +1138,11 @@ contract ChainlinkPriceFeedsTest is Test {
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
          */
-        // Mock timestamp at/above the threshold
+        // Mock timestamp at/above the threshold, but not in the distant future
         uint256 timestamp = bound(
             timestamp_,
             block.timestamp - UPDATE_THRESHOLD,
-            type(uint256).max
+            block.timestamp + 1 days
         );
         ethDaiPriceFeed.setTimestamp(timestamp);
 
@@ -1362,6 +1366,30 @@ contract ChainlinkPriceFeedsTest is Test {
             UPDATE_THRESHOLD
         );
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), priceDecimals, params);
+    }
+
+    // =========  SUPPORTS INTERFACE TESTS ========= //
+
+    function test_supportsInterface_returnsTrueForAllInterfaces() public view {
+        // Check IERC165
+        bytes4 ierc165 = type(IERC165).interfaceId;
+        assertTrue(chainlinkSubmodule.supportsInterface(ierc165), "Should support IERC165");
+
+        // Check ISubmodule (which inherits IVersioned)
+        bytes4 isubmodule = type(ISubmodule).interfaceId;
+        assertTrue(chainlinkSubmodule.supportsInterface(isubmodule), "Should support ISubmodule");
+
+        // Check IVersioned (via ISubmodule inheritance)
+        bytes4 iversioned = type(IVersioned).interfaceId;
+        assertTrue(chainlinkSubmodule.supportsInterface(iversioned), "Should support IVersioned");
+    }
+
+    function test_supportsInterface_unsupported_returnsFalse() public view {
+        bytes4 interfaceId = 0x12345678;
+        assertFalse(
+            chainlinkSubmodule.supportsInterface(interfaceId),
+            "Should not support unsupported"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

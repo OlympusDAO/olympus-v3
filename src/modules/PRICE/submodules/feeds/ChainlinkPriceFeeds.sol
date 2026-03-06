@@ -155,11 +155,14 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         if (roundData.priceInt <= 0)
             revert Chainlink_FeedPriceInvalid(address(feed_), roundData.priceInt);
 
-        if (roundData.updatedAt < blockTimestamp - paramsUpdateThreshold)
+        // Check if data is stale by comparing timestamp + threshold to current time
+        // Note: Overflow is unlikely here since Chainlink timestamps are uint48 (bounded to ~899,000 years)
+        // This comparison is rearranged from `updatedAt < blockTimestamp - threshold` to avoid underflow
+        if (roundData.updatedAt + paramsUpdateThreshold < blockTimestamp)
             revert Chainlink_FeedRoundStale(
                 address(feed_),
                 roundData.updatedAt,
-                blockTimestamp - paramsUpdateThreshold
+                blockTimestamp > paramsUpdateThreshold ? blockTimestamp - paramsUpdateThreshold : 0
             );
     }
 
