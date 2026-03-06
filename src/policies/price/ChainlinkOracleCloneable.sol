@@ -147,7 +147,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
 
         // Calculate: 1 base token = (basePrice / quotePrice) * 10^PRICE_DECIMALS quote tokens
         // Result is in PRICE_DECIMALS scale
-        uint256 price = (basePrice * 10 ** _priceDecimals()) / quotePrice;
+        uint256 price = FullMath.mulDiv(basePrice, 10 ** _priceDecimals(), quotePrice);
 
         // Cast timestamp to uint80 for round ID
         roundId = uint80(baseTimestamp);
