@@ -4,7 +4,6 @@ pragma solidity >=0.8.30;
 import {Test, stdError} from "forge-std/Test.sol";
 import {Kernel, Actions, toKeycode, Keycode, Policy, Permissions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -13,7 +12,6 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILayerZeroReceiver} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroReceiver.sol";
-import {ILayerZeroUserApplicationConfig} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroUserApplicationConfig.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {LZEndpointMock} from "@layer-zero-endpoint-v1-1.1.0/lzApp/mocks/LZEndpointMock.sol";
@@ -339,6 +337,8 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             bytes("")
         );
 
+        uint256 facilitatorEthBefore = facilitator.balance;
+
         vm.expectEmit(true, true, true, true);
         emit ILZBridgeGateway.BridgedSupplyIncreased(amount);
 
@@ -351,7 +351,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         vm.stopPrank();
 
-        // OHM should be burned from the gateway (transferred then burned)
+        // Verify
         assertEq(
             ohm.balanceOf(facilitator),
             facilitatorBalanceBefore - amount,
@@ -363,6 +363,12 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             amount,
             "Bridged supply should increase by amount on canonical"
         );
+        assertEq(
+            facilitator.balance,
+            facilitatorEthBefore - fee,
+            "Facilitator should spend exactly the native fee"
+        );
+        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
     }
 
     function test_burnAndSend_nonCanonical_doesNotTrackSupply() external {
@@ -392,6 +398,9 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             amount,
             bytes("")
         );
+
+        uint256 facilitatorEthBefore = facilitator.balance;
+
         gateway2.burnAndSend{value: fee}(
             CANONICAL_LZ_CHAIN_ID,
             recipient,
@@ -401,7 +410,14 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         vm.stopPrank();
 
+        // Verify
         assertEq(gateway2.bridgedSupply(), 0, "Non-canonical should not track bridged supply");
+        assertEq(
+            facilitator.balance,
+            facilitatorEthBefore - fee,
+            "Facilitator should spend exactly the native fee"
+        );
+        assertEq(address(gateway2).balance, 0, "Gateway should hold no ETH after send");
     }
 
     function test_burnAndSend_revertsIfNotFacilitator() external {

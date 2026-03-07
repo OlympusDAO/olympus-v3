@@ -119,6 +119,7 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
 
         assertEq(fresh.OHM(), address(ohm), "OHM should be set");
         assertEq(fresh.owner(), address(this), "Owner should be the deployer");
+        assertEq(fresh.gateway(), address(0), "Gateway should default to zero address");
         assertFalse(fresh.isEnabled(), "Bridge should start disabled");
     }
 
@@ -164,14 +165,17 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         vm.prank(user);
         bridge.sendOhm{value: fee}(NONCANONICAL_LZ_CHAIN_ID, recipient, amount);
 
-        // User should have lost OHM
         assertEq(ohm.balanceOf(user), userOhmBefore - amount, "User balance should decrease");
-        // Gateway should have no OHM (burned)
         assertEq(ohm.balanceOf(address(gateway)), 0, "Gateway should have no OHM after burn");
-        // Recipient should receive OHM on non-canonical
         assertEq(ohm.balanceOf(recipient), amount, "Recipient should receive OHM on destination");
-        // User should have spent native fee
-        assertTrue(user.balance < userEthBefore, "User should spend native token for fees");
+        assertEq(user.balance, userEthBefore - fee, "User should spend exactly the native fee");
+        assertEq(address(bridge).balance, 0, "Bridge should hold no ETH after send");
+        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
+        assertEq(
+            gateway.bridgedSupply(),
+            amount,
+            "Bridged supply should increase by amount on canonical"
+        );
     }
 
     function test_sendOhm_revertsIfNotEnabled() external {
@@ -223,12 +227,14 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         (uint256 fee, ) = bridge.estimateSendFee(NONCANONICAL_LZ_CHAIN_ID, recipient, amount_);
 
         uint256 userBalBefore = ohm.balanceOf(user);
+        uint256 userEthBefore = user.balance;
 
         vm.prank(user);
         bridge.sendOhm{value: fee}(NONCANONICAL_LZ_CHAIN_ID, recipient, amount_);
 
         assertEq(ohm.balanceOf(user), userBalBefore - amount_, "User should lose exactly amount");
         assertEq(ohm.balanceOf(recipient), amount_, "Recipient should receive exactly amount");
+        assertEq(user.balance, userEthBefore - fee, "User should spend exactly the native fee");
     }
 }
 
