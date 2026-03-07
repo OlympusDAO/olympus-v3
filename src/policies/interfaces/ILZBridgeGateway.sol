@@ -6,8 +6,7 @@ import {IVersioned} from "../../interfaces/IVersioned.sol";
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy.
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, trusted remote
-///      management, and bridged supply cap enforcement. Routes incoming messages by type:
-///      bridge (OHM) or governance.
+///      management, and bridged supply cap enforcement.
 interface ILZBridgeGateway is IVersioned {
     // ========= ERRORS ========= //
 
@@ -62,7 +61,7 @@ interface ILZBridgeGateway is IVersioned {
     /// @param receiver The address that received the minted OHM.
     /// @param amount The amount of OHM minted.
     /// @param srcChainId The LayerZero source chain ID.
-    event BridgeReceived(address indexed receiver, uint256 amount, uint16 indexed srcChainId);
+    event Received(address indexed receiver, uint256 amount, uint16 indexed srcChainId);
 
     /// @notice Emitted when an LZ message fails to process.
     /// @param srcChainId The source chain ID.
@@ -209,15 +208,21 @@ interface ILZBridgeGateway is IVersioned {
     /// @notice Sets the facilitator address.
     /// @dev Only callable by the admin role.
     ///
+    ///      Reverts if:
+    ///      - facilitator_ is the zero address.
+    ///
     /// @param facilitator_ The new facilitator address.
     function setFacilitator(address facilitator_) external;
 
     /// @notice Manually sets the bridged supply value.
-    /// @dev Only callable by the admin role. Only available on canonical chains.
-    ///      Required during migration to set the initial value.
+    /// @dev Only callable by the bridge_admin role. Only available on canonical chains.
+    ///      Required during bridge migration: the bridged amount at deployment differs from
+    ///      the amount at OCG proposal execution, so the MS sets this value after the old
+    ///      bridge is disabled and before the new one is enabled. Also used to correct
+    ///      bridgedSupply in error-recovery scenarios (e.g. misrouted messages).
     ///
     ///      Reverts if:
-    ///      - The caller does not have the admin role.
+    ///      - The caller does not have the bridge_admin role.
     ///      - IS_CANONICAL is false.
     ///
     /// @param bridgedSupply_ The new bridged supply value.
@@ -273,9 +278,7 @@ interface ILZBridgeGateway is IVersioned {
     ///
     /// @param remoteChainId_ The remote chain ID.
     /// @return remoteAddress The trusted remote address.
-    function getTrustedRemoteAddress(
-        uint16 remoteChainId_
-    ) external view returns (address remoteAddress);
+    function getTrustedRemote(uint16 remoteChainId_) external view returns (address remoteAddress);
 
     /// @notice Checks if a source address is a trusted remote for the given chain.
     /// @dev Reverts if either the source address or trusted remote is uninitialized.

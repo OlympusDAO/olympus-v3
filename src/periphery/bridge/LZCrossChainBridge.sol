@@ -29,8 +29,8 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     address public override gateway;
 
     constructor(address ohm_, address owner_) Owned(owner_) {
-        _requireNonZeroAddress(ohm_, "ohm");
-        _requireNonZeroAddress(owner_, "owner");
+        _requireNonzeroAddress(ohm_, "ohm");
+        _requireNonzeroAddress(owner_, "owner");
 
         OHM = ohm_;
 
@@ -63,12 +63,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
             bytes("")
         );
 
-        emit Bridged(msg.sender, amount_, dstChainId_);
+        emit Bridged(msg.sender, amount_, dstChainId_, msg.value);
     }
 
     /// @inheritdoc ILZCrossChainBridge
     function setGateway(address gateway_) external override onlyOwner {
-        _requireNonZeroAddress(gateway_, "gateway");
+        _requireNonzeroAddress(gateway_, "gateway");
 
         gateway = gateway_;
         emit GatewaySet(gateway_);
@@ -88,6 +88,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     ) public view override(PeripheryEnabler) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
@@ -104,7 +105,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }
 
-    function _requireNonZeroAddress(address address_, string memory parameter_) private pure {
+    function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
         if (address_ == address(0)) revert LZCrossChainBridge_InvalidAddress(parameter_);
     }
 }

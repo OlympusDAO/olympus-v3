@@ -7,7 +7,6 @@ import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces
 import {ILayerZeroReceiver} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroReceiver.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
@@ -172,7 +171,7 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata adapterParams_
-    ) external payable override onlyFacilitator onlyEnabled {
+    ) external payable override onlyEnabled onlyFacilitator {
         // Warning. amount_ == 0 should be ensured by the facilitator
         _requireNonzeroAddress(to_, "to");
 
@@ -367,9 +366,7 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function getTrustedRemoteAddress(
-        uint16 remoteChainId_
-    ) external view override returns (address) {
+    function getTrustedRemote(uint16 remoteChainId_) external view override returns (address) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert LZBridgeGateway_NoTrustedPath();
 
@@ -397,7 +394,6 @@ contract LZBridgeGateway is
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
-            interfaceId == type(IEnabler).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }
@@ -434,7 +430,7 @@ contract LZBridgeGateway is
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
 
-        emit BridgeReceived(to, amount, srcChainId_);
+        emit Received(to, amount, srcChainId_);
     }
 
     function _setFacilitator(address facilitator_) private {

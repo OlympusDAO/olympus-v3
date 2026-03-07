@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IVersioned} from "../../interfaces/IVersioned.sol";
 
 /// @title ILZCrossChainBridge
 /// @notice Interface for the LZ Cross-Chain Bridge facilitator, the user-facing entry point
@@ -10,7 +9,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-interface ILZCrossChainBridge is IEnabler, IVersioned {
+interface ILZCrossChainBridge is IVersioned {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
@@ -22,7 +21,8 @@ interface ILZCrossChainBridge is IEnabler, IVersioned {
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
     /// @param dstChainId The LayerZero destination chain ID.
-    event Bridged(address indexed sender, uint256 amount, uint16 indexed dstChainId);
+    /// @param fees The native token fee paid for the bridge transfer.
+    event Bridged(address indexed sender, uint256 amount, uint16 indexed dstChainId, uint256 fees);
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
