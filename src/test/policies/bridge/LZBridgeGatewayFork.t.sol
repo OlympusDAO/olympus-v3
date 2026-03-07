@@ -10,28 +10,7 @@ import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
-
-interface ILZEndpoint {
-    function send(
-        uint16 _dstChainId,
-        bytes calldata _path,
-        bytes calldata _payload,
-        address payable _refundAddress,
-        address _zroPaymentAddress,
-        bytes calldata _adapterParams
-    ) external payable;
-
-    function getSendLibraryAddress(address _userApplication) external view returns (address);
-
-    function receivePayload(
-        uint16 _srcChainId,
-        bytes calldata _srcAddress,
-        address _dstAddress,
-        uint64 _nonce,
-        uint _gasLimit,
-        bytes calldata _payload
-    ) external;
-}
+import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroEndpoint.sol";
 
 /// @notice Fork-based end-to-end tests for LZBridgeGateway cross-chain bridge
 contract LZBridgeGatewayForkTests is Test {
@@ -214,7 +193,19 @@ contract LZBridgeGatewayForkTests is Test {
 
     /// @dev Get the default library address from the LZ endpoint
     function _getDefaultLibrary(address endpoint) internal view returns (address) {
-        return ILZEndpoint(endpoint).getSendLibraryAddress(address(0));
+        return ILayerZeroEndpoint(endpoint).getSendLibraryAddress(address(0));
+    }
+
+    /// @dev Assert that the trusted remote on the polygon gateway matches the expected path
+    function _assertTrustedRemote() internal {
+        vm.selectFork(polygonForkId);
+        bytes memory trustedRemote = polygonGateway.trustedRemoteLookup(MAINNET_LZ_CHAIN_ID);
+        bytes memory expectedPath = abi.encodePacked(
+            address(mainnetGateway),
+            address(polygonGateway)
+        );
+        assertEq(trustedRemote.length, 40, "Trusted remote should be 40 bytes");
+        assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
     }
 
     /// @dev Send OHM from mainnet to polygon and relay the message
@@ -272,15 +263,7 @@ contract LZBridgeGatewayForkTests is Test {
     // ========= TESTS ========= //
 
     function test_mainnetToPolygon_sendsAndReceivesOhm() external {
-        // Verify trusted remote is set on polygon gateway
-        vm.selectFork(polygonForkId);
-        bytes memory trustedRemote = polygonGateway.trustedRemoteLookup(MAINNET_LZ_CHAIN_ID);
-        bytes memory expectedPath = abi.encodePacked(
-            address(mainnetGateway),
-            address(polygonGateway)
-        );
-        assertEq(trustedRemote.length, 40, "Trusted remote should be 40 bytes");
-        assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
+        _assertTrustedRemote();
 
         uint256 amount = 1000e9;
 
@@ -306,15 +289,7 @@ contract LZBridgeGatewayForkTests is Test {
     }
 
     function test_polygonToMainnet_sendsAndReceivesOhm() external {
-        // Verify trusted remote is set on polygon gateway
-        vm.selectFork(polygonForkId);
-        bytes memory trustedRemote = polygonGateway.trustedRemoteLookup(MAINNET_LZ_CHAIN_ID);
-        bytes memory expectedPath = abi.encodePacked(
-            address(mainnetGateway),
-            address(polygonGateway)
-        );
-        assertEq(trustedRemote.length, 40, "Trusted remote should be 40 bytes");
-        assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
+        _assertTrustedRemote();
 
         uint256 amount = 1000e9;
 
@@ -351,15 +326,7 @@ contract LZBridgeGatewayForkTests is Test {
     }
 
     function test_roundTrip_fullFlow() external {
-        // Verify trusted remote is set on polygon gateway
-        vm.selectFork(polygonForkId);
-        bytes memory trustedRemote = polygonGateway.trustedRemoteLookup(MAINNET_LZ_CHAIN_ID);
-        bytes memory expectedPath = abi.encodePacked(
-            address(mainnetGateway),
-            address(polygonGateway)
-        );
-        assertEq(trustedRemote.length, 40, "Trusted remote should be 40 bytes");
-        assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
+        _assertTrustedRemote();
 
         uint256 amount = 500e9;
 
