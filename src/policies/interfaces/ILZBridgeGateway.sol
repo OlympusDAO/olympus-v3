@@ -119,7 +119,7 @@ interface ILZBridgeGateway is IVersioned {
     /// @param bridgedSupplyCap The new bridged supply cap.
     event BridgedSupplyCapSet(uint256 bridgedSupplyCap);
 
-    // ========= OHM BRIDGING ========= //
+    // ========= CORE FUNCTIONS ========= //
 
     /// @notice Burns OHM held by the gateway and sends a bridge message to a destination chain.
     /// @dev Only callable by the facilitator. The facilitator must transfer OHM to the gateway
@@ -167,7 +167,7 @@ interface ILZBridgeGateway is IVersioned {
         bytes calldata srcAddress_,
         uint64 nonce_,
         bytes calldata payload_
-    ) external payable;
+    ) external;
 
     /// @notice Receives and routes an LZ message after validation.
     /// @dev Called via low-level self-call from lzReceive for error isolation.
@@ -225,6 +225,8 @@ interface ILZBridgeGateway is IVersioned {
 
     /// @notice Sets the maximum permitted bridged supply.
     /// @dev Only callable by the admin role. Only available on canonical chains.
+    ///      The cap may be set below the current `bridgedSupply` to prevent further
+    ///      outbound bridging without affecting already-bridged tokens.
     ///
     ///      Reverts if:
     ///      - The caller does not have the admin role.

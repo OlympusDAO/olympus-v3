@@ -36,7 +36,7 @@ contract LZBridgeGateway is
 
     // ========= CONSTANTS ========= //
 
-    /// @notice Role required for LayerZero endpoint configuration.
+    /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
     bytes32 private constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
 
     /// @inheritdoc ILZBridgeGateway
@@ -173,6 +173,7 @@ contract LZBridgeGateway is
         address payable refundAddress_,
         bytes calldata adapterParams_
     ) external payable override onlyFacilitator onlyEnabled {
+        // Warning. amount_ == 0 should be ensured by the facilitator
         _requireNonzeroAddress(to_, "to");
 
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
@@ -262,7 +263,7 @@ contract LZBridgeGateway is
         bytes calldata srcAddress_,
         uint64 nonce_,
         bytes calldata payload_
-    ) public payable override onlyEnabled {
+    ) public override onlyEnabled {
         // Re-validate trusted remote
         _validateTrustedRemote(srcChainId_, srcAddress_);
 
