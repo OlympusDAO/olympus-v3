@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
 // Scripting
@@ -12,9 +13,11 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Interfaces
-import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IERC20 as ChainlinkIERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";
@@ -27,6 +30,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {ConvertibleDepositFacility} from "src/policies/deposits/ConvertibleDepositFacility.sol";
 import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDepositAuctioneer.sol";
+import {CDAuctioneerLimitOrders} from "src/policies/deposits/LimitOrders.sol";
 import {OlympusDepositPositionManager} from "src/modules/DEPOS/OlympusDepositPositionManager.sol";
 import {PositionTokenRenderer} from "src/modules/DEPOS/PositionTokenRenderer.sol";
 import {DepositRedemptionVault} from "src/policies/deposits/DepositRedemptionVault.sol";
@@ -35,6 +39,13 @@ import {ZeroDistributor} from "src/policies/Distributor/ZeroDistributor.sol";
 import {OlympusPrice} from "src/modules/PRICE/OlympusPrice.sol";
 import {OlympusPriceConfig} from "src/policies/PriceConfig.sol";
 import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
+
+// Migration contracts
+import {OwnedERC20} from "src/external/OwnedERC20.sol";
+import {Burner} from "src/policies/Burner.sol";
+import {MigrationProposalHelper} from "src/proposals/MigrationProposalHelper.sol";
+import {V1Migrator} from "src/policies/V1Migrator.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
@@ -83,12 +94,12 @@ contract DeployV3 is WithEnvironment {
             return;
         } else if (len == 1) {
             // Only one deployment
-            string memory name = abi.decode(sequenceFile.parseRaw(".sequence..name"), (string));
+            string memory name = abi.decode(sequenceFile.parseRaw(".sequence[*].name"), (string));
             deployments.push(name);
         } else {
             // More than one deployment
             string[] memory names = abi.decode(
-                sequenceFile.parseRaw(".sequence..name"),
+                sequenceFile.parseRaw(".sequence[*].name"),
                 (string[])
             );
             for (uint256 i = 0; i < len; i++) {
@@ -289,6 +300,34 @@ contract DeployV3 is WithEnvironment {
             );
     }
 
+    function _readDeploymentArgUint8Array(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (uint8[] memory) {
+        string memory jsonPath = string.concat(
+            ".sequence[?(@.name == '",
+            deploymentName_,
+            "')].args.",
+            key_
+        );
+        uint256[] memory uint256Array = sequenceFile.readUintArray(jsonPath);
+        uint8[] memory uint8Array = new uint8[](uint256Array.length);
+        for (uint256 i = 0; i < uint256Array.length; i++) {
+            uint8Array[i] = SafeCast.encodeUInt8(uint256Array[i]);
+        }
+        return uint8Array;
+    }
+
+    function _readDeploymentArgAddressArray(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (address[] memory) {
+        return
+            sequenceFile.readAddressArray(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
     function _getDeployer() internal returns (address) {
         (, address msgSender, ) = vm.readCallers();
 
@@ -354,7 +393,7 @@ contract DeployV3 is WithEnvironment {
         // Deploy LockReleaseTokenPool
         vm.broadcast();
         LockReleaseTokenPool lockReleaseTokenPool = new LockReleaseTokenPool(
-            IERC20(ohm),
+            ChainlinkIERC20(ohm),
             ohmDecimals,
             allowlist,
             rmnProxy,
@@ -766,4 +805,163 @@ contract DeployV3 is WithEnvironment {
 
         return (address(activator), "olympus.periphery");
     }
+
+    function deployConvertibleDepositAuctioneerLimitOrders()
+        public
+        returns (address, string memory)
+    {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address owner = _getAddressNotZero("olympus.multisig.dao");
+        address depositManager = _getAddressNotZero("olympus.policies.DepositManager");
+        address cdAuctioneer = _getAddressNotZero("olympus.policies.ConvertibleDepositAuctioneer");
+        address usds = _getAddressNotZero("external.tokens.USDS");
+        address sUsds = _getAddressNotZero("external.tokens.sUSDS");
+        address positionNft = _getAddressNotZero("olympus.modules.OlympusDepositPositionManager");
+        address yieldRecipient = _getAddressNotZero("olympus.modules.OlympusTreasury");
+
+        // Read arrays from args
+        uint8[] memory depositPeriods = _readDeploymentArgUint8Array(
+            "ConvertibleDepositAuctioneerLimitOrders",
+            "depositPeriods"
+        );
+        address[] memory receiptTokens = _readDeploymentArgAddressArray(
+            "ConvertibleDepositAuctioneerLimitOrders",
+            "receiptTokens"
+        );
+
+        // Log parameters
+        console2.log("ConvertibleDepositAuctioneerLimitOrders parameters:");
+        console2.log("  owner", owner);
+        console2.log("  depositManager", depositManager);
+        console2.log("  cdAuctioneer", cdAuctioneer);
+        console2.log("  usds", usds);
+        console2.log("  sUsds", sUsds);
+        console2.log("  positionNft", positionNft);
+        console2.log("  yieldRecipient", yieldRecipient);
+        console2.log("  depositPeriods count", depositPeriods.length);
+        console2.log("  receiptTokens count", receiptTokens.length);
+        for (uint256 i; i < depositPeriods.length; i++) {
+            console2.log("  depositPeriod", depositPeriods[i]);
+            console2.log("  receiptToken", receiptTokens[i]);
+        }
+
+        // Deploy
+        vm.broadcast();
+        CDAuctioneerLimitOrders limitOrders = new CDAuctioneerLimitOrders(
+            owner,
+            depositManager,
+            cdAuctioneer,
+            usds,
+            sUsds,
+            positionNft,
+            yieldRecipient,
+            depositPeriods,
+            receiptTokens
+        );
+
+        return (address(limitOrders), "olympus.periphery");
+    }
+
+    // ===== MIGRATION CONTRACTS ===== //
+
+    function deployTempOHM() public returns (address, string memory) {
+        // Input parameters
+        string memory name = _readDeploymentArgString("TempOHM", "name");
+        string memory symbol = _readDeploymentArgString("TempOHM", "symbol");
+        address initialOwner = _envAddressNotZero("olympus.multisig.dao");
+
+        // Log parameters
+        console2.log("TempOHM parameters:");
+        console2.log("  name", name);
+        console2.log("  symbol", symbol);
+        console2.log("  initialOwner", initialOwner);
+
+        // Deploy
+        vm.broadcast();
+        OwnedERC20 tempOHM = new OwnedERC20(name, symbol, initialOwner);
+
+        return (address(tempOHM), "external.tokens");
+    }
+
+    function deployBurner() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+
+        // Log parameters
+        console2.log("Burner parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+
+        // Deploy
+        vm.broadcast();
+        Burner burner = new Burner(Kernel(kernel), ERC20(ohm));
+
+        return (address(burner), "olympus.policies");
+    }
+
+    function deployMigrationProposalHelper() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address owner = _getAddressNotZero("olympus.governance.Timelock");
+        address admin = _getAddressNotZero("olympus.multisig.dao");
+        address burner = _getAddressNotZero("olympus.policies.Burner");
+        address tempOHM = _getAddressNotZero("external.tokens.TempOHM");
+
+        // Read OHMv1ToMigrate from args
+        uint256 OHMv1ToMigrate = _readDeploymentArgUint256(
+            "MigrationProposalHelper",
+            "OHMv1ToMigrate"
+        );
+
+        // Log parameters
+        console2.log("MigrationProposalHelper parameters:");
+        console2.log("  owner", owner);
+        console2.log("  admin", admin);
+        console2.log("  burner", burner);
+        console2.log("  tempOHM", tempOHM);
+        console2.log("  OHMv1ToMigrate", OHMv1ToMigrate);
+
+        // Deploy
+        vm.broadcast();
+        MigrationProposalHelper helper = new MigrationProposalHelper(
+            owner,
+            admin,
+            burner,
+            tempOHM,
+            OHMv1ToMigrate
+        );
+
+        return (address(helper), "olympus.periphery");
+    }
+
+    function deployV1Migrator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohmV1 = _getAddressNotZero("olympus.legacy.OHMv1");
+        address gohm = _getAddressNotZero("olympus.legacy.gOHM");
+        bytes32 merkleRoot = bytes32(0); // Set to zero, will be set to a valid root after the proposal is executed
+
+        // Log parameters
+        console2.log("V1Migrator parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohmV1", ohmV1);
+        console2.log("  gohm", gohm);
+        console2.log("  merkleRoot", vm.toString(merkleRoot));
+
+        // Deploy
+        vm.broadcast();
+        V1Migrator migrator = new V1Migrator(
+            Kernel(kernel),
+            IERC20(ohmV1),
+            IgOHM(gohm),
+            merkleRoot
+        );
+
+        return (address(migrator), "olympus.policies");
+    }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

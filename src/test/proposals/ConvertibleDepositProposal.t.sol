@@ -21,7 +21,7 @@ contract ConvertibleDepositProposalTest is ProposalTest {
         ConvertibleDepositProposal proposal = new ConvertibleDepositProposal();
 
         // Set to true once the proposal has been submitted on-chain to enforce calldata matching
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         // Simulate the proposal
         _setupSuite(address(proposal));

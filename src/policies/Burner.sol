@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
+pragma solidity >=0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+// ============  INTERFACES ============ //
 
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+
+// =========== LIBRARIES ===========
 import {TransferHelper} from "libraries/TransferHelper.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+// =========== CONTRACTS ===========
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-
-import "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title Olympus Burner Policy
 /// @notice Olympus Burner Policy Contract
 /// @dev This policy is to enable burning of OHM by the DAO MS to support test runs of new products which have not been automated yet.
 ///      This policy will be removed once the protocol completes feature development and the DAO no longer needs to test products.
 ///      This policy requires categories to be created to designate the purpose for burned OHM, which can be tracked externally from automated systems.
-contract Burner is Policy, RolesConsumer {
+contract Burner is Policy, PolicyEnabler, IVersioned {
     using TransferHelper for ERC20;
 
     // ========== ERRORS ========== //
@@ -33,25 +39,34 @@ contract Burner is Policy, RolesConsumer {
 
     // ========== STATE ========== //
 
+    /// forge-lint: disable-start(mixed-case-variable)
+
     // Modules
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
+    // ROLES is already declared in PolicyAdmin/PolicyEnabler
+
     // Olympus contract dependencies
     /// @notice OHM token
-    ERC20 public immutable ohm;
+    ERC20 public immutable OHM;
 
     // Burn metadata
     /// @notice List of approved categories for logging OHM burns
     bytes32[] public categories;
+
     /// @notice Whether a category is approved for logging
     /// @dev This is used to prevent logging of burn events that are not consistent with standardized names
     mapping(bytes32 => bool) public categoryApproved;
 
+    /// forge-lint: disable-end(mixed-case-variable)
+
     // ========= POLICY SETUP ========= //
 
     constructor(Kernel kernel_, ERC20 ohm_) Policy(kernel_) {
-        ohm = ohm_;
+        OHM = ohm_;
+
+        // Disabled by default
     }
 
     /// @inheritdoc Policy
@@ -65,35 +80,45 @@ contract Burner is Policy, RolesConsumer {
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 trsryMajor, ) = TRSRY.VERSION();
+        (uint8 mintrMajor, ) = MINTR.VERSION();
+        (uint8 rolesMajor, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1, 1]);
-        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+        if (mintrMajor != 1 || rolesMajor != 1 || trsryMajor != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        ohm.safeApprove(address(MINTR), type(uint256).max);
+        OHM.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode trsryKeycode = toKeycode("TRSRY");
 
         requests = new Permissions[](3);
-        requests[0] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[0] = Permissions({keycode: MINTR.KEYCODE(), funcSelector: MINTR.burnOhm.selector});
+        requests[1] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.withdrawReserves.selector
+        });
+        requests[2] = Permissions({
+            keycode: trsryKeycode,
+            funcSelector: TRSRY.increaseWithdrawApproval.selector
+        });
     }
 
     // ========= BURN FUNCTIONS ========= //
 
     modifier onlyApproved(bytes32 category_) {
-        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
+        _onlyApproved(category_);
         _;
+    }
+
+    function _onlyApproved(bytes32 category_) internal view {
+        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
     }
 
     /// @notice Burn OHM from the treasury
@@ -101,10 +126,10 @@ contract Burner is Policy, RolesConsumer {
     function burnFromTreasury(
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Withdraw OHM from the treasury
-        TRSRY.increaseWithdrawApproval(address(this), ohm, amount_);
-        TRSRY.withdrawReserves(address(this), ohm, amount_);
+        TRSRY.increaseWithdrawApproval(address(this), OHM, amount_);
+        TRSRY.withdrawReserves(address(this), OHM, amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
@@ -123,9 +148,9 @@ contract Burner is Policy, RolesConsumer {
         address from_,
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Transfer OHM from the user to this contract
-        ohm.safeTransferFrom(from_, address(this), amount_);
+        OHM.safeTransferFrom(from_, address(this), amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
@@ -139,7 +164,7 @@ contract Burner is Policy, RolesConsumer {
     function burn(
         uint256 amount_,
         bytes32 category_
-    ) external onlyRole("burner_admin") onlyApproved(category_) {
+    ) external onlyEnabled onlyRole("burner_admin") onlyApproved(category_) {
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
 
@@ -151,7 +176,7 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Add a category to the list of approved burn categories
     /// @param category_ Category to add
-    function addCategory(bytes32 category_) external onlyRole("burner_admin") {
+    function addCategory(bytes32 category_) external onlyEnabled onlyRole("burner_admin") {
         if (categoryApproved[category_]) revert Burner_CategoryApproved();
         categories.push(category_);
         categoryApproved[category_] = true;
@@ -161,7 +186,7 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Remove a category from the list of approved burn categories
     /// @param category_ Category to remove
-    function removeCategory(bytes32 category_) external onlyRole("burner_admin") {
+    function removeCategory(bytes32 category_) external onlyEnabled onlyRole("burner_admin") {
         if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
         uint256 len = categories.length;
         for (uint256 i; i < len; ++i) {
@@ -176,6 +201,24 @@ contract Burner is Policy, RolesConsumer {
         emit CategoryRemoved(category_);
     }
 
+    // =========  VERSION ========= //
+
+    /// @inheritdoc IVersioned
+    function VERSION() external pure returns (uint8, uint8) {
+        return (1, 0);
+    }
+
+    // =========  ERC165 ========= //
+
+    /// @notice ERC165 interface support
+    /// @dev    Supports IERC165, IVersioned, and IEnabler (via PolicyEnabler)
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return
+            interfaceId == type(IERC165).interfaceId ||
+            interfaceId == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId);
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Get the list of approved burn categories
@@ -183,3 +226,4 @@ contract Burner is Policy, RolesConsumer {
         return categories;
     }
 }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

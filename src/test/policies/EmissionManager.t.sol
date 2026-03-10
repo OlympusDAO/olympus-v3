@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
@@ -314,7 +314,11 @@ contract EmissionManagerTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy the mock CD auctioneer
-            cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+            cdAuctioneer = new MockConvertibleDepositAuctioneer(
+                kernel,
+                address(0),
+                address(reserve)
+            );
 
             // Deploy the emission manager
             emissionManager = new EmissionManager(
@@ -359,6 +363,7 @@ contract EmissionManagerTest is Test {
         // Mint gOHM supply to test against
         // Index is 10,000, therefore a total supply of 1,000 gOHM = 10,000,000 OHM
         gohm.mint(address(this), 1_000 * 1e18);
+        gohm.setIndex(1e9 * 10000); // Set index to 10,000 (in 1e9 scale)
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
         uint256 testReserve = 1_000_000 * 1e18;
@@ -838,7 +843,7 @@ contract EmissionManagerTest is Test {
         sReserve = new MockERC4626(reserve, "sNewReserve", "sNR");
 
         // Set up a new CDAuctioneer
-        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(reserve));
+        cdAuctioneer = new MockConvertibleDepositAuctioneer(kernel, address(0), address(reserve));
 
         // Set up an EmissionManager with a different deposit asset
         emissionManager = new EmissionManager(
@@ -3258,6 +3263,7 @@ contract EmissionManagerTest is Test {
     function test_setCDAuctionContract_differentAsset_reverts() public {
         MockConvertibleDepositAuctioneer newCDAuctioneer = new MockConvertibleDepositAuctioneer(
             kernel,
+            address(0),
             address(sReserve)
         );
 
