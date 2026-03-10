@@ -273,5 +273,15 @@
         "addr": "0x6D94B3745B0eCF908B3B467907b947b43Fba5f15",
         "chainId": 1,
         "name": "external-tokens-tempohm"
+    },
+    {
+        "addr": "0x45e563c39cDdbA8699A90078F42353A57509543a",
+        "chainId": 1,
+        "name": "olympus-policy-cross-chain-bridge"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-lz-bridge-gateway"
     }
 ]
