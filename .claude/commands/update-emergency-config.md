@@ -251,6 +251,12 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
      documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
+2. **Format the JSON files** to ensure consistent formatting:
+
+   ```bash
+   npx prettier --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
+   ```
+
 #### B6: Validate
 
 Run validation:
