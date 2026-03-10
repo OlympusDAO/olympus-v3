@@ -69,16 +69,14 @@ abstract contract BatchScriptV2 is WithEnvironment {
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_, bool useEmergencyMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
         _loadArgs(argsFilePath_);
 
         address owner = msg.sender;
-        if (useEmergencyMS_) {
-            owner = _envAddressNotZero("olympus.multisig.emergency");
-        } else if (useDaoMS_) {
+        if (useDaoMS_) {
             owner = _envAddressNotZero("olympus.multisig.dao");
         }
         _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
@@ -86,20 +84,14 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
     modifier setUp(bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, false, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
-        _;
-    }
-
-    modifier setUpEmergency(bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
-        string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, false, true, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
+        _setUp(chainName, useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
         _;
     }
 
     /// @dev    Deprecated.
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, false, false, "", "", "");
+        _setUp(chainName, useDaoMS_, false, "", "", "");
         _;
     }
 

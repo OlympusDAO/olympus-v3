@@ -9,14 +9,12 @@ on:
             - develop
         paths:
             - "documentation/emergency/**"
-            - "src/scripts/emergency/**"
             - "src/scripts/env.json"
             - "shell/validate-emergency-config.js"
 
     pull_request:
         paths:
             - "documentation/emergency/**"
-            - "src/scripts/emergency/**"
             - "src/scripts/env.json"
             - "shell/validate-emergency-config.js"
 
