@@ -421,7 +421,7 @@
             "availableOn": ["mainnet", "sepolia"],
             "calls": [
                 {
-                    "abi": "periphery_enabler",
+                    "abi": "ccip_lock_release_pool",
                     "args": [
                         {
                             "envKey": "pool_balance",
