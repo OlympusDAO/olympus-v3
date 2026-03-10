@@ -233,6 +233,16 @@ function validate() {
         errors.push(
           `Component "${component.id}" references unknown ABI: "${call.abi}"`
         );
+      } else {
+        // ABI exists - validate that the function is present in the ABI
+        const abiDef = abis[call.abi];
+        const functionExists = abiDef.some((fn) => fn.name === call.function);
+
+        if (!functionExists) {
+          errors.push(
+            `Component "${component.id}" references ABI "${call.abi}" but missing function "${call.function}"`
+          );
+        }
       }
 
       // Track which contracts have components
