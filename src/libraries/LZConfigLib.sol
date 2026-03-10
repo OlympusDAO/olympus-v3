@@ -15,7 +15,7 @@ interface ILayerZeroDVNVID {
 library LZConfigLib {
     // ========== LZ ENDPOINTS ========== //
 
-    // Source: https://docs.layerzero.network/v1/deployments/deployed-contracts
+    // Source: src/scripts/env.json
 
     // LZ V1 Endpoints:
     address internal constant LZ_ENDPOINT = 0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675;
