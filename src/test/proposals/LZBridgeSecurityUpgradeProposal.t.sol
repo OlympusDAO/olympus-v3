@@ -212,7 +212,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             if (remoteGateways[i] == address(0)) {
                 assertEq(path.length, 0, "Trusted remote should be empty for zero gateway");
             } else {
-                assertEq(path.length, 40, "Trusted remote path should be 40 bytes");
+                assertEq(
+                    path.length,
+                    LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
+                    "Trusted remote path should be 40 bytes"
+                );
                 assertEq(
                     keccak256(path),
                     keccak256(abi.encodePacked(remoteGateways[i], address(gateway))),

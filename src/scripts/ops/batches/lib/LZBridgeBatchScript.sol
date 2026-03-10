@@ -28,7 +28,9 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
     /// @notice Configures LZ versions and per-remote ULN/Executor config for the current chain.
     function _configureLZ(LZBridgeGateway gateway_) internal {
-        (uint16 sendVer, uint16 recvVer) = _getLocalVersions();
+        (uint16 sendVer, uint16 recvVer) = LZConfigLib.getUln301Versions(
+            _envAddressNotZero("external.layerzero.endpoint")
+        );
         address gatewayAddr = address(gateway_);
 
         console2.log("\nConfiguring LZ versions - send:", sendVer, "recv:", recvVer);
@@ -126,14 +128,6 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         if (_isChain("optimism")) return LZConfigLib.OPT_LZ_DVN;
         if (_isChain("base")) return LZConfigLib.BASE_LZ_DVN;
         revert LZBridgeBatchScript_UnsupportedChain();
-    }
-
-    /// @notice Returns (sendVersion, receiveVersion) for the current chain.
-    /// @dev receiveUln301 = latestVersion, sendUln301 = latestVersion - 1.
-    function _getLocalVersions() internal view returns (uint16 sendVer, uint16 recvVer) {
-        address endpoint = _envAddressNotZero("external.layerzero.endpoint");
-        uint16 latest = LZConfigLib.getLatestVersion(endpoint);
-        return (latest - 1, latest);
     }
 
     /// @notice Returns the 3 remote LZ chain IDs for the current chain.

@@ -7,6 +7,7 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
@@ -204,7 +205,11 @@ contract LZBridgeGatewayForkTests is Test {
             address(mainnetGateway),
             address(polygonGateway)
         );
-        assertEq(trustedRemote.length, 40, "Trusted remote should be 40 bytes");
+        assertEq(
+            trustedRemote.length,
+            LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
+            "Trusted remote should be 40 bytes"
+        );
         assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
     }
 
