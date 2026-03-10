@@ -22,18 +22,37 @@ This skill updates `documentation/emergency/emergency-config.json` by analyzing 
 
 #### A1: Discover uncovered contracts
 
-1. Grep `src/policies/` and `src/periphery/` for concrete contracts that inherit `PolicyEnabler`, `PeripheryEnabler`, or `IEnabler`:
-   - Use `Grep` with patterns like `is PolicyEnabler`, `is PeripheryEnabler`, `is IEnabler`
-   - Search for `is.*PolicyEnabler`, `is.*PeripheryEnabler`, `is.*IEnabler` to catch multi-inheritance
-2. Skip abstract contracts — grep each matched file for `abstract contract`; if found, skip it
-3. Read `documentation/emergency/emergency-config.json` and extract `contractRegistry` array
-4. Cross-reference: for each discovered contract, check if the contract name is already in `contractRegistry`
-5. Present the list of uncovered contracts to the user, showing:
+1. **Find all .sol files** in `src/policies/` and `src/periphery/`
+
+2. **Enumerate concrete contract declarations** in each file:
+   - Use `Grep` with pattern `^contract\s+\w+` to find contract declarations
+   - For each match, read the file and check if the contract declaration has the `abstract` keyword
+   - Skip only contracts that are explicitly declared as `abstract contract`
+   - Build a list of concrete contract names with their file paths
+
+3. **Walk inheritance chain** (up to 3 levels) for each concrete contract:
+   - Start with the concrete contract's `is` inheritance list
+   - For each parent contract in the inheritance list:
+     - Check if it matches `PolicyEnabler`, `PeripheryEnabler`, or `IEnabler` (direct match or pattern match)
+     - If not a known enabler, read the parent contract's file and extract its inheritance list
+     - Repeat up to 3 levels deep from the original contract
+   - Track which enabler (if any) was found and at what level
+
+4. **Filter contracts** that have `PolicyEnabler`, `PeripheryEnabler`, or `IEnabler` in their inheritance chain
+
+5. Read `documentation/emergency/emergency-config.json` and extract `contractRegistry` array
+
+6. Cross-reference: for each discovered contract, check if the contract name is already in `contractRegistry`
+
+7. Present the list of uncovered contracts to the user, showing:
    - Contract name
    - File path
-   - Detected pattern (PolicyEnabler / PeripheryEnabler / IEnabler)
-6. Use AskUserQuestion to let the user select which contracts to add
-7. For each selected contract, run the **Detection Hierarchy** (see below), then proceed to **Resolve Addresses**, **Ask Metadata**, **Update Config**, and **Validate** (Steps B3–B7)
+   - Detected enabler (PolicyEnabler / PeripheryEnabler / IEnabler)
+   - Inheritance level where detected (direct or indirect)
+
+8. Use AskUserQuestion to let the user select which contracts to add
+
+9. For each selected contract, run the **Detection Hierarchy** (see below), then proceed to **Resolve Addresses**, **Ask Metadata**, **Update Config**, and **Validate** (Steps B3–B7)
 
 ### Mode B: Contract Mode (argument is a `.sol` file under `src/policies/` or `src/periphery/`)
 
