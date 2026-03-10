@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
