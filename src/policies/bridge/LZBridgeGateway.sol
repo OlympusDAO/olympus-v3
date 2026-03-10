@@ -342,19 +342,16 @@ contract LZBridgeGateway is
     /// @inheritdoc ILayerZeroUserApplicationConfig
     /// @dev Clears the blocked payload at the endpoint level without executing it.
     ///
-    ///      On canonical chains, `bridgedSupply` will NOT be decremented for the dropped message,
+    ///      On Ethereum, `bridgedSupply` will NOT be decremented for the dropped message,
     ///      leaving it over-counted relative to actual supply.
     ///
-    ///      Required recovery procedure:
+    ///      Recovery procedure:
     ///      1. Retrieve the blocked payload from the `PayloadStored` event on the LZ endpoint or via LayerZero Scan.
-    ///      2. Decode `(uint8 msgType, bytes data)` from the payload, then decode
-    ///         `(address to, uint256 amount)` from `data`.
+    ///      2. Decode `(uint8 msgType, bytes data)` from the payload, then
+    ///         decode `(address to, uint256 amount)` from `data`.
     ///      3. Call `forceResumeReceive` to unblock the channel.
-    ///      4. On canonical chains, call `setBridgedSupply(bridgedSupply - amount)` to correct
-    ///         the supply accounting.
+    ///      4. On Ethereum, call `setBridgedSupply(bridgedSupply - amount)` to correct the supply accounting.
     ///      5. Compensate the user for the lost OHM via governance in any way.
-    ///
-    ///      Prefer `retryPayload` whenever possible.
     function forceResumeReceive(
         uint16 srcChainId_,
         bytes calldata srcAddress_
