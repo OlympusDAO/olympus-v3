@@ -38,10 +38,12 @@ The Emergency MS address is configured in `src/scripts/env.json` under the key `
 The following chains are missing Emergency MS addresses (set to zero address) in `src/scripts/env.json`:
 
 - **Arbitrum**: Currently `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
+- **Optimism**: Currently `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
 
 **TODO Task**:
 
 - [ ] Verify Emergency MS deployment status for Arbitrum
+- [ ] Verify Emergency MS deployment status for Optimism
 - [ ] Configure Emergency MS addresses in `src/scripts/env.json` for all chains where the protocol is deployed
 - [ ] Update this documentation once Emergency MS addresses are configured
 

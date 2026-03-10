@@ -277,7 +277,6 @@ function validate() {
 
   // 7. Check contractRegistry coverage
   const registryContracts = new Set(config.contractRegistry);
-  const missingComponents = [];
 
   for (const contractName of registryContracts) {
     if (!contractsWithComponents.has(contractName)) {
