@@ -65,17 +65,6 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
 
 Branch: `lz-bridge-security-revamp` (base commit: `31b2502a51782f23bf0c63ffc9c53ee427c63a5d`)
 
-### Relevant Context (Not In-Scope)
-
-The following contracts provide important context but are not part of this audit's scope:
-
-- [src/policies/CrossChainBridge.sol](../../src/policies/CrossChainBridge.sol) - The existing bridge being replaced. Useful for understanding the baseline behavior and identifying what has changed.
-- [src/Kernel.sol](../../src/Kernel.sol) - Kernel governance and access control
-- [src/modules/MINTR/MINTR.v1.sol](../../src/modules/MINTR/MINTR.v1.sol) - OHM minting/burning module
-- [src/modules/ROLES/ROLES.v1.sol](../../src/modules/ROLES/ROLES.v1.sol) - Role-based access control module
-- [src/policies/utils/PolicyEnabler.sol](../../src/policies/utils/PolicyEnabler.sol) - Enable/disable mix-in for policies
-- [src/periphery/PeripheryEnabler.sol](../../src/periphery/PeripheryEnabler.sol) - Enable/disable mix-in for periphery contracts
-
 ### Previous Audits
 
 You can review previous audits here:
