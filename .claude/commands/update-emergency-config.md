@@ -7,12 +7,14 @@ This skill updates `documentation/emergency/emergency-config.json` by analyzing 
 ```text
 /update-emergency-config                              → scan mode
 /update-emergency-config src/policies/NewThing.sol    → contract mode
+/update-emergency-config src/periphery/Bridge.sol     → contract mode
 ```
 
 **Mode detection:**
 
 - No argument → **scan mode**
-- Argument is any `.sol` file → **contract mode**
+- Argument is a `.sol` file under `src/policies/` or `src/periphery/` → **contract mode**
+- Argument is a `.sol` file outside those directories → **error** (contract keys can only be resolved for policies and periphery contracts)
 
 ## Instructions for Claude
 
@@ -33,11 +35,15 @@ This skill updates `documentation/emergency/emergency-config.json` by analyzing 
 6. Use AskUserQuestion to let the user select which contracts to add
 7. For each selected contract, run the **Detection Hierarchy** (see below), then proceed to **Resolve Addresses**, **Ask Metadata**, **Update Config**, and **Validate** (Steps B3–B7)
 
-### Mode B: Contract Mode (argument is a `.sol` file)
+### Mode B: Contract Mode (argument is a `.sol` file under `src/policies/` or `src/periphery/`)
 
-#### B1: Read the Contract Source
+#### B1: Validate Path and Read the Contract Source
 
-Read the specified `.sol` file.
+1. **Validate the path**: Check that the `.sol` file is under `src/policies/` or `src/periphery/`. If the file is outside these directories, return an error explaining that contract keys can only be resolved for policies and periphery contracts, and suggest the user either:
+   - Move the contract to the appropriate directory if it's a policy or periphery contract, or
+   - Use scan mode (`/update-emergency-config` without arguments) to discover valid contracts
+
+2. **Read the contract source**: Read the specified `.sol` file.
 
 #### B2: Run the Detection Hierarchy
 
