@@ -136,6 +136,8 @@ function validate() {
   }
 
   // 4. Validate multisig addresses in each chain
+  const errorsBeforeAddressValidation = errors.length;
+
   for (const [chainName, chainConfig] of Object.entries(config.chains)) {
     const { multisigs, contracts } = chainConfig;
 
@@ -176,7 +178,10 @@ function validate() {
     }
   }
 
-  log.success("All addresses validated");
+  // Only log success if no address validation errors occurred
+  if (errors.length === errorsBeforeAddressValidation) {
+    log.success("All addresses validated");
+  }
 
   // 5. Check for duplicate component IDs
   const componentIds = config.components.map((c) => c.id);
@@ -192,6 +197,7 @@ function validate() {
   // 6. Validate each component
   const abiKeys = Object.keys(abis);
   const contractsWithComponents = new Set();
+  const errorsBeforeComponentValidation = errors.length;
 
   for (const component of config.components) {
     // Check availableOn chains exist
@@ -263,7 +269,11 @@ function validate() {
       );
     }
   }
-  log.success("All component validations passed");
+
+  // Only log success if no component validation errors occurred
+  if (errors.length === errorsBeforeComponentValidation) {
+    log.success("All component validations passed");
+  }
 
   // 7. Check contractRegistry coverage
   const registryContracts = new Set(config.contractRegistry);
