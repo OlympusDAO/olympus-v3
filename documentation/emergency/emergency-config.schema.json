@@ -1,0 +1,248 @@
+{
+    "$defs": {
+        "call": {
+            "properties": {
+                "abi": {
+                    "description": "Key in the ABIs file",
+                    "type": "string"
+                },
+                "args": {
+                    "description": "Arguments to pass to the function",
+                    "items": {
+                        "$ref": "#/$defs/callArg"
+                    },
+                    "type": "array"
+                },
+                "contractKey": {
+                    "description": "Key in env.json to resolve contract address (e.g., olympus.policies.Emergency)",
+                    "type": "string"
+                },
+                "function": {
+                    "description": "Function name to call",
+                    "type": "string"
+                },
+                "signature": {
+                    "description": "Full function signature (e.g., setBorrowPaused(bool))",
+                    "type": "string"
+                }
+            },
+            "required": ["contractKey", "function", "signature", "abi"],
+            "type": "object"
+        },
+        "callArg": {
+            "properties": {
+                "envKey": {
+                    "description": "If set, value is resolved from env.json using this key",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Can be any JSON value"
+                }
+            },
+            "required": ["name", "type", "value"],
+            "type": "object"
+        },
+        "chainConfig": {
+            "properties": {
+                "chainId": {
+                    "minimum": 1,
+                    "type": "integer"
+                },
+                "contracts": {
+                    "additionalProperties": {
+                        "$ref": "#/$defs/ethereumAddress"
+                    },
+                    "description": "Contract addresses for this chain",
+                    "type": "object"
+                },
+                "multisigs": {
+                    "properties": {
+                        "dao": {
+                            "$ref": "#/$defs/ethereumAddress"
+                        },
+                        "emergency": {
+                            "$ref": "#/$defs/ethereumAddress"
+                        }
+                    },
+                    "required": ["emergency", "dao"],
+                    "type": "object"
+                }
+            },
+            "required": ["chainId", "multisigs"],
+            "type": "object"
+        },
+        "component": {
+            "properties": {
+                "availableOn": {
+                    "description": "Chains where this component is available",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "batchScript": {
+                    "description": "Path to the Solidity batch script",
+                    "type": "string"
+                },
+                "calls": {
+                    "description": "Function calls to execute",
+                    "items": {
+                        "$ref": "#/$defs/call"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "category": {
+                    "description": "Component category",
+                    "enum": ["treasury", "lending", "bridge", "emissions", "core", "reserve"],
+                    "type": "string"
+                },
+                "dependencies": {
+                    "description": "Other component IDs that should be shut down together",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "description": {
+                    "description": "What this component shutdown does",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Unique kebab-case identifier",
+                    "pattern": "^[a-z0-9-]+$",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Human-readable name",
+                    "type": "string"
+                },
+                "owner": {
+                    "description": "Which multisig executes this shutdown",
+                    "enum": ["emergency", "dao"],
+                    "type": "string"
+                },
+                "postShutdownSteps": {
+                    "description": "Steps to take after shutdown",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                "severity": {
+                    "description": "Shutdown severity level",
+                    "enum": ["critical", "high", "medium", "low"],
+                    "type": "string"
+                },
+                "shutdownCriteria": {
+                    "description": "When to trigger this shutdown",
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "id",
+                "name",
+                "description",
+                "category",
+                "severity",
+                "owner",
+                "calls",
+                "availableOn"
+            ],
+            "type": "object"
+        },
+        "ethereumAddress": {
+            "description": "Ethereum address (checksummed or lowercase)",
+            "pattern": "^0x[a-fA-F0-9]{40}$",
+            "type": "string"
+        }
+    },
+    "$id": "https://github.com/OlympusDAO/olympus-v3/blob/master/documentation/emergency/emergency-config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Schema for Olympus Protocol emergency shutdown configuration",
+    "properties": {
+        "$schema": {
+            "description": "Reference to this schema",
+            "type": "string"
+        },
+        "abiFile": {
+            "description": "Relative path to the consolidated ABI file",
+            "type": "string"
+        },
+        "chains": {
+            "additionalProperties": {
+                "$ref": "#/$defs/chainConfig"
+            },
+            "description": "Chain configurations with addresses",
+            "type": "object"
+        },
+        "components": {
+            "description": "Emergency shutdown components",
+            "items": {
+                "$ref": "#/$defs/component"
+            },
+            "minItems": 1,
+            "type": "array"
+        },
+        "contractRegistry": {
+            "description": "List of all contracts that MUST have emergency definitions",
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+        },
+        "lastUpdated": {
+            "description": "ISO 8601 timestamp of last update",
+            "format": "date-time",
+            "type": "string"
+        },
+        "metadata": {
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "docsUrl": {
+                    "format": "uri",
+                    "type": "string"
+                },
+                "repository": {
+                    "type": "string"
+                }
+            },
+            "required": ["description", "repository"],
+            "type": "object"
+        },
+        "updatedBy": {
+            "description": "Identifier of who/what updated the config",
+            "type": "string"
+        },
+        "version": {
+            "description": "Semantic version of the configuration",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "type": "string"
+        }
+    },
+    "required": [
+        "version",
+        "lastUpdated",
+        "metadata",
+        "chains",
+        "contractRegistry",
+        "components",
+        "abiFile"
+    ],
+    "title": "Emergency Shutdown Configuration",
+    "type": "object"
+}

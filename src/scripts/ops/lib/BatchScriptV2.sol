@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
+// solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -75,7 +76,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _loadArgs(argsFilePath_);
 
         address owner = msg.sender;
-        if (useDaoMS_) owner = _envAddressNotZero("olympus.multisig.dao");
+        if (useDaoMS_) {
+            owner = _envAddressNotZero("olympus.multisig.dao");
+        }
         _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
     }
 
