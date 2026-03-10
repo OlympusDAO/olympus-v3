@@ -4,13 +4,14 @@ This skill updates `documentation/emergency/emergency-config.json` by analyzing 
 
 ## Three Invocation Modes
 
-```
+```text
 /update-emergency-config                              → scan mode
 /update-emergency-config src/policies/NewThing.sol    → contract mode
 /update-emergency-config src/scripts/emergency/X.sol  → script mode (legacy)
 ```
 
 **Mode detection:**
+
 - No argument → **scan mode**
 - Argument contains `src/scripts/emergency/` → **script mode**
 - Argument is any other `.sol` file → **contract mode**
@@ -47,10 +48,12 @@ Read the provided Solidity file and extract:
    - Look for the `setUp` modifier (on the `run` function) with `true` as the first argument → `"owner": "dao"`
 
 2. **Contract keys and function calls** from `addToBatch()` calls:
+
    ```solidity
    address addr = _envAddressNotZero("olympus.policies.ContractName");
    addToBatch(addr, abi.encodeWithSelector(IInterface.functionName.selector, args));
    ```
+
    Extract:
    - `contractKey`: e.g., `"olympus.policies.ContractName"`
    - `function`: e.g., `"functionName"`
@@ -77,47 +80,53 @@ Read the specified `.sol` file.
 
 Analyze the contract source in this order. Stop at the first match:
 
-**Level 1 — PolicyEnabler**
+##### Level 1 — PolicyEnabler
+
 - Grep for `is PolicyEnabler` or `is.*PolicyEnabler` in the inheritance declaration
 - Check for indirect inheritance: if the contract inherits from a base contract, read that base contract to see if *it* inherits PolicyEnabler. For example, `ConvertibleDepositFacility` inherits `BaseDepositFacility` which inherits `PolicyEnabler` — this counts as Level 1.
 - Result:
-  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
-  - ABI: `periphery_enabler`
-  - Owner: `emergency` (PolicyEnabler grants `onlyEmergencyOrAdminRole` on disable)
-  - `batchScript`: omit
+    - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+    - ABI: `periphery_enabler`
+    - Owner: `emergency` (PolicyEnabler grants `onlyEmergencyOrAdminRole` on disable)
+    - `batchScript`: omit
 
-**Level 2 — PeripheryEnabler**
+##### Level 2 — PeripheryEnabler
+
 - Grep for `is PeripheryEnabler` or `is.*PeripheryEnabler`
 - Result:
-  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
-  - ABI: `periphery_enabler`
-  - Owner: `dao` (PeripheryEnabler uses `_onlyOwner()`, typically DAO multisig)
-  - `batchScript`: omit
+    - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+    - ABI: `periphery_enabler`
+    - Owner: `dao` (PeripheryEnabler uses `_onlyOwner()`, typically DAO multisig)
+    - `batchScript`: omit
 
-**Level 3 — Direct IEnabler**
+##### Level 3 — Direct IEnabler
+
 - Grep for `is IEnabler` or `IEnabler` in inheritance, but only if NOT already matched by Level 1 or 2
 - Result:
-  - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
-  - ABI: `periphery_enabler`
-  - Owner: **ask user** (use AskUserQuestion with options `emergency` and `dao`)
-  - `batchScript`: omit
+    - Function: `disable` / Signature: `disable(bytes)` / Args: `[{"name": "disableData_", "type": "bytes", "value": ""}]`
+    - ABI: `periphery_enabler`
+    - Owner: **ask user** (use AskUserQuestion with options `emergency` and `dao`)
+    - `batchScript`: omit
 
-**Level 4 — Known emergency functions**
+##### Level 4 — Known emergency functions
+
 - Scan the source for known emergency function definitions: `shutdown`, `deactivate`, `setBorrowPaused`, `setLiquidationsPaused`, `setBridgeStatus`, `emergencyShutdown*`
 - Extract full function signatures from the source
 - Match to ABI keys using the **ABI Lookup Table** below
 - Owner: **ask user**
 - For each arg: determine if a static value can be inferred from context
-  - If any arg is dynamic (can't determine a static value from the source), check for a matching script in `src/scripts/emergency/` that references this contract
-  - If a matching script exists, parse it for arg values and link `batchScript`
-  - If no matching script exists, flag to user and ask how to resolve
+    - If any arg is dynamic (can't determine a static value from the source), check for a matching script in `src/scripts/emergency/` that references this contract
+    - If a matching script exists, parse it for arg values and link `batchScript`
+    - If no matching script exists, flag to user and ask how to resolve
 
-**Level 5 — Matching batch script exists**
+##### Level 5 — Matching batch script exists
+
 - Check `src/scripts/emergency/` for a script that references this contract (grep for the contract name)
 - If found, fall back to **Script Mode** flow (B1–B2) to parse the script
 - Include `batchScript` in the generated component
 
-**Level 6 — None of the above**
+##### Level 6 — None of the above
+
 - Use AskUserQuestion to ask the user what the emergency action should be for this contract
 - Ask for: function name, signature, args, ABI key, owner
 
@@ -128,12 +137,14 @@ Use `jq` to read `src/scripts/env.json` and resolve the contract's env key to ge
 The contract key follows the pattern `olympus.policies.ContractName` or `olympus.periphery.ContractName` — determine the correct path based on the file location.
 
 For example, if the contract is at `src/policies/Heart.sol` and the contract name is `OlympusHeart`:
+
 ```bash
 jq -r '.current.mainnet.olympus.policies.OlympusHeart // empty' src/scripts/env.json
 jq -r '.current.sepolia.olympus.policies.OlympusHeart // empty' src/scripts/env.json
 ```
 
 For a periphery contract like `CCIPCrossChainBridge`:
+
 ```bash
 jq -r '.current.mainnet.olympus.periphery.CCIPCrossChainBridge // empty' src/scripts/env.json
 jq -r '.current.sepolia.olympus.periphery.CCIPCrossChainBridge // empty' src/scripts/env.json
@@ -146,6 +157,7 @@ Discard any chain where the address is empty or the zero address (`0x00000000000
 #### C4: Generate and Confirm Metadata
 
 Before asking the user, **generate suggested values** for all metadata fields by analyzing:
+
 - The contract source code (what it does, what it interacts with)
 - The detection level (PolicyEnabler → emergency-owned, PeripheryEnabler → dao-owned, etc.)
 - Similar existing components in `emergency-config.json` (read the config, find components with the same category or related contracts, and use their patterns as a reference)
@@ -217,6 +229,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 2. Read current `documentation/emergency/emergency-config.json`
 
 3. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
+
    ```bash
    jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
@@ -224,6 +237,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 4. Add/update contract addresses in `chains.*.contracts` only for chains in the `availableOn` array (i.e., skip chains with zero or missing addresses)
 
 5. Add new component to `components` array (build the component JSON and use `jq` to append):
+
 ```json
 {
   "id": "<kebab-case-id>",
@@ -249,10 +263,11 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 }
 ```
 
-   - Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns). These contracts are disabled via `disable(bytes)` directly — no batch script is needed. Even if a legacy batch script exists in `src/scripts/emergency/`, do NOT include `batchScript` for Level 1–3 contracts.
-   - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` only if the user explicitly chose to skip them (the skill should always suggest values first)
+- Omit `batchScript` entirely when the contract was detected via Level 1–3 (IEnabler patterns). These contracts are disabled via `disable(bytes)` directly — no batch script is needed. Even if a legacy batch script exists in `src/scripts/emergency/`, do NOT include `batchScript` for Level 1–3 contracts.
+- Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` only if the user explicitly chose to skip them (the skill should always suggest values first)
 
-6. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
+1. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
+
    ```bash
    jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
      '.version |= (split(".") | .[2] = (.[2] | tonumber + 1 | tostring) | join(".")) |
@@ -264,6 +279,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 #### C6: Validate
 
 Run validation:
+
 ```bash
 node shell/validate-emergency-config.js
 ```
@@ -273,6 +289,7 @@ If validation fails, fix the issues and re-run.
 #### C7: Summary
 
 Report to user:
+
 - Component ID added
 - Detection method used (e.g., "Detected PolicyEnabler — using disable(bytes)")
 - Chains where available
@@ -304,7 +321,7 @@ If no match is found, ask the user if a new ABI entry is needed in `emergency-ab
 
 ## Detection Hierarchy Summary
 
-```
+```text
 Contract source file
     │
     ├─ Level 1: inherits PolicyEnabler?
@@ -335,6 +352,7 @@ For `src/policies/Heart.sol` which has `contract OlympusHeart is PolicyEnabler`:
 
 **Detected:** Level 1 — PolicyEnabler
 **Generated component:**
+
 ```json
 {
   "id": "heart",
@@ -353,6 +371,7 @@ For `src/policies/Heart.sol` which has `contract OlympusHeart is PolicyEnabler`:
   "availableOn": ["mainnet", "sepolia"]
 }
 ```
+
 Note: no `batchScript` field. A legacy batch script exists at `src/scripts/emergency/Heart.sol`, but since `OlympusHeart` inherits `PolicyEnabler` (Level 1), the config is derived directly from the contract source and `batchScript` is omitted.
 
 ### Example 2: Script with dynamic args (script mode)
@@ -361,6 +380,7 @@ For `src/scripts/emergency/CCIPTokenPoolMainnet.sol`:
 
 **Detected:** Script mode (legacy)
 **Generated component includes:**
+
 ```json
 {
   "batchScript": "src/scripts/emergency/CCIPTokenPoolMainnet.sol"
