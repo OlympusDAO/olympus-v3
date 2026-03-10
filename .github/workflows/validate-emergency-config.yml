@@ -39,6 +39,9 @@ jobs:
               with:
                   version: 9
 
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
