@@ -1,0 +1,12 @@
+src/policies/bridge/LZBridgeGateway.sol
+src/policies/interfaces/ILZBridgeGateway.sol
+src/periphery/bridge/LZCrossChainBridge.sol
+src/periphery/interfaces/ILZCrossChainBridge.sol
+src/libraries/LZConfigLib.sol
+src/proposals/LZBridgeSecurityUpgradeProposal.sol
+src/scripts/ops/batches/lib/LZBridgeBatchScript.sol
+src/scripts/ops/batches/lib/LZBridgeL2BatchScript.sol
+src/scripts/ops/batches/LZBridgeGatewayBatch.sol
+src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol
+src/scripts/ops/batches/LZCrossChainBridgeBatch.sol
+src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol
