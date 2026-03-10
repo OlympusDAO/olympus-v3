@@ -178,17 +178,17 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 
 1. Check if a component with the same ID or same `contractKey` already exists in the `components` array. If so, use AskUserQuestion to ask the user whether to update the existing entry or create a new component.
 
-2. Read current `documentation/emergency/emergency-config.json`
+1. Read current `documentation/emergency/emergency-config.json`
 
-3. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
+1. Add contract to `contractRegistry` if not present (extract contract name from env key or source, e.g., `olympus.policies.OlympusHeart` → `OlympusHeart`):
 
    ```bash
    jq '.contractRegistry += ["OlympusHeart"] | .contractRegistry |= unique' documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
-4. Add/update contract addresses in `chains.*.contracts` only for chains in the `availableOn` array (i.e., skip chains with zero or missing addresses)
+1. Add/update contract addresses in `chains.*.contracts` only for chains in the `availableOn` array (i.e., skip chains with zero or missing addresses)
 
-5. Add new component to `components` array (build the component JSON and use `jq` to append):
+1. Add new component to `components` array (build the component JSON and use `jq` to append):
 
 ```json
 {
@@ -216,7 +216,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 
 - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` only if the user explicitly chose to skip them (the skill should always suggest values first)
 
-6. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
+1. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
 
    ```bash
    jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

@@ -81,11 +81,13 @@ The emergency configuration is stored in `documentation/emergency/emergency-conf
 The emergency config follows the structure defined in `documentation/emergency/emergency-config.schema.json`. Key components include:
 
 **Chain Configuration:**
+
 - Chain ID and name mappings
 - Emergency multisig addresses per chain
 - Component addresses and function selectors
 
 **Component Definitions:**
+
 - Target contract addresses
 - Function selectors for shutdown actions
 - Required roles and permissions
@@ -93,6 +95,7 @@ The emergency config follows the structure defined in `documentation/emergency/e
 - Severity ratings and shutdown criteria
 
 **Validation:**
+
 - Config is validated automatically via CI/CD (`.github/workflows/validate-emergency-config.yml`)
 - Can be validated locally using `shell/validate-emergency-config.js`
 
@@ -153,7 +156,7 @@ Shutdown procedures should be initiated when:
 
 ### Decision Tree
 
-```
+```text
 Is there an active exploit?
 ├─ YES → Is it affecting user funds?
 │   ├─ YES → Shutdown immediately (TRSRY, MINTR, Bridges)
@@ -248,6 +251,7 @@ Emergency shutdowns are executed through the emergency frontend, which uses the 
 ### Using the Emergency Frontend
 
 The emergency frontend provides a web interface for:
+
 - Viewing all available components and their shutdown criteria
 - Generating Safe multisig transactions for shutdown actions
 - Collecting signatures from multisig signers
