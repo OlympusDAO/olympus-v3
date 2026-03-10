@@ -123,7 +123,7 @@ sequenceDiagram
     LZCrossChainBridge->>LZBridgeGateway: OHM.transferFrom(user, gateway, amount)
     LZCrossChainBridge->>LZBridgeGateway: burnAndSend{value}(dstChainId, to, amount, refund, params)
     LZBridgeGateway->>LZBridgeGateway: validate trusted remote exists
-    Note over LZBridgeGateway: if IS_CANONICAL: bridgedSupply += amount; check cap
+    Note over LZBridgeGateway: if IS_CANONICAL:<br/>bridgedSupply += amount, check cap
     LZBridgeGateway->>MINTR: approve + burnOhm(gateway, amount)
     LZBridgeGateway->>LZEndpoint: send{value}(dstChainId, trustedRemote, payload, refundAddr, ...)
 ```
@@ -141,7 +141,7 @@ sequenceDiagram
     LZBridgeGateway->>LZBridgeGateway: validate: onlyEnabled, msg.sender == endpoint, trusted remote
     LZBridgeGateway->>LZBridgeGateway: try this.receiveMessage(...)
     LZBridgeGateway->>LZBridgeGateway: decode msgType, route to _receiveBridgeOhm
-    Note over LZBridgeGateway: if IS_CANONICAL: bridgedSupply -= amount
+    Note over LZBridgeGateway: if IS_CANONICAL:<br/>bridgedSupply -= amount
     LZBridgeGateway->>MINTR: increaseMintApproval + mintOhm(to, amount)
     MINTR->>Recipient: OHM minted
 ```
