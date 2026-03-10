@@ -35,6 +35,7 @@
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },
     "devDependencies": {
+        "ajv": "^8.18.0",
         "markdownlint-cli": "^0.42.0",
         "prettier": "^3.0.3",
         "prettier-plugin-sh": "^0.14.0",

@@ -20,6 +20,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const Ajv = require("ajv");
 
 // ANSI colors for terminal output
 const colors = {
@@ -112,6 +113,23 @@ function validate() {
   }
 
   log.info("All required files loaded successfully");
+
+  // 0. Validate against JSON schema
+  // Remove $schema property to avoid meta-schema validation issues
+  const { "$schema": _schema, ...schemaWithoutMeta } = schema;
+  const ajv = new Ajv({ validateFormats: false });
+  const validate = ajv.compile(schemaWithoutMeta);
+  const valid = validate(config);
+
+  if (!valid) {
+    errors.push("JSON Schema validation failed:");
+    validate.errors.forEach((err) => {
+      errors.push(`  - ${err.instancePath} ${err.message}`);
+    });
+    return false;
+  }
+
+  log.success("JSON Schema validation passed");
 
   // 1. Validate version format
   if (!isValidSemver(config.version)) {
