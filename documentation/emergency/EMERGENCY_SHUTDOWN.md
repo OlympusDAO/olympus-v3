@@ -110,7 +110,12 @@ To update the emergency configuration:
 3. Run validation: `node shell/validate-emergency-config.js`
 4. Commit the changes
 
-For bulk updates, use the `/update-emergency-config` command.
+For bulk updates or to discover contracts needing configuration, use the `/update-emergency-config` Claude Code skill (available in this repository's Claude Code environment). This command:
+- Scans `src/policies/` and `src/periphery/` for contracts with emergency capabilities
+- Generates configuration entries with appropriate ABIs, owners, and metadata
+- Validates and updates `emergency-config.json` automatically
+
+Example usage: Type `/update-emergency-config` in Claude Code to scan for uncovered contracts, or `/update-emergency-config src/policies/Heart.sol` to configure a specific contract.
 
 ---
 
