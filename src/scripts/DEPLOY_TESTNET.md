@@ -35,11 +35,23 @@ Run `mint()` in `DeployUsdsMocks.sol`
 
 ## Minting OHM
 
-Run `./shell/roles/grantRole.sh --role "minter_admin"`.
+Grant the minter admin role:
 
-Run `./shell/mint/addCategory.sh --category test`.
+```bash
+./shell/roles/grantRole.sh --role minter_admin --to <address> --chain <chain> --account <wallet> --broadcast true
+```
 
-Run `./shell/mint/mint.sh --category test`.
+Add a minting category:
+
+```bash
+./shell/mint/addCategory.sh --category test --chain <chain> --account <wallet> --broadcast true
+```
+
+Mint OHM:
+
+```bash
+./shell/mint/mint.sh --to <recipient> --amount <amount> --category test --chain <chain> --account <wallet> --broadcast true
+```
 
 ## Wrapping OHM to gOHM
 
