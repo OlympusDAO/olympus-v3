@@ -283,7 +283,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             if (remoteGateways[i] == address(0)) {
                 require(path.length == 0, "Trusted remote should be empty for zero gateway");
             } else {
-                require(path.length == 40, "Trusted remote path should be 40 bytes");
+                require(
+                    path.length == LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
+                    "Trusted remote path should be 40 bytes"
+                );
                 require(
                     keccak256(path) == keccak256(abi.encodePacked(remoteGateways[i], address(gw))),
                     "Trusted remote path mismatch"
@@ -296,7 +299,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
     /// @dev Pushes LZ endpoint configuration actions: versions + per-remote ULN/Executor config.
     function _buildLZConfig(address gateway_) internal {
-        (uint16 sendVer, uint16 recvVer) = _getVersions();
+        (uint16 sendVer, uint16 recvVer) = LZConfigLib.getUln301Versions(LZConfigLib.LZ_ENDPOINT);
         address[] memory dvns = _getDVNs();
         bytes memory ulnSendConfig = LZConfigLib.encodeUlnConfig(
             LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
@@ -399,12 +402,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     }
 
     // ========== LZ ENCODING HELPERS ========== //
-
-    /// @dev Returns (sendVersion, receiveVersion) by querying LZ endpoint latestVersion().
-    function _getVersions() internal view returns (uint16 sendVer, uint16 recvVer) {
-        uint16 latest = LZConfigLib.getLatestVersion(LZConfigLib.LZ_ENDPOINT);
-        return (latest - 1, latest);
-    }
 
     /// @dev Returns DVNs sorted ascending: [ETH_LZ_DVN, GCLOUD_DVN].
     function _getDVNs() internal pure returns (address[] memory dvns) {

@@ -1,11 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
-interface ILayerZeroEndpointLatestVersion {
+interface ILayerZeroEndpointState {
     function latestVersion() external view returns (uint16);
+
+    function uaConfigLookup(
+        address ua
+    )
+        external
+        view
+        returns (
+            uint16 sendVersion,
+            uint16 receiveVersion,
+            address receiveLibrary,
+            address sendLibrary
+        );
 }
 
-interface ILayerZeroDVNVID {
+interface ILayerZeroDVNState {
     function vid() external view returns (uint32);
 }
 
@@ -85,6 +97,11 @@ library LZConfigLib {
     uint16 internal constant OPT_CHAIN_ID = 111;
     uint16 internal constant BASE_CHAIN_ID = 184;
 
+    // ========== OTHER CONSTANTS ========== //
+
+    // LZ V1 trusted remote path length between EVM chains: abi.encodePacked(remoteAddress, localAddress)
+    uint256 internal constant TRUSTED_REMOTE_PATH_LENGTH = 40;
+
     // ========== STRUCTS ========== //
 
     // Source: https://docs.layerzero.network/v2/developers/evm/create-lz-oapp/configuring-pathways
@@ -109,14 +126,17 @@ library LZConfigLib {
     /// @param endpoint_ The LZ V1 Endpoint address.
     /// @return The latest version number.
     function getLatestVersion(address endpoint_) internal view returns (uint16) {
-        return ILayerZeroEndpointLatestVersion(endpoint_).latestVersion();
+        return ILayerZeroEndpointState(endpoint_).latestVersion();
     }
 
-    /// @notice Returns the V1 endpoint ID (`vid`) reported by a DVN contract.
-    /// @param dvn_ The DVN contract address.
-    /// @return The V1 endpoint ID.
-    function getDVNVid(address dvn_) internal view returns (uint32) {
-        return ILayerZeroDVNVID(dvn_).vid();
+    /// @notice Returns (sendVersion, receiveVersion) for ULN301 on the given endpoint.
+    /// @dev receiveUln301 = latestVersion, sendUln301 = latestVersion - 1.
+    /// @param endpoint_ The LZ V1 Endpoint address.
+    function getUln301Versions(
+        address endpoint_
+    ) internal view returns (uint16 sendVer, uint16 recvVer) {
+        uint16 latest = getLatestVersion(endpoint_);
+        return (latest - 1, latest);
     }
 
     // ========== ENCODING HELPERS ========== //
