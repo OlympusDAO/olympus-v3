@@ -4,16 +4,14 @@ pragma solidity 0.8.15;
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {console2} from "forge-std/console2.sol";
 
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract RolesScript is WithEnvironment {
-    function hasRole(
-        string calldata chain_,
-        string calldata role_,
-        address to_
-    ) external returns (bool) {
-        _loadEnv(chain_);
+    function hasRole(string calldata role_, address to_) external returns (bool) {
+        string memory chain = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chain);
 
         console2.log("Checking role", role_, "for", to_);
 
@@ -27,8 +25,9 @@ contract RolesScript is WithEnvironment {
         return hasRoleResult;
     }
 
-    function grantRole(string calldata chain_, string calldata role_, address to_) external {
-        _loadEnv(chain_);
+    function grantRole(string calldata role_, address to_) external {
+        string memory chain = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chain);
 
         console2.log("Granting role", role_, "to", to_);
 
@@ -42,8 +41,9 @@ contract RolesScript is WithEnvironment {
         console2.log("Role granted");
     }
 
-    function revokeRole(string calldata chain_, string calldata role_, address to_) external {
-        _loadEnv(chain_);
+    function revokeRole(string calldata role_, address to_) external {
+        string memory chain = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chain);
 
         console2.log("Revoking role", role_, "from", to_);
 
