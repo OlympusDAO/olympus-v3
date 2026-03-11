@@ -1,0 +1,35 @@
+# Price Feed Improvements Audit Scope
+# Olympus V3 - PRICE v1.2 Module Upgrade
+
+# New Contracts (not in original PRICE v2 import)
+src/interfaces/IPyth.sol
+src/modules/PRICE/IPRICE.v2.sol
+src/modules/PRICE/OlympusPrice.v1_2.sol
+src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol
+src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol
+src/policies/interfaces/price/IChainlinkOracle.sol
+src/policies/interfaces/price/IERC7726Oracle.sol
+src/policies/interfaces/price/IMorphoOracle.sol
+src/policies/interfaces/price/IOracleFactory.sol
+src/policies/price/BaseOracleFactory.sol
+src/policies/price/ChainlinkOracleCloneable.sol
+src/policies/price/ChainlinkOracleFactory.sol
+src/policies/price/ERC7726Oracle.sol
+src/policies/price/MorphoOracleCloneable.sol
+src/policies/price/MorphoOracleFactory.sol
+src/policies/price/PriceConfig.v2.sol
+
+# Configuration Scripts
+src/scripts/ops/batches/ConfigurePriceV1_2.sol
+src/scripts/ops/batches/ConfigureOracles.sol
+
+# OCG Proposal
+src/proposals/OracleProposal.sol
+
+# Modified Contracts (changes since base commit 13062da62eca83a42a4b0e13bc4622b824a2ae35)
+src/modules/PRICE/OlympusPrice.v2.sol
+src/modules/PRICE/PRICE.v2.sol
+src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol
+src/modules/PRICE/submodules/feeds/ERC4626Price.sol
+src/modules/PRICE/submodules/feeds/UniswapV3Price.sol
+src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol

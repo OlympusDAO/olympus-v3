@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity ^0.8.15;
+
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+
+/// @title      UniswapV3PoolLibrary
+/// @author     0xJem
+/// @notice     Library for common functions on Uniswap V3 pool contracts
+library UniswapV3PoolLibrary {
+    // ========  Constants  ========
+
+    uint16 public constant SLIPPAGE_SCALE = 10_000; // 100%
+
+    // ========  Errors  ========
+
+    /// @notice                 Emitted if the given slippage is invalid
+    /// @param slippage_        The invalid slippage
+    /// @param maxSlippage_     The maximum value for slippage
+    error InvalidSlippage(uint16 slippage_, uint16 maxSlippage_);
+
+    error InvalidParams();
+
+    // ========  Functions  ========
+
+    /// @notice         Determines if `pool_` is a valid Uniswap V3 pool
+    ///
+    /// @param pool_    The address of the Uniswap V3 pool
+    /// @return bool    True if `pool_` is a valid Uniswap V3 pool, otherwise false
+    function isValidPool(address pool_) public view returns (bool) {
+        bool isValid = false;
+
+        try IUniswapV3Pool(pool_).slot0() returns (
+            uint160,
+            int24,
+            uint16,
+            uint16,
+            uint16,
+            uint8,
+            bool
+        ) {
+            isValid = true;
+        } catch (bytes memory) {
+            // If slot0 throws, then pool_ is not a Uniswap V3 pool
+            // Do nothing
+        }
+
+        return isValid;
+    }
+
+    /// @notice         Gets the tokens for the given Uniswap V3 pool
+    ///
+    /// @param pool_    The address of the Uniswap V3 pool
+    /// @return address The address of token0
+    /// @return address The address of token1
+    function getPoolTokens(address pool_) public view returns (address, address) {
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+
+        return (pool.token0(), pool.token1());
+    }
+
+    /// @notice         Gets the ordered token amounts for the given Uniswap V3 pool
+    ///
+    /// @param pool_            The address of the Uniswap V3 pool
+    /// @param tokenA_          The address of the token to swap
+    /// @param amountA_         The amount of tokenA_ to swap
+    /// @param amountB_         The amount of tokenB_ to swap
+    /// @return token0Address   The address of token0
+    /// @return token1Address   The address of token1
+    /// @return token0Amount    The amount of token0
+    /// @return token1Amount    The amount of token1
+    function getPoolTokenAmounts(
+        address pool_,
+        address tokenA_,
+        uint256 amountA_,
+        uint256 amountB_
+    )
+        public
+        view
+        returns (
+            address token0Address,
+            address token1Address,
+            uint256 token0Amount,
+            uint256 token1Amount
+        )
+    {
+        (token0Address, token1Address) = getPoolTokens(pool_);
+        if (tokenA_ != token0Address && tokenA_ != token1Address) revert InvalidParams();
+
+        if (token0Address == tokenA_) {
+            token0Amount = amountA_;
+            token1Amount = amountB_;
+        } else {
+            token0Amount = amountB_;
+            token1Amount = amountA_;
+        }
+
+        return (token0Address, token1Address, token0Amount, token1Amount);
+    }
+
+    /// @notice             Convenience method to calculate the minimum amount of tokens to receive
+    /// @dev                This is calculated as `amount_ * (1 - slippageTolerance)`
+    ///
+    /// @param amount_      The amount of tokens to calculate the minimum for
+    /// @param slippageBps_ The maximum percentage slippage allowed in basis points (100 = 1%)
+    /// @return uint256     The minimum amount of tokens to receive
+    function getAmountMin(uint256 amount_, uint16 slippageBps_) public pure returns (uint256) {
+        // Check bounds
+        if (slippageBps_ > SLIPPAGE_SCALE) revert InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
+
+        return (amount_ * uint256(SLIPPAGE_SCALE - slippageBps_)) / uint256(SLIPPAGE_SCALE);
+    }
+}

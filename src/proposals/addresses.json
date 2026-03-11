@@ -273,5 +273,30 @@
         "addr": "0x6D94B3745B0eCF908B3B467907b947b43Fba5f15",
         "chainId": 1,
         "name": "external-tokens-tempohm"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-module-price-1_2"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-erc7726-oracle-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-chainlink-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-morpho-oracle-factory-1_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-price-config-2_0"
     }
 ]

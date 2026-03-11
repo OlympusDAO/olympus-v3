@@ -5,4 +5,7 @@ pragma solidity >=0.8.0;
 interface IEmissionManager {
     /// @notice Whether the contract is locally active
     function locallyActive() external view returns (bool);
+
+    /// @notice Shutdown the emission manager
+    function shutdown() external;
 }

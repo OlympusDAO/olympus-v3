@@ -10,6 +10,31 @@ library String {
         return string(abi.encodePacked(bytes32(abi.encodePacked(str_))));
     }
 
+    /// @notice Converts a bytes32 value to a string
+    /// @dev    Extracts a null-terminated string from bytes32 (stops at the first null byte)
+    ///
+    /// @param  value_ The bytes32 value to convert to a string
+    /// @return string The string representation of the bytes32 value
+    function bytes32ToString(bytes32 value_) internal pure returns (string memory) {
+        uint256 length;
+        while (length < 32 && value_[length] != 0) {
+            unchecked {
+                ++length;
+            }
+        }
+
+        bytes memory buffer = new bytes(length);
+        for (uint256 i; i < length; ) {
+            buffer[i] = value_[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return string(buffer);
+    }
+
     /// @notice Returns a substring of a string
     ///
     /// @param  str_            The string to get the substring of

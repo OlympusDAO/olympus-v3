@@ -293,9 +293,136 @@ function test_givenPositionExists_givenContractIsEnabled_whenAmountExceedsRemain
 }
 ```
 
+### Parameterized Tests (first condition is `when`)
+
+Tests that primarily vary input data parameters use `when` as the first condition. The key distinction:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `given*` | State (pre-existing conditions) | `givenPositionExists`, `givenContractIsEnabled` |
+| `when*` | Parameters (input/config being tested) | `whenThreePrices`, `whenAmountIsZero`, `whenStrictMode` |
+
+```solidity
+// when input has 3 prices
+//   when zero deviate from median
+//     [X] it returns average of all prices
+
+function test_whenThreePrices_whenZeroDeviate() public {
+    // 3 prices = input parameter, not pre-existing state
+    uint256[] memory prices = new uint256[](3);
+    prices[0] = 1000e18;
+    prices[1] = 1050e18;
+    prices[2] = 1200e18;
+    // test logic...
+}
+
+// when strict mode is enabled
+//   when only one price remains
+//     [X] it reverts
+
+function test_whenStrictMode_whenOneRemains_reverts() public {
+    // Configuration parameter test
+    bytes memory params = encodeDeviationParams(1000, true); // strict mode
+    // test logic...
+}
+```
+
 **Note:** Don't include the expected result in the function name. A single test often has multiple assertions/checks.
 
 **Ordering:** Write error/revert tests first, then success tests. This makes failures easier to spot.
+
+### Fuzz Test Naming
+
+Fuzz tests use Foundry's property-based testing to verify behavior with random inputs. Use the `_fuzz` suffix to distinguish fuzz tests from unit tests.
+
+**Pattern:** `test_given<Condition>_fuzz(...)` or `test_when<Parameter>_fuzz(...)`
+
+**DO NOT use:** `testFuzz_` prefix (this is an anti-pattern)
+
+```solidity
+// GOOD - _fuzz suffix
+function test_givenInputArrayLengthLessThanThree_fuzz(uint8 length) public {
+    vm.assume(length < 3);
+    // test logic
+}
+
+function test_givenThreePricesWithValidDeviation_fuzz(
+    uint64 price1,
+    uint64 price2,
+    uint64 price3,
+    uint16 deviationBps
+) public view {
+    vm.assume(price1 >= 1e9 && price1 <= 1e19);
+    // test logic
+}
+
+// BAD - testFuzz_ prefix (anti-pattern)
+function testFuzz_givenInputArrayLessThanThree(uint8 length) public {
+    // ...
+}
+```
+
+**Fuzz test naming guidelines:**
+
+- Always use `_fuzz` suffix, never `testFuzz_` prefix
+- Follow the same branching tree pattern as unit tests
+- Use `bound()` for constraining numeric values (preferred over `vm.assume()`)
+- Use `vm.assume()` only for non-numeric constraints or when `bound()` is not feasible
+- Document the bounds being tested in comments
+
+**Use `bound()` instead of `vm.assume()` for numeric values:**
+
+Foundry has a limit on the number of discarded fuzz inputs. Using `vm.assume()` to constrain a large range to a small range will exhaust this limit and cause the fuzz test to fail.
+
+```solidity
+// BAD - vm.assume() discards too many values
+function test_givenLargeAmount_fuzz(uint256 amount) public {
+    // This discards nearly all uint256 values except 0-1000
+    vm.assume(amount <= 1000);
+    // Test will fail with "Fuzz testing ran out of inputs"
+}
+
+// GOOD - use bound() to constrain the input
+function test_givenLargeAmount_fuzz(uint256 amount) public {
+    uint256 boundedAmount = bound(amount, 0, 1000);
+    // boundedAmount is now in range [0, 1000]
+}
+
+// GOOD - vm.assume() for non-numeric or complex constraints
+function test_givenAddressNotZero_fuzz(address addr) public {
+    vm.assume(addr != address(0));
+    // Only discards 1 out of 2^160 values - acceptable
+}
+
+// GOOD - vm.assume() for tight numeric ranges
+function test_givenSmallArray_fuzz(uint8 length) public {
+    vm.assume(length > 0 && length <= 10);
+    // Only discards 246 out of 256 values - acceptable
+}
+```
+
+**When to use `bound()` vs `vm.assume()`:**
+
+| Scenario | Use | Example |
+|----------|-----|---------|
+| Constrain large numeric range | `bound()` | `bound(value, 0, 1000)` for `uint256 value` |
+| Constrain small numeric range | Either | `vm.assume(len < 10)` for `uint8 len` (only ~46 values discarded) |
+| Non-numeric constraints | `vm.assume()` | `vm.assume(addr != address(0))` |
+| Complex multi-variable | `vm.assume()` | `vm.assume(x > y)` |
+| Address is not zero | `vm.assume()` | `vm.assume(addr != address(0))` |
+
+**Why `bound()` is better for large ranges:**
+
+When a fuzzer generates a random `uint256`, nearly all values will be outside a small target range. For example, targeting `0 <= x <= 1000` discards 99.9999% of inputs. The `bound()` function wraps the input using modulo arithmetic to keep it in range without discarding:
+
+```solidity
+// bound() implementation (simplified)
+function bound(uint256 x, uint256 min, uint256 max) pure returns (uint256) {
+    return min + (x % (max - min + 1));
+}
+
+// This never discards - the fuzzer's random value is transformed into range
+```
 
 ### Examples
 
@@ -503,6 +630,8 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 |---------|-------|-------------|
 | State setup | Inline in each test | `given*` modifiers |
 | Test naming | `test_somethingBad` | `test_givenCondition_whenParameter` (success) or `test_givenCondition_whenParameter_reverts` (revert) |
+| Fuzz test naming | `testFuzz_*` | `test_givenCondition_fuzz` or `test_whenParameter_fuzz` |
+| Constraining large numeric ranges in fuzz | `vm.assume(value <= 1000)` for `uint256 value` | `bound(value, 0, 1000)` |
 | Error testing | `vm.expectRevert("message")` | `abi.encodeWithSelector(Error.selector)` |
 | Assertions | `assertEq(a, b)` | `assertEq(a, b, "description")` |
 | File organization | Multiple functions per file | One function per file |
@@ -513,6 +642,8 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 - [ ] Inherits from appropriate parent test contract
 - [ ] Uses `given*` modifiers for state setup
 - [ ] Follows branching tree naming convention
+- [ ] Fuzz tests use `_fuzz` suffix, not `testFuzz_` prefix
+- [ ] Fuzz tests use `bound()` for large numeric ranges, `vm.assume()` for small ranges/non-numeric
 - [ ] Uses error selectors, not string messages
 - [ ] All assertions have descriptive messages
 - [ ] Mathematical reasoning documented in comments
