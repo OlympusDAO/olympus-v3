@@ -20,9 +20,9 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
-    /// @param dstChainId The LayerZero destination chain ID.
+    /// @param dstEid The LayerZero destination endpoint ID.
     /// @param fees The native token fee paid for the bridge transfer.
-    event Bridged(address indexed sender, uint256 amount, uint16 indexed dstChainId, uint256 fees);
+    event Bridged(address indexed sender, uint256 amount, uint32 indexed dstEid, uint256 fees);
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
@@ -38,10 +38,10 @@ interface ILZCrossChainBridge is IVersioned {
     ///      - amount_ is zero.
     ///      - The user has insufficient OHM balance or approval.
     ///
-    /// @param dstChainId_ The LayerZero destination chain ID.
+    /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to send.
-    function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable;
+    function sendOhm(uint32 dstEid_, address to_, uint256 amount_) external payable;
 
     /// @notice Sets the gateway address.
     /// @dev Only callable by the owner.
@@ -59,16 +59,16 @@ interface ILZCrossChainBridge is IVersioned {
     function OHM() external view returns (address);
 
     /// @notice Estimates the fee for sending OHM to a destination chain.
-    /// @dev Proxies to the gateway's estimateSendFee function with empty adapter params.
+    /// @dev Proxies to the gateway's estimateSendFee function with empty options.
     ///
-    /// @param dstChainId_ The LayerZero destination chain ID.
+    /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to send.
     /// @return nativeFee The estimated native token fee.
-    /// @return zroFee The estimated ZRO token fee (unused).
+    /// @return lzTokenFee The estimated LZ token fee (unused).
     function estimateSendFee(
-        uint16 dstChainId_,
+        uint32 dstEid_,
         address to_,
         uint256 amount_
-    ) external view returns (uint256 nativeFee, uint256 zroFee);
+    ) external view returns (uint256 nativeFee, uint256 lzTokenFee);
 }

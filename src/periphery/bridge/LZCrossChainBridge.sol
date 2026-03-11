@@ -45,7 +45,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     /// @inheritdoc ILZCrossChainBridge
     function sendOhm(
-        uint16 dstChainId_,
+        uint32 dstEid_,
         address to_,
         uint256 amount_
     ) external payable override onlyEnabled {
@@ -56,14 +56,14 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
         // Gateway burns and sends via LayerZero
         ILZBridgeGateway(gateway).burnAndSend{value: msg.value}(
-            dstChainId_,
+            dstEid_,
             to_,
             amount_,
             payable(msg.sender),
             bytes("")
         );
 
-        emit Bridged(msg.sender, amount_, dstChainId_, msg.value);
+        emit Bridged(msg.sender, amount_, dstEid_, msg.value);
     }
 
     /// @inheritdoc ILZCrossChainBridge
@@ -76,11 +76,11 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     /// @inheritdoc ILZCrossChainBridge
     function estimateSendFee(
-        uint16 dstChainId_,
+        uint32 dstEid_,
         address to_,
         uint256 amount_
-    ) external view override returns (uint256 nativeFee, uint256 zroFee) {
-        return ILZBridgeGateway(gateway).estimateSendFee(dstChainId_, to_, amount_, bytes(""));
+    ) external view override returns (uint256 nativeFee, uint256 lzTokenFee) {
+        return ILZBridgeGateway(gateway).estimateSendFee(dstEid_, to_, amount_, bytes(""));
     }
 
     function supportsInterface(

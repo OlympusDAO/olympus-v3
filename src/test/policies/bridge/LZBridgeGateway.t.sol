@@ -11,23 +11,69 @@ import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ILayerZeroReceiver} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroReceiver.sol";
+import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroReceiver.sol";
+import {Origin, MessagingFee} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
+import {ISendLib, Packet} from "@lz-evm-protocol-v2-3.0.142/interfaces/ISendLib.sol";
+import {IMessageLib, MessageLibType} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLib.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLibManager.sol";
+import {EndpointV2Mock} from "@lz-test-devtools-0.2.11/mocks/EndpointV2Mock.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {LZEndpointMock} from "@layer-zero-endpoint-v1-1.1.0/lzApp/mocks/LZEndpointMock.sol";
 
 // solhint-disable max-states-count
 
-/// @dev Helper contract that reverts on any call (simulates wrong destination address)
-contract RevertOnReceive {
-    fallback() external payable {
-        revert("not a bridge");
+/// @dev Minimal mock send/receive library for EndpointV2Mock tests.
+///      Returns a fixed 100 wei native fee. No packet scheduling or relay.
+contract MockSendLib {
+    uint256 public constant NATIVE_FEE = 100;
+
+    function send(
+        Packet calldata,
+        bytes calldata,
+        bool
+    ) external pure returns (MessagingFee memory fee, bytes memory encodedPacket) {
+        fee = MessagingFee(NATIVE_FEE, 0);
+        encodedPacket = bytes("");
     }
+
+    function quote(
+        Packet calldata,
+        bytes calldata,
+        bool
+    ) external pure returns (MessagingFee memory) {
+        return MessagingFee(NATIVE_FEE, 0);
+    }
+
+    function setConfig(address, SetConfigParam[] calldata) external {}
+
+    function getConfig(uint32, address, uint32) external pure returns (bytes memory) {
+        return bytes("");
+    }
+
+    function isSupportedEid(uint32) external pure returns (bool) {
+        return true;
+    }
+
+    function version() external pure returns (uint64, uint8, uint8) {
+        return (0, 0, 2);
+    }
+
+    function messageLibType() external pure returns (MessageLibType) {
+        return MessageLibType.SendAndReceive;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IMessageLib).interfaceId || interfaceId == 0x01ffc9a7; // ERC165
+    }
+
+    fallback() external payable {}
+
+    receive() external payable {}
 }
 
 contract LZBridgeGatewayTestBase is Test {
-    uint16 constant CANONICAL_LZ_CHAIN_ID = 101;
-    uint16 constant NONCANONICAL_LZ_CHAIN_ID = 109;
+    uint32 constant CANONICAL_EID = 1;
+    uint32 constant NONCANONICAL_EID = 2;
     uint256 constant INITIAL_AMOUNT = 100_000e9;
     uint256 constant SUPPLY_CAP = 1_000_000e9;
 
@@ -37,7 +83,7 @@ contract LZBridgeGatewayTestBase is Test {
     OlympusRoles roles;
     RolesAdmin rolesAdmin;
     LZBridgeGateway gateway;
-    LZEndpointMock endpoint;
+    EndpointV2Mock endpoint;
 
     // Non-canonical stack
     Kernel kernel2;
@@ -45,7 +91,7 @@ contract LZBridgeGatewayTestBase is Test {
     OlympusRoles roles2;
     RolesAdmin rolesAdmin2;
     LZBridgeGateway gateway2;
-    LZEndpointMock endpoint2;
+    EndpointV2Mock endpoint2;
 
     // Shared
     MockOhm ohm;
@@ -57,12 +103,26 @@ contract LZBridgeGatewayTestBase is Test {
     address recipient = makeAddr("recipient");
 
     function setUp() public virtual {
-        // 1. Deploy mock OHM and endpoints
-        ohm = new MockOhm("Olympus", "OHM", 9);
-        endpoint = new LZEndpointMock(CANONICAL_LZ_CHAIN_ID);
-        endpoint2 = new LZEndpointMock(NONCANONICAL_LZ_CHAIN_ID);
+        // 1. Deploy mock V2 endpoints
+        endpoint = new EndpointV2Mock(CANONICAL_EID, address(this));
+        endpoint2 = new EndpointV2Mock(NONCANONICAL_EID, address(this));
 
-        // 2. Deploy canonical stack
+        // 2. Deploy and register mock send libraries
+        MockSendLib sendLib1 = new MockSendLib();
+        MockSendLib sendLib2 = new MockSendLib();
+        endpoint.registerLibrary(address(sendLib1));
+        endpoint2.registerLibrary(address(sendLib2));
+
+        // Set default send/receive libraries for each remote EID
+        endpoint.setDefaultSendLibrary(NONCANONICAL_EID, address(sendLib1));
+        endpoint.setDefaultReceiveLibrary(NONCANONICAL_EID, address(sendLib1), 0);
+        endpoint2.setDefaultSendLibrary(CANONICAL_EID, address(sendLib2));
+        endpoint2.setDefaultReceiveLibrary(CANONICAL_EID, address(sendLib2), 0);
+
+        // 3. Deploy mock OHM
+        ohm = new MockOhm("Olympus", "OHM", 9);
+
+        // 4. Deploy canonical stack
         kernel = new Kernel();
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
@@ -78,7 +138,7 @@ contract LZBridgeGatewayTestBase is Test {
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
 
-        // 3. Deploy non-canonical stack
+        // 5. Deploy non-canonical stack
         kernel2 = new Kernel();
         mintr2 = new OlympusMinter(kernel2, address(ohm));
         roles2 = new OlympusRoles(kernel2);
@@ -94,11 +154,11 @@ contract LZBridgeGatewayTestBase is Test {
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
 
-        // 4. Configure gateways
+        // 6. Configure gateways
         vm.startPrank(admin);
-        // Set trusted remotes (cross-linked)
-        gateway.setTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, address(gateway2));
-        gateway2.setTrustedRemote(CANONICAL_LZ_CHAIN_ID, address(gateway));
+        // Set peers (cross-linked)
+        gateway.setPeer(NONCANONICAL_EID, address(gateway2));
+        gateway2.setPeer(CANONICAL_EID, address(gateway));
 
         // Set bridged supply cap on canonical
         gateway.setBridgedSupplyCap(SUPPLY_CAP);
@@ -108,11 +168,7 @@ contract LZBridgeGatewayTestBase is Test {
         gateway2.enable(bytes(""));
         vm.stopPrank();
 
-        // 5. Link endpoint destinations (mock wiring)
-        endpoint.setDestLzEndpoint(address(gateway2), address(endpoint2));
-        endpoint2.setDestLzEndpoint(address(gateway), address(endpoint));
-
-        // 6. Mint OHM to facilitator for burnAndSend tests
+        // 7. Mint OHM to facilitator for burnAndSend tests
         ohm.mint(facilitator, INITIAL_AMOUNT);
 
         // Fund test contract for native fees
@@ -120,35 +176,36 @@ contract LZBridgeGatewayTestBase is Test {
         vm.deal(user, 100 ether);
     }
 
-    function _buildTrustedPath(address remote, address local) internal pure returns (bytes memory) {
-        return abi.encodePacked(remote, local);
-    }
-
     function _buildBridgePayload(address to, uint256 amount) internal view returns (bytes memory) {
         return abi.encode(gateway.MSG_BRIDGE_OHM(), abi.encode(to, amount));
     }
 
-    /// @dev Simulates lzReceive call from the endpoint mock to the gateway
+    /// @dev Simulates lzReceive call directly to the gateway via vm.prank(endpoint)
     function _simulateLzReceive(
         LZBridgeGateway target,
-        LZEndpointMock endpoint,
-        uint16 srcChainId,
+        address endpointAddr,
+        uint32 srcEid,
         address srcGateway,
         address to,
-        uint256 amount,
-        uint64 nonce
+        uint256 amount
     ) internal {
-        bytes memory trustedPath = _buildTrustedPath(srcGateway, address(target));
         bytes memory payload = _buildBridgePayload(to, amount);
+        Origin memory origin = Origin({
+            srcEid: srcEid,
+            sender: bytes32(uint256(uint160(srcGateway))),
+            nonce: 1
+        });
 
-        vm.prank(address(endpoint));
-        target.lzReceive(srcChainId, trustedPath, nonce, payload);
+        vm.prank(endpointAddr);
+        target.lzReceive{value: 0}(origin, bytes32(0), payload, address(0), bytes(""));
     }
 
-    /// @dev Performs a burnAndSend from the facilitator, transferring OHM to gateway first
+    /// @dev Performs a burnAndSend from the facilitator.
+    ///      Note: With MockSendLib, messages are NOT relayed. For E2E tests,
+    ///      simulate the receive separately via _simulateLzReceive.
     function _doBurnAndSend(
         LZBridgeGateway source,
-        uint16 dstChainId,
+        uint32 dstEid,
         address to,
         uint256 amount
     ) internal {
@@ -156,9 +213,9 @@ contract LZBridgeGatewayTestBase is Test {
         ohm.transfer(address(source), amount);
 
         // Estimate fee
-        (uint256 fee, ) = source.estimateSendFee(dstChainId, to, amount, bytes(""));
+        (uint256 fee, ) = source.estimateSendFee(dstEid, to, amount, bytes(""));
 
-        source.burnAndSend{value: fee}(dstChainId, to, amount, payable(facilitator), bytes(""));
+        source.burnAndSend{value: fee}(dstEid, to, amount, payable(facilitator), bytes(""));
         vm.stopPrank();
     }
 }
@@ -180,7 +237,6 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
 
         assertEq(fresh.bridgedSupply(), 0, "Bridged supply should be zero");
         assertEq(fresh.bridgedSupplyCap(), 0, "Bridged supply cap should be zero");
-        assertEq(fresh.precrime(), address(0), "Precrime should be zero");
     }
 
     function test_constructor_nonCanonical() external {
@@ -246,7 +302,6 @@ contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
         Permissions[] memory perms = gateway.requestPermissions();
 
         assertEq(perms.length, 3, "Should request 3 permissions");
-        // All three should be on MINTR keycode
         assertEq(
             Keycode.unwrap(perms[0].keycode),
             bytes5("MINTR"),
@@ -273,11 +328,9 @@ contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
 
 contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
     function test_enable() external {
-        // 1. Preparation: deploy a fresh gateway (disabled)
         LZBridgeGateway fresh = new LZBridgeGateway(kernel, address(endpoint), true, facilitator);
         kernel.executeAction(Actions.ActivatePolicy, address(fresh));
 
-        // 2. Test
         vm.prank(admin);
         fresh.enable(bytes(""));
 
@@ -330,12 +383,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), amount);
-        (uint256 fee, ) = gateway.estimateSendFee(
-            NONCANONICAL_LZ_CHAIN_ID,
-            recipient,
-            amount,
-            bytes("")
-        );
+        (uint256 fee, ) = gateway.estimateSendFee(NONCANONICAL_EID, recipient, amount, bytes(""));
 
         uint256 facilitatorEthBefore = facilitator.balance;
 
@@ -343,7 +391,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         emit ILZBridgeGateway.BridgedSupplyIncreased(amount);
 
         gateway.burnAndSend{value: fee}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             amount,
             payable(facilitator),
@@ -372,37 +420,29 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
     }
 
     function test_burnAndSend_nonCanonical_doesNotTrackSupply() external {
-        // 1. Preparation: give facilitator OHM and send from non-canonical
         uint256 amount = 1000e9;
 
         ohm.mint(facilitator, amount);
 
-        // Need to first receive OHM on non-canonical to have something to burn
-        // For non-canonical, burnAndSend doesn't track supply, so mint OHM on non-canonical by simulating lzReceive
+        // Mint OHM on non-canonical by simulating lzReceive
         _simulateLzReceive(
             gateway2,
-            endpoint2,
-            CANONICAL_LZ_CHAIN_ID,
+            address(endpoint2),
+            CANONICAL_EID,
             address(gateway),
             facilitator,
-            amount,
-            1
+            amount
         );
 
-        // 2. Test: send from non-canonical back to canonical
+        // Send from non-canonical back to canonical
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway2), amount);
-        (uint256 fee, ) = gateway2.estimateSendFee(
-            CANONICAL_LZ_CHAIN_ID,
-            recipient,
-            amount,
-            bytes("")
-        );
+        (uint256 fee, ) = gateway2.estimateSendFee(CANONICAL_EID, recipient, amount, bytes(""));
 
         uint256 facilitatorEthBefore = facilitator.balance;
 
         gateway2.burnAndSend{value: fee}(
-            CANONICAL_LZ_CHAIN_ID,
+            CANONICAL_EID,
             recipient,
             amount,
             payable(facilitator),
@@ -426,7 +466,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         vm.prank(user);
         gateway.burnAndSend{value: 1 ether}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             1000e9,
             payable(user),
@@ -440,7 +480,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         vm.prank(facilitator);
         gateway.burnAndSend{value: 1 ether}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             address(0),
             1000e9,
             payable(user),
@@ -449,15 +489,13 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
     }
 
     function test_burnAndSend_revertsIfNotEnabled() external {
-        // 1. Preparation: disable gateway
         vm.prank(admin);
         gateway.disable(bytes(""));
 
-        // 2. Test
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(facilitator);
         gateway.burnAndSend{value: 1 ether}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             1000e9,
             payable(facilitator),
@@ -465,9 +503,8 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_burnAndSend_revertsIfNoTrustedRemote() external {
-        // Send to chain with no trusted remote
-        uint16 unknownChainId = 42;
+    function test_burnAndSend_revertsIfNoPeer() external {
+        uint32 unknownEid = 42;
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), 1000e9);
@@ -476,7 +513,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_DestinationNotTrusted.selector)
         );
         gateway.burnAndSend{value: 1 ether}(
-            unknownChainId,
+            unknownEid,
             recipient,
             1000e9,
             payable(facilitator),
@@ -486,18 +523,12 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
     }
 
     function test_burnAndSend_canonical_revertsIfSupplyCapExceeded() external {
-        // Try to send more than cap
         uint256 amount = SUPPLY_CAP + 1;
         ohm.mint(facilitator, amount);
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), amount);
-        (uint256 fee, ) = gateway.estimateSendFee(
-            NONCANONICAL_LZ_CHAIN_ID,
-            recipient,
-            amount,
-            bytes("")
-        );
+        (uint256 fee, ) = gateway.estimateSendFee(NONCANONICAL_EID, recipient, amount, bytes(""));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -507,7 +538,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             )
         );
         gateway.burnAndSend{value: fee}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             amount,
             payable(facilitator),
@@ -519,33 +550,31 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
 
 contract LZBridgeGatewayTests_LZReceiver is LZBridgeGatewayTestBase {
     function test_lzReceive_canonical() external {
-        // 1. Preparation: send some OHM out to build bridged supply
+        // 1. Send some OHM out to build bridged supply
         uint256 initialAmount = 5000e9;
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, initialAmount);
+        _doBurnAndSend(gateway, NONCANONICAL_EID, recipient, initialAmount);
         assertEq(
             gateway.bridgedSupply(),
             initialAmount,
             "Bridged supply should be the initial amount after send"
         );
 
-        // 2. Test: receive back on canonical
+        // 2. Receive back on canonical
         uint256 recipientBalanceBefore = ohm.balanceOf(recipient);
-
         uint256 amount = 2000e9;
 
         vm.expectEmit(true, true, true, true);
         emit ILZBridgeGateway.BridgedSupplyDecreased(amount);
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.Received(recipient, amount, NONCANONICAL_LZ_CHAIN_ID);
+        emit ILZBridgeGateway.Received(recipient, amount, NONCANONICAL_EID);
 
         _simulateLzReceive(
             gateway,
-            endpoint,
-            NONCANONICAL_LZ_CHAIN_ID,
+            address(endpoint),
+            NONCANONICAL_EID,
             address(gateway2),
             recipient,
-            amount,
-            1
+            amount
         );
 
         assertEq(
@@ -561,315 +590,137 @@ contract LZBridgeGatewayTests_LZReceiver is LZBridgeGatewayTestBase {
     }
 
     function test_lzReceive_nonCanonical_doesNotTrackSupply() external {
-        // 2. Test: receive on non-canonical
         _simulateLzReceive(
             gateway2,
-            endpoint2,
-            CANONICAL_LZ_CHAIN_ID,
+            address(endpoint2),
+            CANONICAL_EID,
             address(gateway),
             recipient,
-            1000e9,
-            1
+            1000e9
         );
 
         assertEq(gateway2.bridgedSupply(), 0, "Non-canonical should not track bridged supply");
     }
 
-    function test_lzReceive_storesFailedMessageOnInvalidMsgType() external {
-        // Cause a revert by sending invalid msg type payload
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
+    function test_lzReceive_revertsOnInvalidMsgType() external {
         uint256 amount = 1000e9;
-        uint64 nonce = 1;
         bytes memory badPayload = abi.encode(uint8(42), abi.encode(recipient, amount));
 
-        vm.expectEmit(true, true, true, false);
-        emit ILZBridgeGateway.MessageFailed(
-            NONCANONICAL_LZ_CHAIN_ID,
-            trustedPath,
-            nonce,
-            badPayload,
-            bytes("")
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidMessageType.selector, 42)
         );
-
-        // lzReceive should store the failed message, not revert externally
         vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
-
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, keccak256(badPayload), "Invalid message type should be stored as failed");
+        gateway.lzReceive{value: 0}(origin, bytes32(0), badPayload, address(0), bytes(""));
     }
 
-    function test_lzReceive_storesFailedMessageOnInvalidPayloadLength() external {
-        // Valid msg type but data length != 64 bytes (the expected _BRIDGE_OHM_DATA_LENGTH)
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint64 nonce = 1;
+    function test_lzReceive_revertsOnInvalidPayloadLength() external {
         bytes memory shortData = abi.encode(recipient); // 32 bytes, not 64
         bytes memory badPayload = abi.encode(gateway.MSG_BRIDGE_OHM(), shortData);
 
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
 
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(
-            stored,
-            keccak256(badPayload),
-            "Invalid payload length should be stored as failed"
-        );
-    }
-
-    function test_lzReceive_canonical_storesFailedMessageOnSupplyUnderflow() external {
-        // bridgedSupply is 0, receiving OHM would underflow
-        assertEq(gateway.bridgedSupply(), 0, "Bridged supply should be 0");
-
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-
-        // Should store as failed message (underflow reverts in _receiveBridgeOhm)
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, keccak256(payload), "Failed message should be stored on underflow");
-    }
-
-    function test_lzReceive_revertsIfNotEnabled() external {
-        // 1. Preparation: disable gateway
-        vm.prank(admin);
-        gateway.disable(bytes(""));
-
-        // 2. Test: lzReceive should revert when disabled
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
-
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, 1, payload);
-    }
-
-    function test_lzReceive_revertsIfNotEndpoint() external {
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidCaller.selector)
-        );
-        vm.prank(user);
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, 1, payload);
-    }
-
-    function test_lzReceive_revertsIfInvalidTrustedRemote() external {
-        // Use wrong source address
-        bytes memory wrongPath = _buildTrustedPath(user, address(gateway));
-        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidMessageSource.selector)
-        );
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, wrongPath, 1, payload);
-    }
-
-    function test_receiveMessage_revertsIfCallerNotSelf() external {
-        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidCaller.selector)
-        );
-        vm.prank(user);
-        gateway.receiveMessage(NONCANONICAL_LZ_CHAIN_ID, bytes(""), 0, payload);
-    }
-}
-
-contract LZBridgeGatewayTests_RetryMessage is LZBridgeGatewayTestBase {
-    function test_retryMessage_canonical() external {
-        // Scenario: admin incorrectly lowers bridgedSupply, then a receive causes underflow -> failed message
-        // 1. Preparation: bridge OHM out to build bridged supply
-        uint256 bridgedAmount = 5000e9;
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, bridgedAmount);
-        assertEq(gateway.bridgedSupply(), bridgedAmount, "Bridged supply should match sent amount");
-
-        // Admin incorrectly sets bridgedSupply too low
-        vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(500e9);
-
-        // Receive the full bridged amount back: underflows because 500e9 < 5000e9
-        uint256 amount = bridgedAmount;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint64 nonce = 1;
-
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertTrue(stored != bytes32(0), "Should have a stored failed message");
-
-        // Correct bridgedSupply
-        vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(bridgedAmount);
-
-        // 2. Test: retry succeeds
-        uint256 balBefore = ohm.balanceOf(recipient);
-        bytes32 payloadHash = keccak256(payload);
-
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.BridgedSupplyDecreased(amount);
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.Received(recipient, amount, NONCANONICAL_LZ_CHAIN_ID);
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.RetryMessageSuccess(
-            NONCANONICAL_LZ_CHAIN_ID,
-            trustedPath,
-            nonce,
-            payloadHash
-        );
-
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        assertEq(
-            ohm.balanceOf(recipient),
-            balBefore + amount,
-            "Recipient should receive OHM after retry"
-        );
-        stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, bytes32(0), "Stored message should be cleared after retry");
-        assertEq(gateway.bridgedSupply(), 0, "Bridged supply should be zero after full return");
-    }
-
-    // test_retryMessage_nonCanonical_doesNotDecrementBridgedSupply:
-    // A failed message that can be successfully retried on non-canonical is possible if, for example, MINTR reverts.
-
-    function test_retryMessage_revertsIfNotEnabled() external {
-        // 1. Preparation: create failed message, then disable
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        vm.prank(admin);
-        gateway.disable(bytes(""));
-
-        // 2. Test
-        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-    }
-
-    function test_retryMessage_revertsIfTrustedRemoteRemoved() external {
-        // 1. Preparation: create failed message, then remove trusted remote
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        // Remove trusted remote
-        vm.prank(admin);
-        gateway.setTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, address(0));
-
-        // 2. Test
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidMessageSource.selector)
-        );
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-    }
-
-    function test_retryMessage_revertsIfNoStoredMessage() external {
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_NoStoredMessage.selector)
-        );
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, 1, payload);
-    }
-
-    function test_retryMessage_revertsIfPayloadMismatch() external {
-        // 1. Preparation: create failed message
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        // 2. Test: retry with different payload
-        bytes memory wrongPayload = _buildBridgePayload(recipient, 2000e9);
         vm.expectRevert(
             abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidPayload.selector)
         );
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, wrongPayload);
+        vm.prank(address(endpoint));
+        gateway.lzReceive{value: 0}(origin, bytes32(0), badPayload, address(0), bytes(""));
     }
 
-    function test_retryMessage_revertsIfInvalidMsgType() external {
-        // Scenario: incorrect endpoint delivered a payload with unknown message type
-        // 1. Preparation: store failed message
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
+    function test_lzReceive_canonical_revertsOnSupplyUnderflow() external {
+        assertEq(gateway.bridgedSupply(), 0, "Bridged supply should be 0");
+
         uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory badPayload = abi.encode(uint8(42), abi.encode(recipient, amount));
+        bytes memory payload = _buildBridgePayload(recipient, amount);
 
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_BridgedSupplyUnderflow.selector,
+                0,
+                amount
+            )
+        );
         vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
-
-        // 2. Test: reverts, because message type is permanently unrecognized
-        vm.expectRevert();
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
-
-        // Stored message remains (revert rolls back the delete)
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, keccak256(badPayload), "Failed message should persist after failed retry");
+        gateway.lzReceive{value: 0}(origin, bytes32(0), payload, address(0), bytes(""));
     }
 
-    function test_retryMessage_revertsIfInvalidPayloadLength() external {
-        // Scenario: incorrect endpoint delivered a payload with truncated data
-        // 1. Preparation: store failed message
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint64 nonce = 1;
-        bytes memory shortData = abi.encode(recipient); // 32 bytes, not 64
-        bytes memory badPayload = abi.encode(gateway.MSG_BRIDGE_OHM(), shortData);
+    function test_lzReceive_revertsIfNotEnabled() external {
+        vm.prank(admin);
+        gateway.disable(bytes(""));
 
+        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
+
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
+        gateway.lzReceive{value: 0}(origin, bytes32(0), payload, address(0), bytes(""));
+    }
 
-        // 2. Test: reverts because payload length is permanently wrong
-        vm.expectRevert();
-        gateway.retryMessage(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, badPayload);
+    function test_lzReceive_revertsIfNotEndpoint() external {
+        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
 
-        // Stored message remains (revert rolls back the delete)
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, keccak256(badPayload), "Failed message should persist after failed retry");
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidCaller.selector)
+        );
+        vm.prank(user);
+        gateway.lzReceive{value: 0}(origin, bytes32(0), payload, address(0), bytes(""));
+    }
+
+    function test_lzReceive_revertsIfInvalidSender() external {
+        bytes memory payload = _buildBridgePayload(recipient, 1000e9);
+
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(user))),
+            nonce: 1
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidMessageSource.selector)
+        );
+        vm.prank(address(endpoint));
+        gateway.lzReceive{value: 0}(origin, bytes32(0), payload, address(0), bytes(""));
     }
 }
 
 contract LZBridgeGatewayTests_EstimateSendFee is LZBridgeGatewayTestBase {
-    function test_estimateSendFee_proxiesToEndpoint() external view {
-        // The gateway's estimate should match calling the endpoint directly
+    function test_estimateSendFee_returnsNonZeroFee() external view {
         uint256 amount = 1000e9;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-        (uint256 endpointFee, ) = endpoint.estimateFees(
-            NONCANONICAL_LZ_CHAIN_ID,
-            address(gateway),
-            payload,
-            false,
-            bytes("")
-        );
-        (uint256 gatewayFee, ) = gateway.estimateSendFee(
-            NONCANONICAL_LZ_CHAIN_ID,
+        (uint256 nativeFee, ) = gateway.estimateSendFee(
+            NONCANONICAL_EID,
             recipient,
             amount,
             bytes("")
         );
 
-        assertGt(gatewayFee, 0, "Native fee should be non-zero");
-        assertEq(gatewayFee, endpointFee, "Gateway fee should match endpoint fee");
+        // MockSendLib returns 100 wei native fee
+        assertEq(nativeFee, 100, "Native fee should be 100 (MockSendLib default)");
     }
 }
 
@@ -910,24 +761,21 @@ contract LZBridgeGatewayTests_Administrative is LZBridgeGatewayTestBase {
     }
 
     function test_setBridgedSupplyCap_lessThanCurrentSupplyPreventsNewBridgings() external {
-        // 1. Preparation: build up bridged supply
         uint256 bridgedAmount = 10_000e9;
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, bridgedAmount);
+        _doBurnAndSend(gateway, NONCANONICAL_EID, recipient, bridgedAmount);
         assertEq(gateway.bridgedSupply(), bridgedAmount, "Bridged supply should match");
 
-        // Set cap below current bridged supply
         uint256 lowCap = 5000e9;
         vm.prank(admin);
         gateway.setBridgedSupplyCap(lowCap);
 
-        // 2. Test: new bridgings should revert due to cap exceeded
         uint256 newAmount = 1e9;
         ohm.mint(facilitator, newAmount);
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), newAmount);
         (uint256 fee, ) = gateway.estimateSendFee(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             newAmount,
             bytes("")
@@ -941,7 +789,7 @@ contract LZBridgeGatewayTests_Administrative is LZBridgeGatewayTestBase {
             )
         );
         gateway.burnAndSend{value: fee}(
-            NONCANONICAL_LZ_CHAIN_ID,
+            NONCANONICAL_EID,
             recipient,
             newAmount,
             payable(facilitator),
@@ -964,45 +812,112 @@ contract LZBridgeGatewayTests_Administrative is LZBridgeGatewayTestBase {
         gateway2.setBridgedSupplyCap(100_000e9);
     }
 
-    function test_setTrustedRemote() external {
+    function test_setPeer() external {
         address remoteAddr = makeAddr("remote");
-        bytes memory expectedPath = abi.encodePacked(remoteAddr, address(gateway));
-
-        uint16 remoteChainId = 110;
+        uint32 remoteEid = 30110;
+        bytes32 expectedPeer = bytes32(uint256(uint160(remoteAddr)));
 
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.TrustedRemoteSet(remoteChainId, expectedPath);
+        emit ILZBridgeGateway.PeerSet(remoteEid, expectedPeer);
 
         vm.prank(admin);
-        gateway.setTrustedRemote(remoteChainId, remoteAddr);
+        gateway.setPeer(remoteEid, remoteAddr);
 
         assertEq(
-            keccak256(gateway.trustedRemoteLookup(remoteChainId)),
-            keccak256(expectedPath),
-            "Path should be abi.encodePacked(remoteAddress, localAddress)"
+            gateway.peers(remoteEid),
+            expectedPeer,
+            "Peer should be set to address encoded as bytes32"
         );
     }
 
-    function test_setTrustedRemote_zeroAddressClearsTrustedRemote() external {
-        // Verify trusted remote is set
-        bytes memory existing = gateway.trustedRemoteLookup(NONCANONICAL_LZ_CHAIN_ID);
-        assertGt(existing.length, 0, "Should have trusted remote");
+    function test_setPeer_zeroAddressClearsPeer() external {
+        bytes32 existing = gateway.peers(NONCANONICAL_EID);
+        assertTrue(existing != bytes32(0), "Should have peer");
 
-        // Clear it
         vm.prank(admin);
-        gateway.setTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, address(0));
+        gateway.setPeer(NONCANONICAL_EID, address(0));
 
-        assertEq(
-            gateway.trustedRemoteLookup(NONCANONICAL_LZ_CHAIN_ID).length,
-            0,
-            "Trusted remote should be cleared"
-        );
+        assertEq(gateway.peers(NONCANONICAL_EID), bytes32(0), "Peer should be cleared");
     }
 
-    function test_setTrustedRemote_revertsIfNotAdmin() external {
+    function test_setPeer_revertsIfNotAdmin() external {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(user);
-        gateway.setTrustedRemote(110, makeAddr("remote"));
+        gateway.setPeer(30110, makeAddr("remote"));
+    }
+
+    // --- lzClear ---
+
+    function test_lzClear_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.lzClear(Origin(30110, bytes32(uint256(1)), 1), bytes32(0), "");
+    }
+
+    // --- lzRetryReceive ---
+
+    function test_lzRetryReceive_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.lzRetryReceive(Origin(30110, bytes32(uint256(1)), 1), bytes32(0), "", "");
+    }
+
+    // --- lzSkip ---
+
+    function test_lzSkip_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.lzSkip(30110, bytes32(uint256(1)), 1);
+    }
+
+    // --- lzNilify ---
+
+    function test_lzNilify_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.lzNilify(30110, bytes32(uint256(1)), 1, bytes32(0));
+    }
+
+    // --- lzBurn ---
+
+    function test_lzBurn_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.lzBurn(30110, bytes32(uint256(1)), 1, bytes32(0));
+    }
+
+    function test_setSendLibrary_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.setSendLibrary(NONCANONICAL_EID, makeAddr("lib"));
+    }
+
+    function test_setReceiveLibrary_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.setReceiveLibrary(NONCANONICAL_EID, makeAddr("lib"), 0);
+    }
+
+    function test_setLZConfig_revertsIfNotBridgeAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
+        vm.prank(user);
+        gateway.setLZConfig(makeAddr("lib"), bytes("config"));
     }
 
     function test_setBridgedSupply() external {
@@ -1031,231 +946,48 @@ contract LZBridgeGatewayTests_Administrative is LZBridgeGatewayTestBase {
     }
 }
 
-contract LZBridgeGatewayTests_LZPrecrime is LZBridgeGatewayTestBase {
-    function test_precrime_currentlyUnused() external view {
-        assertEq(gateway.precrime(), address(0), "Precrime should currently be the zero address");
+contract LZBridgeGatewayTests_V2Receiver is LZBridgeGatewayTestBase {
+    function test_allowInitializePath_trueForPeer() external view {
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+        assertTrue(gateway.allowInitializePath(origin), "Should allow init for trusted peer");
     }
 
-    function test_setPrecrime() external {
-        address newPrecrime = makeAddr("precrime");
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.PrecrimeSet(newPrecrime);
-        vm.prank(admin);
-        gateway.setPrecrime(newPrecrime);
-        assertEq(gateway.precrime(), newPrecrime, "Precrime should be set");
+    function test_allowInitializePath_falseForNonPeer() external view {
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: bytes32(uint256(uint160(user))),
+            nonce: 1
+        });
+        assertFalse(gateway.allowInitializePath(origin), "Should deny init for non-peer");
     }
 
-    function test_setPrecrime_revertsIfNotAdmin() external {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user);
-        gateway.setPrecrime(user);
-    }
-}
-
-contract LZBridgeGatewayTests_LZUserApplicationConfigWithMock is LZBridgeGatewayTestBase {
-    function test_setConfig_proxiesToEndpoint() external {
-        // Should not revert when called by bridge_admin
-        vm.prank(bridgeAdmin);
-        gateway.setConfig(1, NONCANONICAL_LZ_CHAIN_ID, 1, bytes("config"));
+    function test_allowInitializePath_falseForUnknownEid() external view {
+        Origin memory origin = Origin({
+            srcEid: 42,
+            sender: bytes32(uint256(uint160(address(gateway2)))),
+            nonce: 1
+        });
+        assertFalse(gateway.allowInitializePath(origin), "Should deny init for unknown EID");
     }
 
-    function test_setConfig_revertsIfNotBridgeAdmin() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
-        vm.prank(user);
-        gateway.setConfig(1, NONCANONICAL_LZ_CHAIN_ID, 1, bytes("config"));
-    }
-
-    function test_setSendVersion_proxiesToEndpoint() external {
-        vm.prank(bridgeAdmin);
-        gateway.setSendVersion(1);
-    }
-
-    function test_setSendVersion_revertsIfNotBridgeAdmin() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
-        vm.prank(user);
-        gateway.setSendVersion(1);
-    }
-
-    function test_setReceiveVersion_proxiesToEndpoint() external {
-        vm.prank(bridgeAdmin);
-        gateway.setReceiveVersion(1);
-    }
-
-    function test_setReceiveVersion_revertsIfNotBridgeAdmin() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
-        vm.prank(user);
-        gateway.setReceiveVersion(1);
-    }
-
-    function test_forceResumeReceive_unblocksMismatchedTrustedRemote() external {
-        // Scenario: admin sets incorrect trustedRemote on canonical gateway (wrong destination address).
-        // burnAndSend sends the LZ message to the wrong address on the destination chain.
-        // The wrong address cannot process lzReceive -> endpoint stores payload, blocking the pathway.
-        //
-        // An analogous scenario occurs if the trustedRemote on the destination gateway is incorrect:
-        // the message arrives at the correct gateway, but _validateTrustedRemote reverts because
-        // srcAddress doesn't match. The endpoint stores the payload and blocks the pathway.
-        // In that case, forceResumeReceive is called on the destination gateway to unblock.
-
-        // 1. Preparation: set incorrect trusted remote on canonical gateway
-        // Deploy a contract that will revert on lzReceive (no such function)
-        address wrongAddr = address(new RevertOnReceive());
-        vm.prank(admin);
-        gateway.setTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, wrongAddr);
-
-        // Register wrong address on endpoint so send() doesn't revert
-        endpoint.setDestLzEndpoint(wrongAddr, address(endpoint2));
-
-        // Facilitator sends OHM: it burns correctly but the message goes to wrongAddr
-        uint256 amount = 1000e9;
-        ohm.mint(facilitator, amount);
-
-        vm.startPrank(facilitator);
-        ohm.transfer(address(gateway), amount);
-        (uint256 fee, ) = gateway.estimateSendFee(
-            NONCANONICAL_LZ_CHAIN_ID,
-            recipient,
-            amount,
-            bytes("")
-        );
-        gateway.burnAndSend{value: fee}(
-            NONCANONICAL_LZ_CHAIN_ID,
-            recipient,
-            amount,
-            payable(facilitator),
-            bytes("")
-        );
-        vm.stopPrank();
-
-        // OHM was burned and bridgedSupply increased, but OHM was never minted on destination
-        assertEq(gateway.bridgedSupply(), amount, "Bridged supply should have increased");
-
-        // Destination endpoint has a stored payload for wrongAddr (pathway blocked)
-        bytes memory blockedPath = abi.encodePacked(address(gateway), wrongAddr);
-        assertTrue(
-            endpoint2.hasStoredPayload(CANONICAL_LZ_CHAIN_ID, blockedPath),
-            "Endpoint should have stored payload for wrong address"
-        );
-
-        // 2. Test: admin corrects the trusted remote and bridged supply
-        vm.startPrank(admin);
-        gateway.setTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, address(gateway2));
-        vm.stopPrank();
-
-        vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(0);
-
-        assertEq(gateway.bridgedSupply(), 0, "Bridged supply should be corrected to zero");
-
-        // Note: the burned OHM must be compensated to the affected user. The gateway does not
-        // provide a direct mint mechanism: compensation requires a separate governance action
-        // (e.g. the OCG Timelock to mint OHM to the recipient in any way).
-    }
-
-    function test_forceResumeReceive_revertsIfNotBridgeAdmin() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
-        vm.prank(user);
-        gateway.forceResumeReceive(NONCANONICAL_LZ_CHAIN_ID, bytes("path"));
+    function test_nextNonce_returnsZero() external view {
+        assertEq(gateway.nextNonce(NONCANONICAL_EID, bytes32(0)), 0, "nextNonce should return 0");
     }
 }
 
 contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
-    function test_getConfig() external view {
-        // Should return something (mock returns empty bytes)
-        bytes memory config = gateway.getConfig(1, NONCANONICAL_LZ_CHAIN_ID, address(gateway), 1);
-        // Mock returns empty, just verify it doesn't revert
-        assertEq(config.length, 0, "Mock endpoint returns empty config");
+    function test_peers() external view {
+        bytes32 peer = gateway.peers(NONCANONICAL_EID);
+        bytes32 expected = bytes32(uint256(uint160(address(gateway2))));
+        assertEq(peer, expected, "Peer should match non-canonical gateway address");
     }
 
-    function test_getTrustedRemote() external view {
-        address remoteAddr = gateway.getTrustedRemote(NONCANONICAL_LZ_CHAIN_ID);
-        assertEq(
-            remoteAddr,
-            address(gateway2),
-            "Remote address should match non-canonical gateway"
-        );
-    }
-
-    function test_getTrustedRemote_revertsIfEmpty() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_NoTrustedPath.selector)
-        );
-        gateway.getTrustedRemote(42);
-    }
-
-    function test_isTrustedRemote_true() external view {
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        bool trusted = gateway.isTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, trustedPath);
-        assertTrue(trusted, "Should return true for valid trusted remote");
-    }
-
-    function test_isTrustedRemote_returnsFalseIfInvalidAddress() external view {
-        bytes memory wrongPath = _buildTrustedPath(user, address(gateway));
-        bool trusted = gateway.isTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, wrongPath);
-        assertFalse(trusted, "Should return false for invalid address");
-    }
-
-    function test_isTrustedRemote_returnsFalseIfLengthMismatch() external view {
-        // Trusted path is 40 bytes (address + address), send only 20 bytes
-        bytes memory shortPath = abi.encodePacked(address(gateway2));
-        bool trusted = gateway.isTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, shortPath);
-        assertFalse(trusted, "Should return false for length mismatch");
-    }
-
-    function test_isTrustedRemote_revertsIfUninitialized() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_TrustedRemoteUninitialized.selector
-            )
-        );
-        gateway.isTrustedRemote(42, bytes("something"));
-    }
-
-    function test_isTrustedRemote_revertsIfEmptySourcePassed() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_TrustedRemoteUninitialized.selector
-            )
-        );
-        gateway.isTrustedRemote(NONCANONICAL_LZ_CHAIN_ID, bytes(""));
-    }
-
-    function test_failedMessages() external {
-        // 1. Preparation: create a failed message via bridgedSupply underflow
-        bytes memory trustedPath = _buildTrustedPath(address(gateway2), address(gateway));
-        uint256 amount = 1000e9;
-        uint64 nonce = 1;
-        bytes memory payload = _buildBridgePayload(recipient, amount);
-
-        vm.prank(address(endpoint));
-        gateway.lzReceive(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce, payload);
-
-        // 2. Test
-        bytes32 stored = gateway.failedMessages(NONCANONICAL_LZ_CHAIN_ID, trustedPath, nonce);
-        assertEq(stored, keccak256(payload), "Failed message hash should match payload hash");
-    }
-
-    function test_failedMessages_returnsZeroByDefault() external view {
-        bytes32 hash = gateway.failedMessages(
-            NONCANONICAL_LZ_CHAIN_ID,
-            _buildTrustedPath(address(gateway2), address(gateway)),
-            42
-        );
-        assertEq(hash, bytes32(0), "Should return zero for non-existent failed message");
-    }
-
-    function test_trustedRemoteLookup() external view {
-        bytes memory path = gateway.trustedRemoteLookup(NONCANONICAL_LZ_CHAIN_ID);
-        bytes memory expected = _buildTrustedPath(address(gateway2), address(gateway));
-        assertEq(keccak256(path), keccak256(expected), "Trusted remote lookup should match");
+    function test_peers_returnsZeroForUnknown() external view {
+        assertEq(gateway.peers(42), bytes32(0), "Should return zero for unknown EID");
     }
 
     function test_LZ_ENDPOINT() external view {
@@ -1302,7 +1034,7 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
     function test_supportsInterface_ILayerZeroReceiver() external view {
         assertTrue(
             gateway.supportsInterface(type(ILayerZeroReceiver).interfaceId),
-            "Should support ILayerZeroReceiver"
+            "Should support ILayerZeroReceiver (V2)"
         );
     }
 
@@ -1334,13 +1066,21 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
 
 contract LZBridgeGatewayTests_EndToEndViaMock is LZBridgeGatewayTestBase {
     function test_canonicalToNonCanonical_fullFlow() external {
-        // 1. Preparation
         uint256 amount = 5000e9;
         uint256 facilitatorBalanceBefore = ohm.balanceOf(facilitator);
 
-        // 2. Test: send OHM from canonical to non-canonical
-        // The LZEndpointMock short-circuits send() to lzReceive() on the destination
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, amount);
+        // Send OHM from canonical (burns OHM, increases bridgedSupply)
+        _doBurnAndSend(gateway, NONCANONICAL_EID, recipient, amount);
+
+        // Simulate receiving on non-canonical (mints OHM to recipient)
+        _simulateLzReceive(
+            gateway2,
+            address(endpoint2),
+            CANONICAL_EID,
+            address(gateway),
+            recipient,
+            amount
+        );
 
         // Verify: facilitator lost OHM
         assertEq(
@@ -1349,7 +1089,7 @@ contract LZBridgeGatewayTests_EndToEndViaMock is LZBridgeGatewayTestBase {
             "Facilitator should have less OHM"
         );
 
-        // Verify: recipient received OHM on non-canonical (minted by gateway2)
+        // Verify: recipient received OHM on non-canonical
         assertEq(
             ohm.balanceOf(recipient),
             amount,
@@ -1361,29 +1101,47 @@ contract LZBridgeGatewayTests_EndToEndViaMock is LZBridgeGatewayTestBase {
     }
 
     function test_nonCanonicalToCanonical_fullFlow() external {
-        // 1. Preparation: first bridge OHM to non-canonical so there's bridgedSupply
+        // 1. Bridge OHM to non-canonical
         uint256 amount = 5000e9;
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, amount);
+        _doBurnAndSend(gateway, NONCANONICAL_EID, recipient, amount);
+        _simulateLzReceive(
+            gateway2,
+            address(endpoint2),
+            CANONICAL_EID,
+            address(gateway),
+            recipient,
+            amount
+        );
+
         assertEq(gateway.bridgedSupply(), amount, "Bridged supply after outbound");
         assertEq(ohm.balanceOf(recipient), amount, "Recipient should have OHM on non-canonical");
 
-        // 2. Test: send OHM back from non-canonical to canonical
-        // Recipient becomes the sender on non-canonical
+        // 2. Send OHM back from non-canonical to canonical
         vm.prank(admin);
         gateway2.setFacilitator(recipient);
 
         vm.startPrank(recipient);
         ohm.transfer(address(gateway2), amount);
-        (uint256 fee, ) = gateway2.estimateSendFee(CANONICAL_LZ_CHAIN_ID, user, amount, bytes(""));
+        (uint256 fee, ) = gateway2.estimateSendFee(CANONICAL_EID, user, amount, bytes(""));
         vm.deal(recipient, fee);
         gateway2.burnAndSend{value: fee}(
-            CANONICAL_LZ_CHAIN_ID,
+            CANONICAL_EID,
             user,
             amount,
             payable(recipient),
             bytes("")
         );
         vm.stopPrank();
+
+        // Simulate receiving on canonical (mints OHM to user, decreases bridgedSupply)
+        _simulateLzReceive(
+            gateway,
+            address(endpoint),
+            NONCANONICAL_EID,
+            address(gateway2),
+            user,
+            amount
+        );
 
         // Verify: user received OHM on canonical
         assertEq(ohm.balanceOf(user), amount, "User should receive OHM on canonical");
@@ -1395,7 +1153,15 @@ contract LZBridgeGatewayTests_EndToEndViaMock is LZBridgeGatewayTestBase {
     function test_roundTrip_bridgedSupplyReturnsToZero() external {
         // 1. Send from canonical to non-canonical
         uint256 amount = 3000e9;
-        _doBurnAndSend(gateway, NONCANONICAL_LZ_CHAIN_ID, recipient, amount);
+        _doBurnAndSend(gateway, NONCANONICAL_EID, recipient, amount);
+        _simulateLzReceive(
+            gateway2,
+            address(endpoint2),
+            CANONICAL_EID,
+            address(gateway),
+            recipient,
+            amount
+        );
         assertEq(gateway.bridgedSupply(), amount, "Supply after send");
 
         // 2. Send back from non-canonical to canonical
@@ -1404,16 +1170,25 @@ contract LZBridgeGatewayTests_EndToEndViaMock is LZBridgeGatewayTestBase {
 
         vm.startPrank(recipient);
         ohm.transfer(address(gateway2), amount);
-        (uint256 fee, ) = gateway2.estimateSendFee(CANONICAL_LZ_CHAIN_ID, user, amount, bytes(""));
+        (uint256 fee, ) = gateway2.estimateSendFee(CANONICAL_EID, user, amount, bytes(""));
         vm.deal(recipient, fee);
         gateway2.burnAndSend{value: fee}(
-            CANONICAL_LZ_CHAIN_ID,
+            CANONICAL_EID,
             user,
             amount,
             payable(recipient),
             bytes("")
         );
         vm.stopPrank();
+
+        _simulateLzReceive(
+            gateway,
+            address(endpoint),
+            NONCANONICAL_EID,
+            address(gateway2),
+            user,
+            amount
+        );
 
         // Verify round-trip
         assertEq(

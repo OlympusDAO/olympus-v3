@@ -2,15 +2,12 @@
 pragma solidity >=0.8.30;
 
 // Interfaces
-import {ILayerZeroUserApplicationConfig} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroUserApplicationConfig.sol";
-import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroEndpoint.sol";
-import {ILayerZeroReceiver} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroReceiver.sol";
+import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
+import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroReceiver.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-
-// Libraries
-import {BytesLib} from "@layer-zero-endpoint-v1-1.1.0/libraries/BytesLib.sol";
 
 // Contracts
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -19,20 +16,17 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title LZBridgeGateway
-/// @notice Infrastructure policy handling LayerZero endpoint communication for cross-chain
+/// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
 ///         OHM transfers.
-///         Performs OHM mint/burn via MINTR, manages trusted remotes, and enforces a bridged
+///         Performs OHM mint/burn via MINTR, manages peers, and enforces a bridged
 ///         supply cap on canonical (mainnet) chains.
 contract LZBridgeGateway is
     Policy,
     PolicyEnabler,
     IVersioned,
     ILayerZeroReceiver,
-    ILayerZeroUserApplicationConfig,
     ILZBridgeGateway
 {
-    using BytesLib for bytes;
-
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
@@ -41,14 +35,8 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
 
-    /// @notice Placeholder for the ZRO token payment address (unused).
-    address private constant _ZRO_PAYMENT_ADDRESS = address(0);
-
     /// @notice Expected byte length of an ABI-encoded (address, uint256) bridge payload.
     uint256 private constant _BRIDGE_OHM_DATA_LENGTH = 64;
-
-    /// @notice Byte length of an EVM address, used to extract the remote address from a trusted path.
-    uint256 private constant _EVM_ADDRESS_LENGTH = 20;
 
     // ========= IMMUTABLES ========= //
 
@@ -70,22 +58,13 @@ contract LZBridgeGateway is
     address public override facilitator;
 
     /// @inheritdoc ILZBridgeGateway
-    address public override precrime; // Currently unused
-
-    /// @inheritdoc ILZBridgeGateway
     uint256 public override bridgedSupply;
 
     /// @inheritdoc ILZBridgeGateway
     uint256 public override bridgedSupplyCap;
 
     /// @inheritdoc ILZBridgeGateway
-    /// @dev path = abi.encodePacked(remoteAddress, localAddress).
-    mapping(uint16 chainId_ => bytes path) public override trustedRemoteLookup;
-
-    /// @inheritdoc ILZBridgeGateway
-    mapping(uint16 chainId_ => mapping(bytes srcAddress_ => mapping(uint64 nonce_ => bytes32 payloadHash)))
-        public
-        override failedMessages; // Used for retry
+    mapping(uint32 eid_ => bytes32 peer) public override peers;
 
     // ========= INITIALIZATION & POLICY SETUP ========= //
 
@@ -166,17 +145,17 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     function burnAndSend(
-        uint16 dstChainId_,
+        uint32 dstEid_,
         address to_,
         uint256 amount_,
         address payable refundAddress_,
-        bytes calldata adapterParams_
+        bytes calldata options_
     ) external payable override onlyEnabled onlyFacilitator {
         // Warning. amount_ == 0 should be ensured by the facilitator
         _requireNonzeroAddress(to_, "to");
 
-        bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
-        if (trustedRemote.length == 0) revert LZBridgeGateway_DestinationNotTrusted();
+        bytes32 peer = peers[dstEid_];
+        if (peer == bytes32(0)) revert LZBridgeGateway_DestinationNotTrusted();
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
@@ -192,16 +171,12 @@ contract LZBridgeGateway is
         IERC20(ohm).approve(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
 
-        // Encode and send the bridge message
+        // Encode and send the bridge message via V2 endpoint
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
         // solhint-disable-next-line
-        ILayerZeroEndpoint(LZ_ENDPOINT).send{value: msg.value}(
-            dstChainId_,
-            trustedRemote,
-            payload,
-            refundAddress_,
-            _ZRO_PAYMENT_ADDRESS,
-            adapterParams_
+        ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
+            MessagingParams(dstEid_, peer, payload, options_, false),
+            refundAddress_
         );
     }
 
@@ -209,73 +184,42 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     function estimateSendFee(
-        uint16 dstChainId_,
+        uint32 dstEid_,
         address to_,
         uint256 amount_,
-        bytes calldata adapterParams_
-    ) external view override returns (uint256 nativeFee, uint256 zroFee) {
+        bytes calldata options_
+    ) external view override returns (uint256 nativeFee, uint256 lzTokenFee) {
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
-        return
-            ILayerZeroEndpoint(LZ_ENDPOINT).estimateFees(
-                dstChainId_,
-                address(this),
-                payload,
-                false,
-                adapterParams_
-            );
+        MessagingFee memory fee = ILayerZeroEndpointV2(LZ_ENDPOINT).quote(
+            MessagingParams(dstEid_, peers[dstEid_], payload, options_, false),
+            address(this)
+        );
+        return (fee.nativeFee, fee.lzTokenFee);
     }
 
-    // ========= LZ RECEIVE FUNCTIONS ========= //
+    // ========= LZ V2 RECEIVE FUNCTIONS ========= //
 
     /// @inheritdoc ILayerZeroReceiver
     function lzReceive(
-        uint16 srcChainId_,
-        bytes calldata srcAddress_,
-        uint64 nonce_,
-        bytes calldata payload_
-    ) public override onlyEnabled {
-        _requireCaller(LZ_ENDPOINT); // lzReceive must be called by the endpoint for security
-        _validateTrustedRemote(srcChainId_, srcAddress_);
-
-        try this.receiveMessage(srcChainId_, srcAddress_, nonce_, payload_) {
-            // Success
-        } catch (bytes memory reason) {
-            failedMessages[srcChainId_][srcAddress_][nonce_] = keccak256(payload_);
-            emit MessageFailed(srcChainId_, srcAddress_, nonce_, payload_, reason);
-        }
+        Origin calldata origin_,
+        bytes32,
+        bytes calldata message_,
+        address,
+        bytes calldata
+    ) external payable override onlyEnabled {
+        _requireCaller(LZ_ENDPOINT);
+        if (peers[origin_.srcEid] != origin_.sender) revert LZBridgeGateway_InvalidMessageSource();
+        _decodeAndRoute(origin_.srcEid, message_);
     }
 
-    /// @inheritdoc ILZBridgeGateway
-    function receiveMessage(
-        uint16 srcChainId_,
-        bytes memory,
-        uint64,
-        bytes memory payload_
-    ) public override {
-        _requireCaller(address(this)); // Restrict access to low-level call from lzReceive
-        _decodeAndRoute(srcChainId_, payload_);
+    /// @inheritdoc ILayerZeroReceiver
+    function allowInitializePath(Origin calldata origin_) external view override returns (bool) {
+        return peers[origin_.srcEid] == origin_.sender;
     }
 
-    /// @inheritdoc ILZBridgeGateway
-    function retryMessage(
-        uint16 srcChainId_,
-        bytes calldata srcAddress_,
-        uint64 nonce_,
-        bytes calldata payload_
-    ) public override onlyEnabled {
-        // Re-validate trusted remote
-        _validateTrustedRemote(srcChainId_, srcAddress_);
-
-        // Assert there is a message to retry
-        bytes32 payloadHash = failedMessages[srcChainId_][srcAddress_][nonce_];
-        if (payloadHash == bytes32(0)) revert LZBridgeGateway_NoStoredMessage();
-        if (keccak256(payload_) != payloadHash) revert LZBridgeGateway_InvalidPayload();
-
-        // Clear the stored message
-        delete failedMessages[srcChainId_][srcAddress_][nonce_];
-
-        _decodeAndRoute(srcChainId_, payload_);
-        emit RetryMessageSuccess(srcChainId_, srcAddress_, nonce_, payloadHash);
+    /// @inheritdoc ILayerZeroReceiver
+    function nextNonce(uint32, bytes32) external pure override returns (uint64) {
+        return 0; // Unordered delivery
     }
 
     // ========= ADMIN FUNCTIONS ========= //
@@ -293,21 +237,114 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setTrustedRemote(
-        uint16 remoteChainId_,
-        address remoteAddress_
-    ) external override onlyAdminRole {
-        bytes memory path = remoteAddress_ != address(0)
-            ? abi.encodePacked(remoteAddress_, address(this))
-            : bytes("");
-        trustedRemoteLookup[remoteChainId_] = path;
-        emit TrustedRemoteSet(remoteChainId_, path);
+    function setPeer(uint32 eid_, address peerAddress_) external override onlyAdminRole {
+        bytes32 peer = peerAddress_ != address(0)
+            ? bytes32(uint256(uint160(peerAddress_)))
+            : bytes32(0);
+        peers[eid_] = peer;
+        emit PeerSet(eid_, peer);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setPrecrime(address precrime_) external override onlyAdminRole {
-        precrime = precrime_;
-        emit PrecrimeSet(precrime_);
+    function lzClear(
+        Origin calldata origin_,
+        bytes32 guid_,
+        bytes calldata message_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
+        emit MessageCleared(origin_.srcEid, origin_.sender, origin_.nonce);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function lzRetryReceive(
+        Origin calldata origin_,
+        bytes32 guid_,
+        bytes calldata message_,
+        bytes calldata extraData_
+    ) external payable override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).lzReceive{value: msg.value}(
+            origin_,
+            address(this),
+            guid_,
+            message_,
+            extraData_
+        );
+        emit MessageRetried(origin_.srcEid, origin_.sender, origin_.nonce);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function lzSkip(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
+        emit NonceSkipped(srcEid_, sender_, nonce_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function lzNilify(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_,
+        bytes32 payloadHash_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
+            address(this),
+            srcEid_,
+            sender_,
+            nonce_,
+            payloadHash_
+        );
+        emit MessageNilified(srcEid_, sender_, nonce_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function lzBurn(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_,
+        bytes32 payloadHash_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
+            address(this),
+            srcEid_,
+            sender_,
+            nonce_,
+            payloadHash_
+        );
+        emit MessageBurned(srcEid_, sender_, nonce_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function setSendLibrary(
+        uint32 eid_,
+        address lib_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function setReceiveLibrary(
+        uint32 eid_,
+        address lib_,
+        uint256 gracePeriod_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibrary(
+            address(this),
+            eid_,
+            lib_,
+            gracePeriod_
+        );
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function setLZConfig(
+        address lib_,
+        bytes calldata params_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        SetConfigParam[] memory configParams = abi.decode(params_, (SetConfigParam[]));
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, configParams);
     }
 
     /// @inheritdoc ILZBridgeGateway
@@ -317,85 +354,6 @@ contract LZBridgeGateway is
         _requireCanonical();
         bridgedSupply = bridgedSupply_;
         emit BridgedSupplySet(bridgedSupply_);
-    }
-
-    /// @inheritdoc ILayerZeroUserApplicationConfig
-    function setConfig(
-        uint16 version_,
-        uint16 chainId_,
-        uint256 configType_,
-        bytes calldata config_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpoint(LZ_ENDPOINT).setConfig(version_, chainId_, configType_, config_);
-    }
-
-    /// @inheritdoc ILayerZeroUserApplicationConfig
-    function setSendVersion(uint16 version_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpoint(LZ_ENDPOINT).setSendVersion(version_);
-    }
-
-    /// @inheritdoc ILayerZeroUserApplicationConfig
-    function setReceiveVersion(uint16 version_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpoint(LZ_ENDPOINT).setReceiveVersion(version_);
-    }
-
-    /// @inheritdoc ILayerZeroUserApplicationConfig
-    /// @dev Clears the blocked payload at the endpoint level without executing it.
-    ///
-    ///      On Ethereum, `bridgedSupply` will NOT be decremented for the dropped message,
-    ///      leaving it over-counted relative to actual supply.
-    ///
-    ///      Recovery procedure:
-    ///      1. Retrieve the blocked payload from the `PayloadStored` event on the LZ endpoint or via LayerZero Scan.
-    ///      2. Decode `(uint8 msgType, bytes data)` from the payload, then
-    ///         decode `(address to, uint256 amount)` from `data`.
-    ///      3. Call `forceResumeReceive` to unblock the channel.
-    ///      4. On Ethereum, call `setBridgedSupply(bridgedSupply - amount)` to correct the supply accounting.
-    ///      5. Compensate the user for the lost OHM via governance in any way.
-    function forceResumeReceive(
-        uint16 srcChainId_,
-        bytes calldata srcAddress_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpoint(LZ_ENDPOINT).forceResumeReceive(srcChainId_, srcAddress_);
-    }
-
-    // ========= OTHER VIEW FUNCTIONS ========= //
-
-    /// @inheritdoc ILZBridgeGateway
-    function getConfig(
-        uint16 version_,
-        uint16 chainId_,
-        address,
-        uint256 configType_
-    ) external view override returns (bytes memory) {
-        return
-            ILayerZeroEndpoint(LZ_ENDPOINT).getConfig(
-                version_,
-                chainId_,
-                address(this),
-                configType_
-            );
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function getTrustedRemote(uint16 remoteChainId_) external view override returns (address) {
-        bytes memory path = trustedRemoteLookup[remoteChainId_];
-        if (path.length == 0) revert LZBridgeGateway_NoTrustedPath();
-
-        // Extract the remote address (first 20 bytes of the path)
-        return address(bytes20(path.slice(0, _EVM_ADDRESS_LENGTH)));
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function isTrustedRemote(
-        uint16 srcChainId_,
-        bytes calldata srcAddress_
-    ) external view override returns (bool) {
-        bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
-        if (srcAddress_.length == 0 || trustedSource.length == 0)
-            revert LZBridgeGateway_TrustedRemoteUninitialized();
-        return (srcAddress_.length == trustedSource.length &&
-            keccak256(srcAddress_) == keccak256(trustedSource));
     }
 
     // ========= ERC165 ========= //
@@ -413,11 +371,11 @@ contract LZBridgeGateway is
     // ========= PRIVATE FUNCTIONS ========= //
 
     /// @notice Decodes the message type from the payload and routes to the appropriate handler.
-    function _decodeAndRoute(uint16 srcChainId_, bytes memory payload_) private {
+    function _decodeAndRoute(uint32 srcEid_, bytes calldata payload_) private {
         (uint8 msgType, bytes memory data) = abi.decode(payload_, (uint8, bytes));
 
         if (msgType == MSG_BRIDGE_OHM) {
-            _receiveBridgeOhm(srcChainId_, data);
+            _receiveBridgeOhm(srcEid_, data);
         } else {
             revert LZBridgeGateway_InvalidMessageType(msgType);
         }
@@ -425,7 +383,7 @@ contract LZBridgeGateway is
 
     /// @notice Processes a received OHM bridge message.
     /// @dev On canonical chains, decrements bridgedSupply. Mints OHM to the recipient.
-    function _receiveBridgeOhm(uint16 srcChainId_, bytes memory data_) private {
+    function _receiveBridgeOhm(uint32 srcEid_, bytes memory data_) private {
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
 
@@ -442,23 +400,13 @@ contract LZBridgeGateway is
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
 
-        emit Received(to, amount, srcChainId_);
+        emit Received(to, amount, srcEid_);
     }
 
     function _setFacilitator(address facilitator_) private {
         _requireNonzeroAddress(facilitator_, "facilitator");
         facilitator = facilitator_;
         emit FacilitatorSet(facilitator_);
-    }
-
-    /// @notice Validates that the source address matches the trusted remote for the given chain.
-    function _validateTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_) private view {
-        bytes memory trustedRemote = trustedRemoteLookup[srcChainId_];
-        if (
-            trustedRemote.length == 0 ||
-            srcAddress_.length != trustedRemote.length ||
-            keccak256(srcAddress_) != keccak256(trustedRemote)
-        ) revert LZBridgeGateway_InvalidMessageSource();
     }
 
     function _requireCaller(address expected_) private view {

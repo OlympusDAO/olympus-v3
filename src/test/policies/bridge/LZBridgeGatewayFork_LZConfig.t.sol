@@ -1,20 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
+// TODO: Phase 7 — Rewrite fork tests for LZ V2 EndpointV2 + ULN302 configuration.
+//       The V1 test used ILayerZeroEndpointState, setSendVersion/setReceiveVersion, getConfig(version, chainId, ...),
+//       and trusted remote paths. These must be replaced with V2 equivalents:
+//       - setSendLibrary / setReceiveLibrary with ULN302 addresses
+//       - endpoint.getConfig(oapp, lib, eid, configType) for ULN and Executor config
+//       - peers(eid) for peer validation
+//       - EIDs (uint32) instead of chain IDs (uint16)
+
 import {Test, Vm} from "forge-std/Test.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
-import {LZConfigLib, ILayerZeroEndpointState, ILayerZeroDVNState} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib, ILayerZeroDVNState} from "src/libraries/LZConfigLib.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
-import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroEndpoint.sol";
+import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
 
-/// @notice Fork-based tests for LZ ULN301 configuration on Ethereum, Arbitrum, Optimism, Base.
-/// @dev Validates the security-hardened configuration procedure using production DVN/Executor addresses.
+/// @notice Fork-based tests for LZ V2 ULN302 configuration on Ethereum, Arbitrum, Optimism, Base.
+/// @dev TODO: Rewrite for V2 — currently stubbed to allow compilation. See Phase 7.
 contract LZBridgeGatewayForkTests_LZConfig is Test {
     // =========== TEST CONSTANTS =========== //
 

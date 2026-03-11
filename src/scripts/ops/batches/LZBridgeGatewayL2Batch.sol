@@ -114,8 +114,8 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
         // 3.1. Configure LZ versions and per-remote config
         _configureLZ(gateway);
 
-        // 3.2. Set trusted remotes
-        _setTrustedRemotes(gateway);
+        // 3.2. Set peers
+        _setPeers(gateway);
 
         // 3.3. Enable LZBridgeGateway
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));

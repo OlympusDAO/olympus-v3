@@ -7,10 +7,11 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLibManager.sol";
 
 /// @title LZBridgeBatchScript
 /// @notice Abstract base for LZ bridge batch scripts (Ethereum).
-///         Contains shared constants, structs, and helpers for LZ configuration.
+///         Contains shared constants, structs, and helpers for LZ V2 configuration.
 abstract contract LZBridgeBatchScript is BatchScriptV2 {
     // =========== ERRORS =========== //
 
@@ -24,95 +25,118 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
     // TODO: Set before execution
     uint256 internal constant INITIAL_BRIDGED_SUPPLY = 0;
 
-    // =========== LZ CONFIGURATION HELPERS =========== //
+    // =========== LZ V2 CONFIGURATION HELPERS =========== //
 
-    /// @notice Configures LZ versions and per-remote ULN/Executor config for the current chain.
+    /// @notice Configures LZ V2 libraries and per-remote ULN/Executor config for the current chain.
     function _configureLZ(LZBridgeGateway gateway_) internal {
-        (uint16 sendVer, uint16 recvVer) = LZConfigLib.getUln301Versions(
-            _envAddressNotZero("external.layerzero.endpoint")
-        );
+        address sendLib = _getSendLib();
+        address recvLib = _getReceiveLib();
         address gatewayAddr = address(gateway_);
 
-        console2.log("\nConfiguring LZ versions - send:", sendVer, "recv:", recvVer);
+        console2.log("\nConfiguring LZ V2 libraries");
+        console2.log("  Send library:", sendLib);
+        console2.log("  Receive library:", recvLib);
 
-        // Pin send and receive versions
-        addToBatch(
-            gatewayAddr,
-            abi.encodeWithSelector(LZBridgeGateway.setSendVersion.selector, sendVer)
-        );
-        addToBatch(
-            gatewayAddr,
-            abi.encodeWithSelector(LZBridgeGateway.setReceiveVersion.selector, recvVer)
-        );
+        // Set send and receive libraries for each remote
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = _getRemoteEids();
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            addToBatch(
+                gatewayAddr,
+                abi.encodeWithSelector(
+                    LZBridgeGateway.setSendLibrary.selector,
+                    remoteEids[i],
+                    sendLib
+                )
+            );
+            addToBatch(
+                gatewayAddr,
+                abi.encodeWithSelector(
+                    LZBridgeGateway.setReceiveLibrary.selector,
+                    remoteEids[i],
+                    recvLib,
+                    0 // no grace period
+                )
+            );
+        }
 
-        // Configure per-remote chain
-        uint16[_REMOTE_CHAIN_COUNT] memory remoteChainIds = _getRemoteChainIds();
+        // Configure per-remote chain ULN and Executor config
         uint64 outConf = _outboundConfirmations();
         address[] memory dvns = _getDVNs();
 
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            uint16 remoteId = remoteChainIds[i];
-            console2.log("  Configuring remote chain:", remoteId);
+        // Build send config params (ULN + Executor) for all remotes
+        {
+            SetConfigParam[] memory sendParams = new SetConfigParam[](_REMOTE_CHAIN_COUNT * 2);
+            for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+                uint32 remoteEid = remoteEids[i];
+                console2.log("  Configuring remote EID:", remoteEid);
 
-            // Send ULN config (outbound confirmations from this chain)
+                // Send ULN config (outbound confirmations from this chain)
+                sendParams[i * 2] = SetConfigParam({
+                    eid: remoteEid,
+                    configType: LZConfigLib.CONFIG_TYPE_ULN,
+                    config: LZConfigLib.encodeUlnConfig(outConf, dvns)
+                });
+
+                // Executor config (send side only)
+                sendParams[i * 2 + 1] = SetConfigParam({
+                    eid: remoteEid,
+                    configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
+                    config: LZConfigLib.encodeExecutorConfig()
+                });
+            }
             addToBatch(
                 gatewayAddr,
                 abi.encodeWithSelector(
-                    LZBridgeGateway.setConfig.selector,
-                    sendVer,
-                    remoteId,
-                    LZConfigLib.CONFIG_TYPE_ULN,
-                    LZConfigLib.encodeUlnConfig(outConf, dvns)
+                    LZBridgeGateway.setLZConfig.selector,
+                    sendLib,
+                    abi.encode(sendParams)
                 )
             );
+        }
 
-            // Executor config (send side only)
+        // Build receive config params (ULN only) for all remotes
+        {
+            SetConfigParam[] memory recvParams = new SetConfigParam[](_REMOTE_CHAIN_COUNT);
+            for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+                uint32 remoteEid = remoteEids[i];
+                uint64 remoteOutConf = _outboundConfirmationsForEid(remoteEid);
+                recvParams[i] = SetConfigParam({
+                    eid: remoteEid,
+                    configType: LZConfigLib.CONFIG_TYPE_ULN,
+                    config: LZConfigLib.encodeUlnConfig(remoteOutConf, dvns)
+                });
+            }
             addToBatch(
                 gatewayAddr,
                 abi.encodeWithSelector(
-                    LZBridgeGateway.setConfig.selector,
-                    sendVer,
-                    remoteId,
-                    LZConfigLib.CONFIG_TYPE_EXECUTOR,
-                    LZConfigLib.encodeExecutorConfig()
-                )
-            );
-
-            // Receive ULN config (inbound confirmations = outbound from remote chain)
-            uint64 remoteOutConf = _outboundConfirmationsForChain(remoteId);
-            addToBatch(
-                gatewayAddr,
-                abi.encodeWithSelector(
-                    LZBridgeGateway.setConfig.selector,
-                    recvVer,
-                    remoteId,
-                    LZConfigLib.CONFIG_TYPE_ULN,
-                    LZConfigLib.encodeUlnConfig(remoteOutConf, dvns)
+                    LZBridgeGateway.setLZConfig.selector,
+                    recvLib,
+                    abi.encode(recvParams)
                 )
             );
         }
     }
 
-    /// @notice Sets trusted remotes for all remote chains from env.json addresses.
-    function _setTrustedRemotes(LZBridgeGateway gateway_) internal {
+    /// @notice Sets peers for all remote chains from env.json addresses.
+    function _setPeers(LZBridgeGateway gateway_) internal {
         address gatewayAddr = address(gateway_);
         string[_REMOTE_CHAIN_COUNT] memory remoteChains = _getRemoteChainNames();
-        uint16[_REMOTE_CHAIN_COUNT] memory remoteChainIds = _getRemoteChainIds();
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = _getRemoteEids();
 
-        console2.log("\nSetting trusted remotes");
+        console2.log("\nSetting peers");
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             address remoteGateway = _envAddressNotZero(
                 remoteChains[i],
                 "olympus.policies.LZBridgeGateway"
             );
-            console2.log("  Chain", remoteChainIds[i], "->", remoteGateway);
+            console2.log("  EID", remoteEids[i], "->", remoteGateway);
 
             addToBatch(
                 gatewayAddr,
                 abi.encodeWithSelector(
-                    LZBridgeGateway.setTrustedRemote.selector,
-                    remoteChainIds[i],
+                    LZBridgeGateway.setPeer.selector,
+                    remoteEids[i],
                     remoteGateway
                 )
             );
@@ -130,16 +154,34 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 
-    /// @notice Returns the 3 remote LZ chain IDs for the current chain.
-    function _getRemoteChainIds() internal view returns (uint16[_REMOTE_CHAIN_COUNT] memory ids) {
+    /// @notice Returns the send library address for the current chain.
+    function _getSendLib() internal view returns (address) {
+        if (_isChain("mainnet")) return LZConfigLib.ETH_SEND_ULN_302;
+        if (_isChain("arbitrum")) return LZConfigLib.ARB_SEND_ULN_302;
+        if (_isChain("optimism")) return LZConfigLib.OPT_SEND_ULN_302;
+        if (_isChain("base")) return LZConfigLib.BASE_SEND_ULN_302;
+        revert LZBridgeBatchScript_UnsupportedChain();
+    }
+
+    /// @notice Returns the receive library address for the current chain.
+    function _getReceiveLib() internal view returns (address) {
+        if (_isChain("mainnet")) return LZConfigLib.ETH_RECEIVE_ULN_302;
+        if (_isChain("arbitrum")) return LZConfigLib.ARB_RECEIVE_ULN_302;
+        if (_isChain("optimism")) return LZConfigLib.OPT_RECEIVE_ULN_302;
+        if (_isChain("base")) return LZConfigLib.BASE_RECEIVE_ULN_302;
+        revert LZBridgeBatchScript_UnsupportedChain();
+    }
+
+    /// @notice Returns the 3 remote LZ V2 endpoint IDs for the current chain.
+    function _getRemoteEids() internal view returns (uint32[_REMOTE_CHAIN_COUNT] memory ids) {
         if (_isChain("mainnet"))
-            return [LZConfigLib.ARB_CHAIN_ID, LZConfigLib.OPT_CHAIN_ID, LZConfigLib.BASE_CHAIN_ID];
+            return [LZConfigLib.ARB_EID, LZConfigLib.OPT_EID, LZConfigLib.BASE_EID];
         if (_isChain("arbitrum"))
-            return [LZConfigLib.ETH_CHAIN_ID, LZConfigLib.OPT_CHAIN_ID, LZConfigLib.BASE_CHAIN_ID];
+            return [LZConfigLib.ETH_EID, LZConfigLib.OPT_EID, LZConfigLib.BASE_EID];
         if (_isChain("optimism"))
-            return [LZConfigLib.ETH_CHAIN_ID, LZConfigLib.ARB_CHAIN_ID, LZConfigLib.BASE_CHAIN_ID];
+            return [LZConfigLib.ETH_EID, LZConfigLib.ARB_EID, LZConfigLib.BASE_EID];
         if (_isChain("base"))
-            return [LZConfigLib.ETH_CHAIN_ID, LZConfigLib.ARB_CHAIN_ID, LZConfigLib.OPT_CHAIN_ID];
+            return [LZConfigLib.ETH_EID, LZConfigLib.ARB_EID, LZConfigLib.OPT_EID];
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 
@@ -161,12 +203,12 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 
-    /// @notice Returns the outbound confirmation count for a given LZ chain ID.
-    function _outboundConfirmationsForChain(uint16 chainId_) internal pure returns (uint64) {
-        if (chainId_ == LZConfigLib.ETH_CHAIN_ID) return LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS;
-        if (chainId_ == LZConfigLib.ARB_CHAIN_ID) return LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS;
-        if (chainId_ == LZConfigLib.OPT_CHAIN_ID) return LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS;
-        if (chainId_ == LZConfigLib.BASE_CHAIN_ID) return LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS;
+    /// @notice Returns the outbound confirmation count for a given LZ V2 endpoint ID.
+    function _outboundConfirmationsForEid(uint32 eid_) internal pure returns (uint64) {
+        if (eid_ == LZConfigLib.ETH_EID) return LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == LZConfigLib.ARB_EID) return LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == LZConfigLib.OPT_EID) return LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == LZConfigLib.BASE_EID) return LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS;
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 

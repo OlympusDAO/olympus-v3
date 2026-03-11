@@ -1,39 +1,42 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
-interface ILayerZeroEndpointState {
-    function latestVersion() external view returns (uint16);
-
-    function uaConfigLookup(
-        address ua
-    )
-        external
-        view
-        returns (
-            uint16 sendVersion,
-            uint16 receiveVersion,
-            address receiveLibrary,
-            address sendLibrary
-        );
-}
-
 interface ILayerZeroDVNState {
     function vid() external view returns (uint32);
 }
 
 /// @title LZConfigLib
-/// @notice Shared LayerZero V1 ULN301 constants and struct mirrors used by the
+/// @notice Shared LayerZero V2 EndpointV2 constants and struct mirrors used by the
 ///         LZ Bridge Security Upgrade proposal, LZ Bridge MS batches and its tests.
 library LZConfigLib {
-    // ========== LZ ENDPOINTS ========== //
+    // ========== LZ V2 ENDPOINTS ========== //
 
-    // Source: src/scripts/env.json
+    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
 
-    // LZ V1 Endpoints:
-    address internal constant LZ_ENDPOINT = 0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675;
-    address internal constant ARB_LZ_ENDPOINT = 0x3c2269811836af69497E5F486A85D7316753cf62;
-    address internal constant OPT_LZ_ENDPOINT = 0x3c2269811836af69497E5F486A85D7316753cf62;
-    address internal constant BASE_LZ_ENDPOINT = 0xb6319cC6c8c27A8F5dAF0dD3DF91EA35C4720dd7;
+    address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+    address internal constant ARB_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+    address internal constant OPT_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+    address internal constant BASE_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+
+    // ========== MESSAGE LIBRARIES (SendUln302 / ReceiveUln302) ========== //
+
+    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
+
+    // Ethereum
+    address internal constant ETH_SEND_ULN_302 = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
+    address internal constant ETH_RECEIVE_ULN_302 = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
+
+    // Arbitrum
+    address internal constant ARB_SEND_ULN_302 = 0x975bcD720be66659e3EB3C0e4F1866a3020E493A;
+    address internal constant ARB_RECEIVE_ULN_302 = 0x7B9E184e07a6EE1aC23eAe0fe8D6Be2f663f05e6;
+
+    // Optimism
+    address internal constant OPT_SEND_ULN_302 = 0x1322871e4ab09Bc7f5717189434f97bBD9546e95;
+    address internal constant OPT_RECEIVE_ULN_302 = 0x3C4962fF6258DCfCAFd23A814237571571899985;
+
+    // Base
+    address internal constant BASE_SEND_ULN_302 = 0xB5320B0B3a13cC860893E2Bd79FCd7e13484Dda2;
+    address internal constant BASE_RECEIVE_ULN_302 = 0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf;
 
     // ========== DVNs ========== //
 
@@ -55,15 +58,12 @@ library LZConfigLib {
     // LZ Executor (same EOA on all EVM chains)
     address internal constant LZ_EXECUTOR = 0xe93685f3bBA03016F02bD1828BaDD6195988D950;
 
-    // ========== ULN301 CONFIG TYPES ========== //
+    // ========== ULN302 CONFIG TYPES ========== //
 
     // Source: https://docs.layerzero.network/v2/developers/evm/configuration/dvn-executor-config
-    // Also, LayerZero-v2 repo
-    //   SendUln301.sol: https://github.com/LayerZero-Labs/LayerZero-v2/blob/592625b9e5967643853476445ffe0e777360b906/packages/layerzero-v2/evm/messagelib/contracts/uln/uln301/SendUln301.sol
-    //   ReceiveUln301.sol: https://github.com/LayerZero-Labs/LayerZero-v2/blob/592625b9e5967643853476445ffe0e777360b906/packages/layerzero-v2/evm/messagelib/contracts/uln/uln301/ReceiveUln301.sol
 
-    uint256 internal constant CONFIG_TYPE_EXECUTOR = 1;
-    uint256 internal constant CONFIG_TYPE_ULN = 2;
+    uint32 internal constant CONFIG_TYPE_EXECUTOR = 1;
+    uint32 internal constant CONFIG_TYPE_ULN = 2;
 
     // ========== BRIDGE CONSTANTS ========== //
 
@@ -88,19 +88,14 @@ library LZConfigLib {
     uint64 internal constant OPT_OUTBOUND_CONFIRMATIONS = 20;
     uint64 internal constant BASE_OUTBOUND_CONFIRMATIONS = 10;
 
-    // ========== CHAIN LZ IDS ========== //
+    // ========== CHAIN LZ V2 ENDPOINT IDs (EIDs) ========== //
 
-    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts (Endpoint ID)
+    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
 
-    uint16 internal constant ETH_CHAIN_ID = 101;
-    uint16 internal constant ARB_CHAIN_ID = 110;
-    uint16 internal constant OPT_CHAIN_ID = 111;
-    uint16 internal constant BASE_CHAIN_ID = 184;
-
-    // ========== OTHER CONSTANTS ========== //
-
-    // LZ V1 trusted remote path length between EVM chains: abi.encodePacked(remoteAddress, localAddress)
-    uint256 internal constant TRUSTED_REMOTE_PATH_LENGTH = 40;
+    uint32 internal constant ETH_EID = 30101;
+    uint32 internal constant ARB_EID = 30110;
+    uint32 internal constant OPT_EID = 30111;
+    uint32 internal constant BASE_EID = 30184;
 
     // ========== STRUCTS ========== //
 
@@ -118,25 +113,6 @@ library LZConfigLib {
     struct ExecutorConfig {
         uint32 maxMessageSize;
         address executor;
-    }
-
-    // ========== ENDPOINT QUERIES ========== //
-
-    /// @notice Returns the latest messaging library version from the LZ Endpoint.
-    /// @param endpoint_ The LZ V1 Endpoint address.
-    /// @return The latest version number.
-    function getLatestVersion(address endpoint_) internal view returns (uint16) {
-        return ILayerZeroEndpointState(endpoint_).latestVersion();
-    }
-
-    /// @notice Returns (sendVersion, receiveVersion) for ULN301 on the given endpoint.
-    /// @dev receiveUln301 = latestVersion, sendUln301 = latestVersion - 1.
-    /// @param endpoint_ The LZ V1 Endpoint address.
-    function getUln301Versions(
-        address endpoint_
-    ) internal view returns (uint16 sendVer, uint16 recvVer) {
-        uint16 latest = getLatestVersion(endpoint_);
-        return (latest - 1, latest);
     }
 
     // ========== ENCODING HELPERS ========== //
@@ -166,5 +142,10 @@ library LZConfigLib {
     function encodeExecutorConfig() internal pure returns (bytes memory) {
         return
             abi.encode(ExecutorConfig({maxMessageSize: MAX_MESSAGE_SIZE, executor: LZ_EXECUTOR}));
+    }
+
+    /// @notice Converts an address to bytes32 for V2 peer encoding.
+    function addressToBytes32(address addr_) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(addr_)));
     }
 }
