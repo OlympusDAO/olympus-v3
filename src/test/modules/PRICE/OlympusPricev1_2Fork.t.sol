@@ -673,7 +673,9 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Beat
         // Epoch 0, auction results next index is 0
+        vm.startSnapshotGas("heartbeat_emissionManager");
         heart.beat();
+        vm.stopSnapshotGas();
 
         // Verify
         assertEq(
@@ -713,7 +715,9 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Beat
         // Epoch 6
+        vm.startSnapshotGas("heartbeat_yrf");
         heart.beat();
+        vm.stopSnapshotGas();
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
