@@ -16,6 +16,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
+| admin | YieldDepositFacility | Set yield fee, enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -37,6 +38,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | ReserveWrapper | Disable contract |
+| emergency | YieldDepositFacility | Disable the contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
@@ -45,12 +47,14 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
+| heart | YieldDepositFacility | Calls the execute() function |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
 | manager | Heart | Reset the heartbeat |
+| manager | YieldDepositFacility | Set yield fee |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |

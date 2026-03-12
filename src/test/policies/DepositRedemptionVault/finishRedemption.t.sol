@@ -535,68 +535,68 @@ contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTes
     }
 
     // given yield has been claimed
-    //  [ ] it burns the receipt tokens
-    //  [ ] it transfers the underlying asset to the caller
-    //  [ ] it sets the redemption amount to 0
-    //  [ ] it emits a RedemptionFinished event
+    //  [X] it burns the receipt tokens
+    //  [X] it transfers the underlying asset to the caller
+    //  [X] it sets the redemption amount to 0
+    //  [X] it emits a RedemptionFinished event
 
-    // function test_givenYieldClaimed()
-    //     public
-    //     givenLocallyActive
-    //     givenRecipientHasReserveToken
-    //     givenReserveTokenSpendingIsApprovedByRecipient
-    //     givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
-    //     givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, _previousDepositActualAmount)
-    //     givenVaultAccruesYield(iVault, 1e18)
-    //     givenYieldFee(1000)
-    //     givenDepositPeriodEnded(0)
-    //     givenRateSnapshotTaken
-    // {
-    //     // Warp to after redeemable timestamp
-    //     uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
-    //     vm.warp(redeemableAt);
+    function test_givenYieldClaimed()
+        public
+        givenLocallyActive
+        givenRecipientHasReserveToken
+        givenReserveTokenSpendingIsApprovedByRecipient
+        givenAddressHasYieldDepositPosition(recipient, COMMITMENT_AMOUNT)
+        givenCommitted(recipient, iReserveToken, PERIOD_MONTHS, _previousDepositActualAmount)
+        givenVaultAccruesYield(iVault, 1e18)
+        givenYieldFee(1000)
+        givenDepositPeriodEnded(0)
+        givenRateSnapshotTaken
+    {
+        // Warp to after redeemable timestamp
+        uint48 redeemableAt = redemptionVault.getUserRedemption(recipient, 0).redeemableAt;
+        vm.warp(redeemableAt);
 
-    //     // Claim yield from yield deposit position
-    //     uint256[] memory positionIds = new uint256[](1);
-    //     positionIds[0] = 0;
-    //     vm.prank(recipient);
-    //     ydFacility.claimYield(positionIds);
+        // Claim yield from yield deposit position
+        uint256[] memory positionIds = new uint256[](1);
+        positionIds[0] = 0;
+        vm.prank(recipient);
+        ydFacility.claimYield(positionIds);
 
-    //     // Claim yield from convertible deposits
-    //     cdFacility.claimYield(iReserveToken);
+        // Claim yield from convertible deposits
+        cdFacility.claimYield(iReserveToken);
 
-    //     uint256 balanceBefore = iReserveToken.balanceOf(recipient);
+        uint256 balanceBefore = iReserveToken.balanceOf(recipient);
 
-    //     // Expect event
-    //     vm.expectEmit(true, true, true, true);
-    //     emit RedemptionFinished(
-    //         recipient,
-    //         0,
-    //         address(iReserveToken),
-    //         PERIOD_MONTHS,
-    //         _previousDepositActualAmount
-    //     );
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit RedemptionFinished(
+            recipient,
+            0,
+            address(iReserveToken),
+            PERIOD_MONTHS,
+            _previousDepositActualAmount
+        );
 
-    //     // Call function
-    //     vm.prank(recipient);
-    //     redemptionVault.finishRedemption(0);
+        // Call function
+        vm.prank(recipient);
+        redemptionVault.finishRedemption(0);
 
-    //     // Assertions
-    //     _assertRedeemed(
-    //         recipient,
-    //         0,
-    //         iReserveToken,
-    //         PERIOD_MONTHS,
-    //         address(ydFacility),
-    //         _previousDepositActualAmount, // Includes the redemption
-    //         0,
-    //         balanceBefore,
-    //         COMMITMENT_AMOUNT // Yield deposit position
-    //     );
+        // Assertions
+        _assertRedeemed(
+            recipient,
+            0,
+            iReserveToken,
+            PERIOD_MONTHS,
+            address(ydFacility),
+            _previousDepositActualAmount, // Includes the redemption
+            0,
+            balanceBefore,
+            COMMITMENT_AMOUNT // Yield deposit position
+        );
 
-    //     // Assert that the available deposits are correct
-    //     _assertAvailableDeposits(0);
-    // }
+        // Assert that the available deposits are correct
+        _assertAvailableDeposits(0);
+    }
 
     // [X] it transfers the deposit tokens from the facility to the caller
     // [X] it burns the receipt tokens
