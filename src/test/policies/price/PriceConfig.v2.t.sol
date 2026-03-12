@@ -323,7 +323,7 @@ contract PriceConfigv2Test is Test {
         });
         expectedPerms[6] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.storePrice.selector
+            funcSelector: PRICE.storeObservation.selector
         });
         expectedPerms[7] = Permissions({
             keycode: PRICE_KEYCODE,
@@ -923,7 +923,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.storePrice(address(ohm));
+        priceConfig.storeObservation(address(ohm));
     }
 
     function test_storePrice_unauthorizedUser_reverts(address user_) public {
@@ -937,11 +937,11 @@ contract PriceConfigv2Test is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        priceConfig.storePrice(address(ohm));
+        priceConfig.storeObservation(address(ohm));
 
         // Try with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.storePrice(address(ohm));
+        priceConfig.storeObservation(address(ohm));
 
         // Verify price was stored by checking Variant.LAST returns a price
         (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
@@ -958,7 +958,7 @@ contract PriceConfigv2Test is Test {
 
         // Store price using authorized caller
         vm.prank(caller);
-        priceConfig.storePrice(address(ohm));
+        priceConfig.storeObservation(address(ohm));
 
         // Verify price was stored by checking Variant.LAST returns a price
         (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);

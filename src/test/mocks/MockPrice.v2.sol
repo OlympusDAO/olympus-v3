@@ -208,7 +208,7 @@ contract MockPrice is PRICEv2 {
         return true;
     }
 
-    function storePrice(address asset_) external override {
+    function cachePrice(address asset_) external override {
         // Get current price
         (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
 
@@ -217,7 +217,20 @@ contract MockPrice is PRICEv2 {
         lastStoredTimestamps[asset_] = uint48(block.timestamp);
 
         // Emit event to match PRICEv2 behavior
+        emit PriceCached(asset_, price, uint48(block.timestamp));
+    }
+
+    function storeObservation(address asset_) external override {
+        // Get current price
+        (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
+
+        // Store the price and timestamp
+        lastStoredPrices[asset_] = price;
+        lastStoredTimestamps[asset_] = uint48(block.timestamp);
+
+        // Emit both events to match PRICEv2 behavior
         emit PriceStored(asset_, price, uint48(block.timestamp));
+        emit PriceCached(asset_, price, uint48(block.timestamp));
     }
 
     function addAsset(

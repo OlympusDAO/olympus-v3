@@ -29,8 +29,8 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     }
 
     function _storePrices() internal {
-        priceModule.storePrice(address(baseToken));
-        priceModule.storePrice(address(quoteToken));
+        priceModule.storeObservation(address(baseToken));
+        priceModule.storeObservation(address(quoteToken));
         lastStoredTimestamp = uint48(block.timestamp);
     }
 

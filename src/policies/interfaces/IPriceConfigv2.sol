@@ -61,11 +61,11 @@ interface IPriceConfigv2 {
     /// @param  params_             Update parameters with flags indicating which components to update
     function updateAsset(address asset_, IPRICEv2.UpdateAssetParams memory params_) external;
 
-    /// @notice                     Store the current price of an asset
-    /// @dev                        Calls PRICE.storePrice(asset_) to calculate and store the current price
+    /// @notice                     Store a price observation for an asset
+    /// @dev                        Calls PRICE.storeObservation(asset_) to calculate and store current price
     ///
-    /// @param  asset_              The address of the asset to store the price for
-    function storePrice(address asset_) external;
+    /// @param  asset_              The address of asset
+    function storeObservation(address asset_) external;
 
     /// @notice                     Store the current price of all assets that track a moving average
     /// @dev                        Calls PRICE.storeObservations() to calculate and store observations

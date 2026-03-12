@@ -112,22 +112,25 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Checks cache first (no observation array check since storeObservation updates cache)
+    /// @dev        Fallback order: cache → fresh calculation
+    ///
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
-    /// @dev        - No price could be determined
     /// @dev        - The max age is >= the block timestamp
     function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
         // Check that max age is valid
         uint48 currentTime = uint48(block.timestamp);
         if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
-        // Try to use the last price, must be updated more recently than maxAge
-        // getPrice checks if asset is approved
-        (uint256 price, uint48 timestamp) = getPrice(asset_, Variant.LAST);
-        if (timestamp >= currentTime - maxAge_) return price;
+        // Check cache (updated by both cachePrice() and storeObservation())
+        PriceCache memory cache = _cachedPrices[asset_];
+        if (cache.cachedAt > 0 && cache.cachedAt >= currentTime - maxAge_) {
+            return cache.price;
+        }
 
-        // If last price is stale, use the current price
-        (price, , ) = _getCurrentPrice(asset_, true);
+        // Calculate fresh price
+        (uint256 price, , ) = _getCurrentPrice(asset_, true);
         return price;
     }
 
@@ -148,11 +151,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             (uint256 price_, uint48 timestamp_, ) = _getCurrentPrice(asset_, true);
             return (price_, timestamp_);
         } else if (variant_ == Variant.LAST) {
-            // Inlined _getLastPrice logic
-            Asset memory asset = _assetData[asset_];
-            uint256 nextIdx = asset.nextObsIndex;
-            uint256 lastIdx = nextIdx == 0 ? asset.numObservations - 1 : nextIdx - 1;
-            return (asset.obs[lastIdx], asset.lastObservationTime);
+            // Return cached price (populated by addAsset, cachePrice, or storeObservation)
+            PriceCache memory cache = _cachedPrices[asset_];
+            return (cache.price, cache.cachedAt);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             // Inlined _getMovingAveragePrice logic
             Asset memory asset = _assetData[asset_];
@@ -306,23 +307,42 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The asset is not approved
+    /// @dev        - The price was not able to be determined
+    function cachePrice(address asset_) external override permissioned {
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+
+        (uint256 price, uint48 timestamp, ) = _getCurrentPrice(asset_, true);
+        if (price == 0) revert PRICE_PriceZero(asset_);
+
+        _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
+
+        emit PriceCached(asset_, price, timestamp);
+    }
+
+    /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Get the current price using `_getCurrentPrice()`
     /// @dev        - Store the price in the asset's observation array at the index corresponding to the asset's value of `nextObsIndex`
     /// @dev        - Updates the asset's `lastObservationTime` to the current block timestamp
     /// @dev        - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
     /// @dev        - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
-    /// @dev        - Emit a `PriceStored` event
+    /// @dev        - Emit a `PriceStored` event and `PriceCached` event
     ///
     /// @dev        Will revert if:
     /// @dev        - The asset is not approved
+    /// @dev        - The asset does not store moving average
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
-    function storePrice(address asset_) public override permissioned {
+    function storeObservation(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
         // Check if asset is approved
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
+        // Check if asset stores moving average
+        if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
 
         // Get the current price for the asset
         (uint256 price, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
@@ -339,19 +359,28 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         if (asset.storeMovingAverage)
             asset.cumulativeObs = asset.cumulativeObs + price - oldestPrice;
 
-        // Emit event
+        // Emit PriceStored event (with raw observation price)
         emit PriceStored(asset_, price, currentTime);
+
+        // Also update cache (single source of truth for "last price")
+        // If asset uses MA in strategy, cache MA price (calculated from obs)
+        // Otherwise, cache the raw price
+        uint256 priceToCache = asset.useMovingAverage
+            ? asset.cumulativeObs / asset.numObservations
+            : price;
+        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: currentTime});
+        emit PriceCached(asset_, priceToCache, currentTime);
     }
 
     /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
-    /// @dev        - Store the price for each asset using `storePrice()`
+    /// @dev        - Store the price for each asset using `storeObservation()`
     function storeObservations() public override permissioned {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            if (_assetData[assets[i]].storeMovingAverage) storePrice(assets[i]);
+            if (_assetData[assets[i]].storeMovingAverage) storeObservation(assets[i]);
             unchecked {
                 ++i;
             }
@@ -657,35 +686,27 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
             // Emit Price Stored event for new cached value
             emit PriceStored(asset_, observations_[numObservations - 1], lastObservationTime_);
+
+            // Also update cache (single source of truth for "last price")
+            // Cache the MA price (calculated from cumulativeObs)
+            uint256 maPrice = asset.cumulativeObs / asset.numObservations;
+            _cachedPrices[asset_] = PriceCache({price: maPrice, cachedAt: lastObservationTime_});
+            emit PriceCached(asset_, maPrice, lastObservationTime_);
         } else {
-            // If not storing the moving average, validate that the array has at most one value (for caching)
-            if (observations_.length > 1)
-                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
-
-            asset.movingAverageDuration = 0;
-            asset.nextObsIndex = 0;
-            asset.numObservations = 1;
-
+            // If not storing moving average, update cache directly (no observation array needed)
             uint256 price;
             uint48 timestamp;
             if (observations_.length == 0) {
-                // If no observation provided, get the current price and store it
-                // We can do this here because we know the moving average isn't being stored
-                // and therefore, it is not being used in the strategy to calculate the price
                 (price, timestamp, ) = _getCurrentPrice(asset_, false);
             } else {
-                // If an observation is provided, validate it and store it
                 if (observations_[0] == 0) revert PRICE_ParamsObservationZero(asset_, 0);
-
                 price = observations_[0];
                 timestamp = lastObservationTime_;
             }
 
-            asset.obs.push(price);
-            asset.lastObservationTime = timestamp;
-
-            // Emit Price Stored event for new cached value
-            emit PriceStored(asset_, price, timestamp);
+            // Update cache (single source of truth for "last price")
+            _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
+            emit PriceCached(asset_, price, timestamp);
         }
     }
 

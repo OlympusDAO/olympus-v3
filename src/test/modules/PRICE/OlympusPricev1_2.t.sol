@@ -171,19 +171,19 @@ contract OlympusPricev1_2Test is Test {
 
     modifier givenOhmPriceIsStored() {
         vm.prank(priceWriterV2);
-        price.storePrice(address(ohm));
+        price.storeObservation(address(ohm));
         _;
     }
 
     modifier givenReserveAPriceIsStored() {
         vm.prank(priceWriterV2);
-        price.storePrice(address(reserveA));
+        price.storeObservation(address(reserveA));
         _;
     }
 
     modifier givenReserveBPriceIsStored() {
         vm.prank(priceWriterV2);
-        price.storePrice(address(reserveB));
+        price.storeObservation(address(reserveB));
         _;
     }
 

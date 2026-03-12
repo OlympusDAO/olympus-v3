@@ -15,6 +15,13 @@ interface IPRICEv2 {
     /// @param timestamp_   The timestamp at which the price was calculated
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
+    /// @notice             An asset's price is cached
+    ///
+    /// @param asset_       The address of the asset
+    /// @param price_       The price of the asset in the system unit of account
+    /// @param cachedAt_    The timestamp at which the price was cached
+    event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
+
     /// @notice             An asset's definition is added
     ///
     /// @param asset_       The address of the asset
@@ -248,6 +255,15 @@ interface IPRICEv2 {
         bytes feeds;
     }
 
+    /// @notice         Struct to hold a cached price for an asset
+    ///
+    /// @param price    The cached price of the asset
+    /// @param cachedAt The timestamp at which the price was cached
+    struct PriceCache {
+        uint256 price;
+        uint48 cachedAt;
+    }
+
     /// @notice                         Parameters for updating an asset configuration
     /// @dev                            Only updates components flagged in the struct
     ///
@@ -315,6 +331,7 @@ interface IPRICEv2 {
     function getPrice(address asset_) external view returns (uint256 price);
 
     /// @notice         Returns a price no older than the provided age in the system unit of account
+    /// @dev            Checks cache first, falls back to fresh calculation if stale
     ///
     /// @param asset_   The address of the asset
     /// @param maxAge_  The maximum age (seconds) of the price
@@ -322,6 +339,7 @@ interface IPRICEv2 {
     function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
 
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
+    /// @dev                Variant.LAST returns the cached price (populated by addAsset, cachePrice, or storeObservation)
     ///
     /// @param asset_       The address of the asset
     /// @param variant_     The variant of the price to return
@@ -364,10 +382,23 @@ interface IPRICEv2 {
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
 
-    /// @notice         Calculates and stores the current price of an asset
+    /// @notice         Updates the cached price for an asset
+    /// @dev            Permissioned at module level, can be exposed permissionlessly via policy
+    /// @dev            Does NOT affect moving average observations
+    /// @dev            Works for any approved asset (MA or non-MA)
+    /// @dev            Assumption: Price oracle configuration is robust enough to prevent manipulation
     ///
     /// @param asset_   The address of the asset
-    function storePrice(address asset_) external;
+    function cachePrice(address asset_) external;
+
+    /// @notice             Stores a price observation for moving average calculation
+    /// @dev                Permissioned - only authorized callers can store observations
+    /// @dev                Reverts if the asset does not store moving average
+    /// @dev                Also updates the cache (single source of truth for "last price")
+    /// @dev                Emits both PriceStored and PriceCached events
+    ///
+    /// @param asset_       The address of the asset
+    function storeObservation(address asset_) external;
 
     /// @notice         Calculates and stores the current price of assets that track a moving average
     function storeObservations() external;

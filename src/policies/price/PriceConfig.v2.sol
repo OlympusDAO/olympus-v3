@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
@@ -17,7 +18,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_admin" or "admin" roles
-contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
+contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IPriceCache, IVersioned {
     // ========== STATE ========== //
 
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
@@ -74,7 +75,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](9);
         // PRICE Permissions
         requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
         requests[1] = Permissions({
@@ -99,11 +100,15 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         });
         requests[6] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.storePrice.selector
+            funcSelector: PRICE.storeObservation.selector
         });
         requests[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
+        });
+        requests[8] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.cachePrice.selector
         });
     }
 
@@ -165,13 +170,27 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
-    function storePrice(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
-        PRICE.storePrice(asset_);
+    function storeObservation(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.storeObservation(asset_);
     }
 
     /// @inheritdoc IPriceConfigv2
     function storeObservations() external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.storeObservations();
+    }
+
+    /// @inheritdoc IPriceCache
+    function cachePrice(address asset_) external onlyEnabled {
+        PRICE.cachePrice(asset_);
+    }
+
+    /// @inheritdoc IPriceCache
+    function cachePriceIfNecessary(address asset_, bool forceUpdate_) external onlyEnabled {
+        (, uint48 cachedTime) = PRICE.getPrice(asset_, IPRICEv2.Variant.LAST);
+
+        if (forceUpdate_ || cachedTime == 0) {
+            PRICE.cachePrice(asset_);
+        }
     }
 
     // ========== SUBMODULE MANAGEMENT ========== //
@@ -204,6 +223,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IPriceConfigv2).interfaceId ||
+            interfaceId == type(IPriceCache).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }

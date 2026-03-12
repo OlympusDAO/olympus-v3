@@ -439,7 +439,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Store the MA price
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Get the current price again
         // Will have been updated
@@ -636,7 +636,7 @@ contract PriceV2Test is PriceV2BaseTest {
         // Warp OBSERVATION_FREQUENCY seconds forward, store the price, to increment nextObsIndex to 1
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Get last price, expect the most recent observation to be returned
         (price_, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
@@ -811,7 +811,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Cache the current price of weth
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         uint48 start = uint48(block.timestamp);
 
         // Get current price from price module and check that it matches
@@ -839,7 +839,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Cache the current price of weth
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         uint48 start = uint48(block.timestamp);
 
         // Get current price from price module and check that it matches
@@ -892,7 +892,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Cache the current price of weth
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         uint48 start = uint48(block.timestamp);
 
         // Get current price from price module and check that it matches
@@ -988,7 +988,7 @@ contract PriceV2Test is PriceV2BaseTest {
         // Cache the current price of weth
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
 
         // Get last price of weth in ohm
         (uint256 price_, uint48 timestamp) = price.getPriceIn(
@@ -1213,7 +1213,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Store the price of one asset
         vm.startPrank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         vm.stopPrank();
 
         // Set a different value for both assets
@@ -1236,7 +1236,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Store the price of one asset
         vm.startPrank(priceWriter);
-        price.storePrice(address(alpha));
+        price.storeObservation(address(alpha));
         vm.stopPrank();
 
         // Set a different value for both assets
@@ -1395,7 +1395,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Store the price of one asset
         vm.startPrank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         vm.stopPrank();
 
         // Set a different value for both assets
@@ -1434,7 +1434,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Store the price of base asset
         vm.startPrank(priceWriter);
-        price.storePrice(address(alpha));
+        price.storeObservation(address(alpha));
         vm.stopPrank();
 
         // Set a different value for both assets
@@ -1474,7 +1474,7 @@ contract PriceV2Test is PriceV2BaseTest {
         );
         vm.expectRevert(err);
         vm.prank(priceWriter);
-        price.storePrice(address(twoma));
+        price.storeObservation(address(twoma));
     }
 
     function testRevert_storePrice_priceZero(uint256 nonce_) public {
@@ -1489,7 +1489,7 @@ contract PriceV2Test is PriceV2BaseTest {
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
 
         // Set ohm price feeds to zero (including ETH/USD which is used by recursive feeds)
         ohmUsdPriceFeed.setLatestAnswer(int256(0));
@@ -1511,7 +1511,7 @@ contract PriceV2Test is PriceV2BaseTest {
         );
         vm.expectRevert(expectedRevert);
         vm.prank(priceWriter);
-        price.storePrice(address(ohm));
+        price.storeObservation(address(ohm));
     }
 
     function testRevert_storePrice_onlyPermissioned(uint256 nonce_) public {
@@ -1525,11 +1525,11 @@ contract PriceV2Test is PriceV2BaseTest {
             address(this)
         );
         vm.expectRevert(err);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
 
         // Try to call storePrice with permissioned address (priceWriter) and expect to succeed
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
     }
 
     function test_storePrice_insufficientTimeElapsed(uint256 nonce_) public {
@@ -1539,7 +1539,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Cache the current price of weth
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         uint48 start = uint48(block.timestamp);
 
         // Warp forward in time and store a new price
@@ -1549,7 +1549,7 @@ contract PriceV2Test is PriceV2BaseTest {
         // Call the function
         // Should not revert
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
     }
 
     function test_storePrice_noMovingAverage(uint256 nonce_) public {
@@ -1572,7 +1572,7 @@ contract PriceV2Test is PriceV2BaseTest {
         ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
 
         vm.prank(priceWriter);
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Get updated cached data for weth
@@ -1588,7 +1588,7 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(weth), uint256(2001e18), uint48(block.timestamp));
-        price.storePrice(address(weth));
+        price.storeObservation(address(weth));
     }
 
     function test_storePrice_movingAverage(uint256 nonce_) public {
@@ -1613,7 +1613,7 @@ contract PriceV2Test is PriceV2BaseTest {
         onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
@@ -1633,7 +1633,7 @@ contract PriceV2Test is PriceV2BaseTest {
             onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
             vm.prank(priceWriter);
-            price.storePrice(address(onema));
+            price.storeObservation(address(onema));
         }
 
         uint48 lastStore = uint48(block.timestamp);
@@ -1652,7 +1652,7 @@ contract PriceV2Test is PriceV2BaseTest {
         onemaUsdPriceFeed.setTimestamp(block.timestamp);
 
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
@@ -1663,7 +1663,7 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(onema), uint256(50e18), uint48(block.timestamp));
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
     }
 
     function test_storePrice_excludesMovingAverage() public {
@@ -1707,7 +1707,7 @@ contract PriceV2Test is PriceV2BaseTest {
         uint48 start = uint48(block.timestamp);
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Check the last price - what was returned by the price feed
         uint256 t1_expectedPrice = (5e18 + 5e18) / 2;
@@ -1729,7 +1729,7 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(10e8));
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Check the last price - what was returned by the price feed
         uint256 t2_expectedPrice = (10e18 + 10e18) / 2;
@@ -1796,7 +1796,7 @@ contract PriceV2Test is PriceV2BaseTest {
         uint48 start = uint48(block.timestamp);
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Check the last price - what was returned by the two price feeds
         uint256 t1_expectedPrice = (5e18 + 10e18) / 2;
@@ -1818,7 +1818,7 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(20e8));
         vm.prank(priceWriter);
-        price.storePrice(address(onema));
+        price.storeObservation(address(onema));
 
         // Check the last price - what was returned by the price feed
         uint256 t2_expectedPrice = (10e18 + 20e18) / 2;
