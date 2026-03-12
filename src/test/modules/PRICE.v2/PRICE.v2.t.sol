@@ -1525,11 +1525,11 @@ contract PriceV2Test is PriceV2BaseTest {
             address(this)
         );
         vm.expectRevert(err);
-        price.storeObservation(address(weth));
+        price.storeObservation(address(onema));
 
         // Try to call storePrice with permissioned address (priceWriter) and expect to succeed
         vm.prank(priceWriter);
-        price.storeObservation(address(weth));
+        price.storeObservation(address(onema));
     }
 
     function test_storePrice_insufficientTimeElapsed(uint256 nonce_) public {
@@ -1537,19 +1537,19 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
-        // Cache the current price of weth
+        // Cache the current price of onema
         vm.prank(priceWriter);
-        price.storeObservation(address(weth));
+        price.storeObservation(address(onema));
         uint48 start = uint48(block.timestamp);
 
         // Warp forward in time and store a new price
         vm.warp(uint256(start) + 1);
-        ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
+        onemaUsdPriceFeed.setLatestAnswer(int256(2001e8));
 
         // Call the function
         // Should not revert
         vm.prank(priceWriter);
-        price.storeObservation(address(weth));
+        price.storeObservation(address(onema));
     }
 
     function test_storePrice_noMovingAverage(uint256 nonce_) public {
@@ -2155,22 +2155,26 @@ contract PriceV2Test is PriceV2BaseTest {
         );
         assertEq(price_, 10e18);
 
-        uint256[] memory expectedObs = new uint256[](1);
-        expectedObs[0] = price_;
+        uint256[] memory expectedObs = new uint256[](0);
 
         // Configuration should be stored correctly
         IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
-        assertEq(asset.approved, true);
-        assertEq(asset.storeMovingAverage, false);
-        assertEq(asset.useMovingAverage, false);
-        assertEq(asset.movingAverageDuration, uint32(0));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(1));
-        assertEq(asset.lastObservationTime, priceTimestamp_);
-        assertEq(asset.cumulativeObs, uint256(0)); // Not updated when the moving average is not used/stored
-        assertEq(asset.obs, expectedObs);
-        assertEq(asset.strategy, abi.encode(strategyEmpty));
-        assertEq(asset.feeds, abi.encode(feeds));
+        assertEq(asset.approved, true, "approved");
+        assertEq(asset.storeMovingAverage, false, "storeMovingAverage");
+        assertEq(asset.useMovingAverage, false, "useMovingAverage");
+        assertEq(asset.movingAverageDuration, 0, "movingAverageDuration"); // Not updated when the moving average is not used/stored
+        assertEq(asset.nextObsIndex, 0, "nextObsIndex"); // Not updated when the moving average is not used/stored
+        assertEq(asset.numObservations, 0, "numObservations"); // Not updated when the moving average is not used/stored
+        assertEq(asset.lastObservationTime, 0, "lastObservationTime"); // Not updated when the moving average is not used/stored
+        assertEq(asset.cumulativeObs, 0, "cumulativeObs"); // Not updated when the moving average is not used/stored
+        assertEq(asset.obs, expectedObs, "obs"); // Not updated when the moving average is not used/stored
+        assertEq(asset.strategy, abi.encode(strategyEmpty), "strategy");
+        assertEq(asset.feeds, abi.encode(feeds), "feeds");
+
+        // Price should be cached
+        (uint256 lastPrice, uint48 lastTimestamp) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        assertEq(lastPrice, price_, "lastPrice");
+        assertEq(lastTimestamp, priceTimestamp_, "lastTimestamp");
     }
 
     function test_addAsset_noStrategy_noMovingAverage_singlePriceFeed_singleObservation() public {

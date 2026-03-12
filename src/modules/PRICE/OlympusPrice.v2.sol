@@ -123,10 +123,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint48 currentTime = uint48(block.timestamp);
         if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
-        // Check cache (updated by both cachePrice() and storeObservation())
-        PriceCache memory cache = _cachedPrices[asset_];
-        if (cache.cachedAt > 0 && cache.cachedAt >= currentTime - maxAge_) {
-            return cache.price;
+        // Try to use the last price, must be updated more recently than maxAge
+        // getPrice checks if asset is approved
+        (uint256 lastPrice, uint48 lastTimestamp) = getPrice(asset_, Variant.LAST);
+        if (lastTimestamp > 0 && lastTimestamp >= currentTime - maxAge_) {
+            return lastPrice;
         }
 
         // Calculate fresh price
@@ -694,6 +695,15 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             emit PriceCached(asset_, maPrice, lastObservationTime_);
         } else {
             // If not storing moving average, update cache directly (no observation array needed)
+            // Validate that only 1 observation is provided (for caching)
+            if (observations_.length > 1)
+                revert PRICE_ParamsInvalidObservationCount(
+                    asset_,
+                    observations_.length,
+                    0,
+                    1
+                );
+
             uint256 price;
             uint48 timestamp;
             if (observations_.length == 0) {
