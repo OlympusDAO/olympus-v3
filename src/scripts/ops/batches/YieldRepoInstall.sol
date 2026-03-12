@@ -8,8 +8,9 @@ import {Kernel, Actions} from "src/Kernel.sol";
 
 // Bophades policies
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 import {IHeart} from "src/policies/interfaces/IHeart_v1_6.sol";
-import {YieldRepurchaseFacility} from "policies/YieldRepurchaseFacility.sol";
 
 /// @notice     Installs the YieldRepo contract and the new Heart which calls it
 contract YieldRepoInstall is OlyBatch {
@@ -103,10 +104,14 @@ contract YieldRepoInstall is OlyBatch {
         addToBatch(
             yieldRepo,
             abi.encodeWithSelector(
-                YieldRepurchaseFacility.initialize.selector,
-                initialYieldEarningReserves,
-                initialConversionRate,
-                initialYield
+                PolicyEnabler.enable.selector,
+                abi.encode(
+                    IYieldRepo.EnableParams({
+                        initialReserveBalance: initialYieldEarningReserves,
+                        initialConversionRate: initialConversionRate,
+                        initialYield: initialYield
+                    })
+                )
             )
         );
     }

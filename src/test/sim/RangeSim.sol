@@ -491,7 +491,7 @@ abstract contract RangeSim is Test {
         {
             // Shutdown the yieldRepo
             vm.prank(guardian);
-            yieldRepo.shutdown(new ERC20[](0));
+            yieldRepo.disable(abi.encode(new address[](0)));
 
             // Set initial supply and liquidity balances
             uint256 initialSupply = vm.envUint("SUPPLY");
