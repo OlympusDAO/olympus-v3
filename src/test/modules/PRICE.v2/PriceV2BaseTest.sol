@@ -600,7 +600,11 @@ abstract contract PriceV2BaseTest is Test {
             storeMovingAverage,
             string.concat(label, ": storeMovingAverage")
         );
-        assertEq(data.useMovingAverage, useMovingAverage, string.concat(label, ": useMovingAverage"));
+        assertEq(
+            data.useMovingAverage,
+            useMovingAverage,
+            string.concat(label, ": useMovingAverage")
+        );
         assertEq(
             data.movingAverageDuration,
             movingAverageDuration,

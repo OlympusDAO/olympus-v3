@@ -2636,10 +2636,7 @@ contract PriceV2Test is PriceV2BaseTest {
         );
 
         // Should have a cached result
-        (uint256 price_,) = price.getPrice(
-            address(weth),
-            IPRICEv2.Variant.LAST
-        );
+        (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
         assertEq(price_, 10e18); // Average of 10, 10, 10
 
         // Configuration should be stored correctly
