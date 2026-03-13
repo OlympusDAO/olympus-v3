@@ -165,37 +165,20 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
     }
 
-    /// @notice                         Gets the current price of the asset
-    /// @dev                            This function follows this logic:
-    /// @dev                            - Get the price from each feed
-    /// @dev                            - If using the moving average, append the moving average to the results
-    /// @dev                            - If there is only one price and it is not zero, return it
-    /// @dev                            - Process the prices with the configured strategy
+    /// @notice             Gets the raw feed prices for an asset
     ///
-    /// @dev                            Will revert if:
-    /// @dev                            - The resulting price is zero
-    /// @dev                            - The configured strategy cannot aggregate the prices
-    /// @dev                            - The moving average is used, but is stale
-    ///
-    /// @param asset_                   Asset to get the price of
-    /// @param includeMovingAverage_    Flag to indicate if the moving average should be included in the price calculation
-    /// @return uint256                 The price of the asset
-    /// @return uint48                  The current block timestamp
-    /// @return bool                    Flag to indicate if all feeds were successful
-    function _getCurrentPrice(
-        address asset_,
-        bool includeMovingAverage_
-    ) internal view returns (uint256, uint48, bool) {
+    /// @param asset_       The address of the asset
+    /// @return uint256[]   Array of raw feed prices
+    /// @return bool        Flag indicating if all feeds were successful
+    function _getFeedPrices(address asset_) internal view returns (uint256[] memory, bool) {
         Asset storage asset = _assetData[asset_];
-
-        // Iterate through feeds to get prices to aggregate with strategy
         Component[] memory feeds = abi.decode(asset.feeds, (Component[]));
         uint256 numFeeds = feeds.length;
-        uint256[] memory prices = asset.useMovingAverage && includeMovingAverage_
-            ? new uint256[](numFeeds + 1)
-            : new uint256[](numFeeds);
+        uint256[] memory prices = new uint256[](numFeeds);
         uint8 __decimals = _decimals;
         bool successAllFeeds = true;
+
+        // Iterate through feeds to get prices to aggregate with strategy
         for (uint256 i; i < numFeeds; ) {
             (bool success_, bytes memory data_) = address(_getSubmoduleIfInstalled(feeds[i].target))
                 .staticcall(
@@ -220,34 +203,91 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             }
         }
 
-        // If moving average is used and it is meant to be included, add to end of prices array
-        if (asset.useMovingAverage && includeMovingAverage_) {
-            // Check if the moving average is stale
-            // If the observation frequency has passed (including in the current block), it is stale and should be updated
-            if (asset.lastObservationTime + _observationFrequency <= block.timestamp)
-                revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
+        return (prices, successAllFeeds);
+    }
 
-            prices[numFeeds] = asset.cumulativeObs / asset.numObservations;
-        }
-
+    /// @notice             Aggregates an array of prices using the configured strategy
+    ///
+    /// @param asset_       The address of the asset
+    /// @param prices_      The array of prices to aggregate
+    /// @return uint256     The aggregated price
+    function _aggregate(address asset_, uint256[] memory prices_) internal view returns (uint256) {
         // If there is only one price, ensure it is not zero and return
         // Otherwise, send to strategy to aggregate
-        if (prices.length == 1) {
-            if (prices[0] == 0) revert PRICE_PriceZero(asset_);
-            return (prices[0], uint48(block.timestamp), successAllFeeds);
+        if (prices_.length == 1) {
+            if (prices_[0] == 0) revert PRICE_PriceZero(asset_);
+            return prices_[0];
         }
 
         // Get price from strategy
-        Component memory strategy = abi.decode(asset.strategy, (Component));
+        Component memory strategy = abi.decode(_assetData[asset_].strategy, (Component));
         (bool success, bytes memory data) = address(_getSubmoduleIfInstalled(strategy.target))
-            .staticcall(abi.encodeWithSelector(strategy.selector, prices, strategy.params));
+            .staticcall(abi.encodeWithSelector(strategy.selector, prices_, strategy.params));
 
         // Ensure call was successful and price is not zero
         if (!success) revert PRICE_StrategyFailed(asset_, data);
         uint256 price = abi.decode(data, (uint256));
         if (price == 0) revert PRICE_PriceZero(asset_);
 
-        return (price, uint48(block.timestamp), successAllFeeds);
+        return price;
+    }
+
+    /// @notice             Appends the moving average to an array of prices
+    /// @dev                Assumes that the asset stores and uses the moving average
+    ///
+    /// @param asset_       Asset to get the moving average of
+    /// @param prices_      Array of prices to append to
+    /// @return uint256[]   The array of prices including the moving average
+    function _getInclusivePrices(
+        address asset_,
+        uint256[] memory prices_
+    ) internal view returns (uint256[] memory) {
+        Asset storage asset = _assetData[asset_];
+        uint256 numFeeds = prices_.length;
+        uint256[] memory inclusivePrices = new uint256[](numFeeds + 1);
+        for (uint256 i; i < numFeeds; ) {
+            inclusivePrices[i] = prices_[i];
+            unchecked {
+                ++i;
+            }
+        }
+        inclusivePrices[numFeeds] = asset.cumulativeObs / asset.numObservations;
+        return inclusivePrices;
+    }
+
+    /// @notice                         Gets the current price of the asset
+    /// @dev                            This function follows this logic:
+    /// @dev                            - Get the price from each feed
+    /// @dev                            - If using the moving average, append the moving average to the results
+    /// @dev                            - If there is only one price and it is not zero, return it
+    /// @dev                            - Process the prices with the configured strategy
+    ///
+    /// @dev                            Will revert if:
+    /// @dev                            - The resulting price is zero
+    /// @dev                            - The configured strategy cannot aggregate the prices
+    /// @dev                            - The moving average is used, but is stale
+    ///
+    /// @param asset_                   Asset to get the price of
+    /// @param includeMovingAverage_    Flag to indicate if the moving average should be included in the price calculation
+    /// @return uint256                 The aggregated price
+    /// @return uint48                  The current block timestamp
+    /// @return bool                    Flag indicating if all feeds were successful
+    function _getCurrentPrice(
+        address asset_,
+        bool includeMovingAverage_
+    ) internal view returns (uint256, uint48, bool) {
+        Asset storage asset = _assetData[asset_];
+
+        (uint256[] memory prices, bool successAllFeeds) = _getFeedPrices(asset_);
+
+        if (asset.useMovingAverage && includeMovingAverage_) {
+            if (asset.lastObservationTime + _observationFrequency <= block.timestamp)
+                revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
+
+            prices = _getInclusivePrices(asset_, prices);
+        }
+
+        return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
     }
 
     /// @notice                 Gets price with staleness check, returns single value
@@ -345,27 +385,39 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         // Check if asset stores moving average
         if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
 
-        // Get the current price for the asset
-        (uint256 price, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
+        // Get the current feed prices for the asset
+        (uint256[] memory feedPrices, ) = _getFeedPrices(asset_);
+
+        // Calculate the raw price for the observation (excluding MA)
+        uint256 obsPrice = _aggregate(asset_, feedPrices);
 
         // Store the data in the obs index
         uint256 oldestPrice = asset.obs[asset.nextObsIndex];
-        asset.obs[asset.nextObsIndex] = price;
+        asset.obs[asset.nextObsIndex] = obsPrice;
 
         // Update the last observation time and increment the next index
+        uint48 currentTime = uint48(block.timestamp);
         asset.lastObservationTime = currentTime;
         asset.nextObsIndex = (asset.nextObsIndex + 1) % asset.numObservations;
 
-        // Update the cumulative observation, if storing the moving average
-        if (asset.storeMovingAverage)
-            asset.cumulativeObs = asset.cumulativeObs + price - oldestPrice;
+        // Update the cumulative observation
+        asset.cumulativeObs = asset.cumulativeObs + obsPrice - oldestPrice;
 
         // Emit PriceStored event (with raw observation price)
-        emit PriceStored(asset_, price, currentTime);
+        emit PriceStored(asset_, obsPrice, currentTime);
 
-        // Also update cache with the raw observation price
-        _cachedPrices[asset_] = PriceCache({price: price, cachedAt: currentTime});
-        emit PriceCached(asset_, price, currentTime);
+        // Calculate the inclusive price for the cache (including updated MA)
+        // This ensures the cache is consistent with what getPrice(asset_, true) would return
+        uint256 cachePrice_;
+        if (asset.useMovingAverage) {
+            cachePrice_ = _aggregate(asset_, _getInclusivePrices(asset_, feedPrices));
+        } else {
+            cachePrice_ = obsPrice;
+        }
+
+        // Update cache with the inclusive price
+        _cachedPrices[asset_] = PriceCache({price: cachePrice_, cachedAt: currentTime});
+        emit PriceCached(asset_, cachePrice_, currentTime);
     }
 
     /// @inheritdoc IPRICEv2
