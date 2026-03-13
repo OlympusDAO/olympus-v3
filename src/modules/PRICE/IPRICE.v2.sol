@@ -291,6 +291,9 @@ interface IPRICEv2 {
     }
 
     /// @notice         Variant of price to retrieve
+    /// @dev            - CURRENT: The current aggregating feed price, including moving average if configured
+    /// @dev            - LAST: The last cached aggregating feed price, including moving average if configured
+    /// @dev            - MOVINGAVERAGE: The raw moving average price of the asset
     enum Variant {
         CURRENT,
         LAST,
@@ -339,7 +342,9 @@ interface IPRICEv2 {
     function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
 
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
-    /// @dev                Variant.LAST returns the cached price (populated by addAsset, cachePrice, or storeObservation)
+    /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
+    /// @dev                - Variant.LAST: last cached aggregating feed price, including moving average if configured
+    /// @dev                - Variant.MOVINGAVERAGE: raw moving average price
     ///
     /// @param asset_       The address of the asset
     /// @param variant_     The variant of the price to return

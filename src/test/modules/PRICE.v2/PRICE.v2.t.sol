@@ -635,16 +635,29 @@ contract PriceV2Test is PriceV2BaseTest {
         (uint256 price_, ) = price.getPrice(address(onema), IPRICEv2.Variant.CURRENT);
         assertEq(price_, 5e18);
 
-        // Get the last price, which should be 2e18 from the stored observations
+        // Get the last price, which should be the factual inclusive price cached during addAsset.
+        // 1. Initial observations: [1e18, 2e18]. Total = 3e18. numObservations = 2.
+        // 2. addAsset calculates inclusive price:
+        //    - Feed = 5e18.
+        //    - MA = 3e18 / 2 = 1.5e18.
+        //    - Strategy result = getFirstNonZeroPrice(5e18, 1.5e18) = 5e18.
+        // 3. Cached price = 5e18.
         (price_, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
-        assertEq(price_, 2e18);
+        assertEq(price_, 5e18);
 
         // Warp OBSERVATION_FREQUENCY seconds forward, store the price, to increment nextObsIndex to 1
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
-        // Get last price, expect the most recent observation to be returned
+        // Get last price, expect the most recent inclusive price.
+        // 1. storeObservation called:
+        //    - Feed = 5e18.
+        //    - Aggregated observation price = 5e18.
+        //    - New cumulativeObs = 3e18 + 5e18 - 1e18 (oldest at index 0) = 7e18.
+        //    - New MA = 7e18 / 2 = 3.5e18.
+        //    - Strategy result = getFirstNonZeroPrice(5e18, 3.5e18) = 5e18.
+        // 2. Cached price updated to 5e18.
         (price_, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
 
         assertEq(price_, 5e18);
@@ -1673,7 +1686,7 @@ contract PriceV2Test is PriceV2BaseTest {
         price.storeObservation(address(onema));
     }
 
-    function test_storeObservation_excludesMovingAverage() public {
+    function test_storeObservation_includesMovingAverage() public {
         // Initial observations that return the same value as the Chainlink price feeds
         uint256[] memory observations = new uint256[](2);
         observations[0] = 5e18;
@@ -1716,8 +1729,14 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
-        // Check the last price - what was returned by the price feed
-        uint256 t1_expectedPrice = (5e18 + 5e18) / 2;
+        // Check the last price - what was returned by the price feed (inclusive of MA)
+        // 1. Initial observations passed to addAsset: [5e18, 5e18]. Total = 10e18.
+        // 2. storeObservation called: feed returns 5e18.
+        // 3. Oldest observation at nextObsIndex (0) is 5e18.
+        // 4. New cumulativeObs = 10e18 + 5e18 - 5e18 = 10e18.
+        // 5. MA = 10e18 / 2 = 5e18.
+        // 6. Strategy result = Average(Feed=5e18, MA=5e18) = 5e18.
+        uint256 t1_expectedPrice = 5e18;
         (uint256 t1_lastPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
         assertEq(t1_lastPrice, t1_expectedPrice, "t1: last price did not match");
 
@@ -1726,11 +1745,7 @@ contract PriceV2Test is PriceV2BaseTest {
             address(onema),
             IPRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(
-            t1_movingAverage,
-            (5e18 + t1_expectedPrice) / 2,
-            "t1: moving average did not match"
-        );
+        assertEq(t1_movingAverage, 5e18, "t1: moving average did not match");
 
         // Warp forward in time and store a different price (10e8)
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
@@ -1738,24 +1753,26 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
-        // Check the last price - what was returned by the price feed
-        uint256 t2_expectedPrice = (10e18 + 10e18) / 2;
+        // Check the last price - inclusive of MA
+        // 1. Current cumulativeObs = 10e18.
+        // 2. storeObservation called: feed now returns 10e18.
+        // 3. Oldest observation at nextObsIndex (1) is 5e18.
+        // 4. New cumulativeObs = 10e18 + 10e18 - 5e18 = 15e18.
+        // 5. MA = 15e18 / 2 = 7.5e18.
+        // 6. Strategy result = Average(Feed=10e18, MA=7.5e18) = (10e18 + 7.5e18) / 2 = 8.75e18.
+        uint256 t2_expectedPrice = (10e18 + 7.5e18) / 2;
         (uint256 t2_lastPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
-        assertEq(t2_lastPrice, 10e18, "t2: last price did not match");
+        assertEq(t2_lastPrice, t2_expectedPrice, "t2: last price did not match");
 
         // Check MA
         (uint256 t2_movingAverage, ) = price.getPrice(
             address(onema),
             IPRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(
-            t2_movingAverage,
-            (t1_expectedPrice + t2_expectedPrice) / 2,
-            "t2: moving average did not match"
-        );
+        assertEq(t2_movingAverage, 7.5e18, "t2: moving average did not match");
     }
 
-    function test_storeObservation_twoPriceFeeds_excludesMovingAverage() public {
+    function test_storeObservation_twoPriceFeeds_includesMovingAverage() public {
         // Initial observations that return the same value as the Chainlink price feeds
         uint256[] memory observations = new uint256[](2);
         observations[0] = 5e18;
@@ -1805,8 +1822,16 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
-        // Check the last price - what was returned by the two price feeds
-        uint256 t1_expectedPrice = (5e18 + 10e18) / 2;
+        // Check the last price - what was returned by the price feeds (inclusive of MA)
+        // 1. Initial observations passed to addAsset: [5e18, 5e18]. Total = 10e18.
+        // 2. storeObservation called:
+        //    - Feed1 = 5e18, Feed2 = 10e18.
+        //    - Aggregated observation price = Average(5, 10) = 7.5e18.
+        // 3. Oldest observation at nextObsIndex (0) is 5e18.
+        // 4. New cumulativeObs = 10e18 + 7.5e18 - 5e18 = 12.5e18.
+        // 5. MA = 12.5e18 / 2 = 6.25e18.
+        // 6. Strategy result = Average(Feed1=5e18, Feed2=10e18, MA=6.25e18) = (5 + 10 + 6.25) / 3 = 7.0833...e18
+        uint256 t1_expectedPrice = uint256(5e18 + 10e18 + 6.25e18) / 3;
         (uint256 t1_lastPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
         assertEq(t1_lastPrice, t1_expectedPrice, "t1: last price did not match");
 
@@ -1815,11 +1840,7 @@ contract PriceV2Test is PriceV2BaseTest {
             address(onema),
             IPRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(
-            t1_movingAverage,
-            (5e18 + t1_expectedPrice) / 2,
-            "t1: moving average did not match"
-        );
+        assertEq(t1_movingAverage, 6.25e18, "t1: moving average did not match");
 
         // Warp forward in time and store a new price
         vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
@@ -1827,8 +1848,16 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
-        // Check the last price - what was returned by the price feed
-        uint256 t2_expectedPrice = (10e18 + 20e18) / 2;
+        // Check the last price - inclusive of MA
+        // 1. Current cumulativeObs = 12.5e18.
+        // 2. storeObservation called:
+        //    - Feed1 = 20e18, Feed2 = 10e18.
+        //    - Aggregated observation price = Average(20, 10) = 15e18.
+        // 3. Oldest observation at nextObsIndex (1) is 5e18.
+        // 4. New cumulativeObs = 12.5e18 + 15e18 - 5e18 = 22.5e18.
+        // 5. MA = 22.5e18 / 2 = 11.25e18.
+        // 6. Strategy result = Average(Feed1=20e18, Feed2=10e18, MA=11.25e18) = (20 + 10 + 11.25) / 3 = 13.75e18.
+        uint256 t2_expectedPrice = 13.75e18;
         (uint256 t2_lastPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
         assertEq(t2_lastPrice, t2_expectedPrice, "t2: last price did not match");
 
@@ -1837,11 +1866,7 @@ contract PriceV2Test is PriceV2BaseTest {
             address(onema),
             IPRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(
-            t2_movingAverage,
-            (t1_expectedPrice + t2_expectedPrice) / 2,
-            "t2: moving average did not match"
-        );
+        assertEq(t2_movingAverage, 11.25e18, "t2: moving average did not match");
     }
 
     function _addWEth() internal {
@@ -2328,6 +2353,8 @@ contract PriceV2Test is PriceV2BaseTest {
         // Try and add the asset
         vm.startPrank(priceWriter);
 
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
         emit AssetAdded(address(weth));
@@ -2338,7 +2365,7 @@ contract PriceV2Test is PriceV2BaseTest {
             true, // bool useMovingAverage_
             uint32(16 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
-            _makeRandomObservations(weth, feeds[0], nonce_, uint256(2)), // uint256[] memory observations_
+            obs, // uint256[] memory observations_
             IPRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 ISimplePriceFeedStrategy.getAveragePrice.selector,
@@ -2347,9 +2374,13 @@ contract PriceV2Test is PriceV2BaseTest {
             feeds //
         );
 
-        // Should have a cached result
+        // Should have a cached result - inclusive of MA
+        // Feed1 = 10e18, Feed2 = 10e18. MA = (obs[0] + obs[1]) / 2
+        // Inclusive = (10+10+MA)/3
+        uint256 ma = (obs[0] + obs[1]) / 2;
+        uint256 expectedPrice = uint256(10e18 + 10e18 + ma) / 3;
         (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
-        assertEq(price_, 10e18);
+        assertEq(price_, expectedPrice);
     }
 
     function testRevert_addAsset_multiplePriceFeeds_oneSubmoduleCallFails(uint256 nonce_) public {
@@ -2635,9 +2666,13 @@ contract PriceV2Test is PriceV2BaseTest {
             feeds //
         );
 
-        // Should have a cached result
+        // Should have a cached result - inclusive of MA
+        // Feed = 10e18. MA = (obs[0] + obs[1]) / 2
+        // Inclusive = (10+MA)/2
+        uint256 ma = (observations[0] + observations[1]) / 2;
+        uint256 expectedPrice = (10e18 + ma) / 2;
         (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
-        assertEq(price_, 10e18); // Average of 10, 10, 10
+        assertEq(price_, expectedPrice);
 
         // Configuration should be stored correctly
         IPRICEv2.Asset memory asset = price.getAssetData(address(weth));

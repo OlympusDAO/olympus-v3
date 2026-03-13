@@ -533,9 +533,18 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             observations_
         );
 
-        // Validate configuration
-        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        // Validate configuration and optionally update cache
+        (uint256 price, uint48 timestamp, bool successAllFeeds) = _getCurrentPrice(asset_, true);
         if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
+
+        // If a single initial observation was provided for a non-MA asset, use that as the cached price.
+        // Otherwise, cache the factual inclusive price.
+        uint256 priceToCache = (observations_.length == 1 && !useMovingAverage_)
+            ? observations_[0]
+            : price;
+
+        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: timestamp});
+        emit PriceCached(asset_, priceToCache, timestamp);
 
         // Set asset as approved and add to array
         asset.approved = true;
@@ -657,7 +666,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev                            - Removes existing moving average data
     /// @dev                            - Performs basic checks on the parameters
     /// @dev                            - Sets the moving average data for the asset
-    /// @dev                            - If the moving average is not stored, gets the current price and stores it so that every asset has at least one cached value
+    /// @dev                            - If the moving average is not stored, deletes any existing observation data.
+    /// @dev                            - IMPORTANT: This function does NOT update the price cache. Callers are responsible for updating the cache.
     ///
     /// @dev                            Will revert if:
     /// @dev                            - `lastObservationTime_` is in the future
@@ -734,35 +744,15 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
             uint256 lastObsPrice = observations_[numObservations - 1];
 
-            // Emit Price Stored event for new cached value
+            // Emit Price Stored event for new observation
             emit PriceStored(asset_, lastObsPrice, lastObservationTime_);
-
-            // Also update cache (single source of truth for "last price")
-            // Cache the last observation (not the moving average)
-            _cachedPrices[asset_] = PriceCache({
-                price: lastObsPrice,
-                cachedAt: lastObservationTime_
-            });
-            emit PriceCached(asset_, lastObsPrice, lastObservationTime_);
         } else {
-            // If not storing moving average, update cache directly (no observation array needed)
-            // Validate that only 1 observation is provided (for caching)
+            // If not storing moving average, validate that at most 1 observation is provided
             if (observations_.length > 1)
                 revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
 
-            uint256 price;
-            uint48 timestamp;
-            if (observations_.length == 0) {
-                (price, timestamp, ) = _getCurrentPrice(asset_, false);
-            } else {
-                if (observations_[0] == 0) revert PRICE_ParamsObservationZero(asset_, 0);
-                price = observations_[0];
-                timestamp = lastObservationTime_;
-            }
-
-            // Update cache
-            _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
-            emit PriceCached(asset_, price, timestamp);
+            if (observations_.length == 1 && observations_[0] == 0)
+                revert PRICE_ParamsObservationZero(asset_, 0);
         }
     }
 
@@ -838,9 +828,18 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             );
         }
 
-        // Validate final configuration atomically
-        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        // Validate final configuration atomically and optionally update cache
+        (uint256 price, uint48 timestamp, bool successAllFeeds) = _getCurrentPrice(asset_, true);
         if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
+
+        // If a single initial observation was provided for a non-MA asset, use that as the cached price.
+        // Otherwise, cache the factual inclusive price.
+        uint256 priceToCache = (params_.observations.length == 1 && !asset.useMovingAverage)
+            ? params_.observations[0]
+            : price;
+
+        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: timestamp});
+        emit PriceCached(asset_, priceToCache, timestamp);
 
         // Emit events (based on which updates occurred)
         if (params_.updateFeeds) emit AssetPriceFeedsUpdated(asset_);
