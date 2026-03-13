@@ -1,15 +1,28 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity >=0.8.18;
 
-import {Origin} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
-
-import {IVersioned} from "../../interfaces/IVersioned.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
+import {Origin, MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {RateLimiterLib} from "src/libraries/RateLimiterLib.sol";
 
 /// @title ILZBridgeGateway
-/// @notice Interface for the LZ Bridge Gateway infrastructure policy.
-/// @dev Handles LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer
-///      management, and bridged supply cap enforcement.
-interface ILZBridgeGateway is IVersioned {
+/// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
+/// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
+///      enforced options, rate limiting, and bridged supply cap enforcement.
+interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
+    // ========= TYPES ========= //
+
+    /// @notice Enforced option parameter for a specific endpoint and message type.
+    /// @param eid The endpoint ID.
+    /// @param msgType The message type identifier.
+    /// @param options The enforced options bytes (must be Type 3).
+    struct EnforcedOptionParam {
+        uint32 eid;
+        uint16 msgType;
+        bytes options;
+    }
+
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.
@@ -17,23 +30,26 @@ interface ILZBridgeGateway is IVersioned {
     error LZBridgeGateway_InvalidAddress(string parameter);
 
     /// @notice Thrown when msg.sender is not the LayerZero endpoint.
-    error LZBridgeGateway_InvalidCaller();
+    error LZBridgeGateway_OnlyEndpoint();
 
     /// @notice Thrown when msg.sender is not the facilitator.
     error LZBridgeGateway_OnlyFacilitator();
 
-    /// @notice Thrown when a message source is not trusted.
-    error LZBridgeGateway_InvalidMessageSource();
+    /// @notice Thrown when a message originates from a non-peer source.
+    /// @param eid The source endpoint ID.
+    /// @param sender The sender bytes32 address.
+    error LZBridgeGateway_OnlyPeer(uint32 eid, bytes32 sender);
 
-    /// @notice Thrown when the retry payload does not match the stored hash.
-    error LZBridgeGateway_InvalidPayload();
-
-    /// @notice Thrown when the destination chain has no peer configured.
-    error LZBridgeGateway_DestinationNotTrusted();
+    /// @notice Thrown when no peer is configured for a destination endpoint.
+    /// @param eid The endpoint ID.
+    error LZBridgeGateway_NoPeer(uint32 eid);
 
     /// @notice Thrown when a received message has an unknown message type.
     /// @param msgType The unknown message type.
     error LZBridgeGateway_InvalidMessageType(uint8 msgType);
+
+    /// @notice Thrown when a received message payload has an invalid length.
+    error LZBridgeGateway_InvalidPayload();
 
     /// @notice Thrown when the bridged supply would exceed the cap.
     /// @param newSupply The resulting supply after the operation.
@@ -48,48 +64,34 @@ interface ILZBridgeGateway is IVersioned {
     /// @notice Thrown when a canonical-only function is called on a non-canonical chain.
     error LZBridgeGateway_NotCanonical();
 
+    /// @notice Thrown when options are invalid (not Type 3 or malformed).
+    /// @param options The invalid options bytes.
+    error LZBridgeGateway_InvalidOptions(bytes options);
+
     // ========= EVENTS ========= //
+
+    /// @notice Emitted when OHM is burned and sent to another chain.
+    /// @param sender The address that initiated the send.
+    /// @param amount The amount of OHM sent.
+    /// @param dstEid The destination endpoint ID.
+    /// @param guid The LayerZero message GUID.
+    event Sent(address indexed sender, uint256 amount, uint32 indexed dstEid, bytes32 guid);
 
     /// @notice Emitted when OHM is received and minted from another chain.
     /// @param receiver The address that received the minted OHM.
     /// @param amount The amount of OHM minted.
     /// @param srcEid The LayerZero source endpoint ID.
-    event Received(address indexed receiver, uint256 amount, uint32 indexed srcEid);
+    /// @param guid The LayerZero message GUID.
+    event Received(address indexed receiver, uint256 amount, uint32 indexed srcEid, bytes32 guid);
 
-    /// @notice Emitted when a peer is set for a remote endpoint ID.
-    /// @param eid The remote endpoint ID.
-    /// @param peer The peer address encoded as bytes32.
-    event PeerSet(uint32 indexed eid, bytes32 peer);
+    /// @notice Emitted when a peer is set for a destination endpoint.
+    /// @param eid The endpoint ID.
+    /// @param peer The peer address (bytes32).
+    event PeerSet(uint32 eid, bytes32 peer);
 
-    /// @notice Emitted when a message is cleared from the LZ endpoint.
-    /// @param srcEid The source endpoint ID.
-    /// @param sender The sender address (bytes32).
-    /// @param nonce The nonce of the cleared message.
-    event MessageCleared(uint32 indexed srcEid, bytes32 sender, uint64 nonce);
-
-    /// @notice Emitted when a message is retried via the LZ endpoint.
-    /// @param srcEid The source endpoint ID.
-    /// @param sender The sender address (bytes32).
-    /// @param nonce The nonce of the retried message.
-    event MessageRetried(uint32 indexed srcEid, bytes32 sender, uint64 nonce);
-
-    /// @notice Emitted when a message nonce is skipped on the LZ endpoint.
-    /// @param srcEid The source endpoint ID.
-    /// @param sender The sender address (bytes32).
-    /// @param nonce The nonce that was skipped.
-    event NonceSkipped(uint32 indexed srcEid, bytes32 sender, uint64 nonce);
-
-    /// @notice Emitted when a message is nilified on the LZ endpoint.
-    /// @param srcEid The source endpoint ID.
-    /// @param sender The sender address (bytes32).
-    /// @param nonce The nonce of the nilified message.
-    event MessageNilified(uint32 indexed srcEid, bytes32 sender, uint64 nonce);
-
-    /// @notice Emitted when a message is burned on the LZ endpoint.
-    /// @param srcEid The source endpoint ID.
-    /// @param sender The sender address (bytes32).
-    /// @param nonce The nonce of the burned message.
-    event MessageBurned(uint32 indexed srcEid, bytes32 sender, uint64 nonce);
+    /// @notice Emitted when the delegate is set on the endpoint.
+    /// @param delegate The new delegate address.
+    event DelegateSet(address delegate);
 
     /// @notice Emitted when the facilitator is set.
     /// @param facilitator The new facilitator address.
@@ -111,6 +113,18 @@ interface ILZBridgeGateway is IVersioned {
     /// @param bridgedSupplyCap The new bridged supply cap.
     event BridgedSupplyCapSet(uint256 bridgedSupplyCap);
 
+    /// @notice Emitted when enforced options are set.
+    /// @param enforcedOptions The enforced option parameters.
+    event EnforcedOptionsSet(EnforcedOptionParam[] enforcedOptions);
+
+    /// @notice Emitted when rate limits are set.
+    /// @param rateLimitConfigs The rate limit configurations.
+    event RateLimitsSet(RateLimiterLib.RateLimitConfig[] rateLimitConfigs);
+
+    /// @notice Emitted when rate limit state is reset for one or more endpoints.
+    /// @param eids The endpoint IDs that were reset.
+    event RateLimitsReset(uint32[] eids);
+
     // ========= CORE FUNCTIONS ========= //
 
     /// @notice Burns OHM held by the gateway and sends a bridge message to a destination chain.
@@ -125,18 +139,19 @@ interface ILZBridgeGateway is IVersioned {
     ///      - The gateway is not enabled.
     ///      - No peer exists for the destination endpoint ID.
     ///      - The bridged supply cap would be exceeded (canonical only).
+    ///      - The rate limit would be exceeded.
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to burn and send.
     /// @param refundAddress_ The address to receive excess native token refund.
-    /// @param options_ LayerZero V2 message options for executor gas settings.
+    /// @param extraOptions_ Additional Type 3 options to combine with enforced options.
     function burnAndSend(
         uint32 dstEid_,
         address to_,
         uint256 amount_,
         address payable refundAddress_,
-        bytes calldata options_
+        bytes calldata extraOptions_
     ) external payable;
 
     // ========= FEE ESTIMATION ========= //
@@ -146,17 +161,33 @@ interface ILZBridgeGateway is IVersioned {
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to send.
-    /// @param options_ LayerZero V2 message options.
-    /// @return nativeFee The estimated native token fee.
-    /// @return lzTokenFee The estimated LZ token fee (unused).
+    /// @param extraOptions_ Additional Type 3 options to combine with enforced options.
+    /// @return fee The estimated messaging fee (native + lzToken).
     function estimateSendFee(
         uint32 dstEid_,
         address to_,
         uint256 amount_,
-        bytes calldata options_
-    ) external view returns (uint256 nativeFee, uint256 lzTokenFee);
+        bytes calldata extraOptions_
+    ) external view returns (MessagingFee memory fee);
 
     // ========= ADMIN FUNCTIONS ========= //
+
+    /// @notice Sets the peer gateway address for a remote endpoint ID (destination).
+    /// @dev Only callable by the admin role. Pass `bytes32(0)` to clear.
+    ///
+    /// @param eid_ The remote endpoint ID.
+    /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
+    function setPeer(uint32 eid_, bytes32 peer_) external;
+
+    /// @notice Sets the delegate on the LayerZero endpoint.
+    /// @dev Only callable by the bridge_admin role.
+    ///
+    ///      The delegate is authorized to configure anything on the LayerZero endpoint
+    ///      on behalf of this contract (e.g. send/receive libraries, DVN config).
+    ///      Pass `address(0)` to clear the delegate.
+    ///
+    /// @param delegate_ The new delegate address, or `address(0)` to clear.
+    function setDelegate(address delegate_) external;
 
     /// @notice Sets the facilitator address.
     /// @dev Only callable by the admin role.
@@ -193,112 +224,29 @@ interface ILZBridgeGateway is IVersioned {
     /// @param bridgedSupplyCap_ The new bridged supply cap.
     function setBridgedSupplyCap(uint256 bridgedSupplyCap_) external;
 
-    /// @notice Sets the peer gateway address for a remote endpoint ID.
+    /// @notice Sets enforced options for specific endpoint and message type combinations.
+    /// @dev Only callable by the admin role. Each option must be Type 3.
+    ///
+    /// @param enforcedOptions_ Array of enforced option parameters.
+    function setEnforcedOptions(EnforcedOptionParam[] calldata enforcedOptions_) external;
+
+    /// @notice Sets rate limits for destination endpoints.
     /// @dev Only callable by the admin role.
-    ///      Pass `address(0)` to clear the peer for the endpoint ID.
     ///
-    /// @param eid_ The remote endpoint ID.
-    /// @param peerAddress_ The remote gateway address (or `address(0)` to clear).
-    function setPeer(uint32 eid_, address peerAddress_) external;
+    /// @param rateLimitConfigs_ Array of rate limit configurations.
+    function setRateLimits(RateLimiterLib.RateLimitConfig[] calldata rateLimitConfigs_) external;
 
-    /// @notice Clears (discards) a verified inbound message from the LZ V2 endpoint.
-    /// @dev Only callable by the bridge_admin role. Used to skip processing of a
-    ///      poisoned or stuck message that has already been verified.
+    /// @notice Resets rate limit state (amountInFlight) for the given endpoint IDs.
+    /// @dev Only callable by the bridge_admin role. Does not modify limit or window.
     ///
-    ///      On canonical chains, clearing an inbound bridge message means `bridgedSupply`
-    ///      will not be decremented for the cleared transfer. Call `setBridgedSupply()`
-    ///      afterward to correct the accounting.
-    ///
-    /// @param origin_ The origin of the message (srcEid, sender, nonce).
-    /// @param guid_ The global unique identifier of the message.
-    /// @param message_ The message payload.
-    function lzClear(Origin calldata origin_, bytes32 guid_, bytes calldata message_) external;
-
-    /// @notice Retries delivery of a failed inbound message via the LZ V2 endpoint.
-    /// @dev Only callable by the bridge_admin role. Calls `endpoint.lzReceive()` to
-    ///      re-deliver a message that was verified but failed during execution.
-    ///
-    /// @param origin_ The origin of the message (srcEid, sender, nonce).
-    /// @param guid_ The global unique identifier of the message.
-    /// @param message_ The message payload.
-    /// @param extraData_ Extra data provided by the executor.
-    function lzRetryReceive(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_,
-        bytes calldata extraData_
-    ) external payable;
-
-    /// @notice Skips the next expected inbound nonce on the LZ V2 endpoint.
-    /// @dev Only callable by the bridge_admin role. Used to skip a message that
-    ///      cannot be verified for some reason. The nonce must be the next expected nonce.
-    ///
-    ///      On canonical chains, skipping an inbound bridge message means `bridgedSupply`
-    ///      will not be decremented for the skipped transfer. Call `setBridgedSupply()`
-    ///      afterward to correct the accounting.
-    ///
-    /// @param srcEid_ The source endpoint ID.
-    /// @param sender_ The sender address (bytes32).
-    /// @param nonce_ The nonce to skip (must be inboundNonce + 1).
-    function lzSkip(uint32 srcEid_, bytes32 sender_, uint64 nonce_) external;
-
-    /// @notice Nilifies a verified message, preventing execution until re-verified.
-    /// @dev Only callable by the bridge_admin role. Marks the payload hash as
-    ///      unexecutable while allowing future re-verification.
-    ///
-    /// @param srcEid_ The source endpoint ID.
-    /// @param sender_ The sender address (bytes32).
-    /// @param nonce_ The nonce of the message.
-    /// @param payloadHash_ The payload hash to nilify.
-    function lzNilify(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external;
-
-    /// @notice Permanently burns a message from the LZ V2 endpoint.
-    /// @dev Only callable by the bridge_admin role. Makes the nonce permanently
-    ///      unexecutable and un-verifiable. Only works for nonces <= lazyInboundNonce.
-    ///
-    ///      On canonical chains, burning an inbound bridge message means `bridgedSupply`
-    ///      will not be decremented for the burned transfer. Call `setBridgedSupply()`
-    ///      afterward to correct the accounting.
-    ///
-    /// @param srcEid_ The source endpoint ID.
-    /// @param sender_ The sender address (bytes32).
-    /// @param nonce_ The nonce of the message.
-    /// @param payloadHash_ The payload hash to burn.
-    function lzBurn(uint32 srcEid_, bytes32 sender_, uint64 nonce_, bytes32 payloadHash_) external;
-
-    /// @notice Sets the send library for a remote endpoint ID.
-    /// @dev Only callable by the bridge_admin role.
-    ///
-    /// @param eid_ The remote endpoint ID.
-    /// @param lib_ The send library address.
-    function setSendLibrary(uint32 eid_, address lib_) external;
-
-    /// @notice Sets the receive library for a remote endpoint ID.
-    /// @dev Only callable by the bridge_admin role.
-    ///
-    /// @param eid_ The remote endpoint ID.
-    /// @param lib_ The receive library address.
-    /// @param gracePeriod_ The grace period for the library switch.
-    function setReceiveLibrary(uint32 eid_, address lib_, uint256 gracePeriod_) external;
-
-    /// @notice Sets LayerZero config via the V2 endpoint.
-    /// @dev Only callable by the bridge_admin role. Calls endpoint.setConfig().
-    ///
-    /// @param lib_ The message library address to configure.
-    /// @param params_ The encoded SetConfigParam array.
-    function setLZConfig(address lib_, bytes calldata params_) external;
+    /// @param eids_ The endpoint IDs to reset.
+    function resetRateLimits(uint32[] calldata eids_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 
-    /// @notice Returns the peer for a remote endpoint ID.
-    /// @param eid_ The remote endpoint ID.
-    /// @return The peer as bytes32.
-    function peers(uint32 eid_) external view returns (bytes32);
+    /// @notice The LayerZero V2 endpoint address.
+    // solhint-disable-next-line func-name-mixedcase
+    function LZ_ENDPOINT() external view returns (address);
 
     /// @notice Returns the OHM token address.
     function ohm() external view returns (address);
@@ -312,12 +260,54 @@ interface ILZBridgeGateway is IVersioned {
     /// @notice Returns the bridged supply cap (canonical only).
     function bridgedSupplyCap() external view returns (uint256);
 
-    /// @notice Returns the LayerZero V2 endpoint address.
-    function LZ_ENDPOINT() external view returns (address);
+    /// @notice Returns the peer for a given endpoint ID.
+    /// @param eid The remote endpoint ID.
+    /// @return The peer address (as bytes32).
+    function peers(uint32 eid) external view returns (bytes32);
+
+    /// @notice Returns the enforced options for a given endpoint and message type.
+    /// @param eid The endpoint ID.
+    /// @param msgType The message type.
+    /// @return The enforced options bytes.
+    function enforcedOptions(uint32 eid, uint16 msgType) external view returns (bytes memory);
+
+    /// @notice Returns the rate limit state for a given endpoint.
+    /// @param dstEid The destination endpoint ID.
+    /// @return amountInFlight The amount currently in flight.
+    /// @return lastUpdated Timestamp of the last update.
+    /// @return limit Maximum allowed amount.
+    /// @return window Duration of the window.
+    function rateLimits(
+        uint32 dstEid
+    )
+        external
+        view
+        returns (uint192 amountInFlight, uint64 lastUpdated, uint192 limit, uint64 window);
+
+    /// @notice Returns how much can currently be sent to a destination endpoint.
+    /// @param dstEid_ The destination endpoint ID.
+    /// @return currentAmountInFlight The current decayed amount in flight.
+    /// @return amountCanBeSent The amount that can still be sent.
+    function getAmountCanBeSent(
+        uint32 dstEid_
+    ) external view returns (uint256 currentAmountInFlight, uint256 amountCanBeSent);
+
+    /// @notice Combines enforced options with caller-provided extra options.
+    /// @param eid_ The endpoint ID.
+    /// @param msgType_ The message type.
+    /// @param extraOptions_ Caller-provided options.
+    /// @return The combined options bytes.
+    function combineOptions(
+        uint32 eid_,
+        uint16 msgType_,
+        bytes calldata extraOptions_
+    ) external view returns (bytes memory);
 
     /// @notice Returns whether this is the canonical (mainnet) chain.
+    // solhint-disable-next-line func-name-mixedcase
     function IS_CANONICAL() external view returns (bool);
 
     /// @notice Returns the message type identifier for OHM bridge transfers.
+    // solhint-disable-next-line func-name-mixedcase
     function MSG_BRIDGE_OHM() external view returns (uint8);
 }

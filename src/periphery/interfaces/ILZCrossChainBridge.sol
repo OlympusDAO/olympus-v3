@@ -2,10 +2,11 @@
 pragma solidity >=0.8.4;
 
 import {IVersioned} from "../../interfaces/IVersioned.sol";
+import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
 /// @notice Interface for the LZ Cross-Chain Bridge facilitator, the user-facing entry point
-///         for sending OHM to other chains via LayerZero.
+///         for sending OHM to other chains via LayerZero V2.
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
@@ -56,19 +57,19 @@ interface ILZCrossChainBridge is IVersioned {
     function gateway() external view returns (address);
 
     /// @notice Returns the OHM token address.
+    // solhint-disable-next-line func-name-mixedcase
     function OHM() external view returns (address);
 
     /// @notice Estimates the fee for sending OHM to a destination chain.
-    /// @dev Proxies to the gateway's estimateSendFee function with empty options.
+    /// @dev Proxies to the gateway's estimateSendFee function with empty extra options.
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to send.
-    /// @return nativeFee The estimated native token fee.
-    /// @return lzTokenFee The estimated LZ token fee (unused).
+    /// @return fee The estimated messaging fee (native + lzToken (unused)).
     function estimateSendFee(
         uint32 dstEid_,
         address to_,
         uint256 amount_
-    ) external view returns (uint256 nativeFee, uint256 lzTokenFee);
+    ) external view returns (MessagingFee memory fee);
 }

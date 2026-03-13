@@ -6,39 +6,44 @@ interface ILayerZeroDVNState {
 }
 
 /// @title LZConfigLib
-/// @notice Shared LayerZero V2 EndpointV2 constants and struct mirrors used by the
+/// @notice Shared LayerZero V2 constants and struct mirrors used by the
 ///         LZ Bridge Security Upgrade proposal, LZ Bridge MS batches and its tests.
 library LZConfigLib {
-    // ========== LZ V2 ENDPOINTS ========== //
+    // ========== LZ ENDPOINTS ========== //
 
     // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
 
+    // LZ Endpoint (same CREATE2 address on all EVM chains)
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-    address internal constant ARB_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-    address internal constant OPT_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
-    address internal constant BASE_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
-    // ========== MESSAGE LIBRARIES (SendUln302 / ReceiveUln302) ========== //
+    // ========== LZ MESSAGE LIBRARIES ========== //
 
     // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
 
     // Ethereum
     address internal constant ETH_SEND_ULN_302 = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
-    address internal constant ETH_RECEIVE_ULN_302 = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
+    address internal constant ETH_RECV_ULN_302 = 0xc02Ab410f0734EFa3F14628780e6e695156024C2;
 
     // Arbitrum
     address internal constant ARB_SEND_ULN_302 = 0x975bcD720be66659e3EB3C0e4F1866a3020E493A;
-    address internal constant ARB_RECEIVE_ULN_302 = 0x7B9E184e07a6EE1aC23eAe0fe8D6Be2f663f05e6;
+    address internal constant ARB_RECV_ULN_302 = 0x7B9E184e07a6EE1aC23eAe0fe8D6Be2f663f05e6;
 
     // Optimism
     address internal constant OPT_SEND_ULN_302 = 0x1322871e4ab09Bc7f5717189434f97bBD9546e95;
-    address internal constant OPT_RECEIVE_ULN_302 = 0x3C4962fF6258DCfCAFd23A814237571571899985;
+    address internal constant OPT_RECV_ULN_302 = 0x3c4962Ff6258dcfCafD23a814237B7d6Eb712063;
 
     // Base
     address internal constant BASE_SEND_ULN_302 = 0xB5320B0B3a13cC860893E2Bd79FCd7e13484Dda2;
-    address internal constant BASE_RECEIVE_ULN_302 = 0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf;
+    address internal constant BASE_RECV_ULN_302 = 0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf;
 
-    // ========== DVNs ========== //
+    // ========== EXECUTORS ========== //
+
+    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
+
+    // LZ Executor (same EOA on all EVM chains)
+    address internal constant LZ_EXECUTOR = 0xe93685f3bBA03016F02bD1828BaDD6195988D950;
+
+    // ========== DVNS ========== //
 
     // Source: https://docs.layerzero.network/contracts/dvn-addresses
 
@@ -51,16 +56,11 @@ library LZConfigLib {
     // Google Cloud DVN (same CREATE2 address on all EVM chains)
     address internal constant GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
 
-    // ========== EXECUTOR ========== //
-
-    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
-
-    // LZ Executor (same EOA on all EVM chains)
-    address internal constant LZ_EXECUTOR = 0xe93685f3bBA03016F02bD1828BaDD6195988D950;
-
-    // ========== ULN302 CONFIG TYPES ========== //
+    // ========== CONFIG TYPES (EndpointV2 / SetConfigParam.configType) ========== //
 
     // Source: https://docs.layerzero.network/v2/developers/evm/configuration/dvn-executor-config
+    //   SendUln302.sol: configType 1 = Executor, 2 = ULN
+    //   ReceiveUln302.sol: configType 2 = ULN
 
     uint32 internal constant CONFIG_TYPE_EXECUTOR = 1;
     uint32 internal constant CONFIG_TYPE_ULN = 2;
@@ -88,7 +88,16 @@ library LZConfigLib {
     uint64 internal constant OPT_OUTBOUND_CONFIRMATIONS = 20;
     uint64 internal constant BASE_OUTBOUND_CONFIRMATIONS = 10;
 
-    // ========== CHAIN LZ V2 ENDPOINT IDs (EIDs) ========== //
+    // ========== CHAIN LZ IDS ========== //
+
+    // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts (Endpoint ID)
+
+    uint16 internal constant ETH_CHAIN_ID = 101;
+    uint16 internal constant ARB_CHAIN_ID = 110;
+    uint16 internal constant OPT_CHAIN_ID = 111;
+    uint16 internal constant BASE_CHAIN_ID = 184;
+
+    // ========== LZ EIDs ========== //
 
     // Source: https://docs.layerzero.network/v2/deployments/deployed-contracts
 
@@ -144,8 +153,55 @@ library LZConfigLib {
             abi.encode(ExecutorConfig({maxMessageSize: MAX_MESSAGE_SIZE, executor: LZ_EXECUTOR}));
     }
 
-    /// @notice Converts an address to bytes32 for V2 peer encoding.
-    function addressToBytes32(address addr_) internal pure returns (bytes32) {
-        return bytes32(uint256(uint160(addr_)));
+    // ========== EID HELPERS ========== //
+
+    /// @notice Returns the SendUln302 address for a given V2 EID.
+    function sendUln302ForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_SEND_ULN_302;
+        if (eid_ == ARB_EID) return ARB_SEND_ULN_302;
+        if (eid_ == OPT_EID) return OPT_SEND_ULN_302;
+        if (eid_ == BASE_EID) return BASE_SEND_ULN_302;
+        revert("LZConfigLib: unsupported EID");
+    }
+
+    /// @notice Returns the ReceiveUln302 address for a given V2 EID.
+    function recvUln302ForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_RECV_ULN_302;
+        if (eid_ == ARB_EID) return ARB_RECV_ULN_302;
+        if (eid_ == OPT_EID) return OPT_RECV_ULN_302;
+        if (eid_ == BASE_EID) return BASE_RECV_ULN_302;
+        revert("LZConfigLib: unsupported EID");
+    }
+
+    /// @notice Returns the outbound confirmation count for a given V2 EID.
+    function outboundConfirmationsForEid(uint32 eid_) internal pure returns (uint64) {
+        if (eid_ == ETH_EID) return ETH_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == ARB_EID) return ARB_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == OPT_EID) return OPT_OUTBOUND_CONFIRMATIONS;
+        if (eid_ == BASE_EID) return BASE_OUTBOUND_CONFIRMATIONS;
+        revert("LZConfigLib: unsupported EID");
+    }
+
+    /// @notice Returns the LZ DVN address for a given V2 EID.
+    function lzDvnForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_LZ_DVN;
+        if (eid_ == ARB_EID) return ARB_LZ_DVN;
+        if (eid_ == OPT_EID) return OPT_LZ_DVN;
+        if (eid_ == BASE_EID) return BASE_LZ_DVN;
+        revert("LZConfigLib: unsupported EID");
+    }
+
+    /// @notice Returns [localLzDVN, GCLOUD_DVN] sorted ascending for a given V2 EID.
+    function dvnsForEid(uint32 eid_) internal pure returns (address[] memory dvns) {
+        address localDvn = lzDvnForEid(eid_);
+        dvns = new address[](2);
+        // All chain-specific LZ DVN addresses are below GCLOUD_DVN (0xD56e...)
+        if (localDvn < GCLOUD_DVN) {
+            dvns[0] = localDvn;
+            dvns[1] = GCLOUD_DVN;
+        } else {
+            dvns[0] = GCLOUD_DVN;
+            dvns[1] = localDvn;
+        }
     }
 }

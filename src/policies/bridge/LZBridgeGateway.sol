@@ -2,12 +2,16 @@
 pragma solidity >=0.8.30;
 
 // Interfaces
-import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
-import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroReceiver.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLibManager.sol";
+import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
+import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+
+// Libraries
+import {RateLimiterLib} from "src/libraries/RateLimiterLib.sol";
 
 // Contracts
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -18,25 +22,31 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @title LZBridgeGateway
 /// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
 ///         OHM transfers.
-///         Performs OHM mint/burn via MINTR, manages peers, and enforces a bridged
-///         supply cap on canonical (mainnet) chains.
+///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
+///         tracks bridged supply, and enforces a bridged supply cap on canonical chains.
 contract LZBridgeGateway is
     Policy,
     PolicyEnabler,
     IVersioned,
+    ILZEndpointV2Admin,
     ILayerZeroReceiver,
     ILZBridgeGateway
 {
+    using RateLimiterLib for RateLimiterLib.Limits;
+
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
-    bytes32 private constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
+    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
 
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
 
     /// @notice Expected byte length of an ABI-encoded (address, uint256) bridge payload.
-    uint256 private constant _BRIDGE_OHM_DATA_LENGTH = 64;
+    uint256 internal constant _BRIDGE_OHM_DATA_LENGTH = 64;
+
+    /// @notice Type 3 option type identifier.
+    uint16 internal constant _OPTION_TYPE_3 = 3;
 
     // ========= IMMUTABLES ========= //
 
@@ -64,7 +74,13 @@ contract LZBridgeGateway is
     uint256 public override bridgedSupplyCap;
 
     /// @inheritdoc ILZBridgeGateway
-    mapping(uint32 eid_ => bytes32 peer) public override peers;
+    mapping(uint32 eid_ => bytes32) public override peers;
+
+    /// @inheritdoc ILZBridgeGateway
+    mapping(uint32 eid_ => mapping(uint16 msgType_ => bytes)) public override enforcedOptions;
+
+    /// @notice Rate limit state per destination endpoint.
+    RateLimiterLib.Limits internal _rateLimits;
 
     // ========= INITIALIZATION & POLICY SETUP ========= //
 
@@ -83,6 +99,8 @@ contract LZBridgeGateway is
         _setFacilitator(facilitator_);
 
         // Disabled by default
+
+        // Gateway is always authorized to call endpoint functions.
     }
 
     /// @inheritdoc Policy
@@ -149,13 +167,15 @@ contract LZBridgeGateway is
         address to_,
         uint256 amount_,
         address payable refundAddress_,
-        bytes calldata options_
+        bytes calldata extraOptions_
     ) external payable override onlyEnabled onlyFacilitator {
         // Warning. amount_ == 0 should be ensured by the facilitator
         _requireNonzeroAddress(to_, "to");
 
-        bytes32 peer = peers[dstEid_];
-        if (peer == bytes32(0)) revert LZBridgeGateway_DestinationNotTrusted();
+        bytes32 peer = _getPeerOrRevert(dstEid_);
+
+        // Rate limit check
+        _rateLimits.checkOutflow(dstEid_, amount_);
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
@@ -171,13 +191,16 @@ contract LZBridgeGateway is
         IERC20(ohm).approve(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
 
-        // Encode and send the bridge message via V2 endpoint
+        // Encode and send the bridge message
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
-        // solhint-disable-next-line
-        ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
-            MessagingParams(dstEid_, peer, payload, options_, false),
+        bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
+
+        MessagingReceipt memory receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
+            MessagingParams(dstEid_, peer, payload, options, false),
             refundAddress_
         );
+
+        emit Sent(msg.sender, amount_, dstEid_, receipt.guid);
     }
 
     // ========= FEE ESTIMATION ========= //
@@ -187,29 +210,34 @@ contract LZBridgeGateway is
         uint32 dstEid_,
         address to_,
         uint256 amount_,
-        bytes calldata options_
-    ) external view override returns (uint256 nativeFee, uint256 lzTokenFee) {
+        bytes calldata extraOptions_
+    ) external view override returns (MessagingFee memory fee) {
+        bytes32 peer = _getPeerOrRevert(dstEid_);
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
-        MessagingFee memory fee = ILayerZeroEndpointV2(LZ_ENDPOINT).quote(
-            MessagingParams(dstEid_, peers[dstEid_], payload, options_, false),
-            address(this)
-        );
-        return (fee.nativeFee, fee.lzTokenFee);
+        bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
+
+        return
+            ILayerZeroEndpointV2(LZ_ENDPOINT).quote(
+                MessagingParams(dstEid_, peer, payload, options, false),
+                address(this)
+            );
     }
 
-    // ========= LZ V2 RECEIVE FUNCTIONS ========= //
+    // ========= LZ RECEIVE FUNCTIONS (ILayerZeroReceiver) ========= //
 
     /// @inheritdoc ILayerZeroReceiver
     function lzReceive(
         Origin calldata origin_,
-        bytes32,
+        bytes32 guid_,
         bytes calldata message_,
         address,
         bytes calldata
     ) external payable override onlyEnabled {
-        _requireCaller(LZ_ENDPOINT);
-        if (peers[origin_.srcEid] != origin_.sender) revert LZBridgeGateway_InvalidMessageSource();
-        _decodeAndRoute(origin_.srcEid, message_);
+        if (msg.sender != LZ_ENDPOINT) revert LZBridgeGateway_OnlyEndpoint();
+        if (peers[origin_.srcEid] != origin_.sender)
+            revert LZBridgeGateway_OnlyPeer(origin_.srcEid, origin_.sender);
+
+        _decodeAndRoute(origin_.srcEid, guid_, message_);
     }
 
     /// @inheritdoc ILayerZeroReceiver
@@ -225,6 +253,18 @@ contract LZBridgeGateway is
     // ========= ADMIN FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
+    function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
+        peers[eid_] = peer_;
+        emit PeerSet(eid_, peer_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function setDelegate(address delegate_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
+        emit DelegateSet(delegate_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
     function setFacilitator(address facilitator_) external override onlyAdminRole {
         _setFacilitator(facilitator_);
     }
@@ -237,86 +277,46 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setPeer(uint32 eid_, address peerAddress_) external override onlyAdminRole {
-        bytes32 peer = peerAddress_ != address(0)
-            ? bytes32(uint256(uint160(peerAddress_)))
-            : bytes32(0);
-        peers[eid_] = peer;
-        emit PeerSet(eid_, peer);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function lzClear(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_
+    function setBridgedSupply(
+        uint256 bridgedSupply_
     ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
-        emit MessageCleared(origin_.srcEid, origin_.sender, origin_.nonce);
+        _requireCanonical();
+        bridgedSupply = bridgedSupply_;
+        emit BridgedSupplySet(bridgedSupply_);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function lzRetryReceive(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_,
-        bytes calldata extraData_
-    ) external payable override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).lzReceive{value: msg.value}(
-            origin_,
-            address(this),
-            guid_,
-            message_,
-            extraData_
-        );
-        emit MessageRetried(origin_.srcEid, origin_.sender, origin_.nonce);
+    function setEnforcedOptions(
+        EnforcedOptionParam[] calldata enforcedOptions_
+    ) external override onlyAdminRole {
+        for (uint256 i = 0; i < enforcedOptions_.length; i++) {
+            _assertOptionsType3(enforcedOptions_[i].options);
+            enforcedOptions[enforcedOptions_[i].eid][
+                enforcedOptions_[i].msgType
+            ] = enforcedOptions_[i].options;
+        }
+        emit EnforcedOptionsSet(enforcedOptions_);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function lzSkip(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_
+    function setRateLimits(
+        RateLimiterLib.RateLimitConfig[] calldata rateLimitConfigs_
+    ) external override onlyAdminRole {
+        _rateLimits.configure(rateLimitConfigs_);
+        emit RateLimitsSet(rateLimitConfigs_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function resetRateLimits(
+        uint32[] calldata eids_
     ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
-        emit NonceSkipped(srcEid_, sender_, nonce_);
+        _rateLimits.reset(eids_);
+        emit RateLimitsReset(eids_);
     }
 
-    /// @inheritdoc ILZBridgeGateway
-    function lzNilify(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-        emit MessageNilified(srcEid_, sender_, nonce_);
-    }
+    // ========= LZ ENDPOINT CONFIG ========= //
 
-    /// @inheritdoc ILZBridgeGateway
-    function lzBurn(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-        emit MessageBurned(srcEid_, sender_, nonce_);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
+    /// @inheritdoc ILZEndpointV2Admin
     function setSendLibrary(
         uint32 eid_,
         address lib_
@@ -324,7 +324,7 @@ contract LZBridgeGateway is
         ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
     }
 
-    /// @inheritdoc ILZBridgeGateway
+    /// @inheritdoc ILZEndpointV2Admin
     function setReceiveLibrary(
         uint32 eid_,
         address lib_,
@@ -338,22 +338,108 @@ contract LZBridgeGateway is
         );
     }
 
-    /// @inheritdoc ILZBridgeGateway
-    function setLZConfig(
+    /// @inheritdoc ILZEndpointV2Admin
+    function setReceiveLibraryTimeout(
+        uint32 eid_,
         address lib_,
-        bytes calldata params_
+        uint256 expiry_
     ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        SetConfigParam[] memory configParams = abi.decode(params_, (SetConfigParam[]));
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, configParams);
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibraryTimeout(
+            address(this),
+            eid_,
+            lib_,
+            expiry_
+        );
+    }
+
+    /// @inheritdoc ILZEndpointV2Admin
+    function setEndpointConfig(
+        address lib_,
+        SetConfigParam[] calldata params_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, params_);
+    }
+
+    // ========= LZ MESSAGE MANAGEMENT ========= //
+
+    /// @inheritdoc ILZEndpointV2Admin
+    function skip(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
+    }
+
+    /// @inheritdoc ILZEndpointV2Admin
+    function nilify(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_,
+        bytes32 payloadHash_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
+            address(this),
+            srcEid_,
+            sender_,
+            nonce_,
+            payloadHash_
+        );
+    }
+
+    /// @inheritdoc ILZEndpointV2Admin
+    function burn(
+        uint32 srcEid_,
+        bytes32 sender_,
+        uint64 nonce_,
+        bytes32 payloadHash_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
+            address(this),
+            srcEid_,
+            sender_,
+            nonce_,
+            payloadHash_
+        );
+    }
+
+    /// @inheritdoc ILZEndpointV2Admin
+    function clear(
+        Origin calldata origin_,
+        bytes32 guid_,
+        bytes calldata message_
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
+    }
+
+    // ========= VIEW FUNCTIONS ========= //
+
+    /// @inheritdoc ILZBridgeGateway
+    function rateLimits(
+        uint32 dstEid
+    )
+        external
+        view
+        override
+        returns (uint192 amountInFlight, uint64 lastUpdated, uint192 limit, uint64 window)
+    {
+        return _rateLimits.get(dstEid);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setBridgedSupply(
-        uint256 bridgedSupply_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        _requireCanonical();
-        bridgedSupply = bridgedSupply_;
-        emit BridgedSupplySet(bridgedSupply_);
+    function getAmountCanBeSent(
+        uint32 dstEid_
+    ) external view override returns (uint256 currentAmountInFlight, uint256 amountCanBeSent) {
+        return _rateLimits.amountCanBeSent(dstEid_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function combineOptions(
+        uint32 eid_,
+        uint16 msgType_,
+        bytes calldata extraOptions_
+    ) external view override returns (bytes memory) {
+        return _combineOptions(eid_, msgType_, extraOptions_);
     }
 
     // ========= ERC165 ========= //
@@ -363,6 +449,7 @@ contract LZBridgeGateway is
     ) public view override(PolicyEnabler) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
+            interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
@@ -371,11 +458,11 @@ contract LZBridgeGateway is
     // ========= PRIVATE FUNCTIONS ========= //
 
     /// @notice Decodes the message type from the payload and routes to the appropriate handler.
-    function _decodeAndRoute(uint32 srcEid_, bytes calldata payload_) private {
+    function _decodeAndRoute(uint32 srcEid_, bytes32 guid_, bytes calldata payload_) private {
         (uint8 msgType, bytes memory data) = abi.decode(payload_, (uint8, bytes));
 
         if (msgType == MSG_BRIDGE_OHM) {
-            _receiveBridgeOhm(srcEid_, data);
+            _receiveBridgeOhm(srcEid_, guid_, data);
         } else {
             revert LZBridgeGateway_InvalidMessageType(msgType);
         }
@@ -383,7 +470,7 @@ contract LZBridgeGateway is
 
     /// @notice Processes a received OHM bridge message.
     /// @dev On canonical chains, decrements bridgedSupply. Mints OHM to the recipient.
-    function _receiveBridgeOhm(uint32 srcEid_, bytes memory data_) private {
+    function _receiveBridgeOhm(uint32 srcEid_, bytes32 guid_, bytes memory data_) private {
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
 
@@ -397,10 +484,13 @@ contract LZBridgeGateway is
             emit BridgedSupplyDecreased(amount);
         }
 
+        // Rate limit inflow
+        _rateLimits.checkInflow(srcEid_, amount);
+
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
 
-        emit Received(to, amount, srcEid_);
+        emit Received(to, amount, srcEid_, guid_);
     }
 
     function _setFacilitator(address facilitator_) private {
@@ -409,8 +499,10 @@ contract LZBridgeGateway is
         emit FacilitatorSet(facilitator_);
     }
 
-    function _requireCaller(address expected_) private view {
-        if (msg.sender != expected_) revert LZBridgeGateway_InvalidCaller();
+    function _getPeerOrRevert(uint32 eid_) private view returns (bytes32) {
+        bytes32 peer = peers[eid_];
+        if (peer == bytes32(0)) revert LZBridgeGateway_NoPeer(eid_);
+        return peer;
     }
 
     function _requireCanonical() private view {
@@ -419,5 +511,47 @@ contract LZBridgeGateway is
 
     function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
         if (address_ == address(0)) revert LZBridgeGateway_InvalidAddress(parameter_);
+    }
+
+    // ========= ENFORCED OPTIONS (composed from OAppOptionsType3) ========= //
+
+    /// @notice Combines enforced options with caller-provided extra options.
+    function _combineOptions(
+        uint32 eid_,
+        uint16 msgType_,
+        bytes calldata extraOptions_
+    ) internal view returns (bytes memory) {
+        bytes memory enforced = enforcedOptions[eid_][msgType_];
+
+        // No enforced options, pass whatever the caller supplied
+        if (enforced.length == 0) return extraOptions_;
+
+        // No caller options, return enforced
+        if (extraOptions_.length == 0) return enforced;
+
+        // Caller provided extra options must be Type 3
+        if (extraOptions_.length >= 2) {
+            _assertOptionsType3Calldata(extraOptions_);
+            // Remove the first 2 bytes (type prefix) from extra and concatenate
+            return bytes.concat(enforced, extraOptions_[2:]);
+        }
+
+        // Invalid options
+        revert LZBridgeGateway_InvalidOptions(extraOptions_);
+    }
+
+    /// @notice Validates that options bytes begin with the Type 3 prefix.
+    function _assertOptionsType3(bytes memory options_) internal pure {
+        uint16 optionsType;
+        assembly {
+            optionsType := mload(add(options_, 2))
+        }
+        if (optionsType != _OPTION_TYPE_3) revert LZBridgeGateway_InvalidOptions(options_);
+    }
+
+    /// @notice Validates that calldata options bytes begin with the Type 3 prefix.
+    function _assertOptionsType3Calldata(bytes calldata options_) internal pure {
+        uint16 optionsType = uint16(bytes2(options_[:2]));
+        if (optionsType != _OPTION_TYPE_3) revert LZBridgeGateway_InvalidOptions(options_);
     }
 }

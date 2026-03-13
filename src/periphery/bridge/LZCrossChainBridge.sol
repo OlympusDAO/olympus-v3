@@ -3,6 +3,7 @@ pragma solidity >=0.8.30;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -15,7 +16,7 @@ import {Owned} from "solmate/auth/Owned.sol";
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
 
 /// @title LZCrossChainBridge
-/// @notice Sends OHM to other chains using LayerZero.
+/// @notice Sends OHM to other chains using LayerZero V2.
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. The user approves this contract for OHM, then calls sendOhm().
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
@@ -40,7 +41,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     /// forge-lint: disable-next-item(mixed-case-function)
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+        return (2, 0);
     }
 
     /// @inheritdoc ILZCrossChainBridge
@@ -79,7 +80,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
         uint32 dstEid_,
         address to_,
         uint256 amount_
-    ) external view override returns (uint256 nativeFee, uint256 lzTokenFee) {
+    ) external view override returns (MessagingFee memory fee) {
         return ILZBridgeGateway(gateway).estimateSendFee(dstEid_, to_, amount_, bytes(""));
     }
 

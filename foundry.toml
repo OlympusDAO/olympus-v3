@@ -25,10 +25,16 @@ additional_compiler_profiles = [
     { name = "ten-runs", optimizer_runs = 10 },
     { name = "five-thousand-runs", optimizer_runs = 5000 },
 ]
+# TODO: adjust LZ contracts here
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
+    { paths = "src/policies/bridge/LZBridgeGateway.sol", version = "0.8.30" },
+    { paths = "src/periphery/bridge/LZCrossChainBridge.sol", version = "0.8.30" },
+    { paths = "src/policies/interfaces/ILZBridgeGateway.sol", version = "0.8.30" },
+    { paths = "src/periphery/interfaces/ILZCrossChainBridge.sol", version = "0.8.30" },
+    { paths = "src/test/**/bridge/LZ*.sol", version = "0.8.30" },
     { paths = "src/scripts/ops/batches/**/LZ*.sol", version = "0.8.30" },
     { paths = "**", version = "0.8.15" },
 ]
