@@ -1903,13 +1903,14 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         _assertFeedsUnchanged(oldAssetData, assetData);
         _assertStrategyUnchanged(oldAssetData, assetData);
 
-        // Verify MA is not stored (but last price is)
+        // Verify MA is not stored (obs array should be empty)
         assertEq(assetData.storeMovingAverage, false, "storeMovingAverage");
         assertEq(assetData.movingAverageDuration, uint32(0), "movingAverageDuration");
-
-        // Verify that the last price was stored and can be retrieved
-        assertEq(assetData.numObservations, 1, "numObservations");
-        assertEq(assetData.obs[0], 105e18, "last price stored");
+        assertEq(assetData.numObservations, 0, "numObservations");
+        assertEq(assetData.obs.length, 0, "obs array should be empty");
+        assertEq(assetData.lastObservationTime, uint48(0), "lastObservationTime");
+        assertEq(assetData.nextObsIndex, 0, "nextObsIndex");
+        assertEq(assetData.cumulativeObs, 0, "cumulativeObs");
 
         // Verify the last price can be retrieved via getPrice with Variant.LAST
         (uint256 lastPrice, uint48 lastTimestamp) = price.getPrice(
@@ -1952,21 +1953,22 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         _assertFeedsUnchanged(oldAssetData, assetData);
         _assertStrategyUnchanged(oldAssetData, assetData);
 
-        // Verify MA is not stored (but last price is)
+        // Verify MA is not stored (obs array should be empty)
         assertEq(assetData.storeMovingAverage, false, "storeMovingAverage");
         assertEq(assetData.movingAverageDuration, uint32(0), "movingAverageDuration");
+        assertEq(assetData.numObservations, 0, "numObservations");
+        assertEq(assetData.obs.length, 0, "obs array should be empty");
+        assertEq(assetData.lastObservationTime, uint48(0), "lastObservationTime");
+        assertEq(assetData.nextObsIndex, 0, "nextObsIndex");
+        assertEq(assetData.cumulativeObs, 0, "cumulativeObs");
 
-        // Verify that the current price is stored as the last price
-        assertEq(assetData.numObservations, 1, "numObservations");
-        assertGe(assetData.obs.length, 1, "obs array has at least one element");
-
-        // Verify the last price can be retrieved via getPrice with Variant.LAST
+        // Verify the current price is fetched and stored as the last price
         (uint256 lastPrice, ) = price.getPrice(
             asset_SingleFeed_NoStrategy_NoMA,
             IPRICEv2.Variant.LAST
         );
         assertGt(lastPrice, 0, "last price is stored (not zero)");
-        // Note: lastTimestamp will be the current timestamp from getCurrentPrice
+        // Note: price will be fetched from the price feed via getCurrentPrice
     }
 
     // when the moving average configuration is being updated, when calling getCurrentPrice fails: it reverts

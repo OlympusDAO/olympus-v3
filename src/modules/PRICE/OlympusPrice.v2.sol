@@ -363,14 +363,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         // Emit PriceStored event (with raw observation price)
         emit PriceStored(asset_, price, currentTime);
 
-        // Also update cache (single source of truth for "last price")
-        // If asset uses MA in strategy, cache MA price (calculated from obs)
-        // Otherwise, cache the raw price
-        uint256 priceToCache = asset.useMovingAverage
-            ? asset.cumulativeObs / asset.numObservations
-            : price;
-        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: currentTime});
-        emit PriceCached(asset_, priceToCache, currentTime);
+        // Also update cache with the raw observation price
+        _cachedPrices[asset_] = PriceCache({price: price, cachedAt: currentTime});
+        emit PriceCached(asset_, price, currentTime);
     }
 
     /// @inheritdoc IPRICEv2
@@ -685,24 +680,23 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
                 }
             }
 
+            uint256 lastObsPrice = observations_[numObservations - 1];
+
             // Emit Price Stored event for new cached value
-            emit PriceStored(asset_, observations_[numObservations - 1], lastObservationTime_);
+            emit PriceStored(asset_, lastObsPrice, lastObservationTime_);
 
             // Also update cache (single source of truth for "last price")
-            // Cache the MA price (calculated from cumulativeObs)
-            uint256 maPrice = asset.cumulativeObs / asset.numObservations;
-            _cachedPrices[asset_] = PriceCache({price: maPrice, cachedAt: lastObservationTime_});
-            emit PriceCached(asset_, maPrice, lastObservationTime_);
+            // Cache the last observation (not the moving average)
+            _cachedPrices[asset_] = PriceCache({
+                price: lastObsPrice,
+                cachedAt: lastObservationTime_
+            });
+            emit PriceCached(asset_, lastObsPrice, lastObservationTime_);
         } else {
             // If not storing moving average, update cache directly (no observation array needed)
             // Validate that only 1 observation is provided (for caching)
             if (observations_.length > 1)
-                revert PRICE_ParamsInvalidObservationCount(
-                    asset_,
-                    observations_.length,
-                    0,
-                    1
-                );
+                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
 
             uint256 price;
             uint48 timestamp;
@@ -714,7 +708,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
                 timestamp = lastObservationTime_;
             }
 
-            // Update cache (single source of truth for "last price")
+            // Update cache
             _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
             emit PriceCached(asset_, price, timestamp);
         }
