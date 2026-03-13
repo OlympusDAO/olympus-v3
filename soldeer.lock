@@ -1,16 +1,23 @@
 [[dependencies]]
 name = "@layerzerolabs-lz-evm-messagelib-v2"
-version = "3.0.142"
-url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-messagelib-v2/3_0_142_26-10-2025_08:37:36_lz-evm-messagelib-v2.zip"
-checksum = "7b67b1c9e4787fd3ce865e6e780a7ac7643f3bbda9910eaf40b20395e46ad0fc"
-integrity = "64d977c2b83524199358f803875bb19e5f638d6589cb4b85f9a99747860d0dcd"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-messagelib-v2/3_0_162_27-02-2026_07:58:25_lz-evm-messagelib-v2.zip"
+checksum = "d8e9ae05e8c2a4a724a2fe1f27ed3cfc61aaf53cf261e2773f1c00b941d272df"
+integrity = "99e3b03d29b10f03c0be71d845cdef46ff6cd6976f46b4e9928c38a0c5471913"
 
 [[dependencies]]
 name = "@layerzerolabs-lz-evm-protocol-v2"
-version = "3.0.142"
-url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-protocol-v2/3_0_142_26-10-2025_08:37:50_lz-evm-protocol-v2.zip"
-checksum = "ae4876358329c0476688394587a08057e973a1f1387102a981e01518c6cfd4ef"
-integrity = "6be2c4d18786f165654af441a573b67d2f851f7e70e24b77b7d2d1104f890f85"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-protocol-v2/3_0_162_27-02-2026_07:58:39_lz-evm-protocol-v2.zip"
+checksum = "f894ed1e56d1fd6b7544bcd9db6d5178229b4e9911a815a23657b9e4b9a0ca32"
+integrity = "0f98e284369a98c633555df720e90f5a2cf420419b93643da9f016722d12cf90"
+
+[[dependencies]]
+name = "@layerzerolabs-lz-evm-v1-0-7"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-v1-0-7/3_0_162_27-02-2026_07:58:49_lz-evm-v1-0.zip"
+checksum = "6d531ce4160937fd1aa65db9b15a903caed78ee8ac062554ad93871f63c2a3b8"
+integrity = "451ddd49deb58410cdb08c3412ca784628b4d1bb37e3f3ef2542681d87ccd3fd"
 
 [[dependencies]]
 name = "@layerzerolabs-oapp-evm"
@@ -21,10 +28,10 @@ integrity = "9b5962846e82481219ab5592bcc38c3b9966d978a79615e3e8eb98d28373b266"
 
 [[dependencies]]
 name = "@layerzerolabs-test-devtools-evm-foundry"
-version = "0.2.11"
-url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-test-devtools-evm-foundry/0_2_11_21-08-2024_08:10:29_test-devtools-evm-foundry.zip"
-checksum = "8120a860d9a6f43cff72d645bf7cf6009a1e94a6f1e87fd8f0baeb37c2a7ff77"
-integrity = "a32463b0bcc15c638b8a50d3141171122c5e5c488f07264a368c6c006caf7583"
+version = "8.0.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-test-devtools-evm-foundry/8_0_1_14-12-2025_21:59:24_test-devtools-evm-foundry.zip"
+checksum = "e44c198c917aff47f8ce4b7469d3fd0dc84dc05ffdee28f0136c64f400a2bc93"
+integrity = "cb2acf42ee18ae51488af7fb9779a73c9e3984be82e695afcae336a694183178"
 
 [[dependencies]]
 name = "base58-solidity"
