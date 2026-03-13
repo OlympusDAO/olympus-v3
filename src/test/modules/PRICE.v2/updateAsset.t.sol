@@ -45,181 +45,6 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         testAsset2 = new MockERC20("Test Asset 2", "TST2", 18);
     }
 
-    // ========== HELPER FUNCTIONS ========== //
-
-    // Helper function to create an empty strategy component
-    function _emptyStrategy() internal pure returns (IPRICEv2.Component memory) {
-        return IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes(""));
-    }
-
-    // Helper function to verify strategy is unchanged between two asset states
-    function _assertStrategyUnchanged(
-        IPRICEv2.Asset memory oldAsset,
-        IPRICEv2.Asset memory newAsset
-    ) internal pure {
-        IPRICEv2.Component memory strategy = abi.decode(newAsset.strategy, (IPRICEv2.Component));
-        IPRICEv2.Component memory oldStrategy = abi.decode(oldAsset.strategy, (IPRICEv2.Component));
-        assertEq(
-            fromSubKeycode(strategy.target),
-            fromSubKeycode(oldStrategy.target),
-            "Strategy target"
-        );
-        assertEq(strategy.selector, oldStrategy.selector, "Strategy selector");
-        assertEq(strategy.params, oldStrategy.params, "Strategy params");
-        assertEq(newAsset.useMovingAverage, oldAsset.useMovingAverage, "useMovingAverage");
-    }
-
-    // Helper function to verify moving average is unchanged between two asset states
-    function _assertMovingAverageUnchanged(
-        IPRICEv2.Asset memory oldAsset,
-        IPRICEv2.Asset memory newAsset
-    ) internal pure {
-        assertEq(newAsset.storeMovingAverage, oldAsset.storeMovingAverage, "storeMovingAverage");
-        assertEq(
-            newAsset.movingAverageDuration,
-            oldAsset.movingAverageDuration,
-            "movingAverageDuration"
-        );
-        assertEq(newAsset.lastObservationTime, oldAsset.lastObservationTime, "lastObservationTime");
-        assertEq(newAsset.cumulativeObs, oldAsset.cumulativeObs, "cumulativeObs");
-    }
-
-    // Helper function to verify feeds were updated
-    function _assertFeedsUpdated(
-        IPRICEv2.Asset memory asset,
-        IPRICEv2.Component[] memory expectedFeeds
-    ) internal pure {
-        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, expectedFeeds.length, "feed count");
-        for (uint256 i = 0; i < expectedFeeds.length; i++) {
-            assertEq(
-                fromSubKeycode(feeds[i].target),
-                fromSubKeycode(expectedFeeds[i].target),
-                "Feed target not updated"
-            );
-            assertEq(feeds[i].selector, expectedFeeds[i].selector, "Feed selector not updated");
-            assertEq(feeds[i].params, expectedFeeds[i].params, "Feed params not updated");
-        }
-    }
-
-    // Helper function to verify feeds are unchanged between two asset states
-    function _assertFeedsUnchanged(
-        IPRICEv2.Asset memory oldAsset,
-        IPRICEv2.Asset memory newAsset
-    ) internal pure {
-        IPRICEv2.Component[] memory oldFeeds = abi.decode(oldAsset.feeds, (IPRICEv2.Component[]));
-        IPRICEv2.Component[] memory newFeeds = abi.decode(newAsset.feeds, (IPRICEv2.Component[]));
-        assertEq(newFeeds.length, oldFeeds.length, "Feed count should not change");
-        for (uint256 i = 0; i < oldFeeds.length; i++) {
-            assertEq(
-                fromSubKeycode(newFeeds[i].target),
-                fromSubKeycode(oldFeeds[i].target),
-                "Feed target should not change"
-            );
-            assertEq(newFeeds[i].selector, oldFeeds[i].selector, "Feed selector should not change");
-            assertEq(newFeeds[i].params, oldFeeds[i].params, "Feed params should not change");
-        }
-    }
-
-    // Helper function to verify strategy was updated to expected value
-    function _assertStrategyUpdated(
-        IPRICEv2.Asset memory asset,
-        IPRICEv2.Component memory expectedStrategy,
-        bool useMovingAverage
-    ) internal pure {
-        IPRICEv2.Component memory strategy = abi.decode(asset.strategy, (IPRICEv2.Component));
-        assertEq(
-            fromSubKeycode(strategy.target),
-            fromSubKeycode(expectedStrategy.target),
-            "Strategy target not updated"
-        );
-        assertEq(strategy.selector, expectedStrategy.selector, "Strategy selector not updated");
-        assertEq(strategy.params, expectedStrategy.params, "Strategy params not updated");
-        assertEq(asset.useMovingAverage, useMovingAverage, "useMovingAverage");
-    }
-
-    // Helper function to verify moving average was updated
-    function _assertMovingAverageUpdated(
-        IPRICEv2.Asset memory asset,
-        bool storeMovingAverage,
-        uint32 movingAverageDuration,
-        uint48 lastObservationTime,
-        uint256 cumulativeObs,
-        uint16 numObservations
-    ) internal pure {
-        assertEq(asset.storeMovingAverage, storeMovingAverage, "storeMovingAverage");
-        assertEq(asset.movingAverageDuration, movingAverageDuration, "movingAverageDuration");
-        assertEq(asset.lastObservationTime, lastObservationTime, "lastObservationTime");
-        assertEq(asset.cumulativeObs, cumulativeObs, "cumulativeObs");
-        assertEq(asset.numObservations, numObservations, "numObservations");
-    }
-
-    // Helper function to verify moving average is not stored (cleared)
-    function _assertMovingAverageNotStored(IPRICEv2.Asset memory asset) internal pure {
-        assertEq(asset.storeMovingAverage, false, "storeMovingAverage");
-        assertEq(asset.movingAverageDuration, uint32(0), "movingAverageDuration");
-        assertEq(asset.lastObservationTime, uint48(0), "lastObservationTime");
-        assertEq(asset.numObservations, 0, "numObservations");
-        assertEq(asset.nextObsIndex, 0, "nextObsIndex");
-    }
-
-    // Helper function to create a single price feed component
-    function _singleFeed(
-        AggregatorV2V3Interface feed
-    ) internal pure returns (IPRICEv2.Component memory) {
-        ChainlinkPriceFeeds.OneFeedParams memory params = ChainlinkPriceFeeds.OneFeedParams(
-            feed,
-            uint48(24 hours) // Default heartbeat
-        );
-
-        return
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getOneFeedPrice.selector,
-                abi.encode(params)
-            );
-    }
-
-    // Helper function to create a dual feed multiplication component
-    function _twoFeedMul(
-        AggregatorV2V3Interface baseFeed,
-        AggregatorV2V3Interface quoteFeed
-    ) internal pure returns (IPRICEv2.Component memory) {
-        ChainlinkPriceFeeds.TwoFeedParams memory params = ChainlinkPriceFeeds.TwoFeedParams(
-            baseFeed,
-            uint48(24 hours), // Default heartbeat
-            quoteFeed,
-            uint48(24 hours) // Default heartbeat
-        );
-
-        return
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
-                abi.encode(params)
-            );
-    }
-
-    // Helper function to create a simple strategy component (first non-zero price)
-    function _simpleStrategyFirstNonZero() internal pure returns (IPRICEv2.Component memory) {
-        return
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-                abi.encode(0)
-            );
-    }
-
-    // Helper function to create a simple strategy component (average price)
-    function _simpleStrategyAverage() internal pure returns (IPRICEv2.Component memory) {
-        return
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                ISimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode(0)
-            );
-    }
-
     // ========== MODIFIERS: Test Infrastructure (State Setup) ========== //
 
     // Asset with 1 feed, no strategy, no MA
@@ -1764,6 +1589,136 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             newObs[0] + newObs[1] + newObs[2],
             3
         );
+    }
+
+    // when the moving average configuration is being updated, when store moving average is true, when use moving average is false, when the strategy configuration is being updated: it caches the price without a moving average
+
+    function test_whenUpdatingMovingAverage_whenStoreMovingAverageTrue_cachesOnlyFeedPrice()
+        public
+    {
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        vm.startPrank(priceWriter);
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(onemaFeedParams)
+        );
+
+        // Initial add: MA stored and used
+        onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
+        price.addAsset(
+            address(onema),
+            true,
+            true,
+            uint32(observations.length) * OBSERVATION_FREQUENCY,
+            uint48(block.timestamp),
+            observations,
+            _simpleStrategyFirstNonZero(),
+            feeds
+        );
+
+        // Update: Stop using MA
+        onemaUsdPriceFeed.setLatestAnswer(int256(10e8)); // Feed returns 10e18
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: false,
+            updateStrategy: true, // Need to update strategy to stop using MA in aggregate
+            updateMovingAverage: true,
+            feeds: new IPRICEv2.Component[](0),
+            strategy: _simpleStrategyFirstNonZero(),
+            useMovingAverage: false, // STOP using MA
+            storeMovingAverage: true,
+            movingAverageDuration: uint32(observations.length) * OBSERVATION_FREQUENCY,
+            lastObservationTime: uint48(block.timestamp),
+            observations: observations
+        });
+
+        // Expected price:
+        // 1. Current feeds return 10e18.
+        // 2. MA is stored (MA = 5e18) but NOT used.
+        // 3. Strategy result: getFirstNonZeroPrice(Feed=10e18, MA is EXCLUDED) = 10e18.
+
+        price.updateAsset(address(onema), params);
+        vm.stopPrank();
+
+        (uint256 cachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(
+            cachedPrice,
+            10e18,
+            "Cache should EXCLUDE MA when useMovingAverage updated to false"
+        );
+    }
+
+    // when the moving average configured is being updated, when store moving average is true: the cached price should be inclusive of the moving average
+
+    function test_whenUpdatingMovingAverage_whenUseMovingAverageTrue_cachesInclusivePrice() public {
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        vm.startPrank(priceWriter);
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(onemaFeedParams)
+        );
+
+        // Initial add with 5e18
+        onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
+        price.addAsset(
+            address(onema),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(observations.length) * OBSERVATION_FREQUENCY,
+            uint48(block.timestamp),
+            observations,
+            IPRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode(0)
+            ),
+            feeds
+        );
+
+        // Update asset
+        onemaUsdPriceFeed.setLatestAnswer(int256(10e8)); // Feed returns 10e18
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: false,
+            updateStrategy: false,
+            updateMovingAverage: true, // triggers re-caching
+            feeds: new IPRICEv2.Component[](0),
+            strategy: _emptyStrategy(),
+            useMovingAverage: true, // Should remain true or be updated to true
+            storeMovingAverage: true,
+            movingAverageDuration: uint32(observations.length) * OBSERVATION_FREQUENCY,
+            lastObservationTime: uint48(block.timestamp),
+            observations: observations
+        });
+
+        // Current inclusive price:
+        // 1. Existing state from addAsset: MA = 5e18, useMovingAverage = true.
+        // Expected inclusive price:
+        // 1. Current feeds return 10e18.
+        // 2. MA = 5e18.
+        // 3. Strategy result: Average(Feed=10e18, MA=5e18) = (10 + 5) / 2 = 7.5e18.
+
+        price.updateAsset(address(onema), params);
+        vm.stopPrank();
+
+        (uint256 cachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(cachedPrice, 7.5e18, "Cache should be inclusive of MA after update");
     }
 
     // when the moving average configuration is being updated, when storeMovingAverage is false, when the strategy configuration is not being updated, given useMovingAverage is true: it reverts

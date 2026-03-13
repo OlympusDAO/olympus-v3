@@ -2986,6 +2986,90 @@ contract PriceV2Test is PriceV2BaseTest {
         }
     }
 
+    function test_addAsset_useMovingAverageFalse_cachesOnlyFeedPrice() public {
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        vm.startPrank(priceWriter);
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(onemaFeedParams)
+        );
+
+        onemaUsdPriceFeed.setLatestAnswer(int256(10e8)); // Feed returns 10e18
+
+        // Expected price:
+        // 1. Initial observations: [5e18, 5e18]. MA = 5e18.
+        // 2. Feed returns: 10e18.
+        // 3. storeMovingAverage is true, but useMovingAverage is false.
+        // 4. Since there is only one feed and useMovingAverage is false, the number of sources is 1.
+        // 5. Strategy must be empty. Result is simply the feed price = 10e18.
+
+        price.addAsset(
+            address(onema),
+            true, // storeMovingAverage
+            false, // useMovingAverage (MA should be excluded from strategy)
+            uint32(observations.length) * OBSERVATION_FREQUENCY,
+            uint48(block.timestamp),
+            observations,
+            _emptyStrategy(),
+            feeds
+        );
+        vm.stopPrank();
+
+        (uint256 cachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(
+            cachedPrice,
+            10e18,
+            "Cache should NOT be inclusive of MA when useMovingAverage is false"
+        );
+    }
+
+    function test_addAsset_useMovingAverageTrue_cachesInclusivePrice() public {
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        vm.startPrank(priceWriter);
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(onemaFeedParams)
+        );
+
+        onemaUsdPriceFeed.setLatestAnswer(int256(10e8)); // Feed returns 10e18
+
+        // Expected inclusive price:
+        // 1. Initial observations: [5e18, 5e18]. MA = 5e18.
+        // 2. Feed returns: 10e18.
+        // 3. Strategy result: Average(Feed=10e18, MA=5e18) = (10 + 5) / 2 = 7.5e18.
+
+        price.addAsset(
+            address(onema),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(observations.length) * OBSERVATION_FREQUENCY,
+            uint48(block.timestamp),
+            observations,
+            _simpleStrategyAverage(),
+            feeds
+        );
+        vm.stopPrank();
+
+        (uint256 cachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(cachedPrice, 7.5e18, "Cache should be inclusive of MA");
+    }
+
     // Note: Tests for updateAsset are in updateAsset.t.sol
 }
 /// forge-lint: disable-end(mixed-case-variable,mixed-case-function)

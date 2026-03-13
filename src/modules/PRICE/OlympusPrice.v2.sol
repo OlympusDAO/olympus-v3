@@ -416,8 +416,17 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
 
         // Update cache with the inclusive price
-        _cachedPrices[asset_] = PriceCache({price: cachePrice_, cachedAt: currentTime});
-        emit PriceCached(asset_, cachePrice_, currentTime);
+        _cachePrice(asset_, cachePrice_, currentTime);
+    }
+
+    /// @notice                 Internal helper to update the price cache and emit PriceCached event
+    ///
+    /// @param asset_           Asset to update the cache for
+    /// @param price_           Price to cache
+    /// @param timestamp_       Timestamp for the cache entry
+    function _cachePrice(address asset_, uint256 price_, uint48 timestamp_) internal {
+        _cachedPrices[asset_] = PriceCache({price: price_, cachedAt: timestamp_});
+        emit PriceCached(asset_, price_, timestamp_);
     }
 
     /// @inheritdoc IPRICEv2
@@ -543,8 +552,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             ? observations_[0]
             : price;
 
-        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: timestamp});
-        emit PriceCached(asset_, priceToCache, timestamp);
+        uint48 timestampToCache = (observations_.length == 1 && !useMovingAverage_)
+            ? lastObservationTime_
+            : timestamp;
+
+        _cachePrice(asset_, priceToCache, timestampToCache);
 
         // Set asset as approved and add to array
         asset.approved = true;
@@ -834,12 +846,19 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
         // If a single initial observation was provided for a non-MA asset, use that as the cached price.
         // Otherwise, cache the factual inclusive price.
-        uint256 priceToCache = (params_.observations.length == 1 && !asset.useMovingAverage)
+        uint256 priceToCache = (params_.updateMovingAverage &&
+            params_.observations.length == 1 &&
+            !params_.useMovingAverage)
             ? params_.observations[0]
             : price;
 
-        _cachedPrices[asset_] = PriceCache({price: priceToCache, cachedAt: timestamp});
-        emit PriceCached(asset_, priceToCache, timestamp);
+        uint48 timestampToCache = (params_.updateMovingAverage &&
+            params_.observations.length == 1 &&
+            !params_.useMovingAverage)
+            ? params_.lastObservationTime
+            : timestamp;
+
+        _cachePrice(asset_, priceToCache, timestampToCache);
 
         // Emit events (based on which updates occurred)
         if (params_.updateFeeds) emit AssetPriceFeedsUpdated(asset_);
