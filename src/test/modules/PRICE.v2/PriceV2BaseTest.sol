@@ -581,4 +581,39 @@ abstract contract PriceV2BaseTest is Test {
 
         vm.stopPrank();
     }
+
+    function _assertAssetData(
+        IPRICEv2.Asset memory data,
+        bool approved,
+        bool storeMovingAverage,
+        bool useMovingAverage,
+        uint32 movingAverageDuration,
+        uint48 lastObservationTime,
+        uint16 nextObsIndex,
+        uint16 numObservations,
+        uint256 cumulativeObs,
+        string memory label
+    ) internal virtual {
+        assertEq(data.approved, approved, string.concat(label, ": approved"));
+        assertEq(
+            data.storeMovingAverage,
+            storeMovingAverage,
+            string.concat(label, ": storeMovingAverage")
+        );
+        assertEq(data.useMovingAverage, useMovingAverage, string.concat(label, ": useMovingAverage"));
+        assertEq(
+            data.movingAverageDuration,
+            movingAverageDuration,
+            string.concat(label, ": movingAverageDuration")
+        );
+        assertEq(
+            data.lastObservationTime,
+            lastObservationTime,
+            string.concat(label, ": lastObservationTime")
+        );
+        assertEq(data.nextObsIndex, nextObsIndex, string.concat(label, ": nextObsIndex"));
+        assertEq(data.numObservations, numObservations, string.concat(label, ": numObservations"));
+        assertEq(data.cumulativeObs, cumulativeObs, string.concat(label, ": cumulativeObs"));
+        assertEq(data.obs.length, numObservations, string.concat(label, ": obs.length"));
+    }
 }

@@ -201,12 +201,18 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Get asset data from price module and check that it matches
         IPRICEv2.Asset memory assetData = price.getAssetData(address(ohm));
-        assertEq(assetData.approved, true);
-        assertEq(assetData.storeMovingAverage, true);
-        assertEq(assetData.useMovingAverage, false);
-        assertEq(assetData.movingAverageDuration, uint32(30 days));
-        assertEq(assetData.lastObservationTime, uint48(block.timestamp));
-        assertEq(assetData.obs.length, 90);
+        _assertAssetData(
+            assetData,
+            true,
+            true,
+            false,
+            uint32(30 days),
+            uint48(block.timestamp),
+            0,
+            90,
+            assetData.cumulativeObs,
+            "ohm"
+        );
         IPRICEv2.Component memory assetStrategy = abi.decode(
             assetData.strategy,
             (IPRICEv2.Component)
@@ -1575,13 +1581,21 @@ contract PriceV2Test is PriceV2BaseTest {
         // Get current cached data for onema from initialization
         uint48 start = uint48(block.timestamp);
         IPRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        _assertAssetData(
+            asset,
+            true,
+            true,
+            true,
+            uint32(5 days),
+            start,
+            0,
+            15,
+            asset.cumulativeObs,
+            "initial"
+        );
         assertEq(asset.obs[14], uint256(5e18));
-        assertEq(asset.obs.length, 15);
-        assertEq(asset.numObservations, 15);
         // cumulative obs is random based on the nonce, store for comparison after new value added (which will be larger)
         uint256 cumulativeObs = asset.cumulativeObs;
-        assertEq(asset.lastObservationTime, start);
-        assertEq(asset.nextObsIndex, 0); // starts at zero after initialization since that is the oldest data point
 
         // Warp forward in time and store a new price
         onemaUsdPriceFeed.setLatestAnswer(int256(50e8));
@@ -1594,13 +1608,21 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
+        _assertAssetData(
+            asset,
+            true,
+            true,
+            true,
+            uint32(5 days),
+            uint48(start + OBSERVATION_FREQUENCY),
+            1,
+            15,
+            asset.cumulativeObs,
+            "after first store"
+        );
         assertEq(asset.obs[0], uint256(50e18));
         assertEq(asset.obs[14], uint256(5e18));
-        assertEq(asset.obs.length, 15);
-        assertEq(asset.numObservations, 15);
         assertGt(asset.cumulativeObs, cumulativeObs); // new cumulative obs is larger than the previous one due to adding a high ob
-        assertEq(asset.lastObservationTime, uint48(start + OBSERVATION_FREQUENCY));
-        assertEq(asset.nextObsIndex, 1); // next index is 1 since we added a new value
 
         // Add several new values to test ring buffer
         for (uint256 i; i < 14; i++) {
@@ -1617,12 +1639,20 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
+        _assertAssetData(
+            asset,
+            true,
+            true,
+            true,
+            uint32(5 days),
+            lastStore,
+            0,
+            15,
+            uint256(50e18) * 15,
+            "after loop"
+        );
         assertEq(asset.obs[14], uint256(50e18));
-        assertEq(asset.obs.length, 15);
-        assertEq(asset.numObservations, 15);
         assertEq(asset.cumulativeObs, uint256(50e18) * 15); // all data points should be 50e18 now
-        assertEq(asset.lastObservationTime, lastStore);
-        assertEq(asset.nextObsIndex, 0); // next index should be zero since the ring buffer should wrap back around
 
         // Warp forward in time and store a new price
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
@@ -1633,7 +1663,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
-        assertEq(asset.nextObsIndex, 1); // next index should be 1 since we added a new value
+        assertEq(asset.nextObsIndex, 1, "next index should be 1 since we added a new value");
 
         // Store price again and check that event is emitted
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
@@ -1860,11 +1890,22 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Non-MA assets should not have any effect
         IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
-        assertEq(asset.lastObservationTime, uint48(0));
+        _assertAssetData(asset, true, false, false, 0, 0, 0, 0, 0, "weth");
 
         // MA asset should have been updated
         asset = price.getAssetData(address(onema));
-        assertEq(asset.lastObservationTime, uint48(start + OBSERVATION_FREQUENCY));
+        _assertAssetData(
+            asset,
+            true,
+            true,
+            true,
+            uint32(10 * OBSERVATION_FREQUENCY),
+            uint48(start + OBSERVATION_FREQUENCY),
+            1,
+            10,
+            asset.cumulativeObs,
+            "onema"
+        );
     }
 
     // ========== addAsset ========== //
@@ -2132,19 +2173,9 @@ contract PriceV2Test is PriceV2BaseTest {
         );
         assertEq(price_, 10e18);
 
-        uint256[] memory expectedObs = new uint256[](0);
-
         // Configuration should be stored correctly
         IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
-        assertEq(asset.approved, true, "approved");
-        assertEq(asset.storeMovingAverage, false, "storeMovingAverage");
-        assertEq(asset.useMovingAverage, false, "useMovingAverage");
-        assertEq(asset.movingAverageDuration, 0, "movingAverageDuration"); // Not updated when the moving average is not used/stored
-        assertEq(asset.nextObsIndex, 0, "nextObsIndex"); // Not updated when the moving average is not used/stored
-        assertEq(asset.numObservations, 0, "numObservations"); // Not updated when the moving average is not used/stored
-        assertEq(asset.lastObservationTime, 0, "lastObservationTime"); // Not updated when the moving average is not used/stored
-        assertEq(asset.cumulativeObs, 0, "cumulativeObs"); // Not updated when the moving average is not used/stored
-        assertEq(asset.obs, expectedObs, "obs"); // Not updated when the moving average is not used/stored
+        _assertAssetData(asset, true, false, false, 0, 0, 0, 0, 0, "weth");
         assertEq(asset.strategy, abi.encode(strategyEmpty), "strategy");
         assertEq(asset.feeds, abi.encode(feeds), "feeds");
 
@@ -2605,7 +2636,7 @@ contract PriceV2Test is PriceV2BaseTest {
         );
 
         // Should have a cached result
-        (uint256 price_, uint48 priceTimestamp_) = price.getPrice(
+        (uint256 price_,) = price.getPrice(
             address(weth),
             IPRICEv2.Variant.LAST
         );
@@ -2613,17 +2644,20 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Configuration should be stored correctly
         IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
-        assertEq(asset.approved, true);
-        assertEq(asset.storeMovingAverage, true);
-        assertEq(asset.useMovingAverage, true);
-        assertEq(asset.movingAverageDuration, uint32(16 hours));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(2)); // movingAverageDuration / observation frequency
-        assertEq(asset.lastObservationTime, priceTimestamp_);
-        assertEq(asset.cumulativeObs, expectedCumulativeObservations);
-        assertEq(asset.obs, observations);
-        assertEq(asset.strategy, abi.encode(averageStrategy));
-        assertEq(asset.feeds, abi.encode(feeds));
+        _assertAssetData(
+            asset,
+            true,
+            true,
+            true,
+            uint32(16 hours),
+            uint48(block.timestamp),
+            0,
+            2,
+            expectedCumulativeObservations,
+            "weth"
+        );
+        assertEq(asset.strategy, abi.encode(averageStrategy), "strategy");
+        assertEq(asset.feeds, abi.encode(feeds), "feeds");
     }
 
     function test_addAsset_withMedianStrategy_twoFeeds_movingAverage(uint256 nonce_) public {
