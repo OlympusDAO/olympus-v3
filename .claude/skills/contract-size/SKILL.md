@@ -125,7 +125,7 @@ Both limits are hard constraints on mainnet.
 | 15   | 24,565       | ✅ **(optimal)** |
 | 20+  | 24,583+      | ❌               |
 
-Operator.sol uses `optimizer_runs = 10` in foundry.toml for safety margin.
+The repository default is `optimizer_runs = 10000`; `Operator.sol` is a bytecode-size exception compiled with `optimizer_runs = 10` via the `ten-runs` profile in `foundry.toml`.
 
 ## Workflow Summary
 
