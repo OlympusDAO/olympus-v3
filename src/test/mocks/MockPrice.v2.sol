@@ -132,6 +132,10 @@ contract MockPrice is PRICEv2 {
         address base_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
+        // Mimic PRICE's behaviour of reverting if either asset is not approved
+        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
+        if (!assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
+
         uint256 assetPrice;
         uint256 basePrice;
         uint48 priceTimestamp;
