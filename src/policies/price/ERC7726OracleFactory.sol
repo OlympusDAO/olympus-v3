@@ -36,17 +36,29 @@ contract ERC7726OracleFactory is
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
+    /// @notice The PRICE module
     IPRICEv2 public PRICE;
 
+    /// @notice Reference implementation for cloning
     ERC7726OracleCloneable public immutable ORACLE_IMPLEMENTATION;
 
+    /// @notice Whether new oracle creation is enabled
     bool public isCreationEnabled;
 
+    /// @notice Internal array of all deployed oracles
     address[] internal _oracles;
+
+    /// @notice Mapping from maxAge to oracle
     mapping(uint48 maxAge => address oracle) internal _maxAgeToOracle;
+
+    /// @notice Mapping from oracle to maxAge
     mapping(address oracle => uint48 maxAge) internal _oracleToMaxAge;
+
+    /// @notice Mapping to validate deployed oracles
     mapping(address oracle => bool) public isOracle;
-    mapping(address oracle => bool) public _isOracleEnabled;
+
+    /// @notice Mapping to track if an oracle is enabled
+    mapping(address oracle => bool) internal _isOracleEnabled;
 
     bytes32 internal constant _DEFAULT_ORACLE_NAME = bytes32("ERC7726 Oracle");
 

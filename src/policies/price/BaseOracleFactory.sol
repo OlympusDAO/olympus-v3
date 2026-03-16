@@ -53,7 +53,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     mapping(address oracle => address quoteToken) internal _oracleToQuoteToken;
 
     /// @notice Mapping to track if an oracle is enabled
-    mapping(address => bool) public _isOracleEnabled;
+    mapping(address => bool) internal _isOracleEnabled;
 
     /// @notice Whether new oracle creation is enabled
     bool public isCreationEnabled;
