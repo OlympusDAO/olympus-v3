@@ -49,7 +49,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IPriceCache, IV
         // Require PRICE v1.2+ (major=1, minor>=2) or v2+ (major>=2)
         // Cast to Module to access VERSION() function
         (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major == 1 && minor < 2)
+        if ((major == 1 && minor < 2) || major < 1)
             revert IPriceConfigv2_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
 
         // Verify the PRICE module supports IPRICEv2 interface
