@@ -17,7 +17,7 @@ forge build --sizes --contracts src/path/to/Contract.sol
 **Check with specific optimizer runs:**
 
 ```bash
-forge build --sizes --optimizer-runs src/path/to/Contract.sol < N > --contracts
+forge build --sizes --optimizer-runs <N> --contracts src/path/to/Contract.sol
 ```
 
 **Check all contracts (existing script):**
