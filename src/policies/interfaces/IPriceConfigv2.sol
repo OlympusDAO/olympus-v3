@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.15;
 
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {SubKeycode} from "src/Submodules.sol";
