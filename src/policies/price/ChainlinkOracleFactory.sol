@@ -46,6 +46,7 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
     function _encodeOracleData(
         address baseToken_,
         address quoteToken_,
+        uint48,
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Compose name from token symbols: "base/quote Chainlink Oracle"

@@ -543,14 +543,14 @@ contract OracleProposalTest is ProposalTest {
         assertTrue(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify oracles deployed
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds);
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, 0);
         assertTrue(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
         assertTrue(
             IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
             "Chainlink oracle not enabled"
         );
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds);
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, 0);
         assertTrue(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
         assertTrue(
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),

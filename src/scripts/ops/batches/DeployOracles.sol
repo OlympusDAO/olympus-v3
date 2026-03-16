@@ -145,7 +145,7 @@ contract DeployOracles is BatchScriptV2 {
         string memory factoryName = _isChainlinkFactory ? "Chainlink" : "Morpho";
 
         // Verify oracle was deployed
-        address oracle = IOracleFactory(factory).getOracle(_baseToken, _quoteToken);
+        address oracle = IOracleFactory(factory).getOracle(_baseToken, _quoteToken, 0);
         require(oracle != address(0), string.concat(factoryName, " oracle not deployed"));
         console2.log(factoryName, " oracle deployed:", oracle);
 

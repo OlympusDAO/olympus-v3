@@ -33,6 +33,7 @@ contract ChainlinkOracleFactoryTest is Test {
 
     uint8 public constant PRICE_DECIMALS = 18;
     uint32 public constant OBSERVATION_FREQUENCY = 1 hours;
+    uint48 public constant DEFAULT_MAX_AGE = 1 hours;
 
     uint256 public constant BASE_PRICE = 2e18;
     uint256 public constant QUOTE_PRICE = 1e18;
@@ -90,10 +91,11 @@ contract ChainlinkOracleFactoryTest is Test {
     /// @notice Creates an oracle via the factory
     function _createOracle(
         address baseToken_,
-        address quoteToken_
+        address quoteToken_,
+        uint48 maxAge_
     ) internal returns (address oracle) {
         vm.prank(admin);
-        oracle = factory.createOracle(baseToken_, quoteToken_, bytes(""));
+        oracle = factory.createOracle(baseToken_, quoteToken_, maxAge_, bytes(""));
     }
 
     /// @notice Enables the factory
@@ -161,18 +163,26 @@ contract ChainlinkOracleFactoryTest is Test {
     }
 
     modifier givenOracleIsCreated() {
-        _createOracle(address(baseToken), address(quoteToken));
+        _createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE);
         _;
     }
 
     modifier givenOracleIsEnabled() {
-        address oracle = factory.getOracle(address(baseToken), address(quoteToken));
+        address oracle = factory.getOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE
+        );
         _enableOracle(oracle);
         _;
     }
 
     modifier givenOracleIsDisabled() {
-        address oracle = factory.getOracle(address(baseToken), address(quoteToken));
+        address oracle = factory.getOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE
+        );
         _disableOracle(oracle);
         _;
     }

@@ -16,7 +16,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
         address caller_
     ) public givenFactoryIsEnabled givenOracleIsCreated givenOracleIsDisabled {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.assume(caller_ != admin && caller_ != oracleManager);
 
@@ -35,7 +39,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenFactoryIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
@@ -68,7 +76,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -91,7 +103,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenOracleIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectEmit(true, false, false, false);
         emit IOracleFactory.OracleEnabled(oracle);
@@ -111,7 +127,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenOracleIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.prank(oracleManager);
         factory.enableOracle(oracle);
@@ -128,7 +148,11 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenOracleIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         // Expect revert
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);

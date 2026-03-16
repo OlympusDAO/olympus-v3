@@ -61,6 +61,7 @@ contract MorphoOracleFactory is BaseOracleFactory {
     function _encodeOracleData(
         address collateralToken_,
         address loanToken_,
+        uint48,
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Calculate scale factor

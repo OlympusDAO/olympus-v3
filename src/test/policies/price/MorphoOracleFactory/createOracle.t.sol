@@ -27,7 +27,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(caller_);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when factory is disabled
@@ -37,7 +42,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when creation is disabled
@@ -51,7 +61,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         vm.expectRevert(IOracleFactory.OracleFactory_CreationDisabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when collateral token is zero address
@@ -63,7 +78,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(0), address(loanToken), bytes(""));
+        factory.createOracle(address(0), address(loanToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when collateral token is not a contract
@@ -77,7 +92,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(nonContract, address(loanToken), bytes(""));
+        factory.createOracle(nonContract, address(loanToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when loan token is zero address
@@ -89,7 +104,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(0), bytes(""));
+        factory.createOracle(address(collateralToken), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when loan token is not a contract
@@ -103,7 +118,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), nonContract, bytes(""));
+        factory.createOracle(address(collateralToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when collateral token is not in PRICE module
@@ -118,7 +133,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(newToken), address(loanToken), bytes(""));
+        factory.createOracle(address(newToken), address(loanToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when loan token is not in PRICE module
@@ -133,7 +148,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(newToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(newToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when oracle already exists
@@ -142,7 +162,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     function test_whenOracleAlreadyExists_reverts() public givenFactoryIsEnabled {
         // Create first oracle
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
 
         // Try to create duplicate
         vm.expectRevert(
@@ -154,7 +179,50 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    // when oracle exists for one maxAge
+    //  [X] creating oracle with a different maxAge should succeed
+    //  [X] each maxAge should map to a different oracle
+
+    function test_whenDifferentMaxAge_createsDistinctOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle1 = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        uint48 secondMaxAge = DEFAULT_MAX_AGE + 1;
+        vm.prank(admin);
+        address oracle2 = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            secondMaxAge,
+            bytes("")
+        );
+
+        assertNotEq(oracle1, address(0), "First oracle should be created");
+        assertNotEq(oracle2, address(0), "Second oracle should be created");
+        assertNotEq(oracle1, oracle2, "Oracles should be different for different maxAge");
+
+        assertEq(
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE),
+            oracle1,
+            "First oracle should be stored at first maxAge"
+        );
+        assertEq(
+            factory.getOracle(address(collateralToken), address(loanToken), secondMaxAge),
+            oracle2,
+            "Second oracle should be stored at second maxAge"
+        );
     }
 
     // when token decimals cause overflow
@@ -180,7 +248,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(lowDecimalsToken), address(highDecimalsToken), bytes(""));
+        factory.createOracle(
+            address(lowDecimalsToken),
+            address(highDecimalsToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when token decimals are valid
@@ -208,6 +281,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         address oracle = factory.createOracle(
             address(collateralToken),
             address(loanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -216,14 +290,14 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
         // Verify oracle is stored in mapping
         assertEq(
-            factory.getOracle(address(collateralToken), address(loanToken)),
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE),
             oracle,
             "Oracle should be stored in mapping"
         );
 
         // Verify that there is no oracle for a different ordering
         assertEq(
-            factory.getOracle(address(loanToken), address(collateralToken)),
+            factory.getOracle(address(loanToken), address(collateralToken), DEFAULT_MAX_AGE),
             address(0),
             "There should be no oracle for a different ordering"
         );
@@ -290,7 +364,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         _setPRICEPrices(address(loan18), 1e18);
 
         vm.prank(admin);
-        address oracle = factory.createOracle(address(col6), address(loan18), bytes(""));
+        address oracle = factory.createOracle(
+            address(col6),
+            address(loan18),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
 
         // Verify scale factor calculation
         // Scale factor = 10^(36 + loanDecimals - collateralDecimals)
@@ -311,6 +390,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         address oracle = factory.createOracle(
             address(collateralToken),
             address(loanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -319,9 +399,29 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
         // Verify oracle is stored in mapping
         assertEq(
-            factory.getOracle(address(collateralToken), address(loanToken)),
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE),
             oracle,
             "Oracle should be stored in mapping"
+        );
+    }
+
+    // when maxAge is zero
+    //  [X] it creates oracle successfully
+
+    function test_whenMaxAgeIsZero_succeeds() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            0,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be deployed");
+        assertEq(
+            factory.getOracle(address(collateralToken), address(loanToken), 0),
+            oracle,
+            "Oracle should be stored for maxAge=0"
         );
     }
 
@@ -334,7 +434,12 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
         // Call function
         vm.prank(manager);
-        factory.createOracle(address(collateralToken), address(loanToken), bytes(""));
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

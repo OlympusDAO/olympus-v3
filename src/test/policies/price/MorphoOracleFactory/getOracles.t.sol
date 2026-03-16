@@ -21,7 +21,11 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
     //  [X] it returns array with one oracle
 
     function test_whenOneOracleExists_returnsArrayWithOneOracle() public givenFactoryIsEnabled {
-        address oracle = _createOracle(address(collateralToken), address(loanToken));
+        address oracle = _createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         address[] memory oracles = factory.getOracles();
 
@@ -37,7 +41,11 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
         givenFactoryIsEnabled
     {
         // Create first oracle
-        address oracle1 = _createOracle(address(collateralToken), address(loanToken));
+        address oracle1 = _createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         // Create second oracle with different tokens
         MockERC20 collateralToken2 = new MockERC20("Collateral Token 2", "COL2", 18);
@@ -45,7 +53,11 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
         _setPRICEPrices(address(collateralToken2), 3e18);
         _setPRICEPrices(address(loanToken2), 1e18);
 
-        address oracle2 = _createOracle(address(collateralToken2), address(loanToken2));
+        address oracle2 = _createOracle(
+            address(collateralToken2),
+            address(loanToken2),
+            DEFAULT_MAX_AGE
+        );
 
         // Create third oracle
         MockERC20 collateralToken3 = new MockERC20("Collateral Token 3", "COL3", 18);
@@ -53,7 +65,11 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
         _setPRICEPrices(address(collateralToken3), 4e18);
         _setPRICEPrices(address(loanToken3), 1e18);
 
-        address oracle3 = _createOracle(address(collateralToken3), address(loanToken3));
+        address oracle3 = _createOracle(
+            address(collateralToken3),
+            address(loanToken3),
+            DEFAULT_MAX_AGE
+        );
 
         address[] memory oracles = factory.getOracles();
 

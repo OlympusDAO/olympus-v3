@@ -97,11 +97,13 @@ interface IOracleFactory {
     ///
     /// @param  baseToken_     The base token address
     /// @param  quoteToken_    The quote token address
+    /// @param  maxAge_        The maximum age (in seconds) of cached prices used by the oracle
     /// @param  customParams_  Service-specific custom parameters (can be empty)
     /// @return oracle         The address of the created oracle
     function createOracle(
         address baseToken_,
         address quoteToken_,
+        uint48 maxAge_,
         bytes calldata customParams_
     ) external returns (address oracle);
 
@@ -109,10 +111,12 @@ interface IOracleFactory {
     ///
     /// @param  baseToken_     The base token address
     /// @param  quoteToken_    The quote token address
+    /// @param  maxAge_        The maximum age (in seconds) of cached prices used by the oracle
     /// @return oracle         The address of the oracle, or address(0) if not found
     function getOracle(
         address baseToken_,
-        address quoteToken_
+        address quoteToken_,
+        uint48 maxAge_
     ) external view returns (address oracle);
 
     /// @notice Gets all deployed oracle addresses

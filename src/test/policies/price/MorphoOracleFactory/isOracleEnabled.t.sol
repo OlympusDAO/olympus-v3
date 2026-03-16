@@ -16,7 +16,11 @@ contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenFactoryIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         assertFalse(
             factory.isOracleEnabled(oracle),
@@ -45,7 +49,11 @@ contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenCreationIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         assertTrue(
             factory.isOracleEnabled(oracle),
@@ -62,7 +70,11 @@ contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenOracleIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         assertFalse(factory.isOracleEnabled(oracle), "Should return false when oracle is disabled");
     }
@@ -71,7 +83,11 @@ contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
     //  [X] it returns true
 
     function test_whenOracleIsEnabled() public givenFactoryIsEnabled givenOracleIsCreated {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         assertTrue(factory.isOracleEnabled(oracle), "Should return true when oracle is enabled");
     }

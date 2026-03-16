@@ -174,5 +174,70 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             "latestRound should return correct round ID"
         );
     }
+
+    // when cached prices are fresh (within maxAge)
+    //  [X] it returns cached prices even if live prices changed
+
+    function test_whenCachedPricesAreFresh_returnsCachedPrices(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        // Change live prices without storing
+        _setPRICEPrices(address(baseToken), 15e18); // live base
+        _setPRICEPrices(address(quoteToken), 5e18); // live quote
+
+        // Fuzz warp to a time strictly within maxAge so cache remains fresh
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE - 1));
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        // Cached ratio should still be BASE_PRICE / QUOTE_PRICE = 2
+        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE; // 2e18
+        (, int256 answer, , , ) = oracle.latestRoundData();
+
+        assertEq(answer, int256(expectedCachedPrice), "Should return cached price while fresh");
+    }
+
+    function test_whenCachedAgeEqualsMaxAge_returnsCachedPrices() public givenPricesAreStored {
+        // Change live prices without storing so we can distinguish cache vs live paths
+        _setPRICEPrices(address(baseToken), 15e18); // live base
+        _setPRICEPrices(address(quoteToken), 5e18); // live quote
+
+        // Border case: cached age is exactly maxAge and should still be treated as fresh
+        vm.warp(lastStoredTimestamp + DEFAULT_MAX_AGE);
+
+        // Cached ratio remains BASE_PRICE / QUOTE_PRICE = 2
+        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE; // 2e18
+        (, int256 answer, , , ) = oracle.latestRoundData();
+
+        assertEq(
+            answer,
+            int256(expectedCachedPrice),
+            "Should return cached price at maxAge boundary"
+        );
+    }
+
+    // when cached prices are stale (older than maxAge)
+    //  [X] it returns live prices
+
+    function test_whenCachedPricesAreStale_returnsLivePrices(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        // Change live prices without storing
+        uint256 liveBase = 15e18;
+        uint256 liveQuote = 5e18;
+        _setPRICEPrices(address(baseToken), liveBase);
+        _setPRICEPrices(address(quoteToken), liveQuote);
+
+        // Live ratio = (15 / 5) * 1e18 = 3e18
+        uint256 expectedLivePrice = (liveBase * 10 ** PRICE_DECIMALS) / liveQuote;
+        (, int256 answer, , , ) = oracle.latestRoundData();
+
+        assertEq(answer, int256(expectedLivePrice), "Should return live price when cache is stale");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

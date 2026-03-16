@@ -25,7 +25,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(caller_);
-        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when factory is disabled
@@ -35,7 +35,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when creation is disabled
@@ -49,7 +49,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.expectRevert(IOracleFactory.OracleFactory_CreationDisabled.selector);
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when base token is zero address
@@ -61,7 +61,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(0), address(quoteToken), bytes(""));
+        factory.createOracle(address(0), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when base token is not a contract
@@ -75,7 +75,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(nonContract, address(quoteToken), bytes(""));
+        factory.createOracle(nonContract, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when quote token is zero address
@@ -87,7 +87,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), address(0), bytes(""));
+        factory.createOracle(address(baseToken), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when quote token is not a contract
@@ -101,7 +101,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), nonContract, bytes(""));
+        factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when base token is not configured in PRICE module
@@ -118,7 +118,12 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(unconfiguredToken), address(quoteToken), bytes(""));
+        factory.createOracle(
+            address(unconfiguredToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when quote token is not configured in PRICE module
@@ -135,7 +140,12 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), address(unconfiguredToken), bytes(""));
+        factory.createOracle(
+            address(baseToken),
+            address(unconfiguredToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
     }
 
     // when oracle already exists
@@ -155,7 +165,45 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when oracle exists for one maxAge
+    //  [X] creating oracle with a different maxAge should succeed
+    //  [X] each maxAge should map to a different oracle
+
+    function test_whenDifferentMaxAge_createsDistinctOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle1 = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        uint48 secondMaxAge = DEFAULT_MAX_AGE + 1;
+        vm.prank(admin);
+        address oracle2 = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            secondMaxAge,
+            bytes("")
+        );
+
+        assertNotEq(oracle1, address(0), "First oracle should be created");
+        assertNotEq(oracle2, address(0), "Second oracle should be created");
+        assertNotEq(oracle1, oracle2, "Oracles should be different for different maxAge");
+
+        assertEq(
+            factory.getOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE),
+            oracle1,
+            "First oracle should be stored at first maxAge"
+        );
+        assertEq(
+            factory.getOracle(address(baseToken), address(quoteToken), secondMaxAge),
+            oracle2,
+            "Second oracle should be stored at second maxAge"
+        );
     }
 
     // when all conditions are met
@@ -179,14 +227,19 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         emit IOracleFactory.OracleEnabled(address(0)); // oracle address (will be checked separately)
 
         vm.prank(admin);
-        address oracle = factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        address oracle = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
 
         // Check oracle is not zero
         assertNotEq(oracle, address(0), "Oracle address should not be zero");
 
         // Check oracle is stored in mapping
         assertEq(
-            factory.getOracle(address(baseToken), address(quoteToken)),
+            factory.getOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE),
             oracle,
             "Oracle should be stored in mapping"
         );
@@ -220,7 +273,7 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(manager);
-        factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when called by oracle manager
@@ -228,9 +281,34 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
 
     function test_whenCalledByOracleManager_succeeds() public givenFactoryIsEnabled {
         vm.prank(oracleManager);
-        address oracle = factory.createOracle(address(baseToken), address(quoteToken), bytes(""));
+        address oracle = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
 
         assertNotEq(oracle, address(0), "Oracle address should not be zero");
+    }
+
+    // when maxAge is zero
+    //  [X] it creates oracle successfully
+
+    function test_whenMaxAgeIsZero_succeeds() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            0,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle address should not be zero");
+        assertEq(
+            factory.getOracle(address(baseToken), address(quoteToken), 0),
+            oracle,
+            "Oracle should be stored for maxAge=0"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

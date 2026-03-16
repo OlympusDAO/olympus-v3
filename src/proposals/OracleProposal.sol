@@ -235,14 +235,14 @@ contract OracleProposal is GovernorBravoProposal {
         require(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify OHM/USDS oracles were deployed
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds);
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, 0);
         require(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
         require(
             IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
             "OHM/USDS Chainlink oracle not enabled"
         );
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds);
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, 0);
         require(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
         require(
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),

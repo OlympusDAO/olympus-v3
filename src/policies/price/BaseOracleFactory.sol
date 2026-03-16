@@ -155,11 +155,13 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     ///
     /// @param  baseToken_     The base token address
     /// @param  quoteToken_    The quote token address
+    /// @param  maxAge_        The maximum age (in seconds) of cached prices used by the oracle
     /// @param  customParams_  Service-specific custom parameters (can be empty)
     /// @return bytes          The encoded bytes for cloning
     function _encodeOracleData(
         address baseToken_,
         address quoteToken_,
+        uint48 maxAge_,
         bytes calldata customParams_
     ) internal view virtual returns (bytes memory);
 
@@ -169,6 +171,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     function createOracle(
         address baseToken_,
         address quoteToken_,
+        uint48 maxAge_,
         bytes calldata customParams_
     ) external override onlyEnabled onlyOracleManagerOrAdminRole returns (address oracle) {
         // Check if creation is enabled
@@ -197,7 +200,12 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         PRICE.getPrice(quoteToken_);
 
         // Get service-specific encoded data (includes validation, calculation, and encoding)
-        bytes memory oracleData = _encodeOracleData(baseToken_, quoteToken_, customParams_);
+        bytes memory oracleData = _encodeOracleData(
+            baseToken_,
+            quoteToken_,
+            maxAge_,
+            customParams_
+        );
 
         // Get oracle implementation
         address implementation = _getOracleImplementation();
@@ -223,7 +231,8 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @inheritdoc IOracleFactory
     function getOracle(
         address baseToken_,
-        address quoteToken_
+        address quoteToken_,
+        uint48
     ) external view override returns (address oracle) {
         oracle = _tokensToOracle[baseToken_][quoteToken_];
     }

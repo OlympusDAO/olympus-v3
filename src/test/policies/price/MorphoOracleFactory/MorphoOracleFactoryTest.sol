@@ -33,6 +33,7 @@ contract MorphoOracleFactoryTest is Test {
 
     uint8 public constant PRICE_DECIMALS = 18;
     uint32 public constant OBSERVATION_FREQUENCY = 1 hours;
+    uint48 public constant DEFAULT_MAX_AGE = 1 hours;
 
     // ========== SETUP ========== //
 
@@ -87,10 +88,11 @@ contract MorphoOracleFactoryTest is Test {
     /// @notice Creates an oracle via the factory
     function _createOracle(
         address collateralToken_,
-        address loanToken_
+        address loanToken_,
+        uint48 maxAge_
     ) internal returns (address oracle) {
         vm.prank(admin);
-        oracle = factory.createOracle(collateralToken_, loanToken_, bytes(""));
+        oracle = factory.createOracle(collateralToken_, loanToken_, maxAge_, bytes(""));
     }
 
     /// @notice Enables the factory
@@ -158,18 +160,26 @@ contract MorphoOracleFactoryTest is Test {
     }
 
     modifier givenOracleIsCreated() {
-        _createOracle(address(collateralToken), address(loanToken));
+        _createOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE);
         _;
     }
 
     modifier givenOracleIsEnabled() {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
         _enableOracle(oracle);
         _;
     }
 
     modifier givenOracleIsDisabled() {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
         _disableOracle(oracle);
         _;
     }

@@ -21,7 +21,9 @@ contract MorphoOracleCloneableTest is MorphoOracleFactoryTest {
         _enableFactory();
 
         // Create oracle
-        oracle = IMorphoOracle(_createOracle(address(collateralToken), address(loanToken)));
+        oracle = IMorphoOracle(
+            _createOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE)
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable, unwrapped-modifier-logic)

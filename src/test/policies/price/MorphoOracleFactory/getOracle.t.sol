@@ -11,17 +11,26 @@ contract MorphoOracleFactoryGetOracleTest is MorphoOracleFactoryTest {
     //  [X] it returns oracle address
 
     function test_whenOracleExists() public givenFactoryIsEnabled {
-        address oracle = _createOracle(address(collateralToken), address(loanToken));
+        address oracle = _createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         assertEq(
-            factory.getOracle(address(collateralToken), address(loanToken)),
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE),
             oracle,
             "Should return oracle address"
         );
         assertEq(
-            factory.getOracle(address(loanToken), address(collateralToken)),
+            factory.getOracle(address(loanToken), address(collateralToken), DEFAULT_MAX_AGE),
             address(0),
             "There should be no oracle for a different ordering"
+        );
+        assertEq(
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE + 1),
+            address(0),
+            "There should be no oracle for a different maxAge"
         );
     }
 
@@ -30,7 +39,7 @@ contract MorphoOracleFactoryGetOracleTest is MorphoOracleFactoryTest {
 
     function test_whenOracleDoesNotExist() public view {
         assertEq(
-            factory.getOracle(address(collateralToken), address(loanToken)),
+            factory.getOracle(address(collateralToken), address(loanToken), DEFAULT_MAX_AGE),
             address(0),
             "Should return address(0) when oracle does not exist"
         );

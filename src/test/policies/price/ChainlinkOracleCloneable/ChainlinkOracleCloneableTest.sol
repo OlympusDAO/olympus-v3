@@ -25,7 +25,9 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
         vm.warp(1000);
 
         // Create oracle
-        oracle = IChainlinkOracle(_createOracle(address(baseToken), address(quoteToken)));
+        oracle = IChainlinkOracle(
+            _createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE)
+        );
     }
 
     function _storePrices() internal {

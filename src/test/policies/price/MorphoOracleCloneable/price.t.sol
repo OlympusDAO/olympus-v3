@@ -117,6 +117,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         address newOracle = factory.createOracle(
             address(newCollateralToken),
             address(loanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -170,6 +171,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         address newOracle = factory.createOracle(
             address(collateralToken),
             address(newLoanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -343,6 +345,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         address newOracle = factory.createOracle(
             address(newCollateralToken),
             address(loanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -423,6 +426,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         address newOracle = factory.createOracle(
             address(collateralToken),
             address(newLoanToken),
+            DEFAULT_MAX_AGE,
             bytes("")
         );
 
@@ -483,6 +487,78 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             expectedCollateralTokensPerLoanToken,
             "Collateral tokens per loan token should be calculated correctly after PRICE decimals change"
         );
+    }
+
+    // when cached prices are fresh (within maxAge)
+    //  [X] it returns cached prices even if live prices changed
+
+    function test_whenCachedPricesAreFresh_returnsCachedPrices(uint48 warpDelta_) public {
+        // Cache initial prices
+        priceModule.storeObservation(address(collateralToken));
+        priceModule.storeObservation(address(loanToken));
+        uint48 cachedAt = uint48(block.timestamp);
+
+        // Change live prices without storing
+        _setPRICEPrices(address(collateralToken), 3e18);
+        _setPRICEPrices(address(loanToken), 1e18);
+
+        // Fuzz warp to a time strictly within maxAge so cache remains fresh
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE - 1));
+        vm.warp(cachedAt + warpDelta);
+
+        // Cached ratio remains (2e18 / 1e18) * 1e36 = 2e36
+        uint256 expectedCachedPrice = 2e36;
+        uint256 actualPrice = oracle.price();
+
+        assertEq(actualPrice, expectedCachedPrice, "Should return cached price while fresh");
+    }
+
+    function test_whenCachedAgeEqualsMaxAge_returnsCachedPrices() public {
+        // Cache initial prices
+        priceModule.storeObservation(address(collateralToken));
+        priceModule.storeObservation(address(loanToken));
+        uint48 cachedAt = uint48(block.timestamp);
+
+        // Change live prices without storing so cache-vs-live behavior is observable
+        _setPRICEPrices(address(collateralToken), 3e18);
+        _setPRICEPrices(address(loanToken), 1e18);
+
+        // Border case: cached age is exactly maxAge and should still be treated as fresh
+        vm.warp(cachedAt + DEFAULT_MAX_AGE);
+
+        // Cached ratio remains (2e18 / 1e18) * 1e36 = 2e36
+        uint256 expectedCachedPrice = 2e36;
+        uint256 actualPrice = oracle.price();
+
+        assertEq(actualPrice, expectedCachedPrice, "Should return cached price at maxAge boundary");
+    }
+
+    // when cached prices are stale (older than maxAge)
+    //  [X] it returns live prices
+
+    function test_whenCachedPricesAreStale_returnsLivePrices(uint48 warpDelta_) public {
+        // Cache initial prices
+        priceModule.storeObservation(address(collateralToken));
+        priceModule.storeObservation(address(loanToken));
+        uint48 cachedAt = uint48(block.timestamp);
+
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+        );
+        vm.warp(cachedAt + warpDelta);
+
+        // Change live prices without storing
+        uint256 liveCollateral = 3e18;
+        uint256 liveLoan = 1e18;
+        _setPRICEPrices(address(collateralToken), liveCollateral);
+        _setPRICEPrices(address(loanToken), liveLoan);
+
+        // Live ratio should be (3e18 / 1e18) * 1e36 = 3e36
+        uint256 expectedLivePrice = 3e36;
+        uint256 actualPrice = oracle.price();
+
+        assertEq(actualPrice, expectedLivePrice, "Should return live price when cache is stale");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

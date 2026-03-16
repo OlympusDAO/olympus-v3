@@ -18,7 +18,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
     ) public givenFactoryIsEnabled givenOracleIsCreated {
         vm.assume(caller_ != admin && caller_ != oracleManager && caller_ != emergency);
 
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
@@ -35,7 +39,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenFactoryIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
 
@@ -69,7 +77,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
         givenOracleIsCreated
         givenOracleIsDisabled
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -87,7 +99,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
     //  [X] it emits OracleDisabled event
 
     function test_success() public givenFactoryIsEnabled givenOracleIsCreated {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.expectEmit(true, false, false, false);
         emit IOracleFactory.OracleDisabled(oracle);
@@ -106,7 +122,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.prank(oracleManager);
         factory.disableOracle(oracle);
@@ -122,7 +142,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         // Expect revert
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
@@ -136,7 +160,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
     //  [X] it succeeds
 
     function test_whenCallerHasAdminRole() public givenFactoryIsEnabled givenOracleIsCreated {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.prank(admin);
         factory.disableOracle(oracle);
@@ -146,7 +174,11 @@ contract MorphoOracleFactoryDisableOracleTest is MorphoOracleFactoryTest {
     //  [X] it succeeds
 
     function test_whenCallerHasEmergencyRole() public givenFactoryIsEnabled givenOracleIsCreated {
-        address oracle = factory.getOracle(address(collateralToken), address(loanToken));
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
 
         vm.prank(emergency);
         factory.disableOracle(oracle);
