@@ -362,7 +362,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
         // alphaUsdPriceFeed answer = 50e8.
         // PRICE normalizes to 18 decimals: 50e8 * 1e10 = 50e18.
-        _assertCachedPrice(asset_SingleFeed_Strategy_WithMA, 50e18, "Cached price should match feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_Strategy_WithMA,
+            50e18,
+            "Cached price should match feed value"
+        );
     }
 
     // when the price feed configuration is being updated, when the number of price feeds is 1, when the strategy configuration is not being updated, given useMovingAverage is false, given the existing strategy configuration is empty: it replaces the price feed configuration, it emits an AssetPriceFeedsUpdated event
@@ -459,7 +463,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // alphaUsdPriceFeed answer = 50e8.
         // PRICE normalizes to 18 decimals: 50e8 * 1e10 = 50e18.
         // Empty strategy + no MA usage => cache is feed price.
-        _assertCachedPrice(asset_SingleFeed_Strategy_WithMA, 50e18, "Cached price should match feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_Strategy_WithMA,
+            50e18,
+            "Cached price should match feed value"
+        );
     }
 
     // when the price feed configuration is being updated, when the number of price feeds is 1, when the strategy configuration is being updated, when useMovingAverage is false, when the strategy configuration is not empty: reverts
@@ -580,7 +588,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // alphaUsdPriceFeed answer = 50e8.
         // PRICE normalizes to 18 decimals: 50e8 * 1e10 = 50e18.
         // Strategy is FirstNonZero over one input => cached price = 50e18.
-        _assertCachedPrice(asset_SingleFeed_Strategy_WithMA, 50e18, "Cached price should match feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_Strategy_WithMA,
+            50e18,
+            "Cached price should match feed value"
+        );
     }
 
     // when the price feed configuration is being updated, when the number of price feeds is > 1, when there are duplicate price feeds: it reverts
@@ -799,7 +811,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // onemaUsd = 5e18, twomaEth = 0.01e18.
         // Strategy is FirstNonZero over [feed1, feed2, MA] with useMovingAverage=true.
         // First non-zero is feed1 => 5e18.
-        _assertCachedPrice(asset_MultipleFeeds_Strategy_StoreMA, 5e18, "Cached price should be first non-zero feed");
+        _assertCachedPrice(
+            asset_MultipleFeeds_Strategy_StoreMA,
+            5e18,
+            "Cached price should be first non-zero feed"
+        );
     }
 
     // when the price feed configuration is being updated, when the number of price feeds is > 1, when the strategy configuration is being updated, when the strategy configuration is not empty, when useMovingAverage is true: it replaces the price feed configuration, it replaces the strategy configuration, it emits an AssetPriceFeedsUpdated event, it emits an AssetStrategyUpdated event
@@ -854,7 +870,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // onemaUsd = 5e18, twomaEth = 0.01e18.
         // Strategy is FirstNonZero with MA included.
         // First non-zero remains the first feed => 5e18.
-        _assertCachedPrice(asset_MultipleFeeds_Strategy_StoreMA, 5e18, "Cached price should be first non-zero feed");
+        _assertCachedPrice(
+            asset_MultipleFeeds_Strategy_StoreMA,
+            5e18,
+            "Cached price should be first non-zero feed"
+        );
     }
 
     // when the price feed configuration is being updated, when the strategy configuration is not being updated: it ignores any strategy configuration parameters
@@ -890,7 +910,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
         // onemaUsdPriceFeed answer = 5e8.
         // PRICE normalizes to 18 decimals: 5e8 * 1e10 = 5e18.
-        _assertCachedPrice(asset_SingleFeed_Strategy_WithMA, 5e18, "Cached price should match new feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_Strategy_WithMA,
+            5e18,
+            "Cached price should match new feed value"
+        );
     }
 
     // when the asset strategy configuration is being updated, given the strategy submodule is not installed: it reverts
@@ -1166,7 +1190,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // New MA = (100e18 + 110e18 + 120e18) / 3 = 110e18.
         // Strategy is Average with MA included:
         // (50e18 + 110e18) / 2 = 80e18.
-        _assertCachedPrice(asset_SingleFeed_NoStrategy_NoMA, 80e18, "Cached price should be average of feed and MA");
+        _assertCachedPrice(
+            asset_SingleFeed_NoStrategy_NoMA,
+            80e18,
+            "Cached price should be average of feed and MA"
+        );
     }
 
     // when the asset strategy configuration is being updated, when useMovingAverage is true, when the moving average configuration is being updated, when storeMovingAverage is false: it reverts
@@ -1273,7 +1301,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // alphaUsdPriceFeed answer = 50e8.
         // PRICE normalizes to 18 decimals: 50e8 * 1e10 = 50e18.
         // Empty strategy + useMovingAverage=false => cache is feed price.
-        _assertCachedPrice(asset_SingleFeed_NoStrategy_NoMA, 50e18, "Cached price should match feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_NoStrategy_NoMA,
+            50e18,
+            "Cached price should match feed value"
+        );
     }
 
     // when the asset strategy configuration is being updated, when useMovingAverage is false, when the price feed configuration is not being updated, given there is > 1 price feed, when the strategy is empty: it reverts
@@ -1353,7 +1385,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // twomaEth * ethUsd = 20e18
         // Strategy is Average over two feeds:
         // (20e18 + 20e18) / 2 = 20e18.
-        _assertCachedPrice(asset_MultipleFeeds_Strategy_StoreMA, 20e18, "Cached price should be average of feeds");
+        _assertCachedPrice(
+            asset_MultipleFeeds_Strategy_StoreMA,
+            20e18,
+            "Cached price should be average of feeds"
+        );
     }
 
     // when the asset strategy configuration is being updated, when not updating price feeds configuration: feeds parameter is ignored
@@ -1427,7 +1463,10 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         _assertMovingAverageUnchanged(oldAssetData, assetData);
 
         // Verify cached price - strategy is average on [feed, MA]
-        (uint256 cachedPrice, ) = price.getPrice(asset_SingleFeed_Strategy_WithMA, IPRICEv2.Variant.LAST);
+        (uint256 cachedPrice, ) = price.getPrice(
+            asset_SingleFeed_Strategy_WithMA,
+            IPRICEv2.Variant.LAST
+        );
         assertGt(cachedPrice, 0, "Cached price should be non-zero");
     }
 
@@ -1655,7 +1694,11 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         // Feed stays alphaUsd at 50e8, normalized to 50e18.
         // Although observations are updated, useMovingAverage=false and strategy is empty.
         // Cache therefore remains feed price => 50e18.
-        _assertCachedPrice(asset_SingleFeed_NoStrategy_NoMA, 50e18, "Cached price should match feed value");
+        _assertCachedPrice(
+            asset_SingleFeed_NoStrategy_NoMA,
+            50e18,
+            "Cached price should match feed value"
+        );
     }
 
     // when the moving average configuration is being updated, when store moving average is true, when use moving average is false, when the strategy configuration is being updated: it caches the price without a moving average
