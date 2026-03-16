@@ -7,6 +7,10 @@ import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {Actions} from "src/Kernel.sol";
+import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
+import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
+import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     // ========== TESTS ========== //
@@ -76,6 +80,32 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         );
 
         oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+    }
+
+    function test_givenCloneableBaseAndQuoteTimestampsDiffer_reverts() public {
+        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
+
+        vm.prank(admin);
+        cloneFactory.enable("");
+
+        vm.prank(admin);
+        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
+
+        // Seed both caches at timestamp=1, then force only base cache to timestamp=2.
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
+        vm.warp(block.timestamp + 1);
+        priceModule.cachePrice(address(collateralToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC7726OracleCloneable.ERC7726OracleCloneable_InconsistentTimestamps.selector,
+                uint48(2),
+                uint48(1)
+            )
+        );
+        IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
     }
 
     // given the base token decimals are smaller than the quote token decimals
