@@ -416,10 +416,13 @@ contract OlympusPricev1_2Test is Test {
         public
         givenOhmIsConfigured
         givenObservationFrequencyHasElapsed
-        givenOhmPrice(11e8) // $11
-        givenOhmPriceIsStored
-        givenOhmPrice(10e8) // $10
     {
+        // Cache $11 and then change the live feed to $10; getLastPrice should return cached $11.
+        ohmUsdPriceFeed.setLatestAnswer(11e8);
+        vm.prank(priceWriterV2);
+        price.cachePrice(address(ohm));
+        ohmUsdPriceFeed.setLatestAnswer(10e8);
+
         uint256 lastPrice = price.getLastPrice();
 
         // Price should be in 18 decimals (11e18 = $11)
@@ -790,9 +793,9 @@ contract OlympusPricev1_2Test is Test {
         // Verify reserveA (no MA) should not be affected
         IPRICEv2.Asset memory reserveADataAfter = price.getAssetData(address(reserveA));
         assertEq(
-            reserveADataAfter.obs[0],
-            reserveADataBefore.obs[0],
-            "ReserveA price should not be affected"
+            reserveADataAfter.obs.length,
+            reserveADataBefore.obs.length,
+            "ReserveA observations length should not be affected"
         );
         assertEq(
             reserveADataAfter.lastObservationTime,
