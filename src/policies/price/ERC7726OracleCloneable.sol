@@ -21,19 +21,6 @@ import {String} from "src/libraries/String.sol";
 contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clone {
     using FullMath for uint256;
 
-    // ========== ERRORS ========== //
-
-    /// @notice Thrown when the oracle is not enabled in the factory
-    error ERC7726OracleCloneable_NotEnabled();
-
-    /// @notice Thrown when base/quote timestamps resolve to different sources/times
-    /// @param  baseTimestamp_ The resolved base timestamp
-    /// @param  quoteTimestamp_ The resolved quote timestamp
-    error ERC7726OracleCloneable_InconsistentTimestamps(
-        uint48 baseTimestamp_,
-        uint48 quoteTimestamp_
-    );
-
     // ========== IMMUTABLE ARGS LAYOUT ========== //
 
     // 0x00: factory address (20 bytes)
@@ -66,6 +53,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address asset_,
         uint48 maxAge_
     ) internal view returns (uint256 price_, uint48 timestamp_) {
+        // PRICE_.getPrice(asset_, maxAge_) determines the price source (fresh LAST cache or CURRENT fallback).
+        // Timestamp mirrors that source by using LAST when cacheFresh, otherwise CURRENT, so price/timestamp stay aligned.
         price_ = PRICE_.getPrice(asset_, maxAge_);
         (, uint48 lastTimestamp) = PRICE_.getPrice(asset_, IPRICEv2.Variant.LAST);
         bool cacheFresh = lastTimestamp != 0 &&
@@ -89,18 +78,26 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address base,
         address quote
     ) external view override returns (uint256 outAmount) {
+        return _getQuoteInternal(inAmount, base, quote);
+    }
+
+    function _getQuoteInternal(
+        uint256 inAmount_,
+        address base_,
+        address quote_
+    ) internal view returns (uint256 outAmount_) {
         _checkEnabled();
 
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
         uint48 maxAge_ = maxAge();
         (uint256 basePriceUsd, uint48 baseTimestamp) = _resolvePriceAndTimestamp(
             PRICE,
-            base,
+            base_,
             maxAge_
         );
         (uint256 quotePriceUsd, uint48 quoteTimestamp) = _resolvePriceAndTimestamp(
             PRICE,
-            quote,
+            quote_,
             maxAge_
         );
         if (baseTimestamp != quoteTimestamp) {
@@ -109,13 +106,13 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
 
         // basePriceUsd and quotePriceUsd are USD prices in 10^18 scale from PRICE.
         // baseTokenScale and quoteTokenScale are token unit scales: 10 ** IERC20(token).decimals().
-        uint256 baseTokenScale = 10 ** IERC20(base).decimals();
-        uint256 quoteTokenScale = 10 ** IERC20(quote).decimals();
+        uint256 baseTokenScale = 10 ** IERC20(base_).decimals();
+        uint256 quoteTokenScale = 10 ** IERC20(quote_).decimals();
 
         // Step 1: Convert inAmount from base token units into quote units at USD price ratio.
-        uint256 intermediate = inAmount.mulDiv(basePriceUsd, quotePriceUsd);
+        uint256 intermediate = inAmount_.mulDiv(basePriceUsd, quotePriceUsd);
         // Step 2: Convert between token decimal scales (baseTokenScale -> quoteTokenScale).
-        return intermediate.mulDiv(quoteTokenScale, baseTokenScale);
+        outAmount_ = intermediate.mulDiv(quoteTokenScale, baseTokenScale);
     }
 
     /// @inheritdoc IERC7726Oracle
@@ -125,7 +122,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address base,
         address quote
     ) external view override returns (uint256 bidOutAmount, uint256 askOutAmount) {
-        uint256 outAmount = this.getQuote(inAmount, base, quote);
+        uint256 outAmount = _getQuoteInternal(inAmount, base, quote);
         return (outAmount, outAmount);
     }
 

@@ -6,6 +6,17 @@ pragma solidity >=0.8.0;
 /// @author Euler Labs (https://www.eulerlabs.com/)
 /// @notice Common PriceOracle interface.
 interface IERC7726Oracle {
+    /// @notice Thrown when the oracle is not enabled in the factory
+    error ERC7726OracleCloneable_NotEnabled();
+
+    /// @notice Thrown when base/quote timestamps resolve to different sources/times
+    /// @param  baseTimestamp_ The resolved base timestamp
+    /// @param  quoteTimestamp_ The resolved quote timestamp
+    error ERC7726OracleCloneable_InconsistentTimestamps(
+        uint48 baseTimestamp_,
+        uint48 quoteTimestamp_
+    );
+
     /// @notice Get the name of the oracle.
     /// @return The name of the oracle.
     function name() external view returns (string memory);
