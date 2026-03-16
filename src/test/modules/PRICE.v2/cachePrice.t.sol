@@ -221,6 +221,7 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         // Use ALPHA
         uint256 newPrice = 60e8; // alphaUsdPriceFeed has 8 decimals
         uint256 expectedPrice = 60e18; // result is in 18 decimals
+        /// forge-lint: disable-next-line(unsafe-typecast)
         alphaUsdPriceFeed.setLatestAnswer(int256(newPrice));
 
         vm.startPrank(priceWriter);

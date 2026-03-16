@@ -2745,9 +2745,12 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(asset.storeMovingAverage, true);
         assertEq(asset.useMovingAverage, true);
 
-        // getPrice should work with 2 feeds + 1 MA = 3 inputs for getMedian
+        // Feed1 = 10e18 and Feed2 = 10e18.
+        // MA = (obs[0] + obs[1]) / 2 = (10.512e18 + 10e18) / 2 = 10.256e18.
+        // Median strategy sorts [10e18, 10e18, 10.256e18] and selects middle => 10e18.
+        uint256 expectedPrice = 10e18;
         (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
-        assertGt(price_, 0);
+        assertEq(price_, expectedPrice, "Cached price should equal median of feeds and MA");
 
         vm.stopPrank();
     }
@@ -2892,6 +2895,14 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(asset.approved, true);
         assertEq(asset.storeMovingAverage, true);
         assertEq(asset.useMovingAverage, true);
+
+        // Feed = 10e18.
+        // MA = (obs[0] + obs[1]) / 2.
+        // Inclusive average = (10e18 + MA) / 2.
+        uint256 ma = (observations[0] + observations[1]) / 2;
+        uint256 expectedPrice = (10e18 + ma) / 2;
+        (uint256 cachedPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        assertEq(cachedPrice, expectedPrice, "Cached price should equal average of feed and MA");
     }
 
     function testRevert_addAsset_invalidPriceFeed() public {

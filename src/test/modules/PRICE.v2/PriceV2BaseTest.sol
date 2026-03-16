@@ -802,4 +802,14 @@ abstract contract PriceV2BaseTest is Test {
                 abi.encode(0)
             );
     }
+
+    // Helper function to verify cached price matches expected value
+    function _assertCachedPrice(
+        address asset,
+        uint256 expectedPrice,
+        string memory message
+    ) internal view {
+        (uint256 cachedPrice, ) = price.getPrice(asset, IPRICEv2.Variant.LAST);
+        assertEq(cachedPrice, expectedPrice, message);
+    }
 }
