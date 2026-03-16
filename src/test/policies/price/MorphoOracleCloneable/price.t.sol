@@ -39,6 +39,9 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with PRICE_PriceZero
 
     function test_whenCollateralTokenPriceIsZero_reverts() public {
+        // The oracle caches prices on creation; force cache stale so live price path is used.
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+
         // Set collateral token price to zero
         _setPRICEPrices(address(collateralToken), 0);
 
@@ -53,6 +56,9 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with PRICE_PriceZero
 
     function test_whenLoanTokenPriceIsZero_reverts() public {
+        // The oracle caches prices on creation; force cache stale so live price path is used.
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+
         // Set loan token price to zero
         _setPRICEPrices(address(loanToken), 0);
 
@@ -220,6 +226,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Change collateral price to 3e18
         _setPRICEPrices(address(collateralToken), 3e18);
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
         // New price: 3e18 / 1e18 * 1e36 = 3e36
         uint256 newPrice = oracle.price();
@@ -236,6 +243,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Change loan price to 2e18
         _setPRICEPrices(address(loanToken), 2e18);
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
         // New price: 2e18 / 2e18 * 1e36 = 1e36
         uint256 newPrice = oracle.price();

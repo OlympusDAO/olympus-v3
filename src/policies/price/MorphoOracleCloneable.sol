@@ -8,6 +8,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
+import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -20,7 +21,7 @@ import {String} from "src/libraries/String.sol";
 /// @dev    Returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36 as required by Morpho's IOracle interface.
 ///         The price precision is 36 + loan_token_decimals - collateral_token_decimals.
 ///         This contract is deployed as a clone with immutable args.
-contract MorphoOracleCloneable is IMorphoOracle, Clone {
+contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     using FullMath for uint256;
 
     // ========== IMMUTABLE ARGS LAYOUT ========== //
@@ -28,8 +29,9 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     // 0x00: factory address (20 bytes)
     // 0x14: collateral token address (20 bytes)
     // 0x28: loan token address (20 bytes)
-    // 0x3C: scale factor (32 bytes)
-    // 0x5C: name (32 bytes)
+    // 0x3C: max age (8 bytes, stored as uint64)
+    // 0x44: scale factor (32 bytes)
+    // 0x64: name (32 bytes)
 
     // ========== IMMUTABLE ARGS GETTERS ========== //
 
@@ -58,14 +60,21 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
     ///
     /// @return uint256 The scale factor stored in immutable args
     function scaleFactor() public pure returns (uint256) {
-        return _getArgUint256(0x3C);
+        return _getArgUint256(0x44);
+    }
+
+    /// @notice The maximum allowed age for cached prices
+    ///
+    /// @return uint48 The max age stored in immutable args
+    function _maxAge() internal pure returns (uint48) {
+        return uint48(_getArgUint64(0x3C));
     }
 
     /// @notice The name of the oracle
     ///
     /// @return string The name stored in immutable args
     function name() public pure returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x5C))));
+        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x64))));
     }
 
     // ========== MORPHO ORACLE INTERFACE ========== //
@@ -94,11 +103,36 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
 
         // Get prices in USD
         // Scale: PRICE_DECIMALS
-        uint256 collateralPriceUsd = PRICE.getPrice(collateralToken());
-        uint256 loanPriceUsd = PRICE.getPrice(loanToken());
+        uint48 maxAge = _maxAge();
+        uint256 collateralPriceUsd = PRICE.getPrice(collateralToken(), maxAge);
+        uint256 loanPriceUsd = PRICE.getPrice(loanToken(), maxAge);
 
         // Adjust to the correct scale
         return scaleFactor().mulDiv(collateralPriceUsd, loanPriceUsd);
+    }
+
+    // ========== CACHE INTERFACE ========== //
+
+    /// @inheritdoc IOraclePriceCache
+    function cachePrices() external override {
+        factory().cacheOraclePrices();
+    }
+
+    /// @inheritdoc IOraclePriceCache
+    function cachePricesIfNecessary() external override {
+        IOracleFactory factory_ = factory();
+        IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
+        (, uint48 collateralTimestamp) = PRICE.getPrice(collateralToken(), IPRICEv2.Variant.LAST);
+        (, uint48 loanTimestamp) = PRICE.getPrice(loanToken(), IPRICEv2.Variant.LAST);
+        uint48 maxAge = _maxAge();
+        bool timestampsDiffer = collateralTimestamp != loanTimestamp;
+        bool collateralStale = maxAge > 0 &&
+            block.timestamp > uint256(collateralTimestamp) + uint256(maxAge);
+        bool loanStale = maxAge > 0 && block.timestamp > uint256(loanTimestamp) + uint256(maxAge);
+
+        if (timestampsDiffer || collateralStale || loanStale) {
+            factory_.cacheOraclePrices();
+        }
     }
 
     // ========== ERC165 ========== //
@@ -111,6 +145,7 @@ contract MorphoOracleCloneable is IMorphoOracle, Clone {
         return
             interfaceId_ == type(IMorphoOracle).interfaceId ||
             interfaceId_ == type(IOracle).interfaceId ||
+            interfaceId_ == type(IOraclePriceCache).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId;
     }
 }

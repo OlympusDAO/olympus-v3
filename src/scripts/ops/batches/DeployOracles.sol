@@ -25,6 +25,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 ///             "args": {
 ///               "baseToken": "0x...",
 ///               "quoteToken": "0x...",
+///               "maxAge": "3600",                    // seconds
 ///               "minPrice": "1000000000000000000",  // 18 decimals
 ///               "maxPrice": "10000000000000000000"  // 18 decimals
 ///             }
@@ -54,6 +55,9 @@ contract DeployOracles is BatchScriptV2 {
     /// @notice Maximum expected price (loaded from args)
     uint256 internal _maxPrice;
 
+    /// @notice Oracle max age (seconds) loaded from args
+    uint48 internal _maxAge;
+
     /// @notice Which factory type is being used (for validation)
     bool internal _isChainlinkFactory;
 
@@ -62,7 +66,7 @@ contract DeployOracles is BatchScriptV2 {
     /// @notice Deploy a single Chainlink oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
     /// @param signOnly_ Whether to only sign the batch
-    /// @param argsFilePath_ Path to args file with baseToken, quoteToken, minPrice, maxPrice
+    /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployChainlinkOracle(
         bool useDaoMS_,
         bool signOnly_,
@@ -79,6 +83,7 @@ contract DeployOracles is BatchScriptV2 {
 
         console2.log("Base token:", _baseToken);
         console2.log("Quote token:", _quoteToken);
+        console2.log("Max age:", _maxAge);
         console2.log("Min price:", _minPrice);
         console2.log("Max price:", _maxPrice);
         console2.log("Chainlink factory:", _chainlinkFactory);
@@ -96,7 +101,7 @@ contract DeployOracles is BatchScriptV2 {
     /// @notice Deploy a single Morpho oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
     /// @param signOnly_ Whether to only sign the batch
-    /// @param argsFilePath_ Path to args file with baseToken, quoteToken, minPrice, maxPrice
+    /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployMorphoOracle(
         bool useDaoMS_,
         bool signOnly_,
@@ -113,6 +118,7 @@ contract DeployOracles is BatchScriptV2 {
 
         console2.log("Base token (collateral):", _baseToken);
         console2.log("Quote token (loan):", _quoteToken);
+        console2.log("Max age:", _maxAge);
         console2.log("Min price:", _minPrice);
         console2.log("Max price:", _maxPrice);
         console2.log("Morpho factory:", _morphoFactory);
@@ -145,7 +151,7 @@ contract DeployOracles is BatchScriptV2 {
         string memory factoryName = _isChainlinkFactory ? "Chainlink" : "Morpho";
 
         // Verify oracle was deployed
-        address oracle = IOracleFactory(factory).getOracle(_baseToken, _quoteToken, 0);
+        address oracle = IOracleFactory(factory).getOracle(_baseToken, _quoteToken, _maxAge);
         require(oracle != address(0), string.concat(factoryName, " oracle not deployed"));
         console2.log(factoryName, " oracle deployed:", oracle);
 
@@ -185,8 +191,16 @@ contract DeployOracles is BatchScriptV2 {
     function _loadOracleParams(string memory functionName_) internal {
         _baseToken = _readBatchArgAddress(functionName_, "baseToken");
         _quoteToken = _readBatchArgAddress(functionName_, "quoteToken");
+        uint256 maxAge = _readBatchArgUint256(functionName_, "maxAge");
         _minPrice = _readBatchArgUint256(functionName_, "minPrice");
         _maxPrice = _readBatchArgUint256(functionName_, "maxPrice");
+
+        // maxAge is encoded as uint48 in oracle immutable args
+        if (maxAge > type(uint48).max) {
+            revert("DeployOracles: maxAge exceeds uint48");
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        _maxAge = uint48(maxAge);
 
         // Validate that minPrice does not exceed maxPrice
         if (_minPrice > _maxPrice) {
@@ -206,6 +220,7 @@ contract DeployOracles is BatchScriptV2 {
                 IOracleFactory.createOracle.selector,
                 baseToken_,
                 quoteToken_,
+                _maxAge,
                 "" // customParams (empty for default)
             )
         );
@@ -223,6 +238,7 @@ contract DeployOracles is BatchScriptV2 {
                 IOracleFactory.createOracle.selector,
                 baseToken_,
                 quoteToken_,
+                _maxAge,
                 "" // customParams (empty for default)
             )
         );

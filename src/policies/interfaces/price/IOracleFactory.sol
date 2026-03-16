@@ -63,6 +63,12 @@ interface IOracleFactory {
     /// @param  quoteToken The quote token address
     error OracleFactory_OracleAlreadyExists(address baseToken, address quoteToken);
 
+    /// @notice Thrown when a token pair is invalid
+    ///
+    /// @param  baseToken  The base token address
+    /// @param  quoteToken The quote token address
+    error OracleFactory_InvalidTokenPair(address baseToken, address quoteToken);
+
     /// @notice Thrown when creation is already enabled
     error OracleFactory_CreationAlreadyEnabled();
 
@@ -141,6 +147,11 @@ interface IOracleFactory {
     /// @param  oracle_ The oracle address to check
     /// @return enabled true if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
+
+    /// @notice Caches prices for the calling oracle's configured assets
+    ///
+    /// @dev    Intended to be called by oracle contracts created by this factory
+    function cacheOraclePrices() external;
 
     // ========== ADMIN FUNCTIONS ========== //
 

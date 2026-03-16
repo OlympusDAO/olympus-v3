@@ -24,6 +24,7 @@ import {console2} from "forge-std/console2.sol";
 /// @dev    This proposal enables the oracle policies and deploys initial OHM/USDS oracles
 contract OracleProposal is GovernorBravoProposal {
     Kernel internal _kernel;
+    uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
@@ -179,13 +180,25 @@ contract OracleProposal is GovernorBravoProposal {
         // STEP 4: Deploy OHM/USDS oracles
         _pushAction(
             chainlinkFactory,
-            abi.encodeWithSelector(IOracleFactory.createOracle.selector, ohm, usds, ""),
+            abi.encodeWithSelector(
+                IOracleFactory.createOracle.selector,
+                ohm,
+                usds,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
             "Deploy OHM/USDS Chainlink oracle"
         );
 
         _pushAction(
             morphoFactory,
-            abi.encodeWithSelector(IOracleFactory.createOracle.selector, ohm, usds, ""),
+            abi.encodeWithSelector(
+                IOracleFactory.createOracle.selector,
+                ohm,
+                usds,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
             "Deploy OHM/USDS Morpho oracle"
         );
     }
@@ -235,14 +248,22 @@ contract OracleProposal is GovernorBravoProposal {
         require(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify OHM/USDS oracles were deployed
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, 0);
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
         require(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
         require(
             IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
             "OHM/USDS Chainlink oracle not enabled"
         );
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, 0);
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
         require(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
         require(
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),

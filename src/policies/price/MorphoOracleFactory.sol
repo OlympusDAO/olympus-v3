@@ -61,7 +61,7 @@ contract MorphoOracleFactory is BaseOracleFactory {
     function _encodeOracleData(
         address collateralToken_,
         address loanToken_,
-        uint48,
+        uint48 maxAge_,
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Calculate scale factor
@@ -91,12 +91,14 @@ contract MorphoOracleFactory is BaseOracleFactory {
         );
 
         // Create clone with immutable args
-        // Layout: factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | scaleFactor (32 bytes) | name (32 bytes)
+        // Layout:
+        // factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | maxAge (8 bytes) | scaleFactor (32 bytes) | name (32 bytes)
         return
             abi.encodePacked(
                 address(this), // factory address
                 collateralToken_, // collateral token address
                 loanToken_, // loan token address
+                uint64(maxAge_), // max age
                 scaleFactor, // scale factor
                 oracleName // name
             );

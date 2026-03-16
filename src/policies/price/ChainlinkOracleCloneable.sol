@@ -8,6 +8,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -18,7 +19,7 @@ import {SafeCastLib} from "@solmate-6.2.0/utils/SafeCastLib.sol";
 /// @title  ChainlinkOracleCloneable
 /// @author OlympusDAO
 /// @notice Oracle adapter that implements Chainlink's AggregatorV2V3Interface by calling PRICE.getPrice() for base and quote tokens
-contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
+contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone {
     using FullMath for uint256;
     using SafeCastLib for uint256;
 
@@ -30,7 +31,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
     // 0x14: base token address (20 bytes)
     // 0x28: quote token address (20 bytes)
     // 0x3C: PRICE decimals at creation (1 byte, stored as uint8)
-    // 0x3D: name (32 bytes)
+    // 0x3D: max age (8 bytes, stored as uint64)
+    // 0x45: name (32 bytes)
 
     // ========== IMMUTABLE ARGS GETTERS ========== //
 
@@ -62,11 +64,18 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
         return _getArgUint8(0x3C);
     }
 
+    /// @notice The maximum allowed age for cached prices
+    ///
+    /// @return uint48 The max age stored in immutable args
+    function _maxAge() internal pure returns (uint48) {
+        return uint48(_getArgUint64(0x3D));
+    }
+
     /// @notice The name of the oracle
     ///
     /// @return string The name stored in immutable args
     function name() public pure override returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x3D))));
+        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
     }
 
     // ========== AGGREGATOR V3 INTERFACE ========== //
@@ -130,14 +139,16 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
         // This allows PRICE module upgrades without oracle redeployment
         IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
 
-        // Get last stored prices from PRICE module (in PRICE_DECIMALS scale)
-        (uint256 basePrice, uint48 baseTimestamp) = PRICE.getPrice(
+        uint48 maxAge = _maxAge();
+        (uint256 basePrice, uint48 baseTimestamp) = _resolvePriceAndTimestamp(
+            PRICE,
             baseToken(),
-            IPRICEv2.Variant.LAST
+            maxAge
         );
-        (uint256 quotePrice, uint48 quoteTimestamp) = PRICE.getPrice(
+        (uint256 quotePrice, uint48 quoteTimestamp) = _resolvePriceAndTimestamp(
+            PRICE,
             quoteToken(),
-            IPRICEv2.Variant.LAST
+            maxAge
         );
 
         // Revert if the last timestamp is not consistent
@@ -158,6 +169,26 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
         answeredInRound = roundId;
 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
+    }
+
+    function _resolvePriceAndTimestamp(
+        IPRICEv2 PRICE_,
+        address asset_,
+        uint48 maxAge_
+    ) internal view returns (uint256 price_, uint48 timestamp_) {
+        // PRICE.getPrice(asset, maxAge) returns a cached value when fresh, or the live value otherwise.
+        price_ = PRICE_.getPrice(asset_, maxAge_);
+
+        // Resolve timestamp from the same source variant used by maxAge semantics.
+        (, uint48 lastTimestamp) = PRICE_.getPrice(asset_, IPRICEv2.Variant.LAST);
+        bool cacheFresh = lastTimestamp != 0 &&
+            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
+
+        if (cacheFresh) {
+            timestamp_ = lastTimestamp;
+        } else {
+            (, timestamp_) = PRICE_.getPrice(asset_, IPRICEv2.Variant.CURRENT);
+        }
     }
 
     /// @inheritdoc AggregatorV3Interface
@@ -247,6 +278,31 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
         return updatedAt;
     }
 
+    // ========== CACHE INTERFACE ========== //
+
+    /// @inheritdoc IOraclePriceCache
+    function cachePrices() external override {
+        factory().cacheOraclePrices();
+    }
+
+    /// @inheritdoc IOraclePriceCache
+    function cachePricesIfNecessary() external override {
+        IOracleFactory factory_ = factory();
+        IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
+        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken(), IPRICEv2.Variant.LAST);
+        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken(), IPRICEv2.Variant.LAST);
+        uint48 maxAge = _maxAge();
+        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
+        bool baseTokenStale = maxAge > 0 &&
+            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge);
+        bool quoteTokenStale = maxAge > 0 &&
+            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge);
+
+        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
+            factory_.cacheOraclePrices();
+        }
+    }
+
     // ========== ERC165 ========== //
 
     /// @notice Query if a contract implements an interface
@@ -259,6 +315,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, Clone {
             interfaceId_ == type(AggregatorV2V3Interface).interfaceId ||
             interfaceId_ == type(AggregatorInterface).interfaceId ||
             interfaceId_ == type(AggregatorV3Interface).interfaceId ||
+            interfaceId_ == type(IOraclePriceCache).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId;
     }
 }

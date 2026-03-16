@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -35,8 +36,8 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @notice The PRICE module decimals
     uint8 public PRICE_DECIMALS;
 
-    /// @notice Mapping from base token to quote token to oracle address
-    mapping(address baseToken => mapping(address quoteToken => address oracle))
+    /// @notice Mapping from base token to quote token to maxAge to oracle address
+    mapping(address baseToken => mapping(address quoteToken => mapping(uint48 maxAge => address oracle)))
         internal _tokensToOracle;
 
     /// @notice Internal array of all deployed oracles
@@ -44,6 +45,12 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     /// @notice Mapping to validate deployed oracles
     mapping(address => bool) public isOracle;
+
+    /// @notice Mapping from oracle to base token
+    mapping(address oracle => address baseToken) internal _oracleToBaseToken;
+
+    /// @notice Mapping from oracle to quote token
+    mapping(address oracle => address quoteToken) internal _oracleToQuoteToken;
 
     /// @notice Mapping to track if an oracle is enabled
     mapping(address => bool) public _isOracleEnabled;
@@ -101,8 +108,11 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     /// @inheritdoc Policy
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
-        // No permissions needed - only reading from PRICE module
-        requests = new Permissions[](0);
+        requests = new Permissions[](1);
+        requests[0] = Permissions({
+            keycode: toKeycode(_PRICE_KEYCODE),
+            funcSelector: IPRICEv2.cachePrice.selector
+        });
     }
 
     /// @inheritdoc IVersioned
@@ -180,7 +190,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         }
 
         // Check if oracle already exists
-        if (_tokensToOracle[baseToken_][quoteToken_] != address(0)) {
+        if (_tokensToOracle[baseToken_][quoteToken_][maxAge_] != address(0)) {
             revert OracleFactory_OracleAlreadyExists(baseToken_, quoteToken_);
         }
 
@@ -192,6 +202,11 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         // Validate quote token
         if (quoteToken_ == address(0) || quoteToken_.code.length == 0) {
             revert OracleFactory_InvalidToken(quoteToken_);
+        }
+
+        // Validate token pair
+        if (baseToken_ == quoteToken_) {
+            revert OracleFactory_InvalidTokenPair(baseToken_, quoteToken_);
         }
 
         // Validate tokens are configured in PRICE module
@@ -214,10 +229,14 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         oracle = implementation.clone(oracleData);
 
         // Update storage
-        _tokensToOracle[baseToken_][quoteToken_] = oracle;
+        _tokensToOracle[baseToken_][quoteToken_][maxAge_] = oracle;
         _oracles.push(oracle);
         isOracle[oracle] = true;
+        _oracleToBaseToken[oracle] = baseToken_;
+        _oracleToQuoteToken[oracle] = quoteToken_;
         _isOracleEnabled[oracle] = true;
+
+        _cacheOraclePrices(oracle);
 
         // Emit events
         // Note: New oracles are enabled by default, so we emit OracleEnabled event
@@ -232,9 +251,9 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     function getOracle(
         address baseToken_,
         address quoteToken_,
-        uint48
+        uint48 maxAge_
     ) external view override returns (address oracle) {
-        oracle = _tokensToOracle[baseToken_][quoteToken_];
+        oracle = _tokensToOracle[baseToken_][quoteToken_][maxAge_];
     }
 
     /// @inheritdoc IOracleFactory
@@ -285,6 +304,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
+        IOraclePriceCache(oracle_).cachePricesIfNecessary();
         emit OracleEnabled(oracle_);
     }
 
@@ -314,6 +334,24 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
             isEnabled && // Factory enabled
             isOracle[oracle_] && // Oracle exists
             _isOracleEnabled[oracle_]; // Oracle enabled
+    }
+
+    /// @inheritdoc IOracleFactory
+    function cacheOraclePrices() external override onlyEnabled {
+        if (!isOracle[msg.sender]) revert OracleFactory_InvalidOracle(msg.sender);
+        if (!_isOracleEnabled[msg.sender]) revert OracleFactory_OracleAlreadyDisabled(msg.sender);
+
+        _cacheOraclePrices(msg.sender);
+    }
+
+    /// @notice Caches prices for the configured oracle token pair
+    /// @param oracle_ The oracle whose base/quote tokens should be cached
+    function _cacheOraclePrices(address oracle_) internal {
+        address baseToken = _oracleToBaseToken[oracle_];
+        address quoteToken = _oracleToQuoteToken[oracle_];
+
+        PRICE.cachePrice(baseToken);
+        PRICE.cachePrice(quoteToken);
     }
 
     // ========== ERC165 ========== //

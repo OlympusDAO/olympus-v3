@@ -104,6 +104,22 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when base token equals quote token
+    //  [X] it reverts with InvalidTokenPair
+
+    function test_whenBaseEqualsQuote_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidTokenPair.selector,
+                address(baseToken),
+                address(baseToken)
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(baseToken), address(baseToken), DEFAULT_MAX_AGE, bytes(""));
+    }
+
     // when base token is not configured in PRICE module
     //  [X] it reverts
 
@@ -264,6 +280,29 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
             PRICE_DECIMALS,
             "Decimals should match PRICE decimals"
         );
+    }
+
+    function test_whenOracleIsCreated_cachesBaseAndQuotePrices() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+
+        (, uint48 baseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
+        (, uint48 quoteTimestamp) = priceModule.getPrice(
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertGt(baseTimestamp, 0, "Base token price should be cached");
+        assertGt(quoteTimestamp, 0, "Quote token price should be cached");
+    }
+
+    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
+        );
+
+        vm.prank(admin);
+        factory.cacheOraclePrices();
     }
 
     // when called by manager

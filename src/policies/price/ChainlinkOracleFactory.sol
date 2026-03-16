@@ -46,7 +46,7 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
     function _encodeOracleData(
         address baseToken_,
         address quoteToken_,
-        uint48,
+        uint48 maxAge_,
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Compose name from token symbols: "base/quote Chainlink Oracle"
@@ -57,14 +57,16 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         );
 
         // Create clone with immutable args
-        // Layout: factory (20 bytes) | base (20 bytes) | quote (20 bytes) | PRICE decimals (1 byte) | name (32 bytes)
+        // Layout:
+        // factory (20 bytes) | base (20 bytes) | quote (20 bytes) | PRICE decimals (1 byte) | maxAge (8 bytes) | name (32 bytes)
         return
             abi.encodePacked(
                 address(this), // factory address (20 bytes, ends at 0x14)
                 baseToken_, // base token address (20 bytes, ends at 0x28)
                 quoteToken_, // quote token address (20 bytes, ends at 0x3C)
                 PRICE_DECIMALS, // PRICE decimals at creation (1 byte, at 0x3C)
-                oracleName // name (32 bytes, starts at 0x3D)
+                uint64(maxAge_), // max age (8 bytes, starts at 0x3D)
+                oracleName // name (32 bytes, starts at 0x45)
             );
     }
 }

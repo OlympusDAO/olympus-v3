@@ -4,7 +4,6 @@ pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTest {
@@ -29,16 +28,13 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         oracle.getRoundData(0);
     }
 
-    // when there is no stored price
-    //  [X] it reverts with price zero
+    // when there is no matching round
+    //  [X] it reverts with ChainlinkOracle_NoDataPresent
 
     function test_whenThereIsNoStoredPrice_reverts() public {
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(baseToken))
-        );
+        // New oracles are pre-cached on creation, so roundId=0 does not match latest round.
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NoDataPresent.selector);
 
-        // Call function
         oracle.getRoundData(0);
     }
 

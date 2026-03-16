@@ -33,6 +33,10 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     //  [X] it reverts with price zero
 
     function test_whenThereIsNoStoredPrice_reverts() public {
+        // The oracle now caches prices on creation; force cache stale so live price path is used.
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        _setPRICEPrices(address(baseToken), 0);
+
         // Expect revert
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(baseToken))

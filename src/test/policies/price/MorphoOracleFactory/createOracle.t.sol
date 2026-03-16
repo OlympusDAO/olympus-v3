@@ -121,6 +121,27 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         factory.createOracle(address(collateralToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when collateral token equals loan token
+    //  [X] it reverts with InvalidTokenPair
+
+    function test_whenCollateralEqualsLoan_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidTokenPair.selector,
+                address(collateralToken),
+                address(collateralToken)
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            address(collateralToken),
+            address(collateralToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
     // when collateral token is not in PRICE module
     //  [X] it reverts with PRICE error
 
@@ -350,6 +371,34 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             "COL/LOAN Morpho Oracle",
             "Name should be stored in oracle"
         );
+    }
+
+    function test_whenOracleIsCreated_cachesCollateralAndLoanPrices() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        factory.createOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        (, uint48 collateralTimestamp) = priceModule.getPrice(
+            address(collateralToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 loanTimestamp) = priceModule.getPrice(address(loanToken), IPRICEv2.Variant.LAST);
+
+        assertGt(collateralTimestamp, 0, "Collateral token price should be cached");
+        assertGt(loanTimestamp, 0, "Loan token price should be cached");
+    }
+
+    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
+        );
+
+        vm.prank(admin);
+        factory.cacheOraclePrices();
     }
 
     function test_whenTokenDecimalsAreValid_calculatesScaleFactorWithDifferentDecimals()

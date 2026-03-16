@@ -6,6 +6,7 @@ import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
@@ -160,6 +161,92 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         // Call function
         vm.prank(manager);
         factory.enableOracle(oracle);
+    }
+
+    function test_whenOracleIsEnabledAndPricesAreFresh_doesNotRecacheConfiguredPrices()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+        givenOracleIsDisabled
+    {
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        (, uint48 oldCollateralTimestamp) = priceModule.getPrice(
+            address(collateralToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 oldLoanTimestamp) = priceModule.getPrice(
+            address(loanToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        vm.warp(block.timestamp + 1);
+
+        vm.prank(admin);
+        factory.enableOracle(oracle);
+
+        (, uint48 newCollateralTimestamp) = priceModule.getPrice(
+            address(collateralToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 newLoanTimestamp) = priceModule.getPrice(
+            address(loanToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertEq(
+            newCollateralTimestamp,
+            oldCollateralTimestamp,
+            "Collateral price should not be re-cached"
+        );
+        assertEq(newLoanTimestamp, oldLoanTimestamp, "Loan price should not be re-cached");
+    }
+
+    function test_whenOracleIsEnabledAndPricesAreStale_recachesConfiguredPrices()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+        givenOracleIsDisabled
+    {
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        (, uint48 oldCollateralTimestamp) = priceModule.getPrice(
+            address(collateralToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 oldLoanTimestamp) = priceModule.getPrice(
+            address(loanToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+
+        vm.prank(admin);
+        factory.enableOracle(oracle);
+
+        (, uint48 newCollateralTimestamp) = priceModule.getPrice(
+            address(collateralToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 newLoanTimestamp) = priceModule.getPrice(
+            address(loanToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertGt(
+            newCollateralTimestamp,
+            oldCollateralTimestamp,
+            "Collateral price should be re-cached"
+        );
+        assertGt(newLoanTimestamp, oldLoanTimestamp, "Loan price should be re-cached");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

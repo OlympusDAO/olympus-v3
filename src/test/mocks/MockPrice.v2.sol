@@ -72,9 +72,8 @@ contract MockPrice is PRICEv2 {
         return price;
     }
 
-    function getPrice(address asset_, uint48) external view override returns (uint256) {
-        (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
-        return price;
+    function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
+        return _getPriceWithMaxAge(asset_, maxAge_);
     }
 
     function getPrice(
@@ -121,10 +120,11 @@ contract MockPrice is PRICEv2 {
     function getPriceIn(
         address asset_,
         address base_,
-        uint48
+        uint48 maxAge_
     ) external view override returns (uint256) {
-        (uint256 price, ) = getPriceIn(asset_, base_, Variant.CURRENT);
-        return price;
+        uint256 assetPrice = _getPriceWithMaxAge(asset_, maxAge_);
+        uint256 basePrice = _getPriceWithMaxAge(base_, maxAge_);
+        return (assetPrice * 10 ** _decimals) / basePrice;
     }
 
     function getPriceIn(
@@ -256,6 +256,20 @@ contract MockPrice is PRICEv2 {
 
             getPrice(asset, Variant.CURRENT);
         }
+    }
+
+    function _getPriceWithMaxAge(address asset_, uint48 maxAge_) internal view returns (uint256) {
+        // Mimic PRICE's behaviour of reverting if the asset is not approved
+        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
+
+        uint48 lastTimestamp = lastStoredTimestamps[asset_];
+        bool useCachedPrice = lastTimestamp != 0 &&
+            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
+
+        uint256 price = useCachedPrice ? lastStoredPrices[asset_] : prices[asset_];
+        if (price == 0) revert PRICE_PriceZero(asset_);
+
+        return price;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

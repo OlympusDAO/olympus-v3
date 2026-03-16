@@ -51,6 +51,7 @@ contract OracleProposalTest is ProposalTest {
     // TODO adjust the price bounds when updating the fork block
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
+    uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -543,14 +544,22 @@ contract OracleProposalTest is ProposalTest {
         assertTrue(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify oracles deployed
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, 0);
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
         assertTrue(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
         assertTrue(
             IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
             "Chainlink oracle not enabled"
         );
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, 0);
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
         assertTrue(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
         assertTrue(
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
