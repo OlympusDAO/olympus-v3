@@ -24,7 +24,7 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
     function test_whenOracleIsNotEnabled_reverts() public givenOracleIsDisabled {
         vm.expectRevert(
             abi.encodeWithSelector(
-                IOracleFactory.OracleFactory_OracleAlreadyDisabled.selector,
+                IOracleFactory.OracleFactory_OracleDisabled.selector,
                 address(oracle)
             )
         );

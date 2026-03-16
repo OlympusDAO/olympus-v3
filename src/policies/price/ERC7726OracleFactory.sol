@@ -274,7 +274,7 @@ contract ERC7726OracleFactory is
 
     function _validateCachingCaller(address caller_) internal view {
         if (!isOracle[caller_]) revert ERC7726OracleFactory_InvalidOracle(caller_);
-        if (!_isOracleEnabled[caller_]) revert ERC7726OracleFactory_OracleAlreadyDisabled(caller_);
+        if (!_isOracleEnabled[caller_]) revert ERC7726OracleFactory_OracleDisabled(caller_);
     }
 
     // ========== ERC165 ========== //

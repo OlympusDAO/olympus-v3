@@ -339,7 +339,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     /// @inheritdoc IOracleFactory
     function cacheOraclePrices() external override onlyEnabled {
         if (!isOracle[msg.sender]) revert OracleFactory_InvalidOracle(msg.sender);
-        if (!_isOracleEnabled[msg.sender]) revert OracleFactory_OracleAlreadyDisabled(msg.sender);
+        if (!_isOracleEnabled[msg.sender]) revert OracleFactory_OracleDisabled(msg.sender);
 
         _cacheOraclePrices(msg.sender);
     }

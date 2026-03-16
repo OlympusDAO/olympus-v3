@@ -64,6 +64,10 @@ interface IERC7726OracleFactory {
     /// @param   oracle The already disabled oracle address
     error ERC7726OracleFactory_OracleAlreadyDisabled(address oracle);
 
+    /// @notice  Thrown when an oracle is disabled and attempts an operation that requires enabled state
+    /// @param   oracle The disabled oracle address
+    error ERC7726OracleFactory_OracleDisabled(address oracle);
+
     /// @notice  Thrown when custom params are malformed
     /// @param   length The custom params length
     error ERC7726OracleFactory_InvalidCustomParams(uint256 length);

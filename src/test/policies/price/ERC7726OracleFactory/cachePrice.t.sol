@@ -92,7 +92,7 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IERC7726OracleFactory.ERC7726OracleFactory_OracleAlreadyDisabled.selector,
+                IERC7726OracleFactory.ERC7726OracleFactory_OracleDisabled.selector,
                 oracle
             )
         );

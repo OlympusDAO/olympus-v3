@@ -90,6 +90,11 @@ interface IOracleFactory {
     /// @param  oracle The already disabled oracle address
     error OracleFactory_OracleAlreadyDisabled(address oracle);
 
+    /// @notice Thrown when an oracle is disabled and attempts an operation that requires enabled state
+    ///
+    /// @param  oracle The disabled oracle address
+    error OracleFactory_OracleDisabled(address oracle);
+
     // ========== STATE FUNCTIONS ========== //
 
     /// @notice Gets the current PRICE module address
