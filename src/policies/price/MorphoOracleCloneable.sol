@@ -90,6 +90,9 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             The oracle queries the factory on each price call to get the current PRICE module address.
     ///             This allows the PRICE module to be upgraded in the factory without redeploying oracles.
     ///             If the factory is disabled or PRICE is unset, this function will revert.
+    ///
+    ///             For each asset, PRICE.getPrice(asset, maxAge) uses cached pricing when fresh
+    ///             and falls back to live/current pricing when the cache is stale.
     function price() external view override returns (uint256) {
         // Check if oracle is enabled via factory
         IOracleFactory factory_ = factory();
@@ -114,11 +117,18 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     // ========== CACHE INTERFACE ========== //
 
     /// @inheritdoc IOraclePriceCache
+    /// @dev        Unconditionally asks the factory to cache both configured assets.
+    ///             The factory validates caller/oracle/factory enabled state.
     function cachePrices() external override {
         factory().cacheOraclePrices();
     }
 
     /// @inheritdoc IOraclePriceCache
+    /// @dev        Refreshes cache only when needed:
+    ///             - if collateral and loan cached timestamps differ, or
+    ///             - if either cached timestamp is older than maxAge.
+    ///
+    ///             If both timestamps are aligned and fresh, this is a no-op.
     function cachePricesIfNecessary() external override {
         IOracleFactory factory_ = factory();
         IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());

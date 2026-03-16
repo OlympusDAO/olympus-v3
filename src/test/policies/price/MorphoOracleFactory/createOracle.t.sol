@@ -366,11 +366,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         );
 
         // Verify name is stored in oracle
-        assertEq(
-            oracleContract.name(),
-            "COL/LOAN Morpho Oracle",
-            "Name should be stored in oracle"
-        );
+        assertEq(oracleContract.name(), "COL/LOAN M 3600s", "Name should be stored in oracle");
     }
 
     function test_whenOracleIsCreated_cachesCollateralAndLoanPrices() public givenFactoryIsEnabled {

@@ -54,7 +54,7 @@ contract MorphoOracleCloneableImmutableArgsTest is MorphoOracleCloneableTest {
     //  [X] it returns name from immutable args
 
     function test_name() public view {
-        assertEq(oracle.name(), "COL/LOAN Morpho Oracle", "Should return correct name");
+        assertEq(oracle.name(), "COL/LOAN M 3600s", "Should return correct name");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

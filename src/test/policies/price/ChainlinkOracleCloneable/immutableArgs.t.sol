@@ -46,7 +46,7 @@ contract ChainlinkOracleCloneableImmutableArgsTest is ChainlinkOracleCloneableTe
     //  [X] it returns name from immutable args
 
     function test_name() public view {
-        assertEq(oracle.name(), "BASE/QUOTE Chainlink Oracle", "Should return correct name");
+        assertEq(oracle.name(), "BASE/QUOTE CL 3600s", "Should return correct name");
     }
 
     // description

@@ -11,12 +11,15 @@ import {Kernel} from "src/Kernel.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {LibString} from "@solmate-6.2.0/utils/LibString.sol";
 
 /// @title  MorphoOracleFactory
 /// @author OlympusDAO
 /// @notice Factory contract for deploying MorphoOracle clones for collateral/loan token pairs
 /// @dev    Uses ClonesWithImmutableArgs for gas-efficient oracle deployment
 contract MorphoOracleFactory is BaseOracleFactory {
+    using LibString for uint256;
+
     // ========== STATE ========== //
 
     /// @notice Reference implementation for cloning
@@ -83,11 +86,18 @@ contract MorphoOracleFactory is BaseOracleFactory {
         /// forge-lint: disable-next-line(unsafe-typecast)
         uint256 scaleFactor = 10 ** uint256(exponent);
 
-        // Compose name from token symbols: "collateral/loan Morpho Oracle"
+        // Compose name from token symbols and maxAge: "collateral/loan M {maxAge}s"
         string memory collateralSymbol = ERC20(collateralToken_).symbol();
         string memory loanSymbol = ERC20(loanToken_).symbol();
         bytes32 oracleName = bytes32(
-            abi.encodePacked(collateralSymbol, "/", loanSymbol, " Morpho Oracle")
+            abi.encodePacked(
+                collateralSymbol,
+                "/",
+                loanSymbol,
+                " M ",
+                uint256(maxAge_).toString(),
+                "s"
+            )
         );
 
         // Create clone with immutable args

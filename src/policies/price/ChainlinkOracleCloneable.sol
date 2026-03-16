@@ -176,7 +176,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         address asset_,
         uint48 maxAge_
     ) internal view returns (uint256 price_, uint48 timestamp_) {
-        // PRICE.getPrice(asset, maxAge) returns a cached value when fresh, or the live value otherwise.
+        // PRICE.getPrice(asset, maxAge) returns a cached value when cache age <= maxAge,
+        // otherwise it falls back to live/current pricing.
         price_ = PRICE_.getPrice(asset_, maxAge_);
 
         // Resolve timestamp from the same source variant used by maxAge semantics.
@@ -281,11 +282,21 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     // ========== CACHE INTERFACE ========== //
 
     /// @inheritdoc IOraclePriceCache
+    /// @dev        Unconditionally asks the factory to cache both configured assets.
+    ///             The factory enforces that:
+    ///             - The factory is enabled
+    ///             - The caller is a deployed oracle from this factory
+    ///             - The oracle is currently enabled
     function cachePrices() external override {
         factory().cacheOraclePrices();
     }
 
     /// @inheritdoc IOraclePriceCache
+    /// @dev        Refreshes cache only when needed:
+    ///             - if base and quote cached timestamps differ, or
+    ///             - if either cached timestamp is older than maxAge.
+    ///
+    ///             If both timestamps are aligned and fresh, this is a no-op.
     function cachePricesIfNecessary() external override {
         IOracleFactory factory_ = factory();
         IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());

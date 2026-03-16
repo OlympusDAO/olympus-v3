@@ -9,12 +9,15 @@ import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleClonea
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {LibString} from "@solmate-6.2.0/utils/LibString.sol";
 
 /// @title  ChainlinkOracleFactory
 /// @author OlympusDAO
 /// @notice Factory contract for deploying ChainlinkOracle clones for base/quote token pairs
 /// @dev    Uses ClonesWithImmutableArgs for gas-efficient oracle deployment
 contract ChainlinkOracleFactory is BaseOracleFactory {
+    using LibString for uint256;
+
     // ========== STATE ========== //
 
     /// @notice Reference implementation for cloning
@@ -49,11 +52,11 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         uint48 maxAge_,
         bytes calldata
     ) internal view override returns (bytes memory) {
-        // Compose name from token symbols: "base/quote Chainlink Oracle"
+        // Compose name from token symbols and maxAge: "base/quote CL {maxAge}s"
         string memory baseSymbol = ERC20(baseToken_).symbol();
         string memory quoteSymbol = ERC20(quoteToken_).symbol();
         bytes32 oracleName = bytes32(
-            abi.encodePacked(baseSymbol, "/", quoteSymbol, " Chainlink Oracle")
+            abi.encodePacked(baseSymbol, "/", quoteSymbol, " CL ", uint256(maxAge_).toString(), "s")
         );
 
         // Create clone with immutable args
