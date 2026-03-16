@@ -93,6 +93,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///
     ///             For each asset, PRICE.getPrice(asset, maxAge) uses cached pricing when fresh
     ///             and falls back to live/current pricing when the cache is stale.
+    ///             PRICE reverts with PRICE_PriceZero(asset) if a zero price is encountered,
+    ///             so loanPriceUsd is expected to be non-zero before scaleFactor().mulDiv(..., loanPriceUsd).
     function price() external view override returns (uint256) {
         // Check if oracle is enabled via factory
         IOracleFactory factory_ = factory();
@@ -111,6 +113,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
         uint256 loanPriceUsd = PRICE.getPrice(loanToken(), maxAge);
 
         // Adjust to the correct scale
+        // Denominator safety: PRICE.getPrice(...) reverts on zero price (PRICE_PriceZero),
+        // so loanPriceUsd should be non-zero here.
         return scaleFactor().mulDiv(collateralPriceUsd, loanPriceUsd);
     }
 

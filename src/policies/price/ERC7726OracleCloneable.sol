@@ -107,10 +107,15 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IPriceCache, Clone {
             revert ERC7726OracleCloneable_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
         }
 
+        // basePriceUsd and quotePriceUsd are USD prices in 10^18 scale from PRICE.
+        // baseTokenScale and quoteTokenScale are token unit scales: 10 ** IERC20(token).decimals().
         uint256 baseTokenScale = 10 ** IERC20(base).decimals();
         uint256 quoteTokenScale = 10 ** IERC20(quote).decimals();
 
-        return inAmount.mulDiv(basePriceUsd * quoteTokenScale, quotePriceUsd * baseTokenScale);
+        // Step 1: Convert inAmount from base token units into quote units at USD price ratio.
+        uint256 intermediate = inAmount.mulDiv(basePriceUsd, quotePriceUsd);
+        // Step 2: Convert between token decimal scales (baseTokenScale -> quoteTokenScale).
+        return intermediate.mulDiv(quoteTokenScale, baseTokenScale);
     }
 
     /// @inheritdoc IERC7726Oracle

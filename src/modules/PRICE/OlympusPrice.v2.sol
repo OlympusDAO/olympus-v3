@@ -311,6 +311,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     function getPriceIn(address asset_, address base_) external view override returns (uint256) {
         uint256 assetPrice = _getPriceStale(asset_, 0);
         uint256 basePrice = _getPriceStale(base_, 0);
+        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
         return (assetPrice * 10 ** _decimals) / basePrice;
     }
 
@@ -330,6 +331,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint48 cutoff = uint48(block.timestamp) - maxAge_;
         uint256 assetPrice = _getPriceStale(asset_, cutoff);
         uint256 basePrice = _getPriceStale(base_, cutoff);
+        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
         return (assetPrice * 10 ** _decimals) / basePrice;
     }
 
@@ -341,6 +343,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ) external view override returns (uint256, uint48) {
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
         (uint256 basePrice, uint48 baseTime) = getPrice(base_, variant_);
+        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
         return (
             (assetPrice * 10 ** _decimals) / basePrice,
             assetTime < baseTime ? assetTime : baseTime
