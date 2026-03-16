@@ -14,8 +14,6 @@ import {Kernel, Policy, Keycode, toKeycode, Permissions, Module} from "src/Kerne
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-
-// Contracts
 import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 
 // Libraries

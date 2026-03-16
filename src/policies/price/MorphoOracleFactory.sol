@@ -2,12 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-// Interfaces
-import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
-import {BaseOracleFactory} from "src/policies/price/BaseOracleFactory.sol";
-
 // Bophades
 import {Kernel} from "src/Kernel.sol";
+import {BaseOracleFactory} from "src/policies/price/BaseOracleFactory.sol";
+import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
