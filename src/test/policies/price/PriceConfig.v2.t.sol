@@ -293,7 +293,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](8);
+        Permissions[] memory expectedPerms = new Permissions[](9);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
@@ -328,6 +328,10 @@ contract PriceConfigv2Test is Test {
         expectedPerms[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
+        });
+        expectedPerms[8] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.cachePrice.selector
         });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
