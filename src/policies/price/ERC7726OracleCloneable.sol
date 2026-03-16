@@ -5,7 +5,7 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
-import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -18,7 +18,7 @@ import {String} from "src/libraries/String.sol";
 /// @title  ERC7726OracleCloneable
 /// @author OlympusDAO
 /// @notice Cloneable ERC7726 oracle that quotes any base/quote pair using the PRICE module
-contract ERC7726OracleCloneable is IERC7726Oracle, IPriceCache, Clone {
+contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clone {
     using FullMath for uint256;
 
     // ========== ERRORS ========== //
@@ -129,27 +129,25 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IPriceCache, Clone {
         return (outAmount, outAmount);
     }
 
-    /// @inheritdoc IPriceCache
-    function cachePrice(address asset_) external override {
-        IPriceCache(address(factory())).cachePrice(asset_);
+    /// @notice Caches both base and quote assets through the factory in a single call
+    /// @param  base_ The base asset to cache
+    /// @param  quote_ The quote asset to cache
+    function cachePrices(address base_, address quote_) external override {
+        factory().cachePrices(base_, quote_);
     }
 
-    /// @notice Caches the given asset through the factory only when stale for this oracle's maxAge
-    /// @param  asset_ The asset to cache if necessary
-    function cachePriceIfNecessary(address asset_) external {
-        this.cachePriceIfNecessary(asset_, false);
-    }
-
-    /// @inheritdoc IPriceCache
-    function cachePriceIfNecessary(address asset_, bool forceUpdate_) external override {
-        IPriceCache(address(factory())).cachePriceIfNecessary(asset_, forceUpdate_);
+    /// @notice Caches both base and quote assets through the factory only when stale
+    /// @param  base_ The base asset to conditionally cache
+    /// @param  quote_ The quote asset to conditionally cache
+    function cachePricesIfNecessary(address base_, address quote_) external override {
+        factory().cachePricesIfNecessary(base_, quote_, maxAge());
     }
 
     /// @notice Query if a contract implements an interface
     function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
         return
             interfaceId_ == type(IERC7726Oracle).interfaceId ||
-            interfaceId_ == type(IPriceCache).interfaceId ||
+            interfaceId_ == type(IERC7726OraclePriceCache).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId;
     }
 }

@@ -1018,6 +1018,44 @@ contract PriceConfigv2Test is Test {
         assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
     }
 
+    function test_cachePriceIfNecessary_maxAge_notEnabled_reverts() public givenDisabled {
+        _expectRevertNotEnabled();
+        priceConfig.cachePriceIfNecessary(address(ohm), uint48(1));
+    }
+
+    function test_cachePriceIfNecessary_maxAge_givenCacheIsFresh_doesNotCache() public {
+        _addBaseAssets();
+        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+
+        vm.warp(block.timestamp + 1);
+        priceConfig.cachePriceIfNecessary(address(ohm), uint48(2));
+
+        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertEq(newTimestamp, oldTimestamp, "Fresh cache should not be updated");
+    }
+
+    function test_cachePriceIfNecessary_maxAge_givenCacheIsStale_caches() public {
+        _addBaseAssets();
+        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+
+        vm.warp(block.timestamp + 3);
+        priceConfig.cachePriceIfNecessary(address(ohm), uint48(2));
+
+        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(newTimestamp, oldTimestamp, "Stale cache should be updated");
+    }
+
+    function test_cachePriceIfNecessary_maxAgeZero_cachesWhenTimestampIsFromPriorBlock() public {
+        _addBaseAssets();
+        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+
+        vm.warp(block.timestamp + 1);
+        priceConfig.cachePriceIfNecessary(address(ohm), uint48(0));
+
+        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
+        assertGt(newTimestamp, oldTimestamp, "maxAge = 0 should cache when timestamp is stale");
+    }
+
     function test_supportsInterface() public view {
         ERC165Helper.validateSupportsInterface(address(priceConfig));
         assertEq(

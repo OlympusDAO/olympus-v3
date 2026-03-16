@@ -288,30 +288,13 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The caller is a deployed oracle from this factory
     ///             - The oracle is currently enabled
     function cachePrices() external override {
-        factory().cacheOraclePrices();
+        factory().cachePrices(baseToken(), quoteToken());
     }
 
     /// @inheritdoc IOraclePriceCache
-    /// @dev        Refreshes cache only when needed:
-    ///             - if base and quote cached timestamps differ, or
-    ///             - if either cached timestamp is older than maxAge.
-    ///
-    ///             If both timestamps are aligned and fresh, this is a no-op.
+    /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     function cachePricesIfNecessary() external override {
-        IOracleFactory factory_ = factory();
-        IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
-        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken(), IPRICEv2.Variant.LAST);
-        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken(), IPRICEv2.Variant.LAST);
-        uint48 maxAge = _maxAge();
-        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
-        bool baseTokenStale = maxAge > 0 &&
-            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge);
-        bool quoteTokenStale = maxAge > 0 &&
-            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge);
-
-        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
-            factory_.cacheOraclePrices();
-        }
+        factory().cachePricesIfNecessary(baseToken(), quoteToken(), _maxAge());
     }
 
     // ========== ERC165 ========== //

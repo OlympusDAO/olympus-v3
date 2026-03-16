@@ -5,7 +5,6 @@ pragma solidity >=0.8.15;
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
-import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
@@ -18,7 +17,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_admin" or "admin" roles
-contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IPriceCache, IVersioned {
+contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== STATE ========== //
 
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
@@ -179,16 +178,15 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IPriceCache, IV
         PRICE.storeObservations();
     }
 
-    /// @inheritdoc IPriceCache
-    function cachePrice(address asset_) external onlyEnabled {
+    /// @inheritdoc IPriceConfigv2
+    function cachePrice(address asset_) external override onlyEnabled {
         PRICE.cachePrice(asset_);
     }
 
-    /// @inheritdoc IPriceCache
-    function cachePriceIfNecessary(address asset_, bool forceUpdate_) external onlyEnabled {
+    /// @inheritdoc IPriceConfigv2
+    function cachePriceIfNecessary(address asset_, uint48 maxAge_) public override onlyEnabled {
         (, uint48 cachedTime) = PRICE.getPrice(asset_, IPRICEv2.Variant.LAST);
-
-        if (forceUpdate_ || cachedTime == 0) {
+        if (cachedTime == 0 || block.timestamp > uint256(cachedTime) + uint256(maxAge_)) {
             PRICE.cachePrice(asset_);
         }
     }
@@ -223,7 +221,6 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IPriceCache, IV
         return
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IPriceConfigv2).interfaceId ||
-            interfaceId == type(IPriceCache).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }

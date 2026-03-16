@@ -72,6 +72,27 @@ interface IPriceConfigv2 {
     function storeObservations() external;
 
     // ========================= //
+    // PRICE CACHE MANAGEMENT    //
+    // ========================= //
+
+    /// @notice                     Cache an asset price immediately
+    /// @dev                        This bypasses staleness checks and always requests a refresh.
+    ///                             Use this when the caller explicitly wants a new cached value now.
+    ///
+    /// @param  asset_              The address of the asset to cache
+    function cachePrice(address asset_) external;
+
+    /// @notice                     Cache an asset price only when stale or never cached
+    /// @dev                        This is a policy-level cache helper intended for callers that manage
+    ///                             staleness explicitly. Unlike oracle clone cache helpers, max age is
+    ///                             provided by the caller and not embedded in immutable oracle params.
+    ///
+    /// @param  asset_              The address of the asset to potentially cache
+    /// @param  maxAge_             Maximum accepted cache age in seconds
+    ///                             If `maxAge_` is 0, any cache from a prior block is treated as stale.
+    function cachePriceIfNecessary(address asset_, uint48 maxAge_) external;
+
+    // ========================= //
     // SUBMODULE MANAGEMENT      //
     // ========================= //
 

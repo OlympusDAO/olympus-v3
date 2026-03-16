@@ -344,6 +344,36 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         _cacheOraclePrices(msg.sender);
     }
 
+    /// @inheritdoc IOracleFactory
+    function cachePrices(address baseToken_, address quoteToken_) external override onlyEnabled {
+        _validateCachingCaller(msg.sender);
+        _validateCachingPair(msg.sender, baseToken_, quoteToken_);
+        PRICE.cachePrice(baseToken_);
+        PRICE.cachePrice(quoteToken_);
+    }
+
+    /// @inheritdoc IOracleFactory
+    function cachePricesIfNecessary(
+        address baseToken_,
+        address quoteToken_,
+        uint48 maxAge_
+    ) external override onlyEnabled {
+        _validateCachingCaller(msg.sender);
+        _validateCachingPair(msg.sender, baseToken_, quoteToken_);
+        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken_, IPRICEv2.Variant.LAST);
+        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken_, IPRICEv2.Variant.LAST);
+        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
+        bool baseTokenStale = maxAge_ > 0 &&
+            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge_);
+        bool quoteTokenStale = maxAge_ > 0 &&
+            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge_);
+
+        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
+            PRICE.cachePrice(baseToken_);
+            PRICE.cachePrice(quoteToken_);
+        }
+    }
+
     /// @notice Caches prices for the configured oracle token pair
     /// @param oracle_ The oracle whose base/quote tokens should be cached
     function _cacheOraclePrices(address oracle_) internal {
@@ -352,6 +382,23 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
         PRICE.cachePrice(baseToken);
         PRICE.cachePrice(quoteToken);
+    }
+
+    function _validateCachingCaller(address caller_) internal view {
+        if (!isOracle[caller_]) revert OracleFactory_InvalidOracle(caller_);
+        if (!_isOracleEnabled[caller_]) revert OracleFactory_OracleDisabled(caller_);
+    }
+
+    function _validateCachingPair(
+        address caller_,
+        address baseToken_,
+        address quoteToken_
+    ) internal view {
+        if (
+            _oracleToBaseToken[caller_] != baseToken_ || _oracleToQuoteToken[caller_] != quoteToken_
+        ) {
+            revert OracleFactory_InvalidTokenPair(baseToken_, quoteToken_);
+        }
     }
 
     // ========== ERC165 ========== //

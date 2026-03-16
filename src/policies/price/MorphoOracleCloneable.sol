@@ -124,29 +124,13 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     /// @dev        Unconditionally asks the factory to cache both configured assets.
     ///             The factory validates caller/oracle/factory enabled state.
     function cachePrices() external override {
-        factory().cacheOraclePrices();
+        factory().cachePrices(collateralToken(), loanToken());
     }
 
     /// @inheritdoc IOraclePriceCache
-    /// @dev        Refreshes cache only when needed:
-    ///             - if collateral and loan cached timestamps differ, or
-    ///             - if either cached timestamp is older than maxAge.
-    ///
-    ///             If both timestamps are aligned and fresh, this is a no-op.
+    /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     function cachePricesIfNecessary() external override {
-        IOracleFactory factory_ = factory();
-        IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
-        (, uint48 collateralTimestamp) = PRICE.getPrice(collateralToken(), IPRICEv2.Variant.LAST);
-        (, uint48 loanTimestamp) = PRICE.getPrice(loanToken(), IPRICEv2.Variant.LAST);
-        uint48 maxAge = _maxAge();
-        bool timestampsDiffer = collateralTimestamp != loanTimestamp;
-        bool collateralStale = maxAge > 0 &&
-            block.timestamp > uint256(collateralTimestamp) + uint256(maxAge);
-        bool loanStale = maxAge > 0 && block.timestamp > uint256(loanTimestamp) + uint256(maxAge);
-
-        if (timestampsDiffer || collateralStale || loanStale) {
-            factory_.cacheOraclePrices();
-        }
+        factory().cachePricesIfNecessary(collateralToken(), loanToken(), _maxAge());
     }
 
     // ========== ERC165 ========== //
