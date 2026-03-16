@@ -10,7 +10,6 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {Actions} from "src/Kernel.sol";
 import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
-import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     // ========== TESTS ========== //
@@ -100,7 +99,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ERC7726OracleCloneable.ERC7726OracleCloneable_InconsistentTimestamps.selector,
+                IERC7726Oracle.ERC7726OracleCloneable_InconsistentTimestamps.selector,
                 uint48(2),
                 uint48(1)
             )

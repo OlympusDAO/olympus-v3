@@ -4,17 +4,16 @@ pragma solidity >=0.8.15;
 
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract ERC7726OracleFactoryDisableCreationTest is ERC7726OracleFactoryTest {
     function test_whenCallerDoesNotHaveRequiredRole_reverts(
         address caller_
     ) public givenFactoryIsEnabled {
-        vm.assume(caller_ != admin);
+        vm.assume(caller_ != admin && caller_ != oracleManager && caller_ != emergency);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         factory.disableCreation();
     }
@@ -47,6 +46,26 @@ contract ERC7726OracleFactoryDisableCreationTest is ERC7726OracleFactoryTest {
         factory.disableCreation();
 
         assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    function test_whenCallerHasOracleManagerRole_succeeds() public givenFactoryIsEnabled {
+        vm.prank(oracleManager);
+        factory.disableCreation();
+
+        assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    function test_whenCallerHasEmergencyRole_succeeds() public givenFactoryIsEnabled {
+        vm.prank(emergency);
+        factory.disableCreation();
+
+        assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    function test_whenCallerHasManagerRole_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(manager);
+        factory.disableCreation();
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

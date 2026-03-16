@@ -5,7 +5,6 @@ pragma solidity >=0.8.15;
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
-import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
@@ -117,7 +116,7 @@ contract ERC7726OracleFactoryCreateOracleTest is ERC7726OracleFactoryTest {
         vm.prank(admin);
         factory.disableOracle(oracle);
 
-        vm.expectRevert(ERC7726OracleCloneable.ERC7726OracleCloneable_NotEnabled.selector);
+        vm.expectRevert(IERC7726Oracle.ERC7726OracleCloneable_NotEnabled.selector);
         IERC7726Oracle(oracle).getQuote(1e18, address(baseToken), address(quoteToken));
     }
 }

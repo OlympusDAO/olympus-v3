@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 
 import {Deviation} from "libraries/Deviation.sol";
 
 contract DeviationTest is Test {
-    function test_isDeviating() public pure {
+    function test_givenValueEqualsBenchmark_isDeviating_returnsFalse() public pure {
         uint256 value = 100;
         uint256 benchmark = 100;
         uint256 deviationBps = 100;
@@ -22,8 +22,14 @@ contract DeviationTest is Test {
             false,
             "value == benchmark"
         );
+    }
 
-        value = 101;
+    function test_givenValueAtUpperBound_isDeviating_returnsFalse() public pure {
+        uint256 value = 101;
+        uint256 benchmark = 100;
+        uint256 deviationBps = 100;
+        uint256 deviationMax = 10000;
+
         // value = 101 is at the upper bound of [99.00, 101.00].
         // diff = |101 - 100| = 1 <= 1.00, so not deviating.
         assertEq(
@@ -31,7 +37,14 @@ contract DeviationTest is Test {
             false,
             "value > benchmark, within bounds"
         );
-        value = 99;
+    }
+
+    function test_givenValueAtLowerBound_isDeviating_returnsFalse() public pure {
+        uint256 value = 99;
+        uint256 benchmark = 100;
+        uint256 deviationBps = 100;
+        uint256 deviationMax = 10000;
+
         // value = 99 is at the lower bound of [99.00, 101.00].
         // diff = |99 - 100| = 1 <= 1.00, so not deviating.
         assertEq(
@@ -39,8 +52,14 @@ contract DeviationTest is Test {
             false,
             "value < benchmark, within bounds"
         );
+    }
 
-        value = 102;
+    function test_givenValueExceedsUpperBound_isDeviating_returnsTrue() public pure {
+        uint256 value = 102;
+        uint256 benchmark = 100;
+        uint256 deviationBps = 100;
+        uint256 deviationMax = 10000;
+
         // value = 102 exceeds the upper bound (102 > 101.00).
         // diff = |102 - 100| = 2 > 1.00, so deviating.
         assertEq(
@@ -48,7 +67,14 @@ contract DeviationTest is Test {
             true,
             "value > benchmark, outside bounds"
         );
-        value = 98;
+    }
+
+    function test_givenValueBelowLowerBound_isDeviating_returnsTrue() public pure {
+        uint256 value = 98;
+        uint256 benchmark = 100;
+        uint256 deviationBps = 100;
+        uint256 deviationMax = 10000;
+
         // value = 98 is below the lower bound (98 < 99.00).
         // diff = |98 - 100| = 2 > 1.00, so deviating.
         // deviationMax = 10_000 means "100.00%" basis-point denominator, so
@@ -78,6 +104,8 @@ contract DeviationTest is Test {
         uint256 value = bound(value_, benchmark, benchmark + 10_000);
         uint256 deviationBps = 1;
         uint256 deviationMax = 10_000;
+        // allowedDeviation = benchmark * deviationBps / deviationMax = 100_000_000 * 1 / 10_000 = 10_000.
+        // In-bounds range is [benchmark, benchmark + 10_000], so this fuzz bound must return false.
 
         assertEq(
             Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
@@ -91,6 +119,8 @@ contract DeviationTest is Test {
         uint256 value = bound(value_, benchmark + 10_001, benchmark + 50_000);
         uint256 deviationBps = 1;
         uint256 deviationMax = 10_000;
+        // allowedDeviation is still 10_000, so values above benchmark + 10_000 are out-of-bounds.
+        // This fuzz range starts at benchmark + 10_001 and must return true.
 
         assertEq(
             Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
