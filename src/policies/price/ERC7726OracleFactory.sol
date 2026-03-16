@@ -73,7 +73,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
         address priceModule = getModuleAddress(dependencies[0]);
 
         (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major == 1 && minor < 2) {
+        if (major < 1 || (major == 1 && minor < 2)) {
             revert ERC7726OracleFactory_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
         }
 
@@ -183,14 +183,19 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
-    function enableCreation() external override onlyEnabled onlyAdminRole {
+    function enableCreation() external override onlyEnabled onlyOracleManagerOrAdminRole {
         if (isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyEnabled();
         isCreationEnabled = true;
         emit CreationEnabled();
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    function disableCreation() external override onlyEnabled onlyAdminRole {
+    function disableCreation()
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrAdminOrEmergencyRole
+    {
         if (!isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyDisabled();
         isCreationEnabled = false;
         emit CreationDisabled();

@@ -83,7 +83,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         // Require PRICE v1.2+ (major=1, minor>=2) or v2+ (major>=2)
         // Cast to Module to access VERSION() function
         (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major == 1 && minor < 2)
+        if (major == 0 || (major == 1 && minor < 2))
             revert OracleFactory_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
 
         // Verify the PRICE module supports IPRICEv2 interface
