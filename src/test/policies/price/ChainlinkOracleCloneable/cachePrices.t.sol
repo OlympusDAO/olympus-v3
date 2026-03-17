@@ -126,6 +126,37 @@ contract ChainlinkOracleCloneableCachePricesTest is ChainlinkOracleCloneableTest
         assertGt(newQuoteTimestamp, oldQuoteTimestamp, "Quote token price should be re-cached");
     }
 
+    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
+        public
+    {
+        address zeroMaxAgeOracleAddress = _createOracle(address(baseToken), address(quoteToken), 0);
+        ChainlinkOracleCloneable zeroMaxAgeOracle = ChainlinkOracleCloneable(zeroMaxAgeOracleAddress);
+
+        (, uint48 oldBaseTimestamp) = priceModule.getPrice(
+            address(baseToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 oldQuoteTimestamp) = priceModule.getPrice(
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        vm.warp(block.timestamp + 1);
+        zeroMaxAgeOracle.cachePricesIfNecessary();
+
+        (, uint48 newBaseTimestamp) = priceModule.getPrice(
+            address(baseToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 newQuoteTimestamp) = priceModule.getPrice(
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertGt(newBaseTimestamp, oldBaseTimestamp, "maxAge=0 should recache base token");
+        assertGt(newQuoteTimestamp, oldQuoteTimestamp, "maxAge=0 should recache quote token");
+    }
+
     function test_whenTimestampsAreDifferent_cachePricesIfNecessaryCaches() public {
         (, uint48 oldBaseTimestamp) = priceModule.getPrice(
             address(baseToken),

@@ -390,9 +390,9 @@ abstract contract BaseOracleFactory is
         (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken_, IPRICEv2.Variant.LAST);
         (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken_, IPRICEv2.Variant.LAST);
         bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
-        bool baseTokenStale = maxAge_ > 0 &&
+        bool baseTokenStale = baseTokenTimestamp == 0 ||
             block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge_);
-        bool quoteTokenStale = maxAge_ > 0 &&
+        bool quoteTokenStale = quoteTokenTimestamp == 0 ||
             block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge_);
 
         if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
