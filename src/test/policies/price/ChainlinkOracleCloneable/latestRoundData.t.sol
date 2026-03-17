@@ -103,6 +103,13 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         );
     }
 
+    function test_whenOracleIsEnabled_gasSnapshotLatestRoundData() public givenPricesAreStored {
+        vm.startSnapshotGas("ChainlinkOracleCloneable.latestRoundData");
+        oracle.latestRoundData();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
     // when PRICE decimals change
     //  [X] it continues to use original PRICE decimals
     //  [X] it returns correct price calculation with original decimals

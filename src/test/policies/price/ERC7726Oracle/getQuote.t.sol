@@ -52,6 +52,13 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         oracle.getQuote(1e18, address(collateralToken), unconfiguredQuote);
     }
 
+    function test_givenOracleIsEnabled_gasSnapshot_getQuote() public givenOracleIsEnabled {
+        vm.startSnapshotGas("ERC7726OracleCloneable.getQuote");
+        oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
     // given the base asset price is zero
     //  [X] it reverts
 

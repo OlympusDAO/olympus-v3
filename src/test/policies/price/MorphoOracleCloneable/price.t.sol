@@ -114,6 +114,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         );
     }
 
+    function test_gasSnapshot_price() public {
+        vm.startSnapshotGas("MorphoOracleCloneable.price");
+        oracle.price();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
     // when the collateral token decimals are smaller than the loan token decimals
     //  [X] it calculates price correctly
 
