@@ -41,7 +41,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     /// forge-lint: disable-next-item(mixed-case-function)
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (2, 0);
+        return (1, 0);
     }
 
     /// @inheritdoc ILZCrossChainBridge
