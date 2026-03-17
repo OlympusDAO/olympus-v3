@@ -270,10 +270,10 @@ contract ERC7726OracleFactory is
         (, uint48 baseTimestamp) = PRICE.getPrice(base_, IPRICEv2.Variant.LAST);
         (, uint48 quoteTimestamp) = PRICE.getPrice(quote_, IPRICEv2.Variant.LAST);
         bool timestampsDiffer = baseTimestamp != quoteTimestamp;
-        bool baseStale = baseTimestamp == 0 ||
-            block.timestamp > uint256(baseTimestamp) + uint256(maxAge_);
-        bool quoteStale = quoteTimestamp == 0 ||
-            block.timestamp > uint256(quoteTimestamp) + uint256(maxAge_);
+        bool baseStale = (baseTimestamp == 0 ||
+            block.timestamp > uint256(baseTimestamp) + uint256(maxAge_));
+        bool quoteStale = (quoteTimestamp == 0 ||
+            block.timestamp > uint256(quoteTimestamp) + uint256(maxAge_));
 
         if (timestampsDiffer || baseStale || quoteStale) {
             PRICE.cachePrice(base_);
