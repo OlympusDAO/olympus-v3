@@ -38,12 +38,17 @@ The contracts in-scope for this audit are:
 
 - [src/policies/interfaces/price/IChainlinkOracle.sol](../../src/policies/interfaces/price/IChainlinkOracle.sol) - Chainlink oracle interface
 - [src/policies/interfaces/price/IERC7726Oracle.sol](../../src/policies/interfaces/price/IERC7726Oracle.sol) - ERC7726 oracle interface
+- [src/policies/interfaces/price/IERC7726OracleFactory.sol](../../src/policies/interfaces/price/IERC7726OracleFactory.sol) - ERC7726 oracle factory interface
+- [src/policies/interfaces/price/IERC7726OraclePriceCache.sol](../../src/policies/interfaces/price/IERC7726OraclePriceCache.sol) - ERC7726 oracle cache interface
 - [src/policies/interfaces/price/IMorphoOracle.sol](../../src/policies/interfaces/price/IMorphoOracle.sol) - Morpho oracle interface
 - [src/policies/interfaces/price/IOracleFactory.sol](../../src/policies/interfaces/price/IOracleFactory.sol) - Oracle factory interface
+- [src/policies/interfaces/price/IOraclePriceCache.sol](../../src/policies/interfaces/price/IOraclePriceCache.sol) - Oracle cache interface
+- [src/policies/interfaces/price/IPriceOracle.sol](../../src/policies/interfaces/price/IPriceOracle.sol) - Generic price oracle interface
 - [src/policies/price/BaseOracleFactory.sol](../../src/policies/price/BaseOracleFactory.sol) - Base oracle factory
 - [src/policies/price/ChainlinkOracleCloneable.sol](../../src/policies/price/ChainlinkOracleCloneable.sol) - Cloneable Chainlink oracle
 - [src/policies/price/ChainlinkOracleFactory.sol](../../src/policies/price/ChainlinkOracleFactory.sol) - Chainlink oracle factory
-- [src/policies/price/ERC7726Oracle.sol](../../src/policies/price/ERC7726Oracle.sol) - ERC7726 vault oracle (singular policy, not a factory)
+- [src/policies/price/ERC7726OracleCloneable.sol](../../src/policies/price/ERC7726OracleCloneable.sol) - Cloneable ERC7726 oracle
+- [src/policies/price/ERC7726OracleFactory.sol](../../src/policies/price/ERC7726OracleFactory.sol) - ERC7726 oracle factory
 - [src/policies/price/MorphoOracleCloneable.sol](../../src/policies/price/MorphoOracleCloneable.sol) - Cloneable Morpho oracle
 - [src/policies/price/MorphoOracleFactory.sol](../../src/policies/price/MorphoOracleFactory.sol) - Morpho oracle factory
 
@@ -71,7 +76,7 @@ The following contracts have been modified since the original PRICE v2 import fr
 - [src/modules/PRICE/submodules/feeds/UniswapV3Price.sol](../../src/modules/PRICE/submodules/feeds/UniswapV3Price.sol) - Added IVersioned interface, supportsInterface
 - [src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol](../../src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol) - Added deviation filtering strategies
 
-**Note:** To determine which changes are in-scope, compare the current state against commit `13062da62eca83a42a4b0e13bc4622b824a2ae35`.
+**Note:** This scope is intentionally focused on PRICE v1.2 and oracle integration contracts for this audit package, rather than every file changed on the branch since commit `13062da62eca83a42a4b0e13bc4622b824a2ae35`.
 
 #### Out of Scope (Legacy Files)
 
@@ -119,7 +124,7 @@ The base PRICE v2 architecture has been audited as part of the RBS v2 project:
     - Base commit: `17fe660525b2f0d706ca318b53111fbf103949ba`
     - Post-remediations commit: `9c10dc188210632b6ce46c7a836484e8e063151f`
 
-**Note:** The PRICE v2 architecture was imported into the `price-feed-improvements` branch from commit `13062da62eca83a42a4b0e13bc4622b824a2ae35` (source: OlympusDAO/bophades@26b3fd378fbde1918b32764dd0d86121d82932d5). However, **many imported files have been modified** since the base import. This audit covers ALL contracts that differ from commit `13062da62eca83a42a4b0e13bc4622b824a2ae35`.
+**Note:** The PRICE v2 architecture was imported into the `price-feed-improvements` branch from commit `13062da62eca83a42a4b0e13bc4622b824a2ae35` (source: OlympusDAO/bophades@26b3fd378fbde1918b32764dd0d86121d82932d5). This audit package focuses on PRICE v1.2 and oracle integration contracts listed in the scope above.
 
 ## Architecture
 
@@ -146,7 +151,7 @@ flowchart TD
   subgraph OraclePolicies["Oracle Policies<br/>(External Integration)"]
     CLFactory["ChainlinkOracleFactory<br/>(Creates Clones)"]
     MorphoFactory["MorphoOracleFactory<br/>(Creates Clones)"]
-    ERC7726["ERC7726Oracle<br/>(Singular Policy)"]
+    ERC7726Factory["ERC7726OracleFactory<br/>(Creates Clones)"]
   end
 
   PRICE --> Feeds
@@ -187,7 +192,7 @@ sequenceDiagram
     CL-->>PRICE: price2
   and
     PRICE->>Pyth: getOneFeedPrice(pyth, ethUsdFeedId, updateThreshold, maxConf)
-    Note over Pyth: Feed: Pyth ETH-USD<br/>Calls pyth.getPriceUnsafe()<br/>Update threshold: 1 hour<br/>Max confidence: $10
+    Note over Pyth: Feed: Pyth ETH-USD<br/>Calls pyth.getPriceNoOlderThan()<br/>Update threshold: 1 hour<br/>Max confidence: $10
     Pyth-->>PRICE: price3
   and
     PRICE->>CL: getTwoFeedPriceMul(ethBtcFeed, btcUsdFeed, updateThreshold)
@@ -228,7 +233,7 @@ sequenceDiagram
     CL-->>PRICE: price2
   and
     PRICE->>Pyth: getOneFeedPrice(pyth, usdsUsdFeedId, updateThreshold, maxConf)
-    Note over Pyth: Feed: Pyth USDS-USD<br/>Calls pyth.getPriceUnsafe()<br/>Update threshold: 24 hours<br/>Max confidence: $0.01
+    Note over Pyth: Feed: Pyth USDS-USD<br/>Calls pyth.getPriceNoOlderThan()<br/>Update threshold: 24 hours<br/>Max confidence: $0.01
     Pyth-->>PRICE: price3
   end
 
@@ -347,10 +352,7 @@ Olympus provides oracle policies that enable external protocols (Morpho, ERC7726
 
 - `ChainlinkOracleFactory`: Creates clones implementing `AggregatorV3Interface` (Chainlink-compatible)
 - `MorphoOracleFactory`: Creates clones implementing `IMorphoOracle` (Morpho lending markets)
-
-**Singular Oracle Policy** (direct implementation, no factory):
-
-- `ERC7726Oracle`: Single policy implementing `IERC7726Oracle` (ERC7726 vaults)
+- `ERC7726OracleFactory`: Creates clones implementing `IERC7726Oracle` (ERC7726 vaults)
 
 **PRICE v1.2 Module**: The underlying source of truth for all price data
 
@@ -370,20 +372,20 @@ sequenceDiagram
   Oracle->>Factory: getPriceModule()
   Factory-->>Oracle: PRICE v1.2 address
 
-  Oracle->>PRICE: getPrice(baseToken)
-  Note over PRICE: Returns current USD price<br/>from configured feeds
-  PRICE-->>Oracle: basePrice
+  Oracle->>PRICE: getPrice(baseToken, Variant.LAST)
+  Note over PRICE: Returns cached USD price
+  PRICE-->>Oracle: basePrice, baseTimestamp
 
-  Oracle->>PRICE: getPrice(quoteToken)
-  Note over PRICE: Returns current USD price<br/>from configured feeds
-  PRICE-->>Oracle: quotePrice
+  Oracle->>PRICE: getPrice(quoteToken, Variant.LAST)
+  Note over PRICE: Returns cached USD price
+  PRICE-->>Oracle: quotePrice, quoteTimestamp
 
+  Note over Oracle: Revert if timestamps are inconsistent
   Note over Oracle: Calculate: (basePrice / quotePrice) * 10^PRICE_DECIMALS
-  Oracle-->>Protocol: roundId, answer, startedAt, updatedAt (using current timestamp)
+  Oracle-->>Protocol: roundId, answer, startedAt, updatedAt (using cached timestamp)
 
-  Note over Protocol,PRICE: PRICE module upgrade path
-  Factory->>Factory: updatePriceModule(newPRICE)
-  Note over Factory: Oracles use new PRICE without redeployment
+  Note over Protocol,PRICE: Factory resolves PRICE through policy dependencies
+  Note over Factory: Oracles read PRICE module from factory each call
 ```
 
 **Morpho Oracle Factory Sequence:**
@@ -402,36 +404,42 @@ sequenceDiagram
   Oracle->>Factory: getPriceModule()
   Factory-->>Oracle: PRICE v1.2 address
 
-  Oracle->>PRICE: getPrice(collateralToken)
-  Note over PRICE: Returns current USD price<br/>from configured feeds
-  PRICE-->>Oracle: collateralPrice
+  Oracle->>PRICE: getPrice(collateralToken, Variant.LAST)
+  Note over PRICE: Returns cached USD price
+  PRICE-->>Oracle: collateralPrice, collateralTimestamp
 
-  Oracle->>PRICE: getPrice(loanToken)
-  Note over PRICE: Returns current USD price<br/>from configured feeds
-  PRICE-->>Oracle: loanPrice
+  Oracle->>PRICE: getPrice(loanToken, Variant.LAST)
+  Note over PRICE: Returns cached USD price
+  PRICE-->>Oracle: loanPrice, loanTimestamp
 
+  Note over Oracle: Revert if timestamps are inconsistent<br/>or stale (maxAge)
   Note over Oracle: Calculate: (collateralPrice / loanPrice) * 10^36
   Oracle-->>Protocol: price (scaled by 1e36)
 ```
 
-**ERC7726 Oracle (Singular Policy):**
+**ERC7726 Oracle Factory Sequence:**
 
 ```mermaid
 sequenceDiagram
   participant Vault as ERC7726 Vault
-  participant Oracle as ERC7726Oracle<br/>(Policy - No Factory)
+  participant Oracle as ERC7726 Oracle Clone
+  participant Factory as ERC7726OracleFactory<br/>(Policy)
   participant PRICE as PRICE v1.2 Module
 
   Note over Vault,PRICE: ERC7726 oracle query
 
   Vault->>Oracle: getQuote(amount, base, quote)
-  Note over Oracle: Policy calls PRICE directly<br/>(no factory needed)
-  Oracle->>PRICE: getPrice(base)
-  PRICE-->>Oracle: basePrice (USD)
+  Oracle->>Oracle: Check factory.isOracleEnabled(this)
+  Oracle->>Factory: getPriceModule()
+  Factory-->>Oracle: PRICE v1.2 address
 
-  Oracle->>PRICE: getPrice(quote)
-  PRICE-->>Oracle: quotePrice (USD)
+  Oracle->>PRICE: getPrice(base, Variant.LAST)
+  PRICE-->>Oracle: basePrice, baseTimestamp
 
+  Oracle->>PRICE: getPrice(quote, Variant.LAST)
+  PRICE-->>Oracle: quotePrice, quoteTimestamp
+
+  Note over Oracle: Revert if timestamps are inconsistent<br/>or stale (maxAge)
   Note over Oracle: Calculate: amount * basePrice / quotePrice
   Note over Oracle: Adjust for token decimals
   Oracle-->>Vault: quoteAmount
@@ -459,7 +467,7 @@ The multi-feed price resolution process:
 
 For assets that track moving averages (OHM):
 
-1. **Store**: `storePrice()` called periodically (every 8 hours for OHM)
+1. **Store**: `storeObservations()` called periodically (every 8 hours for OHM)
 2. **Calculate**: New observation added to ring buffer
 3. **Update**: Moving average recalculated from stored observations
 4. **Storage**: 21 observations for 7-day average (8-hour frequency)
@@ -471,11 +479,11 @@ For assets that track moving averages (OHM):
 Pyth-specific price update flow:
 
 1. **Price Update**: Pyth price must be updated via `updatePriceFeeds()` on Pyth contract
-2. **Fetch**: `PythPriceFeeds` submodule calls `getPriceUnsafe()` for latest price
+2. **Fetch**: `PythPriceFeeds` submodule calls `getPriceNoOlderThan()` for the latest non-stale price
 3. **Validation**:
-   - Check staleness (update threshold)
-   - Validate confidence interval (max confidence)
-   - Revert if confidence exceeds threshold
+    - Check staleness (update threshold)
+    - Validate confidence interval (max confidence)
+    - Revert if confidence exceeds threshold
 4. **Return**: Price in 18 decimals
 
 **Critical:** Pyth prices MUST be updated regularly via the [pyth-price-pusher](https://github.com/OlympusDAO/pyth-price-pusher) tool. If not updated within the `updateThreshold` period, price resolution fails.
@@ -486,7 +494,7 @@ Pyth-specific price update flow:
 
 1. **Deploy Factory**: Base factory contract deployed as a policy with PRICE module reference
 2. **Activate Policy**: Factory activated in Kernel via `Actions.ActivatePolicy`
-3. **Request Oracle**: External protocol calls `factory.createOracle(baseToken, quoteToken, name)`
+3. **Request Oracle**: Privileged address calls `createOracle(...)` on the relevant factory (`IOracleFactory` or `IERC7726OracleFactory`)
 4. **Clone Deployment**: Factory deploys minimal-gas oracle clone via CREATE2
 5. **Enable Oracle**: Oracle enabled via `factory.enableOracle(oracleAddress)` (optional for auto-enable)
 
@@ -496,8 +504,9 @@ Pyth-specific price update flow:
 2. **Validation**: Oracle checks `factory.isOracleEnabled(this)` - reverts if disabled
 3. **PRICE Reference**: Oracle gets current PRICE address via `factory.getPriceModule()`
 4. **Price Resolution**:
-   - Chainlink oracles: `PRICE.getPrice(baseToken)` and `PRICE.getPrice(quoteToken)` (current value)
-   - Morpho oracles: `PRICE.getPrice(collateralToken)` and `PRICE.getPrice(loanToken)` (current value)
+    - Chainlink oracles: `PRICE.getPrice(baseToken, Variant.LAST)` and `PRICE.getPrice(quoteToken, Variant.LAST)` (cached values)
+    - Morpho oracles: `PRICE.getPrice(collateralToken, Variant.LAST)` and `PRICE.getPrice(loanToken, Variant.LAST)` (cached values)
+    - ERC7726 oracles: `PRICE.getPrice(base, Variant.LAST)` and `PRICE.getPrice(quote, Variant.LAST)` (cached values)
 5. **Ratio Calculation**: Oracle calculates `(basePrice / quotePrice) * 10^decimals`
 6. **Return**: Price, timestamp, and round ID returned to external protocol
 
@@ -511,25 +520,25 @@ Pyth-specific price update flow:
 
 **Oracle Types:**
 
-| Type | Creates Clones? | Interface | Use Case |
-| ---- | -------------- | --------- | -------- |
-| `ChainlinkOracleFactory` | Yes | `AggregatorV3Interface` | Protocols expecting Chainlink-compatible oracles |
-| `MorphoOracleFactory` | Yes | `IMorphoOracle` | Morpho lending markets |
-| `ERC7726Oracle` | No (singular policy) | `IERC7726Oracle` | ERC7726-compliant vaults |
+| Type                     | Creates Clones? | Interface               | Use Case                                         |
+| ------------------------ | --------------- | ----------------------- | ------------------------------------------------ |
+| `ChainlinkOracleFactory` | Yes             | `AggregatorV3Interface` | Protocols expecting Chainlink-compatible oracles |
+| `MorphoOracleFactory`    | Yes             | `IMorphoOracle`         | Morpho lending markets                           |
+| `ERC7726OracleFactory`   | Yes             | `IERC7726Oracle`        | ERC7726-compliant vaults                         |
 
 ## Frequently-Asked Questions
 
 ### Q: Is the code/contract expected to comply with any EIPs?
 
-A: The ERC7726 oracle policy complies with ERC7726 (Vault Oracle Interface). The core PRICE module does not implement any specific EIPs/ERCs.
+A: The ERC7726 oracle factory and clones implement ERC7726-compatible quoting (`IERC7726Oracle`). The core PRICE module does not implement any specific EIPs/ERCs.
 
 ### Q: What happens if a price feed is stale or returns an invalid value?
 
-A: Invalid price feeds (zero value, stale data, excessive confidence) return zero and are excluded from calculation. If strict mode is enabled and insufficient valid values remain, the price resolution reverts.
+A: If a feed call fails (for example stale/invalid data), PRICE treats that feed as failed for the call and the strategy receives a zero for that slot. If strict mode is enabled and insufficient valid values remain after filtering, price resolution reverts.
 
 ### Q: What happens if Pyth price feeds are not updated?
 
-A: If Pyth prices are not updated within the `updateThreshold` period, the feed returns zero and is excluded. If strict mode requires 2+ values and only 1-2 feeds remain valid, price resolution may fail.
+A: If Pyth prices are not updated within the `updateThreshold` period, Pyth feed reads revert and that feed is treated as failed by PRICE aggregation logic. If strict mode requires 2+ values and only 1-2 feeds remain valid, price resolution may fail.
 
 **Mitigation:** Use the [pyth-price-pusher](https://github.com/OlympusDAO/pyth-price-pusher) tool for automated price updates.
 
@@ -557,17 +566,20 @@ Both feeds are validated for staleness before multiplication. This provides a 4t
 A: The following are known issues/limitations:
 
 1. **Uniswap V3 Price Manipulation**: PRICE submodules using on-chain reserves (Uniswap V3) are susceptible to sandwich attacks and multi-block manipulation
-   - **Mitigation**: 30-minute TWAP window reduces manipulation risk
-   - **Mitigation**: Multi-feed redundancy (2 independent pool paths)
-   - **Mitigation**: Moving average tracking (for OHM)
+
+    - **Mitigation**: 30-minute TWAP window reduces manipulation risk
+    - **Mitigation**: Multi-feed redundancy (2 independent pool paths)
+    - **Mitigation**: Moving average tracking (for OHM)
 
 2. **Pyth Feed Dependency**: Pyth feeds require regular updates to remain valid
-   - **Mitigation**: Automated price update via pyth-price-pusher tool
-   - **Mitigation**: Redundant feeds (3 for USDS, 4 for wETH)
+
+    - **Mitigation**: Automated price update via pyth-price-pusher tool
+    - **Mitigation**: Redundant feeds (3 for USDS, 4 for wETH)
 
 3. **Price Feed Convergence**: If all feeds for an asset are manipulated or report invalid data, price resolution fails
-   - **Mitigation**: Strict mode requires 2+ valid values
-   - **Mitigation**: Independent oracle providers (Chainlink, RedStone, Pyth)
+
+    - **Mitigation**: Strict mode requires 2+ valid values
+    - **Mitigation**: Independent oracle providers (Chainlink, RedStone, Pyth)
 
 ### Q: Why is PRICE v1.2 being used instead of v2?
 
@@ -584,10 +596,10 @@ A: Oracle Factory Policies are specialized policies that create and manage oracl
 **How they work:**
 
 1. Factory deployed as a policy with PRICE module reference
-2. External protocol requests oracle clone via `factory.createOracle(baseToken, quoteToken, name)`
-3. Factory deploys minimal-gas clone via CREATE2
-4. Clone implements standard interface (Chainlink AggregatorV3, IMorphoOracle)
-5. When queried, clone validates it's enabled via factory, gets PRICE module address, and calls `PRICE.getPrice()`
+2. Privileged address creates oracle clone via `createOracle(...)`
+3. Factory deploys minimal-gas clone via CREATE2 with immutable args
+4. Clone implements a standard interface (Chainlink AggregatorV3, IMorphoOracle, IERC7726Oracle)
+5. When queried, clone validates it's enabled via factory, gets PRICE module address, and calls `PRICE.getPrice(..., Variant.LAST)`
 6. Clone calculates price ratio (basePrice / quotePrice) and returns in standard format
 
 **Key benefits:**
@@ -597,7 +609,7 @@ A: Oracle Factory Policies are specialized policies that create and manage oracl
 - Minimal gas cost due to CREATE2 cloning
 - Permissioned control via factory enable/disable functions
 
-**Note:** ERC7726Oracle is different - it's a singular policy (not a factory) that implements ERC7726 directly without creating clones.
+**Note:** ERC7726 integration is factory-based (`ERC7726OracleFactory` + `ERC7726OracleCloneable`), consistent with the other oracle adapters.
 
 **See also:** [Oracle Architecture for External Protocols](#oracle-architecture-for-external-protocols) sequence diagrams above.
 

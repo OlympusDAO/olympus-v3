@@ -23,7 +23,7 @@ PRICE v1.2 configures 4 assets with multi-feed price resolution:
 | ------------------ | --------- | -------------------------------------------------------------------------------------- | --------------------- | ------------------------------- |
 | Chainlink USDS-USD | Chainlink | [0xfF4...19b](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1) | 86,400 sec (24 hours) | -                               |
 | Chainlink DAI-USD  | Chainlink | [0xAed...eE9](https://etherscan.io/address/0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9) | 86,400 sec (24 hours) | -                               |
-| Pyth USDS-USD      | Pyth      | `0x5c50e4bb79...c66e83a5` (bytes32)                                                    | 86,400 sec (24 hours) | Max confidence: 0.01e18 ($0.01) |
+| Pyth USDS-USD      | Pyth      | `0x77f0971af1...2d297ea1` (bytes32)                                                    | 86,400 sec (24 hours) | Max confidence: 0.01e18 ($0.01) |
 
 **Strategy:**
 
@@ -57,7 +57,7 @@ PRICE v1.2 configures 4 assets with multi-feed price resolution:
 | ----------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------- |
 | Chainlink ETH-USD | Chainlink         | [0x5f4...5419](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)                                                                                          | 3,600 sec (1 hour) | -                                |
 | RedStone ETH-USD  | RedStone          | [0x67F...6Dc4](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4)                                                                                          | 3,600 sec (1 hour) | -                                |
-| Pyth ETH-USD      | Pyth              | `0xff61491a9...002a84b5` (bytes32)                                                                                                                                               | 3,600 sec (1 hour) | Max confidence: 10e18 ($10)      |
+| Pyth ETH-USD      | Pyth              | `0xff61491a93...34fd0ace` (bytes32)                                                                                                                                              | 3,600 sec (1 hour) | Max confidence: 10e18 ($10)      |
 | ETH-BTC × BTC-USD | Chainlink derived | [0xAc5...4e99](https://etherscan.io/address/0xAc559F25B1619171CbC396a50854A3240b6A4e99) × [0xF40...88c](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | 3,600 sec (1 hour) | Function: `getTwoFeedPriceMul()` |
 
 **Strategy:**
@@ -105,7 +105,7 @@ The **update threshold** is the maximum number of seconds that can elapse since 
 | USDS feeds | 86,400 sec (24 hours) |
 | wETH feeds | 3,600 sec (1 hour)    |
 
-**Behavior:** If a feed's last update is older than this threshold, the feed returns zero and is excluded from price calculation.
+**Behavior:** If a feed's last update is older than this threshold, the feed read reverts and PRICE treats that feed as failed for aggregation.
 
 ### Observation Window
 
@@ -155,12 +155,12 @@ Pyth price feeds require regular updates to remain valid. The [pyth-price-pusher
 
 **Feed IDs:**
 
-- USDS-USD: `0x5c50e4bb799...56c66e83a5`
-- ETH-USD: `0xff61491a9...2a84b5`
+- USDS-USD: `0x77f0971af11...2d297ea1`
+- ETH-USD: `0xff61491a93...34fd0ace`
 
 **Update frequency:** Recommended every 30-60 seconds for best security
 
-**Failure mode:** If Pyth prices are not updated within the `updateThreshold` period, the feed returns zero and is excluded. If strict mode requires 2+ values and insufficient feeds remain, price resolution fails.
+**Failure mode:** If Pyth prices are not updated within the `updateThreshold` period, the feed read reverts and PRICE treats that feed as failed. If strict mode requires 2+ values and insufficient feeds remain, price resolution fails.
 
 **Note:** For Oracle Factory policies (Chainlink, Morpho, ERC7726) that enable external protocol integration, see the [README.md](./README.md#oracle-architecture-for-external-protocols) section for architecture and sequence diagrams.
 
@@ -190,7 +190,7 @@ OHM moving average is pre-populated with 21 observations at deployment:
 
 **Storage:** Observations stored in a ring buffer in PRICE module
 
-**Update:** Called via `PRICE.storePrice()` every 8 hours
+**Update:** Called via `PRICE.storeObservations()` every 8 hours
 
 ## Risk Considerations
 
