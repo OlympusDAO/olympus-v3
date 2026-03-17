@@ -91,14 +91,26 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
 
         priceModule.cachePrice(address(baseToken));
         priceModule.cachePrice(address(quoteToken));
-        (, uint48 oldBaseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
-        (, uint48 oldQuoteTimestamp) = priceModule.getPrice(address(quoteToken), IPRICEv2.Variant.LAST);
+        (, uint48 oldBaseTimestamp) = priceModule.getPrice(
+            address(baseToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 oldQuoteTimestamp) = priceModule.getPrice(
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
 
         vm.warp(block.timestamp + 1);
         clone.cachePricesIfNecessary(address(baseToken), address(quoteToken));
 
-        (, uint48 newBaseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
-        (, uint48 newQuoteTimestamp) = priceModule.getPrice(address(quoteToken), IPRICEv2.Variant.LAST);
+        (, uint48 newBaseTimestamp) = priceModule.getPrice(
+            address(baseToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 newQuoteTimestamp) = priceModule.getPrice(
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
         assertGt(newBaseTimestamp, oldBaseTimestamp, "maxAge=0 should recache base token");
         assertGt(newQuoteTimestamp, oldQuoteTimestamp, "maxAge=0 should recache quote token");
     }

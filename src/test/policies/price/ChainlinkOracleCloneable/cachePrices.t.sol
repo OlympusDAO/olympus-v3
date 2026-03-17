@@ -130,7 +130,9 @@ contract ChainlinkOracleCloneableCachePricesTest is ChainlinkOracleCloneableTest
         public
     {
         address zeroMaxAgeOracleAddress = _createOracle(address(baseToken), address(quoteToken), 0);
-        ChainlinkOracleCloneable zeroMaxAgeOracle = ChainlinkOracleCloneable(zeroMaxAgeOracleAddress);
+        ChainlinkOracleCloneable zeroMaxAgeOracle = ChainlinkOracleCloneable(
+            zeroMaxAgeOracleAddress
+        );
 
         (, uint48 oldBaseTimestamp) = priceModule.getPrice(
             address(baseToken),
