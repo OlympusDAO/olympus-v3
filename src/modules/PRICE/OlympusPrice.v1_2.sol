@@ -63,30 +63,39 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         return (1, 2);
     }
 
+    /// @notice                 Returns an OHM price variant from PRICEv2
+    /// @param variant_         Price variant to fetch
+    /// @return price_          The requested OHM price
+    function _getOhmPrice(IPRICEv2.Variant variant_) internal view returns (uint256 price_) {
+        (price_, ) = getPrice(OHM, variant_);
+    }
+
+    /// @notice                 Shared revert helper for deprecated PRICEv1 methods
+    function _revertDeprecated() internal pure {
+        revert PRICE_Deprecated();
+    }
+
     // ========== PRICEv1 VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the current price of OHM.
     ///             Compatibility function for PRICEv1.
     function getCurrentPrice() external view returns (uint256) {
-        (uint256 price, ) = getPrice(OHM, IPRICEv2.Variant.CURRENT);
-        return price;
+        return _getOhmPrice(IPRICEv2.Variant.CURRENT);
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the last price of OHM.
     ///             Compatibility function for PRICEv1.
     function getLastPrice() external view returns (uint256) {
-        (uint256 price, ) = getPrice(OHM, IPRICEv2.Variant.LAST);
-        return price;
+        return _getOhmPrice(IPRICEv2.Variant.LAST);
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the moving average of OHM.
     ///             Compatibility function for PRICEv1.
     function getMovingAverage() external view returns (uint256) {
-        (uint256 price, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
-        return price;
+        return _getOhmPrice(IPRICEv2.Variant.MOVINGAVERAGE);
     }
 
     /// @inheritdoc IPRICEv1
@@ -110,6 +119,8 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @inheritdoc IPRICEv1
     /// @dev        Updates the moving average for all assets.
     ///             Provided as a compatibility function for PRICEv1.
+    /// @dev        Reentrancy note: delegates to `storeObservations()`, whose feed/strategy lookups
+    ///             are resolved via `staticcall`.
     function updateMovingAverage() external permissioned {
         // Update all assets that track moving averages
         storeObservations();
@@ -118,12 +129,13 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated. Reverts.
     function initialize(uint256[] memory, uint48) external pure {
-        revert PRICE_Deprecated();
+        _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Changes the minimum target price for OHM.
     ///             Provided as a compatibility function for PRICEv1.
+    /// @dev        Reentrancy note: this function does not make external calls.
     function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external permissioned {
         minimumTargetPrice = minimumTargetPrice_;
         emit MinimumTargetPriceChanged(minimumTargetPrice_);
@@ -132,19 +144,19 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated. Reverts.
     function changeUpdateThresholds(uint48, uint48) external pure {
-        revert PRICE_Deprecated();
+        _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated. Reverts.
     function changeMovingAverageDuration(uint48) external pure {
-        revert PRICE_Deprecated();
+        _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated. Reverts.
     function changeObservationFrequency(uint48) external pure {
-        revert PRICE_Deprecated();
+        _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv2
