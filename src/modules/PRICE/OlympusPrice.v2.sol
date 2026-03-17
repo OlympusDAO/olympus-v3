@@ -382,12 +382,26 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The asset does not store moving average
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
+    ///
     /// @dev        Reentrancy note: feed/strategy resolution is done via `staticcall`, so callbacks
-    ///             cannot perform state-changing reentry.
+    /// @dev        cannot perform state-changing reentry.
+    ///
+    /// @dev        This function does not enforce a minimum frequency between observations,
+    /// @dev        leaving the onus on the caller to perform validation.
+    ///
+    /// @param asset_   The address of the asset
     function storeObservation(address asset_) public override permissioned {
         _storeObservation(asset_);
     }
 
+    /// @notice Stores an observation for an asset
+    /// @dev    Will revert if:
+    /// @dev    - The asset is not approved
+    /// @dev    - The moving average is not stored for the asset
+    /// @dev    - Getting the prices fails
+    /// @dev    - Aggregating the prices fails
+    ///
+    /// @param asset_   The address of the asset
     function _storeObservation(address asset_) internal {
         Asset storage asset = _assetData[asset_];
 
@@ -445,8 +459,12 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
     /// @dev        - Store the price for each asset using `storeObservation()`
+    ///
     /// @dev        Reentrancy note: delegates to `storeObservation()`, which only reaches external
-    ///             price providers via `staticcall`.
+    /// @dev        price providers via `staticcall`.
+    ///
+    /// @dev        This function does not enforce a minimum frequency between observations,
+    /// @dev        leaving the onus on the caller to perform validation.
     function storeObservations() public override permissioned {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
