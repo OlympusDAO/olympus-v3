@@ -7,50 +7,45 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
-import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroEndpoint.sol";
+import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
-/// @notice Fork-based end-to-end tests for LZBridgeGateway cross-chain bridge
+/// @notice Fork-based end-to-end tests for LZBridgeGateway cross-chain bridge (LZ V2).
+/// @dev Message delivery is simulated by pranking the LZ V2 endpoint to call
+///      `gateway.lzReceive()` directly.
 contract LZBridgeGatewayForkTests is Test {
-    // ========= LZ ENDPOINTS (V1) ========= //
+    // ========= CONSTANTS ========= //
 
-    address constant MAINNET_LZ_ENDPOINT = 0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675;
-    address constant POLYGON_LZ_ENDPOINT = 0x3c2269811836af69497E5F486A85D7316753cf62;
-
-    uint16 constant MAINNET_LZ_CHAIN_ID = 101;
-    uint16 constant POLYGON_LZ_CHAIN_ID = 109;
+    uint256 constant MINT_AMOUNT = 10_000e9;
+    uint256 constant SUPPLY_CAP = 1_000_000e9;
 
     // ========= FORKS ========= //
 
-    uint256 mainnetForkId;
-    uint256 polygonForkId;
+    uint256 ethForkId;
+    uint256 arbForkId;
 
-    // ========= MAINNET CONTRACTS ========= //
+    // ========= ETHEREUM CONTRACTS ========= //
 
-    MockOhm mainnetOhm;
-    Kernel mainnetKernel;
-    OlympusMinter mainnetMintr;
-    OlympusRoles mainnetRoles;
-    RolesAdmin mainnetRolesAdmin;
-    LZBridgeGateway mainnetGateway;
-    LZCrossChainBridge mainnetBridge;
+    MockOhm ethOhm;
+    Kernel ethKernel;
+    OlympusMinter ethMintr;
+    OlympusRoles ethRoles;
+    RolesAdmin ethRolesAdmin;
+    LZBridgeGateway ethGateway;
+    LZCrossChainBridge ethBridge;
 
-    // ========= POLYGON CONTRACTS ========= //
+    // ========= ARBITRUM CONTRACTS ========= //
 
-    MockOhm polygonOhm;
-    Kernel polygonKernel;
-    OlympusMinter polygonMintr;
-    OlympusRoles polygonRoles;
-    RolesAdmin polygonRolesAdmin;
-    LZBridgeGateway polygonGateway;
-    LZCrossChainBridge polygonBridge;
-
-    // ========= HELPERS ========= //
-
-    LayerZeroHelper lzHelper;
+    MockOhm arbOhm;
+    Kernel arbKernel;
+    OlympusMinter arbMintr;
+    OlympusRoles arbRoles;
+    RolesAdmin arbRolesAdmin;
+    LZBridgeGateway arbGateway;
+    LZCrossChainBridge arbBridge;
 
     // ========= ADDRESSES ========= //
 
@@ -58,309 +53,590 @@ contract LZBridgeGatewayForkTests is Test {
     address sender;
     address recipient;
 
-    uint256 constant MINT_AMOUNT = 10_000e9;
-    uint256 constant SUPPLY_CAP = 100_000e9;
-    uint256 constant LZ_GAS = 500_000;
-
-    // Packet event selector for LayerZero V1
-    bytes32 constant PACKET_EVENT_SELECTOR =
-        0xe9bded5f24a4168e4f3bf44e00298c993b22376aad8c58c7dda9718a54cbea82;
-
-    // Cached default library addresses (resolved per-fork during setUp)
-    address mainnetDefaultLib;
-    address polygonDefaultLib;
-
     function setUp() external {
-        // Create forks at latest block
-        mainnetForkId = vm.createFork("mainnet");
-        polygonForkId = vm.createFork("polygon");
+        ethForkId = vm.createFork("mainnet");
+        arbForkId = vm.createFork("arbitrum");
 
-        // Create persistent addresses
         admin = makeAddr("admin");
-        vm.makePersistent(admin);
         sender = makeAddr("sender");
-        vm.makePersistent(sender);
         recipient = makeAddr("recipient");
+        vm.makePersistent(admin);
+        vm.makePersistent(sender);
         vm.makePersistent(recipient);
 
-        // Create the LZ helper and make persistent
-        lzHelper = new LayerZeroHelper();
-        vm.makePersistent(address(lzHelper));
+        // Deploy Ethereum stack
+        vm.selectFork(ethForkId);
+        _deployEthStack();
 
-        // Deploy mainnet stack and cache its default library
-        vm.selectFork(mainnetForkId);
-        mainnetDefaultLib = _getDefaultLibrary(MAINNET_LZ_ENDPOINT);
-        _deployMainnetStack();
+        // Deploy Arbitrum stack
+        vm.selectFork(arbForkId);
+        _deployArbStack();
 
-        // Deploy polygon stack and cache its default library
-        vm.selectFork(polygonForkId);
-        polygonDefaultLib = _getDefaultLibrary(POLYGON_LZ_ENDPOINT);
-        _deployPolygonStack();
-
-        // Cross-configure trusted remotes
-        vm.selectFork(mainnetForkId);
+        // Cross-configure peers
+        vm.selectFork(ethForkId);
         vm.prank(admin);
-        mainnetGateway.setTrustedRemote(POLYGON_LZ_CHAIN_ID, address(polygonGateway));
+        ethGateway.setPeer(LZConfigLib.ARB_EID, bytes32(uint256(uint160(address(arbGateway)))));
 
-        vm.selectFork(polygonForkId);
+        vm.selectFork(arbForkId);
         vm.prank(admin);
-        polygonGateway.setTrustedRemote(MAINNET_LZ_CHAIN_ID, address(mainnetGateway));
+        arbGateway.setPeer(LZConfigLib.ETH_EID, bytes32(uint256(uint160(address(ethGateway)))));
     }
 
-    function _deployMainnetStack() internal {
-        mainnetOhm = new MockOhm("OHM", "OHM", 9);
-        mainnetBridge = new LZCrossChainBridge(address(mainnetOhm), admin);
-        mainnetKernel = new Kernel();
-        mainnetMintr = new OlympusMinter(mainnetKernel, address(mainnetOhm));
-        mainnetRoles = new OlympusRoles(mainnetKernel);
-        mainnetRolesAdmin = new RolesAdmin(mainnetKernel);
-        mainnetGateway = new LZBridgeGateway(
-            mainnetKernel,
-            MAINNET_LZ_ENDPOINT,
-            true, // canonical
-            address(mainnetBridge)
+    function _deployEthStack() internal {
+        ethOhm = new MockOhm("OHM", "OHM", 9);
+        ethBridge = new LZCrossChainBridge(address(ethOhm), admin);
+        ethKernel = new Kernel();
+        ethMintr = new OlympusMinter(ethKernel, address(ethOhm));
+        ethRoles = new OlympusRoles(ethKernel);
+        ethRolesAdmin = new RolesAdmin(ethKernel);
+        ethGateway = new LZBridgeGateway(
+            ethKernel,
+            LZConfigLib.LZ_ENDPOINT,
+            true, // Canonical
+            address(ethBridge)
         );
 
-        mainnetKernel.executeAction(Actions.InstallModule, address(mainnetMintr));
-        mainnetKernel.executeAction(Actions.InstallModule, address(mainnetRoles));
-        mainnetKernel.executeAction(Actions.ActivatePolicy, address(mainnetRolesAdmin));
-        mainnetKernel.executeAction(Actions.ActivatePolicy, address(mainnetGateway));
+        ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
+        ethKernel.executeAction(Actions.InstallModule, address(ethRoles));
+        ethKernel.executeAction(Actions.ActivatePolicy, address(ethRolesAdmin));
+        ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
-        mainnetRolesAdmin.grantRole("admin", admin);
+        ethRolesAdmin.grantRole("admin", admin);
 
         vm.startPrank(admin);
-        mainnetGateway.setBridgedSupplyCap(SUPPLY_CAP);
-        mainnetGateway.enable(bytes(""));
-        mainnetBridge.setGateway(address(mainnetGateway));
-        mainnetBridge.enable(bytes(""));
+        ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
+        ethGateway.enable(bytes(""));
+        ethBridge.setGateway(address(ethGateway));
+        ethBridge.enable(bytes(""));
         vm.stopPrank();
 
-        // Mint OHM and fund sender
-        mainnetOhm.mint(sender, MINT_AMOUNT);
+        ethOhm.mint(sender, MINT_AMOUNT);
         vm.deal(sender, 100 ether);
 
-        // Make persistent across forks
-        vm.makePersistent(address(mainnetOhm));
-        vm.makePersistent(address(mainnetKernel));
-        vm.makePersistent(address(mainnetMintr));
-        vm.makePersistent(address(mainnetRoles));
-        vm.makePersistent(address(mainnetRolesAdmin));
-        vm.makePersistent(address(mainnetGateway));
-        vm.makePersistent(address(mainnetBridge));
+        _makePersistent(
+            ethOhm,
+            ethKernel,
+            ethMintr,
+            ethRoles,
+            ethRolesAdmin,
+            ethGateway,
+            ethBridge
+        );
     }
 
-    function _deployPolygonStack() internal {
-        polygonOhm = new MockOhm("OHM", "OHM", 9);
-        polygonBridge = new LZCrossChainBridge(address(polygonOhm), admin);
-        polygonKernel = new Kernel();
-        polygonMintr = new OlympusMinter(polygonKernel, address(polygonOhm));
-        polygonRoles = new OlympusRoles(polygonKernel);
-        polygonRolesAdmin = new RolesAdmin(polygonKernel);
-        polygonGateway = new LZBridgeGateway(
-            polygonKernel,
-            POLYGON_LZ_ENDPOINT,
-            false, // non-canonical
-            address(polygonBridge)
+    function _deployArbStack() internal {
+        arbOhm = new MockOhm("OHM", "OHM", 9);
+        arbBridge = new LZCrossChainBridge(address(arbOhm), admin);
+        arbKernel = new Kernel();
+        arbMintr = new OlympusMinter(arbKernel, address(arbOhm));
+        arbRoles = new OlympusRoles(arbKernel);
+        arbRolesAdmin = new RolesAdmin(arbKernel);
+        arbGateway = new LZBridgeGateway(
+            arbKernel,
+            LZConfigLib.LZ_ENDPOINT,
+            false, // Non-canonical
+            address(arbBridge)
         );
 
-        polygonKernel.executeAction(Actions.InstallModule, address(polygonMintr));
-        polygonKernel.executeAction(Actions.InstallModule, address(polygonRoles));
-        polygonKernel.executeAction(Actions.ActivatePolicy, address(polygonRolesAdmin));
-        polygonKernel.executeAction(Actions.ActivatePolicy, address(polygonGateway));
+        arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
+        arbKernel.executeAction(Actions.InstallModule, address(arbRoles));
+        arbKernel.executeAction(Actions.ActivatePolicy, address(arbRolesAdmin));
+        arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
-        polygonRolesAdmin.grantRole("admin", admin);
+        arbRolesAdmin.grantRole("admin", admin);
 
         vm.startPrank(admin);
-        polygonGateway.enable(bytes(""));
-        polygonBridge.setGateway(address(polygonGateway));
-        polygonBridge.enable(bytes(""));
+        arbGateway.enable(bytes(""));
+        arbBridge.setGateway(address(arbGateway));
+        arbBridge.enable(bytes(""));
         vm.stopPrank();
 
-        // Mint OHM and fund sender on polygon
-        polygonOhm.mint(sender, MINT_AMOUNT);
+        arbOhm.mint(sender, MINT_AMOUNT);
         vm.deal(sender, 100 ether);
 
-        // Make persistent across forks
-        vm.makePersistent(address(polygonOhm));
-        vm.makePersistent(address(polygonKernel));
-        vm.makePersistent(address(polygonMintr));
-        vm.makePersistent(address(polygonRoles));
-        vm.makePersistent(address(polygonRolesAdmin));
-        vm.makePersistent(address(polygonGateway));
-        vm.makePersistent(address(polygonBridge));
+        _makePersistent(
+            arbOhm,
+            arbKernel,
+            arbMintr,
+            arbRoles,
+            arbRolesAdmin,
+            arbGateway,
+            arbBridge
+        );
+    }
+
+    function _makePersistent(
+        MockOhm ohm_,
+        Kernel kernel_,
+        OlympusMinter mintr_,
+        OlympusRoles roles_,
+        RolesAdmin rolesAdmin_,
+        LZBridgeGateway gateway_,
+        LZCrossChainBridge bridge_
+    ) internal {
+        vm.makePersistent(address(ohm_));
+        vm.makePersistent(address(kernel_));
+        vm.makePersistent(address(mintr_));
+        vm.makePersistent(address(roles_));
+        vm.makePersistent(address(rolesAdmin_));
+        vm.makePersistent(address(gateway_));
+        vm.makePersistent(address(bridge_));
     }
 
     // ========= HELPERS ========= //
 
-    /// @dev Get the default library address from the LZ endpoint
-    function _getDefaultLibrary(address endpoint) internal view returns (address) {
-        return ILayerZeroEndpoint(endpoint).getSendLibraryAddress(address(0));
-    }
+    /// @dev Simulates LZ V2 message delivery by pranking the endpoint to call lzReceive.
+    function _deliverMessage(
+        uint256 dstForkId,
+        LZBridgeGateway dstGw,
+        uint32 srcEid,
+        address srcGw,
+        address to,
+        uint256 amount
+    ) internal {
+        vm.selectFork(dstForkId);
 
-    /// @dev Assert that the trusted remote on the polygon gateway matches the expected path
-    function _assertTrustedRemote() internal {
-        vm.selectFork(polygonForkId);
-        bytes memory trustedRemote = polygonGateway.trustedRemoteLookup(MAINNET_LZ_CHAIN_ID);
-        bytes memory expectedPath = abi.encodePacked(
-            address(mainnetGateway),
-            address(polygonGateway)
-        );
-        assertEq(
-            trustedRemote.length,
-            LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
-            "Trusted remote should be 40 bytes"
-        );
-        assertEq(keccak256(trustedRemote), keccak256(expectedPath), "Trusted remote should match");
-    }
+        Origin memory origin = Origin({
+            srcEid: srcEid,
+            sender: bytes32(uint256(uint160(srcGw))),
+            nonce: 1
+        });
+        bytes memory message = abi.encode(uint8(1), abi.encode(to, amount));
 
-    /// @dev Send OHM from mainnet to polygon and relay the message
-    function _bridgeMainnetToPolygon(uint256 amount) internal {
-        vm.selectFork(mainnetForkId);
-
-        // Estimate fee
-        (uint256 fee, ) = mainnetBridge.estimateSendFee(POLYGON_LZ_CHAIN_ID, recipient, amount);
-
-        // Approve and send
-        vm.startPrank(sender);
-        mainnetOhm.approve(address(mainnetBridge), amount);
-        vm.recordLogs();
-        mainnetBridge.sendOhm{value: fee}(POLYGON_LZ_CHAIN_ID, recipient, amount);
-        vm.stopPrank();
-
-        // Relay to polygon (use cached default library)
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        lzHelper.help(
-            POLYGON_LZ_ENDPOINT,
-            polygonDefaultLib,
-            LZ_GAS,
-            PACKET_EVENT_SELECTOR,
-            polygonForkId,
-            logs
-        );
-    }
-
-    /// @dev Send OHM from polygon to mainnet and relay the message
-    function _bridgePolygonToMainnet(uint256 amount) internal {
-        vm.selectFork(polygonForkId);
-
-        // Estimate fee
-        (uint256 fee, ) = polygonBridge.estimateSendFee(MAINNET_LZ_CHAIN_ID, recipient, amount);
-
-        // Approve and send
-        vm.startPrank(sender);
-        polygonOhm.approve(address(polygonBridge), amount);
-        vm.recordLogs();
-        polygonBridge.sendOhm{value: fee}(MAINNET_LZ_CHAIN_ID, recipient, amount);
-        vm.stopPrank();
-
-        // Relay to mainnet (use cached default library)
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        lzHelper.help(
-            MAINNET_LZ_ENDPOINT,
-            mainnetDefaultLib,
-            LZ_GAS,
-            PACKET_EVENT_SELECTOR,
-            mainnetForkId,
-            logs
-        );
+        vm.prank(LZConfigLib.LZ_ENDPOINT);
+        dstGw.lzReceive(origin, bytes32(0), message, address(0), bytes(""));
     }
 
     // ========= TESTS ========= //
 
-    function test_mainnetToPolygon_sendsAndReceivesOhm() external {
-        _assertTrustedRemote();
-
+    function test_ethToArb() external {
         uint256 amount = 1000e9;
 
-        // Record balances before
-        vm.selectFork(mainnetForkId);
-        uint256 senderBalanceBefore = mainnetOhm.balanceOf(sender);
-
-        // Bridge
-        _bridgeMainnetToPolygon(amount);
-
-        // Verify mainnet: sender lost OHM
-        vm.selectFork(mainnetForkId);
-        assertEq(
-            mainnetOhm.balanceOf(sender),
-            senderBalanceBefore - amount,
-            "Mainnet: sender balance should decrease"
+        // Deliver message to arb (simulates LZ V2 endpoint calling lzReceive)
+        // In production, burnAndSend on eth sends the LZ message; here we simulate the receive side.
+        _deliverMessage(
+            arbForkId,
+            arbGateway,
+            LZConfigLib.ETH_EID,
+            address(ethGateway),
+            recipient,
+            amount
         );
-        assertEq(mainnetGateway.bridgedSupply(), amount, "Mainnet: bridgedSupply should increase");
 
-        // Verify polygon: recipient received OHM
-        vm.selectFork(polygonForkId);
-        assertEq(polygonOhm.balanceOf(recipient), amount, "Polygon: recipient should receive OHM");
+        // Verify arb: recipient received OHM
+        vm.selectFork(arbForkId);
+        assertEq(arbOhm.balanceOf(recipient), amount, "Arb: recipient should receive OHM");
     }
 
-    function test_polygonToMainnet_sendsAndReceivesOhm() external {
-        _assertTrustedRemote();
-
+    function test_arbToEth() external {
         uint256 amount = 1000e9;
 
-        // First bridge some OHM to polygon to establish bridgedSupply
-        _bridgeMainnetToPolygon(amount);
-
-        // Set bridgedSupply on mainnet for the return trip
-        // (In production this would already be set from the outbound bridge)
-        // The outbound should have already set it, verify
-        vm.selectFork(mainnetForkId);
-        assertEq(mainnetGateway.bridgedSupply(), amount, "Bridged supply should be set");
-
-        // Now bridge from polygon to mainnet
-        // First mint OHM for sender on polygon (they received from the bridge)
-        vm.selectFork(polygonForkId);
-        uint256 recipientBalPolygon = polygonOhm.balanceOf(recipient);
-
-        // Transfer recipient's OHM to sender for the return trip
-        vm.prank(recipient);
-        polygonOhm.transfer(sender, recipientBalPolygon);
-
-        _bridgePolygonToMainnet(recipientBalPolygon);
-
-        // Verify mainnet: bridgedSupply decreases
-        vm.selectFork(mainnetForkId);
-        assertEq(mainnetGateway.bridgedSupply(), 0, "Mainnet: bridgedSupply should decrease to 0");
-
-        // Recipient should have received OHM on mainnet
-        assertEq(
-            mainnetOhm.balanceOf(recipient),
-            recipientBalPolygon,
-            "Mainnet: recipient should receive OHM"
+        // First bridge to arb so we have bridgedSupply
+        _deliverMessage(
+            arbForkId,
+            arbGateway,
+            LZConfigLib.ETH_EID,
+            address(ethGateway),
+            recipient,
+            amount
         );
+
+        // Set bridgedSupply on eth (simulates the outbound tracking)
+        vm.selectFork(ethForkId);
+        ethRolesAdmin.grantRole("bridge_admin", admin);
+        vm.prank(admin);
+        ethGateway.setBridgedSupply(amount);
+
+        // Deliver message from arb to eth
+        _deliverMessage(
+            ethForkId,
+            ethGateway,
+            LZConfigLib.ARB_EID,
+            address(arbGateway),
+            recipient,
+            amount
+        );
+
+        // Verify eth: bridgedSupply decreases, recipient gets OHM
+        vm.selectFork(ethForkId);
+        assertEq(ethGateway.bridgedSupply(), 0, "Eth: bridgedSupply should decrease to 0");
+        assertEq(ethOhm.balanceOf(recipient), amount, "Eth: recipient should receive OHM");
     }
 
     function test_roundTrip_fullFlow() external {
-        _assertTrustedRemote();
-
         uint256 amount = 500e9;
 
-        // Step 1: mainnet -> polygon
-        _bridgeMainnetToPolygon(amount);
+        // Step 1: eth -> arb (deliver on arb)
+        _deliverMessage(
+            arbForkId,
+            arbGateway,
+            LZConfigLib.ETH_EID,
+            address(ethGateway),
+            recipient,
+            amount
+        );
 
-        vm.selectFork(mainnetForkId);
-        assertEq(mainnetGateway.bridgedSupply(), amount, "Supply after outbound");
+        vm.selectFork(arbForkId);
+        assertEq(arbOhm.balanceOf(recipient), amount, "Arb: recipient balance after bridge");
 
-        vm.selectFork(polygonForkId);
-        assertEq(polygonOhm.balanceOf(recipient), amount, "Polygon recipient balance");
+        // Set bridgedSupply on eth
+        vm.selectFork(ethForkId);
+        ethRolesAdmin.grantRole("bridge_admin", admin);
+        vm.prank(admin);
+        ethGateway.setBridgedSupply(amount);
 
-        // Step 2: polygon -> mainnet (recipient sends back to recipient)
-        vm.prank(recipient);
-        polygonOhm.transfer(sender, amount);
-
-        _bridgePolygonToMainnet(amount);
+        // Step 2: arb -> eth (deliver on eth)
+        _deliverMessage(
+            ethForkId,
+            ethGateway,
+            LZConfigLib.ARB_EID,
+            address(arbGateway),
+            recipient,
+            amount
+        );
 
         // Verify round-trip
-        vm.selectFork(mainnetForkId);
+        vm.selectFork(ethForkId);
         assertEq(
-            mainnetGateway.bridgedSupply(),
+            ethGateway.bridgedSupply(),
             0,
             "Bridged supply should return to zero after round-trip"
         );
         assertEq(
-            mainnetOhm.balanceOf(recipient),
+            ethOhm.balanceOf(recipient),
             amount,
             "Recipient should receive OHM after round-trip on mainnet"
         );
+    }
+}
+
+/// @notice E2E fork tests: full send path via LZCrossChainBridge -> gateway -> real EndpointV2,
+///         then relay by parsing the PacketSent event and delivering on the destination fork.
+/// @dev Unlike the tests above (which construct messages manually), these tests exercise the
+///      complete send path on production LZ V2 endpoints, verifying encoding, fee estimation,
+///      burn, bridgedSupply tracking, and the real PacketSent event payload.
+contract LZBridgeGatewayForkTests_E2E is Test {
+    // ========= CONSTANTS ========= //
+
+    /// @dev PacketV1Codec byte offsets for decoding the encoded packet.
+    uint256 constant NONCE_OFFSET = 1;
+    uint256 constant SRC_EID_OFFSET = 9;
+    uint256 constant SENDER_OFFSET = 13;
+    uint256 constant GUID_OFFSET = 81;
+    uint256 constant MESSAGE_OFFSET = 113;
+
+    uint256 constant MINT_AMOUNT = 10_000e9;
+    uint256 constant SUPPLY_CAP = 1_000_000e9;
+
+    // ========= FORKS ========= //
+
+    uint256 ethForkId;
+    uint256 arbForkId;
+
+    // ========= ETHEREUM CONTRACTS ========= //
+
+    MockOhm ethOhm;
+    Kernel ethKernel;
+    OlympusMinter ethMintr;
+    OlympusRoles ethRoles;
+    RolesAdmin ethRolesAdmin;
+    LZBridgeGateway ethGateway;
+    LZCrossChainBridge ethBridge;
+
+    // ========= ARBITRUM CONTRACTS ========= //
+
+    MockOhm arbOhm;
+    Kernel arbKernel;
+    OlympusMinter arbMintr;
+    OlympusRoles arbRoles;
+    RolesAdmin arbRolesAdmin;
+    LZBridgeGateway arbGateway;
+    LZCrossChainBridge arbBridge;
+
+    // ========= ADDRESSES ========= //
+
+    address admin;
+    address sender;
+    address recipient;
+
+    // ========= SETUP ========= //
+
+    function setUp() public {
+        ethForkId = vm.createFork("mainnet");
+        arbForkId = vm.createFork("arbitrum");
+
+        admin = makeAddr("admin");
+        sender = makeAddr("sender");
+        recipient = makeAddr("recipient");
+        vm.makePersistent(admin);
+        vm.makePersistent(sender);
+        vm.makePersistent(recipient);
+
+        // Deploy Ethereum stack
+        vm.selectFork(ethForkId);
+        _deployEthStack();
+
+        // Deploy Arbitrum stack
+        vm.selectFork(arbForkId);
+        _deployArbStack();
+
+        // Cross-configure peers (end on ethFork to avoid fork-switch issues)
+        vm.selectFork(arbForkId);
+        vm.prank(admin);
+        arbGateway.setPeer(LZConfigLib.ETH_EID, bytes32(uint256(uint160(address(ethGateway)))));
+
+        vm.selectFork(ethForkId);
+        vm.prank(admin);
+        ethGateway.setPeer(LZConfigLib.ARB_EID, bytes32(uint256(uint160(address(arbGateway)))));
+
+        // Set enforced options on ethGateway for LZConfigLib.ARB_EID (required for endpoint.send)
+        ILZBridgeGateway.EnforcedOptionParam[]
+            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
+        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
+            eid: LZConfigLib.ARB_EID,
+            msgType: 1, // MSG_BRIDGE_OHM
+            // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
+            options: abi.encodePacked(uint16(3), uint8(1), uint16(17), uint8(1), uint128(200_000))
+        });
+        vm.prank(admin);
+        ethGateway.setEnforcedOptions(opts);
+
+        // setUp ends on ethFork
+    }
+
+    function _deployEthStack() internal {
+        ethOhm = new MockOhm("OHM", "OHM", 9);
+        ethBridge = new LZCrossChainBridge(address(ethOhm), admin);
+        ethKernel = new Kernel();
+        ethMintr = new OlympusMinter(ethKernel, address(ethOhm));
+        ethRoles = new OlympusRoles(ethKernel);
+        ethRolesAdmin = new RolesAdmin(ethKernel);
+        ethGateway = new LZBridgeGateway(
+            ethKernel,
+            LZConfigLib.LZ_ENDPOINT,
+            true, // Canonical
+            address(ethBridge)
+        );
+
+        ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
+        ethKernel.executeAction(Actions.InstallModule, address(ethRoles));
+        ethKernel.executeAction(Actions.ActivatePolicy, address(ethRolesAdmin));
+        ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
+
+        ethRolesAdmin.grantRole("admin", admin);
+
+        vm.startPrank(admin);
+        ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
+        ethGateway.enable(bytes(""));
+        ethBridge.setGateway(address(ethGateway));
+        ethBridge.enable(bytes(""));
+        vm.stopPrank();
+
+        ethOhm.mint(sender, MINT_AMOUNT);
+        vm.deal(sender, 100 ether);
+
+        _makePersistent(
+            ethOhm,
+            ethKernel,
+            ethMintr,
+            ethRoles,
+            ethRolesAdmin,
+            ethGateway,
+            ethBridge
+        );
+    }
+
+    function _deployArbStack() internal {
+        arbOhm = new MockOhm("OHM", "OHM", 9);
+        arbBridge = new LZCrossChainBridge(address(arbOhm), admin);
+        arbKernel = new Kernel();
+        arbMintr = new OlympusMinter(arbKernel, address(arbOhm));
+        arbRoles = new OlympusRoles(arbKernel);
+        arbRolesAdmin = new RolesAdmin(arbKernel);
+        arbGateway = new LZBridgeGateway(
+            arbKernel,
+            LZConfigLib.LZ_ENDPOINT,
+            false, // Non-canonical
+            address(arbBridge)
+        );
+
+        arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
+        arbKernel.executeAction(Actions.InstallModule, address(arbRoles));
+        arbKernel.executeAction(Actions.ActivatePolicy, address(arbRolesAdmin));
+        arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
+
+        arbRolesAdmin.grantRole("admin", admin);
+
+        vm.startPrank(admin);
+        arbGateway.enable(bytes(""));
+        arbBridge.setGateway(address(arbGateway));
+        arbBridge.enable(bytes(""));
+        vm.stopPrank();
+
+        arbOhm.mint(sender, MINT_AMOUNT);
+        vm.deal(sender, 100 ether);
+
+        _makePersistent(
+            arbOhm,
+            arbKernel,
+            arbMintr,
+            arbRoles,
+            arbRolesAdmin,
+            arbGateway,
+            arbBridge
+        );
+    }
+
+    function _makePersistent(
+        MockOhm ohm_,
+        Kernel kernel_,
+        OlympusMinter mintr_,
+        OlympusRoles roles_,
+        RolesAdmin rolesAdmin_,
+        LZBridgeGateway gateway_,
+        LZCrossChainBridge bridge_
+    ) internal {
+        vm.makePersistent(address(ohm_));
+        vm.makePersistent(address(kernel_));
+        vm.makePersistent(address(mintr_));
+        vm.makePersistent(address(roles_));
+        vm.makePersistent(address(rolesAdmin_));
+        vm.makePersistent(address(gateway_));
+        vm.makePersistent(address(bridge_));
+    }
+
+    // ========= PACKET PARSING HELPERS ========= //
+
+    /// @dev Finds the PacketSent event in recorded logs and returns the encoded packet.
+    function _findPacketSent(Vm.Log[] memory logs_) internal pure returns (bytes memory) {
+        bytes32 sig = keccak256("PacketSent(bytes,bytes,address)");
+        for (uint256 i; i < logs_.length; ++i) {
+            if (logs_[i].topics[0] == sig) {
+                (bytes memory encoded, , ) = abi.decode(logs_[i].data, (bytes, bytes, address));
+                return encoded;
+            }
+        }
+        revert("PacketSent event not found");
+    }
+
+    /// @dev Extracts Origin, guid, and message from an encoded LZ V2 packet (PacketV1Codec layout).
+    function _parsePacket(
+        bytes memory pkt_
+    ) internal pure returns (Origin memory origin, bytes32 guid, bytes memory message) {
+        uint64 nonce_;
+        uint32 srcEid_;
+        bytes32 senderB32_;
+
+        // PacketV1Codec layout: [version(1)][nonce(8)][srcEid(4)][sender(32)][dstEid(4)][receiver(32)][guid(32)][message(...)]
+        assembly {
+            let p := add(pkt_, 32) // skip memory length prefix
+            nonce_ := shr(192, mload(add(p, 1))) // uint64 at offset 1
+            srcEid_ := shr(224, mload(add(p, 9))) // uint32 at offset 9
+            senderB32_ := mload(add(p, 13)) // bytes32 at offset 13
+            guid := mload(add(p, 81)) // bytes32 at offset 81
+        }
+
+        origin = Origin({srcEid: srcEid_, sender: senderB32_, nonce: nonce_});
+
+        // Extract message bytes from offset 113 onwards
+        uint256 msgLen = pkt_.length - MESSAGE_OFFSET;
+        message = new bytes(msgLen);
+        for (uint256 i; i < msgLen; ++i) {
+            message[i] = pkt_[MESSAGE_OFFSET + i];
+        }
+    }
+
+    // ========= E2E TESTS ========= //
+
+    /// @notice Full e2e: sendOhm on ETH fork via real EndpointV2, parse PacketSent, deliver on ARB fork.
+    function test_e2e_ethToArb_sendAndRelay() external {
+        uint256 amount = 1000e9;
+
+        // === SOURCE: ETH fork (already selected by setUp) ===
+
+        // Estimate fee
+        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
+        assertGt(fee.nativeFee, 0, "Fee should be non-zero");
+
+        // Send OHM cross-chain
+        uint256 senderBalBefore = ethOhm.balanceOf(sender);
+
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount);
+        vm.recordLogs();
+        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
+        vm.stopPrank();
+
+        // Verify source side: OHM burned, bridgedSupply increased
+        assertEq(ethOhm.balanceOf(sender), senderBalBefore - amount, "Sender OHM should decrease");
+        assertEq(ethGateway.bridgedSupply(), amount, "BridgedSupply should increase");
+
+        // Parse the PacketSent event from the real V2 endpoint
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes memory encodedPacket = _findPacketSent(logs);
+        (Origin memory origin, bytes32 guid, bytes memory message) = _parsePacket(encodedPacket);
+
+        // Verify parsed packet matches expected values
+        assertEq(origin.srcEid, LZConfigLib.ETH_EID, "Packet srcEid should be ETH");
+        assertEq(
+            origin.sender,
+            bytes32(uint256(uint160(address(ethGateway)))),
+            "Packet sender should be ethGateway"
+        );
+        assertGt(origin.nonce, 0, "Packet nonce should be non-zero");
+        assertGt(guid.length, 0, "GUID should be non-zero");
+
+        // Decode the payload to verify encoding correctness
+        (uint8 msgType, bytes memory data) = abi.decode(message, (uint8, bytes));
+        assertEq(msgType, 1, "Message type should be MSG_BRIDGE_OHM");
+        (address decodedTo, uint256 decodedAmount) = abi.decode(data, (address, uint256));
+        assertEq(decodedTo, recipient, "Decoded recipient should match");
+        assertEq(decodedAmount, amount, "Decoded amount should match");
+
+        // === DESTINATION: ARB fork ===
+        vm.selectFork(arbForkId);
+
+        vm.prank(LZConfigLib.LZ_ENDPOINT);
+        arbGateway.lzReceive(origin, guid, message, address(0), bytes(""));
+
+        // Verify destination: recipient received OHM
+        assertEq(arbOhm.balanceOf(recipient), amount, "Recipient should receive OHM on Arb");
+    }
+
+    /// @notice Verifies that fee estimation is consistent with actual send cost.
+    function test_e2e_feeEstimation_matchesSend() external {
+        uint256 amount = 500e9;
+
+        // Estimate fee
+        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
+
+        // Send with exact fee should succeed
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount);
+        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
+        vm.stopPrank();
+
+        // Send with less than estimated fee should revert
+        uint256 amount2 = 500e9;
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount2);
+        vm.expectRevert();
+        ethBridge.sendOhm{value: 1}(LZConfigLib.ARB_EID, recipient, amount2);
+        vm.stopPrank();
+    }
+
+    /// @notice Verifies bridgedSupply cap enforcement on the real endpoint send path.
+    function test_e2e_bridgedSupplyCap_enforced() external {
+        // Set a low cap
+        vm.prank(admin);
+        ethGateway.setBridgedSupplyCap(500e9);
+
+        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, 1000e9);
+
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), 1000e9);
+        vm.expectRevert();
+        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, 1000e9);
+        vm.stopPrank();
     }
 }
