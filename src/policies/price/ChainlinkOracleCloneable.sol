@@ -67,7 +67,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @notice The maximum allowed age for cached prices
     ///
     /// @return uint48 The max age stored in immutable args
-    function _maxAge() internal pure returns (uint48) {
+    function maxAge() public pure override returns (uint48) {
         return uint48(_getArgUint64(0x3D));
     }
 
@@ -102,15 +102,17 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @inheritdoc AggregatorV3Interface
-    /// @dev        This function will revert if:
+    /// @dev        This function uses cached LAST prices only (round-style semantics).
+    ///             It does not fallback to live pricing when caches are stale.
+    ///
+    ///             This function will revert if:
     ///             - The oracle is not enabled (checked via factory)
     ///             - The factory is disabled (checked via factory.isOracleEnabled())
     ///             - Either the base or quote token is not configured in the PRICE module
-    ///             - Either the base or quote token returns a price of zero
-    ///             - The timestamp of the base or quote token is not consistent
+    ///             - Either the base or quote token cached price is zero
+    ///             - The base/quote cached timestamps are inconsistent
     ///
-    ///             The oracle queries the factory on each call to get the current PRICE module address.
-    ///             This allows the PRICE module to be upgraded in the factory without redeploying oracles.
+    ///             If callers encounter a revert due to feed state, they should cache prices then retry.
     ///
     /// @return roundId          The round ID (timestamp of the observation, cast to uint80)
     /// @return answer           The price of 1 base token in quote tokens, scaled by 10^PRICE_DECIMALS
@@ -139,19 +141,17 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         // This allows PRICE module upgrades without oracle redeployment
         IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
 
-        uint48 maxAge = _maxAge();
-        (uint256 basePrice, uint48 baseTimestamp) = _resolvePriceAndTimestamp(
-            PRICE,
+        // Get the cached prices
+        // PRICE will revert if either price is 0, so we don't need to check that here
+        (uint256 basePrice, uint48 baseTimestamp) = PRICE.getPrice(
             baseToken(),
-            maxAge
+            IPRICEv2.Variant.LAST
         );
-        (uint256 quotePrice, uint48 quoteTimestamp) = _resolvePriceAndTimestamp(
-            PRICE,
+        (uint256 quotePrice, uint48 quoteTimestamp) = PRICE.getPrice(
             quoteToken(),
-            maxAge
+            IPRICEv2.Variant.LAST
         );
 
-        // Revert if the last timestamp is not consistent
         if (baseTimestamp != quoteTimestamp) {
             revert ChainlinkOracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
         }
@@ -171,25 +171,23 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
     }
 
-    function _resolvePriceAndTimestamp(
-        IPRICEv2 PRICE_,
-        address asset_,
-        uint48 maxAge_
-    ) internal view returns (uint256 price_, uint48 timestamp_) {
-        // PRICE.getPrice(asset, maxAge) returns a cached value when cache age <= maxAge,
-        // otherwise it falls back to live/current pricing.
-        price_ = PRICE_.getPrice(asset_, maxAge_);
+    function _isStaleFromTimestamps(
+        uint48 baseTimestamp_,
+        uint48 quoteTimestamp_
+    ) internal view returns (bool) {
+        if (baseTimestamp_ == 0 || quoteTimestamp_ == 0) return true;
+        if (baseTimestamp_ != quoteTimestamp_) return true;
+        return block.timestamp > uint256(baseTimestamp_) + uint256(maxAge());
+    }
 
-        // Resolve timestamp from the same source variant used by maxAge semantics.
-        (, uint48 lastTimestamp) = PRICE_.getPrice(asset_, IPRICEv2.Variant.LAST);
-        bool cacheFresh = lastTimestamp != 0 &&
-            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
-
-        if (cacheFresh) {
-            timestamp_ = lastTimestamp;
-        } else {
-            (, timestamp_) = PRICE_.getPrice(asset_, IPRICEv2.Variant.CURRENT);
-        }
+    /// @inheritdoc IChainlinkOracle
+    /// @dev        Chainlink-style round readers may consume stale rounds. This flag allows
+    ///             consumers to detect stale or inconsistent cached state before reading.
+    function isStale() external view override returns (bool) {
+        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
+        (, uint48 baseTimestamp) = PRICE.getPrice(baseToken(), IPRICEv2.Variant.LAST);
+        (, uint48 quoteTimestamp) = PRICE.getPrice(quoteToken(), IPRICEv2.Variant.LAST);
+        return _isStaleFromTimestamps(baseTimestamp, quoteTimestamp);
     }
 
     /// @inheritdoc AggregatorV3Interface
@@ -294,7 +292,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     function cachePricesIfNecessary() external override {
-        factory().cachePricesIfNecessary(baseToken(), quoteToken(), _maxAge());
+        factory().cachePricesIfNecessary(baseToken(), quoteToken(), maxAge());
     }
 
     // ========== ERC165 ========== //

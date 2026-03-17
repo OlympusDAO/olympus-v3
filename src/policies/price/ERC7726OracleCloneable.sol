@@ -33,7 +33,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @notice The maximum allowed age for cached prices
-    function maxAge() public pure returns (uint48) {
+    function maxAge() public pure override returns (uint48) {
         return uint48(_getArgUint64(0x14));
     }
 
@@ -48,31 +48,17 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         }
     }
 
-    function _resolvePriceAndTimestamp(
-        IPRICEv2 PRICE_,
-        address asset_,
-        uint48 maxAge_
-    ) internal view returns (uint256 price_, uint48 timestamp_) {
-        // PRICE_.getPrice(asset_, maxAge_) determines the price source (fresh LAST cache or CURRENT fallback).
-        // Timestamp mirrors that source by using LAST when cacheFresh, otherwise CURRENT, so price/timestamp stay aligned.
-        price_ = PRICE_.getPrice(asset_, maxAge_);
-        (, uint48 lastTimestamp) = PRICE_.getPrice(asset_, IPRICEv2.Variant.LAST);
-        bool cacheFresh = lastTimestamp != 0 &&
-            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
-        if (cacheFresh) {
-            timestamp_ = lastTimestamp;
-            return (price_, timestamp_);
-        }
-
-        (, timestamp_) = PRICE_.getPrice(asset_, IPRICEv2.Variant.CURRENT);
-    }
-
     /// @inheritdoc IERC7726Oracle
-    /// @dev        Uses PRICE.getPrice(asset, maxAge) for both base and quote:
-    ///             - returns cached values when cache age <= maxAge
-    ///             - falls back to live/current pricing when cache is stale
+    /// @dev        Uses cached LAST prices only.
     ///
-    ///             Reverts if the oracle is disabled in the factory.
+    ///             Reverts if:
+    ///             - The oracle is disabled in the factory
+    ///             - Base/quote cached timestamps are inconsistent
+    ///             - The shared cached timestamp is stale
+    ///             - Base/quote cached prices are zero
+    ///
+    ///             If callers encounter a feed-state revert, they should cache prices then retry.
+    ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
     function getQuote(
         uint256 inAmount,
         address base,
@@ -89,19 +75,23 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         _checkEnabled();
 
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        uint48 maxAge_ = maxAge();
-        (uint256 basePriceUsd, uint48 baseTimestamp) = _resolvePriceAndTimestamp(
-            PRICE,
-            base_,
-            maxAge_
-        );
-        (uint256 quotePriceUsd, uint48 quoteTimestamp) = _resolvePriceAndTimestamp(
-            PRICE,
+
+        // Get the cached prices
+        // PRICE will revert if either price is 0, so we don't need to check that here
+        (uint256 basePriceUsd, uint48 baseTimestamp) = PRICE.getPrice(base_, IPRICEv2.Variant.LAST);
+        (uint256 quotePriceUsd, uint48 quoteTimestamp) = PRICE.getPrice(
             quote_,
-            maxAge_
+            IPRICEv2.Variant.LAST
         );
+
         if (baseTimestamp != quoteTimestamp) {
             revert ERC7726Oracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
+        }
+
+        // Check for staleness
+        uint48 maxAge_ = maxAge();
+        if (_isStaleFromTimestamp(baseTimestamp, maxAge_)) {
+            revert ERC7726Oracle_Stale(baseTimestamp, maxAge_);
         }
 
         // basePriceUsd and quotePriceUsd are USD prices in 10^18 scale from PRICE.
@@ -138,6 +128,35 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @param  quote_ The quote asset to conditionally cache
     function cachePricesIfNecessary(address base_, address quote_) external override {
         factory().cachePricesIfNecessary(base_, quote_, maxAge());
+    }
+
+    function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
+        if (timestamp_ == 0) return true;
+        return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+    }
+
+    /// @inheritdoc IERC7726Oracle
+    function isStale(address base, address quote) external view override returns (bool) {
+        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
+        (, uint48 baseTimestamp) = PRICE.getPrice(base, IPRICEv2.Variant.LAST);
+        (, uint48 quoteTimestamp) = PRICE.getPrice(quote, IPRICEv2.Variant.LAST);
+
+        if (baseTimestamp != quoteTimestamp) return true;
+        return _isStaleFromTimestamp(baseTimestamp, maxAge());
+    }
+
+    /// @inheritdoc IERC7726Oracle
+    /// @dev        Reverts if base/quote timestamps are inconsistent.
+    function timestamp(address base, address quote) external view override returns (uint48) {
+        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
+        (, uint48 baseTimestamp) = PRICE.getPrice(base, IPRICEv2.Variant.LAST);
+        (, uint48 quoteTimestamp) = PRICE.getPrice(quote, IPRICEv2.Variant.LAST);
+
+        if (baseTimestamp != quoteTimestamp) {
+            revert ERC7726Oracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
+        }
+
+        return baseTimestamp;
     }
 
     /// @notice Query if a contract implements an interface

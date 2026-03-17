@@ -25,16 +25,26 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
 
     /// @notice The base token address
     ///
-    /// @return address The base token address
-    function baseToken() external view returns (address);
+    /// @return baseToken_  The base token address
+    function baseToken() external view returns (address baseToken_);
 
     /// @notice The quote token address
     ///
-    /// @return address The quote token address
-    function quoteToken() external view returns (address);
+    /// @return quoteToken_ The quote token address
+    function quoteToken() external view returns (address quoteToken_);
+
+    /// @notice The maximum allowed age for cached prices
+    ///
+    /// @return maxAge_  The configured maximum cache age in seconds
+    function maxAge() external view returns (uint48 maxAge_);
 
     /// @notice The name of the oracle
     ///
-    /// @return string The name
-    function name() external view returns (string memory);
+    /// @return name_   The name
+    function name() external view returns (string memory name_);
+
+    /// @notice Returns whether the feed should be considered stale for round consumers.
+    ///
+    /// @return isStale_    true if the feed is stale or has mismatched timestamps
+    function isStale() external view returns (bool isStale_);
 }

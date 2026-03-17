@@ -29,21 +29,21 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         oracle.latestRoundData();
     }
 
-    // when there is no stored price
-    //  [X] it reverts with price zero
+    // when live prices become zero but cache already exists
+    //  [X] it still returns cached round data
 
-    function test_whenThereIsNoStoredPrice_reverts() public {
-        // The oracle now caches prices on creation; force cache stale so live price path is used.
+    function test_whenLivePricesAreZeroButCacheExists_returnsCachedPrice() public {
+        // The oracle uses cached LAST values and does not fallback to live pricing.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         _setPRICEPrices(address(baseToken), 0);
+        _setPRICEPrices(address(quoteToken), 0);
 
-        // Expect revert
-        vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(baseToken))
+        (, int256 answer, , , ) = oracle.latestRoundData();
+        assertEq(
+            answer,
+            int256((BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE),
+            "Should return cached round"
         );
-
-        // Call function
-        oracle.latestRoundData();
     }
 
     // when oracle is enabled
@@ -220,9 +220,9 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     }
 
     // when cached prices are stale (older than maxAge)
-    //  [X] it returns live prices
+    //  [X] it returns cached prices (round semantics)
 
-    function test_whenCachedPricesAreStale_returnsLivePrices(
+    function test_whenCachedPricesAreStale_returnsCachedPrices(
         uint48 warpDelta_
     ) public givenPricesAreStored {
         // Fuzz warp to a time strictly beyond maxAge so cache is stale
@@ -237,11 +237,34 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         _setPRICEPrices(address(baseToken), liveBase);
         _setPRICEPrices(address(quoteToken), liveQuote);
 
-        // Live ratio = (15 / 5) * 1e18 = 3e18
-        uint256 expectedLivePrice = (liveBase * 10 ** PRICE_DECIMALS) / liveQuote;
+        // Round-style semantics always return cached LAST values.
+        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE;
         (, int256 answer, , , ) = oracle.latestRoundData();
 
-        assertEq(answer, int256(expectedLivePrice), "Should return live price when cache is stale");
+        assertEq(
+            answer,
+            int256(expectedCachedPrice),
+            "Should return cached price even when cache is stale"
+        );
+    }
+
+    function test_whenBaseAndQuoteTimestampsDiffer_reverts() public givenPricesAreStored {
+        // Move to a new block and update live prices.
+        vm.warp(block.timestamp + 1);
+        _setPRICEPrices(address(baseToken), 8e18);
+        _setPRICEPrices(address(quoteToken), 4e18);
+
+        // Refresh only base cache so LAST timestamps diverge.
+        priceModule.cachePrice(address(baseToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IChainlinkOracle.ChainlinkOracle_InconsistentTimestamps.selector,
+                uint48(block.timestamp),
+                uint48(block.timestamp - 1)
+            )
+        );
+        oracle.latestRoundData();
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

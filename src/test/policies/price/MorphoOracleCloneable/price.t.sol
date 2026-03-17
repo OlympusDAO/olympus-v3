@@ -39,16 +39,19 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with PRICE_PriceZero
 
     function test_whenCollateralTokenPriceIsZero_reverts() public {
-        // The oracle caches prices on creation; force cache stale so live price path is used.
+        // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
         // Set collateral token price to zero
         _setPRICEPrices(address(collateralToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(collateralToken))
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_Stale.selector,
+                uint48(1),
+                DEFAULT_MAX_AGE
+            )
         );
-
         oracle.price();
     }
 
@@ -56,16 +59,19 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with PRICE_PriceZero
 
     function test_whenLoanTokenPriceIsZero_reverts() public {
-        // The oracle caches prices on creation; force cache stale so live price path is used.
+        // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
         // Set loan token price to zero
         _setPRICEPrices(address(loanToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(loanToken))
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_Stale.selector,
+                uint48(1),
+                DEFAULT_MAX_AGE
+            )
         );
-
         oracle.price();
     }
 
@@ -216,38 +222,77 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         );
     }
 
-    // when collateral price changes
-    //  [X] it reflects new price
+    // when collateral live price changes
+    //  [X] it keeps returning cached price until cache refresh
+    //  [X] it reflects new price after cache refresh
 
-    function test_whenCollateralPriceChanges() public {
+    function test_whenCollateralPriceChanges_reflectsAfterCacheRefresh() public {
         // Initial price: 2e18 / 1e18 * 1e36 = 2e36
         uint256 initialPrice = oracle.price();
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
-        // Change collateral price to 3e18
-        _setPRICEPrices(address(collateralToken), 3e18);
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        // Change live collateral price only (do not cache yet)
+        priceModule.setPrice(address(collateralToken), 3e18);
+
+        // Cached-only semantics: value should remain unchanged before cache refresh
+        uint256 staleCachedPrice = oracle.price();
+        assertEq(staleCachedPrice, initialPrice, "Price should remain cached before refresh");
+
+        // Refresh both caches to pull in new live values
+        vm.warp(block.timestamp + 1);
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
 
         // New price: 3e18 / 1e18 * 1e36 = 3e36
         uint256 newPrice = oracle.price();
         assertEq(newPrice, 3e36, "Price should reflect new collateral price");
     }
 
-    // when loan price changes
-    //  [X] it reflects new price
+    // when loan live price changes
+    //  [X] it keeps returning cached price until cache refresh
+    //  [X] it reflects new price after cache refresh
 
-    function test_whenLoanPriceChanges() public {
+    function test_whenLoanPriceChanges_reflectsAfterCacheRefresh() public {
         // Initial price: 2e18 / 1e18 * 1e36 = 2e36
         uint256 initialPrice = oracle.price();
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
-        // Change loan price to 2e18
-        _setPRICEPrices(address(loanToken), 2e18);
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        // Change live loan price only (do not cache yet)
+        priceModule.setPrice(address(loanToken), 2e18);
+
+        // Cached-only semantics: value should remain unchanged before cache refresh
+        uint256 staleCachedPrice = oracle.price();
+        assertEq(staleCachedPrice, initialPrice, "Price should remain cached before refresh");
+
+        // Refresh both caches to pull in new live values
+        vm.warp(block.timestamp + 1);
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
 
         // New price: 2e18 / 2e18 * 1e36 = 1e36
         uint256 newPrice = oracle.price();
         assertEq(newPrice, 1e36, "Price should reflect new loan price");
+    }
+
+    function test_whenCollateralAndLoanTimestampsDiffer_reverts() public {
+        // Move to a new block and change live prices.
+        vm.warp(block.timestamp + 1);
+        uint256 liveCollateral = 8e18;
+        uint256 liveLoan = 4e18;
+        _setPRICEPrices(address(collateralToken), liveCollateral);
+        _setPRICEPrices(address(loanToken), liveLoan);
+
+        // Refresh only collateral cache so LAST timestamps diverge.
+        priceModule.cachePrice(address(collateralToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_InconsistentTimestamps.selector,
+                uint48(block.timestamp),
+                uint48(block.timestamp - 1)
+            )
+        );
+        oracle.price();
     }
 
     // when PRICE module is updated in factory
@@ -263,6 +308,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Set different prices in new PRICE module
         newPriceModule.setPrice(address(collateralToken), 4e18);
         newPriceModule.setPrice(address(loanToken), 1e18);
+        newPriceModule.cachePrice(address(collateralToken));
+        newPriceModule.cachePrice(address(loanToken));
 
         // Update factory dependencies to use new PRICE module
         factory.configureDependencies();
@@ -542,9 +589,9 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     }
 
     // when cached prices are stale (older than maxAge)
-    //  [X] it returns live prices
+    //  [X] it reverts
 
-    function test_whenCachedPricesAreStale_returnsLivePrices(uint48 warpDelta_) public {
+    function test_whenCachedPricesAreStale_reverts(uint48 warpDelta_) public {
         // Cache initial prices
         priceModule.storeObservation(address(collateralToken));
         priceModule.storeObservation(address(loanToken));
@@ -556,17 +603,14 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         );
         vm.warp(cachedAt + warpDelta);
 
-        // Change live prices without storing
-        uint256 liveCollateral = 3e18;
-        uint256 liveLoan = 1e18;
-        _setPRICEPrices(address(collateralToken), liveCollateral);
-        _setPRICEPrices(address(loanToken), liveLoan);
-
-        // Live ratio should be (3e18 / 1e18) * 1e36 = 3e36
-        uint256 expectedLivePrice = 3e36;
-        uint256 actualPrice = oracle.price();
-
-        assertEq(actualPrice, expectedLivePrice, "Should return live price when cache is stale");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_Stale.selector,
+                cachedAt,
+                DEFAULT_MAX_AGE
+            )
+        );
+        oracle.price();
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

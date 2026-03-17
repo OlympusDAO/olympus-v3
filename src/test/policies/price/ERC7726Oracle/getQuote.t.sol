@@ -6,7 +6,6 @@ pragma solidity >=0.8.15;
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {Actions} from "src/Kernel.sol";
 import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
@@ -18,9 +17,9 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     //  [X] it reverts
 
     function test_givenOracleIsDisabled_reverts() public {
-        // Oracle starts disabled by default, so we can test directly
-        // Note: This assumes getQuote will check isEnabled and revert with NotEnabled
-        vm.expectRevert(IEnabler.NotEnabled.selector);
+        _disableOracle();
+
+        vm.expectRevert(IERC7726Oracle.ERC7726Oracle_NotEnabled.selector);
 
         oracle.getQuote(1e18, address(collateralToken), address(loanToken));
     }
@@ -57,28 +56,28 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     //  [X] it reverts
 
     function test_givenBaseAssetPriceIsZero_reverts() public givenOracleIsEnabled {
-        // Set base asset price to zero
-        _setPRICEPrices(address(collateralToken), 0);
+        MockERC20 zeroBaseToken = new MockERC20("Zero Base", "ZBASE", 18);
+        priceModule.setPrice(address(zeroBaseToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(collateralToken))
+            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroBaseToken))
         );
 
-        oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        oracle.getQuote(1e18, address(zeroBaseToken), address(loanToken));
     }
 
     // given the quote asset price is zero
     //  [X] it reverts
 
     function test_givenQuoteAssetPriceIsZero_reverts() public givenOracleIsEnabled {
-        // Set quote asset price to zero
-        _setPRICEPrices(address(loanToken), 0);
+        MockERC20 zeroQuoteToken = new MockERC20("Zero Quote", "ZQUOTE", 18);
+        priceModule.setPrice(address(zeroQuoteToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(loanToken))
+            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroQuoteToken))
         );
 
-        oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        oracle.getQuote(1e18, address(collateralToken), address(zeroQuoteToken));
     }
 
     function test_givenCloneableBaseAndQuoteTimestampsDiffer_reverts() public {
@@ -100,11 +99,91 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IERC7726Oracle.ERC7726Oracle_InconsistentTimestamps.selector,
-                uint48(2),
-                uint48(1)
+                uint48(block.timestamp),
+                uint48(block.timestamp - 1)
             )
         );
         IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
+    }
+
+    function test_givenCloneablePricesAreStale_reverts() public {
+        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
+
+        vm.prank(admin);
+        cloneFactory.enable("");
+
+        vm.prank(admin);
+        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
+
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
+        vm.warp(block.timestamp + 1 hours + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC7726Oracle.ERC7726Oracle_Stale.selector,
+                uint48(1),
+                uint48(1 hours)
+            )
+        );
+        IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
+    }
+
+    function test_givenLiveBasePriceChanges_withoutCacheRefresh_keepsCachedQuote()
+        public
+        givenOracleIsEnabled
+    {
+        uint256 initialQuote = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        assertEq(initialQuote, 2e18, "Initial quote should use cached 2:1 ratio");
+
+        // Update live price only; cloneable reads LAST so this should not affect quote yet.
+        priceModule.setPrice(address(collateralToken), 3e18);
+        uint256 quoteBeforeRefresh = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(quoteBeforeRefresh, initialQuote, "Quote should remain cached before refresh");
+
+        // Refresh cache and verify quote reflects new ratio.
+        vm.warp(block.timestamp + 1);
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
+        uint256 quoteAfterRefresh = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(quoteAfterRefresh, 3e18, "Quote should update after cache refresh");
+    }
+
+    function test_givenLiveQuotePriceChanges_withoutCacheRefresh_keepsCachedQuote()
+        public
+        givenOracleIsEnabled
+    {
+        uint256 initialQuote = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        assertEq(initialQuote, 2e18, "Initial quote should use cached 2:1 ratio");
+
+        // Update live quote price only; cloneable reads LAST so this should not affect quote yet.
+        priceModule.setPrice(address(loanToken), 2e18);
+        uint256 quoteBeforeRefresh = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(quoteBeforeRefresh, initialQuote, "Quote should remain cached before refresh");
+
+        // Refresh cache and verify quote reflects new ratio.
+        vm.warp(block.timestamp + 1);
+        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(loanToken));
+        uint256 quoteAfterRefresh = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(quoteAfterRefresh, 1e18, "Quote should update after cache refresh");
     }
 
     // given the base token decimals are smaller than the quote token decimals
