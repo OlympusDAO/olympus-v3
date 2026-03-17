@@ -7,6 +7,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
@@ -312,7 +313,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint256 assetPrice = _getPriceStale(asset_, 0);
         uint256 basePrice = _getPriceStale(base_, 0);
         // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return (assetPrice * 10 ** _decimals) / basePrice;
+        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
     }
 
     /// @inheritdoc IPRICEv2
@@ -332,7 +333,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint256 assetPrice = _getPriceStale(asset_, cutoff);
         uint256 basePrice = _getPriceStale(base_, cutoff);
         // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return (assetPrice * 10 ** _decimals) / basePrice;
+        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
     }
 
     /// @inheritdoc IPRICEv2
@@ -345,7 +346,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256 basePrice, uint48 baseTime) = getPrice(base_, variant_);
         // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
         return (
-            (assetPrice * 10 ** _decimals) / basePrice,
+            FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice),
             assetTime < baseTime ? assetTime : baseTime
         );
     }

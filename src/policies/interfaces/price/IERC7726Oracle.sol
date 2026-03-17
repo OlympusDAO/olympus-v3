@@ -28,6 +28,8 @@ interface IERC7726Oracle is IPriceOracle {
 
     /// @notice Returns whether the cached feed state is stale for a given pair.
     ///
+    /// @param base         The address of the base token
+    /// @param quote        The address of the quote token
     /// @return isStale_    Returns true if timestamps are inconsistent, unset, or older than maxAge.
     function isStale(address base, address quote) external view returns (bool isStale_);
 
@@ -35,6 +37,6 @@ interface IERC7726Oracle is IPriceOracle {
     ///
     /// @param base         The address of the base token
     /// @param quote        The address of the quote token
-    /// @return timestamp_  The timestamp from the
+    /// @return timestamp_  The shared cached UNIX timestamp (`uint48`) for this base/quote pair used to judge staleness.
     function timestamp(address base, address quote) external view returns (uint48 timestamp_);
 }

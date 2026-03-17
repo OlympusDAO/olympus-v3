@@ -182,7 +182,7 @@ sequenceDiagram
 
   User->>PRICE: getPrice(wETH)
 
-  par Fetch prices in parallel
+  par Logical fan-out across sources
     PRICE->>CL: getOneFeedPrice(chainlinkEthUsdFeed, updateThreshold)
     Note over CL: Feed: Chainlink ETH-USD<br/>Calls aggregator.latestRoundData()<br/>Update threshold: 1 hour
     CL-->>PRICE: price1
@@ -223,7 +223,7 @@ sequenceDiagram
 
   User->>PRICE: getPrice(USDS)
 
-  par Fetch prices in parallel
+  par Logical fan-out across sources
     PRICE->>CL: getOneFeedPrice(chainlinkUsdsUsdFeed, updateThreshold)
     Note over CL: Feed: Chainlink USDS-USD<br/>Calls aggregator.latestRoundData()<br/>Update threshold: 24 hours
     CL-->>PRICE: price1
@@ -538,7 +538,7 @@ A: If a feed call fails (for example stale/invalid data), PRICE treats that feed
 
 ### Q: What happens if Pyth price feeds are not updated?
 
-A: If Pyth prices are not updated within the `updateThreshold` period, Pyth feed reads revert and that feed is treated as failed by PRICE aggregation logic. If strict mode requires 2+ values and only 1-2 feeds remain valid, price resolution may fail.
+A: If Pyth prices are not updated within the `updateThreshold` period, Pyth feed reads revert and that feed is treated as failed by PRICE aggregation logic. In strict mode, post-deviation filtering is applied before counting valid feeds; if strict mode requires >=2 valid feeds and fewer than 2 feeds remain after filtering (0 or 1), price resolution fails.
 
 **Mitigation:** Use the [pyth-price-pusher](https://github.com/OlympusDAO/pyth-price-pusher) tool for automated price updates.
 

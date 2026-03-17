@@ -33,16 +33,21 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @notice The address of the OHM token
     address public immutable OHM;
 
-    /// @notice         OHM-specific minimum target price (PRICEv1 style)
+    /// @notice         OHM-specific minimum target price (PRICEv1 style), scaled to 18 decimals.
+    /// @dev            Value is represented as `targetPrice * 10**18`, matching PRICEv1-compatible output units.
     uint256 public minimumTargetPrice;
 
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                         Constructor for PRICEv1_2 compatibility layer
+    /// @dev                            The constructor reverts if:
+    /// @dev                            - `observationFrequency_` is invalid (from `OlympusPricev2`)
+    /// @dev                            - `ohm_ == address(0)` (`PRICE_InvalidOHM`)
+    ///
     /// @param kernel_                  Kernel address
     /// @param ohm_                     The address of the OHM token
     /// @param observationFrequency_    Frequency at which prices are stored for moving average
-    /// @param minimumTargetPrice_      Initial minimum target price for OHM
+    /// @param minimumTargetPrice_      Initial minimum target OHM price in 18 decimals (`price * 10**18`)
     constructor(
         Kernel kernel_,
         address ohm_,
@@ -135,6 +140,9 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @inheritdoc IPRICEv1
     /// @dev        Changes the minimum target price for OHM.
     ///             Provided as a compatibility function for PRICEv1.
+    ///             Reverts if the caller is not permissioned by the Kernel.
+    ///
+    /// @param minimumTargetPrice_ New minimum target OHM price in 18 decimals (`price * 10**18`)
     /// @dev        Reentrancy note: this function does not make external calls.
     function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external permissioned {
         minimumTargetPrice = minimumTargetPrice_;
