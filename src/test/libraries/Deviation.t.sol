@@ -6,6 +6,43 @@ import {Test} from "forge-std/Test.sol";
 import {Deviation} from "libraries/Deviation.sol";
 
 contract DeviationTest is Test {
+    uint256 internal _benchmark;
+    uint256 internal _value;
+    uint256 internal _deviationBps;
+    uint256 internal _deviationMax;
+
+    modifier givenBenchmarkWithSmallDeviationBps() {
+        _benchmark = 100_000_000;
+        _deviationBps = 1;
+        _deviationMax = 10_000;
+        _;
+    }
+
+    modifier givenBenchmarkWithSmallDeviationBpsAndValueOutsideBound() {
+        _benchmark = 100_000_000;
+        _value = _benchmark + 19_999;
+        _deviationBps = 1;
+        _deviationMax = 10_000;
+        _;
+    }
+
+    modifier givenBenchmarkWithLargeDeviationBpsAndValueNearBenchmark() {
+        _benchmark = 100_000_000;
+        _value = _benchmark + 19_999;
+        _deviationBps = 9_999;
+        _deviationMax = 10_000;
+        _;
+    }
+
+    function exposed_isDeviatingWithBpsCheck(
+        uint256 value_,
+        uint256 benchmark_,
+        uint256 deviationBps_,
+        uint256 deviationMax_
+    ) external pure returns (bool) {
+        return Deviation.isDeviatingWithBpsCheck(value_, benchmark_, deviationBps_, deviationMax_);
+    }
+
     function test_givenValueEqualsBenchmark_isDeviating_returnsFalse() public pure {
         uint256 value = 100;
         uint256 benchmark = 100;
@@ -86,59 +123,93 @@ contract DeviationTest is Test {
         );
     }
 
-    function test_isDeviating_smallDeviationBps() public pure {
-        uint256 benchmark = 100_000_000;
-        uint256 value = benchmark + 19_999;
-        uint256 deviationBps = 1;
-        uint256 deviationMax = 10_000;
-
+    function test_givenBenchmarkWithSmallDeviationBps_whenValueExceedsBenchmark_thenDeviates()
+        public
+        givenBenchmarkWithSmallDeviationBpsAndValueOutsideBound
+    {
+        // benchmark = 100_000_000 (8-decimal integer scale)
+        // deviation ratio = deviationBps / deviationMax = 1 / 10_000 = 0.01%
+        // allowed absolute deviation = benchmark * deviationBps / deviationMax
+        // = 100_000_000 * 1 / 10_000 = 10_000 (same 8-decimal integer scale)
+        // upper bound = benchmark + allowed deviation = 100_010_000
+        // value = benchmark + 19_999 = 100_019_999 > 100_010_000
+        // so value is outside bounds and isDeviating(...) must return true.
         assertEq(
-            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            Deviation.isDeviating(_value, _benchmark, _deviationBps, _deviationMax),
             true,
             "value > benchmark, outside bounds"
         );
     }
 
-    function test_isDeviating_smallDeviationBps_insideBounds_fuzz(uint256 value_) public pure {
-        uint256 benchmark = 100_000_000;
-        uint256 value = bound(value_, benchmark, benchmark + 10_000);
-        uint256 deviationBps = 1;
-        uint256 deviationMax = 10_000;
-        // allowedDeviation = benchmark * deviationBps / deviationMax = 100_000_000 * 1 / 10_000 = 10_000.
-        // In-bounds range is [benchmark, benchmark + 10_000], so this fuzz bound must return false.
+    function test_givenBenchmarkWithSmallDeviationBps_whenValueWithinBound_thenNotDeviating(
+        uint256 value_
+    ) public givenBenchmarkWithSmallDeviationBps {
+        _value = bound(value_, _benchmark, _benchmark + 10_000);
+
+        // benchmark = 100_000_000 (8-decimal integer scale)
+        // deviation ratio = 1 / 10_000 = 0.01%
+        // allowed absolute deviation = 100_000_000 * 1 / 10_000 = 10_000
+        // upper bound = benchmark + 10_000 = 100_010_000
+        // fuzzed value is constrained to [100_000_000, 100_010_000], so it is in-bounds
+        // and isDeviating(...) must return false.
 
         assertEq(
-            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            Deviation.isDeviating(_value, _benchmark, _deviationBps, _deviationMax),
             false,
             "value > benchmark, inside bounds"
         );
     }
 
-    function test_isDeviating_smallDeviationBps_outsideBounds_fuzz(uint256 value_) public pure {
-        uint256 benchmark = 100_000_000;
-        uint256 value = bound(value_, benchmark + 10_001, benchmark + 50_000);
-        uint256 deviationBps = 1;
-        uint256 deviationMax = 10_000;
-        // allowedDeviation is still 10_000, so values above benchmark + 10_000 are out-of-bounds.
-        // This fuzz range starts at benchmark + 10_001 and must return true.
+    function test_givenBenchmarkWithSmallDeviationBps_whenValueOutsideBound_thenDeviating(
+        uint256 value_
+    ) public givenBenchmarkWithSmallDeviationBps {
+        _value = bound(value_, _benchmark + 10_001, _benchmark + 50_000);
+
+        // benchmark = 100_000_000 (8-decimal integer scale)
+        // deviation ratio = 1 / 10_000 = 0.01%
+        // allowed absolute deviation = 100_000_000 * 1 / 10_000 = 10_000
+        // upper bound = benchmark + 10_000 = 100_010_000
+        // fuzzed value is constrained to [100_010_001, 100_050_000], so it is out-of-bounds
+        // and isDeviating(...) must return true.
 
         assertEq(
-            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            Deviation.isDeviating(_value, _benchmark, _deviationBps, _deviationMax),
             true,
             "value > benchmark, outside bounds"
         );
     }
 
-    function test_isDeviating_largeDeviationBps() public pure {
-        uint256 benchmark = 100_000_000;
-        uint256 value = benchmark + 19_999;
-        uint256 deviationBps = 9_999;
-        uint256 deviationMax = 10_000;
-
+    function test_givenBenchmarkWithLargeDeviationBps_whenValueNearBenchmark_thenNotDeviating()
+        public
+        givenBenchmarkWithLargeDeviationBpsAndValueNearBenchmark
+    {
+        // benchmark = 100_000_000 (8-decimal integer scale)
+        // deviation ratio = 9_999 / 10_000 = 99.99%
+        // allowed absolute deviation = benchmark * deviationBps / deviationMax
+        // = 100_000_000 * 9_999 / 10_000 = 99_990_000
+        // upper bound = benchmark + allowed deviation = 199_990_000
+        // value = benchmark + 19_999 = 100_019_999 <= 199_990_000
+        // so value is within bounds and isDeviating(...) must return false.
         assertEq(
-            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            Deviation.isDeviating(_value, _benchmark, _deviationBps, _deviationMax),
             false,
             "value > benchmark, inside bounds"
         );
+    }
+
+    function test_givenDeviationBpsExceedsDeviationMax_whenCheckingWithGuard_thenReverts() public {
+        uint256 benchmark = 100_000_000;
+        uint256 value = benchmark;
+        uint256 deviationMax = 10_000;
+        uint256 deviationBps = deviationMax + 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Deviation.Deviation_InvalidDeviationBps.selector,
+                deviationBps,
+                deviationMax
+            )
+        );
+        this.exposed_isDeviatingWithBpsCheck(value, benchmark, deviationBps, deviationMax);
     }
 }
