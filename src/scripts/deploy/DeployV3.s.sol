@@ -56,7 +56,7 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 
 // Oracle factories
 import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
-import {ERC7726Oracle} from "src/policies/price/ERC7726Oracle.sol";
+import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
 // PRICE
@@ -911,20 +911,20 @@ contract DeployV3 is WithEnvironment {
         return (address(factory), "olympus.policies");
     }
 
-    function deployERC7726Oracle() public returns (address, string memory) {
+    function deployERC7726OracleFactory() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
 
         // Log parameters
-        console2.log("ERC7726Oracle parameters:");
+        console2.log("ERC7726OracleFactory parameters:");
         console2.log("  kernel", kernel);
 
         // Deploy
         vm.broadcast();
-        ERC7726Oracle oracle = new ERC7726Oracle(Kernel(kernel));
+        ERC7726OracleFactory factory = new ERC7726OracleFactory(Kernel(kernel));
 
-        return (address(oracle), "olympus.policies");
+        return (address(factory), "olympus.policies");
     }
 
     // ========== MOCK PRICE FEED DEPLOYMENT FUNCTIONS ========== //

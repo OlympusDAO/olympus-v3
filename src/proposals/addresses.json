@@ -282,7 +282,7 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-erc7726-oracle-1_0"
+        "name": "olympus-policy-erc7726-oracle-factory-1_0"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",

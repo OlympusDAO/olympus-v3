@@ -24,8 +24,9 @@ import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.so
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 
 // Oracle policies
-import {ERC7726Oracle} from "src/policies/price/ERC7726Oracle.sol";
+import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
 import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
@@ -140,7 +141,7 @@ contract OracleProposalTest is ProposalTest {
 
         // 4. Deploy and activate oracle policies so their dependencies are configured
         // (The OCG proposal will enable() them later to turn on functionality)
-        _deployERC7726OracleIfNeeded(kernelAddr);
+        _deployERC7726OracleFactoryIfNeeded(kernelAddr);
         _deployChainlinkOracleFactoryIfNeeded(kernelAddr);
         _deployMorphoOracleFactoryIfNeeded(kernelAddr);
         _activateOraclePoliciesIfNeeded();
@@ -236,15 +237,15 @@ contract OracleProposalTest is ProposalTest {
 
     // ========== POLICY DEPLOYMENT ========== //
 
-    function _deployERC7726OracleIfNeeded(address kernelAddr_) internal {
-        string memory key = "olympus-policy-erc7726-oracle-1_0";
+    function _deployERC7726OracleFactoryIfNeeded(address kernelAddr_) internal {
+        string memory key = "olympus-policy-erc7726-oracle-factory-1_0";
         address policy = _safeGetAddress(key);
         if (policy == address(0)) {
-            console2.log("Deploying ERC7726Oracle");
-            policy = address(new ERC7726Oracle(Kernel(kernelAddr_)));
+            console2.log("Deploying ERC7726OracleFactory");
+            policy = address(new ERC7726OracleFactory(Kernel(kernelAddr_)));
             addresses.addAddress(key, policy);
         } else {
-            console2.log("ERC7726Oracle already deployed");
+            console2.log("ERC7726OracleFactory already deployed");
         }
 
         vm.label(policy, key);
@@ -280,17 +281,17 @@ contract OracleProposalTest is ProposalTest {
 
     /// @notice Activate oracle policies if not already active
     function _activateOraclePoliciesIfNeeded() internal {
-        address erc7726Oracle = addresses.getAddress("olympus-policy-erc7726-oracle-1_0");
+        address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address chainlinkFactory = addresses.getAddress(
             "olympus-policy-chainlink-oracle-factory-1_0"
         );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         Kernel kernelAddr = Kernel(addresses.getAddress("olympus-kernel"));
 
-        // Activate ERC7726Oracle if deployed but not active
-        if (!Policy(erc7726Oracle).isActive()) {
-            console2.log("Activating ERC7726Oracle");
-            kernelAddr.executeAction(Actions.ActivatePolicy, erc7726Oracle);
+        // Activate ERC7726OracleFactory if deployed but not active
+        if (!Policy(erc7726Factory).isActive()) {
+            console2.log("Activating ERC7726OracleFactory");
+            kernelAddr.executeAction(Actions.ActivatePolicy, erc7726Factory);
         }
 
         // Activate ChainlinkOracleFactory if deployed but not active
@@ -537,13 +538,23 @@ contract OracleProposalTest is ProposalTest {
 
         // Verify policies enabled
         assertTrue(
-            IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-1_0")).isEnabled(),
-            "ERC7726Oracle not enabled"
+            IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0")).isEnabled(),
+            "ERC7726OracleFactory not enabled"
         );
         assertTrue(IEnabler(chainlinkFactory).isEnabled(), "ChainlinkOracleFactory not enabled");
         assertTrue(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify oracles deployed
+        address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
+            DEFAULT_ORACLE_MAX_AGE
+        );
+        assertTrue(erc7726Oracle != address(0), "ERC7726 oracle not deployed");
+        assertTrue(
+            IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle),
+            "ERC7726 oracle not enabled"
+        );
+
         address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
             ohm,
             usds,
@@ -567,15 +578,18 @@ contract OracleProposalTest is ProposalTest {
         );
     }
 
-    /// @notice Validates that the ERC7726Oracle returns a valid OHM price
+    /// @notice Validates that the ERC7726 oracle clone returns a valid OHM price
     /// @dev    Prices for USDS, wETH, OHM are validated in ConfigurePriceV1_2 batch
-    ///         This test validates that the ERC7726Oracle correctly quotes OHM in USDS
+    ///         This test validates that the ERC7726 clone correctly quotes OHM in USDS
     function testProposal_validatePricesAreSane() public view {
-        address erc7726Oracle = addresses.getAddress("olympus-policy-erc7726-oracle-1_0");
+        address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
+            DEFAULT_ORACLE_MAX_AGE
+        );
 
-        // Validate ERC7726Oracle can quote OHM in terms of USDS
+        // Validate ERC7726 clone can quote OHM in terms of USDS
         // Quote 1 OHM (9 decimals) in USDS (18 decimals)
         uint256 ohmInUsds = IERC7726Oracle(erc7726Oracle).getQuote(1e9, ohm, usds);
         console2.log("Asset price of OHM:", ohmInUsds);

@@ -9,7 +9,7 @@
             "args": {}
         },
         {
-            "name": "ERC7726Oracle",
+            "name": "ERC7726OracleFactory",
             "args": {}
         }
     ]

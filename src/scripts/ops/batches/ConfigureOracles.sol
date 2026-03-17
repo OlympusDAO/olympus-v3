@@ -38,16 +38,16 @@ contract ConfigureOracles is BatchScriptV2 {
         // Load factory addresses from env
         address chainlinkFactory = _envAddressNotZero("olympus.policies.ChainlinkOracleFactory");
         address morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
-        address erc7726Oracle = _envAddressNotZero("olympus.policies.ERC7726Oracle");
+        address erc7726Factory = _envAddressNotZero("olympus.policies.ERC7726OracleFactory");
 
         console2.log("ChainlinkOracleFactory:", chainlinkFactory);
         console2.log("MorphoOracleFactory:", morphoFactory);
-        console2.log("ERC7726Oracle:", erc7726Oracle);
+        console2.log("ERC7726OracleFactory:", erc7726Factory);
 
         // Activate each factory/policy
         _activateFactory(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _activateFactory(kernel, morphoFactory, "MorphoOracleFactory");
-        _activateFactory(kernel, erc7726Oracle, "ERC7726Oracle");
+        _activateFactory(kernel, erc7726Factory, "ERC7726OracleFactory");
 
         console2.log("\n=== Oracle Policies Configuration Batch Prepared ===");
         console2.log("\nPost-Batch Steps:");
@@ -71,12 +71,12 @@ contract ConfigureOracles is BatchScriptV2 {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address chainlinkFactory = _envAddressNotZero("olympus.policies.ChainlinkOracleFactory");
         address morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
-        address erc7726Oracle = _envAddressNotZero("olympus.policies.ERC7726Oracle");
+        address erc7726Factory = _envAddressNotZero("olympus.policies.ERC7726OracleFactory");
 
         // Verify policies are activated in Kernel
         _verifyPolicyActivated(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _verifyPolicyActivated(kernel, morphoFactory, "MorphoOracleFactory");
-        _verifyPolicyActivated(kernel, erc7726Oracle, "ERC7726Oracle");
+        _verifyPolicyActivated(kernel, erc7726Factory, "ERC7726OracleFactory");
 
         console2.log("\n=== Oracle Configuration Validated ===");
     }

@@ -12,6 +12,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 
 // Role definitions
 import {ADMIN_ROLE, ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -48,12 +49,12 @@ contract OracleProposal is GovernorBravoProposal {
                 "\n",
                 "## Oracle Policies\n",
                 "\n",
-                "This proposal enables three oracle policies:\n",
+                "This proposal enables three oracle factories:\n",
                 "\n",
-                "### 1. ERC7726Oracle\n\n",
-                "- **Purpose**: Provides a standardized ERC7726-compliant oracle interface\n",
-                "- **Function**: Queries PRICE for token prices and returns quotes in a standardized format\n",
-                "- **Use Cases**: General lending protocols requiring ERC7726 price feeds\n",
+                "### 1. ERC7726OracleFactory\n\n",
+                "- **Purpose**: Factory for deploying ERC7726-compatible oracle clones\n",
+                "- **Function**: Creates ERC7726-compatible cached-price oracles from PRICE data\n",
+                "- **Use Cases**: General lending integrations requiring ERC7726 quote interfaces\n",
                 "\n",
                 "### 2. ChainlinkOracleFactory\n\n",
                 "- **Purpose**: Factory for deploying gas-efficient Chainlink oracle clones\n",
@@ -71,11 +72,12 @@ contract OracleProposal is GovernorBravoProposal {
                 "\n",
                 "1. **Grant `admin` role to Timelock** (if needed)\n",
                 "2. **Grant `oracle_manager` role to DAO MS and Timelock** (if needed)\n",
-                "3. **Enable ERC7726Oracle policy**\n",
+                "3. **Enable ERC7726OracleFactory policy**\n",
                 "4. **Enable ChainlinkOracleFactory policy**\n",
                 "5. **Enable MorphoOracleFactory policy**\n",
-                "6. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
-                "7. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
+                "6. **Deploy ERC7726 oracle** (via ERC7726OracleFactory)\n",
+                "7. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
+                "8. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
                 "\n",
                 "## Technical Details\n",
                 "\n",
@@ -112,7 +114,7 @@ contract OracleProposal is GovernorBravoProposal {
         address timelock = addresses.getAddress("olympus-timelock");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
 
-        address erc7726Oracle = addresses.getAddress("olympus-policy-erc7726-oracle-1_0");
+        address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address chainlinkFactory = addresses.getAddress(
             "olympus-policy-chainlink-oracle-factory-1_0"
         );
@@ -160,9 +162,9 @@ contract OracleProposal is GovernorBravoProposal {
 
         // STEP 3: Enable oracle policies
         _pushAction(
-            erc7726Oracle,
+            erc7726Factory,
             abi.encodeWithSelector(IEnabler.enable.selector, ""),
-            "Enable ERC7726Oracle"
+            "Enable ERC7726OracleFactory"
         );
 
         _pushAction(
@@ -177,7 +179,17 @@ contract OracleProposal is GovernorBravoProposal {
             "Enable MorphoOracleFactory"
         );
 
-        // STEP 4: Deploy OHM/USDS oracles
+        // STEP 4: Deploy oracles
+        _pushAction(
+            erc7726Factory,
+            abi.encodeWithSelector(
+                IERC7726OracleFactory.createOracle.selector,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
+            "Deploy ERC7726 oracle"
+        );
+
         _pushAction(
             chainlinkFactory,
             abi.encodeWithSelector(
@@ -225,6 +237,7 @@ contract OracleProposal is GovernorBravoProposal {
             "olympus-policy-chainlink-oracle-factory-1_0"
         );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
+        address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
 
         // Verify admin role granted to Timelock
         require(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
@@ -240,14 +253,20 @@ contract OracleProposal is GovernorBravoProposal {
         );
 
         // Verify oracle policies are enabled
-        require(
-            IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-1_0")).isEnabled(),
-            "ERC7726Oracle not enabled"
-        );
+        require(IEnabler(erc7726Factory).isEnabled(), "ERC7726OracleFactory not enabled");
         require(IEnabler(chainlinkFactory).isEnabled(), "ChainlinkOracleFactory not enabled");
         require(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
-        // Verify OHM/USDS oracles were deployed
+        // Verify oracles were deployed
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
+            DEFAULT_ORACLE_MAX_AGE
+        );
+        require(erc7726Oracle != address(0), "ERC7726 oracle not deployed");
+        require(
+            IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle),
+            "ERC7726 oracle not enabled"
+        );
+
         address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
             ohm,
             usds,
