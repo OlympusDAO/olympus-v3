@@ -1,7 +1,7 @@
 {
-    "ChainlinkOracleCloneable.getRoundData": "8864",
-    "ChainlinkOracleCloneable.latestAnswer": "23807",
-    "ChainlinkOracleCloneable.latestRound": "23817",
-    "ChainlinkOracleCloneable.latestRoundData": "24227",
-    "ChainlinkOracleCloneable.latestTimestamp": "23826"
+    "ChainlinkOracleCloneable.getRoundData": "8860",
+    "ChainlinkOracleCloneable.latestAnswer": "23803",
+    "ChainlinkOracleCloneable.latestRound": "23813",
+    "ChainlinkOracleCloneable.latestRoundData": "24223",
+    "ChainlinkOracleCloneable.latestTimestamp": "23822"
 }
