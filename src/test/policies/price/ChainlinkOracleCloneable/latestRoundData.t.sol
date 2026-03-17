@@ -4,7 +4,6 @@ pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneableTest {
@@ -39,11 +38,12 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         _setPRICEPrices(address(quoteToken), 0);
 
         (, int256 answer, , , ) = oracle.latestRoundData();
-        assertEq(
-            answer,
-            int256((BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE),
-            "Should return cached round"
-        );
+        // Expected cached round answer:
+        // BASE_PRICE = 2e18, QUOTE_PRICE = 1e18, PRICE_DECIMALS = 18
+        // (BASE_PRICE * 10^PRICE_DECIMALS) / QUOTE_PRICE
+        // = (2e18 * 1e18) / 1e18
+        // = 2e18
+        assertEq(answer, 2e18, "Should return cached round");
     }
 
     // when oracle is enabled
@@ -201,10 +201,11 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         vm.warp(lastStoredTimestamp + warpDelta);
 
         // Cached ratio should still be BASE_PRICE / QUOTE_PRICE = 2
-        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE; // 2e18
         (, int256 answer, , , ) = oracle.latestRoundData();
 
-        assertEq(answer, int256(expectedCachedPrice), "Should return cached price while fresh");
+        // Expected cached answer:
+        // (2e18 * 1e18) / 1e18 = 2e18
+        assertEq(answer, 2e18, "Should return cached price while fresh");
     }
 
     function test_whenCachedAgeEqualsMaxAge_returnsCachedPrices() public givenPricesAreStored {
@@ -216,14 +217,11 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         vm.warp(lastStoredTimestamp + DEFAULT_MAX_AGE);
 
         // Cached ratio remains BASE_PRICE / QUOTE_PRICE = 2
-        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE; // 2e18
         (, int256 answer, , , ) = oracle.latestRoundData();
 
-        assertEq(
-            answer,
-            int256(expectedCachedPrice),
-            "Should return cached price at maxAge boundary"
-        );
+        // Expected cached answer:
+        // (2e18 * 1e18) / 1e18 = 2e18
+        assertEq(answer, 2e18, "Should return cached price at maxAge boundary");
     }
 
     // when cached prices are stale (older than maxAge)
@@ -245,14 +243,11 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         _setPRICEPrices(address(quoteToken), liveQuote);
 
         // Round-style semantics always return cached LAST values.
-        uint256 expectedCachedPrice = (BASE_PRICE * 10 ** PRICE_DECIMALS) / QUOTE_PRICE;
         (, int256 answer, , , ) = oracle.latestRoundData();
 
-        assertEq(
-            answer,
-            int256(expectedCachedPrice),
-            "Should return cached price even when cache is stale"
-        );
+        // Expected cached answer:
+        // (2e18 * 1e18) / 1e18 = 2e18
+        assertEq(answer, 2e18, "Should return cached price even when cache is stale");
     }
 
     function test_whenBaseAndQuoteTimestampsDiffer_reverts() public givenPricesAreStored {

@@ -60,7 +60,7 @@ contract ERC7726OracleFactory is
     /// @notice Mapping to track if an oracle is enabled
     mapping(address oracle => bool) internal _isOracleEnabled;
 
-    bytes32 internal constant _DEFAULT_ORACLE_NAME = bytes32("ERC7726 Oracle");
+    bytes32 internal constant _DEFAULT_ORACLE_NAME = "ERC7726 Oracle";
 
     // ========== CONSTRUCTOR ========== //
 
