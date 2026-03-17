@@ -74,7 +74,6 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address quote_
     ) internal view returns (uint256 outAmount_) {
         _checkEnabled();
-
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
 
         // Get the cached prices
@@ -133,7 +132,9 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
         if (timestamp_ == 0) return true;
-        return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        unchecked {
+            return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        }
     }
 
     /// @inheritdoc IERC7726Oracle

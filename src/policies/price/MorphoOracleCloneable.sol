@@ -134,7 +134,9 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
         if (timestamp_ == 0) return true;
-        return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        unchecked {
+            return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        }
     }
 
     /// @inheritdoc IMorphoOracle

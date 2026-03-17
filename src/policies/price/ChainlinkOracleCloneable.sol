@@ -14,14 +14,12 @@ import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 import {String} from "src/libraries/String.sol";
-import {SafeCastLib} from "@solmate-6.2.0/utils/SafeCastLib.sol";
 
 /// @title  ChainlinkOracleCloneable
 /// @author OlympusDAO
 /// @notice Oracle adapter that implements Chainlink's AggregatorV2V3Interface by calling PRICE.getPrice() for base and quote tokens
 contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone {
     using FullMath for uint256;
-    using SafeCastLib for uint256;
 
     uint8 internal constant _VERSION = 1;
 
@@ -101,7 +99,6 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return _VERSION;
     }
 
-    /// @inheritdoc AggregatorV3Interface
     /// @dev        This function uses cached LAST prices only (round-style semantics).
     ///             It does not fallback to live pricing when caches are stale.
     ///
@@ -119,10 +116,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @return startedAt        The timestamp when the round started (same as updatedAt)
     /// @return updatedAt        The timestamp when the round was updated (from PRICE module's lastObservationTime)
     /// @return answeredInRound  The round ID (same as roundId)
-    function latestRoundData()
-        external
+    function _latestRoundDataInternal()
+        internal
         view
-        override
         returns (
             uint80 roundId,
             int256 answer,
@@ -171,13 +167,31 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
     }
 
+    /// @inheritdoc AggregatorV3Interface
+    function latestRoundData()
+        external
+        view
+        override
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        return _latestRoundDataInternal();
+    }
+
     function _isStaleFromTimestamps(
         uint48 baseTimestamp_,
         uint48 quoteTimestamp_
     ) internal view returns (bool) {
         if (baseTimestamp_ == 0 || quoteTimestamp_ == 0) return true;
         if (baseTimestamp_ != quoteTimestamp_) return true;
-        return block.timestamp > uint256(baseTimestamp_) + uint256(maxAge());
+        unchecked {
+            return block.timestamp > uint256(baseTimestamp_) + uint256(maxAge());
+        }
     }
 
     /// @inheritdoc IChainlinkOracle
@@ -221,7 +235,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         )
     {
         // Get latest round data
-        (roundId, answer, startedAt, updatedAt, answeredInRound) = this.latestRoundData();
+        (roundId, answer, startedAt, updatedAt, answeredInRound) = _latestRoundDataInternal();
 
         // Only support the latest round
         if (roundId_ != roundId) {
@@ -237,7 +251,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///
     /// @return int256  The latest price
     function latestAnswer() external view override returns (int256) {
-        (, int256 answer, , , ) = this.latestRoundData();
+        (, int256 answer, , , ) = _latestRoundDataInternal();
         return answer;
     }
 
@@ -245,7 +259,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///
     /// @return uint256 The latest timestamp
     function latestTimestamp() external view override returns (uint256) {
-        (, , , uint256 updatedAt, ) = this.latestRoundData();
+        (, , , uint256 updatedAt, ) = _latestRoundDataInternal();
         return updatedAt;
     }
 
@@ -253,7 +267,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///
     /// @return uint256 The latest round ID
     function latestRound() external view override returns (uint256) {
-        (uint80 roundId, , , , ) = this.latestRoundData();
+        (uint80 roundId, , , , ) = _latestRoundDataInternal();
         return uint256(roundId);
     }
 
@@ -263,7 +277,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @param      roundId_    The round ID to query
     /// @return int256  The answer for the given round ID
     function getAnswer(uint256 roundId_) external view override returns (int256) {
-        (, int256 answer, , , ) = this.getRoundData(roundId_.safeCastTo80());
+        (uint80 roundId, int256 answer, , , ) = _latestRoundDataInternal();
+        if (roundId_ != uint256(roundId)) {
+            revert ChainlinkOracle_NoDataPresent();
+        }
         return answer;
     }
 
@@ -273,7 +290,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @param      roundId_    The round ID to query
     /// @return uint256 The timestamp for the given round ID
     function getTimestamp(uint256 roundId_) external view override returns (uint256) {
-        (, , , uint256 updatedAt, ) = this.getRoundData(roundId_.safeCastTo80());
+        (uint80 roundId, , , uint256 updatedAt, ) = _latestRoundDataInternal();
+        if (roundId_ != uint256(roundId)) {
+            revert ChainlinkOracle_NoDataPresent();
+        }
         return updatedAt;
     }
 
