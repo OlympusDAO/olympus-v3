@@ -8,6 +8,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 
 // Bophades
 import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
@@ -17,7 +18,7 @@ import {fromSubKeycode} from "src/Submodules.sol";
 /// @title      OlympusPriceV2
 /// @author     Oighty
 /// @notice     Provides current and historical prices for assets
-contract OlympusPricev2 is PRICEv2, IVersioned {
+contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     // DONE
     // [X] Update functions for asset price feeds, strategies, etc.
     // [X] Toggle MA on and off for an asset
@@ -355,7 +356,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The caller is not permissioned
     /// @dev        - The asset is not approved
     /// @dev        - The price was not able to be determined
-    function cachePrice(address asset_) external override permissioned {
+    function cachePrice(address asset_) external override permissioned nonReentrant {
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
         (uint256 price, uint48 timestamp, ) = _getCurrentPrice(asset_, true);
@@ -380,7 +381,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The asset does not store moving average
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
-    function storeObservation(address asset_) public override permissioned {
+    function storeObservation(address asset_) public override permissioned nonReentrant {
+        _storeObservation(asset_);
+    }
+
+    function _storeObservation(address asset_) internal {
         Asset storage asset = _assetData[asset_];
 
         // Check if asset is approved
@@ -437,10 +442,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
     /// @dev        - Store the price for each asset using `storeObservation()`
-    function storeObservations() public override permissioned {
+    function storeObservations() public override permissioned nonReentrant {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            if (_assetData[assets[i]].storeMovingAverage) storeObservation(assets[i]);
+            if (_assetData[assets[i]].storeMovingAverage) _storeObservation(assets[i]);
             unchecked {
                 ++i;
             }
@@ -512,7 +517,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint256[] memory observations_,
         Component memory strategy_,
         Component[] memory feeds_
-    ) external override permissioned {
+    ) external override permissioned nonReentrant {
         // Check that asset is a contract
         if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
 
@@ -573,7 +578,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - The caller is not permissioned
-    function removeAsset(address asset_) external override permissioned {
+    function removeAsset(address asset_) external override permissioned nonReentrant {
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
@@ -790,7 +795,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     function updateAsset(
         address asset_,
         UpdateAssetParams memory params_
-    ) external override permissioned {
+    ) external override permissioned nonReentrant {
         // Validate at least one update flag is true
         if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
             revert PRICE_NoUpdatesRequested(asset_);

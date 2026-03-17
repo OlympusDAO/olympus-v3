@@ -17,11 +17,18 @@ import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.
 
 // Libraries
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 
 /// @title  ERC7726OracleFactory
 /// @author OlympusDAO
 /// @notice Factory for deploying generic ERC7726 clone oracles keyed by maxAge
-contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, IVersioned {
+contract ERC7726OracleFactory is
+    Policy,
+    PolicyEnabler,
+    IERC7726OracleFactory,
+    IVersioned,
+    ReentrancyGuard
+{
     using ClonesWithImmutableArgs for address;
 
     // ========== STATE ========== //
@@ -145,7 +152,14 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     function createOracle(
         uint48 maxAge_,
         bytes calldata customParams_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole returns (address oracle) {
+    )
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrAdminRole
+        nonReentrant
+        returns (address oracle)
+    {
         if (!isCreationEnabled) revert ERC7726OracleFactory_CreationDisabled();
         if (_maxAgeToOracle[maxAge_] != address(0)) {
             revert ERC7726OracleFactory_OracleAlreadyExists(maxAge_);
@@ -183,7 +197,13 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
-    function enableCreation() external override onlyEnabled onlyOracleManagerOrAdminRole {
+    function enableCreation()
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrAdminRole
+        nonReentrant
+    {
         if (isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyEnabled();
         isCreationEnabled = true;
         emit CreationEnabled();
@@ -195,6 +215,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
         override
         onlyEnabled
         onlyOracleManagerOrAdminOrEmergencyRole
+        nonReentrant
     {
         if (!isCreationEnabled) revert ERC7726OracleFactory_CreationAlreadyDisabled();
         isCreationEnabled = false;
@@ -206,7 +227,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     /// @inheritdoc IERC7726OracleFactory
     function enableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {
         if (!isOracle[oracle_]) revert ERC7726OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert ERC7726OracleFactory_OracleAlreadyEnabled(oracle_);
 
@@ -217,7 +238,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     /// @inheritdoc IERC7726OracleFactory
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole nonReentrant {
         if (!isOracle[oracle_]) revert ERC7726OracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) {
             revert ERC7726OracleFactory_OracleAlreadyDisabled(oracle_);
@@ -233,7 +254,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    function cachePrices(address base_, address quote_) external override onlyEnabled {
+    function cachePrices(address base_, address quote_) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         PRICE.cachePrice(base_);
         PRICE.cachePrice(quote_);
@@ -244,7 +265,7 @@ contract ERC7726OracleFactory is Policy, PolicyEnabler, IERC7726OracleFactory, I
         address base_,
         address quote_,
         uint48 maxAge_
-    ) external override onlyEnabled {
+    ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         (, uint48 baseTimestamp) = PRICE.getPrice(base_, IPRICEv2.Variant.LAST);
         (, uint48 quoteTimestamp) = PRICE.getPrice(quote_, IPRICEv2.Variant.LAST);

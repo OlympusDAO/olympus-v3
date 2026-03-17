@@ -4,7 +4,6 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -17,12 +16,19 @@ import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Libraries
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 
 /// @title  BaseOracleFactory
 /// @author OlympusDAO
 /// @notice Abstract base contract for oracle factories with common functionality
 /// @dev    Uses ClonesWithImmutableArgs for gas-efficient oracle deployment
-abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IVersioned {
+abstract contract BaseOracleFactory is
+    Policy,
+    PolicyEnabler,
+    IOracleFactory,
+    IVersioned,
+    ReentrancyGuard
+{
     using ClonesWithImmutableArgs for address;
 
     // ========== STATE ========== //
@@ -51,6 +57,9 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
     /// @notice Mapping from oracle to quote token
     mapping(address oracle => address quoteToken) internal _oracleToQuoteToken;
+
+    /// @notice Mapping from oracle to maxAge
+    mapping(address oracle => uint48 maxAge) internal _oracleToMaxAge;
 
     /// @notice Mapping to track if an oracle is enabled
     mapping(address => bool) internal _isOracleEnabled;
@@ -183,7 +192,14 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         address quoteToken_,
         uint48 maxAge_,
         bytes calldata customParams_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole returns (address oracle) {
+    )
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrAdminRole
+        nonReentrant
+        returns (address oracle)
+    {
         // Check if creation is enabled
         if (!isCreationEnabled) {
             revert OracleFactory_CreationDisabled();
@@ -234,6 +250,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         isOracle[oracle] = true;
         _oracleToBaseToken[oracle] = baseToken_;
         _oracleToQuoteToken[oracle] = quoteToken_;
+        _oracleToMaxAge[oracle] = maxAge_;
         _isOracleEnabled[oracle] = true;
 
         _cacheOraclePrices(oracle);
@@ -269,7 +286,13 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IOracleFactory
-    function enableCreation() external override onlyEnabled onlyOracleManagerOrAdminRole {
+    function enableCreation()
+        external
+        override
+        onlyEnabled
+        onlyOracleManagerOrAdminRole
+        nonReentrant
+    {
         if (isCreationEnabled) revert OracleFactory_CreationAlreadyEnabled();
 
         isCreationEnabled = true;
@@ -282,6 +305,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         override
         onlyEnabled
         onlyOracleManagerOrAdminOrEmergencyRole
+        nonReentrant
     {
         if (!isCreationEnabled) revert OracleFactory_CreationAlreadyDisabled();
 
@@ -299,12 +323,12 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     ///             - The oracle is already enabled
     function enableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
-        IOraclePriceCache(oracle_).cachePricesIfNecessary();
+        _cacheOraclePricesIfNecessary(oracle_);
         emit OracleEnabled(oracle_);
     }
 
@@ -316,7 +340,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     ///             - The oracle is already disabled
     function disableOracle(
         address oracle_
-    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole {
+    ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole nonReentrant {
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (!_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyDisabled(oracle_);
 
@@ -337,7 +361,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     }
 
     /// @inheritdoc IOracleFactory
-    function cacheOraclePrices() external override onlyEnabled {
+    function cacheOraclePrices() external override onlyEnabled nonReentrant {
         if (!isOracle[msg.sender]) revert OracleFactory_InvalidOracle(msg.sender);
         if (!_isOracleEnabled[msg.sender]) revert OracleFactory_OracleDisabled(msg.sender);
 
@@ -345,7 +369,10 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
     }
 
     /// @inheritdoc IOracleFactory
-    function cachePrices(address baseToken_, address quoteToken_) external override onlyEnabled {
+    function cachePrices(
+        address baseToken_,
+        address quoteToken_
+    ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         PRICE.cachePrice(baseToken_);
@@ -357,7 +384,7 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
         address baseToken_,
         address quoteToken_,
         uint48 maxAge_
-    ) external override onlyEnabled {
+    ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken_, IPRICEv2.Variant.LAST);
@@ -382,6 +409,27 @@ abstract contract BaseOracleFactory is Policy, PolicyEnabler, IOracleFactory, IV
 
         PRICE.cachePrice(baseToken);
         PRICE.cachePrice(quoteToken);
+    }
+
+    /// @notice Conditionally caches prices for the configured oracle token pair based on maxAge/timestamp mismatch
+    /// @param oracle_ The oracle whose base/quote tokens should be conditionally cached
+    function _cacheOraclePricesIfNecessary(address oracle_) internal {
+        address baseToken = _oracleToBaseToken[oracle_];
+        address quoteToken = _oracleToQuoteToken[oracle_];
+        uint48 maxAge = _oracleToMaxAge[oracle_];
+
+        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken, IPRICEv2.Variant.LAST);
+        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken, IPRICEv2.Variant.LAST);
+        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
+        bool baseTokenStale = maxAge > 0 &&
+            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge);
+        bool quoteTokenStale = maxAge > 0 &&
+            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge);
+
+        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
+            PRICE.cachePrice(baseToken);
+            PRICE.cachePrice(quoteToken);
+        }
     }
 
     function _validateCachingCaller(address caller_) internal view {
