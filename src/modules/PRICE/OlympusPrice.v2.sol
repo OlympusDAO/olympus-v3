@@ -8,7 +8,6 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
-import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 
 // Bophades
 import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
@@ -18,7 +17,7 @@ import {fromSubKeycode} from "src/Submodules.sol";
 /// @title      OlympusPriceV2
 /// @author     Oighty
 /// @notice     Provides current and historical prices for assets
-contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
+contract OlympusPricev2 is PRICEv2, IVersioned {
     // DONE
     // [X] Update functions for asset price feeds, strategies, etc.
     // [X] Toggle MA on and off for an asset
@@ -356,7 +355,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        - The caller is not permissioned
     /// @dev        - The asset is not approved
     /// @dev        - The price was not able to be determined
-    function cachePrice(address asset_) external override permissioned nonReentrant {
+    /// @dev        Reentrancy note: `_getCurrentPrice()` resolves feeds/strategy via `staticcall`,
+    ///             so callbacks cannot perform state-changing reentry.
+    function cachePrice(address asset_) external override permissioned {
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
         (uint256 price, uint48 timestamp, ) = _getCurrentPrice(asset_, true);
@@ -381,7 +382,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        - The asset does not store moving average
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
-    function storeObservation(address asset_) public override permissioned nonReentrant {
+    /// @dev        Reentrancy note: feed/strategy resolution is done via `staticcall`, so callbacks
+    ///             cannot perform state-changing reentry.
+    function storeObservation(address asset_) public override permissioned {
         _storeObservation(asset_);
     }
 
@@ -442,7 +445,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
     /// @dev        - Store the price for each asset using `storeObservation()`
-    function storeObservations() public override permissioned nonReentrant {
+    /// @dev        Reentrancy note: delegates to `storeObservation()`, which only reaches external
+    ///             price providers via `staticcall`.
+    function storeObservations() public override permissioned {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
             if (_assetData[assets[i]].storeMovingAverage) _storeObservation(assets[i]);
@@ -508,6 +513,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        - The moving average is being used, but not stored
     /// @dev        - An empty strategy was specified, but the number of feeds requires a strategy
     /// @dev        - The call to get the current price of any feed fails
+    /// @dev        Reentrancy note: feed/strategy validation uses `staticcall`, so callbacks cannot
+    ///             perform state-changing reentry.
     function addAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -517,7 +524,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
         uint256[] memory observations_,
         Component memory strategy_,
         Component[] memory feeds_
-    ) external override permissioned nonReentrant {
+    ) external override permissioned {
         // Check that asset is a contract
         if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
 
@@ -578,7 +585,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - The caller is not permissioned
-    function removeAsset(address asset_) external override permissioned nonReentrant {
+    /// @dev        Reentrancy note: this function does not make external calls.
+    function removeAsset(address asset_) external override permissioned {
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
@@ -792,10 +800,12 @@ contract OlympusPricev2 is PRICEv2, IVersioned, ReentrancyGuard {
     /// @dev        - `asset_` is not approved
     /// @dev        - The final configuration is invalid
     /// @dev        - Any updated submodule is not installed
+    /// @dev        Reentrancy note: any external feed/strategy resolution in validation uses
+    ///             `staticcall`, so callbacks cannot perform state-changing reentry.
     function updateAsset(
         address asset_,
         UpdateAssetParams memory params_
-    ) external override permissioned nonReentrant {
+    ) external override permissioned {
         // Validate at least one update flag is true
         if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
             revert PRICE_NoUpdatesRequested(asset_);
