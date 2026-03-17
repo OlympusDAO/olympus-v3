@@ -99,7 +99,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IERC7726Oracle.ERC7726OracleCloneable_InconsistentTimestamps.selector,
+                IERC7726Oracle.ERC7726Oracle_InconsistentTimestamps.selector,
                 uint48(2),
                 uint48(1)
             )

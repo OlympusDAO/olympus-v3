@@ -44,7 +44,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
 
     function _checkEnabled() internal view {
         if (!factory().isOracleEnabled(address(this))) {
-            revert ERC7726OracleCloneable_NotEnabled();
+            revert ERC7726Oracle_NotEnabled();
         }
     }
 
@@ -101,7 +101,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
             maxAge_
         );
         if (baseTimestamp != quoteTimestamp) {
-            revert ERC7726OracleCloneable_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
+            revert ERC7726Oracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
         }
 
         // basePriceUsd and quotePriceUsd are USD prices in 10^18 scale from PRICE.

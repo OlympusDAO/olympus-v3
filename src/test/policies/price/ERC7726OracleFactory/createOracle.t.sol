@@ -116,7 +116,7 @@ contract ERC7726OracleFactoryCreateOracleTest is ERC7726OracleFactoryTest {
         vm.prank(admin);
         factory.disableOracle(oracle);
 
-        vm.expectRevert(IERC7726Oracle.ERC7726OracleCloneable_NotEnabled.selector);
+        vm.expectRevert(IERC7726Oracle.ERC7726Oracle_NotEnabled.selector);
         IERC7726Oracle(oracle).getQuote(1e18, address(baseToken), address(quoteToken));
     }
 }
