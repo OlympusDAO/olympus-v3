@@ -33,5 +33,12 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         bool stale = oracle.isStale(address(collateralToken), address(loanToken));
         assertEq(stale, true, "Inconsistent timestamps should be stale");
     }
+
+    function test_gasSnapshot_isStale() public {
+        vm.startSnapshotGas("ERC7726OracleCloneable.isStale");
+        oracle.isStale(address(collateralToken), address(loanToken));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

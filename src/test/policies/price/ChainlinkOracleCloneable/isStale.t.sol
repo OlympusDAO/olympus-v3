@@ -32,5 +32,12 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
 
         assertEq(oracle.isStale(), true, "Inconsistent timestamps should be treated as stale");
     }
+
+    function test_gasSnapshot_isStale() public givenPricesAreStored {
+        vm.startSnapshotGas("ChainlinkOracleCloneable.isStale");
+        oracle.isStale();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

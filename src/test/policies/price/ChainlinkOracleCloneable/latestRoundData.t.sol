@@ -110,6 +110,36 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
     }
 
+    function test_whenOracleIsEnabled_gasSnapshotLatestAnswer() public givenPricesAreStored {
+        vm.startSnapshotGas("ChainlinkOracleCloneable.latestAnswer");
+        AggregatorV2V3Interface(address(oracle)).latestAnswer();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenOracleIsEnabled_gasSnapshotLatestTimestamp() public givenPricesAreStored {
+        vm.startSnapshotGas("ChainlinkOracleCloneable.latestTimestamp");
+        AggregatorV2V3Interface(address(oracle)).latestTimestamp();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenOracleIsEnabled_gasSnapshotLatestRound() public givenPricesAreStored {
+        vm.startSnapshotGas("ChainlinkOracleCloneable.latestRound");
+        AggregatorV2V3Interface(address(oracle)).latestRound();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenOracleIsEnabled_gasSnapshotGetRoundData() public givenPricesAreStored {
+        (uint80 roundId, , , , ) = oracle.latestRoundData();
+
+        vm.startSnapshotGas("ChainlinkOracleCloneable.getRoundData");
+        oracle.getRoundData(roundId);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
     // when PRICE decimals change
     //  [X] it continues to use original PRICE decimals
     //  [X] it returns correct price calculation with original decimals

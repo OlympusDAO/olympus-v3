@@ -36,5 +36,15 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
 
         assertEq(oracle.isStale(), true, "Inconsistent timestamps should be stale");
     }
+
+    function test_gasSnapshot_isStale() public {
+        priceModule.storeObservation(address(collateralToken));
+        priceModule.storeObservation(address(loanToken));
+
+        vm.startSnapshotGas("MorphoOracleCloneable.isStale");
+        oracle.isStale();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
