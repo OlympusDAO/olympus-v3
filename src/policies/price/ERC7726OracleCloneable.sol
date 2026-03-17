@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
+import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
@@ -37,7 +38,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         return uint48(_getArgUint64(0x14));
     }
 
-    /// @inheritdoc IERC7726Oracle
+    /// @inheritdoc IPriceOracle
     function name() external pure override returns (string memory) {
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x1C))));
     }
@@ -48,7 +49,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         }
     }
 
-    /// @inheritdoc IERC7726Oracle
+    /// @inheritdoc IPriceOracle
     /// @dev        Uses cached LAST prices only.
     ///
     ///             Reverts if:
@@ -105,7 +106,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         outAmount_ = intermediate.mulDiv(quoteTokenScale, baseTokenScale);
     }
 
-    /// @inheritdoc IERC7726Oracle
+    /// @inheritdoc IPriceOracle
     /// @dev        Returns symmetric bid/ask using the same quote value.
     function getQuotes(
         uint256 inAmount,
@@ -162,6 +163,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @notice Query if a contract implements an interface
     function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
         return
+            interfaceId_ == type(IPriceOracle).interfaceId ||
             interfaceId_ == type(IERC7726Oracle).interfaceId ||
             interfaceId_ == type(IERC7726OraclePriceCache).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId;

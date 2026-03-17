@@ -7,6 +7,7 @@ import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Interfaces
+import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
@@ -26,6 +27,10 @@ contract ERC7726OracleSupportsInterfaceTest is ERC7726OracleTest {
         assertTrue(
             erc165Oracle.supportsInterface(type(IERC7726OraclePriceCache).interfaceId),
             "IERC7726OraclePriceCache mismatch"
+        );
+        assertTrue(
+            erc165Oracle.supportsInterface(type(IPriceOracle).interfaceId),
+            "IPriceOracle mismatch"
         );
         assertFalse(
             erc165Oracle.supportsInterface(type(IERC20).interfaceId),
