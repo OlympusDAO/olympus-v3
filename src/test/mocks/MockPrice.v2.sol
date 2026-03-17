@@ -63,6 +63,14 @@ contract MockPrice is PRICEv2 {
         movingAverages[asset] = movingAverage;
     }
 
+    /// @notice Test helper to directly set LAST cache payload.
+    /// @dev    Used to simulate edge cases such as a zero timestamp with non-zero price.
+    function setLastPrice(address asset_, uint256 price_, uint48 timestamp_) public {
+        assetApproved[asset_] = true;
+        lastStoredPrices[asset_] = price_;
+        lastStoredTimestamps[asset_] = timestamp_;
+    }
+
     function setObservations(address asset, uint256[] memory observations_) public {
         observations[asset] = observations_;
     }
@@ -89,8 +97,9 @@ contract MockPrice is PRICEv2 {
             price = prices[asset_];
             priceTimestamp = timestamp;
         } else if (variant_ == Variant.LAST) {
-            // Return last stored price, or 0 if never stored
-            if (lastStoredTimestamps[asset_] == 0) {
+            // Return last stored price, or 0 if never stored.
+            // Test helper `setLastPrice` may intentionally set a zero timestamp with non-zero price.
+            if (lastStoredTimestamps[asset_] == 0 && lastStoredPrices[asset_] == 0) {
                 price = 0;
                 priceTimestamp = 0;
             } else {
