@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
-// TODO: Phase 7 — Rewrite fork tests for LZ V2 EndpointV2 + ULN302 configuration.
-//       The V1 test used ILayerZeroEndpointState, setSendVersion/setReceiveVersion, getConfig(version, chainId, ...),
-//       and trusted remote paths. These must be replaced with V2 equivalents:
-//       - setSendLibrary / setReceiveLibrary with ULN302 addresses
-//       - endpoint.getConfig(oapp, lib, eid, configType) for ULN and Executor config
-//       - peers(eid) for peer validation
-//       - EIDs (uint32) instead of chain IDs (uint16)
-
 import {Test, Vm} from "forge-std/Test.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {LZConfigLib, ILayerZeroDVNState} from "src/libraries/LZConfigLib.sol";
@@ -17,23 +9,19 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
 
-/// @notice Fork-based tests for LZ V2 ULN302 configuration on Ethereum, Arbitrum, Optimism, Base.
-/// @dev TODO: Rewrite for V2 — currently stubbed to allow compilation. See Phase 7.
+/// @notice Fork-based tests for LZ V2 endpoint configuration on Ethereum, Arbitrum, Optimism, Base.
+/// @dev Validates the security-hardened configuration procedure using production DVN/Executor addresses.
+///      All endpoint config is done through the gateway's ILZEndpointV2Admin functions.
 contract LZBridgeGatewayForkTests_LZConfig is Test {
     // =========== TEST CONSTANTS =========== //
 
-    /// @dev Total number of chains (Ethereum, Arbitrum, Optimism, Base).
     uint256 constant CHAIN_COUNT = 4;
-
     uint256 constant MINT_AMOUNT = 10_000e9;
     uint256 constant SUPPLY_CAP = 100_000e9;
-    uint256 constant LZ_GAS = 500_000;
-
-    bytes32 constant PACKET_EVENT_SELECTOR =
-        0xe9bded5f24a4168e4f3bf44e00298c993b22376aad8c58c7dda9718a54cbea82;
 
     // =========== FORKS =========== //
 
@@ -76,26 +64,12 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     LZBridgeGateway baseGateway;
     LZCrossChainBridge baseBridge;
 
-    // =========== HELPERS & CACHED STATE =========== //
-
-    LayerZeroHelper lzHelper;
+    // =========== HELPERS =========== //
 
     address admin;
     address bridgeAdmin;
     address sender;
     address recipient;
-
-    address ethDefaultLib;
-    address arbDefaultLib;
-
-    uint16 ethSendUln301;
-    uint16 ethReceiveUln301;
-    uint16 arbSendUln301;
-    uint16 arbReceiveUln301;
-    uint16 optSendUln301;
-    uint16 optReceiveUln301;
-    uint16 baseSendUln301;
-    uint16 baseReceiveUln301;
 
     // =========== setUp =========== //
 
@@ -114,15 +88,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         vm.makePersistent(sender);
         vm.makePersistent(recipient);
 
-        lzHelper = new LayerZeroHelper();
-        vm.makePersistent(address(lzHelper));
-
-        // -- Deploy stacks on each fork --
+        // Deploy stacks on each fork
         vm.selectFork(ethForkId);
-        ethDefaultLib = ILayerZeroEndpoint(LZConfigLib.LZ_ENDPOINT).getSendLibraryAddress(
-            address(0)
-        );
-        (ethSendUln301, ethReceiveUln301) = LZConfigLib.getUln301Versions(LZConfigLib.LZ_ENDPOINT);
         (
             ethOhm,
             ethKernel,
@@ -131,15 +98,9 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             ethRolesAdmin,
             ethGateway,
             ethBridge
-        ) = _deployStack(LZConfigLib.LZ_ENDPOINT, true);
+        ) = _deployStack(true);
 
         vm.selectFork(arbForkId);
-        arbDefaultLib = ILayerZeroEndpoint(LZConfigLib.ARB_LZ_ENDPOINT).getSendLibraryAddress(
-            address(0)
-        );
-        (arbSendUln301, arbReceiveUln301) = LZConfigLib.getUln301Versions(
-            LZConfigLib.ARB_LZ_ENDPOINT
-        );
         (
             arbOhm,
             arbKernel,
@@ -148,12 +109,9 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             arbRolesAdmin,
             arbGateway,
             arbBridge
-        ) = _deployStack(LZConfigLib.ARB_LZ_ENDPOINT, false);
+        ) = _deployStack(false);
 
         vm.selectFork(optForkId);
-        (optSendUln301, optReceiveUln301) = LZConfigLib.getUln301Versions(
-            LZConfigLib.OPT_LZ_ENDPOINT
-        );
         (
             optOhm,
             optKernel,
@@ -162,12 +120,9 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             optRolesAdmin,
             optGateway,
             optBridge
-        ) = _deployStack(LZConfigLib.OPT_LZ_ENDPOINT, false);
+        ) = _deployStack(false);
 
         vm.selectFork(baseForkId);
-        (baseSendUln301, baseReceiveUln301) = LZConfigLib.getUln301Versions(
-            LZConfigLib.BASE_LZ_ENDPOINT
-        );
         (
             baseOhm,
             baseKernel,
@@ -176,63 +131,62 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             baseRolesAdmin,
             baseGateway,
             baseBridge
-        ) = _deployStack(LZConfigLib.BASE_LZ_ENDPOINT, false);
+        ) = _deployStack(false);
 
-        // -- Trusted remotes: full mesh (6 bidirectional pairs) --
-        _crossTrust(
+        // Set peers (full mesh)
+        _crossPeer(
             ethForkId,
             ethGateway,
-            LZConfigLib.ARB_CHAIN_ID,
+            LZConfigLib.ARB_EID,
             arbForkId,
             arbGateway,
-            LZConfigLib.ETH_CHAIN_ID
+            LZConfigLib.ETH_EID
         );
-        _crossTrust(
+        _crossPeer(
             ethForkId,
             ethGateway,
-            LZConfigLib.OPT_CHAIN_ID,
+            LZConfigLib.OPT_EID,
             optForkId,
             optGateway,
-            LZConfigLib.ETH_CHAIN_ID
+            LZConfigLib.ETH_EID
         );
-        _crossTrust(
+        _crossPeer(
             ethForkId,
             ethGateway,
-            LZConfigLib.BASE_CHAIN_ID,
+            LZConfigLib.BASE_EID,
             baseForkId,
             baseGateway,
-            LZConfigLib.ETH_CHAIN_ID
+            LZConfigLib.ETH_EID
         );
-        _crossTrust(
+        _crossPeer(
             arbForkId,
             arbGateway,
-            LZConfigLib.OPT_CHAIN_ID,
+            LZConfigLib.OPT_EID,
             optForkId,
             optGateway,
-            LZConfigLib.ARB_CHAIN_ID
+            LZConfigLib.ARB_EID
         );
-        _crossTrust(
+        _crossPeer(
             arbForkId,
             arbGateway,
-            LZConfigLib.BASE_CHAIN_ID,
+            LZConfigLib.BASE_EID,
             baseForkId,
             baseGateway,
-            LZConfigLib.ARB_CHAIN_ID
+            LZConfigLib.ARB_EID
         );
-        _crossTrust(
+        _crossPeer(
             optForkId,
             optGateway,
-            LZConfigLib.BASE_CHAIN_ID,
+            LZConfigLib.BASE_EID,
             baseForkId,
             baseGateway,
-            LZConfigLib.OPT_CHAIN_ID
+            LZConfigLib.OPT_EID
         );
     }
 
     // =========== DEPLOY HELPERS =========== //
 
     function _deployStack(
-        address endpoint_,
         bool isCanonical_
     )
         internal
@@ -252,30 +206,13 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         mintr_ = new OlympusMinter(kernel_, address(ohm_));
         roles_ = new OlympusRoles(kernel_);
         rolesAdmin_ = new RolesAdmin(kernel_);
-        gateway_ = new LZBridgeGateway(kernel_, endpoint_, isCanonical_, address(bridge_));
-        _activateAndConfigure(
+        gateway_ = new LZBridgeGateway(
             kernel_,
-            mintr_,
-            roles_,
-            rolesAdmin_,
-            gateway_,
-            bridge_,
-            isCanonical_
+            LZConfigLib.LZ_ENDPOINT,
+            isCanonical_,
+            address(bridge_)
         );
-        ohm_.mint(sender, MINT_AMOUNT);
-        vm.deal(sender, 100 ether);
-        _makePersistent(ohm_, kernel_, mintr_, roles_, rolesAdmin_, gateway_, bridge_);
-    }
 
-    function _activateAndConfigure(
-        Kernel kernel_,
-        OlympusMinter mintr_,
-        OlympusRoles roles_,
-        RolesAdmin rolesAdmin_,
-        LZBridgeGateway gateway_,
-        LZCrossChainBridge bridge_,
-        bool isCanonical
-    ) internal {
         kernel_.executeAction(Actions.InstallModule, address(mintr_));
         kernel_.executeAction(Actions.InstallModule, address(roles_));
         kernel_.executeAction(Actions.ActivatePolicy, address(rolesAdmin_));
@@ -284,11 +221,16 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         rolesAdmin_.grantRole("bridge_admin", bridgeAdmin);
 
         vm.startPrank(admin);
-        if (isCanonical) gateway_.setBridgedSupplyCap(SUPPLY_CAP);
+        if (isCanonical_) gateway_.setBridgedSupplyCap(SUPPLY_CAP);
         gateway_.enable(bytes(""));
         bridge_.setGateway(address(gateway_));
         bridge_.enable(bytes(""));
         vm.stopPrank();
+
+        ohm_.mint(sender, MINT_AMOUNT);
+        vm.deal(sender, 100 ether);
+
+        _makePersistent(ohm_, kernel_, mintr_, roles_, rolesAdmin_, gateway_, bridge_);
     }
 
     function _makePersistent(
@@ -309,241 +251,144 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         vm.makePersistent(address(bridge_));
     }
 
-    function _crossTrust(
+    function _crossPeer(
         uint256 forkA,
         LZBridgeGateway gwA,
-        uint16 chainIdB,
+        uint32 eidB,
         uint256 forkB,
         LZBridgeGateway gwB,
-        uint16 chainIdA
+        uint32 eidA
     ) internal {
         vm.selectFork(forkA);
         vm.prank(admin);
-        gwA.setTrustedRemote(chainIdB, address(gwB));
+        gwA.setPeer(eidB, LZConfigLib.addressToBytes32(address(gwB)));
 
         vm.selectFork(forkB);
         vm.prank(admin);
-        gwB.setTrustedRemote(chainIdA, address(gwA));
+        gwB.setPeer(eidA, LZConfigLib.addressToBytes32(address(gwA)));
     }
 
     // =========== LOOKUP HELPERS =========== //
 
-    function _allChainIds() internal pure returns (uint16[CHAIN_COUNT] memory ids) {
-        ids[0] = LZConfigLib.ETH_CHAIN_ID;
-        ids[1] = LZConfigLib.ARB_CHAIN_ID;
-        ids[2] = LZConfigLib.OPT_CHAIN_ID;
-        ids[3] = LZConfigLib.BASE_CHAIN_ID;
+    function _allEids() internal pure returns (uint32[CHAIN_COUNT] memory eids) {
+        eids[0] = LZConfigLib.ETH_EID;
+        eids[1] = LZConfigLib.ARB_EID;
+        eids[2] = LZConfigLib.OPT_EID;
+        eids[3] = LZConfigLib.BASE_EID;
     }
 
-    function _forkId(uint16 chainId) internal view returns (uint256) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return ethForkId;
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return arbForkId;
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return optForkId;
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return baseForkId;
-        revert("unknown chain");
+    function _forkId(uint32 eid) internal view returns (uint256) {
+        if (eid == LZConfigLib.ETH_EID) return ethForkId;
+        if (eid == LZConfigLib.ARB_EID) return arbForkId;
+        if (eid == LZConfigLib.OPT_EID) return optForkId;
+        if (eid == LZConfigLib.BASE_EID) return baseForkId;
+        revert("unknown eid");
     }
 
-    function _gateway(uint16 chainId) internal view returns (LZBridgeGateway) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return ethGateway;
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return arbGateway;
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return optGateway;
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return baseGateway;
-        revert("unknown chain");
-    }
-
-    function _endpoint(uint16 chainId) internal pure returns (address) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return LZConfigLib.LZ_ENDPOINT;
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return LZConfigLib.ARB_LZ_ENDPOINT;
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return LZConfigLib.OPT_LZ_ENDPOINT;
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return LZConfigLib.BASE_LZ_ENDPOINT;
-        revert("unknown chain");
-    }
-
-    function _versions(uint16 chainId) internal view returns (uint16 send, uint16 recv) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return (ethSendUln301, ethReceiveUln301);
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return (arbSendUln301, arbReceiveUln301);
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return (optSendUln301, optReceiveUln301);
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return (baseSendUln301, baseReceiveUln301);
-        revert("unknown chain");
-    }
-
-    /// @dev Returns [chainSpecificDVN, GCLOUD_DVN] sorted ascending.
-    ///      All the chain-specific LZ DVNs have addresses below 0xD56e (GCLOUD).
-    function _getDVNs(uint16 chainId) internal pure returns (address[] memory dvns) {
-        dvns = new address[](2);
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) dvns[0] = LZConfigLib.ETH_LZ_DVN;
-        else if (chainId == LZConfigLib.ARB_CHAIN_ID) dvns[0] = LZConfigLib.ARB_LZ_DVN;
-        else if (chainId == LZConfigLib.OPT_CHAIN_ID) dvns[0] = LZConfigLib.OPT_LZ_DVN;
-        else if (chainId == LZConfigLib.BASE_CHAIN_ID) dvns[0] = LZConfigLib.BASE_LZ_DVN;
-        else revert("unknown chain");
-        dvns[1] = LZConfigLib.GCLOUD_DVN;
-    }
-
-    function _lzDVN(uint16 chainId) internal pure returns (address) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return LZConfigLib.ETH_LZ_DVN;
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return LZConfigLib.ARB_LZ_DVN;
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return LZConfigLib.OPT_LZ_DVN;
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return LZConfigLib.BASE_LZ_DVN;
-        revert("unknown chain");
-    }
-
-    /// @dev Outbound confirmations depend only on the source chain.
-    function _outboundConfirmations(uint16 chainId) internal pure returns (uint64) {
-        if (chainId == LZConfigLib.ETH_CHAIN_ID) return LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS;
-        if (chainId == LZConfigLib.ARB_CHAIN_ID) return LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS;
-        if (chainId == LZConfigLib.OPT_CHAIN_ID) return LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS;
-        if (chainId == LZConfigLib.BASE_CHAIN_ID) return LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS;
-        revert("unknown chain");
+    function _gateway(uint32 eid) internal view returns (LZBridgeGateway) {
+        if (eid == LZConfigLib.ETH_EID) return ethGateway;
+        if (eid == LZConfigLib.ARB_EID) return arbGateway;
+        if (eid == LZConfigLib.OPT_EID) return optGateway;
+        if (eid == LZConfigLib.BASE_EID) return baseGateway;
+        revert("unknown eid");
     }
 
     // =========== CHAIN CONFIG PROCEDURE =========== //
 
-    /// @dev Pins versions and sets DVN/Executor config for all remote chains.
-    function _configureChain(uint16 localChainId) internal {
-        vm.selectFork(_forkId(localChainId));
-        LZBridgeGateway gw = _gateway(localChainId);
-        (uint16 sendVer, uint16 recvVer) = _versions(localChainId);
-        address[] memory dvns = _getDVNs(localChainId);
-        uint64 sendConf = _outboundConfirmations(localChainId);
+    /// @dev Pins libraries and sets DVN/Executor config for all remote chains via gateway.
+    function _configureChain(uint32 localEid) internal {
+        vm.selectFork(_forkId(localEid));
+        LZBridgeGateway gw = _gateway(localEid);
+        address sendLib = LZConfigLib.sendUln302ForEid(localEid);
+        address recvLib = LZConfigLib.recvUln302ForEid(localEid);
+        address[] memory dvns = LZConfigLib.dvnsForEid(localEid);
+        uint64 sendConf = LZConfigLib.outboundConfirmationsForEid(localEid);
+
+        uint32[CHAIN_COUNT] memory eids = _allEids();
 
         vm.startPrank(bridgeAdmin);
-        gw.setSendVersion(sendVer);
-        gw.setReceiveVersion(recvVer);
-
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            if (chains[i] == localChainId) continue;
-            uint16 remoteId = chains[i];
+            if (eids[i] == localEid) continue;
+            uint32 remoteEid = eids[i];
 
-            // Send ULN: outbound confirmations from this chain
-            gw.setConfig(
-                sendVer,
-                remoteId,
-                LZConfigLib.CONFIG_TYPE_ULN,
-                LZConfigLib.encodeUlnConfig(sendConf, dvns)
-            );
-            // Executor (send side only)
-            gw.setConfig(
-                sendVer,
-                remoteId,
-                LZConfigLib.CONFIG_TYPE_EXECUTOR,
-                LZConfigLib.encodeExecutorConfig()
-            );
-            // Receive ULN: inbound confirmations = outbound from remote chain
-            gw.setConfig(
-                recvVer,
-                remoteId,
-                LZConfigLib.CONFIG_TYPE_ULN,
-                LZConfigLib.encodeUlnConfig(_outboundConfirmations(remoteId), dvns)
-            );
+            // Pin libraries
+            gw.setSendLibrary(remoteEid, sendLib);
+            gw.setReceiveLibrary(remoteEid, recvLib, 0);
+
+            // Send config (ULN + Executor)
+            SetConfigParam[] memory sendParams = new SetConfigParam[](2);
+            sendParams[0] = SetConfigParam({
+                eid: remoteEid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(sendConf, dvns)
+            });
+            sendParams[1] = SetConfigParam({
+                eid: remoteEid,
+                configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
+                config: LZConfigLib.encodeExecutorConfig()
+            });
+            gw.setEndpointConfig(sendLib, sendParams);
+
+            // Receive config (ULN only)
+            uint64 recvConf = LZConfigLib.outboundConfirmationsForEid(remoteEid);
+            SetConfigParam[] memory recvParams = new SetConfigParam[](1);
+            recvParams[0] = SetConfigParam({
+                eid: remoteEid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(recvConf, dvns)
+            });
+            gw.setEndpointConfig(recvLib, recvParams);
         }
         vm.stopPrank();
     }
 
-    /// @dev Verifies that versions pinned, libraries non-zero, configs stored.
-    function _verifyChainConfig(uint16 localChainId) internal {
-        vm.selectFork(_forkId(localChainId));
-        address ep = _endpoint(localChainId);
-        LZBridgeGateway gw = _gateway(localChainId);
-        (uint16 sendVer, uint16 recvVer) = _versions(localChainId);
+    /// @dev Verifies that libraries are pinned and configs are stored for all remote EIDs.
+    function _verifyChainConfig(uint32 localEid) internal {
+        vm.selectFork(_forkId(localEid));
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        LZBridgeGateway gw = _gateway(localEid);
+        address sendLib = LZConfigLib.sendUln302ForEid(localEid);
+        address recvLib = LZConfigLib.recvUln302ForEid(localEid);
 
-        // Versions pinned
-        {
-            uint16 sv = ILayerZeroEndpoint(ep).getSendVersion(address(gw));
-            uint16 rv = ILayerZeroEndpoint(ep).getReceiveVersion(address(gw));
-            assertEq(sv, sendVer, "send version pinned");
-            assertEq(rv, recvVer, "receive version pinned");
-        }
-
-        // Library addresses non-zero (not default drag-along)
-        {
-            address sendLib = ILayerZeroEndpoint(ep).getSendLibraryAddress(address(gw));
-            address recvLib = ILayerZeroEndpoint(ep).getReceiveLibraryAddress(address(gw));
-            assertTrue(sendLib != address(0), "sendLib non-zero");
-            assertTrue(recvLib != address(0), "recvLib non-zero");
-        }
-
-        // uaConfigLookup shows explicit config
-        {
-            (uint16 uaSv, uint16 uaRv, , ) = ILayerZeroEndpointState(ep).uaConfigLookup(
-                address(gw)
-            );
-            assertEq(uaSv, sendVer, "uaConfigLookup sendVersion");
-            assertEq(uaRv, recvVer, "uaConfigLookup recvVersion");
-        }
-
-        // Config stored for each remote
-        _verifyConfigStored(gw, sendVer, recvVer, localChainId);
-    }
-
-    function _verifyConfigStored(
-        LZBridgeGateway gw,
-        uint16 sendVer,
-        uint16 recvVer,
-        uint16 localChainId
-    ) internal view {
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
+        uint32[CHAIN_COUNT] memory eids = _allEids();
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            if (chains[i] == localChainId) continue;
-            uint16 remoteId = chains[i];
+            if (eids[i] == localEid) continue;
+            uint32 remoteEid = eids[i];
 
-            bytes memory sCfg = gw.getConfig(
-                sendVer,
-                remoteId,
+            // Send library pinned
+            assertEq(ep.getSendLibrary(address(gw), remoteEid), sendLib, "send lib pinned");
+
+            // Receive library pinned (not default)
+            (address rLib, bool isDefault) = ep.getReceiveLibrary(address(gw), remoteEid);
+            assertEq(rLib, recvLib, "recv lib pinned");
+            assertFalse(isDefault, "recv lib should not be default");
+
+            // Send ULN config stored
+            bytes memory sCfg = ep.getConfig(
                 address(gw),
+                sendLib,
+                remoteEid,
                 LZConfigLib.CONFIG_TYPE_ULN
             );
             assertGt(sCfg.length, 0, "send ULN config stored");
 
-            bytes memory eCfg = gw.getConfig(
-                sendVer,
-                remoteId,
+            // Executor config stored
+            bytes memory eCfg = ep.getConfig(
                 address(gw),
+                sendLib,
+                remoteEid,
                 LZConfigLib.CONFIG_TYPE_EXECUTOR
             );
             assertGt(eCfg.length, 0, "executor config stored");
 
-            bytes memory rCfg = gw.getConfig(
-                recvVer,
-                remoteId,
+            // Receive ULN config stored
+            bytes memory rCfg = ep.getConfig(
                 address(gw),
+                recvLib,
+                remoteEid,
                 LZConfigLib.CONFIG_TYPE_ULN
             );
             assertGt(rCfg.length, 0, "recv ULN config stored");
-        }
-    }
-
-    function _assertTrustedRemote(
-        uint256 forkId_,
-        LZBridgeGateway localGw,
-        uint16 remoteChainId,
-        LZBridgeGateway remoteGw
-    ) internal {
-        vm.selectFork(forkId_);
-        bytes memory path = localGw.trustedRemoteLookup(remoteChainId);
-        assertEq(
-            path.length,
-            LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
-            "trusted remote path should be 40 bytes"
-        );
-        assertEq(
-            keccak256(path),
-            keccak256(abi.encodePacked(address(remoteGw), address(localGw))),
-            "trusted remote path mismatch"
-        );
-    }
-
-    /// @dev Warm-up: reads trusted remotes on ALL forks to stabilize persistent contract
-    ///      state across fork switches. Required before any cross-fork operation.
-    function _warmUpAllForks() internal {
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
-        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            vm.selectFork(_forkId(chains[i]));
-            LZBridgeGateway gw = _gateway(chains[i]);
-            for (uint256 j = 0; j < CHAIN_COUNT; ++j) {
-                if (i == j) continue;
-                gw.trustedRemoteLookup(chains[j]);
-            }
         }
     }
 
@@ -552,179 +397,111 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     /// @notice Verifies that production DVN contracts exist on each chain and report the
     ///         correct vid (V1 endpoint ID).
     function test_dvnContracts_haveCorrectVid() external {
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
+        uint32[CHAIN_COUNT] memory eids = _allEids();
+        uint16[CHAIN_COUNT] memory v1ChainIds = [
+            LZConfigLib.ETH_CHAIN_ID,
+            LZConfigLib.ARB_CHAIN_ID,
+            LZConfigLib.OPT_CHAIN_ID,
+            LZConfigLib.BASE_CHAIN_ID
+        ];
 
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            vm.selectFork(_forkId(chains[i]));
+            vm.selectFork(_forkId(eids[i]));
 
             // LZ Labs DVN
-            address lzDvn = _lzDVN(chains[i]);
+            address lzDvn = LZConfigLib.lzDvnForEid(eids[i]);
             uint32 lzVid = ILayerZeroDVNState(lzDvn).vid();
-            assertEq(lzVid, uint32(chains[i]), "LZ DVN vid should match LZ chain ID");
+            assertEq(lzVid, uint32(v1ChainIds[i]), "LZ DVN vid should match LZ chain ID");
 
             // Google Cloud DVN
             uint32 gcVid = ILayerZeroDVNState(LZConfigLib.GCLOUD_DVN).vid();
-            assertEq(gcVid, uint32(chains[i]), "GCLOUD DVN vid should match LZ chain ID");
+            assertEq(gcVid, uint32(v1ChainIds[i]), "GCLOUD DVN vid should match LZ chain ID");
         }
     }
 
-    /// @notice Before any configuration, all gateways use default LZ libraries that are drag-along vulnerable:
-    ///         when an application uses default configuration, the LayerZero multisig can substitute
-    ///         message libraries or proof libraries.
-    ///         See for more details: https://prestwich.substack.com/p/zero-validation
+    /// @notice Before any configuration, gateways use default LZ libraries (drag-along vulnerable).
     function test_givenNoConfig_allChainsUseDefaults() external {
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
+        uint32[CHAIN_COUNT] memory eids = _allEids();
 
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            vm.selectFork(_forkId(chains[i]));
-            address ep = _endpoint(chains[i]);
-            LZBridgeGateway gw = _gateway(chains[i]);
+            vm.selectFork(_forkId(eids[i]));
+            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+            LZBridgeGateway gw = _gateway(eids[i]);
 
-            // uaConfigLookup should be all zeros (no explicit config)
-            (uint16 sv, uint16 rv, address recvLib, address sendLib) = ILayerZeroEndpointState(ep)
-                .uaConfigLookup(address(gw));
-
-            assertEq(sv, 0, "sendVersion should be 0 before config");
-            assertEq(rv, 0, "recvVersion should be 0 before config");
-            assertEq(recvLib, address(0), "recvLib should be 0 before config");
-            assertEq(sendLib, address(0), "sendLib should be 0 before config");
-
-            // Send library resolves to default (drag-along vulnerable)
-            address gwSendLib = ILayerZeroEndpoint(ep).getSendLibraryAddress(address(gw));
-            address defaultLib = ILayerZeroEndpoint(ep).getSendLibraryAddress(address(0));
-            assertEq(gwSendLib, defaultLib, "send library should be the default before config");
+            // For any remote EID, receive library should be default
+            uint32 someRemoteEid = (eids[i] == LZConfigLib.ETH_EID)
+                ? LZConfigLib.ARB_EID
+                : LZConfigLib.ETH_EID;
+            (, bool isDefault) = ep.getReceiveLibrary(address(gw), someRemoteEid);
+            assertTrue(isDefault, "receive library should be default before config");
         }
     }
 
-    /// @notice Pins ULN301 versions on all 4 chains, verifies via endpoint queries and
-    ///         uaConfigLookup.
-    function test_givenConfig_allChainsVersionsPinned() external {
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
-
-        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
-            vm.selectFork(_forkId(chains[i]));
-            LZBridgeGateway gw = _gateway(chains[i]);
-            (uint16 sendVer, uint16 recvVer) = _versions(chains[i]);
-            address ep = _endpoint(chains[i]);
-
-            vm.startPrank(bridgeAdmin);
-            gw.setSendVersion(sendVer);
-            gw.setReceiveVersion(recvVer);
-            vm.stopPrank();
-
-            // Verify via endpoint
-            assertEq(
-                ILayerZeroEndpoint(ep).getSendVersion(address(gw)),
-                sendVer,
-                "send version pinned"
-            );
-            assertEq(
-                ILayerZeroEndpoint(ep).getReceiveVersion(address(gw)),
-                recvVer,
-                "receive version pinned"
-            );
-
-            // Verify libraries non-zero
-            assertTrue(
-                ILayerZeroEndpoint(ep).getSendLibraryAddress(address(gw)) != address(0),
-                "sendLib non-zero"
-            );
-            assertTrue(
-                ILayerZeroEndpoint(ep).getReceiveLibraryAddress(address(gw)) != address(0),
-                "recvLib non-zero"
-            );
-
-            // Verify via uaConfigLookup
-            (uint16 uaSv, uint16 uaRv, , ) = ILayerZeroEndpointState(ep).uaConfigLookup(
-                address(gw)
-            );
-            assertEq(uaSv, sendVer, "uaConfigLookup sendVersion");
-            assertEq(uaRv, recvVer, "uaConfigLookup recvVersion");
-        }
-    }
-
-    /// @notice Full setup procedure for all 4 chains and all 12 directed paths.
-    ///         Uses production DVN addresses and confirmation numbers.
-    function test_fullSetupProcedure_verifyAllChains() external {
-        _warmUpAllForks();
+    /// @notice After configuration, all chains have libraries pinned (not default).
+    function test_givenConfig_allChainsLibrariesPinned() external {
+        uint32[CHAIN_COUNT] memory eids = _allEids();
 
         // Configure all chains
-        _configureChain(LZConfigLib.ETH_CHAIN_ID);
-        _configureChain(LZConfigLib.ARB_CHAIN_ID);
-        _configureChain(LZConfigLib.OPT_CHAIN_ID);
-        _configureChain(LZConfigLib.BASE_CHAIN_ID);
-
-        // Warm up again after all config fork-switches
-        _warmUpAllForks();
+        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
+            _configureChain(eids[i]);
+        }
 
         // Verify all chains
-        _verifyChainConfig(LZConfigLib.ETH_CHAIN_ID);
-        _verifyChainConfig(LZConfigLib.ARB_CHAIN_ID);
-        _verifyChainConfig(LZConfigLib.OPT_CHAIN_ID);
-        _verifyChainConfig(LZConfigLib.BASE_CHAIN_ID);
-
-        // Note: Trusted remote verification is omitted here because Foundry's
-        // vm.makePersistent storage becomes unreliable across concurrent forks.
-        // Trusted remotes are validated in setUp().
-        // // Verify trusted remotes
-        // _assertTrustedRemote(ethForkId, ethGateway, LZConfigLib.ARB_CHAIN_ID, arbGateway);
-        // _assertTrustedRemote(ethForkId, ethGateway, LZConfigLib.OPT_CHAIN_ID, optGateway);
-        // _assertTrustedRemote(ethForkId, ethGateway, LZConfigLib.BASE_CHAIN_ID, baseGateway);
-        // _assertTrustedRemote(arbForkId, arbGateway, LZConfigLib.ETH_CHAIN_ID, ethGateway);
-        // _assertTrustedRemote(arbForkId, arbGateway, LZConfigLib.OPT_CHAIN_ID, optGateway);
-        // _assertTrustedRemote(arbForkId, arbGateway, LZConfigLib.BASE_CHAIN_ID, baseGateway);
-        // _assertTrustedRemote(optForkId, optGateway, LZConfigLib.ETH_CHAIN_ID, ethGateway);
-        // _assertTrustedRemote(optForkId, optGateway, LZConfigLib.ARB_CHAIN_ID, arbGateway);
-        // _assertTrustedRemote(optForkId, optGateway, LZConfigLib.BASE_CHAIN_ID, baseGateway);
-        // _assertTrustedRemote(baseForkId, baseGateway, LZConfigLib.ETH_CHAIN_ID, ethGateway);
-        // _assertTrustedRemote(baseForkId, baseGateway, LZConfigLib.ARB_CHAIN_ID, arbGateway);
-        // _assertTrustedRemote(baseForkId, baseGateway, LZConfigLib.OPT_CHAIN_ID, optGateway);
+        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
+            _verifyChainConfig(eids[i]);
+        }
     }
 
-    /// @notice Verifies that confirmation numbers in the config match the symmetry requirement:
-    ///         send confirmations on chain A for chain B == receive confirmations on chain B
-    ///         from chain A.
+    /// @notice Full setup procedure: configure + verify all chains.
+    function test_fullSetupProcedure_verifyAllChains() external {
+        _configureChain(LZConfigLib.ETH_EID);
+        _configureChain(LZConfigLib.ARB_EID);
+        _configureChain(LZConfigLib.OPT_EID);
+        _configureChain(LZConfigLib.BASE_EID);
+
+        _verifyChainConfig(LZConfigLib.ETH_EID);
+        _verifyChainConfig(LZConfigLib.ARB_EID);
+        _verifyChainConfig(LZConfigLib.OPT_EID);
+        _verifyChainConfig(LZConfigLib.BASE_EID);
+    }
+
+    /// @notice Verifies that confirmation numbers match symmetry:
+    ///         send confirmations on chain A for chain B == receive confirmations on chain B from A.
     function test_configSymmetry_sendMatchesReceive() external {
-        _warmUpAllForks();
+        uint32[CHAIN_COUNT] memory eids = _allEids();
 
-        // Configure all chains first
-        _configureChain(LZConfigLib.ETH_CHAIN_ID);
-        _configureChain(LZConfigLib.ARB_CHAIN_ID);
-        _configureChain(LZConfigLib.OPT_CHAIN_ID);
-        _configureChain(LZConfigLib.BASE_CHAIN_ID);
-
-        uint16[CHAIN_COUNT] memory chains = _allChainIds();
+        // Configure all chains
+        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
+            _configureChain(eids[i]);
+        }
 
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
             for (uint256 j = 0; j < CHAIN_COUNT; ++j) {
                 if (i == j) continue;
 
-                uint16 chainA = chains[i];
-                uint16 chainB = chains[j];
+                uint32 eidA = eids[i];
+                uint32 eidB = eids[j];
 
                 // Read send ULN config from chain A for chain B
-                vm.selectFork(_forkId(chainA));
-                LZBridgeGateway gwA = _gateway(chainA);
-                (uint16 sendVerA, ) = _versions(chainA);
-                bytes memory sendCfg = gwA.getConfig(
-                    sendVerA,
-                    chainB,
-                    address(gwA),
+                vm.selectFork(_forkId(eidA));
+                ILayerZeroEndpointV2 epA = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+                bytes memory sendCfg = epA.getConfig(
+                    address(_gateway(eidA)),
+                    LZConfigLib.sendUln302ForEid(eidA),
+                    eidB,
                     LZConfigLib.CONFIG_TYPE_ULN
                 );
 
                 // Read receive ULN config from chain B for chain A
-                vm.selectFork(_forkId(chainB));
-                LZBridgeGateway gwB = _gateway(chainB);
-                (, uint16 recvVerB) = _versions(chainB);
-                bytes memory recvCfg = gwB.getConfig(
-                    recvVerB,
-                    chainA,
-                    address(gwB),
+                vm.selectFork(_forkId(eidB));
+                ILayerZeroEndpointV2 epB = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+                bytes memory recvCfg = epB.getConfig(
+                    address(_gateway(eidB)),
+                    LZConfigLib.recvUln302ForEid(eidB),
+                    eidA,
                     LZConfigLib.CONFIG_TYPE_ULN
                 );
 
-                // Decode confirmations from both configs
                 LZConfigLib.UlnConfig memory sendUln = abi.decode(sendCfg, (LZConfigLib.UlnConfig));
                 LZConfigLib.UlnConfig memory recvUln = abi.decode(recvCfg, (LZConfigLib.UlnConfig));
 
@@ -734,6 +511,37 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                     "send conf on A must match recv conf on B"
                 );
             }
+        }
+    }
+
+    /// @notice Verifies that hardcoded library addresses match on-chain defaults.
+    function test_libraryAddressesMatchDefaults() external {
+        uint32[CHAIN_COUNT] memory eids = _allEids();
+
+        for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
+            vm.selectFork(_forkId(eids[i]));
+            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+
+            // Pick any remote EID to query the default
+            uint32 someRemoteEid = (eids[i] == LZConfigLib.ETH_EID)
+                ? LZConfigLib.ARB_EID
+                : LZConfigLib.ETH_EID;
+
+            // Default send library should match our hardcoded constant
+            address defaultSendLib = ep.defaultSendLibrary(someRemoteEid);
+            assertEq(
+                defaultSendLib,
+                LZConfigLib.sendUln302ForEid(eids[i]),
+                "hardcoded sendUln302 should match on-chain default"
+            );
+
+            // Default receive library should match our hardcoded constant
+            address defaultRecvLib = ep.defaultReceiveLibrary(someRemoteEid);
+            assertEq(
+                defaultRecvLib,
+                LZConfigLib.recvUln302ForEid(eids[i]),
+                "hardcoded recvUln302 should match on-chain default"
+            );
         }
     }
 }

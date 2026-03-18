@@ -124,6 +124,14 @@ library LZConfigLib {
         address executor;
     }
 
+    // ========== ADDRESS HELPERS ========== //
+
+    /// @notice Converts an address to a bytes32 value left-padded with zeros.
+    /// @dev    Used by LayerZero V2 for peer addressing (OApp.setPeer, etc.).
+    function addressToBytes32(address addr_) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(addr_)));
+    }
+
     // ========== ENCODING HELPERS ========== //
 
     /// @notice ABI-encodes a UlnConfig struct.

@@ -75,11 +75,11 @@ contract LZBridgeGatewayForkTests is Test {
         // Cross-configure peers
         vm.selectFork(ethForkId);
         vm.prank(admin);
-        ethGateway.setPeer(LZConfigLib.ARB_EID, bytes32(uint256(uint160(address(arbGateway)))));
+        ethGateway.setPeer(LZConfigLib.ARB_EID, LZConfigLib.addressToBytes32(address(arbGateway)));
 
         vm.selectFork(arbForkId);
         vm.prank(admin);
-        arbGateway.setPeer(LZConfigLib.ETH_EID, bytes32(uint256(uint160(address(ethGateway)))));
+        arbGateway.setPeer(LZConfigLib.ETH_EID, LZConfigLib.addressToBytes32(address(ethGateway)));
     }
 
     function _deployEthStack() internal {
@@ -198,7 +198,7 @@ contract LZBridgeGatewayForkTests is Test {
 
         Origin memory origin = Origin({
             srcEid: srcEid,
-            sender: bytes32(uint256(uint160(srcGw))),
+            sender: LZConfigLib.addressToBytes32(srcGw),
             nonce: 1
         });
         bytes memory message = abi.encode(uint8(1), abi.encode(to, amount));
@@ -383,11 +383,11 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         // Cross-configure peers (end on ethFork to avoid fork-switch issues)
         vm.selectFork(arbForkId);
         vm.prank(admin);
-        arbGateway.setPeer(LZConfigLib.ETH_EID, bytes32(uint256(uint160(address(ethGateway)))));
+        arbGateway.setPeer(LZConfigLib.ETH_EID, LZConfigLib.addressToBytes32(address(ethGateway)));
 
         vm.selectFork(ethForkId);
         vm.prank(admin);
-        ethGateway.setPeer(LZConfigLib.ARB_EID, bytes32(uint256(uint160(address(arbGateway)))));
+        ethGateway.setPeer(LZConfigLib.ARB_EID, LZConfigLib.addressToBytes32(address(arbGateway)));
 
         // Set enforced options on ethGateway for LZConfigLib.ARB_EID (required for endpoint.send)
         ILZBridgeGateway.EnforcedOptionParam[]
@@ -510,7 +510,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
     /// @dev Finds the PacketSent event in recorded logs and returns the encoded packet.
     function _findPacketSent(Vm.Log[] memory logs_) internal pure returns (bytes memory) {
         bytes32 sig = keccak256("PacketSent(bytes,bytes,address)");
-        for (uint256 i; i < logs_.length; ++i) {
+        for (uint256 i = 0; i < logs_.length; ++i) {
             if (logs_[i].topics[0] == sig) {
                 (bytes memory encoded, , ) = abi.decode(logs_[i].data, (bytes, bytes, address));
                 return encoded;
@@ -541,7 +541,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         // Extract message bytes from offset 113 onwards
         uint256 msgLen = pkt_.length - MESSAGE_OFFSET;
         message = new bytes(msgLen);
-        for (uint256 i; i < msgLen; ++i) {
+        for (uint256 i = 0; i < msgLen; ++i) {
             message[i] = pkt_[MESSAGE_OFFSET + i];
         }
     }
@@ -580,7 +580,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         assertEq(origin.srcEid, LZConfigLib.ETH_EID, "Packet srcEid should be ETH");
         assertEq(
             origin.sender,
-            bytes32(uint256(uint160(address(ethGateway)))),
+            LZConfigLib.addressToBytes32(address(ethGateway)),
             "Packet sender should be ethGateway"
         );
         assertGt(origin.nonce, 0, "Packet nonce should be non-zero");

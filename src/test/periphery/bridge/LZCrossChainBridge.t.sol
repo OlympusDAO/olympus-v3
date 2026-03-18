@@ -13,6 +13,7 @@ import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -106,8 +107,8 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         gateway.setBridgedSupplyCap(SUPPLY_CAP);
 
         // Set peers
-        gateway.setPeer(NONCANONICAL_EID, bytes32(uint256(uint160(address(gateway2)))));
-        gateway2.setPeer(CANONICAL_EID, bytes32(uint256(uint160(address(gateway)))));
+        gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+        gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
 
         // Set enforced options
         ILZBridgeGateway.EnforcedOptionParam[]
@@ -200,7 +201,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         bridge.sendOhm{value: fee.nativeFee}(NONCANONICAL_EID, recipient, amount);
 
         // Deliver packet
-        verifyPackets(NONCANONICAL_EID, bytes32(uint256(uint160(address(gateway2)))));
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
 
         assertEq(ohm.balanceOf(user), userOhmBefore - amount, "User balance should decrease");
         assertEq(ohm.balanceOf(address(gateway)), 0, "Gateway should have no OHM after burn");
@@ -274,7 +275,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         bridge.sendOhm{value: fee.nativeFee}(NONCANONICAL_EID, recipient, amount_);
 
         // Deliver packet
-        verifyPackets(NONCANONICAL_EID, bytes32(uint256(uint160(address(gateway2)))));
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
 
         assertEq(ohm.balanceOf(user), userBalBefore - amount_, "User should lose exactly amount");
         assertEq(ohm.balanceOf(recipient), amount_, "Recipient should receive exactly amount");
