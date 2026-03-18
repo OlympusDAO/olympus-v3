@@ -22,7 +22,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         Entry points (run in order):
 ///         1. `activateGateway`    as Kernel executor               deactivates old bridge and activates new gateway
 ///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
-///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & trusted remotes and enables
+///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
 contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
     // =========== ENTRY POINTS =========== //
 
@@ -103,7 +103,7 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
     }
 
     /// @notice Step 3. DAO MS actions (requires bridge_admin & admin roles):
-    ///         LZ config, trusted remotes, and enable.
+    ///         LZ config, peers, enforced options, and enable.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     function configureAndEnable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
@@ -111,13 +111,16 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
 
         console2.log("\n=== [L2] [Step 3] Configure & Enable:", chain, "===");
 
-        // 3.1. Configure LZ versions and per-remote config
+        // 3.1. Configure LZ libraries and ULN/Executor config
         _configureLZ(gateway);
 
         // 3.2. Set peers
         _setPeers(gateway);
 
-        // 3.3. Enable LZBridgeGateway
+        // 3.3. Set enforced options
+        _setEnforcedOptions(gateway);
+
+        // 3.4. Enable LZBridgeGateway
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
         _proposeL2Batch();

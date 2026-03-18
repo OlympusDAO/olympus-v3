@@ -15,20 +15,22 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
-import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.142/interfaces/ILayerZeroEndpointV2.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.142/interfaces/IMessageLibManager.sol";
+import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Contracts
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy
 ///         that separates infrastructure from user-facing concerns, caps bridged supply,
-///         and pins LayerZero V2 ULN302 configuration (DVNs + Executor).
+///         and migrates to LayerZero V2 with explicit endpoint configuration, eliminating drag-along vulnerability.
 ///         The periphery LZCrossChainBridge is configured separately by the DAO MS.
 ///
 ///         Assumes:
@@ -74,10 +76,13 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "The existing CrossChainBridge contract contains a number of security flaws and limitations, which are addressed in this upgrade by introducing the following:\n",
                 "\n",
-                "- A cap on the supply that can be bridged back to Ethereum, limiting blast radius and protecting against unlimited inbound mints.\n",
-                "- Separation into an infrastructure policy (LZBridgeGateway) and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge. The infrastructure policy is activated in the Kernel and handles all privileged operations (minting, burning, supply tracking, peer management). The periphery contract provides the user-facing interface and is configured separately by the DAO MS.\n",
-                "- Hardened bridge operations: send and receive are blocked while the bridge is disabled, and peers are always verified.\n",
-                "- Migration from Endpoint V1 to V2 with ULN302 message libraries. ULN302 uses configurable Decentralized Verifier Networks (DVNs) and a separate Executor, eliminating the proof library substitution attack vector. The send and receive libraries are explicitly set per remote chain, and per-chain ULN and Executor configs are set via endpoint setConfig calls, ensuring the bridge does not rely on LayerZero endpoint defaults. Verification with dual-DVN confirmation.\n",
+                "- A cap on the total supply bridged out from Ethereum, limiting blast radius. Combined with an underflow check on inbound receives, this prevents unlimited mints from non-canonical chains.\n",
+                "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
+                "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
+                "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
+                "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle independent of the supply cap. Rate limits are left unconfigured by default and configured separately as needed.\n",
+                "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
+                "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
                 "- Retained mint/burn model to avoid supply inflation and double-counting.\n",
                 "\n",
                 "## Resources\n",
@@ -95,11 +100,12 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "## Proposal Steps\n",
                 "\n",
                 "1. Grant the `bridge_admin` role to the DAO MS.\n",
-                "2. Configure LayerZero V2 Endpoint settings: set send/receive libraries to ULN302, set ULN verification config (dual-DVN: LayerZero DVN + Google Cloud DVN, with per-chain confirmation requirements) and Executor config per remote chain (Arbitrum, Optimism, Base).\n",
+                "2. Configure LayerZero V2 Endpoint: pin send/receive libraries to SendUln302/ReceiveUln302, set ULN verification config (dual-DVN: LayerZero DVN + Google Cloud DVN, with per-chain confirmation requirements) and Executor config per remote chain (Arbitrum, Optimism, Base).\n",
                 "3. Set peers for Arbitrum, Optimism, and Base.\n",
                 // TODO: Update the value before submission
                 "4. Set the bridged supply cap to ... OHM.\n",
-                "5. Enable the LZBridgeGateway policy.\n",
+                "5. Set enforced options: 200,000 gas minimum for lzReceive execution on each destination chain (Arbitrum, Optimism, Base).\n",
+                "6. Enable the LZBridgeGateway policy.\n",
                 "\n",
                 "At the completion of this proposal, the DAO MS will deactivate the old CrossChainBridge, configure the periphery LZCrossChainBridge, and synchronize the initial bridged supply via batch scripts.\n"
             );
@@ -134,10 +140,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             );
         }
 
-        // 2. Configure LZ V2 endpoint libraries and per-remote config
+        // 2. Configure LZ V2 endpoint (libraries + ULN/Executor config)
         _buildLZConfig(lzBridgeGateway);
 
-        // 3. Set peers (conditional - only if remote addresses are set)
+        // 3. Set peers
         _buildPeers(lzBridgeGateway);
 
         // 4. Set bridged supply cap (onlyAdminRole)
@@ -150,7 +156,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Set bridged supply cap on LZBridgeGateway"
         );
 
-        // 5. Enable LZBridgeGateway (Policy, onlyAdminRole)
+        // 5. Set enforced options
+        _buildEnforcedOptions(lzBridgeGateway);
+
+        // 6. Enable LZBridgeGateway (Policy, onlyAdminRole)
         _pushAction(
             lzBridgeGateway,
             abi.encodeWithSelector(PolicyEnabler.enable.selector, ""),
@@ -173,6 +182,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         LZBridgeGateway gw = LZBridgeGateway(
             addresses.getAddress("olympus-policy-lz-bridge-gateway")
         );
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
 
         // 1. Validate LZBridgeGateway is active in the Kernel (activated by MS before OCG)
         require(Policy(address(gw)).isActive(), "LZBridgeGateway policy is not active");
@@ -190,47 +200,25 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 4. Validate bridged supply cap is set
         require(gw.bridgedSupplyCap() == BRIDGED_SUPPLY_CAP, "Bridged supply cap does not match");
 
-        // 5. Validate LZ V2 libraries are set
-        ILayerZeroEndpointV2 endpoint = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
-        _validateLZLibraries(endpoint, gw);
+        // 5. Validate per-remote LZ config
+        _validateLZConfig(gw, ep);
 
-        // 6. Validate per-remote LZ config (ULN + Executor) for each remote chain
-        _validateLZConfig(endpoint, gw);
-
-        // 7. Validate peers
+        // 6. Validate peers
         _validatePeers(gw);
+
+        // 7. Validate enforced options set
+        _validateEnforcedOptions(gw);
     }
 
-    /// @dev Validates send/receive libraries are set (not using defaults).
-    function _validateLZLibraries(
-        ILayerZeroEndpointV2 endpoint_,
-        LZBridgeGateway gw
-    ) internal view {
-        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
-            LZConfigLib.ARB_EID,
-            LZConfigLib.OPT_EID,
-            LZConfigLib.BASE_EID
-        ];
+    // ========== LZ CONFIG BUILDERS ========== //
 
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            address sendLib = endpoint_.getSendLibrary(address(gw), remoteEids[i]);
-            require(sendLib != address(0), "Send library not set");
-            require(
-                !endpoint_.isDefaultSendLibrary(address(gw), remoteEids[i]),
-                "Send library is still default"
-            );
+    /// @dev Pushes LZ V2 endpoint configuration actions via the gateway:
+    ///      pin libraries + set ULN/Executor config per remote chain.
+    function _buildLZConfig(address gateway_) internal {
+        address sendLib = LZConfigLib.ETH_SEND_ULN_302;
+        address recvLib = LZConfigLib.ETH_RECV_ULN_302;
+        address[] memory dvns = _getDVNs();
 
-            (address recvLib, bool isDefault) = endpoint_.getReceiveLibrary(
-                address(gw),
-                remoteEids[i]
-            );
-            require(recvLib != address(0), "Receive library not set");
-            require(!isDefault, "Receive library is still default");
-        }
-    }
-
-    /// @dev Validates send ULN, executor, and receive ULN config for each remote chain.
-    function _validateLZConfig(ILayerZeroEndpointV2 endpoint_, LZBridgeGateway gw) internal view {
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,
             LZConfigLib.OPT_EID,
@@ -242,58 +230,206 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS
         ];
 
-        address sendLib = LZConfigLib.ETH_SEND_ULN_302;
-        address recvLib = LZConfigLib.ETH_RECEIVE_ULN_302;
-
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            // Send ULN config
-            bytes memory sendCfg = endpoint_.getConfig(
-                address(gw),
-                sendLib,
-                remoteEids[i],
-                LZConfigLib.CONFIG_TYPE_ULN
-            );
-            require(sendCfg.length > 0, "Send ULN config not set");
-            LZConfigLib.UlnConfig memory sendUln = abi.decode(sendCfg, (LZConfigLib.UlnConfig));
-            require(
-                sendUln.confirmations == LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
-                "Send ULN confirmations mismatch"
-            );
-            require(sendUln.requiredDVNCount == 2, "Send ULN should require 2 DVNs");
+            uint32 eid = remoteEids[i];
 
-            // Executor config
-            bytes memory execCfg = endpoint_.getConfig(
-                address(gw),
-                sendLib,
-                remoteEids[i],
-                LZConfigLib.CONFIG_TYPE_EXECUTOR
-            );
-            require(execCfg.length > 0, "Executor config not set");
-            LZConfigLib.ExecutorConfig memory exec = abi.decode(
-                execCfg,
-                (LZConfigLib.ExecutorConfig)
-            );
-            require(exec.executor == LZConfigLib.LZ_EXECUTOR, "Executor address mismatch");
-            require(
-                exec.maxMessageSize == LZConfigLib.MAX_MESSAGE_SIZE,
-                "Executor maxMessageSize mismatch"
+            // Pin send library
+            _pushAction(
+                gateway_,
+                abi.encodeCall(ILZEndpointV2Admin.setSendLibrary, (eid, sendLib)),
+                "Pin send library"
             );
 
-            // Receive ULN config
-            bytes memory recvCfg = endpoint_.getConfig(
-                address(gw),
-                recvLib,
-                remoteEids[i],
-                LZConfigLib.CONFIG_TYPE_ULN
+            // Pin receive library (gracePeriod = 0 for immediate)
+            _pushAction(
+                gateway_,
+                abi.encodeCall(ILZEndpointV2Admin.setReceiveLibrary, (eid, recvLib, 0)),
+                "Pin receive library"
             );
-            require(recvCfg.length > 0, "Recv ULN config not set");
-            LZConfigLib.UlnConfig memory recvUln = abi.decode(recvCfg, (LZConfigLib.UlnConfig));
-            require(recvUln.confirmations == remoteConfs[i], "Recv ULN confirmations mismatch");
-            require(recvUln.requiredDVNCount == 2, "Recv ULN should require 2 DVNs");
+
+            // Send ULN + Executor config
+            SetConfigParam[] memory sendParams = new SetConfigParam[](2);
+            sendParams[0] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS, dvns)
+            });
+            sendParams[1] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
+                config: LZConfigLib.encodeExecutorConfig()
+            });
+            _pushAction(
+                gateway_,
+                abi.encodeCall(ILZEndpointV2Admin.setEndpointConfig, (sendLib, sendParams)),
+                "Set send ULN + Executor config"
+            );
+
+            // Receive ULN config (inbound = remote chain's outbound confirmations)
+            SetConfigParam[] memory recvParams = new SetConfigParam[](1);
+            recvParams[0] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(remoteConfs[i], dvns)
+            });
+            _pushAction(
+                gateway_,
+                abi.encodeCall(ILZEndpointV2Admin.setEndpointConfig, (recvLib, recvParams)),
+                "Set receive ULN config"
+            );
         }
     }
 
-    /// @dev Validates peers are set for non-zero gateway addresses.
+    /// @dev Pushes setPeer actions for non-zero remote gateway addresses.
+    function _buildPeers(address gateway_) internal {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID
+        ];
+        address[_REMOTE_CHAIN_COUNT] memory remoteGateways = [
+            ARB_GATEWAY,
+            OPT_GATEWAY,
+            BASE_GATEWAY
+        ];
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            if (remoteGateways[i] == address(0)) continue;
+
+            _pushAction(
+                gateway_,
+                abi.encodeCall(
+                    ILZBridgeGateway.setPeer,
+                    (remoteEids[i], LZConfigLib.addressToBytes32(remoteGateways[i]))
+                ),
+                "Set peer"
+            );
+        }
+    }
+
+    /// @dev Pushes setEnforcedOptions action for all remote EIDs.
+    function _buildEnforcedOptions(address gateway_) internal {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID
+        ];
+
+        ILZBridgeGateway.EnforcedOptionParam[]
+            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](_REMOTE_CHAIN_COUNT);
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
+            opts[i] = ILZBridgeGateway.EnforcedOptionParam({
+                eid: remoteEids[i],
+                msgType: 1, // MSG_BRIDGE_OHM
+                options: abi.encodePacked(
+                    uint16(3),
+                    uint8(1),
+                    uint16(17),
+                    uint8(1),
+                    uint128(200_000)
+                )
+            });
+        }
+
+        _pushAction(
+            gateway_,
+            abi.encodeCall(ILZBridgeGateway.setEnforcedOptions, (opts)),
+            "Set enforced options"
+        );
+    }
+
+    // ========== VALIDATION HELPERS ========== //
+
+    function _validateLZConfig(LZBridgeGateway gw, ILayerZeroEndpointV2 ep) internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID
+        ];
+        uint64[_REMOTE_CHAIN_COUNT] memory remoteConfs = [
+            LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS
+        ];
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            _validateLibraries(gw, ep, remoteEids[i]);
+            _validateSendConfig(gw, ep, remoteEids[i]);
+            _validateRecvConfig(gw, ep, remoteEids[i], remoteConfs[i]);
+        }
+    }
+
+    function _validateLibraries(
+        LZBridgeGateway gw,
+        ILayerZeroEndpointV2 ep,
+        uint32 eid
+    ) internal view {
+        require(
+            ep.getSendLibrary(address(gw), eid) == LZConfigLib.ETH_SEND_ULN_302,
+            "Send library not pinned correctly"
+        );
+        require(!ep.isDefaultSendLibrary(address(gw), eid), "Send library is still default");
+        (address pinnedRecvLib, bool isDefault) = ep.getReceiveLibrary(address(gw), eid);
+        require(pinnedRecvLib == LZConfigLib.ETH_RECV_ULN_302, "Receive library not pinned");
+        require(!isDefault, "Receive library is still default");
+    }
+
+    function _validateSendConfig(
+        LZBridgeGateway gw,
+        ILayerZeroEndpointV2 ep,
+        uint32 eid
+    ) internal view {
+        // Send ULN
+        bytes memory sendUlnCfg = ep.getConfig(
+            address(gw),
+            LZConfigLib.ETH_SEND_ULN_302,
+            eid,
+            LZConfigLib.CONFIG_TYPE_ULN
+        );
+        require(sendUlnCfg.length > 0, "Send ULN config not set");
+        LZConfigLib.UlnConfig memory sendUln = abi.decode(sendUlnCfg, (LZConfigLib.UlnConfig));
+        require(
+            sendUln.confirmations == LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
+            "Send ULN confirmations mismatch"
+        );
+        require(sendUln.requiredDVNCount == 2, "Send ULN should require 2 DVNs");
+
+        // Executor
+        bytes memory execCfg = ep.getConfig(
+            address(gw),
+            LZConfigLib.ETH_SEND_ULN_302,
+            eid,
+            LZConfigLib.CONFIG_TYPE_EXECUTOR
+        );
+        require(execCfg.length > 0, "Executor config not set");
+        LZConfigLib.ExecutorConfig memory exec = abi.decode(execCfg, (LZConfigLib.ExecutorConfig));
+        require(exec.executor == LZConfigLib.LZ_EXECUTOR, "Executor address mismatch");
+        require(
+            exec.maxMessageSize == LZConfigLib.MAX_MESSAGE_SIZE,
+            "Executor maxMessageSize mismatch"
+        );
+    }
+
+    function _validateRecvConfig(
+        LZBridgeGateway gw,
+        ILayerZeroEndpointV2 ep,
+        uint32 eid,
+        uint64 expectedConf
+    ) internal view {
+        bytes memory recvUlnCfg = ep.getConfig(
+            address(gw),
+            LZConfigLib.ETH_RECV_ULN_302,
+            eid,
+            LZConfigLib.CONFIG_TYPE_ULN
+        );
+        require(recvUlnCfg.length > 0, "Recv ULN config not set");
+        LZConfigLib.UlnConfig memory recvUln = abi.decode(recvUlnCfg, (LZConfigLib.UlnConfig));
+        require(recvUln.confirmations == expectedConf, "Recv ULN confirmations mismatch");
+        require(recvUln.requiredDVNCount == 2, "Recv ULN should require 2 DVNs");
+    }
+
     function _validatePeers(LZBridgeGateway gw) internal view {
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,
@@ -316,121 +452,30 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         }
     }
 
-    // ========== LZ CONFIG BUILDERS ========== //
-
-    /// @dev Pushes LZ V2 endpoint configuration actions: libraries + per-remote ULN/Executor config.
-    function _buildLZConfig(address gateway_) internal {
-        address sendLib = LZConfigLib.ETH_SEND_ULN_302;
-        address recvLib = LZConfigLib.ETH_RECEIVE_ULN_302;
-        address[] memory dvns = _getDVNs();
-
+    function _validateEnforcedOptions(LZBridgeGateway gw) internal view {
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,
             LZConfigLib.OPT_EID,
             LZConfigLib.BASE_EID
         ];
-        uint64[_REMOTE_CHAIN_COUNT] memory remoteConfs = [
-            LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS,
-            LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS,
-            LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS
-        ];
 
-        // Set send and receive libraries per remote chain
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            _pushAction(
-                gateway_,
-                abi.encodeWithSelector(
-                    LZBridgeGateway.setSendLibrary.selector,
-                    remoteEids[i],
-                    sendLib
-                ),
-                "Set LZ send library"
-            );
-            _pushAction(
-                gateway_,
-                abi.encodeWithSelector(
-                    LZBridgeGateway.setReceiveLibrary.selector,
-                    remoteEids[i],
-                    recvLib,
-                    0
-                ),
-                "Set LZ receive library"
-            );
-        }
-
-        // Build send config params (ULN + Executor)
-        SetConfigParam[] memory sendParams = new SetConfigParam[](_REMOTE_CHAIN_COUNT * 2);
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            sendParams[i * 2] = SetConfigParam({
-                eid: remoteEids[i],
-                configType: LZConfigLib.CONFIG_TYPE_ULN,
-                config: LZConfigLib.encodeUlnConfig(LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS, dvns)
-            });
-            sendParams[i * 2 + 1] = SetConfigParam({
-                eid: remoteEids[i],
-                configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
-                config: LZConfigLib.encodeExecutorConfig()
-            });
-        }
-        _pushAction(
-            gateway_,
-            abi.encodeWithSelector(
-                LZBridgeGateway.setLZConfig.selector,
-                sendLib,
-                abi.encode(sendParams)
-            ),
-            "Set LZ send ULN and executor config"
+        // Expected: Type 3, WORKER_ID=1 (Executor), size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
+        bytes memory expected = abi.encodePacked(
+            uint16(3),
+            uint8(1),
+            uint16(17),
+            uint8(1),
+            uint128(200_000)
         );
-
-        // Build receive config params (ULN only)
-        SetConfigParam[] memory recvParams = new SetConfigParam[](_REMOTE_CHAIN_COUNT);
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            recvParams[i] = SetConfigParam({
-                eid: remoteEids[i],
-                configType: LZConfigLib.CONFIG_TYPE_ULN,
-                config: LZConfigLib.encodeUlnConfig(remoteConfs[i], dvns)
-            });
-        }
-        _pushAction(
-            gateway_,
-            abi.encodeWithSelector(
-                LZBridgeGateway.setLZConfig.selector,
-                recvLib,
-                abi.encode(recvParams)
-            ),
-            "Set LZ receive ULN config"
-        );
-    }
-
-    /// @dev Pushes setPeer actions for non-zero remote gateway addresses.
-    function _buildPeers(address gateway_) internal {
-        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
-            LZConfigLib.ARB_EID,
-            LZConfigLib.OPT_EID,
-            LZConfigLib.BASE_EID
-        ];
-        address[_REMOTE_CHAIN_COUNT] memory remoteGateways = [
-            ARB_GATEWAY,
-            OPT_GATEWAY,
-            BASE_GATEWAY
-        ];
+        bytes32 expectedHash = keccak256(expected);
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            if (remoteGateways[i] == address(0)) continue;
-
-            _pushAction(
-                gateway_,
-                abi.encodeWithSelector(
-                    LZBridgeGateway.setPeer.selector,
-                    remoteEids[i],
-                    remoteGateways[i]
-                ),
-                "Set peer"
-            );
+            bytes memory opts = gw.enforcedOptions(remoteEids[i], gw.MSG_BRIDGE_OHM());
+            require(keccak256(opts) == expectedHash, "Enforced options mismatch");
         }
     }
 
-    // ========== LZ ENCODING HELPERS ========== //
+    // ========== DVN HELPERS ========== //
 
     /// @dev Returns DVNs sorted ascending: [ETH_LZ_DVN, GCLOUD_DVN].
     function _getDVNs() internal pure returns (address[] memory dvns) {

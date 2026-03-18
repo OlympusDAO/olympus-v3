@@ -8,13 +8,15 @@ import {console2} from "forge-std/console2.sol";
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
+// Interfaces
+import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {ILayerZeroEndpoint} from "@layer-zero-endpoint-v1-1.1.0/lzApp/interfaces/ILayerZeroEndpoint.sol";
 
 // Proposal
 import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpgradeProposal.sol";
@@ -22,7 +24,7 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24628549;
+    uint256 public constant BLOCK = 24685696;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 3;
@@ -116,11 +118,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     // ========== LZ CONFIG VERIFICATION HELPERS ==========
 
-    function _verifySendUlnConfig(uint16 sendVer_, uint16 remoteChainId_) internal view {
-        bytes memory cfg = gateway.getConfig(
-            sendVer_,
-            remoteChainId_,
+    function _verifySendUlnConfig(uint32 remoteEid_) internal view {
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        bytes memory cfg = ep.getConfig(
             address(gateway),
+            LZConfigLib.ETH_SEND_ULN_302,
+            remoteEid_,
             LZConfigLib.CONFIG_TYPE_ULN
         );
         assertGt(cfg.length, 0, "Send ULN config should be set");
@@ -147,15 +150,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertEq(uln.optionalDVNCount, 0, "Send ULN should have 0 optional DVNs");
     }
 
-    function _verifyRecvUlnConfig(
-        uint16 recvVer_,
-        uint16 remoteChainId_,
-        uint64 expectedConfirmations_
-    ) internal view {
-        bytes memory cfg = gateway.getConfig(
-            recvVer_,
-            remoteChainId_,
+    function _verifyRecvUlnConfig(uint32 remoteEid_, uint64 expectedConfirmations_) internal view {
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        bytes memory cfg = ep.getConfig(
             address(gateway),
+            LZConfigLib.ETH_RECV_ULN_302,
+            remoteEid_,
             LZConfigLib.CONFIG_TYPE_ULN
         );
         assertGt(cfg.length, 0, "Recv ULN config should be set");
@@ -177,11 +177,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertEq(uln.optionalDVNCount, 0, "Recv ULN should have 0 optional DVNs");
     }
 
-    function _verifyExecutorConfig(uint16 sendVer_, uint16 remoteChainId_) internal view {
-        bytes memory cfg = gateway.getConfig(
-            sendVer_,
-            remoteChainId_,
+    function _verifyExecutorConfig(uint32 remoteEid_) internal view {
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        bytes memory cfg = ep.getConfig(
             address(gateway),
+            LZConfigLib.ETH_SEND_ULN_302,
+            remoteEid_,
             LZConfigLib.CONFIG_TYPE_EXECUTOR
         );
         assertGt(cfg.length, 0, "Executor config should be set");
@@ -195,11 +196,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertEq(exec.executor, LZConfigLib.LZ_EXECUTOR, "Executor address mismatch");
     }
 
-    function _verifyTrustedRemotes() internal view {
-        uint16[_REMOTE_CHAIN_COUNT] memory remoteIds = [
-            LZConfigLib.ARB_CHAIN_ID,
-            LZConfigLib.OPT_CHAIN_ID,
-            LZConfigLib.BASE_CHAIN_ID
+    function _verifyPeers() internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID
         ];
         address[_REMOTE_CHAIN_COUNT] memory remoteGateways = [
             proposal.ARB_GATEWAY(),
@@ -208,20 +209,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         ];
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            bytes memory path = gateway.trustedRemoteLookup(remoteIds[i]);
+            bytes32 peer = gateway.peers(remoteEids[i]);
             if (remoteGateways[i] == address(0)) {
-                assertEq(path.length, 0, "Trusted remote should be empty for zero gateway");
+                assertEq(peer, bytes32(0), "Peer should be empty for zero gateway");
             } else {
-                assertEq(
-                    path.length,
-                    LZConfigLib.TRUSTED_REMOTE_PATH_LENGTH,
-                    "Trusted remote path should be 40 bytes"
-                );
-                assertEq(
-                    keccak256(path),
-                    keccak256(abi.encodePacked(remoteGateways[i], address(gateway))),
-                    "Trusted remote path mismatch"
-                );
+                assertEq(peer, LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
             }
         }
     }
@@ -244,7 +236,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
 
         // 3. Gateway immutables
-        assertEq(gateway.LZ_ENDPOINT(), LZConfigLib.LZ_ENDPOINT, "LZ_ENDPOINT should match");
+        assertEq(gateway.LZ_ENDPOINT(), LZConfigLib.LZ_ENDPOINT, "Endpoint should match");
         assertTrue(gateway.IS_CANONICAL(), "Gateway should be canonical on mainnet");
         assertEq(gateway.ohm(), address(ohm), "OHM should match");
 
@@ -255,18 +247,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             "Bridged supply cap should match proposal constant"
         );
 
-        // 5. LZ versions pinned
-        ILayerZeroEndpoint endpoint = ILayerZeroEndpoint(LZConfigLib.LZ_ENDPOINT);
-        uint16 sendVer = endpoint.getSendVersion(address(gateway));
-        uint16 recvVer = endpoint.getReceiveVersion(address(gateway));
-        assertGt(sendVer, 0, "Send version should be pinned");
-        assertEq(recvVer, sendVer + 1, "Receive version should be send version + 1");
-
-        // 6. Per-remote LZ config (send ULN, executor, receive ULN)
-        uint16[_REMOTE_CHAIN_COUNT] memory remoteIds = [
-            LZConfigLib.ARB_CHAIN_ID,
-            LZConfigLib.OPT_CHAIN_ID,
-            LZConfigLib.BASE_CHAIN_ID
+        // 5. Per-remote LZ config (send library pinned, receive library pinned, ULN + Executor config)
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID
         ];
         uint64[_REMOTE_CHAIN_COUNT] memory remoteConfs = [
             LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS,
@@ -275,13 +261,36 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         ];
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            _verifySendUlnConfig(sendVer, remoteIds[i]);
-            _verifyExecutorConfig(sendVer, remoteIds[i]);
-            _verifyRecvUlnConfig(recvVer, remoteIds[i], remoteConfs[i]);
+            uint32 eid = remoteEids[i];
+
+            // Libraries pinned
+            assertEq(
+                ep.getSendLibrary(address(gateway), eid),
+                LZConfigLib.ETH_SEND_ULN_302,
+                "Send library should be pinned"
+            );
+            assertFalse(
+                ep.isDefaultSendLibrary(address(gateway), eid),
+                "Send library should not be default"
+            );
+            (address recvLib, bool isDefault) = ep.getReceiveLibrary(address(gateway), eid);
+            assertEq(recvLib, LZConfigLib.ETH_RECV_ULN_302, "Receive library should be pinned");
+            assertFalse(isDefault, "Receive library should not be default");
+
+            // Config
+            _verifySendUlnConfig(eid);
+            _verifyExecutorConfig(eid);
+            _verifyRecvUlnConfig(eid, remoteConfs[i]);
         }
 
-        // 7. Trusted remotes
-        _verifyTrustedRemotes();
+        // 6. Peers
+        _verifyPeers();
+
+        // 7. Enforced options
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            bytes memory opts = gateway.enforcedOptions(remoteEids[i], gateway.MSG_BRIDGE_OHM());
+            assertGt(opts.length, 0, "Enforced options should be set");
+        }
     }
 }
 

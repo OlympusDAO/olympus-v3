@@ -44,7 +44,7 @@ contract LZBridgeGatewayBatch is LZBridgeBatchScript {
     }
 
     /// @notice Ethereum Phase 2 (post-OCG): set initial bridged supply.
-    ///         LZ config and trusted remotes are set by the OCG proposal.
+    ///         LZ config and peers are set by the OCG proposal.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     function setBridgedSupply(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");

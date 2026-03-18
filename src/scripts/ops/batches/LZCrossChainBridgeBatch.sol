@@ -11,37 +11,47 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @title LZCrossChainBridgeBatch
 /// @notice Ethereum MS batch scripts for the LZCrossChainBridge periphery contract.
-///         Run after LZBridgeGatewayBatch has activated and configured the gateway.
 ///
 ///         Entry points:
-///         - `setup`:   setGateway + enable + deactivate old CrossChainBridge (post-OCG)
-///         - `enable`:  enable only
-///         - `disable`: disable only
+///         - `setGateway` (pre-OCG): point periphery bridge at the new LZBridgeGateway
+///         - `setup (post-OCG):      enable periphery bridge + deactivate old CrossChainBridge
+///         - `enable`:               enable only
+///         - `disable`:              disable only
 contract LZCrossChainBridgeBatch is LZBridgeBatchScript {
     // =========== ENTRY POINTS =========== //
 
-    /// @notice Ethereum setup (post-OCG): set gateway and enable the periphery bridge.
+    /// @notice Ethereum (pre-OCG): set gateway on the periphery bridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    function setup(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function setGateway(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
-        address kernel = _envAddressNotZero("olympus.Kernel");
-        address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
 
-        console2.log("\n=== LZCrossChainBridge Setup (Ethereum) ===");
+        console2.log("\n=== LZCrossChainBridge Set Gateway (Ethereum, pre-OCG) ===");
         console2.log("Bridge:", bridgeAddr);
         console2.log("Gateway:", gatewayAddr);
 
-        // 1. Set gateway
         addToBatch(
             bridgeAddr,
             abi.encodeWithSelector(LZCrossChainBridge.setGateway.selector, gatewayAddr)
         );
 
-        // 2. Enable bridge
+        proposeBatch();
+    }
+
+    /// @notice Ethereum setup (post-OCG): enable the periphery bridge and deactivate the old one.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    function setup(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+        address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+
+        console2.log("\n=== LZCrossChainBridge Setup (Ethereum, post-OCG) ===");
+        console2.log("Bridge:", bridgeAddr);
+
+        // 1. Enable bridge
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
-        // 3. Deactivate old CrossChainBridge in Kernel
+        // 2. Deactivate old CrossChainBridge in Kernel
         console2.log("Deactivating old CrossChainBridge:", oldBridge);
         addToBatch(
             kernel,
