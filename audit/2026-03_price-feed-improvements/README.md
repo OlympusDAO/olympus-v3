@@ -124,7 +124,13 @@ The base PRICE v2 architecture has been audited as part of the RBS v2 project:
     - Base commit: `17fe660525b2f0d706ca318b53111fbf103949ba`
     - Post-remediations commit: `9c10dc188210632b6ce46c7a836484e8e063151f`
 
-**Note:** The PRICE v2 architecture was imported into the `price-feed-improvements` branch from commit `13062da62eca83a42a4b0e13bc4622b824a2ae35` (source: OlympusDAO/bophades@26b3fd378fbde1918b32764dd0d86121d82932d5). This audit package focuses on PRICE v1.2 and oracle integration contracts listed in the scope above.
+- **Trust PRICEv2 Audit (11/2023)**
+    - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/OlympusRBSv2%20v03.pdf)
+    - Repository: OlympusDAO/bophades
+    - Base commit: `04791b8943240a55f13e43cbf013846c53c189a6`
+    - Post-remediations commit: `85214158b054c2ae816776fa8cf61a628ea6c2da`
+
+**Note:** The PRICE v2 architecture was imported into the `price-feed-improvements` branch at commit [OlympusDAO/bophades@26b3fd378fbde1918b32764dd0d86121d82932d5](https://github.com/OlympusDAO/bophades/tree/26b3fd378fbde1918b32764dd0d86121d82932d5). This audit package focuses on PRICE v1.2 and oracle integration contracts listed in the scope above.
 
 ## Architecture
 
