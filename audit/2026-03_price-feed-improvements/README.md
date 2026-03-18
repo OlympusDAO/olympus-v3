@@ -52,10 +52,6 @@ The contracts in-scope for this audit are:
 - [src/policies/price/MorphoOracleCloneable.sol](../../src/policies/price/MorphoOracleCloneable.sol) - Cloneable Morpho oracle
 - [src/policies/price/MorphoOracleFactory.sol](../../src/policies/price/MorphoOracleFactory.sol) - Morpho oracle factory
 
-**Price Configuration:**
-
-- [src/policies/price/PriceConfig.v2.sol](../../src/policies/price/PriceConfig.v2.sol) - Price configuration policy v2
-
 **Configuration Scripts:**
 
 - [src/scripts/ops/batches/ConfigurePriceV1_2.sol](../../src/scripts/ops/batches/ConfigurePriceV1_2.sol) - PRICE v1.2 asset configuration batch script
@@ -75,6 +71,8 @@ The following contracts have been modified since the original PRICE v2 import fr
 - [src/modules/PRICE/submodules/feeds/ERC4626Price.sol](../../src/modules/PRICE/submodules/feeds/ERC4626Price.sol) - Added IVersioned interface, supportsInterface
 - [src/modules/PRICE/submodules/feeds/UniswapV3Price.sol](../../src/modules/PRICE/submodules/feeds/UniswapV3Price.sol) - Added IVersioned interface, supportsInterface
 - [src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol](../../src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol) - Added deviation filtering strategies
+- [src/policies/price/PriceConfig.v2.sol](../../src/policies/price/PriceConfig.v2.sol) - Price configuration policy v2
+- [src/Submodules.sol](../../src/Submodules.sol) - Added IVersioned interface, supportsInterface
 
 **Note:** This scope is intentionally focused on PRICE v1.2 and oracle integration contracts for this audit package, rather than every file changed on the branch since commit `13062da62eca83a42a4b0e13bc4622b824a2ae35`.
 
@@ -93,9 +91,10 @@ The following contracts were already audited as part of PRICE v2 and are **NOT**
 
 - [src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol](../../src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol)
 - [src/modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol](../../src/modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol)
+- [src/libraries/Balancer/](../../src/libraries/Balancer/)
 - [src/libraries/Deviation.sol](../../src/libraries/Deviation.sol)
-- [src/libraries/UniswapV3/Oracle.sol](../../src/libraries/UniswapV3/Oracle.sol)
-- [src/Submodules.sol](../../src/Submodules.sol)
+- [src/libraries/QuickSort.sol](../../src/libraries/QuickSort.sol)
+- [src/libraries/UniswapV3/](../../src/libraries/UniswapV3/)
 
 ### External Contracts
 
