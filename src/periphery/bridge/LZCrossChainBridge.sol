@@ -35,7 +35,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
         OHM = ohm_;
 
-        // Disabled by default
+        // PeripheryEnabler starts disabled; must be explicitly enabled after configuration.
     }
 
     /// forge-lint: disable-next-item(mixed-case-function)
@@ -101,7 +101,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     /// @inheritdoc PeripheryEnabler
     function _onlyOwner() internal view override {
-        // String literal to keep it consistent with the solmate onlyOwner modifier
+        // String literal for consistency with solmate's Owned.onlyOwner modifier
         // solhint-disable-next-line gas-custom-errors
         if (msg.sender != owner) revert("UNAUTHORIZED");
     }

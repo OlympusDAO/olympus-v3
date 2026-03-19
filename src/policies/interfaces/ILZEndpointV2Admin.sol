@@ -54,7 +54,7 @@ interface ILZEndpointV2Admin {
     /// @param payloadHash_ The hash of the payload to burn.
     function burn(uint32 srcEid_, bytes32 sender_, uint64 nonce_, bytes32 payloadHash_) external;
 
-    /// @notice Clears a composed message.
+    /// @notice Clears a verified but unexecuted inbound message.
     /// @param origin_ The origin of the message.
     /// @param guid_ The GUID of the message.
     /// @param message_ The message bytes.

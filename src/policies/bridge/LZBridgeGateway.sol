@@ -92,9 +92,7 @@ contract LZBridgeGateway is
 
         _setFacilitator(facilitator_);
 
-        // Disabled by default
-
-        // Gateway is always authorized to call endpoint functions.
+        // PolicyEnabler starts disabled; must be explicitly enabled after configuration.
     }
 
     /// @inheritdoc Policy
@@ -106,7 +104,7 @@ contract LZBridgeGateway is
         MINTRv1 mintr = MINTRv1(getModuleAddress(dependencies[0]));
         ROLESv1 roles = ROLESv1(getModuleAddress(dependencies[1]));
 
-        // Ensure modules are using the expected major version. Modules should be sorted in alphabetical order.
+        // Ensure modules are using the expected major version
         (uint8 major, ) = mintr.VERSION();
         if (major != 1) revert Policy_WrongModuleVersion(abi.encode([1, 1]));
         (major, ) = roles.VERSION();
@@ -163,7 +161,7 @@ contract LZBridgeGateway is
         address payable refundAddress_,
         bytes calldata extraOptions_
     ) external payable override onlyEnabled onlyFacilitator {
-        // Warning. amount_ == 0 should be ensured by the facilitator
+        // Note: zero-amount validation is the facilitator's responsibility
         _requireNonzeroAddress(to_, "to");
 
         bytes32 peer = _getPeerOrRevert(dstEid_);
@@ -510,7 +508,7 @@ contract LZBridgeGateway is
         // Caller provided extra options must be Type 3
         if (extraOptions_.length >= 2) {
             _assertOptionsType3Calldata(extraOptions_);
-            // Remove the first 2 bytes (type prefix) from extra and concatenate
+            // Strip the 2-byte Type 3 prefix from extra options before concatenation
             return bytes.concat(enforced, extraOptions_[2:]);
         }
 

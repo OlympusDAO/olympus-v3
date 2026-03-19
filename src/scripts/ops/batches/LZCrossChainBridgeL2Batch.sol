@@ -14,7 +14,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///
 ///         Entry points:
 ///         - `disableOldBridge`: disable old CrossChainBridge (pre-migration)
-///         - `setupL2`         : setGateway + enable (no heart beat validation)
+///         - `setupL2`         : setGateway + enable (skips OlympusHeart validation)
 ///         - `enable`          : enable only
 ///         - `disable`         : disable only
 contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {

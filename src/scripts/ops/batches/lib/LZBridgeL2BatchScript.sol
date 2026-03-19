@@ -9,10 +9,10 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 /// @title LZBridgeL2BatchScript
 /// @notice Abstract base for LZ bridge batch scripts on L2 chains.
 ///         Extends LZBridgeBatchScript with `_proposeL2Batch()` which skips
-///         heart beat validation (L2 chains don't have OlympusHeart).
+///         OlympusHeart validation (L2 chains don't deploy OlympusHeart).
 abstract contract LZBridgeL2BatchScript is LZBridgeBatchScript {
-    /// @notice Custom batch proposal for L2 chains that skips heart beat validation.
-    /// @dev L2 chains don't have OlympusHeart, so _validateHeartBeat() would revert.
+    /// @notice Custom batch proposal for L2 chains that skips OlympusHeart validation.
+    /// @dev L2 chains don't deploy OlympusHeart, so _validateHeartBeat() would revert.
     function _proposeL2Batch() internal {
         if (_batchTargets.length == 0) {
             console2.log("No batch targets to execute");
@@ -69,7 +69,7 @@ abstract contract LZBridgeL2BatchScript is LZBridgeBatchScript {
         }
 
         if (useTenderlyFork) {
-            console2.log("Tenderly fork not supported for L2 batch, use standard proposeBatch");
+            console2.log("Tenderly fork not supported for L2 batch, use USE_ANVIL_FORK=true or standard broadcasting");
             return;
         }
 
