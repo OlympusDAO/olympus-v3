@@ -8,13 +8,13 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IOHMTeller} from "src/policies/incentives/convertible/IOHMTeller.sol";
+import {IOHMToken} from "src/policies/incentives/convertible/IOHMToken.sol";
+import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-contract ConvertibleOHMTokenTestBase is Test {
+contract IOHMTokenTestBase is Test {
     // Contracts
     Kernel kernel;
     OlympusTreasury trsry;
@@ -24,13 +24,13 @@ contract ConvertibleOHMTokenTestBase is Test {
     MockOhm ohm;
     MockERC20 usds;
 
-    ConvertibleOHMTeller teller;
+    IOHMTeller teller;
 
     // Constants
     uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
 
     // Test accounts
-    address rewardDistributor = makeAddr("rewardDistributor");
+    address incentiveDistributor = makeAddr("incentiveDistributor");
     address admin = makeAddr("admin");
     address user0 = makeAddr("user0");
     address user1 = makeAddr("user1");
@@ -56,7 +56,7 @@ contract ConvertibleOHMTokenTestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy the teller policy
-        teller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        teller = new IOHMTeller(address(kernel), address(ohm));
         // Activate the policy
         kernel.executeAction(Actions.ActivatePolicy, address(teller));
 
@@ -70,7 +70,7 @@ contract ConvertibleOHMTokenTestBase is Test {
         teller.enable(abi.encode(type(uint256).max));
 
         // Grant the reward distributor role (required for the functions deploy and create)
-        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor);
+        roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor);
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -100,18 +100,15 @@ contract ConvertibleOHMTokenTestBase is Test {
         );
     }
 
-    function _deployConvertibleToken() internal returns (ConvertibleOHMToken token) {
-        vm.prank(rewardDistributor);
-        token = ConvertibleOHMToken(
+    function _deployConvertibleToken() internal returns (IOHMToken token) {
+        vm.prank(incentiveDistributor);
+        token = IOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
     // Calculates the exact exercise cost using the teller
-    function _exerciseCost(
-        ConvertibleOHMToken token,
-        uint256 amount
-    ) internal view returns (uint256) {
+    function _exerciseCost(IOHMToken token, uint256 amount) internal view returns (uint256) {
         (, uint256 cost) = teller.exerciseCost(address(token), amount);
         return cost;
     }
@@ -121,8 +118,8 @@ contract ConvertibleOHMTokenTestBase is Test {
     }
 }
 
-contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
-    ConvertibleOHMToken token;
+contract IOHMTokenTests is IOHMTokenTestBase {
+    IOHMToken token;
 
     uint256 user0InitialBal = 100e9;
 
@@ -133,7 +130,7 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
         token = _deployConvertibleToken();
 
         // Mint convertible tokens to User0
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, user0InitialBal);
     }
 
@@ -197,7 +194,7 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
         ) = token.parameters();
 
         assertEq(quoteToken, address(usds), "Quote token should be USDS");
-        assertEq(creator_, rewardDistributor, "Creator should be reward distributor");
+        assertEq(creator_, incentiveDistributor, "Creator should be reward distributor");
         assertEq(eligible_, _roundToDay(eligibleTimestamp), "Eligible should match");
         assertEq(expiry_, _roundToDay(expiryTimestamp), "Expiry should match");
         assertEq(strike_, STRIKE_PRICE, "Strike price should match");
@@ -224,7 +221,7 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
     }
 
     function test_creator() external view {
-        assertEq(token.creator(), rewardDistributor, "Creator should be reward distributor");
+        assertEq(token.creator(), incentiveDistributor, "Creator should be reward distributor");
     }
 
     function test_strike() external view {
@@ -236,7 +233,7 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
         uint256 mintAmount = 50e9;
         uint256 totalSupplyBefore = token.totalSupply();
 
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user1, mintAmount);
 
         // Verify
@@ -249,13 +246,13 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
     }
 
     function test_mintFor_revertsIfNotTeller() external {
-        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
+        vm.expectRevert(IOHMToken.IOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.mintFor(user0, 100e9);
     }
 
     function test_burnFrom_revertsIfNotTeller() external {
-        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
+        vm.expectRevert(IOHMToken.IOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.burnFrom(user0, user0InitialBal);
     }

@@ -9,17 +9,17 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-import {RewardDistributorConvertible} from "src/policies/rewards/RewardDistributorConvertible.sol";
-import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
-import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IOHMTeller} from "src/policies/incentives/convertible/IOHMTeller.sol";
+import {IOHMToken} from "src/policies/incentives/convertible/IOHMToken.sol";
+import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
+import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
+import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
+import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {MockConvertibleOHMTellerZeroDeploy} from "src/test/mocks/MockConvertibleOHMTellerZeroDeploy.sol";
+import {MockIOHMTellerZeroDeploy} from "src/test/mocks/MockIOHMTellerZeroDeploy.sol";
 
-contract RewardDistributorConvertibleTestBase is Test {
+contract IncentiveDistributorConvertibleTestBase is Test {
     // Contracts
     Kernel kernel;
     OlympusTreasury trsry;
@@ -29,8 +29,8 @@ contract RewardDistributorConvertibleTestBase is Test {
     MockOhm ohm;
     MockERC20 usds;
 
-    ConvertibleOHMTeller teller;
-    RewardDistributorConvertible distributor;
+    IOHMTeller teller;
+    IncentiveDistributorConvertible distributor;
 
     // Test accounts
     address admin = makeAddr("admin");
@@ -64,7 +64,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy the teller policy
-        teller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        teller = new IOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(teller));
 
         // Grant permission to this test contract to call increaseMintApproval
@@ -83,7 +83,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         teller.enable(abi.encode(type(uint256).max));
 
         // Deploy the distributor
-        distributor = new RewardDistributorConvertible(
+        distributor = new IncentiveDistributorConvertible(
             address(kernel),
             startTimestamp - 1,
             address(teller)
@@ -91,10 +91,10 @@ contract RewardDistributorConvertibleTestBase is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
         // Grant the reward distributor role to the distributor policy
-        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), address(distributor));
+        roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), address(distributor));
 
         // Setup roles for distributor
-        roles.saveRole(distributor.ROLE_REWARDS_MANAGER(), admin);
+        roles.saveRole(distributor.ROLE_INCENTIVE_MANAGER(), admin);
 
         // Enable the distributor policy
         distributor.enable("");
@@ -168,7 +168,7 @@ contract RewardDistributorConvertibleTestBase is Test {
         return (convertibleTokens * STRIKE_PRICE + 1e9 - 1) / 1e9; // Round up
     }
 
-    // Encodes IRewardDistributorConvertible.EndEpochParams
+    // Encodes IIncentiveDistributorConvertible.EndEpochParams
     function _encodeParams(
         address quoteToken,
         uint48 eligible,
@@ -177,7 +177,7 @@ contract RewardDistributorConvertibleTestBase is Test {
     ) internal pure returns (bytes memory) {
         return
             abi.encode(
-                IRewardDistributorConvertible.EndEpochParams({
+                IIncentiveDistributorConvertible.EndEpochParams({
                     quoteToken: quoteToken,
                     eligible: eligible,
                     expiry: expiry,
@@ -187,30 +187,32 @@ contract RewardDistributorConvertibleTestBase is Test {
     }
 }
 
-contract RewardDistributorConvertibleConstructorTests is RewardDistributorConvertibleTestBase {
+contract IncentiveDistributorConvertibleConstructorTests is
+    IncentiveDistributorConvertibleTestBase
+{
     function test_constructor_initializesCorrectly() external view {
         assertEq(distributor.EPOCH_START_DATE(), startTimestamp, "EPOCH_START_DATE should match");
         assertEq(address(distributor.TELLER()), address(teller), "TELLER should match");
     }
 
     function test_constructor_rejectsZeroTeller() external {
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidAddress.selector);
-        new RewardDistributorConvertible(address(kernel), startTimestamp - 1, address(0));
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidAddress.selector);
+        new IncentiveDistributorConvertible(address(kernel), startTimestamp - 1, address(0));
     }
 
     function test_constructor_rejectsZeroStartTimestamp() external {
-        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochIsZero.selector);
-        new RewardDistributorConvertible(address(kernel), 0, address(teller));
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_EpochIsZero.selector);
+        new IncentiveDistributorConvertible(address(kernel), 0, address(teller));
     }
 
     function test_constructor_rejectsEpochNotEndOfDay() external {
         uint256 notEndOfDay = startTimestamp; // Midnight is not end-of-day (23:59:59)
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
-        new RewardDistributorConvertible(address(kernel), notEndOfDay, address(teller));
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidEpochTimestamp.selector);
+        new IncentiveDistributorConvertible(address(kernel), notEndOfDay, address(teller));
     }
 }
 
-contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertibleTestBase {
+contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorConvertibleTestBase {
     function test_endEpoch_deploysConvertibleTokenAndSetsMerkleRoot() external {
         uint40 epochEndDate = _firstEpochEndDate();
         bytes32 merkleRoot = bytes32(uint256(1));
@@ -224,14 +226,12 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.prank(admin);
         // Use checkTopic2=false because token address is not known before deploy
         vm.expectEmit(true, false, false, true);
-        emit IRewardDistributor.EpochEnded(
+        emit IIncentiveDistributor.EpochEnded(
             epochEndDate,
             address(0), // Address not checked (checkTopic2=false)
             params
         );
-        ConvertibleOHMToken token = ConvertibleOHMToken(
-            distributor.endEpoch(epochEndDate, merkleRoot, params)
-        );
+        IOHMToken token = IOHMToken(distributor.endEpoch(epochEndDate, merkleRoot, params));
 
         // Verify state
         assertFalse(address(token) == address(0), "Token should be deployed");
@@ -282,7 +282,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         bytes32 merkleRoot = bytes32(uint256(n));
 
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -311,7 +311,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.startPrank(admin);
 
         // End epoch 1
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
@@ -326,7 +326,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
 
         // End epoch 2
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -346,7 +346,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
 
         // End epoch 3
-        ConvertibleOHMToken token3 = ConvertibleOHMToken(
+        IOHMToken token3 = IOHMToken(
             distributor.endEpoch(
                 epoch3EndDate,
                 root3,
@@ -381,14 +381,14 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
 
         // End epochs with different strike prices
         vm.startPrank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -414,7 +414,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
-                distributor.ROLE_REWARDS_MANAGER()
+                distributor.ROLE_INCENTIVE_MANAGER()
             )
         );
         vm.prank(caller);
@@ -442,7 +442,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
-        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_EpochTooEarly.selector);
         distributor.endEpoch(
             secondEpochEndDate,
             bytes32(uint256(2)),
@@ -455,7 +455,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         uint40 epochEndDate = startTimestamp + 12 hours; // Not at end of day
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidEpochTimestamp.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidEpochTimestamp.selector);
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
@@ -475,7 +475,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_EpochAlreadySet.selector,
+                IIncentiveDistributor.IncentiveDistributor_EpochAlreadySet.selector,
                 epochEndDate
             )
         );
@@ -491,7 +491,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         uint40 epochEndDate = startTimestamp - 1; // 23:59:59 UTC of day before
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_EpochTooEarly.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_EpochTooEarly.selector);
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
@@ -505,7 +505,9 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         uint48 invalidExpiry = uint48(epochEndDate);
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributorConvertible.RewardDistributor_InvalidToken.selector);
+        vm.expectRevert(
+            IIncentiveDistributorConvertible.IncentiveDistributor_InvalidToken.selector
+        );
         distributor.endEpoch(
             epochEndDate,
             bytes32(uint256(1)),
@@ -522,7 +524,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                IIncentiveDistributorConvertible.IncentiveDistributor_InvalidParamsLength.selector,
                 128,
                 shortParams.length
             )
@@ -545,7 +547,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                IIncentiveDistributorConvertible.IncentiveDistributor_InvalidParamsLength.selector,
                 128,
                 longParams.length
             )
@@ -559,7 +561,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributorConvertible.RewardDistributor_InvalidParamsLength.selector,
+                IIncentiveDistributorConvertible.IncentiveDistributor_InvalidParamsLength.selector,
                 128,
                 0
             )
@@ -571,7 +573,7 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         uint40 epochEndDate = _firstEpochEndDate();
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidMerkleRoot.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidMerkleRoot.selector);
         distributor.endEpoch(
             epochEndDate,
             bytes32(0),
@@ -581,14 +583,14 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
 
     function test_endEpoch_revertsIfTellerReturnsZeroAddress() external {
         // Deploy a separate distributor backed by a mock teller that returns address(0)
-        MockConvertibleOHMTellerZeroDeploy mockTeller = new MockConvertibleOHMTellerZeroDeploy();
-        RewardDistributorConvertible mockDistributor = new RewardDistributorConvertible(
+        MockIOHMTellerZeroDeploy mockTeller = new MockIOHMTellerZeroDeploy();
+        IncentiveDistributorConvertible mockDistributor = new IncentiveDistributorConvertible(
             address(kernel),
             startTimestamp - 1,
             address(mockTeller)
         );
         kernel.executeAction(Actions.ActivatePolicy, address(mockDistributor));
-        // admin already has ROLE_REWARDS_MANAGER from setUp
+        // admin already has ROLE_INCENTIVE_MANAGER from setUp
         mockDistributor.enable("");
 
         uint40 epochEndDate = _firstEpochEndDate();
@@ -600,7 +602,9 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
         );
 
         vm.prank(admin);
-        vm.expectRevert(IRewardDistributorConvertible.RewardDistributor_InvalidToken.selector);
+        vm.expectRevert(
+            IIncentiveDistributorConvertible.IncentiveDistributor_InvalidToken.selector
+        );
         mockDistributor.endEpoch(epochEndDate, bytes32(uint256(1)), params);
     }
 
@@ -620,9 +624,9 @@ contract RewardDistributorConvertibleEndEpochTests is RewardDistributorConvertib
     }
 }
 
-contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleTestBase {
+contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConvertibleTestBase {
     uint40 epochEndDate;
-    ConvertibleOHMToken token;
+    IOHMToken token;
 
     function setUp() public override {
         super.setUp();
@@ -631,15 +635,12 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
     }
 
     // Helper to setup an epoch with a single user's reward leaf
-    function _setupEpochWithLeaf(
-        address user,
-        uint256 amount
-    ) internal returns (ConvertibleOHMToken) {
+    function _setupEpochWithLeaf(address user, uint256 amount) internal returns (IOHMToken) {
         bytes32 leaf = _generateLeaf(user, epochEndDate, amount);
 
         vm.prank(admin);
         return
-            ConvertibleOHMToken(
+            IOHMToken(
                 distributor.endEpoch(
                     epochEndDate,
                     leaf,
@@ -663,7 +664,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         vm.prank(user0);
         vm.expectEmit(true, true, true, true);
-        emit IRewardDistributorConvertible.ConvertibleTokensClaimed(
+        emit IIncentiveDistributorConvertible.ConvertibleTokensClaimed(
             user0,
             address(token),
             amount,
@@ -696,7 +697,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -706,7 +707,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -759,7 +760,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, zeroAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -769,7 +770,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, normalAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -827,7 +828,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         bytes32 merkleRoot = _generateRoot(user0Leaf, user1Leaf);
 
         vm.prank(admin);
-        token = ConvertibleOHMToken(
+        token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -878,14 +879,14 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         bytes32 root2 = _generateLeaf(user0, epoch2EndDate, amount2);
 
         vm.startPrank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -923,7 +924,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         // Setup epoch with fuzzed amount
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        token = ConvertibleOHMToken(
+        token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -967,7 +968,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         // Setup epochs with different strike prices to get different tokens
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -977,7 +978,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -1058,7 +1059,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_NoEpochsSpecified.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_NoEpochsSpecified.selector);
         distributor.claim(new uint256[](0), amounts, proofs);
     }
 
@@ -1074,7 +1075,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_ArrayLengthMismatch.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_ArrayLengthMismatch.selector);
         distributor.claim(epochEndDates, new uint256[](0), proofs);
     }
 
@@ -1092,7 +1093,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         vm.prank(user0);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_ArrayLengthMismatch.selector,
+                IIncentiveDistributor.IncentiveDistributor_ArrayLengthMismatch.selector,
                 epochEndDate
             )
         );
@@ -1117,7 +1118,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         // 2. Test: second claim should revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                IIncentiveDistributor.IncentiveDistributor_AlreadyClaimed.selector,
                 epochEndDate
             )
         );
@@ -1180,7 +1181,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
             vm.prank(user0);
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                    IIncentiveDistributor.IncentiveDistributor_AlreadyClaimed.selector,
                     epoch2EndDate
                 )
             );
@@ -1206,7 +1207,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         vm.prank(user0);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IRewardDistributor.RewardDistributor_AlreadyClaimed.selector,
+                IIncentiveDistributor.IncentiveDistributor_AlreadyClaimed.selector,
                 epochEndDate
             )
         );
@@ -1232,7 +1233,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidProof.selector);
         distributor.claim(epochEndDates, amounts, proofs);
     }
 
@@ -1249,7 +1250,7 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
 
         // User1 tries to claim using User0's proof
         vm.prank(user1);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_InvalidProof.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidProof.selector);
         distributor.claim(epochEndDates, amounts, proofs);
 
         // Verify User1 received nothing
@@ -1277,13 +1278,13 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(IRewardDistributor.RewardDistributor_NothingToClaim.selector);
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_NothingToClaim.selector);
         distributor.claim(epochEndDates, amounts, proofs);
     }
 
     function test_claim_revertsIfInvalidTokenWhenEpochNotSetup() external {
         // Don't setup epoch - no convertible token deployed
-        // In RewardDistributorConvertible, the InvalidToken check happens before RewardDistributor_MerkleRootNotSet
+        // In IncentiveDistributorConvertible, the InvalidToken check happens before IncentiveDistributor_MerkleRootNotSet
         // because it first looks up epochConvertibleTokens[epochEndDate]
 
         uint256[] memory epochEndDates = new uint256[](1);
@@ -1294,19 +1295,23 @@ contract RewardDistributorConvertibleClaimTests is RewardDistributorConvertibleT
         proofs[0] = new bytes32[](0);
 
         vm.prank(user0);
-        vm.expectRevert(IRewardDistributorConvertible.RewardDistributor_InvalidToken.selector);
+        vm.expectRevert(
+            IIncentiveDistributorConvertible.IncentiveDistributor_InvalidToken.selector
+        );
         distributor.claim(epochEndDates, amounts, proofs);
     }
 }
 
-contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConvertibleTestBase {
+contract IncentiveDistributorConvertiblePreviewClaimTests is
+    IncentiveDistributorConvertibleTestBase
+{
     function test_previewClaim_returnsCorrectValues() external {
         uint256 amount = 100e9;
         uint40 epochEndDate = _firstEpochEndDate();
 
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -1437,7 +1442,9 @@ contract RewardDistributorConvertiblePreviewClaimTests is RewardDistributorConve
     }
 }
 
-contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConvertibleTestBase {
+contract IncentiveDistributorConvertibleIntegrationTests is
+    IncentiveDistributorConvertibleTestBase
+{
     function test_claimAndExercise_skipOnCoverage() external {
         uint256 amount = 100e9;
         uint40 epochEndDate = _firstEpochEndDate();
@@ -1445,7 +1452,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Setup epoch
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -1492,7 +1499,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Setup epoch 1
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        ConvertibleOHMToken token1 = ConvertibleOHMToken(
+        IOHMToken token1 = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -1503,7 +1510,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         // Setup epoch 2 (same token params = same token)
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        ConvertibleOHMToken token2 = ConvertibleOHMToken(
+        IOHMToken token2 = IOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -1574,7 +1581,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
         root = keccak256(abi.encodePacked(leftLeaf, rightLeaf));
 
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 root,
@@ -1629,7 +1636,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         // End epoch
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -1697,7 +1704,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         // Set up merkle roots for each epoch (same token params = same token)
         vm.startPrank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 _generateLeaf(user0, epoch1EndDate, amount1),
@@ -1758,7 +1765,7 @@ contract RewardDistributorConvertibleIntegrationTests is RewardDistributorConver
 
         bytes32 merkleRoot = _generateLeaf(user0, epochEndDate, claimAmount);
         vm.prank(admin);
-        ConvertibleOHMToken token = ConvertibleOHMToken(
+        IOHMToken token = IOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,

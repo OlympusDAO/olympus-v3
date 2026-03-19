@@ -4,7 +4,7 @@ pragma solidity >=0.8.4;
 // Based on Bond Protocol's `IFixedStrikeOptionTeller`:
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
 
-interface IConvertibleOHMTeller {
+interface IIOHMTeller {
     /// @notice Emitted when a new convertible token is deployed.
     event ConvertibleTokenCreated(
         address indexed token,

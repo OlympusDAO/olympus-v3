@@ -1,11 +1,11 @@
 {
     "sequence": [
         {
-            "name": "ConvertibleOHMTeller",
+            "name": "IOHMTeller",
             "args": {}
         },
         {
-            "name": "RewardDistributorConvertible",
+            "name": "IncentiveDistributorConvertible",
             "args": {
                 "lastEpochEndDate": 1753919999
             }

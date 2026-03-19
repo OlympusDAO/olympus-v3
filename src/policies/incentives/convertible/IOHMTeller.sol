@@ -8,11 +8,11 @@ pragma solidity >=0.8.30;
 // - Integrated into the Olympus Kernel-Module-Policy framework with role-based access control.
 // - Simplified to OHM-only call options: removed payoutToken, receiver, and call/put parameters.
 // - Minting via MINTR module on exercise (no pre-deposited collateral); quote tokens sent to TRSRY.
-// - Only the deploying RewardDistributor (creator) can mint tokens via create();
+// - Only the deploying IncentiveDistributor (creator) can mint tokens via create();
 //   token hash includes creator to scope tokens per deployer.
 // - Removed reclaim(), protocol fees, and collateral tracking.
 // - Added mint cap management via MINTR approval; PolicyEnabler lifecycle for enable/disable.
-// - Token naming uses decimal notation (e.g., "15.50") with "convOHM-" prefix.
+// - Token naming uses decimal notation (e.g., "15.50") with "iOHM-" prefix.
 // - burnFrom deducts allowance (original burn did not).
 // - Solidity >=0.8.30; OZ SafeERC20/ReentrancyGuardTransient replaces solmate equivalents.
 // - CloneERC20 split into CloneERC20 (reused existing) + CloneERC20Permit.
@@ -20,10 +20,10 @@ pragma solidity >=0.8.30;
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
+import {IOHMToken} from "src/policies/incentives/convertible/IOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
@@ -36,13 +36,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-contract ConvertibleOHMTeller is
-    IConvertibleOHMTeller,
-    IVersioned,
-    Policy,
-    PolicyEnabler,
-    ReentrancyGuardTransient
-{
+contract IOHMTeller is IIOHMTeller, IVersioned, Policy, PolicyEnabler, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
@@ -52,8 +46,8 @@ contract ConvertibleOHMTeller is
     /// @notice The role for configuration
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
 
-    /// @notice The role for reward distribution (deploying and minting convertible tokens)
-    bytes32 public constant ROLE_REWARD_DISTRIBUTOR = "convertible_distributor";
+    /// @notice The role for incentive distribution (deploying and minting convertible tokens)
+    bytes32 public constant ROLE_INCENTIVE_DISTRIBUTOR = "incentive_distributor";
 
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
@@ -67,7 +61,7 @@ contract ConvertibleOHMTeller is
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
     uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
 
-    /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
+    /// @notice The reference implementation of `IOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
@@ -84,7 +78,7 @@ contract ConvertibleOHMTeller is
     /// @notice The treasury module for receiving quote tokens
     TRSRYv1 public TRSRY;
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     uint48 public override minDuration;
 
     // ========== CONSTRUCTOR ========== //
@@ -96,7 +90,7 @@ contract ConvertibleOHMTeller is
         _requireNonzeroAddress(1, ohm_);
 
         // Deploy the token implementation for cloning (deployments)
-        TOKEN_IMPLEMENTATION = address(new ConvertibleOHMToken());
+        TOKEN_IMPLEMENTATION = address(new IOHMToken());
 
         OHM = ohm_;
         if (IERC20Metadata(ohm_).decimals() != _OHM_DECIMALS)
@@ -158,7 +152,7 @@ contract ConvertibleOHMTeller is
 
     // ========== TOKEN DEPLOYMENTS ========== //
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function deploy(
         address quoteToken_,
         uint48 eligible_,
@@ -168,7 +162,7 @@ contract ConvertibleOHMTeller is
         external
         override
         onlyEnabled
-        onlyRole(ROLE_REWARD_DISTRIBUTOR)
+        onlyRole(ROLE_INCENTIVE_DISTRIBUTOR)
         nonReentrant
         returns (address)
     {
@@ -214,19 +208,17 @@ contract ConvertibleOHMTeller is
 
     // ========== TOKEN MINTING ========== //
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function create(
         address token_,
         address to_,
         uint256 amount_
-    ) external override onlyEnabled onlyRole(ROLE_REWARD_DISTRIBUTOR) nonReentrant {
+    ) external override onlyEnabled onlyRole(ROLE_INCENTIVE_DISTRIBUTOR) nonReentrant {
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
-        (ConvertibleOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
-            token_
-        );
+        (IOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(token_);
         if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
-        // Only the creator (RewardDistributor) that deployed this token can mint more
+        // Only the creator (IncentiveDistributor) that deployed this token can mint more
         if (msg.sender != creator) revert Teller_NotTokenCreator(msg.sender, creator);
 
         token.mintFor(to_, amount_);
@@ -235,11 +227,11 @@ contract ConvertibleOHMTeller is
 
     // ========== TOKEN EXERCISE ========== //
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function exercise(address token_, uint256 amount_) external override onlyEnabled nonReentrant {
         _requireNonzeroAmount(1, amount_);
         (
-            ConvertibleOHMToken token,
+            IOHMToken token,
             address quoteToken,
             ,
             uint48 eligible,
@@ -274,7 +266,7 @@ contract ConvertibleOHMTeller is
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function exerciseCost(
         address token_,
         uint256 amount_
@@ -286,12 +278,12 @@ contract ConvertibleOHMTeller is
         return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function remainingMintApproval() external view override returns (uint256 remaining_) {
         return MINTR.mintApproval(address(this));
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function getTokenHash(
         address quoteToken_,
         address creator_,
@@ -303,7 +295,7 @@ contract ConvertibleOHMTeller is
         return _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function getToken(
         address quoteToken_,
         address creator_,
@@ -385,12 +377,12 @@ contract ConvertibleOHMTeller is
         token = TOKEN_IMPLEMENTATION.clone(immutableArgs);
 
         // Set the domain separator for the token on creation to save gas on permit approvals
-        ConvertibleOHMToken(token).updateDomainSeparator();
+        IOHMToken(token).updateDomainSeparator();
     }
 
     function _requireExistingToken(
         address token_
-    ) internal view returns (ConvertibleOHMToken, address, address, uint48, uint48, uint256) {
+    ) internal view returns (IOHMToken, address, address, uint48, uint48, uint256) {
         // Load token parameters
         (
             address quoteToken,
@@ -398,13 +390,11 @@ contract ConvertibleOHMTeller is
             uint48 eligible,
             uint48 expiry,
             uint256 strikePrice
-        ) = ConvertibleOHMToken(token_).parameters();
+        ) = IOHMToken(token_).parameters();
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist (timestamps are already truncated)
-        ConvertibleOHMToken token = ConvertibleOHMToken(
-            _getToken(quoteToken, creator, eligible, expiry, strikePrice)
-        );
+        IOHMToken token = IOHMToken(_getToken(quoteToken, creator, eligible, expiry, strikePrice));
 
         // Revert if provided token address does not match stored token address
         if (token_ != address(token)) revert Teller_UnsupportedToken(token_);
@@ -414,8 +404,8 @@ contract ConvertibleOHMTeller is
 
     /// @notice Derives a name and symbol of the convertible token
     /// @dev Examples:
-    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "convOHM-20250601"
-    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "convOHM-20251231"
+    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "iOHM-20250601"
+    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "iOHM-20251231"
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
@@ -434,9 +424,9 @@ contract ConvertibleOHMTeller is
         // Format the strike price as decimal with up to 2 fractional digits (e.g., "21.42")
         bytes memory price = _formatPrice(strikePrice_, IERC20Metadata(quoteToken_).decimals());
 
-        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "convOHM-YYYYMMDD"
+        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "iOHM-YYYYMMDD"
         name = bytes32(abi.encodePacked("OHM/", quoteSymbol, " ", price, " ", date));
-        symbol = bytes32(abi.encodePacked("convOHM-", date));
+        symbol = bytes32(abi.encodePacked("iOHM-", date));
         return (name, symbol);
     }
 
@@ -530,14 +520,14 @@ contract ConvertibleOHMTeller is
         _;
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
     }
 
-    /// @inheritdoc IConvertibleOHMTeller
+    /// @inheritdoc IIOHMTeller
     function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminOrTellerAdminRole {
         _setMintCap(cap_);
     }
@@ -547,7 +537,7 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc PolicyEnabler
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
-            interfaceId == type(IConvertibleOHMTeller).interfaceId ||
+            interfaceId == type(IIOHMTeller).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }

@@ -3,9 +3,9 @@ pragma solidity >=0.8.4;
 
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
-/// @title IRewardDistributor
+/// @title IIncentiveDistributor
 /// @notice Interface for Merkle tree-based reward distributors
-interface IRewardDistributor is IERC165 {
+interface IIncentiveDistributor is IERC165 {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a Merkle root is set for a completed epoch.
@@ -28,44 +28,44 @@ interface IRewardDistributor is IERC165 {
     /// @notice Thrown when the Merkle root for an epoch is already set
     ///
     /// @param  epochEndDate    The epoch end date in question
-    error RewardDistributor_EpochAlreadySet(uint256 epochEndDate);
+    error IncentiveDistributor_EpochAlreadySet(uint256 epochEndDate);
 
     /// @notice Thrown when an invalid Merkle proof is submitted
-    error RewardDistributor_InvalidProof();
+    error IncentiveDistributor_InvalidProof();
 
     /// @notice Thrown when a zero Merkle root is provided
-    error RewardDistributor_InvalidMerkleRoot();
+    error IncentiveDistributor_InvalidMerkleRoot();
 
     /// @notice Thrown when no epochs are specified for a claim
-    error RewardDistributor_NoEpochsSpecified();
+    error IncentiveDistributor_NoEpochsSpecified();
 
     /// @notice Thrown when a Merkle root has not been set for a given epoch
     ///
     /// @param  epochEndDate    The epoch end date missing a Merkle root
-    error RewardDistributor_MerkleRootNotSet(uint256 epochEndDate);
+    error IncentiveDistributor_MerkleRootNotSet(uint256 epochEndDate);
 
     /// @notice Thrown when provided arrays are not the same length
-    error RewardDistributor_ArrayLengthMismatch();
+    error IncentiveDistributor_ArrayLengthMismatch();
 
     /// @notice Thrown when an invalid address is provided
-    error RewardDistributor_InvalidAddress();
+    error IncentiveDistributor_InvalidAddress();
 
     /// @notice Thrown when ending an epoch before required time has elapsed
-    error RewardDistributor_EpochTooEarly();
+    error IncentiveDistributor_EpochTooEarly();
 
     /// @notice Thrown when the epoch timestamp is invalid (not at day boundary)
-    error RewardDistributor_InvalidEpochTimestamp();
+    error IncentiveDistributor_InvalidEpochTimestamp();
 
     /// @notice Thrown when the epoch start date is zero
-    error RewardDistributor_EpochIsZero();
+    error IncentiveDistributor_EpochIsZero();
 
     /// @notice Thrown when no rewards are claimable
-    error RewardDistributor_NothingToClaim();
+    error IncentiveDistributor_NothingToClaim();
 
     /// @notice Thrown when a user tries to claim rewards for an epoch they have already claimed
     ///
     /// @param  epochEndDate    The epoch end date that was already claimed
-    error RewardDistributor_AlreadyClaimed(uint256 epochEndDate);
+    error IncentiveDistributor_AlreadyClaimed(uint256 epochEndDate);
 
     // ========== ADMIN FUNCTIONS ========== //
 

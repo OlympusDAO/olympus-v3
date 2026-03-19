@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
+import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 
-/// @title IRewardDistributorConvertible
-/// @notice The interface for reward distributors for Convertible OHM Tokens.
-/// @dev It extends IRewardDistributor with convertible token-specific functionality.
-interface IRewardDistributorConvertible is IRewardDistributor {
+/// @title IIncentiveDistributorConvertible
+/// @notice The interface for reward distributors for iOHM Tokens.
+/// @dev It extends IIncentiveDistributor with convertible token-specific functionality.
+interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== STRUCTS ========== //
 
     /// @notice Parameters for ending an epoch with convertible tokens.
@@ -38,10 +38,10 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     ///
     /// @param  expected    The expected byte length.
     /// @param  actual      The actual byte length.
-    error RewardDistributor_InvalidParamsLength(uint256 expected, uint256 actual);
+    error IncentiveDistributor_InvalidParamsLength(uint256 expected, uint256 actual);
 
     /// @notice Thrown when an invalid token is referenced.
-    error RewardDistributor_InvalidToken();
+    error IncentiveDistributor_InvalidToken();
 
     // ========== USER FUNCTIONS ========== //
 

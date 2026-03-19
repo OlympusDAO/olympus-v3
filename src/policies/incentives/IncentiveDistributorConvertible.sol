@@ -2,19 +2,19 @@
 pragma solidity >=0.8.30;
 
 // Base Contract
-import {BaseRewardDistributor} from "src/policies/rewards/BaseRewardDistributor.sol";
+import {BaseIncentiveDistributor} from "src/policies/incentives/BaseIncentiveDistributor.sol";
 
 // Interfaces
-import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
-import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
+import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
+import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Bophades
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @title Reward Distributor for Convertible OHM Tokens
+/// @title Incentive Distributor for iOHM Tokens
 /// @notice Distributes convertible OHM tokens to users based on Merkle proofs.
 /// @dev Architecture:
 ///      - Rewards are calculated off-chain.
@@ -22,33 +22,36 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///      - Merkle roots are posted on-chain by the authorized role.
 ///      - Users submit proofs to claim their rewards in convertible tokens.
 ///
-///      Tokens are deployed and minted via ConvertibleOHMTeller.
-contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistributorConvertible {
+///      Tokens are deployed and minted via IOHMTeller.
+contract IncentiveDistributorConvertible is
+    BaseIncentiveDistributor,
+    IIncentiveDistributorConvertible
+{
     // ========== IMMUTABLES ========== //
 
     /// @notice The teller contract for deploying and minting convertible tokens
-    IConvertibleOHMTeller public immutable TELLER;
+    IIOHMTeller public immutable TELLER;
 
     /// @notice Expected byte length of ABI-encoded EndEpochParams (4 slots × 32 bytes)
     uint256 private constant _END_EPOCH_PARAMS_LENGTH = 128;
 
     // ========== STATE VARIABLES ========== //
 
-    /// @inheritdoc IRewardDistributorConvertible
+    /// @inheritdoc IIncentiveDistributorConvertible
     mapping(uint256 epochEndDate => address) public epochConvertibleTokens;
 
     // ========== CONSTRUCTOR ========== //
 
     /// @param kernel_ The kernel address
     /// @param lastEpochEndDate_ The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
-    /// @param teller_ The address of the Convertible OHM Teller
+    /// @param teller_ The address of the iOHM Teller
     constructor(
         address kernel_,
         uint256 lastEpochEndDate_,
         address teller_
-    ) BaseRewardDistributor(kernel_, lastEpochEndDate_) {
-        if (teller_ == address(0)) revert RewardDistributor_InvalidAddress();
-        TELLER = IConvertibleOHMTeller(teller_);
+    ) BaseIncentiveDistributor(kernel_, lastEpochEndDate_) {
+        if (teller_ == address(0)) revert IncentiveDistributor_InvalidAddress();
+        TELLER = IIOHMTeller(teller_);
     }
 
     // ========== POLICY SETUP ========== //
@@ -68,31 +71,34 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @inheritdoc IRewardDistributor
+    /// @inheritdoc IIncentiveDistributor
     function endEpoch(
         uint40 epochEndDate_,
         bytes32 merkleRoot_,
         bytes calldata params_
-    ) external onlyAuthorized(ROLE_REWARDS_MANAGER) onlyEnabled returns (address token) {
+    ) external onlyAuthorized(ROLE_INCENTIVE_MANAGER) onlyEnabled returns (address token) {
         if (params_.length != _END_EPOCH_PARAMS_LENGTH)
-            revert RewardDistributor_InvalidParamsLength(_END_EPOCH_PARAMS_LENGTH, params_.length);
+            revert IncentiveDistributor_InvalidParamsLength(
+                _END_EPOCH_PARAMS_LENGTH,
+                params_.length
+            );
 
-        IRewardDistributorConvertible.EndEpochParams memory p = abi.decode(
+        IIncentiveDistributorConvertible.EndEpochParams memory p = abi.decode(
             params_,
-            (IRewardDistributorConvertible.EndEpochParams)
+            (IIncentiveDistributorConvertible.EndEpochParams)
         );
 
         // Validate that the token expires after the end of the epoch (users need time to claim their tokens)
         // Note: epochEndDate_ is always 23:59:59 UTC (validated by _setMerkleRoot), so
         // p.expiry > epochEndDate_ guarantees expiry falls on a strictly later day
-        if (p.expiry <= epochEndDate_) revert RewardDistributor_InvalidToken();
+        if (p.expiry <= epochEndDate_) revert IncentiveDistributor_InvalidToken();
 
         // Set and validate the merkle root
         _setMerkleRoot(epochEndDate_, merkleRoot_);
 
         // Deploy the new convertible token via the teller
         token = TELLER.deploy(p.quoteToken, p.eligible, p.expiry, p.strikePrice);
-        if (token == address(0)) revert RewardDistributor_InvalidToken();
+        if (token == address(0)) revert IncentiveDistributor_InvalidToken();
 
         // Store the convertible token for this epoch
         epochConvertibleTokens[epochEndDate_] = token;
@@ -103,7 +109,7 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
 
     // ========== USER FUNCTIONS ========== //
 
-    /// @inheritdoc IRewardDistributorConvertible
+    /// @inheritdoc IIncentiveDistributorConvertible
     function claim(
         uint256[] calldata epochEndDates_,
         uint256[] calldata amounts_,
@@ -120,7 +126,7 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         for (uint256 i = 0; i < len; ++i) {
             // Get the convertible token for this epoch
             address convertibleToken = epochConvertibleTokens[epochEndDates_[i]];
-            if (convertibleToken == address(0)) revert RewardDistributor_InvalidToken();
+            if (convertibleToken == address(0)) revert IncentiveDistributor_InvalidToken();
 
             // Validate preconditions, verify proof, and mark as claimed
             _validateAndMarkClaimed(msg.sender, epochEndDates_[i], amounts_[i], proofs_[i]);
@@ -143,12 +149,12 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
         }
 
         // Revert if no tokens were actually minted
-        if (!hasMinted) revert RewardDistributor_NothingToClaim();
+        if (!hasMinted) revert IncentiveDistributor_NothingToClaim();
     }
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IRewardDistributorConvertible
+    /// @inheritdoc IIncentiveDistributorConvertible
     function previewClaim(
         address user_,
         uint256[] calldata epochEndDates_,
@@ -175,9 +181,9 @@ contract RewardDistributorConvertible is BaseRewardDistributor, IRewardDistribut
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(BaseRewardDistributor, IERC165) returns (bool) {
+    ) public view virtual override(BaseIncentiveDistributor, IERC165) returns (bool) {
         return
-            interfaceId == type(IRewardDistributorConvertible).interfaceId ||
+            interfaceId == type(IIncentiveDistributorConvertible).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 }
