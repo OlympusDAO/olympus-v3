@@ -37,6 +37,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         - LZBridgeGateway has been deployed on Ethereum mainnet.
 ///         - Remote LZBridgeGateway instances have been deployed on Arbitrum, Optimism, and Base.
 ///         - DAO MS has already activated LZBridgeGateway in the Kernel.
+///         - OCG timelock already has the `admin` and `bridge_admin` roles.
 contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     Kernel internal _kernel;
 
@@ -96,6 +97,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- LZBridgeGateway has been deployed on Ethereum.\n",
                 "- Remote LZBridgeGateway instances have been deployed on Arbitrum, Optimism, and Base.\n",
                 "- The DAO MS has already activated LZBridgeGateway in the Kernel.\n",
+                "- The OCG timelock already has the `admin` and `bridge_admin` roles (required for endpoint configuration, peer setup, and enabling).\n",
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
