@@ -10,10 +10,8 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
-// Libraries
-import {RateLimiterLib} from "src/libraries/RateLimiterLib.sol";
-
 // Contracts
+import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -27,13 +25,12 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 contract LZBridgeGateway is
     Policy,
     PolicyEnabler,
+    RateLimiter,
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
     ILZBridgeGateway
 {
-    using RateLimiterLib for RateLimiterLib.Limits;
-
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
@@ -78,9 +75,6 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     mapping(uint32 eid_ => mapping(uint16 msgType_ => bytes)) public override enforcedOptions;
-
-    /// @notice Rate limit state per destination endpoint.
-    RateLimiterLib.Limits internal _rateLimits;
 
     // ========= INITIALIZATION & POLICY SETUP ========= //
 
@@ -174,8 +168,7 @@ contract LZBridgeGateway is
 
         bytes32 peer = _getPeerOrRevert(dstEid_);
 
-        // Rate limit check
-        _rateLimits.checkOutflow(dstEid_, amount_);
+        _outflow(dstEid_, amount_); // Rate limit outflow
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
@@ -199,7 +192,6 @@ contract LZBridgeGateway is
             MessagingParams(dstEid_, peer, payload, options, false),
             refundAddress_
         );
-
         emit Sent(msg.sender, amount_, dstEid_, receipt.guid);
     }
 
@@ -300,18 +292,14 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     function setRateLimits(
-        RateLimiterLib.RateLimitConfig[] calldata rateLimitConfigs_
+        RateLimitConfig[] memory rateLimitConfigs_
     ) external override onlyAdminRole {
-        _rateLimits.configure(rateLimitConfigs_);
-        emit RateLimitsSet(rateLimitConfigs_);
+        _setRateLimits(rateLimitConfigs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function resetRateLimits(
-        uint32[] calldata eids_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
-        _rateLimits.reset(eids_);
-        emit RateLimitsReset(eids_);
+    function resetRateLimits(uint32[] memory eids_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+        _resetRateLimits(eids_);
     }
 
     // ========= LZ ENDPOINT CONFIG ========= //
@@ -415,25 +403,6 @@ contract LZBridgeGateway is
     // ========= VIEW FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
-    function rateLimits(
-        uint32 dstEid
-    )
-        external
-        view
-        override
-        returns (uint192 amountInFlight, uint64 lastUpdated, uint192 limit, uint64 window)
-    {
-        return _rateLimits.get(dstEid);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function getAmountCanBeSent(
-        uint32 dstEid_
-    ) external view override returns (uint256 currentAmountInFlight, uint256 amountCanBeSent) {
-        return _rateLimits.amountCanBeSent(dstEid_);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
     function combineOptions(
         uint32 eid_,
         uint16 msgType_,
@@ -453,6 +422,16 @@ contract LZBridgeGateway is
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
+    }
+
+    // ========= RATE LIMITER OVERRIDE ========= //
+
+    /// @dev Skips rate limiting for unconfigured EIDs (limit == 0 && window == 0),
+    ///      making rate limiting opt-in rather than mandatory.
+    function _outflow(uint32 _dstEid, uint256 _amount) internal override {
+        RateLimit storage rl = rateLimits[_dstEid];
+        if (rl.limit == 0 && rl.window == 0) return;
+        super._outflow(_dstEid, _amount);
     }
 
     // ========= PRIVATE FUNCTIONS ========= //
@@ -484,8 +463,7 @@ contract LZBridgeGateway is
             emit BridgedSupplyDecreased(amount);
         }
 
-        // Rate limit inflow
-        _rateLimits.checkInflow(srcEid_, amount);
+        _inflow(srcEid_, amount); // Rate limit inflow
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);

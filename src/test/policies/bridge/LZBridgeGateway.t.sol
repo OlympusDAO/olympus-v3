@@ -14,7 +14,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
-import {RateLimiterLib} from "src/libraries/RateLimiterLib.sol";
+import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -144,12 +144,8 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     }
 
     function _setRateLimit(uint32 dstEid_, uint192 limit_, uint64 window_) internal {
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
-            dstEid: dstEid_,
-            limit: limit_,
-            window: window_
-        });
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({dstEid: dstEid_, limit: limit_, window: window_});
         vm.prank(admin);
         gateway.setRateLimits(configs);
     }
@@ -527,6 +523,94 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
 
         assertEq(ohm.balanceOf(recipient), amount, "Recipient should receive OHM");
         assertEq(gateway.bridgedSupply(), amount, "Bridged supply should increase");
+    }
+
+    function test_burnAndSend_skipsUnconfiguredRateLimits() external {
+        // No rate limit configured on either gateway
+        (, , uint192 limit, uint64 window) = gateway.rateLimits(NONCANONICAL_EID);
+        assertEq(limit, 0, "Limit should be 0");
+        assertEq(window, 0, "Window should be 0");
+
+        // Outflow succeeds
+        _sendCanonicalToNonCanonical(recipient, 1000e9);
+
+        // Inflow succeeds
+        vm.prank(recipient);
+        ohm.transfer(facilitator, 1000e9);
+        _sendNonCanonicalToCanonical(recipient, 1000e9);
+    }
+
+    function test_burnAndSend_canonical_inflowRateLimit() external {
+        // Set rate limit on canonical for both directions
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
+            dstEid: NONCANONICAL_EID,
+            limit: 10_000e9,
+            window: 3600
+        });
+        vm.prank(admin);
+        gateway.setRateLimits(configs);
+
+        // Send some out
+        _sendCanonicalToNonCanonical(recipient, 5000e9);
+
+        (uint256 inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        assertEq(inFlight, 5000e9, "5000e9 should be in flight");
+
+        // Bridge back: _inflow(NONCANONICAL_EID) reduces amountInFlight for the same key
+        _sendNonCanonicalToCanonical(recipient, 2000e9);
+
+        (inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        assertEq(inFlight, 3000e9, "Inflow should reduce in-flight");
+    }
+
+    function test_burnAndSend_canonical_outflowRateLimit() external {
+        // Set rate limit on canonical
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
+            dstEid: NONCANONICAL_EID,
+            limit: 5_000e9,
+            window: 3600
+        });
+        vm.prank(admin);
+        gateway.setRateLimits(configs);
+
+        // Send within limit succeeds
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            3_000e9,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 3_000e9);
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            3_000e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        (uint256 inFlight, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        assertEq(inFlight, 3_000e9, "3000e9 should be in flight");
+        assertEq(canSend, 2_000e9, "2000e9 should remain");
+
+        // Send exceeding remaining limit reverts
+        ohm.mint(facilitator, 2_001e9);
+        fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, 2_001e9, bytes(""));
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 2_001e9);
+        vm.expectRevert(abi.encodeWithSelector(RateLimiter.RateLimitExceeded.selector));
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            2_001e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
     }
 
     function test_burnAndSend_revertsIfEnforcedOptionsLackExecutorGas() external {
@@ -1196,18 +1280,18 @@ contract LZBridgeGatewayTests_CombineOptions is LZBridgeGatewayTestBase {
     }
 }
 
-/// @dev Sliding-window rate limiter for outbound sends.
-contract LZBridgeGatewayTests_RateLimiter is LZBridgeGatewayTestBase {
+/// @dev Setting rate limits.
+contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
     function test_setRateLimits() external {
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
             limit: 10_000e9,
             window: 3600
         });
 
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.RateLimitsSet(configs);
+        emit RateLimiter.RateLimitsChanged(configs);
 
         vm.prank(admin);
         gateway.setRateLimits(configs);
@@ -1221,8 +1305,8 @@ contract LZBridgeGatewayTests_RateLimiter is LZBridgeGatewayTestBase {
     }
 
     function test_setRateLimits_revertsIfNotAdmin() external {
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
             limit: 10_000e9,
             window: 3600
@@ -1232,161 +1316,14 @@ contract LZBridgeGatewayTests_RateLimiter is LZBridgeGatewayTestBase {
         vm.prank(user);
         gateway.setRateLimits(configs);
     }
-
-    function test_rateLimiter_exceedsLimit() external {
-        // Set rate limit
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: 1_000e9,
-            window: 3600
-        });
-        vm.prank(admin);
-        gateway.setRateLimits(configs);
-
-        // Try to send more than the limit
-        uint256 overLimit = 1_001e9;
-        ohm.mint(facilitator, overLimit);
-        MessagingFee memory fee = gateway.estimateSendFee(
-            NONCANONICAL_EID,
-            recipient,
-            overLimit,
-            bytes("")
-        );
-
-        vm.startPrank(facilitator);
-        ohm.transfer(address(gateway), overLimit);
-
-        vm.expectRevert(abi.encodeWithSelector(RateLimiterLib.RateLimitExceeded.selector));
-        gateway.burnAndSend{value: fee.nativeFee}(
-            NONCANONICAL_EID,
-            recipient,
-            overLimit,
-            payable(facilitator),
-            bytes("")
-        );
-        vm.stopPrank();
-    }
-
-    function test_rateLimiter_decaysOverTime() external {
-        // Set rate limit
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: 1_000e9,
-            window: 3600
-        });
-        vm.prank(admin);
-        gateway.setRateLimits(configs);
-
-        // Send the full limit
-        MessagingFee memory fee = gateway.estimateSendFee(
-            NONCANONICAL_EID,
-            recipient,
-            1_000e9,
-            bytes("")
-        );
-        vm.startPrank(facilitator);
-        ohm.transfer(address(gateway), 1_000e9);
-        gateway.burnAndSend{value: fee.nativeFee}(
-            NONCANONICAL_EID,
-            recipient,
-            1_000e9,
-            payable(facilitator),
-            bytes("")
-        );
-        vm.stopPrank();
-
-        // Can't send more immediately
-        (uint256 inFlight, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 1_000e9, "All in flight");
-        assertEq(canSend, 0, "Nothing can be sent");
-
-        // After half the window, half should have decayed
-        vm.warp(block.timestamp + 1800);
-        (inFlight, canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 500e9, "Half should remain in flight");
-        assertEq(canSend, 500e9, "Half should be available");
-
-        // After the full window, everything decayed
-        vm.warp(block.timestamp + 1800);
-        (inFlight, canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 0, "Nothing in flight");
-        assertEq(canSend, 1_000e9, "Full limit available");
-    }
-
-    function test_rateLimiter_inflowReducesInFlight() external {
-        // Set rate limit on canonical for both directions
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: 10_000e9,
-            window: 3600
-        });
-        vm.prank(admin);
-        gateway.setRateLimits(configs);
-
-        // Send some out
-        _sendCanonicalToNonCanonical(recipient, 5000e9);
-
-        (uint256 inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 5000e9, "5000e9 should be in flight");
-
-        // Set rate limit on non-canonical too, so inflow works for gateway (srcEid = NONCANONICAL_EID)
-        // The inflow uses srcEid key, so we need rate limit with dstEid = NONCANONICAL_EID already set
-
-        // Bridge back some OHM to canonical - this triggers _checkAndUpdateInflow on gateway for srcEid=NONCANONICAL_EID
-        _sendNonCanonicalToCanonical(recipient, 2000e9);
-
-        (inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 3000e9, "Inflow should reduce in-flight");
-    }
-
-    function test_rateLimiter_disabledWithMaxUint() external {
-        // Set rate limit with max uint192 (effectively disabled)
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: type(uint192).max,
-            window: 3600
-        });
-        vm.prank(admin);
-        gateway.setRateLimits(configs);
-
-        // Can send a large amount
-        (, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(canSend, type(uint192).max, "Effectively unlimited");
-    }
-
-    function test_rateLimiter_unconfiguredSkipsCheck() external {
-        // No rate limit set
-        MessagingFee memory fee = gateway.estimateSendFee(
-            NONCANONICAL_EID,
-            recipient,
-            1000e9,
-            bytes("")
-        );
-
-        vm.startPrank(facilitator);
-        ohm.transfer(address(gateway), 1000e9);
-        // Should succeed without rate limit configured
-        gateway.burnAndSend{value: fee.nativeFee}(
-            NONCANONICAL_EID,
-            recipient,
-            1000e9,
-            payable(facilitator),
-            bytes("")
-        );
-        vm.stopPrank();
-    }
 }
 
 /// @dev Emergency rate limit reset.
 contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
     function test_resetRateLimits() external {
         // Configure rate limit
-        RateLimiterLib.RateLimitConfig[] memory configs = new RateLimiterLib.RateLimitConfig[](1);
-        configs[0] = RateLimiterLib.RateLimitConfig({
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
             limit: 1_000e9,
             window: 3600
@@ -1421,7 +1358,7 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         eids[0] = NONCANONICAL_EID;
 
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.RateLimitsReset(eids);
+        emit RateLimiter.RateLimitsReset(eids);
 
         vm.prank(bridgeAdmin);
         gateway.resetRateLimits(eids);

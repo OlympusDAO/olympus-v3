@@ -4,7 +4,7 @@ pragma solidity >=0.8.18;
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {Origin, MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {RateLimiterLib} from "src/libraries/RateLimiterLib.sol";
+import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
@@ -117,14 +117,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param enforcedOptions The enforced option parameters.
     event EnforcedOptionsSet(EnforcedOptionParam[] enforcedOptions);
 
-    /// @notice Emitted when rate limits are set.
-    /// @param rateLimitConfigs The rate limit configurations.
-    event RateLimitsSet(RateLimiterLib.RateLimitConfig[] rateLimitConfigs);
-
-    /// @notice Emitted when rate limit state is reset for one or more endpoints.
-    /// @param eids The endpoint IDs that were reset.
-    event RateLimitsReset(uint32[] eids);
-
     // ========= CORE FUNCTIONS ========= //
 
     /// @notice Burns OHM held by the gateway and sends a bridge message to a destination chain.
@@ -234,13 +226,13 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @dev Only callable by the admin role.
     ///
     /// @param rateLimitConfigs_ Array of rate limit configurations.
-    function setRateLimits(RateLimiterLib.RateLimitConfig[] calldata rateLimitConfigs_) external;
+    function setRateLimits(RateLimiter.RateLimitConfig[] memory rateLimitConfigs_) external;
 
     /// @notice Resets rate limit state (amountInFlight) for the given endpoint IDs.
     /// @dev Only callable by the bridge_admin role. Does not modify limit or window.
     ///
     /// @param eids_ The endpoint IDs to reset.
-    function resetRateLimits(uint32[] calldata eids_) external;
+    function resetRateLimits(uint32[] memory eids_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 
@@ -270,27 +262,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param msgType The message type.
     /// @return The enforced options bytes.
     function enforcedOptions(uint32 eid, uint16 msgType) external view returns (bytes memory);
-
-    /// @notice Returns the rate limit state for a given endpoint.
-    /// @param dstEid The destination endpoint ID.
-    /// @return amountInFlight The amount currently in flight.
-    /// @return lastUpdated Timestamp of the last update.
-    /// @return limit Maximum allowed amount.
-    /// @return window Duration of the window.
-    function rateLimits(
-        uint32 dstEid
-    )
-        external
-        view
-        returns (uint192 amountInFlight, uint64 lastUpdated, uint192 limit, uint64 window);
-
-    /// @notice Returns how much can currently be sent to a destination endpoint.
-    /// @param dstEid_ The destination endpoint ID.
-    /// @return currentAmountInFlight The current decayed amount in flight.
-    /// @return amountCanBeSent The amount that can still be sent.
-    function getAmountCanBeSent(
-        uint32 dstEid_
-    ) external view returns (uint256 currentAmountInFlight, uint256 amountCanBeSent);
 
     /// @notice Combines enforced options with caller-provided extra options.
     /// @param eid_ The endpoint ID.
