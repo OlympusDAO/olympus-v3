@@ -13,11 +13,25 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///         Run after LZBridgeGatewayL2Batch has set up the gateway.
 ///
 ///         Entry points:
-///         - `setupL2` : setGateway + enable (no heart beat validation)
-///         - `enable`  : enable only
-///         - `disable` : disable only
+///         - `disableOldBridge`: disable old CrossChainBridge (pre-migration)
+///         - `setupL2`         : setGateway + enable (no heart beat validation)
+///         - `enable`          : enable only
+///         - `disable`         : disable only
 contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
     // =========== ENTRY POINTS =========== //
+
+    /// @notice L2 (pre-migration): disable old CrossChainBridge.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    function disableOldBridge(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+        address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+
+        console2.log("\n=== Disabling Old CrossChainBridge (L2:", chain, ") ===");
+        console2.log("Old Bridge:", oldBridge);
+
+        addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
+
+        _proposeL2Batch();
+    }
 
     /// @notice L2 setup: set gateway and enable the periphery bridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
