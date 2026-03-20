@@ -6,9 +6,9 @@ import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZ
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
-import {TestHelperOz5, EndpointV2} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
+import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 
-import {Kernel, Actions, toKeycode, Keycode, Policy, Permissions} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode, Keycode, Permissions} from "src/Kernel.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";

@@ -5,7 +5,7 @@ import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {Test, Vm} from "forge-std/Test.sol";
 
-import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
