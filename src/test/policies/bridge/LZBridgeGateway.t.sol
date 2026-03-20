@@ -563,6 +563,33 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         assertEq(inFlight, 3000e9, "Inflow should reduce in-flight");
     }
 
+    function test_burnAndSend_nonCanonical_inflowSkipsWhenAmountInFlightZero() external {
+        // Configure rate limit on non-canonical gateway for inbound from canonical
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
+            dstEid: CANONICAL_EID,
+            limit: 10_000e9,
+            window: 3600
+        });
+        vm.prank(admin);
+        gateway2.setRateLimits(configs);
+
+        // No outflow from gateway2: amountInFlight for CANONICAL_EID is 0
+        (uint192 amountInFlight, , , ) = gateway2.rateLimits(CANONICAL_EID);
+        assertEq(amountInFlight, 0, "amountInFlight should be 0 before inflow");
+
+        // Send from canonical to non-canonical: gateway2 receives, _inflow hits amountInFlight == 0
+        _sendCanonicalToNonCanonical(recipient, 1000e9);
+
+        // amountInFlight remains 0: the _inflow override skipped the write
+        (amountInFlight, , , ) = gateway2.rateLimits(CANONICAL_EID);
+        assertEq(amountInFlight, 0, "amountInFlight should remain 0 after skipped inflow");
+
+        // Full outflow capacity on gateway2 is still available
+        (, uint256 canSend) = gateway2.getAmountCanBeSent(CANONICAL_EID);
+        assertEq(canSend, 10_000e9, "Full outflow capacity should be available");
+    }
+
     function test_burnAndSend_canonical_outflowRateLimit() external {
         // Set rate limit on canonical
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);

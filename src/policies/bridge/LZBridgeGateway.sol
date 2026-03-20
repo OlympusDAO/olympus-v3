@@ -6,6 +6,7 @@ pragma solidity >=0.8.30;
 /// Reimplemented inline rather than inherited because those contracts assume OZ Ownable,
 /// which is incompatible with the Bophades Kernel RBAC model.
 /// RateLimiter is the only oapp-evm contract inherited directly (no Ownable dependency).
+/// _outflow() and _inflow() are overridden to make rate limiting opt-in per EID.
 ///
 /// Ported logic (~ = identical, -> = differs):
 ///
@@ -467,6 +468,14 @@ contract LZBridgeGateway is
         RateLimit storage rl = rateLimits[_dstEid];
         if (rl.limit == 0 && rl.window == 0) return;
         super._outflow(_dstEid, _amount);
+    }
+
+    /// @dev Skips inflow accounting when no outflow is tracked for this EID.
+    ///      For unconfigured EIDs (where _outflow is also skipped), amountInFlight is always 0.
+    ///      For configured EIDs, avoids a redundant write when all outflow has been settled.
+    function _inflow(uint32 _srcEid, uint256 _amount) internal override {
+        if (rateLimits[_srcEid].amountInFlight == 0) return;
+        super._inflow(_srcEid, _amount);
     }
 
     // ========= PRIVATE FUNCTIONS ========= //
