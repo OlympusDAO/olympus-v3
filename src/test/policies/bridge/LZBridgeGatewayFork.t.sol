@@ -584,7 +584,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
             "Packet sender should be ethGateway"
         );
         assertGt(origin.nonce, 0, "Packet nonce should be non-zero");
-        assertGt(guid.length, 0, "GUID should be non-zero");
+        assertTrue(guid != bytes32(0), "GUID should be non-zero");
 
         // Decode the payload to verify encoding correctness
         (uint8 msgType, bytes memory data) = abi.decode(message, (uint8, bytes));
