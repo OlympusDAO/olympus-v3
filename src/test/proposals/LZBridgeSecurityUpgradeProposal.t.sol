@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.30;
 
 import {ProposalTest} from "./ProposalTest.sol";
 import {console2} from "forge-std/console2.sol";

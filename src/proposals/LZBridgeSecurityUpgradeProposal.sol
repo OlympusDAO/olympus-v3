@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.30;
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
