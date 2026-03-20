@@ -164,15 +164,6 @@ sequenceDiagram
     MINTR->>Recipient: OHM minted
 ```
 
-#### Failed Message Recovery (LZ V2 Native)
-
-The gateway does not implement custom retry logic. Failed messages are handled by the LayerZero V2 endpoint natively. The `bridge_admin` role has access to recovery primitives:
-
-- `skip(srcEid, sender, nonce)` - Skip a nonce for a source path
-- `nilify(srcEid, sender, nonce, payloadHash)` - Invalidate a specific payload
-- `burn(srcEid, sender, nonce, payloadHash)` - Permanently destroy a payload
-- `clear(origin, guid, message)` - Clear a verified but unexecuted inbound message
-
 ### Access Control Summary
 
 #### LZBridgeGateway (Policy)
