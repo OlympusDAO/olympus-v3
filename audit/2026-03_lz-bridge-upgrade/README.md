@@ -25,7 +25,7 @@ On receive:
 LZ Endpoint V2 -> LZBridgeGateway.lzReceive -> validate peer -> mint OHM to recipient
 ```
 
-Additionally, an OCG proposal and multisig batch scripts handle the on-chain migration across seven phases: deployment, pre-OCG gateway wiring, OCG execution (LZ V2 config + peers + cap + options + enable gateway), old bridge disablement, bridged supply snapshot, non-canonical chain setup, and Ethereum periphery activation.
+Additionally, an OCG proposal and multisig batch scripts handle the on-chain migration: deployment, pre-OCG gateway wiring, OCG execution (LZ V2 config + peers + cap + options + enable gateway), old bridge disablement, bridged supply snapshot, non-canonical chain setup, and Ethereum periphery activation.
 
 ## Scope
 
@@ -46,7 +46,7 @@ Additionally, an OCG proposal and multisig batch scripts handle the on-chain mig
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
             - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
 
-**OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. Ported code is in scope. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow` override are in scope, the base contract itself is not.
+**OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
 
 #### Deployment & Configuration
 
