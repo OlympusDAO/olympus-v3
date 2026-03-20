@@ -68,7 +68,7 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
         - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `setGateway` (pre-OCG), `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
         - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (set gateway ref + enable facilitator)
 
-Branch: `lz-bridge-security-upgrade-v2`
+Branch: `lz-bridge-upgrade`
 
 ### Previous Audits
 
@@ -135,7 +135,7 @@ sequenceDiagram
     participant LZEndpointV2
 
     User->>LZCrossChainBridge: sendOhm(dstEid, to, amount) + native fee
-    LZCrossChainBridge->>LZBridgeGateway: OHM.transferFrom(user, gateway, amount)
+    LZCrossChainBridge->>LZBridgeGateway: OHM.safeTransferFrom(user, gateway, amount)
     LZCrossChainBridge->>LZBridgeGateway: burnAndSend{value}(dstEid, to, amount, refund, extraOptions)
     LZBridgeGateway->>LZBridgeGateway: validate peer exists for dstEid
     LZBridgeGateway->>LZBridgeGateway: rate limit outflow
