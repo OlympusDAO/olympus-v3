@@ -139,6 +139,10 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
 
     /// @notice Estimates the fee for sending OHM to a destination chain.
     ///
+    ///         Reverts if:
+    ///         - The recipient address is zero.
+    ///         - No peer exists for the destination endpoint ID.
+    ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to send.

@@ -65,6 +65,9 @@ contract LZBridgeGateway is
     /// @notice Expected byte length of an ABI-encoded (address, uint256) bridge payload.
     uint256 internal constant _BRIDGE_OHM_DATA_LENGTH = 64;
 
+    /// @notice Minimum ABI-encoded length for (uint8, bytes): 32 + 32 offset + 32 length.
+    uint256 internal constant _MIN_PAYLOAD_LENGTH = 96;
+
     /// @notice Type 3 option type identifier.
     uint16 internal constant _OPTION_TYPE_3 = 3;
 
@@ -232,6 +235,7 @@ contract LZBridgeGateway is
         uint256 amount_,
         bytes calldata extraOptions_
     ) external view override returns (MessagingFee memory fee) {
+        _requireNonzeroAddress(to_, "to");
         bytes32 peer = _getPeerOrRevert(dstEid_);
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
         bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
@@ -482,6 +486,7 @@ contract LZBridgeGateway is
 
     /// @notice Decodes the message type from the payload and routes to the appropriate handler.
     function _decodeAndRoute(uint32 srcEid_, bytes32 guid_, bytes calldata payload_) private {
+        if (payload_.length < _MIN_PAYLOAD_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (uint8 msgType, bytes memory data) = abi.decode(payload_, (uint8, bytes));
 
         if (msgType == MSG_BRIDGE_OHM) {

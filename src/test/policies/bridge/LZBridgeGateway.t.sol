@@ -900,10 +900,28 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
             nonce: 1
         });
 
-        // Empty payload should fail ABI decoding
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidPayload.selector)
+        );
         vm.prank(address(endpointSetup.endpointList[1]));
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
+    }
+
+    function test_lzReceive_revertsIfMalformedOuterPayload() external {
+        Origin memory origin = Origin({
+            srcEid: CANONICAL_EID,
+            sender: LZConfigLib.addressToBytes32(address(gateway)),
+            nonce: 1
+        });
+
+        // 64 bytes: too short for ABI-encoded (uint8, bytes) which needs >= 96
+        bytes memory malformed = abi.encode(uint256(1), uint256(2));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidPayload.selector)
+        );
+        vm.prank(address(endpointSetup.endpointList[1]));
+        gateway2.lzReceive(origin, bytes32(0), malformed, address(0), bytes(""));
     }
 
     function test_lzReceive_revertsIfPayloadDataTooShort() external {
@@ -968,6 +986,13 @@ contract LZBridgeGatewayTests_EstimateSendFee is LZBridgeGatewayTestBase {
             bytes("")
         );
         assertGt(fee.nativeFee, 0, "Native fee should be non-zero");
+    }
+
+    function test_estimateSendFee_revertsIfZeroRecipient() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector, "to")
+        );
+        gateway.estimateSendFee(NONCANONICAL_EID, address(0), 1000e9, bytes(""));
     }
 
     function test_estimateSendFee_revertsIfNoPeer() external {
