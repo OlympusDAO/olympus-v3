@@ -46,7 +46,7 @@ Additionally, an OCG proposal and multisig batch scripts handle the on-chain mig
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
             - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
 
-**Inherited dependency (not in scope, but integrated):** `RateLimiter` from `@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol` — audited LayerZero utility; the gateway's integration and `_outflow` override are in scope.
+**OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. Ported code is in scope. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow` override are in scope, the base contract itself is not.
 
 #### Deployment & Configuration
 
