@@ -1,6 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.30;
 
+/// Peer management, endpoint send/receive, and enforced-option logic ported from
+/// @layerzerolabs/oapp-evm v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).
+/// Reimplemented inline rather than inherited because those contracts assume OZ Ownable,
+/// which is incompatible with the Bophades Kernel RBAC model.
+/// RateLimiter is the only oapp-evm contract inherited directly (no Ownable dependency).
+///
+/// Ported logic (~ = identical, -> = differs):
+///
+///   OAppCore:         peers, setPeer(), _getPeerOrRevert(), setDelegate() ~
+///                     -> Endpoint stored as `address`, cast at each call site.
+///   OAppReceiver:     lzReceive(), allowInitializePath(), nextNonce() ~
+///                     -> Routes via _decodeAndRoute() instead of virtual _lzReceive().
+///   OAppSender:       estimateSendFee() <- _quote(); burnAndSend() <- _lzSend()
+///                     -> msg.value forwarded directly; no _payNative()/_payLzToken().
+///   OAppOptionsType3: enforcedOptions, setEnforcedOptions(), _combineOptions(),
+///                     _assertOptionsType3() ~
+///                     -> Adds _assertOptionsType3Calldata() for calldata inputs.
+///
+/// Not ported: oAppVersion() (-> IVersioned), isComposeMsgSender(), _payNative()/_payLzToken().
+/// Access control: onlyOwner -> onlyAdminRole / onlyRole("bridge_admin").
+
 // Interfaces
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
@@ -533,6 +554,7 @@ contract LZBridgeGateway is
     }
 
     /// @notice Validates that options bytes begin with the Type 3 prefix.
+    /// @dev Assembly pattern from OAppOptionsType3._assertOptionsType3() (@layerzerolabs/oapp-evm v0.4.1).
     function _assertOptionsType3(bytes memory options_) internal pure {
         uint16 optionsType;
         assembly {
