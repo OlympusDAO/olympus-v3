@@ -69,7 +69,7 @@ contract IOHMTokenTestBase is Test {
         // Enable the teller policy with infinite minting cap
         teller.enable(abi.encode(type(uint256).max));
 
-        // Grant the reward distributor role (required for the functions deploy and create)
+        // Grant the incentive distributor role (required for the functions deploy and create)
         roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor);
 
         // Fund users with USDS for exercise tests
@@ -194,7 +194,7 @@ contract IOHMTokenTests is IOHMTokenTestBase {
         ) = token.parameters();
 
         assertEq(quoteToken, address(usds), "Quote token should be USDS");
-        assertEq(creator_, incentiveDistributor, "Creator should be reward distributor");
+        assertEq(creator_, incentiveDistributor, "Creator should be incentive distributor");
         assertEq(eligible_, _roundToDay(eligibleTimestamp), "Eligible should match");
         assertEq(expiry_, _roundToDay(expiryTimestamp), "Expiry should match");
         assertEq(strike_, STRIKE_PRICE, "Strike price should match");
@@ -221,7 +221,7 @@ contract IOHMTokenTests is IOHMTokenTestBase {
     }
 
     function test_creator() external view {
-        assertEq(token.creator(), incentiveDistributor, "Creator should be reward distributor");
+        assertEq(token.creator(), incentiveDistributor, "Creator should be incentive distributor");
     }
 
     function test_strike() external view {

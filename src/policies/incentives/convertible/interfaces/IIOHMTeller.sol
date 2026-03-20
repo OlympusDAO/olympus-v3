@@ -61,7 +61,7 @@ interface IIOHMTeller {
     error Teller_FeeOnTransfer(uint256 expected, uint256 actual);
 
     /// @notice Deploys a new convertible token and returns its address.
-    /// @dev Only callable by addresses with the reward distributor role.
+    /// @dev Only callable by addresses with the incentive distributor role.
     ///      If a convertible token already exists for the parameters, it returns that address.
     ///
     ///      Both `eligible_` and `expiry_` are truncated to 00:00:00 UTC of their respective day.
@@ -84,7 +84,7 @@ interface IIOHMTeller {
     ) external returns (address token);
 
     /// @notice Mints convertible tokens to the `to`.
-    /// @dev Only callable by addresses with the reward distributor role.
+    /// @dev Only callable by addresses with the incentive distributor role.
     /// @param token_ The convertible token to mint.
     /// @param to_ The recipient address.
     /// @param amount_ The amount of tokens to mint.

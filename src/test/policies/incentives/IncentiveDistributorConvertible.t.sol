@@ -90,7 +90,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         );
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
-        // Grant the reward distributor role to the distributor policy
+        // Grant the incentive distributor role to the distributor policy
         roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), address(distributor));
 
         // Setup roles for distributor
@@ -131,7 +131,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         return startTimestamp + 1 days - 1;
     }
 
-    // Generates a merkle leaf for reward claims
+    // Generates a merkle leaf for incentive claims
     function _generateLeaf(
         address user,
         uint256 epochEndDate,
@@ -634,7 +634,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         epochEndDate = _firstEpochEndDate();
     }
 
-    // Helper to setup an epoch with a single user's reward leaf
+    // Helper to setup an epoch with a single user's incentive leaf
     function _setupEpochWithLeaf(address user, uint256 amount) internal returns (IOHMToken) {
         bytes32 leaf = _generateLeaf(user, epochEndDate, amount);
 
@@ -650,7 +650,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
     }
 
     function test_claim_mintsConvertibleTokens() external {
-        // 1. Preparation: setup epoch with User0's reward
+        // 1. Preparation: setup epoch with User0's incentive
         uint256 amount = 100e9; // 100 OHM worth
         token = _setupEpochWithLeaf(user0, amount);
 
@@ -1267,7 +1267,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
     }
 
     function test_claim_revertsIfZeroRewards() external {
-        uint256 amount = 0; // Zero rewards
+        uint256 amount = 0; // Zero incentives
         token = _setupEpochWithLeaf(user0, amount);
 
         uint256[] memory epochEndDates = new uint256[](1);

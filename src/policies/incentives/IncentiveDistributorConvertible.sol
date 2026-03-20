@@ -17,10 +17,10 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 /// @title Incentive Distributor for iOHM Tokens
 /// @notice Distributes convertible OHM tokens to users based on Merkle proofs.
 /// @dev Architecture:
-///      - Rewards are calculated off-chain.
-///      - Backend generates Merkle trees with accumulated rewards per user per epoch.
+///      - Incentives are calculated off-chain.
+///      - Backend generates Merkle trees with accumulated incentives per user per epoch.
 ///      - Merkle roots are posted on-chain by the authorized role.
-///      - Users submit proofs to claim their rewards in convertible tokens.
+///      - Users submit proofs to claim their incentives in convertible tokens.
 ///
 ///      Tokens are deployed and minted via IOHMTeller.
 contract IncentiveDistributorConvertible is

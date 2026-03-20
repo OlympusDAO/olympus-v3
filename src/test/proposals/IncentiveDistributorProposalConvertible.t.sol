@@ -160,7 +160,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
     // ========== HELPERS ==========
 
-    /// @notice Generates a merkle leaf for reward claims (double-hash)
+    /// @notice Generates a merkle leaf for incentive claims (double-hash)
     function _generateLeaf(
         address user,
         uint256 epochEndDate,

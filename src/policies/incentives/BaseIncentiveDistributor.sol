@@ -15,11 +15,11 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title Base Incentive Distributor
-/// @notice Minimal abstract base contract for Merkle tree-based rewards distribution.
+/// @notice Minimal abstract base contract for Merkle tree-based incentive distribution.
 /// @dev Architecture:
 ///      - Provides internal building blocks for epoch and merkle management.
 ///      - Derived contracts define their own public API.
-///      - No assumptions about reward token type.
+///      - No assumptions about incentive token type.
 abstract contract BaseIncentiveDistributor is
     Policy,
     PolicyEnabler,

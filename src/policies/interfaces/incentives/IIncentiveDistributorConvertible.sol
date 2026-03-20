@@ -4,7 +4,7 @@ pragma solidity >=0.8.4;
 import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 
 /// @title IIncentiveDistributorConvertible
-/// @notice The interface for reward distributors for iOHM Tokens.
+/// @notice The interface for incentive distributors for iOHM Tokens.
 /// @dev It extends IIncentiveDistributor with convertible token-specific functionality.
 interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== STRUCTS ========== //
@@ -21,7 +21,7 @@ interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a user successfully claims their convertible tokens for an epoch.
-    /// @param user The address of the user claiming rewards.
+    /// @param user The address of the user claiming incentives.
     /// @param convertibleToken The address of the convertible token claimed.
     /// @param amount The amount of convertible tokens claimed for this epoch.
     /// @param epochEndDate The epoch end date claimed for.
@@ -60,7 +60,7 @@ interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Previews claimable tokens and amounts for a user.
-    /// @param user_ The recipient of the rewards.
+    /// @param user_ The recipient of the incentives.
     /// @param epochEndDates_ The list of epoch end dates being previewed.
     /// @param amounts_ The amounts to claim for each epoch.
     /// @param proofs_ The Merkle proofs for each epoch.

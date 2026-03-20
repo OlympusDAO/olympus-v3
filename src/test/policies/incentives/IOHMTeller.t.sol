@@ -74,7 +74,7 @@ contract IOHMTellerTestBase is Test {
         // Enable the teller policy with infinite minting cap
         teller.enable(abi.encode(type(uint256).max));
 
-        // Grant the reward distributor role (required for the functions deploy and create)
+        // Grant the incentive distributor role (required for the functions deploy and create)
         roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor);
 
         // Fund users with USDS for exercise tests
@@ -201,7 +201,7 @@ contract IOHMTellerDeploymentTests is IOHMTellerTestBase {
         assertEq(
             token.creator(),
             incentiveDistributor,
-            "The creator should match the reward distributor"
+            "The creator should match the incentive distributor"
         );
         assertEq(
             keccak256(bytes(token.name())),
@@ -304,7 +304,7 @@ contract IOHMTellerDeploymentTests is IOHMTellerTestBase {
     }
 
     function test_deploy_createsUniqueTokensForDifferentCreators_skipOnCoverage() external {
-        // 1. Preparation: create second reward distributor
+        // 1. Preparation: create second incentive distributor
         address incentiveDistributor2 = makeAddr("incentiveDistributor2");
         roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor2);
 
@@ -611,7 +611,7 @@ contract IOHMTellerMintTests is IOHMTellerTestBase {
         // 1. Preparation: deploy a token by incentiveDistributor
         IOHMToken token = _deployConvertibleToken();
 
-        // Create second reward distributor with the role
+        // Create second incentive distributor with the role
         address incentiveDistributor2 = makeAddr("incentiveDistributor2");
         roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor2);
 
