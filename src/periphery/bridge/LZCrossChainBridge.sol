@@ -10,7 +10,7 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
-import {Owned} from "solmate/auth/Owned.sol";
+import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
