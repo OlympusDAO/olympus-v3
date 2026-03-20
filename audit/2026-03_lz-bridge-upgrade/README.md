@@ -15,13 +15,13 @@ The new design splits the bridge into two contracts:
 1. **LZBridgeGateway** (Policy) - Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, bridged supply tracking and cap enforcement, and proxying of LZ V2 endpoint configuration and message management functions for the `bridge_admin` role.
 2. **LZCrossChainBridge** (Periphery) - User-facing facilitator contract that has no privileged access to the Olympus protocol. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
 
-```
+```text
 User -> LZCrossChainBridge (facilitator) -> LZBridgeGateway (policy) -> LZ Endpoint V2 -> [destination]
 ```
 
 On receive:
 
-```
+```text
 LZ Endpoint V2 -> LZBridgeGateway.lzReceive -> validate peer -> mint OHM to recipient
 ```
 
