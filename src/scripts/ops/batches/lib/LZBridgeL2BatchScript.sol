@@ -2,9 +2,9 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
-import {LZBridgeBatchScript} from "./LZBridgeBatchScript.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
 import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
+import {console2} from "@forge-std-1.9.6/console2.sol";
+import {LZBridgeBatchScript} from "./LZBridgeBatchScript.sol";
 
 /// @title LZBridgeL2BatchScript
 /// @notice Abstract base for LZ bridge batch scripts on L2 chains.
@@ -53,16 +53,7 @@ abstract contract LZBridgeL2BatchScript is LZBridgeBatchScript {
             }
             console2.log("\nBroadcasting batch to Anvil fork");
             vm.startBroadcast(_owner);
-            for (uint256 i; i < _batchTargets.length; ++i) {
-                (bool success, bytes memory data) = _batchTargets[i].call(_batchData[i]);
-                if (!success) {
-                    assembly {
-                        let revertStringLength := mload(data)
-                        let revertStringPtr := add(data, 0x20)
-                        revert(revertStringPtr, revertStringLength)
-                    }
-                }
-            }
+            _runBatch();
             vm.stopBroadcast();
             console2.log("Batch executed successfully on Anvil fork");
             return;
