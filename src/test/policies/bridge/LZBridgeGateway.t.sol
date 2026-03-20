@@ -1446,6 +1446,15 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
             ),
             bytes("")
         );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "setSendLibrary(address,uint32,address)",
+                address(gateway),
+                NONCANONICAL_EID,
+                lib
+            )
+        );
         vm.prank(bridgeAdmin);
         gateway.setSendLibrary(NONCANONICAL_EID, lib);
     }
@@ -1473,6 +1482,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 gracePeriod
             ),
             bytes("")
+        );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "setReceiveLibrary(address,uint32,address,uint256)",
+                address(gateway),
+                NONCANONICAL_EID,
+                lib,
+                gracePeriod
+            )
         );
         vm.prank(bridgeAdmin);
         gateway.setReceiveLibrary(NONCANONICAL_EID, lib, gracePeriod);
@@ -1502,6 +1521,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
             ),
             bytes("")
         );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "setReceiveLibraryTimeout(address,uint32,address,uint256)",
+                address(gateway),
+                NONCANONICAL_EID,
+                lib,
+                expiry
+            )
+        );
         vm.prank(bridgeAdmin);
         gateway.setReceiveLibraryTimeout(NONCANONICAL_EID, lib, expiry);
     }
@@ -1528,6 +1557,15 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 params
             ),
             bytes("")
+        );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "setConfig(address,address,(uint32,uint32,bytes)[])",
+                address(gateway),
+                lib,
+                params
+            )
         );
         vm.prank(bridgeAdmin);
         gateway.setEndpointConfig(lib, params);
@@ -1561,6 +1599,16 @@ contract LZBridgeGatewayTests_LZMessageManagement is LZBridgeGatewayTestBase {
             ),
             bytes("")
         );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "skip(address,uint32,bytes32,uint64)",
+                address(gateway),
+                NONCANONICAL_EID,
+                sender,
+                nonce
+            )
+        );
         vm.prank(bridgeAdmin);
         gateway.skip(NONCANONICAL_EID, sender, nonce);
     }
@@ -1591,6 +1639,17 @@ contract LZBridgeGatewayTests_LZMessageManagement is LZBridgeGatewayTestBase {
             ),
             bytes("")
         );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "nilify(address,uint32,bytes32,uint64,bytes32)",
+                address(gateway),
+                NONCANONICAL_EID,
+                sender,
+                nonce,
+                payloadHash
+            )
+        );
         vm.prank(bridgeAdmin);
         gateway.nilify(NONCANONICAL_EID, sender, nonce, payloadHash);
     }
@@ -1620,6 +1679,17 @@ contract LZBridgeGatewayTests_LZMessageManagement is LZBridgeGatewayTestBase {
                 payloadHash
             ),
             bytes("")
+        );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "burn(address,uint32,bytes32,uint64,bytes32)",
+                address(gateway),
+                NONCANONICAL_EID,
+                sender,
+                nonce,
+                payloadHash
+            )
         );
         vm.prank(bridgeAdmin);
         gateway.burn(NONCANONICAL_EID, sender, nonce, payloadHash);
@@ -1653,6 +1723,16 @@ contract LZBridgeGatewayTests_LZMessageManagement is LZBridgeGatewayTestBase {
                 message
             ),
             bytes("")
+        );
+        vm.expectCall(
+            endpoint_,
+            abi.encodeWithSignature(
+                "clear(address,(uint32,bytes32,uint64),bytes32,bytes)",
+                address(gateway),
+                origin,
+                guid,
+                message
+            )
         );
         vm.prank(bridgeAdmin);
         gateway.clear(origin, guid, message);
