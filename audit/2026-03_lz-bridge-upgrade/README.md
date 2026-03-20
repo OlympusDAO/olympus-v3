@@ -12,7 +12,7 @@ The existing `CrossChainBridge` policy (deployed on Ethereum mainnet and Arbitru
 
 The new design splits the bridge into two contracts:
 
-1. **LZBridgeGateway** (Policy) - Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, and bridged supply cap enforcement.
+1. **LZBridgeGateway** (Policy) - Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, bridged supply tracking and cap enforcement, and proxying of LZ V2 endpoint configuration and message management functions for the `bridge_admin` role.
 2. **LZCrossChainBridge** (Periphery) - User-facing facilitator contract that has no privileged access to the Olympus protocol. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
 
 ```
@@ -25,7 +25,7 @@ On receive:
 LZ Endpoint V2 -> LZBridgeGateway.lzReceive -> validate peer -> mint OHM to recipient
 ```
 
-Additionally, an OCG proposal and multisig batch scripts handle the on-chain migration: deactivating the old bridge, activating and configuring the new contracts, setting peers, granting roles, and enabling the bridge.
+Additionally, an OCG proposal and multisig batch scripts handle the on-chain migration across seven phases: deployment, pre-OCG gateway wiring, OCG execution (LZ V2 config + peers + cap + options + enable gateway), old bridge disablement, bridged supply snapshot, non-canonical chain setup, and Ethereum periphery activation.
 
 ## Scope
 
@@ -46,11 +46,15 @@ Additionally, an OCG proposal and multisig batch scripts handle the on-chain mig
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
             - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
 
+**Inherited dependency (not in scope, but integrated):** `RateLimiter` from `@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol` — audited LayerZero utility; the gateway's integration and `_outflow` override are in scope.
+
 #### Deployment & Configuration
 
 These contracts configure and deploy the core contracts. Misconfiguration here (wrong addresses, wrong confirmation counts, incorrect role grants, wrong migration ordering) can undermine the security properties of the core contracts.
 
 - [src/](../../src)
+    - [scripts/deploy/](../../src/scripts/deploy/)
+        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) - `deployLZCrossChainBridge()` and `deployLZBridgeGateway()` deployment functions
     - [libraries/](../../src/libraries/)
         - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) - Shared LZ V2 constants (endpoints, SendUln302/ReceiveUln302 libraries, DVNs, executor, confirmation counts) and encoding helpers
     - [proposals/](../../src/proposals/)
@@ -60,11 +64,11 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
             - [LZBridgeBatchScript.sol](../../src/scripts/ops/batches/lib/LZBridgeBatchScript.sol) - Base class with shared constants, per-chain DVN addresses, and LZ V2 configuration helpers
             - [LZBridgeL2BatchScript.sol](../../src/scripts/ops/batches/lib/LZBridgeL2BatchScript.sol) - Base class for non-canonical chains (skips OlympusHeart validation)
         - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: activate gateway, set initial bridged supply
-        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch: deactivate old bridge, activate gateway, grant roles, configure LZ V2, set peers, enable
-        - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: set gateway ref, enable facilitator, deactivate old bridge
-        - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: set gateway ref, enable facilitator
+        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch: deactivate old bridge, activate gateway, grant roles, configure LZ V2, set peers, set enforced options, enable
+        - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `setGateway` (pre-OCG), `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
+        - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (set gateway ref + enable facilitator)
 
-Branch: `lz-bridge-upgrade`
+Branch: `lz-bridge-security-upgrade-v2`
 
 ### Previous Audits
 
@@ -95,10 +99,17 @@ You can review previous audits here:
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions. It merely transfers OHM to the gateway and calls `burnAndSend`. This limits the blast radius if the facilitator is compromised.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
 6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation (LayerZero DVN + Google Cloud DVN).
-7. **`bridge_admin` role separation**: LZ endpoint configuration (`setSendLibrary`, `setReceiveLibrary`, `setEndpointConfig`, `skip`, `nilify`, `burn`, `clear`) and `setBridgedSupply` use a dedicated `bridge_admin` role, separate from the `admin` role used for business-level configuration.
+7. **`bridge_admin` role separation**: LZ endpoint configuration (`setSendLibrary`, `setReceiveLibrary`, `setEndpointConfig`, `skip`, `nilify`, `burn`, `clear`), `setBridgedSupply`, and `setDelegate` use a dedicated `bridge_admin` role, separate from the `admin` role used for business-level configuration. The `setDelegate` function allows setting an LZ endpoint delegate as a fallback mechanism for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set and all endpoint administration flows through the gateway's own functions.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
-9. **Per-endpoint rate limiting**: Opt-in rate limiting on both outbound and inbound transfers, providing a time-windowed throttle independent of the supply cap. Unconfigured endpoints skip rate limiting.
+9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount (enabling more outbound), but are not independently capped. The gateway overrides `_outflow` to skip unconfigured EIDs (where `limit == 0 && window == 0`); the base `_inflow` is safe for unconfigured EIDs without override.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by the `bridge_admin` role.
+
+### LZ V2 Receiver Callbacks
+
+The gateway implements `ILayerZeroReceiver`:
+
+- **`allowInitializePath(origin)`**: Returns `true` only if `peers[origin.srcEid] == origin.sender`. Controls which communication paths the LZ V2 endpoint can initialize for this contract.
+- **`nextNonce(_, _)`**: Returns `0` — unordered (nonce-independent) delivery, the default per `OAppReceiver` (`@lz-oapp-evm-0.4.1`). Matches the original V1 CrossChainBridge, which also does not enforce message ordering.
 
 ### Bridged Supply Tracking
 
@@ -132,6 +143,7 @@ sequenceDiagram
     LZBridgeGateway->>MINTR: approve + burnOhm(gateway, amount)
     LZBridgeGateway->>LZBridgeGateway: combine enforced + extra options
     LZBridgeGateway->>LZEndpointV2: send(MessagingParams, refundAddr)
+    LZBridgeGateway-->>LZBridgeGateway: emit Sent(sender, amount, dstEid, guid)
 ```
 
 #### Receiving OHM (Destination Chain)
