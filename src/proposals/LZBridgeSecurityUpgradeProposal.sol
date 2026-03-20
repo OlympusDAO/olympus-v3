@@ -15,6 +15,9 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
+import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
@@ -317,12 +320,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.BASE_EID
         ];
 
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](_REMOTE_CHAIN_COUNT);
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](_REMOTE_CHAIN_COUNT);
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
-            opts[i] = ILZBridgeGateway.EnforcedOptionParam({
+            opts[i] = EnforcedOptionParam({
                 eid: remoteEids[i],
                 msgType: 1, // MSG_BRIDGE_OHM
                 options: abi.encodePacked(
@@ -391,7 +393,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.CONFIG_TYPE_ULN
         );
         require(sendUlnCfg.length > 0, "Send ULN config not set");
-        LZConfigLib.UlnConfig memory sendUln = abi.decode(sendUlnCfg, (LZConfigLib.UlnConfig));
+        UlnConfig memory sendUln = abi.decode(sendUlnCfg, (UlnConfig));
         require(
             sendUln.confirmations == LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
             "Send ULN confirmations mismatch"
@@ -406,7 +408,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.CONFIG_TYPE_EXECUTOR
         );
         require(execCfg.length > 0, "Executor config not set");
-        LZConfigLib.ExecutorConfig memory exec = abi.decode(execCfg, (LZConfigLib.ExecutorConfig));
+        ExecutorConfig memory exec = abi.decode(execCfg, (ExecutorConfig));
         require(exec.executor == LZConfigLib.LZ_EXECUTOR, "Executor address mismatch");
         require(
             exec.maxMessageSize == LZConfigLib.MAX_MESSAGE_SIZE,
@@ -427,7 +429,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.CONFIG_TYPE_ULN
         );
         require(recvUlnCfg.length > 0, "Recv ULN config not set");
-        LZConfigLib.UlnConfig memory recvUln = abi.decode(recvUlnCfg, (LZConfigLib.UlnConfig));
+        UlnConfig memory recvUln = abi.decode(recvUlnCfg, (UlnConfig));
         require(recvUln.confirmations == expectedConf, "Recv ULN confirmations mismatch");
         require(recvUln.requiredDVNCount == 2, "Recv ULN should require 2 DVNs");
     }

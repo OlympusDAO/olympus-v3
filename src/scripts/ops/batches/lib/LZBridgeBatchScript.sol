@@ -5,12 +5,12 @@ pragma solidity >=0.8.30;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @title LZBridgeBatchScript
 /// @notice Abstract base for LZ bridge batch scripts.
@@ -123,8 +123,8 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
         console2.log("\nSetting enforced options");
 
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](remoteEids.length);
+        EnforcedOptionParam[]
+            memory opts = new EnforcedOptionParam[](remoteEids.length);
 
         for (uint256 i = 0; i < remoteEids.length; ++i) {
             // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
@@ -135,7 +135,7 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
                 uint8(1),
                 uint128(200_000)
             );
-            opts[i] = ILZBridgeGateway.EnforcedOptionParam({
+            opts[i] = EnforcedOptionParam({
                 eid: remoteEids[i],
                 msgType: msgBridgeOhm,
                 options: options

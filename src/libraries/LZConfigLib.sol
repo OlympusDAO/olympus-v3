@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
+import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
+import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
+
 interface ILayerZeroDVNState {
     function vid() external view returns (uint32);
 }
@@ -105,24 +108,6 @@ library LZConfigLib {
     uint32 internal constant ARB_EID = 30110;
     uint32 internal constant OPT_EID = 30111;
     uint32 internal constant BASE_EID = 30184;
-
-    // ========== STRUCTS ========== //
-
-    // Source: https://docs.layerzero.network/v2/developers/evm/create-lz-oapp/configuring-pathways
-
-    struct UlnConfig {
-        uint64 confirmations;
-        uint8 requiredDVNCount;
-        uint8 optionalDVNCount;
-        uint8 optionalDVNThreshold;
-        address[] requiredDVNs;
-        address[] optionalDVNs;
-    }
-
-    struct ExecutorConfig {
-        uint32 maxMessageSize;
-        address executor;
-    }
 
     // ========== ADDRESS HELPERS ========== //
 

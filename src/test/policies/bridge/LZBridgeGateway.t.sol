@@ -14,6 +14,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -112,18 +113,16 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
 
         // Set enforced options
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory enforcedOpts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        enforcedOpts[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory enforcedOpts = new EnforcedOptionParam[](1);
+        enforcedOpts[0] = EnforcedOptionParam({
             eid: NONCANONICAL_EID,
             msgType: gateway.MSG_BRIDGE_OHM(),
             options: DEFAULT_OPTIONS
         });
         gateway.setEnforcedOptions(enforcedOpts);
 
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory enforcedOpts2 = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        enforcedOpts2[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory enforcedOpts2 = new EnforcedOptionParam[](1);
+        enforcedOpts2[0] = EnforcedOptionParam({
             eid: CANONICAL_EID,
             msgType: gateway2.MSG_BRIDGE_OHM(),
             options: DEFAULT_OPTIONS
@@ -616,9 +615,8 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
     function test_burnAndSend_revertsIfEnforcedOptionsLackExecutorGas() external {
         // Override enforced options to Type 3 prefix only (no executor lzReceive entry).
         // The LZ endpoint executor rejects options without a gas specification.
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({
             eid: NONCANONICAL_EID,
             msgType: gateway.MSG_BRIDGE_OHM(),
             options: abi.encodePacked(uint16(3))
@@ -1138,9 +1136,8 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
 /// @dev Type 3 enforced option configuration.
 contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
     function test_setEnforcedOptions() external {
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({
             eid: uint32(42),
             msgType: uint16(1),
             options: DEFAULT_OPTIONS
@@ -1160,13 +1157,8 @@ contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
         // Type 1 options (not Type 3)
         bytes memory type1Options = abi.encodePacked(uint16(1), uint128(200_000));
 
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
-            eid: uint32(42),
-            msgType: uint16(1),
-            options: type1Options
-        });
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({eid: uint32(42), msgType: uint16(1), options: type1Options});
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1179,9 +1171,8 @@ contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
     }
 
     function test_setEnforcedOptions_revertsIfNotAdmin() external {
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({
             eid: uint32(42),
             msgType: uint16(1),
             options: DEFAULT_OPTIONS

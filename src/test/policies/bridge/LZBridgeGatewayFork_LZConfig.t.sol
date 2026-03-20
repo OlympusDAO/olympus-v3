@@ -9,6 +9,9 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
+import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
+import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -502,8 +505,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                     LZConfigLib.CONFIG_TYPE_ULN
                 );
 
-                LZConfigLib.UlnConfig memory sendUln = abi.decode(sendCfg, (LZConfigLib.UlnConfig));
-                LZConfigLib.UlnConfig memory recvUln = abi.decode(recvCfg, (LZConfigLib.UlnConfig));
+                UlnConfig memory sendUln = abi.decode(sendCfg, (UlnConfig));
+                UlnConfig memory recvUln = abi.decode(recvCfg, (UlnConfig));
 
                 assertEq(
                     sendUln.confirmations,

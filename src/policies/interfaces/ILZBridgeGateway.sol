@@ -1,28 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.18;
 
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
+import {Origin, MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
-import {Origin, MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
 ///      enforced options, rate limiting, and bridged supply cap enforcement.
 interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
-    // ========= TYPES ========= //
-
-    /// @notice Enforced option parameter for a specific endpoint and message type.
-    /// @param eid The endpoint ID.
-    /// @param msgType The message type identifier.
-    /// @param options The enforced options bytes (must be Type 3).
-    struct EnforcedOptionParam {
-        uint32 eid;
-        uint16 msgType;
-        bytes options;
-    }
-
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.

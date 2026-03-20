@@ -9,6 +9,8 @@ import {console2} from "forge-std/console2.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
+import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
+import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 // Contracts
@@ -128,7 +130,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
         assertGt(cfg.length, 0, "Send ULN config should be set");
 
-        LZConfigLib.UlnConfig memory uln = abi.decode(cfg, (LZConfigLib.UlnConfig));
+        UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
         assertEq(
             uln.confirmations,
             LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
@@ -160,7 +162,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
         assertGt(cfg.length, 0, "Recv ULN config should be set");
 
-        LZConfigLib.UlnConfig memory uln = abi.decode(cfg, (LZConfigLib.UlnConfig));
+        UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
         assertEq(uln.confirmations, expectedConfirmations_, "Recv ULN confirmations mismatch");
         assertEq(uln.requiredDVNCount, 2, "Recv ULN should require 2 DVNs");
         assertEq(uln.requiredDVNs.length, 2, "Recv ULN should have 2 required DVNs");
@@ -187,7 +189,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
         assertGt(cfg.length, 0, "Executor config should be set");
 
-        LZConfigLib.ExecutorConfig memory exec = abi.decode(cfg, (LZConfigLib.ExecutorConfig));
+        ExecutorConfig memory exec = abi.decode(cfg, (ExecutorConfig));
         assertEq(
             exec.maxMessageSize,
             LZConfigLib.MAX_MESSAGE_SIZE,

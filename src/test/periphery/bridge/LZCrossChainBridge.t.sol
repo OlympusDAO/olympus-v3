@@ -13,6 +13,7 @@ import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -111,18 +112,16 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
 
         // Set enforced options
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts1 = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts1[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts1 = new EnforcedOptionParam[](1);
+        opts1[0] = EnforcedOptionParam({
             eid: NONCANONICAL_EID,
             msgType: gateway.MSG_BRIDGE_OHM(),
             options: DEFAULT_OPTIONS
         });
         gateway.setEnforcedOptions(opts1);
 
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts2 = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts2[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts2 = new EnforcedOptionParam[](1);
+        opts2[0] = EnforcedOptionParam({
             eid: CANONICAL_EID,
             msgType: gateway2.MSG_BRIDGE_OHM(),
             options: DEFAULT_OPTIONS

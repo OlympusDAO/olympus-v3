@@ -8,6 +8,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -390,9 +391,8 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         ethGateway.setPeer(LZConfigLib.ARB_EID, LZConfigLib.addressToBytes32(address(arbGateway)));
 
         // Set enforced options on ethGateway for LZConfigLib.ARB_EID (required for endpoint.send)
-        ILZBridgeGateway.EnforcedOptionParam[]
-            memory opts = new ILZBridgeGateway.EnforcedOptionParam[](1);
-        opts[0] = ILZBridgeGateway.EnforcedOptionParam({
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({
             eid: LZConfigLib.ARB_EID,
             msgType: 1, // MSG_BRIDGE_OHM
             // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k

@@ -2,13 +2,14 @@
 pragma solidity >=0.8.30;
 
 // Interfaces
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
@@ -188,7 +189,13 @@ contract LZBridgeGateway is
         bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
 
         MessagingReceipt memory receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
-            MessagingParams(dstEid_, peer, payload, options, false),
+            MessagingParams({
+                dstEid: dstEid_,
+                receiver: peer,
+                message: payload,
+                options: options,
+                payInLzToken: false
+            }),
             refundAddress_
         );
         emit Sent(msg.sender, amount_, dstEid_, receipt.guid);
@@ -209,7 +216,13 @@ contract LZBridgeGateway is
 
         return
             ILayerZeroEndpointV2(LZ_ENDPOINT).quote(
-                MessagingParams(dstEid_, peer, payload, options, false),
+                MessagingParams({
+                    dstEid: dstEid_,
+                    receiver: peer,
+                    message: payload,
+                    options: options,
+                    payInLzToken: false
+                }),
                 address(this)
             );
     }
@@ -280,7 +293,7 @@ contract LZBridgeGateway is
     function setEnforcedOptions(
         EnforcedOptionParam[] calldata enforcedOptions_
     ) external override onlyAdminRole {
-        for (uint256 i = 0; i < enforcedOptions_.length; i++) {
+        for (uint256 i = 0; i < enforcedOptions_.length; ++i) {
             _assertOptionsType3(enforcedOptions_[i].options);
             enforcedOptions[enforcedOptions_[i].eid][
                 enforcedOptions_[i].msgType
