@@ -96,7 +96,7 @@ abstract contract LZBridgeL2BatchScript is LZBridgeBatchScript {
             }
 
             console2.log("\nBroadcasting batch to EOA");
-            vm.startBroadcast();
+            vm.startBroadcast(_owner);
             _runBatch();
             vm.stopBroadcast();
             console2.log("Batch executed successfully");
