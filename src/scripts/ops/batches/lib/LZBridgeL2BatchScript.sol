@@ -12,7 +12,7 @@ import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
 ///         OlympusHeart validation (L2 chains don't deploy OlympusHeart).
 abstract contract LZBridgeL2BatchScript is LZBridgeBatchScript {
     /// @notice Custom batch proposal for L2 chains that skips OlympusHeart validation.
-    /// @dev L2 chains don't deploy OlympusHeart, so _validateHeartBeat() would revert.
+    /// @dev OlympusHeart is not deployed on L2 chains, so _validateHeartBeat() would revert.
     function _proposeL2Batch() internal {
         if (_batchTargets.length == 0) {
             console2.log("No batch targets to execute");

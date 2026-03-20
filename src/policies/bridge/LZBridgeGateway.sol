@@ -93,6 +93,7 @@ contract LZBridgeGateway is
         _setFacilitator(facilitator_);
 
         // PolicyEnabler starts disabled; must be explicitly enabled after configuration.
+        // Gateway is always authorized to call endpoint functions.
     }
 
     /// @inheritdoc Policy
