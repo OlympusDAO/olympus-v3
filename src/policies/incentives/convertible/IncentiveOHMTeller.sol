@@ -391,14 +391,31 @@ contract IncentiveOHMTeller is
     function _requireExistingToken(
         address token_
     ) internal view returns (IncentiveOHMToken, address, address, uint48, uint48, uint256) {
-        // Load token parameters
-        (
-            address quoteToken,
-            address creator,
-            uint48 eligible,
-            uint48 expiry,
-            uint256 strikePrice
-        ) = IncentiveOHMToken(token_).parameters();
+        // Revert early for EOAs (no code at address) with a meaningful error
+        if (token_.code.length == 0) revert Teller_UnsupportedToken(token_);
+
+        // Load token parameters via try/catch to revert with a meaningful error for non-token contracts
+        address quoteToken;
+        address creator;
+        uint48 eligible;
+        uint48 expiry;
+        uint256 strikePrice;
+
+        try IncentiveOHMToken(token_).parameters() returns (
+            address quoteToken_,
+            address creator_,
+            uint48 eligible_,
+            uint48 expiry_,
+            uint256 strikePrice_
+        ) {
+            quoteToken = quoteToken_;
+            creator = creator_;
+            eligible = eligible_;
+            expiry = expiry_;
+            strikePrice = strikePrice_;
+        } catch {
+            revert Teller_UnsupportedToken(token_);
+        }
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist (timestamps are already truncated)

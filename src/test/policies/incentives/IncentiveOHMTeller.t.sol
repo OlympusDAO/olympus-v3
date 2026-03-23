@@ -696,6 +696,26 @@ contract IncentiveOHMTellerMintTests is IncentiveOHMTellerTestBase {
         teller.create(address(token), user0, 100e9);
     }
 
+    function test_create_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IIncentiveOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(user0, user0, 100e9);
+    }
+
+    function test_create_revertsIfTokenIsNonTokenContract() external {
+        // Use the kernel address as a contract that doesn't implement parameters()
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IIncentiveOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(kernel), user0, 100e9);
+    }
+
     function test_create_revertsIfPolicyDisabled() external {
         // 1. Preparation: deploy a token, then disable the policy
         IncentiveOHMToken token = _deployConvertibleToken();
@@ -1010,6 +1030,23 @@ contract IncentiveOHMTellerExerciseTests is IncentiveOHMTellerTestBase {
         );
         teller.exercise(address(fotConvToken), user0InitialBal);
         vm.stopPrank();
+    }
+
+    function test_exercise_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IIncentiveOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        teller.exercise(user0, 100e9);
+    }
+
+    function test_exercise_revertsIfTokenIsNonTokenContract() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IIncentiveOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        teller.exercise(address(kernel), 100e9);
     }
 
     function test_exercise_revertsIfPolicyDisabled() external {
@@ -1348,6 +1385,23 @@ contract IncentiveOHMTellerViewerTests is IncentiveOHMTellerTestBase {
             )
         );
         teller.exerciseCost(address(badToken), 100e9);
+    }
+
+    function test_exerciseCost_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IIncentiveOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        teller.exerciseCost(user0, 100e9);
+    }
+
+    function test_exerciseCost_revertsIfTokenIsNonTokenContract() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IIncentiveOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        teller.exerciseCost(address(kernel), 100e9);
     }
 
     function test_exerciseCost_revertsIfAmountIsZero() external {
