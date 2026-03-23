@@ -27,10 +27,10 @@ import {CloneERC20Permit} from "src/external/clones/CloneERC20Permit.sol";
 ///      [0x61:0x75]  teller (address)
 ///      [0x75:0x89]  creator (address)
 ///      [0x89:0xA9]  strikePrice (uint256)
-contract IOHMToken is CloneERC20Permit {
+contract IncentiveOHMToken is CloneERC20Permit {
     // ========== ERRORS ========== //
 
-    error IOHMToken_OnlyTeller();
+    error IncentiveOHMToken_OnlyTeller();
 
     // ========== IMMUTABLE PARAMETERS ========== //
 
@@ -84,7 +84,7 @@ contract IOHMToken is CloneERC20Permit {
     // ========== MINT & BURN ========== //
 
     modifier onlyTeller() {
-        if (msg.sender != teller()) revert IOHMToken_OnlyTeller();
+        if (msg.sender != teller()) revert IncentiveOHMToken_OnlyTeller();
         _;
     }
 

@@ -7,7 +7,7 @@ import {BaseIncentiveDistributor} from "src/policies/incentives/BaseIncentiveDis
 // Interfaces
 import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
-import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
+import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Bophades
@@ -22,7 +22,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///      - Merkle roots are posted on-chain by the authorized role.
 ///      - Users submit proofs to claim their incentives in convertible tokens.
 ///
-///      Tokens are deployed and minted via IOHMTeller.
+///      Tokens are deployed and minted via IncentiveOHMTeller.
 contract IncentiveDistributorConvertible is
     BaseIncentiveDistributor,
     IIncentiveDistributorConvertible
@@ -30,7 +30,7 @@ contract IncentiveDistributorConvertible is
     // ========== IMMUTABLES ========== //
 
     /// @notice The teller contract for deploying and minting convertible tokens
-    IIOHMTeller public immutable TELLER;
+    IIncentiveOHMTeller public immutable TELLER;
 
     /// @notice Expected byte length of ABI-encoded EndEpochParams (4 slots × 32 bytes)
     uint256 private constant _END_EPOCH_PARAMS_LENGTH = 128;
@@ -51,7 +51,7 @@ contract IncentiveDistributorConvertible is
         address teller_
     ) BaseIncentiveDistributor(kernel_, lastEpochEndDate_) {
         if (teller_ == address(0)) revert IncentiveDistributor_InvalidAddress();
-        TELLER = IIOHMTeller(teller_);
+        TELLER = IIncentiveOHMTeller(teller_);
     }
 
     // ========== POLICY SETUP ========== //

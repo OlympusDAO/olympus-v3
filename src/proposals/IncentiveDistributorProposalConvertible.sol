@@ -16,7 +16,7 @@ import {Kernel} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
-import {IOHMTeller} from "src/policies/incentives/convertible/IOHMTeller.sol";
+import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice Proposal to enable the iOHM Incentive Distributor system
@@ -26,7 +26,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     // ========== CONSTANTS ========== //
 
     /// TODO: Decide on the initial mint cap
-    /// @notice Initial mint cap for the IOHMTeller (in OHM units, 9 decimals)
+    /// @notice Initial mint cap for the IncentiveOHMTeller (in OHM units, 9 decimals)
     uint256 internal constant INITIAL_MINT_CAP = 1000e9;
 
     // ========== PROPOSAL ========== //
@@ -46,13 +46,13 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
                 "# iOHM Incentive Distributor Enablement\n\n",
                 "## Summary\n\n",
                 "This proposal enables the iOHM incentive distribution system, ",
-                "consisting of the IOHMTeller and IncentiveDistributorConvertible policies.\n\n",
+                "consisting of the IncentiveOHMTeller and IncentiveDistributorConvertible policies.\n\n",
                 "## Proposal Actions\n\n",
                 "1. Grant `incentive_distributor` role to IncentiveDistributorConvertible.\n",
                 "2. Grant `convertible_admin` role to DAO MS.\n",
                 "3. Grant `incentive_manager` role to Distributor MS.\n",
                 // TODO: specify the specific minting cap value when it becomes known
-                "4. Enable the IOHMTeller policy (with initial mint cap).\n",
+                "4. Enable the IncentiveOHMTeller policy (with initial mint cap).\n",
                 "5. Enable the IncentiveDistributorConvertible policy.\n\n",
                 "## Result\n\n",
                 "After execution, the Distributor MS will be able to post weekly merkle roots and deploy ",
@@ -116,11 +116,11 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             "Grant incentive_manager role to Distributor MS"
         );
 
-        // 4. Enable IOHMTeller (with initial mint cap)
+        // 4. Enable IncentiveOHMTeller (with initial mint cap)
         _pushAction(
             iohmTeller,
             abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(INITIAL_MINT_CAP)),
-            "Enable IOHMTeller policy"
+            "Enable IncentiveOHMTeller policy"
         );
 
         // 5. Enable IncentiveDistributorConvertible
@@ -170,13 +170,13 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             "Distributor MS does not have incentive_manager role"
         );
 
-        // Validate IOHMTeller is enabled
-        require(IOHMTeller(iohmTeller).isEnabled(), "IOHMTeller is not enabled");
+        // Validate IncentiveOHMTeller is enabled
+        require(IncentiveOHMTeller(iohmTeller).isEnabled(), "IncentiveOHMTeller is not enabled");
 
         // Validate the teller's mint cap was set to INITIAL_MINT_CAP via enable(bytes)
         require(
-            IOHMTeller(iohmTeller).remainingMintApproval() == INITIAL_MINT_CAP,
-            "IOHMTeller mint cap does not match INITIAL_MINT_CAP"
+            IncentiveOHMTeller(iohmTeller).remainingMintApproval() == INITIAL_MINT_CAP,
+            "IncentiveOHMTeller mint cap does not match INITIAL_MINT_CAP"
         );
 
         // Validate IncentiveDistributorConvertible is enabled

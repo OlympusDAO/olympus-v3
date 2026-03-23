@@ -11,8 +11,8 @@ import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IOHMTeller} from "src/policies/incentives/convertible/IOHMTeller.sol";
-import {IOHMToken} from "src/policies/incentives/convertible/IOHMToken.sol";
+import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
+import {IncentiveOHMToken} from "src/policies/incentives/convertible/IncentiveOHMToken.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 
 // Interfaces
@@ -28,7 +28,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
     // ========== DEPLOYMENT TOGGLES ==========
 
-    /// @dev Set to true once the IOHMTeller and IncentiveDistributorConvertible
+    /// @dev Set to true once the IncentiveOHMTeller and IncentiveDistributorConvertible
     ///      policies have been deployed on mainnet. When false, setUp() deploys them
     ///      locally and registers them in the address registry before proposal simulation.
     bool public constant IS_POLICIES_DEPLOYED = false;
@@ -36,7 +36,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     // ========== CONTRACTS ==========
 
     Kernel public kernel;
-    IOHMTeller public teller;
+    IncentiveOHMTeller public teller;
     IncentiveDistributorConvertible public distributor;
     IncentiveDistributorProposalTestWrapper public proposalWrapper;
     IERC20 public ohm;
@@ -81,15 +81,15 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         // ========== CONDITIONAL POLICY DEPLOYMENT ==========
 
         if (IS_POLICIES_DEPLOYED) {
-            teller = IOHMTeller(addresses.getAddress("olympus-policy-iohm-teller"));
+            teller = IncentiveOHMTeller(addresses.getAddress("olympus-policy-iohm-teller"));
             distributor = IncentiveDistributorConvertible(
                 addresses.getAddress("olympus-policy-incentive-distributor-convertible")
             );
             console2.log("Policies already deployed on mainnet");
         } else {
             // Deploy teller
-            teller = new IOHMTeller(address(kernel), address(ohm));
-            vm.label(address(teller), "IOHMTeller");
+            teller = new IncentiveOHMTeller(address(kernel), address(ohm));
+            vm.label(address(teller), "IncentiveOHMTeller");
 
             // Deploy distributor
             // lastEpochEndDate = end of yesterday (23:59:59 UTC)
@@ -136,13 +136,13 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     function _verifyPostProposalState() internal view {
         assertTrue(
             Policy(address(teller)).isActive(),
-            "IOHMTeller should be active after proposal"
+            "IncentiveOHMTeller should be active after proposal"
         );
         assertTrue(
             Policy(address(distributor)).isActive(),
             "IncentiveDistributorConvertible should be active after proposal"
         );
-        assertTrue(teller.isEnabled(), "IOHMTeller should be enabled after proposal");
+        assertTrue(teller.isEnabled(), "IncentiveOHMTeller should be enabled after proposal");
         assertTrue(
             distributor.isEnabled(),
             "IncentiveDistributorConvertible should be enabled after proposal"
@@ -150,7 +150,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
         console2.log("");
         console2.log("====== Post-Proposal State Verified ======");
-        console2.log("IOHMTeller active:", Policy(address(teller)).isActive());
+        console2.log("IncentiveOHMTeller active:", Policy(address(teller)).isActive());
         console2.log(
             "IncentiveDistributorConvertible active:",
             Policy(address(distributor)).isActive()
@@ -210,8 +210,8 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
     /// @notice Validates that the proposal leaves the system in the correct end state
     function test_proposalEndState() public view {
-        // Verify IOHMTeller is active in the Kernel
-        assertTrue(Policy(address(teller)).isActive(), "IOHMTeller should be active");
+        // Verify IncentiveOHMTeller is active in the Kernel
+        assertTrue(Policy(address(teller)).isActive(), "IncentiveOHMTeller should be active");
 
         // Verify IncentiveDistributorConvertible is active in the Kernel
         assertTrue(
@@ -237,7 +237,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         );
 
         // Verify policies are enabled
-        assertTrue(teller.isEnabled(), "IOHMTeller should be enabled");
+        assertTrue(teller.isEnabled(), "IncentiveOHMTeller should be enabled");
         assertTrue(distributor.isEnabled(), "IncentiveDistributorConvertible should be enabled");
 
         // TODO: specify the specific minting cap value when it becomes known
@@ -336,7 +336,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
     /// @notice Validates that an epoch can be ended by the incentive_manager
     /// @dev Verifies the incentive_manager role can call endEpoch, which deploys a
-    ///      IOHMToken with the correct parameters and stores the merkle root.
+    ///      IncentiveOHMToken with the correct parameters and stores the merkle root.
     function test_endEpoch_succeeds() public {
         uint40 epochEndDate = _firstEpochEndDate();
         bytes32 merkleRoot = bytes32(uint256(1));
@@ -378,7 +378,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         );
 
         // Verify token parameters match what was requested
-        IOHMToken convToken = IOHMToken(token);
+        IncentiveOHMToken convToken = IncentiveOHMToken(token);
         assertEq(address(convToken.quote()), address(usds), "Quote token should be USDS");
         assertEq(convToken.strike(), STRIKE_PRICE, "Strike price should match");
         assertEq(convToken.eligible(), eligibleTimestamp, "Eligible timestamp should match");
@@ -399,7 +399,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         bytes32 leaf = _generateLeaf(user0, epochEndDate, claimAmount);
 
         vm.prank(distributorMS);
-        IOHMToken token = IOHMToken(
+        IncentiveOHMToken token = IncentiveOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -444,7 +444,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         bytes32 leaf = _generateLeaf(user0, epochEndDate, claimAmount);
 
         vm.prank(distributorMS);
-        IOHMToken token = IOHMToken(
+        IncentiveOHMToken token = IncentiveOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,

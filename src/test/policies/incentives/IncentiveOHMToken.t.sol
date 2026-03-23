@@ -8,13 +8,13 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IOHMTeller} from "src/policies/incentives/convertible/IOHMTeller.sol";
-import {IOHMToken} from "src/policies/incentives/convertible/IOHMToken.sol";
-import {IIOHMTeller} from "src/policies/incentives/convertible/interfaces/IIOHMTeller.sol";
+import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
+import {IncentiveOHMToken} from "src/policies/incentives/convertible/IncentiveOHMToken.sol";
+import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-contract IOHMTokenTestBase is Test {
+contract IncentiveOHMTokenTestBase is Test {
     // Contracts
     Kernel kernel;
     OlympusTreasury trsry;
@@ -24,7 +24,7 @@ contract IOHMTokenTestBase is Test {
     MockOhm ohm;
     MockERC20 usds;
 
-    IOHMTeller teller;
+    IncentiveOHMTeller teller;
 
     // Constants
     uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
@@ -56,7 +56,7 @@ contract IOHMTokenTestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy the teller policy
-        teller = new IOHMTeller(address(kernel), address(ohm));
+        teller = new IncentiveOHMTeller(address(kernel), address(ohm));
         // Activate the policy
         kernel.executeAction(Actions.ActivatePolicy, address(teller));
 
@@ -100,15 +100,18 @@ contract IOHMTokenTestBase is Test {
         );
     }
 
-    function _deployConvertibleToken() internal returns (IOHMToken token) {
+    function _deployConvertibleToken() internal returns (IncentiveOHMToken token) {
         vm.prank(incentiveDistributor);
-        token = IOHMToken(
+        token = IncentiveOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
     // Calculates the exact exercise cost using the teller
-    function _exerciseCost(IOHMToken token, uint256 amount) internal view returns (uint256) {
+    function _exerciseCost(
+        IncentiveOHMToken token,
+        uint256 amount
+    ) internal view returns (uint256) {
         (, uint256 cost) = teller.exerciseCost(address(token), amount);
         return cost;
     }
@@ -118,8 +121,8 @@ contract IOHMTokenTestBase is Test {
     }
 }
 
-contract IOHMTokenTests is IOHMTokenTestBase {
-    IOHMToken token;
+contract IncentiveOHMTokenTests is IncentiveOHMTokenTestBase {
+    IncentiveOHMToken token;
 
     uint256 user0InitialBal = 100e9;
 
@@ -246,13 +249,13 @@ contract IOHMTokenTests is IOHMTokenTestBase {
     }
 
     function test_mintFor_revertsIfNotTeller() external {
-        vm.expectRevert(IOHMToken.IOHMToken_OnlyTeller.selector);
+        vm.expectRevert(IncentiveOHMToken.IncentiveOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.mintFor(user0, 100e9);
     }
 
     function test_burnFrom_revertsIfNotTeller() external {
-        vm.expectRevert(IOHMToken.IOHMToken_OnlyTeller.selector);
+        vm.expectRevert(IncentiveOHMToken.IncentiveOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.burnFrom(user0, user0InitialBal);
     }

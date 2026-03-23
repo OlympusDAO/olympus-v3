@@ -6,8 +6,8 @@
 
 src/policies/incentives/BaseIncentiveDistributor.sol
 src/policies/incentives/IncentiveDistributorConvertible.sol
-src/policies/incentives/convertible/IOHMTeller.sol
-src/policies/incentives/convertible/IOHMToken.sol
+src/policies/incentives/convertible/IncentiveOHMTeller.sol
+src/policies/incentives/convertible/IncentiveOHMToken.sol
 src/external/clones/Clone.sol
 src/external/clones/CloneERC20.sol
 src/external/clones/CloneERC20Permit.sol
@@ -16,7 +16,7 @@ src/external/clones/CloneERC20Permit.sol
 
 src/policies/interfaces/incentives/IIncentiveDistributor.sol
 src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol
-src/policies/incentives/convertible/interfaces/IIOHMTeller.sol
+src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol
 
 # OCG Proposal
 

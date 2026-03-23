@@ -3,9 +3,9 @@ pragma solidity >=0.8.0;
 
 import {ERC20} from "@openzeppelin-5.3.0/token/ERC20/ERC20.sol";
 
-/// @notice A mock token that mimics IOHMToken interface
+/// @notice A mock token that mimics IncentiveOHMToken interface
 ///         for testing with invalid/malicious tokens.
-contract MaliciousIOHMToken is ERC20 {
+contract MaliciousIncentiveOHMToken is ERC20 {
     address internal _quote;
     address internal _creator;
     uint48 internal _eligible;
