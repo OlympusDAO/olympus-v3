@@ -1096,12 +1096,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         amounts[0] = amount;
 
         vm.prank(user0);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IIncentiveDistributor.IncentiveDistributor_ArrayLengthMismatch.selector,
-                epochEndDate
-            )
-        );
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_ArrayLengthMismatch.selector);
         distributor.claim(epochEndDates, amounts, new bytes32[][](0));
     }
 
@@ -1287,10 +1282,10 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         distributor.claim(epochEndDates, amounts, proofs);
     }
 
-    function test_claim_revertsIfInvalidTokenWhenEpochNotSetup() external {
-        // Don't setup epoch - no convertible token deployed
-        // In IncentiveDistributorConvertible, the InvalidToken check happens before IncentiveDistributor_MerkleRootNotSet
-        // because it first looks up epochConvertibleTokens[epochEndDate]
+    function test_claim_revertsWithMerkleRootNotSetBeforeInvalidToken() external {
+        // Don't setup epoch - no merkle root and no convertible token deployed
+        // _validateAndMarkClaimed() is called before the token lookup,
+        // so MerkleRootNotSet should revert before InvalidToken
 
         uint256[] memory epochEndDates = new uint256[](1);
         epochEndDates[0] = epochEndDate;
@@ -1301,7 +1296,10 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         vm.prank(user0);
         vm.expectRevert(
-            IIncentiveDistributorConvertible.IncentiveDistributor_InvalidToken.selector
+            abi.encodeWithSelector(
+                IIncentiveDistributor.IncentiveDistributor_MerkleRootNotSet.selector,
+                epochEndDate
+            )
         );
         distributor.claim(epochEndDates, amounts, proofs);
     }

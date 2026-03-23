@@ -124,12 +124,12 @@ contract IncentiveDistributorConvertible is
         // Process claims for each epoch by verifying proofs, marking as claimed and minting convertible tokens
         bool hasMinted = false;
         for (uint256 i = 0; i < len; ++i) {
+            // Validate preconditions, verify proof, and mark as claimed
+            _validateAndMarkClaimed(msg.sender, epochEndDates_[i], amounts_[i], proofs_[i]);
+
             // Get the convertible token for this epoch
             address convertibleToken = epochConvertibleTokens[epochEndDates_[i]];
             if (convertibleToken == address(0)) revert IncentiveDistributor_InvalidToken();
-
-            // Validate preconditions, verify proof, and mark as claimed
-            _validateAndMarkClaimed(msg.sender, epochEndDates_[i], amounts_[i], proofs_[i]);
 
             tokens[i] = convertibleToken;
             mintedAmounts[i] = amounts_[i];
