@@ -27,7 +27,14 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
     /// TODO: Decide on the initial mint cap
     /// @notice Initial mint cap for the IncentiveOHMTeller (in OHM units, 9 decimals)
-    uint256 internal constant INITIAL_MINT_CAP = 1000e9;
+    uint256 internal constant _INITIAL_MINT_CAP = 1000e9;
+
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 internal constant _ROLE_INCENTIVE_DISTRIBUTOR = bytes32("incentive_distributor");
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 internal constant _ROLE_CONVERTIBLE_ADMIN = bytes32("convertible_admin");
+    /// forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 internal constant _ROLE_INCENTIVE_MANAGER = bytes32("incentive_manager");
 
     // ========== PROPOSAL ========== //
 
@@ -85,8 +92,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                bytes32("incentive_distributor"),
+                _ROLE_INCENTIVE_DISTRIBUTOR,
                 incentiveDistributorConvertible
             ),
             "Grant incentive_distributor role to IncentiveDistributorConvertible"
@@ -95,12 +101,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         // 2. Grant convertible_admin role to DAO MS
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                bytes32("convertible_admin"),
-                daoMS
-            ),
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, _ROLE_CONVERTIBLE_ADMIN, daoMS),
             "Grant convertible_admin role to DAO MS"
         );
 
@@ -109,8 +110,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                bytes32("incentive_manager"),
+                _ROLE_INCENTIVE_MANAGER,
                 distributorMS
             ),
             "Grant incentive_manager role to Distributor MS"
@@ -119,7 +119,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         // 4. Enable IncentiveOHMTeller (with initial mint cap)
         _pushAction(
             iohmTeller,
-            abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(INITIAL_MINT_CAP)),
+            abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(_INITIAL_MINT_CAP)),
             "Enable IncentiveOHMTeller policy"
         );
 
@@ -151,32 +151,29 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
         // Validate IncentiveDistributorConvertible has the incentive_distributor role
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(incentiveDistributorConvertible, bytes32("incentive_distributor")),
+            roles.hasRole(incentiveDistributorConvertible, _ROLE_INCENTIVE_DISTRIBUTOR),
             "IncentiveDistributorConvertible does not have incentive_distributor role"
         );
 
         // Validate DAO MS has the convertible_admin role
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, bytes32("convertible_admin")),
+            roles.hasRole(daoMS, _ROLE_CONVERTIBLE_ADMIN),
             "DAO MS does not have convertible_admin role"
         );
 
         // Validate Distributor MS has the incentive_manager role
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(distributorMS, bytes32("incentive_manager")),
+            roles.hasRole(distributorMS, _ROLE_INCENTIVE_MANAGER),
             "Distributor MS does not have incentive_manager role"
         );
 
         // Validate IncentiveOHMTeller is enabled
         require(IncentiveOHMTeller(iohmTeller).isEnabled(), "IncentiveOHMTeller is not enabled");
 
-        // Validate the teller's mint cap was set to INITIAL_MINT_CAP via enable(bytes)
+        // Validate the teller's mint cap was set to _INITIAL_MINT_CAP via enable(bytes)
         require(
-            IncentiveOHMTeller(iohmTeller).remainingMintApproval() == INITIAL_MINT_CAP,
-            "IncentiveOHMTeller mint cap does not match INITIAL_MINT_CAP"
+            IncentiveOHMTeller(iohmTeller).remainingMintApproval() == _INITIAL_MINT_CAP,
+            "IncentiveOHMTeller mint cap does not match _INITIAL_MINT_CAP"
         );
 
         // Validate IncentiveDistributorConvertible is enabled
