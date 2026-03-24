@@ -60,12 +60,13 @@ interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Previews claimable tokens and amounts for a user.
+    /// @dev Returns zero for epochs whose token is unset or expired.
     /// @param user_ The recipient of the incentives.
     /// @param epochEndDates_ The list of epoch end dates being previewed.
     /// @param amounts_ The amounts to claim for each epoch.
     /// @param proofs_ The Merkle proofs for each epoch.
     /// @return tokens The array of convertible tokens that would be minted.
-    /// @return claimableAmounts The array of amounts claimable per epoch.
+    /// @return claimableAmounts The array of amounts claimable per epoch (zero if expired or unset).
     function previewClaim(
         address user_,
         uint256[] calldata epochEndDates_,

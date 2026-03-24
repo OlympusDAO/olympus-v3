@@ -10,7 +10,8 @@ import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentiv
 import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
-// Bophades
+// Contracts
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
@@ -170,7 +171,14 @@ contract IncentiveDistributorConvertible is
 
         for (uint256 i = 0; i < len; ++i) {
             // Get the convertible token for this epoch (may be the zero address if not set)
-            tokens[i] = epochConvertibleTokens[epochEndDates_[i]];
+            address token = epochConvertibleTokens[epochEndDates_[i]];
+            tokens[i] = token;
+
+            // Skip if token is unset or expired
+            if (
+                token == address(0) ||
+                ConvertibleOHMToken(token).expiry() <= uint48(block.timestamp)
+            ) continue;
 
             if (_isClaimable(user_, epochEndDates_[i], amounts_[i], proofs_[i]))
                 claimableAmounts[i] = amounts_[i];
