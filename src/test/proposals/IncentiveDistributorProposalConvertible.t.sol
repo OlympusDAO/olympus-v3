@@ -110,6 +110,13 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
                 block.chainid
             );
             console2.log("Policies deployed locally");
+
+            // Activate policies in the Kernel (normally done by deployment scripts)
+            address executor = kernel.executor();
+            vm.startPrank(executor);
+            kernel.executeAction(Actions.ActivatePolicy, address(teller));
+            kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+            vm.stopPrank();
         }
 
         // Set debug mode
