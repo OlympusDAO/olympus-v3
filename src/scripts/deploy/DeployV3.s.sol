@@ -41,8 +41,8 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // Reward distribution
-import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
-import {RewardDistributorConvertible} from "src/policies/rewards/RewardDistributorConvertible.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -857,7 +857,7 @@ contract DeployV3 is WithEnvironment {
         return (address(limitOrders), "olympus.periphery");
     }
 
-    // ===== REWARD DISTRIBUTION CONTRACTS ===== //
+    // ===== INCENTIVE DISTRIBUTION CONTRACTS ===== //
 
     function deployConvertibleOHMTeller() public returns (address, string memory) {
         // Dependencies
@@ -877,7 +877,7 @@ contract DeployV3 is WithEnvironment {
         return (address(teller), "olympus.policies");
     }
 
-    function deployRewardDistributorConvertible() public returns (address, string memory) {
+    function deployIncentiveDistributorConvertible() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
@@ -885,7 +885,7 @@ contract DeployV3 is WithEnvironment {
 
         // Input parameters
         uint256 lastEpochEndDate = _readDeploymentArgUint256(
-            "RewardDistributorConvertible",
+            "IncentiveDistributorConvertible",
             "lastEpochEndDate"
         );
 
@@ -896,14 +896,14 @@ contract DeployV3 is WithEnvironment {
         );
 
         // Log parameters
-        console2.log("RewardDistributorConvertible parameters:");
+        console2.log("IncentiveDistributorConvertible parameters:");
         console2.log("  kernel", kernel);
         console2.log("  lastEpochEndDate", lastEpochEndDate);
         console2.log("  teller", teller);
 
         // Deploy
         vm.broadcast();
-        RewardDistributorConvertible distributor = new RewardDistributorConvertible(
+        IncentiveDistributorConvertible distributor = new IncentiveDistributorConvertible(
             kernel,
             lastEpochEndDate,
             teller

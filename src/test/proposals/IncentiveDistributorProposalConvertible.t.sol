@@ -11,24 +11,24 @@ import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-import {RewardDistributorConvertible} from "src/policies/rewards/RewardDistributorConvertible.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
+import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 
 // Interfaces
-import {IRewardDistributorConvertible} from "src/policies/interfaces/rewards/IRewardDistributorConvertible.sol";
+import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
 
 // Proposal
-import {RewardDistributorProposalConvertible} from "src/proposals/RewardDistributorProposalConvertible.sol";
+import {IncentiveDistributorProposalConvertible} from "src/proposals/IncentiveDistributorProposalConvertible.sol";
 
-contract RewardDistributorProposalConvertibleTest is ProposalTest {
+contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     /// @dev Block after contracts are deployed and installed in the Kernel.
     ///      Update this once the contracts are deployed on mainnet.
     uint256 public constant BLOCK = 23831097;
 
     // ========== DEPLOYMENT TOGGLES ==========
 
-    /// @dev Set to true once the ConvertibleOHMTeller and RewardDistributorConvertible
+    /// @dev Set to true once the ConvertibleOHMTeller and IncentiveDistributorConvertible
     ///      policies have been deployed on mainnet. When false, setUp() deploys them
     ///      locally and registers them in the address registry before proposal simulation.
     bool public constant IS_POLICIES_DEPLOYED = false;
@@ -37,8 +37,8 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
 
     Kernel public kernel;
     ConvertibleOHMTeller public teller;
-    RewardDistributorConvertible public distributor;
-    RewardDistributorProposalTestWrapper public proposalWrapper;
+    IncentiveDistributorConvertible public distributor;
+    IncentiveDistributorProposalTestWrapper public proposalWrapper;
     IERC20 public ohm;
     IERC20 public usds;
     ROLESv1 public roles;
@@ -60,8 +60,8 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         // ========== PROPOSAL SETUP ==========
 
         // Deploy proposal under test
-        RewardDistributorProposalConvertible proposal = new RewardDistributorProposalConvertible();
-        proposalWrapper = new RewardDistributorProposalTestWrapper();
+        IncentiveDistributorProposalConvertible proposal = new IncentiveDistributorProposalConvertible();
+        proposalWrapper = new IncentiveDistributorProposalTestWrapper();
 
         // Set to true once the proposal has been submitted on-chain to enforce calldata matching
         hasBeenSubmitted = false;
@@ -76,16 +76,14 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         usds = IERC20(addresses.getAddress("external-tokens-usds"));
         roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
         daoMS = addresses.getAddress("olympus-multisig-dao");
-        distributorMS = addresses.getAddress("olympus-multisig-reward-distributor");
+        distributorMS = addresses.getAddress("olympus-multisig-incentive-distributor");
 
         // ========== CONDITIONAL POLICY DEPLOYMENT ==========
 
         if (IS_POLICIES_DEPLOYED) {
-            teller = ConvertibleOHMTeller(
-                addresses.getAddress("olympus-policy-convertible-ohm-teller")
-            );
-            distributor = RewardDistributorConvertible(
-                addresses.getAddress("olympus-policy-reward-distributor-convertible")
+            teller = ConvertibleOHMTeller(addresses.getAddress("olympus-policy-iohm-teller"));
+            distributor = IncentiveDistributorConvertible(
+                addresses.getAddress("olympus-policy-incentive-distributor-convertible")
             );
             console2.log("Policies already deployed on mainnet");
         } else {
@@ -96,23 +94,19 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
             // Deploy distributor
             // lastEpochEndDate = end of yesterday (23:59:59 UTC)
             uint256 lastEpochEndDate = _roundToDay(uint48(block.timestamp)) - 1;
-            distributor = new RewardDistributorConvertible(
+            distributor = new IncentiveDistributorConvertible(
                 address(kernel),
                 lastEpochEndDate,
                 address(teller)
             );
-            vm.label(address(distributor), "RewardDistributorConvertible");
+            vm.label(address(distributor), "IncentiveDistributorConvertible");
 
             // Register in the address registry so the proposal can find them
             // Note: addresses.json has 0x0 placeholders which are treated as non-existent,
             // so we use addAddress (not changeAddress)
+            addresses.addAddress("olympus-policy-iohm-teller", address(teller), block.chainid);
             addresses.addAddress(
-                "olympus-policy-convertible-ohm-teller",
-                address(teller),
-                block.chainid
-            );
-            addresses.addAddress(
-                "olympus-policy-reward-distributor-convertible",
+                "olympus-policy-incentive-distributor-convertible",
                 address(distributor),
                 block.chainid
             );
@@ -146,19 +140,19 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         );
         assertTrue(
             Policy(address(distributor)).isActive(),
-            "RewardDistributorConvertible should be active after proposal"
+            "IncentiveDistributorConvertible should be active after proposal"
         );
         assertTrue(teller.isEnabled(), "ConvertibleOHMTeller should be enabled after proposal");
         assertTrue(
             distributor.isEnabled(),
-            "RewardDistributorConvertible should be enabled after proposal"
+            "IncentiveDistributorConvertible should be enabled after proposal"
         );
 
         console2.log("");
         console2.log("====== Post-Proposal State Verified ======");
         console2.log("ConvertibleOHMTeller active:", Policy(address(teller)).isActive());
         console2.log(
-            "RewardDistributorConvertible active:",
+            "IncentiveDistributorConvertible active:",
             Policy(address(distributor)).isActive()
         );
         console2.log("Mint approval:", teller.remainingMintApproval());
@@ -166,7 +160,7 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
 
     // ========== HELPERS ==========
 
-    /// @notice Generates a merkle leaf for reward claims (double-hash)
+    /// @notice Generates a merkle leaf for incentive claims (double-hash)
     function _generateLeaf(
         address user,
         uint256 epochEndDate,
@@ -184,7 +178,7 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
     ) internal pure returns (bytes memory) {
         return
             abi.encode(
-                IRewardDistributorConvertible.EndEpochParams({
+                IIncentiveDistributorConvertible.EndEpochParams({
                     quoteToken: quoteToken,
                     eligible: eligible,
                     expiry: expiry,
@@ -219,17 +213,17 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         // Verify ConvertibleOHMTeller is active in the Kernel
         assertTrue(Policy(address(teller)).isActive(), "ConvertibleOHMTeller should be active");
 
-        // Verify RewardDistributorConvertible is active in the Kernel
+        // Verify IncentiveDistributorConvertible is active in the Kernel
         assertTrue(
             Policy(address(distributor)).isActive(),
-            "RewardDistributorConvertible should be active"
+            "IncentiveDistributorConvertible should be active"
         );
 
         // Verify roles are correctly assigned
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(distributor), bytes32("convertible_distributor")),
-            "RewardDistributorConvertible should have convertible_distributor role"
+            "IncentiveDistributorConvertible should have convertible_distributor role"
         );
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -238,13 +232,13 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         );
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(distributorMS, bytes32("rewards_manager")),
-            "Distributor MS should have rewards_manager role"
+            roles.hasRole(distributorMS, bytes32("incentive_manager")),
+            "Distributor MS should have incentive_manager role"
         );
 
         // Verify policies are enabled
         assertTrue(teller.isEnabled(), "ConvertibleOHMTeller should be enabled");
-        assertTrue(distributor.isEnabled(), "RewardDistributorConvertible should be enabled");
+        assertTrue(distributor.isEnabled(), "IncentiveDistributorConvertible should be enabled");
 
         // TODO: specify the specific minting cap value when it becomes known
         // Verify mint cap was set to INITIAL_MINT_CAP (1000 OHM = 1000e9)
@@ -283,7 +277,7 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
         proposalWrapper.validate(addresses, address(this));
     }
 
-    /// @notice Verifies that _validate still passes after a rewards_manager ends an epoch
+    /// @notice Verifies that _validate still passes after a incentive_manager ends an epoch
     /// @dev endEpoch deploys tokens but does not change mint approval, so _validate
     ///      (which checks remainingMintApproval == INITIAL_MINT_CAP) should still pass.
     ///      Analogous to migration cleanup tests that verify _validate holds after state changes.
@@ -340,8 +334,8 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
     // Functional Lifecycle Tests
     // ========================================================================
 
-    /// @notice Validates that an epoch can be ended by the rewards_manager
-    /// @dev Verifies the rewards_manager role can call endEpoch, which deploys a
+    /// @notice Validates that an epoch can be ended by the incentive_manager
+    /// @dev Verifies the incentive_manager role can call endEpoch, which deploys a
     ///      ConvertibleOHMToken with the correct parameters and stores the merkle root.
     function test_endEpoch_succeeds() public {
         uint40 epochEndDate = _firstEpochEndDate();
@@ -517,7 +511,7 @@ contract RewardDistributorProposalConvertibleTest is ProposalTest {
 }
 
 /// @notice Test wrapper to expose internal _validate and _deploy functions for testing
-contract RewardDistributorProposalTestWrapper is RewardDistributorProposalConvertible {
+contract IncentiveDistributorProposalTestWrapper is IncentiveDistributorProposalConvertible {
     function validate(Addresses addresses, address caller) external view {
         _validate(addresses, caller);
     }

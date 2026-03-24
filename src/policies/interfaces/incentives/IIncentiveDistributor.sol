@@ -3,23 +3,23 @@ pragma solidity >=0.8.4;
 
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
-/// @title IRewardDistributor
-/// @notice Interface for Merkle tree-based reward distributors
-interface IRewardDistributor is IERC165 {
+/// @title IIncentiveDistributor
+/// @notice Interface for Merkle tree-based incentive distributors
+interface IIncentiveDistributor is IERC165 {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a Merkle root is set for a completed epoch.
-    /// @dev The `epochEndDate` is the END of the epoch whose rewards are being finalized.
+    /// @dev The `epochEndDate` is the END of the epoch whose incentives are being finalized.
     ///      The next epoch starts 1 second after `epochEndDate`.
     ///      Token-specific information should be emitted in derived contract events.
     ///
     /// @param epochEndDate The end of the completed epoch (23:59:59 UTC).
-    /// @param merkleRoot The Merkle root containing accumulated rewards for that epoch.
+    /// @param merkleRoot The Merkle root containing accumulated incentives for that epoch.
     event MerkleRootSet(uint256 indexed epochEndDate, bytes32 merkleRoot);
 
-    /// @notice Emitted when an epoch ends with rewards configured.
+    /// @notice Emitted when an epoch ends with incentives configured.
     /// @param epochEndDate The end of the completed epoch (23:59:59 UTC).
-    /// @param token The reward token address for this epoch.
+    /// @param token The incentive token address for this epoch.
     /// @param params Implementation-specific parameters (abi.encoded).
     event EpochEnded(uint256 indexed epochEndDate, address indexed token, bytes params);
 
@@ -28,44 +28,44 @@ interface IRewardDistributor is IERC165 {
     /// @notice Thrown when the Merkle root for an epoch is already set
     ///
     /// @param  epochEndDate    The epoch end date in question
-    error RewardDistributor_EpochAlreadySet(uint256 epochEndDate);
+    error IncentiveDistributor_EpochAlreadySet(uint256 epochEndDate);
 
     /// @notice Thrown when an invalid Merkle proof is submitted
-    error RewardDistributor_InvalidProof();
+    error IncentiveDistributor_InvalidProof();
 
     /// @notice Thrown when a zero Merkle root is provided
-    error RewardDistributor_InvalidMerkleRoot();
+    error IncentiveDistributor_InvalidMerkleRoot();
 
     /// @notice Thrown when no epochs are specified for a claim
-    error RewardDistributor_NoEpochsSpecified();
+    error IncentiveDistributor_NoEpochsSpecified();
 
     /// @notice Thrown when a Merkle root has not been set for a given epoch
     ///
     /// @param  epochEndDate    The epoch end date missing a Merkle root
-    error RewardDistributor_MerkleRootNotSet(uint256 epochEndDate);
+    error IncentiveDistributor_MerkleRootNotSet(uint256 epochEndDate);
 
     /// @notice Thrown when provided arrays are not the same length
-    error RewardDistributor_ArrayLengthMismatch();
+    error IncentiveDistributor_ArrayLengthMismatch();
 
     /// @notice Thrown when an invalid address is provided
-    error RewardDistributor_InvalidAddress();
+    error IncentiveDistributor_InvalidAddress();
 
     /// @notice Thrown when ending an epoch before required time has elapsed
-    error RewardDistributor_EpochTooEarly();
+    error IncentiveDistributor_EpochTooEarly();
 
     /// @notice Thrown when the epoch timestamp is invalid (not at day boundary)
-    error RewardDistributor_InvalidEpochTimestamp();
+    error IncentiveDistributor_InvalidEpochTimestamp();
 
     /// @notice Thrown when the epoch start date is zero
-    error RewardDistributor_EpochIsZero();
+    error IncentiveDistributor_EpochIsZero();
 
-    /// @notice Thrown when no rewards are claimable
-    error RewardDistributor_NothingToClaim();
+    /// @notice Thrown when no incentives are claimable
+    error IncentiveDistributor_NothingToClaim();
 
-    /// @notice Thrown when a user tries to claim rewards for an epoch they have already claimed
+    /// @notice Thrown when a user tries to claim incentives for an epoch they have already claimed
     ///
     /// @param  epochEndDate    The epoch end date that was already claimed
-    error RewardDistributor_AlreadyClaimed(uint256 epochEndDate);
+    error IncentiveDistributor_AlreadyClaimed(uint256 epochEndDate);
 
     // ========== ADMIN FUNCTIONS ========== //
 
@@ -73,7 +73,7 @@ interface IRewardDistributor is IERC165 {
     /// @param epochEndDate_ The epoch end date (23:59:59 UTC timestamp).
     /// @param merkleRoot_ The Merkle root to be set.
     /// @param params_ Implementation-specific parameters (abi.encoded).
-    /// @return token The token address for this epoch's rewards.
+    /// @return token The token address for this epoch's incentives.
     function endEpoch(
         uint40 epochEndDate_,
         bytes32 merkleRoot_,
@@ -93,7 +93,7 @@ interface IRewardDistributor is IERC165 {
     /// @return merkleRoot      The Merkle root bytes32 value
     function epochMerkleRoots(uint256 epochEndDate) external view returns (bytes32 merkleRoot);
 
-    /// @notice Returns whether a user has already claimed rewards for a given epoch
+    /// @notice Returns whether a user has already claimed incentives for a given epoch
     ///
     /// @param  user            The user address to check for
     /// @param  epochEndDate    The epoch end date to check for

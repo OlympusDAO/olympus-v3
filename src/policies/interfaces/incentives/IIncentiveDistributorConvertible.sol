@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IRewardDistributor} from "src/policies/interfaces/rewards/IRewardDistributor.sol";
+import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 
-/// @title IRewardDistributorConvertible
-/// @notice The interface for reward distributors for Convertible OHM Tokens.
-/// @dev It extends IRewardDistributor with convertible token-specific functionality.
-interface IRewardDistributorConvertible is IRewardDistributor {
+/// @title IIncentiveDistributorConvertible
+/// @notice The interface for incentive distributors for Convertible OHM Tokens.
+/// @dev It extends IIncentiveDistributor with convertible token-specific functionality.
+interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== STRUCTS ========== //
 
     /// @notice Parameters for ending an epoch with convertible tokens.
@@ -21,7 +21,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a user successfully claims their convertible tokens for an epoch.
-    /// @param user The address of the user claiming rewards.
+    /// @param user The address of the user claiming incentives.
     /// @param convertibleToken The address of the convertible token claimed.
     /// @param amount The amount of convertible tokens claimed for this epoch.
     /// @param epochEndDate The epoch end date claimed for.
@@ -38,10 +38,10 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     ///
     /// @param  expected    The expected byte length.
     /// @param  actual      The actual byte length.
-    error RewardDistributor_InvalidParamsLength(uint256 expected, uint256 actual);
+    error IncentiveDistributor_InvalidParamsLength(uint256 expected, uint256 actual);
 
     /// @notice Thrown when an invalid token is referenced.
-    error RewardDistributor_InvalidToken();
+    error IncentiveDistributor_InvalidToken();
 
     // ========== USER FUNCTIONS ========== //
 
@@ -60,7 +60,7 @@ interface IRewardDistributorConvertible is IRewardDistributor {
     // ========== VIEW FUNCTIONS ========== //
 
     /// @notice Previews claimable tokens and amounts for a user.
-    /// @param user_ The recipient of the rewards.
+    /// @param user_ The recipient of the incentives.
     /// @param epochEndDates_ The list of epoch end dates being previewed.
     /// @param amounts_ The amounts to claim for each epoch.
     /// @param proofs_ The Merkle proofs for each epoch.

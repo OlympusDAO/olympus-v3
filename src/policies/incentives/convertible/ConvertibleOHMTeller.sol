@@ -8,7 +8,7 @@ pragma solidity >=0.8.30;
 // - Integrated into the Olympus Kernel-Module-Policy framework with role-based access control.
 // - Simplified to OHM-only call options: removed payoutToken, receiver, and call/put parameters.
 // - Minting via MINTR module on exercise (no pre-deposited collateral); quote tokens sent to TRSRY.
-// - Only the deploying RewardDistributor (creator) can mint tokens via create();
+// - Only the deploying IncentiveDistributor (creator) can mint tokens via create();
 //   token hash includes creator to scope tokens per deployer.
 // - Removed reclaim(), protocol fees, and collateral tracking.
 // - Added mint cap management via MINTR approval; PolicyEnabler lifecycle for enable/disable.
@@ -20,10 +20,10 @@ pragma solidity >=0.8.30;
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
@@ -52,8 +52,8 @@ contract ConvertibleOHMTeller is
     /// @notice The role for configuration
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
 
-    /// @notice The role for reward distribution (deploying and minting convertible tokens)
-    bytes32 public constant ROLE_REWARD_DISTRIBUTOR = "convertible_distributor";
+    /// @notice The role for incentive distribution (deploying and minting convertible tokens)
+    bytes32 public constant ROLE_CONVERTIBLE_DISTRIBUTOR = "convertible_distributor";
 
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
@@ -168,7 +168,7 @@ contract ConvertibleOHMTeller is
         external
         override
         onlyEnabled
-        onlyRole(ROLE_REWARD_DISTRIBUTOR)
+        onlyRole(ROLE_CONVERTIBLE_DISTRIBUTOR)
         nonReentrant
         returns (address)
     {
@@ -219,14 +219,14 @@ contract ConvertibleOHMTeller is
         address token_,
         address to_,
         uint256 amount_
-    ) external override onlyEnabled onlyRole(ROLE_REWARD_DISTRIBUTOR) nonReentrant {
+    ) external override onlyEnabled onlyRole(ROLE_CONVERTIBLE_DISTRIBUTOR) nonReentrant {
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
         (ConvertibleOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
             token_
         );
         if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
-        // Only the creator (RewardDistributor) that deployed this token can mint more
+        // Only the creator (IncentiveDistributor) that deployed this token can mint more
         if (msg.sender != creator) revert Teller_NotTokenCreator(msg.sender, creator);
 
         token.mintFor(to_, amount_);
@@ -391,14 +391,31 @@ contract ConvertibleOHMTeller is
     function _requireExistingToken(
         address token_
     ) internal view returns (ConvertibleOHMToken, address, address, uint48, uint48, uint256) {
-        // Load token parameters
-        (
-            address quoteToken,
-            address creator,
-            uint48 eligible,
-            uint48 expiry,
-            uint256 strikePrice
-        ) = ConvertibleOHMToken(token_).parameters();
+        // Revert early for EOAs (no code at address) with a meaningful error
+        if (token_.code.length == 0) revert Teller_UnsupportedToken(token_);
+
+        // Load token parameters via try/catch to revert with a meaningful error for non-token contracts
+        address quoteToken;
+        address creator;
+        uint48 eligible;
+        uint48 expiry;
+        uint256 strikePrice;
+
+        try ConvertibleOHMToken(token_).parameters() returns (
+            address quoteToken_,
+            address creator_,
+            uint48 eligible_,
+            uint48 expiry_,
+            uint256 strikePrice_
+        ) {
+            quoteToken = quoteToken_;
+            creator = creator_;
+            eligible = eligible_;
+            expiry = expiry_;
+            strikePrice = strikePrice_;
+        } catch {
+            revert Teller_UnsupportedToken(token_);
+        }
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist (timestamps are already truncated)

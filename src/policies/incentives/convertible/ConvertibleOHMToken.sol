@@ -11,7 +11,7 @@ import {CloneERC20Permit} from "src/external/clones/CloneERC20Permit.sol";
 /// @notice The ERC20-compatible token representing a call option on OHM with a fixed strike price.
 /// @dev This contract uses Clones (https://github.com/wighawag/clones-with-immutable-args)
 ///      for gas-efficient deployment.
-///      Tokens can only be minted/burned by the Convertible OHM Teller that created them.
+///      Tokens can only be minted/burned by the ConvertibleOHMTeller that created them.
 ///
 ///      Tokens can be exercised 1:1 for OHM by paying (amount * strike price) in the quote token.
 ///      Exercise is permitted any time between the eligible timestamp and the expiry timestamp.

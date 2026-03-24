@@ -14,10 +14,10 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate, enable/disable contract |
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
-| admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
+| admin | Heart | Reset the heartbeat, enable/disable the contract, set the distributor, set auction rewards |
+| admin | IncentiveDistributorConvertible | Enable/disable contract |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
-| admin | RewardDistributorConvertible | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -31,6 +31,7 @@ This document describes the roles that are used in the Olympus protocol.
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
+| em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
 | emergency | ConvertibleOHMTeller | Disable contract |
@@ -40,18 +41,18 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
+| emergency | IncentiveDistributorConvertible | Disable contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | ReserveWrapper | Disable contract |
-| emergency | RewardDistributorConvertible | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
-| em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
+| incentive_manager | IncentiveDistributorConvertible | Call endEpoch() to post merkle roots |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
@@ -62,7 +63,6 @@ This document describes the roles that are used in the Olympus protocol.
 | operator_reporter | Operator | Report bond purchases |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
-| rewards_manager | RewardDistributorConvertible | Call endEpoch() to post merkle roots |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 
 ## Role Allocations

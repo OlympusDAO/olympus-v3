@@ -9,9 +9,9 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ConvertibleOHMTeller} from "src/policies/rewards/convertible/ConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/rewards/convertible/ConvertibleOHMToken.sol";
-import {IConvertibleOHMTeller} from "src/policies/rewards/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -35,7 +35,7 @@ contract ConvertibleOHMTellerTestBase is Test {
     uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
 
     // Test accounts
-    address rewardDistributor = makeAddr("rewardDistributor"); // False contract
+    address incentiveDistributor = makeAddr("incentiveDistributor"); // False contract
     address admin = makeAddr("admin");
     address user0 = makeAddr("user0");
     address user1 = makeAddr("user1");
@@ -74,8 +74,8 @@ contract ConvertibleOHMTellerTestBase is Test {
         // Enable the teller policy with infinite minting cap
         teller.enable(abi.encode(type(uint256).max));
 
-        // Grant the reward distributor role (required for the functions deploy and create)
-        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor);
+        // Grant the incentive distributor role (required for the functions deploy and create)
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor);
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -106,7 +106,7 @@ contract ConvertibleOHMTellerTestBase is Test {
     }
 
     function _deployConvertibleToken() internal returns (ConvertibleOHMToken token) {
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         token = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
@@ -176,7 +176,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         emit IConvertibleOHMTeller.ConvertibleTokenCreated(
             address(0), // The address is not yet known
             address(usds),
-            rewardDistributor,
+            incentiveDistributor,
             _roundToDay(eligibleTimestamp),
             _roundToDay(expiryTimestamp),
             STRIKE_PRICE
@@ -203,8 +203,8 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         assertEq(token.quote(), address(usds), "The quote token should match");
         assertEq(
             token.creator(),
-            rewardDistributor,
-            "The creator should match the reward distributor"
+            incentiveDistributor,
+            "The creator should match the incentive distributor"
         );
         assertEq(
             keccak256(bytes(token.name())),
@@ -217,7 +217,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
             "The symbol should match"
         );
         assertEq(
-            teller.tokens(_calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp)),
+            teller.tokens(_calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp)),
             address(token),
             "The token should be stored in the mapping"
         );
@@ -226,7 +226,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
 
     function test_deploy_createsTokenWithZeroEligibleUsingCurrentTimestamp() external {
         // Deploy a token with zero eligible time
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         ConvertibleOHMToken token = ConvertibleOHMToken(
             teller.deploy(
                 address(usds),
@@ -260,7 +260,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
     function test_deploy_createsUniqueTokensForDifferentParams_skipOnCoverage() external {
         // Deploy convertible tokens with different params
         ConvertibleOHMToken token1 = _deployConvertibleToken();
-        vm.startPrank(rewardDistributor);
+        vm.startPrank(incentiveDistributor);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE + 1e18)
         );
@@ -292,7 +292,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         // 2. Test
         // Deploy tokens with different quote tokens
         ConvertibleOHMToken token1 = _deployConvertibleToken();
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             teller.deploy(address(usdc), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
@@ -307,14 +307,14 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
     }
 
     function test_deploy_createsUniqueTokensForDifferentCreators_skipOnCoverage() external {
-        // 1. Preparation: create second reward distributor
-        address rewardDistributor2 = makeAddr("rewardDistributor2");
-        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor2);
+        // 1. Preparation: create second incentive distributor
+        address incentiveDistributor2 = makeAddr("incentiveDistributor2");
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor2);
 
         // 2. Test: deploy tokens with same params but different creators
-        ConvertibleOHMToken token1 = _deployConvertibleToken(); // deployed by rewardDistributor
+        ConvertibleOHMToken token1 = _deployConvertibleToken(); // deployed by incentiveDistributor
 
-        vm.prank(rewardDistributor2);
+        vm.prank(incentiveDistributor2);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
@@ -324,24 +324,28 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
             address(token1) != address(token2),
             "Should create different tokens for different creators"
         );
-        assertEq(token1.creator(), rewardDistributor, "Token1 creator should be rewardDistributor");
+        assertEq(
+            token1.creator(),
+            incentiveDistributor,
+            "Token1 creator should be incentiveDistributor"
+        );
         assertEq(
             token2.creator(),
-            rewardDistributor2,
-            "Token2 creator should be rewardDistributor2"
+            incentiveDistributor2,
+            "Token2 creator should be incentiveDistributor2"
         );
 
         // Verify hash includes creator
         bytes32 hash1 = teller.getTokenHash(
             address(usds),
-            rewardDistributor,
+            incentiveDistributor,
             eligibleTimestamp,
             expiryTimestamp,
             STRIKE_PRICE
         );
         bytes32 hash2 = teller.getTokenHash(
             address(usds),
-            rewardDistributor2,
+            incentiveDistributor2,
             eligibleTimestamp,
             expiryTimestamp,
             STRIKE_PRICE
@@ -360,7 +364,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         ConvertibleOHMToken token1 = _deployConvertibleToken();
 
         // 2. Test: deploy with different timestamps that round to the same day
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             teller.deploy(
                 address(usds),
@@ -384,7 +388,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(address(0))
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(0), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
@@ -399,7 +403,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(address(lowDecToken))
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(lowDecToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
@@ -411,7 +415,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(user0)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(user0, eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
@@ -428,7 +432,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(pastEligible)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), pastEligible, expiryTimestamp + 2 days, STRIKE_PRICE);
     }
 
@@ -441,7 +445,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(expiry)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, expiry, STRIKE_PRICE);
     }
 
@@ -453,7 +457,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(eligibleTimestamp)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, eligibleTimestamp, STRIKE_PRICE);
     }
 
@@ -471,7 +475,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(shortExpiry)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, shortExpiry, STRIKE_PRICE);
     }
 
@@ -483,7 +487,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(uint256(0))
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, 0);
     }
 
@@ -497,15 +501,15 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(tooLowStrike)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, tooLowStrike);
     }
 
-    function test_deploy_revertsIfNotRewardDistributor() external {
+    function test_deploy_revertsIfNotIncentiveDistributor() external {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
-                teller.ROLE_REWARD_DISTRIBUTOR()
+                teller.ROLE_CONVERTIBLE_DISTRIBUTOR()
             )
         );
         vm.prank(user0);
@@ -518,7 +522,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
 
         // 2. Test
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 }
@@ -531,7 +535,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         // 2. Test
         // Create (mint) convertible tokens to User0
         uint256 mintAmount = 100e9; // 100 OHM worth of tokens
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         vm.expectEmit(true, true, false, true);
         emit IConvertibleOHMTeller.ConvertibleTokenMinted(address(token), user0, mintAmount);
         teller.create(address(token), user0, mintAmount);
@@ -553,7 +557,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         // Create tokens to two users
         uint256 mintAmount1 = 100e9;
         uint256 mintAmount2 = 200e9;
-        vm.startPrank(rewardDistributor);
+        vm.startPrank(incentiveDistributor);
         teller.create(address(token), user0, mintAmount1);
         teller.create(address(token), user1, mintAmount2);
         vm.stopPrank();
@@ -571,7 +575,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
     function test_create_revertsIfTokenDoesNotExist() external {
         // 1. Preparation: create a malicious token that mimics ConvertibleOHMToken
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             eligibleTimestamp,
             expiryTimestamp,
             address(teller)
@@ -581,10 +585,10 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_TokenDoesNotExist.selector,
-                _calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp)
+                _calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(badToken), user0, 100e9);
     }
 
@@ -592,7 +596,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         // 1. Preparation: deploy a real token and a malicious one with same params
         _deployConvertibleToken();
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             _roundToDay(eligibleTimestamp),
             _roundToDay(expiryTimestamp),
             address(user1) // different teller
@@ -605,27 +609,27 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
                 address(badToken)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(badToken), user0, 100e9);
     }
 
     function test_create_revertsIfNotTokenCreator() external {
-        // 1. Preparation: deploy a token by rewardDistributor
+        // 1. Preparation: deploy a token by incentiveDistributor
         ConvertibleOHMToken token = _deployConvertibleToken();
 
-        // Create second reward distributor with the role
-        address rewardDistributor2 = makeAddr("rewardDistributor2");
-        roles.saveRole(teller.ROLE_REWARD_DISTRIBUTOR(), rewardDistributor2);
+        // Create second incentive distributor with the role
+        address incentiveDistributor2 = makeAddr("incentiveDistributor2");
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor2);
 
-        // 2. Test: rewardDistributor2 should not be able to mint tokens created by rewardDistributor
+        // 2. Test: incentiveDistributor2 should not be able to mint tokens created by incentiveDistributor
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_NotTokenCreator.selector,
-                rewardDistributor2,
-                rewardDistributor
+                incentiveDistributor2,
+                incentiveDistributor
             )
         );
-        vm.prank(rewardDistributor2);
+        vm.prank(incentiveDistributor2);
         teller.create(address(token), user0, 100e9);
     }
 
@@ -641,7 +645,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
                 _roundToDay(expiryTimestamp)
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, 100e9);
     }
 
@@ -657,7 +661,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(address(0))
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), address(0), 100e9);
     }
 
@@ -673,11 +677,11 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
                 abi.encodePacked(uint256(0))
             )
         );
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, 0);
     }
 
-    function test_create_revertsIfNotRewardDistributor() external {
+    function test_create_revertsIfNotIncentiveDistributor() external {
         // 1. Preparation: deploy a token
         ConvertibleOHMToken token = _deployConvertibleToken();
 
@@ -685,11 +689,31 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
-                teller.ROLE_REWARD_DISTRIBUTOR()
+                teller.ROLE_CONVERTIBLE_DISTRIBUTOR()
             )
         );
         vm.prank(user0);
         teller.create(address(token), user0, 100e9);
+    }
+
+    function test_create_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(user0, user0, 100e9);
+    }
+
+    function test_create_revertsIfTokenIsNonTokenContract() external {
+        // Use the kernel address as a contract that doesn't implement parameters()
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(kernel), user0, 100e9);
     }
 
     function test_create_revertsIfPolicyDisabled() external {
@@ -699,7 +723,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
 
         // 2. Test
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, 100e9);
     }
 }
@@ -716,7 +740,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         token = _deployConvertibleToken();
 
         // Mint convertible tokens to User0
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, user0InitialBal);
     }
 
@@ -815,7 +839,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
     function test_exercise_byTwoUsers_skipOnCoverage() external {
         // 1. Preparation: mint convertible tokens to User1, warp to the eligible time
         uint256 user1InitialBal = 200e9;
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user1, user1InitialBal);
 
         vm.warp(eligibleTimestamp);
@@ -869,7 +893,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         uint48 differentEligible = eligibleTimestamp + 30 days;
         uint48 differentExpiry = expiryTimestamp + 30 days;
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             differentEligible,
             differentExpiry,
             address(teller)
@@ -879,7 +903,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_TokenDoesNotExist.selector,
-                _calcTokenHash(rewardDistributor, differentEligible, differentExpiry)
+                _calcTokenHash(incentiveDistributor, differentEligible, differentExpiry)
             )
         );
         teller.exercise(address(badToken), 100e9);
@@ -889,7 +913,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // 1. Preparation: deploy a real token and a malicious one with same params
         _deployConvertibleToken();
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             _roundToDay(eligibleTimestamp),
             _roundToDay(expiryTimestamp),
             address(user1) // different teller
@@ -971,13 +995,13 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         MockERC20FeeOnTransfer fotToken = new MockERC20FeeOnTransfer("FOT", "FOT", feeRecipient);
 
         // Deploy a convertible token with the fee-on-transfer quote token
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         ConvertibleOHMToken fotConvToken = ConvertibleOHMToken(
             teller.deploy(address(fotToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
 
         // Mint convertible tokens to user0
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(fotConvToken), user0, user0InitialBal);
 
         // Fund user0 with fee-on-transfer tokens
@@ -1006,6 +1030,23 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         );
         teller.exercise(address(fotConvToken), user0InitialBal);
         vm.stopPrank();
+    }
+
+    function test_exercise_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        teller.exercise(user0, 100e9);
+    }
+
+    function test_exercise_revertsIfTokenIsNonTokenContract() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        teller.exercise(address(kernel), 100e9);
     }
 
     function test_exercise_revertsIfPolicyDisabled() external {
@@ -1121,7 +1162,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // Deploy a convertible token and mint some to user0
         ConvertibleOHMToken token = _deployConvertibleToken();
         uint256 mintAmount = 100e9;
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, mintAmount);
 
         // Exercise tokens to consume some mint approval (mintOhm reduces mintApproval)
@@ -1315,7 +1356,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
 
     function test_exerciseCost_revertsIfTokenDoesNotExist() external {
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             eligibleTimestamp,
             expiryTimestamp,
             address(teller)
@@ -1324,7 +1365,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_TokenDoesNotExist.selector,
-                _calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp)
+                _calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp)
             )
         );
         teller.exerciseCost(address(badToken), 100e9);
@@ -1334,7 +1375,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         // 1. Preparation: deploy a real token and a malicious one
         _deployConvertibleToken();
         MaliciousConvertibleOHMToken badToken = _deployMaliciousConvertibleToken(
-            rewardDistributor,
+            incentiveDistributor,
             _roundToDay(eligibleTimestamp),
             _roundToDay(expiryTimestamp),
             address(user1)
@@ -1348,6 +1389,23 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
             )
         );
         teller.exerciseCost(address(badToken), 100e9);
+    }
+
+    function test_exerciseCost_revertsIfTokenIsEOA() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IConvertibleOHMTeller.Teller_UnsupportedToken.selector, user0)
+        );
+        teller.exerciseCost(user0, 100e9);
+    }
+
+    function test_exerciseCost_revertsIfTokenIsNonTokenContract() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_UnsupportedToken.selector,
+                address(kernel)
+            )
+        );
+        teller.exerciseCost(address(kernel), 100e9);
     }
 
     function test_exerciseCost_revertsIfAmountIsZero() external {
@@ -1373,7 +1431,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         ConvertibleOHMToken token = ConvertibleOHMToken(
             teller.getToken(
                 address(usds),
-                rewardDistributor,
+                incentiveDistributor,
                 eligibleTimestamp,
                 expiryTimestamp,
                 STRIKE_PRICE
@@ -1396,7 +1454,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         ConvertibleOHMToken token = ConvertibleOHMToken(
             teller.getToken(
                 address(usds),
-                rewardDistributor,
+                incentiveDistributor,
                 eligibleTimestamp + eligibleDiff_,
                 expiryTimestamp + expiryDiff_,
                 STRIKE_PRICE
@@ -1413,12 +1471,12 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_TokenDoesNotExist.selector,
-                _calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp)
+                _calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp)
             )
         );
         teller.getToken(
             address(usds),
-            rewardDistributor,
+            incentiveDistributor,
             eligibleTimestamp,
             expiryTimestamp,
             STRIKE_PRICE
@@ -1429,12 +1487,12 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         assertEq(
             teller.getTokenHash(
                 address(usds),
-                rewardDistributor,
+                incentiveDistributor,
                 eligibleTimestamp,
                 expiryTimestamp,
                 STRIKE_PRICE
             ),
-            _calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp),
+            _calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp),
             "The hash should match the expected one"
         );
     }
@@ -1449,12 +1507,12 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         assertEq(
             teller.getTokenHash(
                 address(usds),
-                rewardDistributor,
+                incentiveDistributor,
                 eligibleTimestamp + eligibleDiff_,
                 expiryTimestamp + expiryDiff_,
                 STRIKE_PRICE
             ),
-            _calcTokenHash(rewardDistributor, eligibleTimestamp, expiryTimestamp),
+            _calcTokenHash(incentiveDistributor, eligibleTimestamp, expiryTimestamp),
             "The hash should match for the rounded timestamps"
         );
     }
@@ -1480,7 +1538,7 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
 
         // Create (mint) convertible tokens to User0
         uint256 mintAmount = 500e9;
-        vm.prank(rewardDistributor);
+        vm.prank(incentiveDistributor);
         teller.create(address(token), user0, mintAmount);
         assertEq(token.balanceOf(user0), mintAmount, "User0 should receive convertible tokens");
 
@@ -1511,7 +1569,7 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
     function test_multipleDeploysAndExercises_skipOnCoverage() external {
         // Deploy two different tokens
         ConvertibleOHMToken token1 = _deployConvertibleToken();
-        vm.startPrank(rewardDistributor);
+        vm.startPrank(incentiveDistributor);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2)
         );
