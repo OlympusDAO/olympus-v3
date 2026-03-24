@@ -19,7 +19,7 @@ import {IncentiveDistributorConvertible} from "src/policies/incentives/Incentive
 import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @notice Proposal to enable the convOHM Incentive Distributor system
+/// @notice Proposal to enable the Convertible OHM Incentive Distributor system
 contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     Kernel internal _kernel;
 
@@ -38,21 +38,22 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
     // ========== PROPOSAL ========== //
 
+    /// TODO: change proposal id to actual
     function id() public pure override returns (uint256) {
         return 14;
     }
 
     function name() public pure override returns (string memory) {
-        return "convOHM Incentive Distributor Enablement";
+        return "Convertible OHM Incentive Distributor Enablement";
     }
 
     /// TODO: Update description
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# convOHM Incentive Distributor Enablement\n\n",
+                "# Olympus Engage: Convertible OHM Distributor Enablement\n\n",
                 "## Summary\n\n",
-                "This proposal enables the convOHM incentive distribution system, ",
+                "This proposal enables the Convertible OHM distribution for the Olympus Engage incentive system, ",
                 "consisting of the ConvertibleOHMTeller and IncentiveDistributorConvertible policies.\n\n",
                 "## Proposal Actions\n\n",
                 "1. Grant `convertible_distributor` role to IncentiveDistributorConvertible.\n",
@@ -63,7 +64,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
                 "5. Enable the IncentiveDistributorConvertible policy.\n\n",
                 "## Result\n\n",
                 "After execution, the Distributor MS will be able to post weekly merkle roots and deploy ",
-                "convOHM tokens for each epoch. Users will be able to claim their convOHM incentives ",
+                "Convertible OHM tokens for each epoch. Users will be able to claim their Convertible OHM incentives ",
                 "and exercise them for OHM by paying the conversion price in the quote token.\n\n",
                 "## References\n\n",
                 "TODO: Add RFC/OIP reference.\n",

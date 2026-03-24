@@ -22,19 +22,19 @@ contract ConvertibleOHMTellerMintCap is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // Read addresses from env.json
-        address iohmTeller = _envAddressNotZero("olympus.policies.ConvertibleOHMTeller");
+        address convertibleOHMTeller = _envAddressNotZero("olympus.policies.ConvertibleOHMTeller");
 
         // Read mint cap from args file
         uint256 mintCap = _readBatchArgUint256("setMintCap", "mintCap");
         require(mintCap > 0, "mintCap must be greater than zero -- update args file");
 
         console2.log("=== Setting ConvertibleOHMTeller Mint Cap ===");
-        console2.log("ConvertibleOHMTeller:", iohmTeller);
+        console2.log("ConvertibleOHMTeller:", convertibleOHMTeller);
         console2.log("Mint Cap:", mintCap);
 
         // Set the mint cap
         console2.log("1. Setting mint cap");
-        addToBatch(iohmTeller, abi.encodeWithSignature("setMintCap(uint256)", mintCap));
+        addToBatch(convertibleOHMTeller, abi.encodeWithSignature("setMintCap(uint256)", mintCap));
 
         // Propose/execute the batch
         proposeBatch();

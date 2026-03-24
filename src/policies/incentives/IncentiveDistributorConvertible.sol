@@ -14,7 +14,7 @@ import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @title Incentive Distributor for convOHM Tokens
+/// @title Incentive Distributor for Convertible OHM Tokens
 /// @notice Distributes convertible OHM tokens to users based on Merkle proofs.
 /// @dev Architecture:
 ///      - Incentives are calculated off-chain.
@@ -44,7 +44,7 @@ contract IncentiveDistributorConvertible is
 
     /// @param kernel_ The kernel address
     /// @param lastEpochEndDate_ The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
-    /// @param teller_ The address of the convOHM Teller
+    /// @param teller_ The address of the ConvertibleOHMTeller
     constructor(
         address kernel_,
         uint256 lastEpochEndDate_,

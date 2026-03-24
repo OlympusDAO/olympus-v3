@@ -7,11 +7,11 @@ pragma solidity ^0.8.30;
 
 import {CloneERC20Permit} from "src/external/clones/CloneERC20Permit.sol";
 
-/// @title convOHM Token
+/// @title Convertible OHM Token
 /// @notice The ERC20-compatible token representing a call option on OHM with a fixed strike price.
 /// @dev This contract uses Clones (https://github.com/wighawag/clones-with-immutable-args)
 ///      for gas-efficient deployment.
-///      Tokens can only be minted/burned by the convOHM Teller that created them.
+///      Tokens can only be minted/burned by the ConvertibleOHMTeller that created them.
 ///
 ///      Tokens can be exercised 1:1 for OHM by paying (amount * strike price) in the quote token.
 ///      Exercise is permitted any time between the eligible timestamp and the expiry timestamp.
@@ -66,7 +66,7 @@ contract ConvertibleOHMToken is CloneERC20Permit {
         return _getArgUint48(_EXPIRATION_TIMESTAMP_OFFSET);
     }
 
-    /// @notice Returns the address of the convOHM Teller that created this convertible token.
+    /// @notice Returns the address of the Convertible OHM Teller that created this convertible token.
     function teller() public pure returns (address) {
         return _getArgAddress(_TELLER_OFFSET);
     }
