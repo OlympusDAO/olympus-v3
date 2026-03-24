@@ -2,24 +2,23 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity ^0.8.0;
 
-import {ProposalTest} from "./ProposalTest.sol";
-import {Addresses} from "proposal-sim/addresses/Addresses.sol";
+// Interfaces
+import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
+
+// Libraries
 import {console2} from "forge-std/console2.sol";
 
 // Contracts
-import {Kernel, Actions, Policy} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
-
-// Interfaces
-import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
-
-// Proposal
 import {IncentiveDistributorProposalConvertible} from "src/proposals/IncentiveDistributorProposalConvertible.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
+import {ProposalTest} from "./ProposalTest.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     /// @dev Block after contracts are deployed and installed in the Kernel.

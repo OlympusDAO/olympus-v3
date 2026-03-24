@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
-import {Test, stdError} from "forge-std/Test.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {Kernel, Actions, toKeycode, Keycode, Policy} from "src/Kernel.sol";
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
-import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
+// Interfaces
 import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
+// Libraries
+import {Test, stdError} from "forge-std/Test.sol";
+
+// Contracts
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
+import {Kernel, Actions, toKeycode, Keycode, Policy} from "src/Kernel.sol";
 import {MaliciousConvertibleOHMToken} from "src/test/mocks/MaliciousConvertibleOHMToken.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 contract ConvertibleOHMTellerTestBase is Test {
     // Contracts
