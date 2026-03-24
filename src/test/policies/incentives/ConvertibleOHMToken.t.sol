@@ -8,13 +8,13 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
-import {IncentiveOHMToken} from "src/policies/incentives/convertible/IncentiveOHMToken.sol";
-import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-contract IncentiveOHMTokenTestBase is Test {
+contract ConvertibleOHMTokenTestBase is Test {
     // Contracts
     Kernel kernel;
     OlympusTreasury trsry;
@@ -24,7 +24,7 @@ contract IncentiveOHMTokenTestBase is Test {
     MockOhm ohm;
     MockERC20 usds;
 
-    IncentiveOHMTeller teller;
+    ConvertibleOHMTeller teller;
 
     // Constants
     uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
@@ -56,7 +56,7 @@ contract IncentiveOHMTokenTestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy the teller policy
-        teller = new IncentiveOHMTeller(address(kernel), address(ohm));
+        teller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         // Activate the policy
         kernel.executeAction(Actions.ActivatePolicy, address(teller));
 
@@ -70,7 +70,7 @@ contract IncentiveOHMTokenTestBase is Test {
         teller.enable(abi.encode(type(uint256).max));
 
         // Grant the incentive distributor role (required for the functions deploy and create)
-        roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), incentiveDistributor);
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor);
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -100,16 +100,16 @@ contract IncentiveOHMTokenTestBase is Test {
         );
     }
 
-    function _deployConvertibleToken() internal returns (IncentiveOHMToken token) {
+    function _deployConvertibleToken() internal returns (ConvertibleOHMToken token) {
         vm.prank(incentiveDistributor);
-        token = IncentiveOHMToken(
+        token = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
     // Calculates the exact exercise cost using the teller
     function _exerciseCost(
-        IncentiveOHMToken token,
+        ConvertibleOHMToken token,
         uint256 amount
     ) internal view returns (uint256) {
         (, uint256 cost) = teller.exerciseCost(address(token), amount);
@@ -121,8 +121,8 @@ contract IncentiveOHMTokenTestBase is Test {
     }
 }
 
-contract IncentiveOHMTokenTests is IncentiveOHMTokenTestBase {
-    IncentiveOHMToken token;
+contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
+    ConvertibleOHMToken token;
 
     uint256 user0InitialBal = 100e9;
 
@@ -249,13 +249,13 @@ contract IncentiveOHMTokenTests is IncentiveOHMTokenTestBase {
     }
 
     function test_mintFor_revertsIfNotTeller() external {
-        vm.expectRevert(IncentiveOHMToken.IncentiveOHMToken_OnlyTeller.selector);
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.mintFor(user0, 100e9);
     }
 
     function test_burnFrom_revertsIfNotTeller() external {
-        vm.expectRevert(IncentiveOHMToken.IncentiveOHMToken_OnlyTeller.selector);
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_OnlyTeller.selector);
         vm.prank(user0);
         token.burnFrom(user0, user0InitialBal);
     }

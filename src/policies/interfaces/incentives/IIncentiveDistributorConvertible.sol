@@ -4,7 +4,7 @@ pragma solidity >=0.8.4;
 import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 
 /// @title IIncentiveDistributorConvertible
-/// @notice The interface for incentive distributors for iOHM Tokens.
+/// @notice The interface for incentive distributors for convOHM Tokens.
 /// @dev It extends IIncentiveDistributor with convertible token-specific functionality.
 interface IIncentiveDistributorConvertible is IIncentiveDistributor {
     // ========== STRUCTS ========== //

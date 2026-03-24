@@ -1,7 +1,7 @@
 {
     "sequence": [
         {
-            "name": "IncentiveOHMTeller",
+            "name": "ConvertibleOHMTeller",
             "args": {}
         },
         {

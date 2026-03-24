@@ -7,14 +7,14 @@ import {BaseIncentiveDistributor} from "src/policies/incentives/BaseIncentiveDis
 // Interfaces
 import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
-import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 
 // Bophades
 import {Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @title Incentive Distributor for iOHM Tokens
+/// @title Incentive Distributor for convOHM Tokens
 /// @notice Distributes convertible OHM tokens to users based on Merkle proofs.
 /// @dev Architecture:
 ///      - Incentives are calculated off-chain.
@@ -22,7 +22,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///      - Merkle roots are posted on-chain by the authorized role.
 ///      - Users submit proofs to claim their incentives in convertible tokens.
 ///
-///      Tokens are deployed and minted via IncentiveOHMTeller.
+///      Tokens are deployed and minted via ConvertibleOHMTeller.
 contract IncentiveDistributorConvertible is
     BaseIncentiveDistributor,
     IIncentiveDistributorConvertible
@@ -30,7 +30,7 @@ contract IncentiveDistributorConvertible is
     // ========== IMMUTABLES ========== //
 
     /// @notice The teller contract for deploying and minting convertible tokens
-    IIncentiveOHMTeller public immutable TELLER;
+    IConvertibleOHMTeller public immutable TELLER;
 
     /// @notice Expected byte length of ABI-encoded EndEpochParams (4 slots × 32 bytes)
     uint256 private constant _END_EPOCH_PARAMS_LENGTH = 128;
@@ -44,14 +44,14 @@ contract IncentiveDistributorConvertible is
 
     /// @param kernel_ The kernel address
     /// @param lastEpochEndDate_ The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
-    /// @param teller_ The address of the iOHM Teller
+    /// @param teller_ The address of the convOHM Teller
     constructor(
         address kernel_,
         uint256 lastEpochEndDate_,
         address teller_
     ) BaseIncentiveDistributor(kernel_, lastEpochEndDate_) {
         if (teller_ == address(0)) revert IncentiveDistributor_InvalidAddress();
-        TELLER = IIncentiveOHMTeller(teller_);
+        TELLER = IConvertibleOHMTeller(teller_);
     }
 
     // ========== POLICY SETUP ========== //

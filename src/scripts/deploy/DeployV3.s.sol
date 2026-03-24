@@ -41,7 +41,7 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 
 // Reward distribution
-import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 
 // solhint-disable gas-custom-errors
@@ -859,20 +859,20 @@ contract DeployV3 is WithEnvironment {
 
     // ===== INCENTIVE DISTRIBUTION CONTRACTS ===== //
 
-    function deployIncentiveOHMTeller() public returns (address, string memory) {
+    function deployConvertibleOHMTeller() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
 
         // Log parameters
-        console2.log("IncentiveOHMTeller parameters:");
+        console2.log("ConvertibleOHMTeller parameters:");
         console2.log("  kernel", kernel);
         console2.log("  ohm", ohm);
 
         // Deploy
         vm.broadcast();
-        IncentiveOHMTeller teller = new IncentiveOHMTeller(kernel, ohm);
+        ConvertibleOHMTeller teller = new ConvertibleOHMTeller(kernel, ohm);
 
         return (address(teller), "olympus.policies");
     }
@@ -881,7 +881,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
-        address teller = _getAddressNotZero("olympus.policies.IncentiveOHMTeller");
+        address teller = _getAddressNotZero("olympus.policies.ConvertibleOHMTeller");
 
         // Input parameters
         uint256 lastEpochEndDate = _readDeploymentArgUint256(

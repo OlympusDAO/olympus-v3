@@ -12,7 +12,7 @@ pragma solidity >=0.8.30;
 //   token hash includes creator to scope tokens per deployer.
 // - Removed reclaim(), protocol fees, and collateral tracking.
 // - Added mint cap management via MINTR approval; PolicyEnabler lifecycle for enable/disable.
-// - Token naming uses decimal notation (e.g., "15.50") with "iOHM-" prefix.
+// - Token naming uses decimal notation (e.g., "15.50") with "convOHM-" prefix.
 // - burnFrom deducts allowance (original burn did not).
 // - Solidity >=0.8.30; OZ SafeERC20/ReentrancyGuardTransient replaces solmate equivalents.
 // - CloneERC20 split into CloneERC20 (reused existing) + CloneERC20Permit.
@@ -20,10 +20,10 @@ pragma solidity >=0.8.30;
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
-import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
-import {IncentiveOHMToken} from "src/policies/incentives/convertible/IncentiveOHMToken.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
@@ -36,8 +36,8 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-contract IncentiveOHMTeller is
-    IIncentiveOHMTeller,
+contract ConvertibleOHMTeller is
+    IConvertibleOHMTeller,
     IVersioned,
     Policy,
     PolicyEnabler,
@@ -53,7 +53,7 @@ contract IncentiveOHMTeller is
     bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
 
     /// @notice The role for incentive distribution (deploying and minting convertible tokens)
-    bytes32 public constant ROLE_INCENTIVE_DISTRIBUTOR = "incentive_distributor";
+    bytes32 public constant ROLE_CONVERTIBLE_DISTRIBUTOR = "convertible_distributor";
 
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
@@ -67,7 +67,7 @@ contract IncentiveOHMTeller is
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
     uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
 
-    /// @notice The reference implementation of `IncentiveOHMToken`, deployed upon creation for cloning
+    /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
     /// @notice The OHM token (the payout token)
@@ -84,7 +84,7 @@ contract IncentiveOHMTeller is
     /// @notice The treasury module for receiving quote tokens
     TRSRYv1 public TRSRY;
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     uint48 public override minDuration;
 
     // ========== CONSTRUCTOR ========== //
@@ -96,7 +96,7 @@ contract IncentiveOHMTeller is
         _requireNonzeroAddress(1, ohm_);
 
         // Deploy the token implementation for cloning (deployments)
-        TOKEN_IMPLEMENTATION = address(new IncentiveOHMToken());
+        TOKEN_IMPLEMENTATION = address(new ConvertibleOHMToken());
 
         OHM = ohm_;
         if (IERC20Metadata(ohm_).decimals() != _OHM_DECIMALS)
@@ -158,7 +158,7 @@ contract IncentiveOHMTeller is
 
     // ========== TOKEN DEPLOYMENTS ========== //
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function deploy(
         address quoteToken_,
         uint48 eligible_,
@@ -168,7 +168,7 @@ contract IncentiveOHMTeller is
         external
         override
         onlyEnabled
-        onlyRole(ROLE_INCENTIVE_DISTRIBUTOR)
+        onlyRole(ROLE_CONVERTIBLE_DISTRIBUTOR)
         nonReentrant
         returns (address)
     {
@@ -214,15 +214,15 @@ contract IncentiveOHMTeller is
 
     // ========== TOKEN MINTING ========== //
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function create(
         address token_,
         address to_,
         uint256 amount_
-    ) external override onlyEnabled onlyRole(ROLE_INCENTIVE_DISTRIBUTOR) nonReentrant {
+    ) external override onlyEnabled onlyRole(ROLE_CONVERTIBLE_DISTRIBUTOR) nonReentrant {
         _requireNonzeroAddress(1, to_);
         _requireNonzeroAmount(2, amount_);
-        (IncentiveOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
+        (ConvertibleOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
             token_
         );
         if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
@@ -235,11 +235,11 @@ contract IncentiveOHMTeller is
 
     // ========== TOKEN EXERCISE ========== //
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function exercise(address token_, uint256 amount_) external override onlyEnabled nonReentrant {
         _requireNonzeroAmount(1, amount_);
         (
-            IncentiveOHMToken token,
+            ConvertibleOHMToken token,
             address quoteToken,
             ,
             uint48 eligible,
@@ -274,7 +274,7 @@ contract IncentiveOHMTeller is
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function exerciseCost(
         address token_,
         uint256 amount_
@@ -286,12 +286,12 @@ contract IncentiveOHMTeller is
         return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function remainingMintApproval() external view override returns (uint256 remaining_) {
         return MINTR.mintApproval(address(this));
     }
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function getTokenHash(
         address quoteToken_,
         address creator_,
@@ -303,7 +303,7 @@ contract IncentiveOHMTeller is
         return _getTokenHash(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
     }
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function getToken(
         address quoteToken_,
         address creator_,
@@ -385,12 +385,12 @@ contract IncentiveOHMTeller is
         token = TOKEN_IMPLEMENTATION.clone(immutableArgs);
 
         // Set the domain separator for the token on creation to save gas on permit approvals
-        IncentiveOHMToken(token).updateDomainSeparator();
+        ConvertibleOHMToken(token).updateDomainSeparator();
     }
 
     function _requireExistingToken(
         address token_
-    ) internal view returns (IncentiveOHMToken, address, address, uint48, uint48, uint256) {
+    ) internal view returns (ConvertibleOHMToken, address, address, uint48, uint48, uint256) {
         // Revert early for EOAs (no code at address) with a meaningful error
         if (token_.code.length == 0) revert Teller_UnsupportedToken(token_);
 
@@ -401,7 +401,7 @@ contract IncentiveOHMTeller is
         uint48 expiry;
         uint256 strikePrice;
 
-        try IncentiveOHMToken(token_).parameters() returns (
+        try ConvertibleOHMToken(token_).parameters() returns (
             address quoteToken_,
             address creator_,
             uint48 eligible_,
@@ -419,7 +419,7 @@ contract IncentiveOHMTeller is
 
         // Retrieve the internally stored convertible token with this configuration
         // Reverts internally if token doesn't exist (timestamps are already truncated)
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             _getToken(quoteToken, creator, eligible, expiry, strikePrice)
         );
 
@@ -431,8 +431,8 @@ contract IncentiveOHMTeller is
 
     /// @notice Derives a name and symbol of the convertible token
     /// @dev Examples:
-    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "iOHM-20250601"
-    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "iOHM-20251231"
+    ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "convOHM-20250601"
+    ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "convOHM-20251231"
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
@@ -451,9 +451,9 @@ contract IncentiveOHMTeller is
         // Format the strike price as decimal with up to 2 fractional digits (e.g., "21.42")
         bytes memory price = _formatPrice(strikePrice_, IERC20Metadata(quoteToken_).decimals());
 
-        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "iOHM-YYYYMMDD"
+        // Name: "OHM/QUOTE PRICE YYYYMMDD", Symbol: "convOHM-YYYYMMDD"
         name = bytes32(abi.encodePacked("OHM/", quoteSymbol, " ", price, " ", date));
-        symbol = bytes32(abi.encodePacked("iOHM-", date));
+        symbol = bytes32(abi.encodePacked("convOHM-", date));
         return (name, symbol);
     }
 
@@ -547,14 +547,14 @@ contract IncentiveOHMTeller is
         _;
     }
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
     }
 
-    /// @inheritdoc IIncentiveOHMTeller
+    /// @inheritdoc IConvertibleOHMTeller
     function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminOrTellerAdminRole {
         _setMintCap(cap_);
     }
@@ -564,7 +564,7 @@ contract IncentiveOHMTeller is
     /// @inheritdoc PolicyEnabler
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
-            interfaceId == type(IIncentiveOHMTeller).interfaceId ||
+            interfaceId == type(IConvertibleOHMTeller).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }

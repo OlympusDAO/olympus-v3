@@ -16,21 +16,21 @@ import {Kernel} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
-import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
-/// @notice Proposal to enable the iOHM Incentive Distributor system
+/// @notice Proposal to enable the convOHM Incentive Distributor system
 contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     Kernel internal _kernel;
 
     // ========== CONSTANTS ========== //
 
     /// TODO: Decide on the initial mint cap
-    /// @notice Initial mint cap for the IncentiveOHMTeller (in OHM units, 9 decimals)
+    /// @notice Initial mint cap for the ConvertibleOHMTeller (in OHM units, 9 decimals)
     uint256 internal constant _INITIAL_MINT_CAP = 1000e9;
 
     /// forge-lint: disable-next-line(unsafe-typecast)
-    bytes32 internal constant _ROLE_INCENTIVE_DISTRIBUTOR = bytes32("incentive_distributor");
+    bytes32 internal constant _ROLE_CONVERTIBLE_DISTRIBUTOR = bytes32("convertible_distributor");
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 internal constant _ROLE_CONVERTIBLE_ADMIN = bytes32("convertible_admin");
     /// forge-lint: disable-next-line(unsafe-typecast)
@@ -43,27 +43,27 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     }
 
     function name() public pure override returns (string memory) {
-        return "iOHM Incentive Distributor Enablement";
+        return "convOHM Incentive Distributor Enablement";
     }
 
     /// TODO: Update description
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# iOHM Incentive Distributor Enablement\n\n",
+                "# convOHM Incentive Distributor Enablement\n\n",
                 "## Summary\n\n",
-                "This proposal enables the iOHM incentive distribution system, ",
-                "consisting of the IncentiveOHMTeller and IncentiveDistributorConvertible policies.\n\n",
+                "This proposal enables the convOHM incentive distribution system, ",
+                "consisting of the ConvertibleOHMTeller and IncentiveDistributorConvertible policies.\n\n",
                 "## Proposal Actions\n\n",
-                "1. Grant `incentive_distributor` role to IncentiveDistributorConvertible.\n",
+                "1. Grant `convertible_distributor` role to IncentiveDistributorConvertible.\n",
                 "2. Grant `convertible_admin` role to DAO MS.\n",
                 "3. Grant `incentive_manager` role to Distributor MS.\n",
                 // TODO: specify the specific minting cap value when it becomes known
-                "4. Enable the IncentiveOHMTeller policy (with initial mint cap).\n",
+                "4. Enable the ConvertibleOHMTeller policy (with initial mint cap).\n",
                 "5. Enable the IncentiveDistributorConvertible policy.\n\n",
                 "## Result\n\n",
                 "After execution, the Distributor MS will be able to post weekly merkle roots and deploy ",
-                "iOHM tokens for each epoch. Users will be able to claim their iOHM incentives ",
+                "convOHM tokens for each epoch. Users will be able to claim their convOHM incentives ",
                 "and exercise them for OHM by paying the conversion price in the quote token.\n\n",
                 "## References\n\n",
                 "TODO: Add RFC/OIP reference.\n",
@@ -87,15 +87,15 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         address distributorMS = addresses.getAddress("olympus-multisig-incentive-distributor");
 
-        // 1. Grant incentive_distributor role to IncentiveDistributorConvertible
+        // 1. Grant convertible_distributor role to IncentiveDistributorConvertible
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                _ROLE_INCENTIVE_DISTRIBUTOR,
+                _ROLE_CONVERTIBLE_DISTRIBUTOR,
                 incentiveDistributorConvertible
             ),
-            "Grant incentive_distributor role to IncentiveDistributorConvertible"
+            "Grant convertible_distributor role to IncentiveDistributorConvertible"
         );
 
         // 2. Grant convertible_admin role to DAO MS
@@ -116,11 +116,11 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             "Grant incentive_manager role to Distributor MS"
         );
 
-        // 4. Enable IncentiveOHMTeller (with initial mint cap)
+        // 4. Enable ConvertibleOHMTeller (with initial mint cap)
         _pushAction(
             iohmTeller,
             abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(_INITIAL_MINT_CAP)),
-            "Enable IncentiveOHMTeller policy"
+            "Enable ConvertibleOHMTeller policy"
         );
 
         // 5. Enable IncentiveDistributorConvertible
@@ -149,10 +149,10 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         address distributorMS = addresses.getAddress("olympus-multisig-incentive-distributor");
 
-        // Validate IncentiveDistributorConvertible has the incentive_distributor role
+        // Validate IncentiveDistributorConvertible has the convertible_distributor role
         require(
-            roles.hasRole(incentiveDistributorConvertible, _ROLE_INCENTIVE_DISTRIBUTOR),
-            "IncentiveDistributorConvertible does not have incentive_distributor role"
+            roles.hasRole(incentiveDistributorConvertible, _ROLE_CONVERTIBLE_DISTRIBUTOR),
+            "IncentiveDistributorConvertible does not have convertible_distributor role"
         );
 
         // Validate DAO MS has the convertible_admin role
@@ -167,13 +167,16 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             "Distributor MS does not have incentive_manager role"
         );
 
-        // Validate IncentiveOHMTeller is enabled
-        require(IncentiveOHMTeller(iohmTeller).isEnabled(), "IncentiveOHMTeller is not enabled");
+        // Validate ConvertibleOHMTeller is enabled
+        require(
+            ConvertibleOHMTeller(iohmTeller).isEnabled(),
+            "ConvertibleOHMTeller is not enabled"
+        );
 
         // Validate the teller's mint cap was set to _INITIAL_MINT_CAP via enable(bytes)
         require(
-            IncentiveOHMTeller(iohmTeller).remainingMintApproval() == _INITIAL_MINT_CAP,
-            "IncentiveOHMTeller mint cap does not match _INITIAL_MINT_CAP"
+            ConvertibleOHMTeller(iohmTeller).remainingMintApproval() == _INITIAL_MINT_CAP,
+            "ConvertibleOHMTeller mint cap does not match _INITIAL_MINT_CAP"
         );
 
         // Validate IncentiveDistributorConvertible is enabled

@@ -9,15 +9,15 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IncentiveOHMTeller} from "src/policies/incentives/convertible/IncentiveOHMTeller.sol";
-import {IncentiveOHMToken} from "src/policies/incentives/convertible/IncentiveOHMToken.sol";
+import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
+import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 import {IIncentiveDistributor} from "src/policies/interfaces/incentives/IIncentiveDistributor.sol";
 import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
-import {IIncentiveOHMTeller} from "src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol";
+import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {MockIncentiveOHMTellerZeroDeploy} from "src/test/mocks/MockIncentiveOHMTellerZeroDeploy.sol";
+import {MockConvertibleOHMTellerZeroDeploy} from "src/test/mocks/MockConvertibleOHMTellerZeroDeploy.sol";
 
 contract IncentiveDistributorConvertibleTestBase is Test {
     // Contracts
@@ -29,7 +29,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
     MockOhm ohm;
     MockERC20 usds;
 
-    IncentiveOHMTeller teller;
+    ConvertibleOHMTeller teller;
     IncentiveDistributorConvertible distributor;
 
     // Test accounts
@@ -64,7 +64,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(roles));
 
         // Deploy the teller policy
-        teller = new IncentiveOHMTeller(address(kernel), address(ohm));
+        teller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(teller));
 
         // Grant permission to this test contract to call increaseMintApproval
@@ -91,7 +91,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
         // Grant the incentive distributor role to the distributor policy
-        roles.saveRole(teller.ROLE_INCENTIVE_DISTRIBUTOR(), address(distributor));
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), address(distributor));
 
         // Setup roles for distributor
         roles.saveRole(distributor.ROLE_INCENTIVE_MANAGER(), admin);
@@ -231,7 +231,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
             address(0), // Address not checked (checkTopic2=false)
             params
         );
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(epochEndDate, merkleRoot, params)
         );
 
@@ -284,7 +284,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         bytes32 merkleRoot = bytes32(uint256(n));
 
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -313,7 +313,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         vm.startPrank(admin);
 
         // End epoch 1
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
@@ -328,7 +328,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         );
 
         // End epoch 2
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -348,7 +348,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         );
 
         // End epoch 3
-        IncentiveOHMToken token3 = IncentiveOHMToken(
+        ConvertibleOHMToken token3 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch3EndDate,
                 root3,
@@ -383,14 +383,14 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
 
         // End epochs with different strike prices
         vm.startPrank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -585,7 +585,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
 
     function test_endEpoch_revertsIfTellerReturnsZeroAddress() external {
         // Deploy a separate distributor backed by a mock teller that returns address(0)
-        MockIncentiveOHMTellerZeroDeploy mockTeller = new MockIncentiveOHMTellerZeroDeploy();
+        MockConvertibleOHMTellerZeroDeploy mockTeller = new MockConvertibleOHMTellerZeroDeploy();
         IncentiveDistributorConvertible mockDistributor = new IncentiveDistributorConvertible(
             address(kernel),
             startTimestamp - 1,
@@ -628,7 +628,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
 
 contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConvertibleTestBase {
     uint40 epochEndDate;
-    IncentiveOHMToken token;
+    ConvertibleOHMToken token;
 
     function setUp() public override {
         super.setUp();
@@ -640,12 +640,12 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
     function _setupEpochWithLeaf(
         address user,
         uint256 amount
-    ) internal returns (IncentiveOHMToken) {
+    ) internal returns (ConvertibleOHMToken) {
         bytes32 leaf = _generateLeaf(user, epochEndDate, amount);
 
         vm.prank(admin);
         return
-            IncentiveOHMToken(
+            ConvertibleOHMToken(
                 distributor.endEpoch(
                     epochEndDate,
                     leaf,
@@ -702,7 +702,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -712,7 +712,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -765,7 +765,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, zeroAmount);
         vm.prank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -775,7 +775,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, normalAmount);
         vm.prank(admin);
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -833,7 +833,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         bytes32 merkleRoot = _generateRoot(user0Leaf, user1Leaf);
 
         vm.prank(admin);
-        token = IncentiveOHMToken(
+        token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -884,14 +884,14 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         bytes32 root2 = _generateLeaf(user0, epoch2EndDate, amount2);
 
         vm.startPrank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 root1,
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 root2,
@@ -929,7 +929,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         // Setup epoch with fuzzed amount
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        token = IncentiveOHMToken(
+        token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -973,7 +973,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         // Setup epochs with different strike prices to get different tokens
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -983,7 +983,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
 
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -1314,7 +1314,7 @@ contract IncentiveDistributorConvertiblePreviewClaimTests is
 
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -1455,7 +1455,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         // Setup epoch
         bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 leaf,
@@ -1502,7 +1502,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         // Setup epoch 1
         bytes32 leaf1 = _generateLeaf(user0, epoch1EndDate, amount1);
         vm.prank(admin);
-        IncentiveOHMToken token1 = IncentiveOHMToken(
+        ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 leaf1,
@@ -1513,7 +1513,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         // Setup epoch 2 (same token params = same token)
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
-        IncentiveOHMToken token2 = IncentiveOHMToken(
+        ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
                 leaf2,
@@ -1584,7 +1584,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         root = keccak256(abi.encodePacked(leftLeaf, rightLeaf));
 
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 root,
@@ -1639,7 +1639,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
 
         // End epoch
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
@@ -1707,7 +1707,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
 
         // Set up merkle roots for each epoch (same token params = same token)
         vm.startPrank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
                 _generateLeaf(user0, epoch1EndDate, amount1),
@@ -1768,7 +1768,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
 
         bytes32 merkleRoot = _generateLeaf(user0, epochEndDate, claimAmount);
         vm.prank(admin);
-        IncentiveOHMToken token = IncentiveOHMToken(
+        ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,

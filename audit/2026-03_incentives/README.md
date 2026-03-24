@@ -18,29 +18,29 @@ The system currently supports one reward type:
 
 | Reward Type | Distributor | Token | Mechanism |
 |---|---|---|---|
-| iOHM Rewards | `IncentiveDistributorConvertible` | iOHM | Fixed-strike call options on OHM |
+| convOHM Rewards | `IncentiveDistributorConvertible` | convOHM | Fixed-strike call options on OHM |
 
-### iOHM Rewards (iOHM)
+### convOHM Rewards (convOHM)
 
-iOHM tokens are fixed-strike American-style call options on OHM. Each epoch produces a distinct iOHM token with specific parameters (quote token, strike price, eligibility window, expiry).
+convOHM tokens are fixed-strike American-style call options on OHM. Each epoch produces a distinct convOHM token with specific parameters (quote token, strike price, eligibility window, expiry).
 
 The lifecycle is:
 
-1. **Deploy** -- When an epoch ends, an off-chain backend calculates token configuration params, the admin then sets the Merkle root and the `IncentiveDistributorConvertible` deploys a new iOHM token via the `IncentiveOHMTeller`.
-2. **Claim** -- Users submit Merkle proofs to the distributor, which mints iOHM to them via the teller.
-3. **Exercise** -- Between the eligible date and expiry, iOHM holders can exercise their tokens: they pay `amount * strikePrice / 1e9` in the quote token (e.g. USDS), the iOHM is burned, and fresh OHM is minted to the user via the MINTR module.
-4. **Expiry** -- Unexercised tokens expire worthless. There is no reclaim mechanism (unlike the Bond Protocol original, which pre-deposited collateral).
+1. **Deploy** - When an epoch ends, an off-chain backend calculates token configuration params, the admin then sets the Merkle root and the `IncentiveDistributorConvertible` deploys a new convOHM token via the `ConvertibleOHMTeller`.
+2. **Claim** - Users submit Merkle proofs to the distributor, which mints convOHM to them via the teller.
+3. **Exercise** - Between the eligible date and expiry, convOHM holders can exercise their tokens: they pay `amount * strikePrice / 1e9` in the quote token (e.g. USDS), the convOHM is burned, and fresh OHM is minted to the user via the MINTR module.
+4. **Expiry** - Unexercised tokens expire worthless. There is no reclaim mechanism (unlike the Bond Protocol original, which pre-deposited collateral).
 
 #### Token Naming
 
-Each iOHM token is named with the format:
+Each convOHM token is named with the format:
 
 - **Name**: `<quoteSymbol>/OHM <price> <YYYYMMDD>` (e.g. `USDS/OHM 15.50 20260301` with the date marking the conversion eligibility period)
-- **Symbol**: `iOHM-<YYYYMMDD>` (e.g. `iOHM-20260301`)
+- **Symbol**: `convOHM-<YYYYMMDD>` (e.g. `convOHM-20260301`)
 
 #### Forked from Bond Protocol
 
-The `IncentiveOHMTeller` and `IncentiveOHMToken` contracts are forked from Bond Protocol's option-contracts (`FixedStrikeOptionTeller` and `FixedStrikeOptionToken`) at commit [b8ce2ca](https://github.com/Bond-Protocol/option-contracts/commit/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c), which have been [previously audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit) and battle-tested in production.
+The `ConvertibleOHMTeller` and `ConvertibleOHMToken` contracts are forked from Bond Protocol's option-contracts (`FixedStrikeOptionTeller` and `FixedStrikeOptionToken`) at commit [b8ce2ca](https://github.com/Bond-Protocol/option-contracts/commit/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c), which have been [previously audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit) and battle-tested in production.
 
 Key changes from the Bond Protocol originals:
 
@@ -54,7 +54,7 @@ Key changes from the Bond Protocol originals:
 | Mint cap management | Added MINTR approval management to control total OHM minting |
 | Reentrancy guard | Upgraded from `ReentrancyGuard` to `ReentrancyGuardTransient` (gas optimized) |
 
-The existing `CloneERC20` (in `src/external/clones/`, previously audited for convertible deposits) now inherits from a new `Clone` wrapper (`src/external/clones/Clone.sol`) that extends the `@clones-with-immutable-args` dependency with a `_getArgUint48` reader. EIP-2612 permit support is provided by `CloneERC20Permit` (`src/external/clones/CloneERC20Permit.sol`), a new extension of `CloneERC20` with permit logic adopted from Bond Protocol's [CloneERC20.sol](https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol) (previously [audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit)). `IncentiveOHMToken` inherits from `CloneERC20Permit`.
+The existing `CloneERC20` (in `src/external/clones/`, previously audited for convertible deposits) now inherits from a new `Clone` wrapper (`src/external/clones/Clone.sol`) that extends the `@clones-with-immutable-args` dependency with a `_getArgUint48` reader. EIP-2612 permit support is provided by `CloneERC20Permit` (`src/external/clones/CloneERC20Permit.sol`), a new extension of `CloneERC20` with permit logic adopted from Bond Protocol's [CloneERC20.sol](https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol) (previously [audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit)). `ConvertibleOHMToken` inherits from `CloneERC20Permit`.
 
 ## Scope
 
@@ -80,10 +80,10 @@ The contracts in scope for this audit are:
     - [policies/](../../src/policies/)
         - [incentives/](../../src/policies/incentives/)
             - [convertible/](../../src/policies/incentives/convertible/)
-                - [IncentiveOHMTeller.sol](../../src/policies/incentives/convertible/IncentiveOHMTeller.sol)
-                - [IncentiveOHMToken.sol](../../src/policies/incentives/convertible/IncentiveOHMToken.sol)
+                - [ConvertibleOHMTeller.sol](../../src/policies/incentives/convertible/ConvertibleOHMTeller.sol)
+                - [ConvertibleOHMToken.sol](../../src/policies/incentives/convertible/ConvertibleOHMToken.sol)
                 - [interfaces/](../../src/policies/incentives/convertible/interfaces/)
-                    - [IIncentiveOHMTeller.sol](../../src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol)
+                    - [IConvertibleOHMTeller.sol](../../src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol)
     - [external/](../../src/external/)
         - [clones/](../../src/external/clones/)
             - [Clone.sol](../../src/external/clones/Clone.sol)
@@ -97,8 +97,8 @@ Given the Bond Protocol fork, the audit effort should be weighted as follows:
 | Priority | Contracts | Rationale |
 |---|---|---|
 | **High** | `BaseIncentiveDistributor`, `IncentiveDistributorConvertible` | Entirely new code; Merkle tree logic, claim flows |
-| **High** | `IncentiveOHMTeller` (deltas from Bond Protocol) | Kernel integration, MINTR minting model, removed features, creator isolation |
-| **Medium** | `IncentiveOHMToken` (deltas from Bond Protocol) | Reduced immutable layout, added creator field, renamed mint/burn |
+| **High** | `ConvertibleOHMTeller` (deltas from Bond Protocol) | Kernel integration, MINTR minting model, removed features, creator isolation |
+| **Medium** | `ConvertibleOHMToken` (deltas from Bond Protocol) | Reduced immutable layout, added creator field, renamed mint/burn |
 | **Low** | `Clone.sol` | Thin wrapper over `@clones-with-immutable-args` dependency, adds only `_getArgUint48` |
 | **Low** | `CloneERC20.sol` | Previously audited; only change is metadata visibility (`external` → `public`) |
 | **Low** | `CloneERC20Permit.sol` | EIP-2612 permit logic adopted from audited Bond Protocol code |
@@ -117,10 +117,10 @@ Policy (Bophades)
   |     |
   |     +-- IncentiveDistributorConvertible (concrete)
   |           implements IIncentiveDistributorConvertible
-  |           provides: iOHM token deployment and minting via Teller
+  |           provides: convOHM token deployment and minting via Teller
   |
-  +-- IncentiveOHMTeller (concrete)
-        implements IIncentiveOHMTeller, IVersioned, PolicyEnabler, ReentrancyGuardTransient
+  +-- ConvertibleOHMTeller (concrete)
+        implements IConvertibleOHMTeller, IVersioned, PolicyEnabler, ReentrancyGuardTransient
         provides: token deployment, minting, exercise, mint cap management
 
 Clone (extends @clones-with-immutable-args, adds _getArgUint48)
@@ -129,7 +129,7 @@ Clone (extends @clones-with-immutable-args, adds _getArgUint48)
         |
         +-- CloneERC20Permit (EIP-2612 permit extension)
               |
-              +-- IncentiveOHMToken
+              +-- ConvertibleOHMToken
                     provides: immutable-args ERC20 with permit, mint/burn gated to teller
 ```
 
@@ -154,8 +154,8 @@ flowchart TD
     end
 
     subgraph Convertible Token System
-        Teller["IncentiveOHMTeller"]
-        ConvToken["iOHM Tokens\n(cloned per epoch)"]
+        Teller["ConvertibleOHMTeller"]
+        ConvToken["convOHM Tokens\n(cloned per epoch)"]
     end
 
     Admin((incentive_manager)) -->|"endEpoch()"| DistConv
@@ -178,9 +178,9 @@ flowchart TD
 | Role | Holder | Permissions |
 |---|---|---|
 | `incentive_manager` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
-| `incentive_distributor` | `IncentiveDistributorConvertible` | Call `deploy()` and `create()` on `IncentiveOHMTeller` |
-| `convertible_admin` | Multisig / governance | Call `setMintCap()` on `IncentiveOHMTeller` |
-| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()`, `setMinDuration()` on `IncentiveOHMTeller` |
+| `convertible_distributor` | `IncentiveDistributorConvertible` | Call `deploy()` and `create()` on `ConvertibleOHMTeller` |
+| `convertible_admin` | Multisig / governance | Call `setMintCap()` on `ConvertibleOHMTeller` |
+| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()`, `setMinDuration()` on `ConvertibleOHMTeller` |
 | Emergency role (PolicyEnabler) | Emergency multisig | Disable distributors and teller |
 
 ### Module Dependencies
@@ -189,20 +189,20 @@ flowchart TD
 |---|---|---|---|
 | `BaseIncentiveDistributor` | Yes (via derived) | - | - |
 | `IncentiveDistributorConvertible` | Yes | - | - |
-| `IncentiveOHMTeller` | Yes | Yes | Yes |
+| `ConvertibleOHMTeller` | Yes | Yes | Yes |
 
 ## Processes
 
 ### Ending an Epoch (Convertible Rewards)
 
-When an epoch ends, the admin posts the Merkle root and deploys a new iOHM token for the epoch via the teller.
+When an epoch ends, the admin posts the Merkle root and deploys a new convOHM token for the epoch via the teller.
 
 ```mermaid
 sequenceDiagram
     participant Admin as incentive_manager
     participant DistConv as IncentiveDistributorConvertible
-    participant Teller as IncentiveOHMTeller
-    participant ConvToken as iOHM Token (clone)
+    participant Teller as ConvertibleOHMTeller
+    participant ConvToken as convOHM Token (clone)
 
     Admin->>DistConv: endEpoch(epochEndDate, merkleRoot, params)
     Note over DistConv: params = abi.encode(quoteToken, eligible, expiry, strikePrice)
@@ -225,8 +225,8 @@ sequenceDiagram
 sequenceDiagram
     participant User
     participant DistConv as IncentiveDistributorConvertible
-    participant Teller as IncentiveOHMTeller
-    participant ConvToken as iOHM Token
+    participant Teller as ConvertibleOHMTeller
+    participant ConvToken as convOHM Token
 
     User->>DistConv: claim(epochEndDates, amounts, proofs)
     loop For each epoch
@@ -240,13 +240,13 @@ sequenceDiagram
     DistConv->>DistConv: emit ConvertibleTokensClaimed per epoch
 ```
 
-### Exercising iOHM
+### Exercising convOHM
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Teller as IncentiveOHMTeller
-    participant ConvToken as iOHM Token
+    participant Teller as ConvertibleOHMTeller
+    participant ConvToken as convOHM Token
     participant MINTR
     participant TRSRY
     participant QuoteToken as Quote Token (e.g. USDS)
@@ -270,7 +270,7 @@ All distributors and the teller use the `PolicyEnabler` pattern for lifecycle ma
 ```mermaid
 flowchart TD
     admin((admin)) -->|"enable()"| DistConv["IncentiveDistributorConvertible"]
-    admin -->|"enable()"| Teller["IncentiveOHMTeller"]
+    admin -->|"enable()"| Teller["ConvertibleOHMTeller"]
     emergency((emergency)) -->|"disable()"| DistConv
     emergency -->|"disable()"| Teller
 
@@ -282,12 +282,12 @@ flowchart TD
 
 ### Mint Cap Management
 
-The `IncentiveOHMTeller` manages its own MINTR approval to enforce a protocol-wide cap on OHM minting through iOHM exercise.
+The `ConvertibleOHMTeller` manages its own MINTR approval to enforce a protocol-wide cap on OHM minting through convOHM exercise.
 
 ```mermaid
 sequenceDiagram
     participant Admin as admin / convertible_admin
-    participant Teller as IncentiveOHMTeller
+    participant Teller as ConvertibleOHMTeller
     participant MINTR
 
     Admin->>Teller: setMintCap(newCap)

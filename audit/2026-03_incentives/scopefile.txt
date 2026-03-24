@@ -1,13 +1,13 @@
 # Incentive Distributor Audit Scope
 
-# Olympus V3 - iOHM Incentive Distribution System
+# Olympus V3 - convOHM Incentive Distribution System
 
 # New Contracts
 
 src/policies/incentives/BaseIncentiveDistributor.sol
 src/policies/incentives/IncentiveDistributorConvertible.sol
-src/policies/incentives/convertible/IncentiveOHMTeller.sol
-src/policies/incentives/convertible/IncentiveOHMToken.sol
+src/policies/incentives/convertible/ConvertibleOHMTeller.sol
+src/policies/incentives/convertible/ConvertibleOHMToken.sol
 src/external/clones/Clone.sol
 src/external/clones/CloneERC20.sol
 src/external/clones/CloneERC20Permit.sol
@@ -16,7 +16,7 @@ src/external/clones/CloneERC20Permit.sol
 
 src/policies/interfaces/incentives/IIncentiveDistributor.sol
 src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol
-src/policies/incentives/convertible/interfaces/IIncentiveOHMTeller.sol
+src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol
 
 # OCG Proposal
 
