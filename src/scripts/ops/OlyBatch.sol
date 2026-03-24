@@ -5,6 +5,7 @@ import {BatchScript} from "./lib/BatchScript.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {console2} from "forge-std/console2.sol";
 import {Surl} from "@surl-1.0.0/Surl.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 
 abstract contract OlyBatch is BatchScript {
     using stdJson for string;
@@ -88,18 +89,58 @@ abstract contract OlyBatch is BatchScript {
     function loadEnv() internal virtual;
 
     function executeBatch(bool send_) internal override {
-        bool isTestnet = vm.envOr("TESTNET", false);
+        bool useAnvilFork = vm.envOr("USE_ANVIL_FORK", false);
+        bool useTenderlyFork = vm.envOr("USE_TENDERLY_FORK", false);
 
-        if (isTestnet && send_) {
-            console2.log("Sending batch on testnet");
-            _sendTestnetBatch();
-            return;
+        if (send_) {
+            if (useAnvilFork) {
+                _sendAnvilBatch();
+                return;
+            }
+            if (useTenderlyFork) {
+                _sendTenderlyBatch();
+                return;
+            }
         }
 
         super.executeBatch(send_);
     }
 
-    function _sendTestnetBatch() private {
+    function _sendAnvilBatch() private {
+        // Check if we're in broadcast mode
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Anvil fork execution");
+            return;
+        }
+
+        console2.log("Executing batch via Anvil fork");
+        vm.startBroadcast(safe);
+
+        for (uint256 i; i < actionsTo.length; i++) {
+            console2.log("  Executing batch action ", i + 1);
+            (bool success, bytes memory data) = actionsTo[i].call(actionsData[i]);
+            if (!success) {
+                // Revert with error data
+                // solhint-disable-next-line no-inline-assembly
+                assembly {
+                    let revertStringLength := mload(data)
+                    let revertStringPtr := add(data, 0x20)
+                    revert(revertStringPtr, revertStringLength)
+                }
+            }
+        }
+
+        vm.stopBroadcast();
+        console2.log("Batch executed successfully");
+    }
+
+    function _sendTenderlyBatch() private {
+        // Check if we're in broadcast mode
+        if (!vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            console2.log("Not broadcasting, skipping Tenderly VNet execution");
+            return;
+        }
+
         // Get the testnet RPC URL and access key
         string memory TENDERLY_ACCOUNT_SLUG = vm.envString("TENDERLY_ACCOUNT_SLUG");
         string memory TENDERLY_PROJECT_SLUG = vm.envString("TENDERLY_PROJECT_SLUG");
@@ -135,7 +176,7 @@ abstract contract OlyBatch is BatchScript {
                     "{",
                     '"callArgs": {',
                     '"from": "',
-                    vm.toString(daoMS),
+                    vm.toString(safe),
                     '", "to": "',
                     vm.toString(actionsTo[i]),
                     '", "gas": "0x7a1200", "gasPrice": "0x10", "value": "0x0", ',

@@ -2,72 +2,37 @@
 
 # This script prints the inputs for a proposal to the governor.
 #
-# Usage: src/scripts/proposals/printInputs.sh --file <proposal-path> --contract <contract-name> --account <forge account> --fork <true|false> --env <env-file>
-#
-# Environment variables:
-# RPC_URL
+# Usage:
+# src/scripts/proposals/printInputs.sh
+#   --file <proposal-path>
+#   --contract <contract-name>
+#   --chain <chain-name-or-url> (e.g. mainnet, base, or provide a custom RPC URL)
+#   [--env <env-file>]
 
-# Exit if any error occurs
 set -e
 
-# Iterate through named arguments
-# Source: https://unix.stackexchange.com/a/388038
-while [ $# -gt 0 ]; do
-    if [[ $1 == *"--"* ]]; then
-        v="${1/--/}"
-        declare $v="$2"
-    fi
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source $SCRIPT_DIR/../../../shell/lib/arguments.sh
 
-    shift
-done
+load_named_args "$@"
+load_env
 
-# Get the name of the .env file or use the default
-ENV_FILE=${env:-".env"}
-echo "Sourcing environment variables from $ENV_FILE"
+echo ""
+echo "Validating arguments"
+validate_file "$file" "Proposal file not found. Provide correct path after --file."
+validate_text "$contract" "Contract name not specified. Use --contract."
+validate_text "$chain" "No chain specified. Specify the chain after the --chain flag."
 
-# Load environment file
-set -a # Automatically export all variables
-source $ENV_FILE
-set +a # Disable automatic export
-
-# Apply defaults to command-line arguments
-FORK=${fork:-false}
-
-# Check if the proposal file was specified
-if [ -z "$file" ]; then
-    echo "Error: Proposal file was not specified"
-    exit 1
+FORK_FLAGS=""
+if [[ "$chain" == *"localhost"* ]] || [[ "$chain" == *"127.0.0.1"* ]]; then
+    FORK_FLAGS="--legacy"
 fi
 
-# Check if the proposal file exists
-if [ ! -f "$file" ]; then
-    echo "Error: Proposal file does not exist. Provide the correct relative path after the --file flag."
-    exit 1
-fi
+echo ""
+echo "Summary:"
+echo "  Proposal: $file:$contract"
+echo "  Chain: $chain"
 
-# Check if the contract name was specified
-if [ -z "$contract" ]; then
-    echo "Error: Contract name was not specified"
-    exit 1
-fi
-
-# Check if the RPC_URL was specified
-if [ -z "$RPC_URL" ]; then
-    echo "Error: RPC_URL was not specified"
-    exit 1
-fi
-
-echo "Using proposal contract: $file:$contract"
-echo "Using RPC at URL: $RPC_URL"
-
-# Set the fork flag
-FORK_FLAG=""
-if [ "$FORK" = "true" ]; then
-    FORK_FLAG="--legacy"
-    echo "Fork: enabled"
-else
-    echo "Fork: disabled"
-fi
-
-# Run the forge script
-forge script $file:$contract --sig "printProposalInputs()" -vvv --rpc-url $RPC_URL $FORK_FLAG
+echo ""
+echo "Running forge script..."
+forge script $file:$contract --sig "printProposalInputs()" --rpc-url $chain $FORK_FLAGS -vvv

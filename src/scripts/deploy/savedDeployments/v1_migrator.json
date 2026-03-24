@@ -1,0 +1,25 @@
+{
+    "sequence": [
+        {
+            "name": "TempOHM",
+            "args": {
+                "name": "TempOHM",
+                "symbol": "tempOHM"
+            }
+        },
+        {
+            "name": "Burner",
+            "args": {}
+        },
+        {
+            "name": "MigrationProposalHelper",
+            "args": {
+                "OHMv1ToMigrate": 197370742207442
+            }
+        },
+        {
+            "name": "V1Migrator",
+            "args": {}
+        }
+    ]
+}

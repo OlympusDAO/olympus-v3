@@ -3,11 +3,16 @@
 # Revokes a role from the specified address
 #
 # Usage:
-# ./revokeRole.sh --role <role name> --from <recipient address> --account <cast wallet> --broadcast <false> --env <file>
+# ./revokeRole.sh --role <role name> --from <recipient address> --chain <chain name> --account <cast wallet> OR --ledger <mnemonic-index> --broadcast <false> --env <file>
 #
-# Environment variables:
-# RPC_URL
-# CHAIN
+# The chain is determined automatically from block.chainid. The --chain parameter specifies the RPC URL (from foundry.toml).
+#
+# Examples:
+# Using cast wallet:
+#   ./revokeRole.sh --role minter_admin --from 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --chain sepolia --account mywallet --broadcast true
+#
+# Using Ledger:
+#   ./revokeRole.sh --role minter_admin --from 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --chain sepolia --ledger 0 --broadcast true
 
 # Exit if any error occurs
 set -e
@@ -28,33 +33,25 @@ echo ""
 echo "Validating arguments"
 validate_text "$role" "No role specified. Please provide the role after the --role flag."
 validate_address "$from" "No recipient specified or it is not an EVM address. Provide the recipient after the --from flag."
-validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
-
-# Validate environment variables
-echo ""
-echo "Validating environment variables"
-validate_text "$RPC_URL" "No RPC URL specified. Specify the RPC_URL in the $ENV_FILE file."
-validate_text "$CHAIN" "No chain specified. Specify the CHAIN in the $ENV_FILE file."
-
-echo ""
-echo "Summary:"
-echo "  Deploying from account: $account"
-echo "  Chain: $CHAIN"
-echo "  Using RPC at URL: $RPC_URL"
-echo "  Role: $role"
-echo "  From: $from"
+validate_text "$chain" "No chain specified. Provide the chain after the --chain flag."
 
 # Validate and set forge script flags
 source $SCRIPT_DIR/../lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_account_address $account
+validate_and_set_account "$account" "$ledger"
+
+echo ""
+echo "Summary:"
+echo "  Chain: $chain"
+echo "  Role: $role"
+echo "  From: $from"
 
 # Deploy using script
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Roles.s.sol:RolesScript \
-    --sig "revokeRole(string,string,address)()" $CHAIN $role $from \
-    --rpc-url $RPC_URL --account $account --slow -vvv \
+    --sig "revokeRole(string,address)()" $role $from \
+    --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
     $BROADCAST_FLAG
 

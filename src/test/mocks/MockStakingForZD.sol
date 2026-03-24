@@ -35,6 +35,10 @@ contract MockStakingZD is IStaking {
         if (trigger_) bounty = rebase();
     }
 
+    function stake(address, uint256, bool, bool) external pure returns (uint256) {
+        return 0;
+    }
+
     function setDistributor(address _distributor) external {
         distributor = ZeroDistributor(_distributor);
     }
@@ -42,4 +46,14 @@ contract MockStakingZD is IStaking {
     function secondsToNextEpoch() external view returns (uint256) {
         return epoch.end > block.timestamp ? epoch.end - block.timestamp : 0;
     }
+
+    function OHM() external view returns (address) {}
+
+    function sOHM() external view returns (address) {}
+
+    function gOHM() external view returns (address) {}
+
+    function index() external view returns (uint256) {}
+
+    function supplyInWarmup() external view returns (uint256) {}
 }

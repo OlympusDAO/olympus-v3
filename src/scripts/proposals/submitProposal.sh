@@ -2,97 +2,54 @@
 
 # This script submits a proposal to the governor.
 #
-# Usage: src/scripts/proposals/submitProposal.sh --file <proposal-path> --contract <contract-name> --account <forge account> --fork <true|false> --broadcast <true|false> --env <env-file>
-#
-# Environment variables:
-# RPC_URL
+# Usage:
+# src/scripts/proposals/submitProposal.sh
+#   --file <proposal-path>
+#   --contract <contract-name>
+#   (--account <cast-wallet> OR --ledger <mnemonic-index>)
+#   --chain <chain-name-or-url> (e.g. mainnet, base, or provide a custom RPC URL)
+#   [--broadcast <true|false>]
+#   [--env <env-file>]
 
-# Exit if any error occurs
 set -e
 
-# Iterate through named arguments
-# Source: https://unix.stackexchange.com/a/388038
-while [ $# -gt 0 ]; do
-    if [[ $1 == *"--"* ]]; then
-        v="${1/--/}"
-        declare $v="$2"
-    fi
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source $SCRIPT_DIR/../../../shell/lib/arguments.sh
+source $SCRIPT_DIR/../../../shell/lib/forge.sh
 
-    shift
-done
+load_named_args "$@"
+load_env
 
-# Get the name of the .env file or use the default
-ENV_FILE=${env:-".env"}
-echo "Sourcing environment variables from $ENV_FILE"
-
-# Load environment file
-set -a # Automatically export all variables
-source $ENV_FILE
-set +a # Disable automatic export
-
-# Apply defaults to command-line arguments
-FORK=${fork:-false}
 BROADCAST=${broadcast:-false}
 
-# Check if the proposal file was specified
-if [ -z "$file" ]; then
-    echo "Error: Proposal file was not specified"
-    exit 1
-fi
-
-# Check if the proposal file exists
-if [ ! -f "$file" ]; then
-    echo "Error: Proposal file does not exist. Provide the correct relative path after the --file flag."
-    exit 1
-fi
-
-# Check if the contract name was specified
-if [ -z "$contract" ]; then
-    echo "Error: Contract name was not specified"
-    exit 1
-fi
-
-# Check if the RPC_URL was specified
-if [ -z "$RPC_URL" ]; then
-    echo "Error: RPC_URL was not specified"
-    exit 1
-fi
-
-# Check if the forge account was specified
-if [ -z "$account" ]; then
-    echo "Error: Forge account was not specified. Set up using 'cast wallet'."
-    exit 1
-fi
-
-# Get the address of the cast wallet
-echo "Getting address for cast account $account"
-CAST_ADDRESS=$(cast wallet address --account $account)
 echo ""
+echo "Validating arguments"
+validate_file "$file" "Proposal file not found. Provide correct path after --file."
+validate_text "$contract" "Contract name not specified. Use --contract."
+validate_text "$chain" "No chain specified. Specify the chain after the --chain flag."
 
-echo "Using proposal contract: $file:$contract"
-echo "Using RPC at URL: $RPC_URL"
-echo "Using forge account: $account"
-echo "Sender address: $CAST_ADDRESS"
+validate_and_set_account "$account" "$ledger"
 
-# Set the fork flag
-FORK_FLAG=""
-if [ "$FORK" = "true" ]; then
-    FORK_FLAG="--legacy"
-    echo "Fork: enabled"
-else
-    echo "Fork: disabled"
+set_broadcast_flag $BROADCAST
+
+FORK_FLAGS=""
+if [[ "$chain" == *"localhost"* ]] || [[ "$chain" == *"127.0.0.1"* ]]; then
+    FORK_FLAGS="--legacy"
 fi
 
-# Set the broadcast flag
-BROADCAST_FLAG=""
-if [ "$BROADCAST" = "true" ]; then
-    BROADCAST_FLAG="--broadcast"
-    echo "Broadcast: enabled"
-else
-    echo "Broadcast: disabled"
-fi
+echo ""
+echo "Summary:"
+echo "  Proposal: $file:$contract"
+echo "  Chain: $chain"
+echo "  Sender: $ACCOUNT_ADDRESS"
 
-# Run the forge script
 echo ""
 echo "Running forge script..."
-forge script $file:$contract --rpc-url $RPC_URL --account $account --sender $CAST_ADDRESS $FORK_FLAG $BROADCAST_FLAG -vvv
+forge script $file:$contract \
+    --rpc-url $chain \
+    $ACCOUNT_FLAG \
+    $LEDGER_FLAGS \
+    --sender $ACCOUNT_ADDRESS \
+    $FORK_FLAGS \
+    $BROADCAST_FLAG \
+    -vvv

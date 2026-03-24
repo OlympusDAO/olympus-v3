@@ -49,6 +49,8 @@ contract MockGohm is IgOHM {
         uint256 amount
     ) external override returns (bool) {}
 
+    function sOHM() external view returns (address) {}
+
     function mint(address _to, uint256 _amount) external override {}
 
     function burn(address _from, uint256 _amount) external override {}

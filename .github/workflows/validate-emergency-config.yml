@@ -1,0 +1,73 @@
+name: Validate Emergency Config
+
+on:
+    push:
+        branches:
+            - emergency
+            - master
+            - main
+            - develop
+        paths:
+            - "documentation/emergency/**"
+            - "src/scripts/env.json"
+            - "shell/validate-emergency-config.js"
+
+    pull_request:
+        paths:
+            - "documentation/emergency/**"
+            - "src/scripts/env.json"
+            - "shell/validate-emergency-config.js"
+
+    workflow_dispatch:
+
+jobs:
+    validate:
+        name: Validate Emergency Config
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Install pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Run validation script
+              run: node shell/validate-emergency-config.js
+
+            - name: Check for uncommitted changes
+              run: |
+                  if [[ -n $(git status --porcelain documentation/emergency/) ]]; then
+                    echo "ERROR: Uncommitted changes detected in documentation/emergency/"
+                    git status --porcelain documentation/emergency/
+                    exit 1
+                  fi
+
+    # Uncomment to enable frontend trigger when ready
+    # trigger-frontend:
+    #   name: Trigger Frontend Rebuild
+    #   needs: validate
+    #   runs-on: ubuntu-latest
+    #   if: github.ref == 'refs/heads/emergency' && github.event_name == 'push'
+    #
+    #   steps:
+    #     - name: Trigger frontend repository_dispatch
+    #       uses: peter-evans/repository-dispatch@v3
+    #       with:
+    #         token: ${{ secrets.FRONTEND_TRIGGER_TOKEN }}
+    #         repository: OlympusDAO/olympus-frontend
+    #         event-type: emergency-config-updated
+    #         client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

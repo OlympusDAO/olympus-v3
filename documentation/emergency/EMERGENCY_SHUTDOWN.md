@@ -1,129 +1,283 @@
 # Emergency Shutdown Instructions
 
-This document provides information on how to shut down the Olympus protocol in the event of an emergency.
+This document provides comprehensive information on how to shut down the Olympus protocol in the event of an emergency.
 
-Currently the contracts in the protocol have differing approaches and access controles for shutdown procedures. Efforts have started to standardise the functions and roles, but will take time.
+## Table of Contents
 
-## Role Assignment
+1. [Emergency Multisig Overview](#emergency-multisig-overview)
+2. [Emergency Config Structure](#emergency-config-structure)
+3. [When to Shutdown](#when-to-shutdown)
+4. [Emergency Procedures](#emergency-procedures)
+5. [Executing Shutdowns](#executing-shutdowns)
+
+---
+
+## Emergency Multisig Overview
+
+### What is the Emergency MS
+
+The Emergency Multisig (Emergency MS) is a dedicated Safe multisig wallet with specific permissions to execute emergency shutdown procedures. It operates independently from the DAO Multisig (DAO MS) to ensure rapid response capability during critical situations.
+
+### Address and Verification
+
+The Emergency MS address is configured in `src/scripts/env.json` under the key `olympus.multisig.emergency`. The address varies by chain:
+
+**Current Emergency MS Addresses:**
+
+| Chain | Address |
+|-------|---------|
+| **Mainnet** | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` |
+| **Base** | `0x18a390bD45bCc92652b9A91AD51Aed7f1c1358f5` (same as DAO MS) |
+| **Base Sepolia** | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` (same as DAO MS) |
+| **Berachain** | `0xa5ea62894027D981D34BB99A04BD36B818b2Aaf0` |
+| **Berachain Bartio** | `0x1A5309F208f161a393E8b5A253de8Ab894A67188` (same as DAO MS) |
+| **Sepolia** | `0x81E6E5Ba12a11ceed3E8BfE825B56ae9b7260691` |
+
+**⚠️ Missing Emergency MS Addresses:**
+
+The following chains are missing Emergency MS addresses (set to zero address) in `src/scripts/env.json`:
+
+- **Arbitrum**: Currently `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
+- **Optimism**: Currently `0x0000000000000000000000000000000000000000` - **ACTION REQUIRED**
+
+**TODO Task**:
+
+- [ ] Verify Emergency MS deployment status for Arbitrum
+- [ ] Verify Emergency MS deployment status for Optimism
+- [ ] Configure Emergency MS addresses in `src/scripts/env.json` for all chains where the protocol is deployed
+- [ ] Update this documentation once Emergency MS addresses are configured
+
+**Note**: Emergency shutdown procedures cannot be executed on chains without a configured Emergency MS address. Use DAO MS for these chains until Emergency MS is deployed and configured.
+
+**Important**: Always verify the Emergency MS address before executing shutdown procedures. You can verify the address by:
+
+1. Checking the `env.json` file
+2. Verifying on the [Protocol Visualizer](https://olympus-protocol-visualizer.up.railway.app)
+3. Confirming with the protocol team
+
+### Role Assignments and Permissions
+
+For detailed information about all roles in the protocol, see [ROLES.md](../../ROLES.md).
+
+The Emergency MS has been granted the following roles:
+
+- `emergency_shutdown` - Allows shutdown of TRSRY withdrawals, MINTR minting
+- `emergency` - Allows shutdown of Cooler V2 operations (borrows and liquidations), CCIP CrossChainBridge, Heart, EmissionManager and Convertible Deposits
+
+The Emergency MS does **not** have access to:
+
+- `bridge_admin` (LayerZero CrossChainBridge)
+- `loop_daddy` (YieldRepurchaseFacility)
+- `reserve_migrator_admin` (ReserveMigrator)
+
+These require the DAO MS or OCG Timelock.
+
+---
+
+## Emergency Config Structure
+
+The emergency configuration is stored in `documentation/emergency/emergency-config.json`. This file is used by the emergency frontend to generate and execute shutdown transactions.
+
+### Config Schema
+
+The emergency config follows the structure defined in `documentation/emergency/emergency-config.schema.json`. Key components include:
+
+**Chain Configuration:**
+
+- Chain ID and name mappings
+- Emergency multisig addresses per chain
+- Component addresses and function selectors
+
+**Component Definitions:**
+
+- Target contract addresses
+- Function selectors for shutdown actions
+- Required roles and permissions
+- Multisig owner (Emergency MS vs DAO MS)
+- Severity ratings and shutdown criteria
+
+**Validation:**
+
+- Config is validated automatically via CI/CD (`.github/workflows/validate-emergency-config.yml`)
+- Can be validated locally using `shell/validate-emergency-config.js`
+
+### Updating the Config
+
+To update the emergency configuration:
+
+1. Edit `documentation/emergency/emergency-config.json`
+2. Ensure changes follow the schema
+3. Run validation: `node shell/validate-emergency-config.js`
+4. Commit the changes
+
+For bulk updates or to discover contracts needing configuration, use the `/update-emergency-config` Claude Code skill (available in this repository's Claude Code environment). This command:
+
+- Scans `src/policies/` and `src/periphery/` for contracts with emergency capabilities
+- Generates configuration entries with appropriate ABIs, owners, and metadata
+- Validates and updates `emergency-config.json` automatically
+
+Example usage: Type `/update-emergency-config` in Claude Code to scan for uncovered contracts, or `/update-emergency-config src/policies/Heart.sol` to configure a specific contract.
+
+---
+
+## When to Shutdown
+
+### General Protocol-Level Guidance
+
+Shutdown procedures should be initiated when:
+
+1. **Critical Vulnerabilities**
+   - Active exploit detected
+   - Code vulnerability that could lead to fund loss
+   - Access control bypasses
+
+2. **Infinite Mint Bugs**
+   - Unauthorized minting capability
+   - Broken minting controls
+   - Oracle manipulation leading to infinite minting
+
+3. **Oracle Failures**
+   - Price oracle manipulation
+   - Stale or incorrect price feeds
+   - Oracle downtime affecting critical operations
+
+4. **Bridge Exploits**
+   - Cross-chain bridge vulnerabilities
+   - Unauthorized bridging
+   - Bridge contract compromises
+
+5. **Governance Attacks**
+   - Unauthorized governance actions
+   - Compromised governance contracts
+   - Malicious proposals being executed
+
+### Severity Assessment Framework
+
+| Severity | Description | Response Time |
+|----------|-------------|---------------|
+| **Critical** | Immediate shutdown required, active exploit or imminent risk | Immediate |
+| **High** | Immediate shutdown required, significant vulnerability with immediate exploitability | Immediate |
+| **Medium** | Shutdown within hours, moderate risk | Hours |
+| **Low** | Monitor, no immediate action required | Monitor |
+
+**Note**: Only Critical or High severity issues require immediate shutdown. Medium and Low severity issues should be assessed on a case-by-case basis.
+
+### Decision Tree
+
+```text
+Is there an active exploit?
+├─ YES → Is it affecting user funds?
+│   ├─ YES → Shutdown immediately (TRSRY, MINTR, Bridges)
+│   └─ NO → Assess severity and shutdown affected components
+└─ NO → Is there a critical vulnerability?
+    ├─ YES → Is it exploitable immediately?
+    │   ├─ YES → Shutdown vulnerable components
+    │   └─ NO → Plan coordinated shutdown
+    └─ NO → Monitor and assess
+```
+
+---
+
+## Emergency Procedures
+
+### Step-by-Step Emergency Response Protocol
+
+1. **Detection and Assessment**
+   - Identify the issue
+   - Assess severity using the framework above
+   - Determine affected components
+
+2. **Communication**
+   - Alert the protocol team immediately
+   - Coordinate with Emergency MS signers
+   - Document the issue and proposed response
+
+3. **Preparation**
+   - Verify Emergency MS signer availability
+   - Access the emergency frontend
+   - Review available components and their severity ratings
+
+4. **Execution**
+   - Select components to shutdown via the frontend
+   - Generate Safe multisig transactions
+   - Obtain required signatures from signers
+   - Execute shutdown transactions
+
+5. **Verification**
+   - Verify shutdown transactions on-chain
+   - Confirm affected components are disabled
+   - Document the shutdown
+
+6. **Post-Shutdown Actions**
+   - Communicate status to community
+   - Begin investigation and remediation
+   - Plan restart procedures
+
+### Communication Procedures
+
+- **Internal**: Use designated emergency communication channels
+- **External**: Coordinate public communication through official channels
+- **Timeline**: Document all actions and timelines
+
+### Escalation Path
+
+1. **Level 1**: Protocol team assessment
+2. **Level 2**: Emergency MS signer coordination
+3. **Level 3**: DAO MS involvement (if required)
+4. **Level 4**: External security audit and remediation
+
+### Coordination Between Emergency MS Signers
+
+- Establish communication channel before emergencies
+- Pre-agree on shutdown procedures
+- Coordinate signature timing
+- Verify all signers are available
+
+### Post-Shutdown Actions
+
+1. **Investigation**
+   - Root cause analysis
+   - Impact assessment
+   - Remediation planning
+
+2. **Remediation**
+   - Fix vulnerabilities
+   - Test solutions
+   - Prepare restart procedures
+
+3. **Restart**
+   - Coordinate restart with governance
+   - Execute restart procedures
+   - Monitor post-restart operations
+
+---
+
+## Executing Shutdowns
+
+Emergency shutdowns are executed through the emergency frontend, which uses the configuration in `documentation/emergency/emergency-config.json` to generate and execute transactions.
+
+### Using the Emergency Frontend
+
+The emergency frontend provides a web interface for:
+
+- Viewing all available components and their shutdown criteria
+- Generating Safe multisig transactions for shutdown actions
+- Collecting signatures from multisig signers
+- Submitting transactions to the blockchain
+- Tracking execution status
+
+**Access**: The emergency frontend is hosted in a separate repository. Contact the protocol team for access information.
+
+### Component Details
+
+For detailed information about each component—including shutdown criteria, function signatures, and post-shutdown steps—refer to `documentation/emergency/emergency-config.json`. Each component entry includes:
+
+- **Description**: What the component does
+- **Severity**: How critical it is
+- **Shutdown Criteria**: When to shut it down
+- **Post-Shutdown Steps**: How to verify the shutdown worked
+- **Dependencies**: Other components that should be shut down together
+
+### Role Assignment
 
 The assignment of roles can be viewed at any time on the [Protocol Visualizer](https://olympus-protocol-visualizer.up.railway.app).
-
-## Contract Addresses
-
-Addresses are provided in the sections below, but effort should be made to check the address in [env.json](../../src/scripts/env.json), in case it has not been updated here.
-
-## CCIP Bridge
-
-See [BRIDGE_CCIP](../BRIDGE_CCIP.md) for detailed instructions on how to shut down the components of the CCIP bridge.
-
-## LayerZero Bridge
-
-Bridging OHM between EVM chains is currently handled by the [LayerZero bridge](../../src/policies/CrossChainBridge.sol). Transactions can be paused by calling the following:
-
-- Function: `setBridgeStatus(bool)`
-- Required role: `bridge_admin` (DAO MS, OCG Timelock)
-- Address: `0x45e563c39cDdbA8699A90078F42353A57509543a`
-- [ABI](abis/cross_chain_bridge.json)
-
-## TRSRY
-
-Withdrawals from the TRSRY module can be stopped by calling the [Emergency policy](../../src/policies/Emergency.sol):
-
-- Function: `shutdownWithdrawals()`
-- Required role: `emergency_shutdown` (DAO MS, Emergency MS, OCG Timelock)
-- Address: `0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75`
-- [ABI](abis/emergency.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## MINTR
-
-OHM minting by the MINTR can be stopped by calling the [Emergency policy](../../src/policies/Emergency.sol):
-
-- Function: `shutdownMinting()`
-- Required role: `emergency_shutdown` (DAO MS, Emergency MS, OCG Timelock)
-- Address: `0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75`
-- [ABI](abis/emergency.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## Cooler v2
-
-### Borrows
-
-Borrows can be paused on the Cooler V2 contract ([MonoCooler](../../src/policies/cooler/MonoCooler.sol)):
-
-- Function: `setBorrowPaused(bool)`
-- Required role: `admin` (OCG Timelock) or `emergency` (OCG Timelock or Emergency MS)
-- Address: `0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC`
-- [ABI](abis/cooler_v2.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-### Composites
-
-The [composites periphery contract](../../src/periphery/CoolerComposites.sol) can be disabled using the following:
-
-- Function: `disable(bytes)` (empty bytes is fine)
-- Required role: currently owned by the DAO MS
-- Address: `0x6593768feBF9C95aC857Fb7Ef244D5738D1C57Fd`
-- [ABI](abis/periphery_enabler.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-### Migrator
-
-The [migrator periphery contract](../../src/periphery/CoolerV2Migrator.sol) can be disabled using the following:
-
-- Function: `disable(bytes)` (empty bytes is fine)
-- Required role: currently owned by the DAO MS
-- Address: `0xE045BD0A0d85E980AA152064C06EAe6B6aE358D2`
-- [ABI](abis/periphery_enabler.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-### Liquidations
-
-Liquidations can be paused on the Cooler V2 contract ([MonoCooler](../../src/policies/cooler/MonoCooler.sol)):
-
-- Function: `setLiquidationsPaused(bool)`
-- Required role: `admin` (OCG Timelock) or `emergency` (OCG Timelock or Emergency MS)
-- Address: `0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC`
-- [ABI](abis/cooler_v2.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## Emission Manager
-
-The [EmissionManager policy](../../src/policies/EmissionManager.sol) can be shut down using the following:
-
-- Function: `shutdown()`
-- Required role: `emergency_shutdown` (DAO MS, Emergency MS, OCG Timelock)
-- Address: `0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2`
-- [ABI](abis/emission_manager.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## Yield Repurchase Facility
-
-The [YieldRepurchaseFacility policy](../../src/policies/YieldRepurchaseFacility.sol) can be shut down using the following:
-
-- Function: `shutdown(ERC20[])`
-- Required role: `loop_daddy` (DAO MS, OCG Timelock)
-- Address: `0x271e35a8555a62F6bA76508E85dfD76D580B0692`
-- [ABI](abis/yield_repurchase_facility.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-The `shutdown()` function takes an array of tokens that will be transferred into the TRSRY module. A zero-length array can be provided.
-
-## Heart
-
-The [Heart policy](../../src/policies/Heart.sol) can be shut down using the following:
-
-- Function: `disable()`
-- Required role: `emergency` (OCG Timelock, Emergency MS)
-- Address: `0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB`
-- [ABI](abis/heart.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## Bond Manager
-
-The [BondManager policy](../../src/policies/BondManager.sol) can be used to stop the bond callback from minting more OHM. It also closes the market.
-
-- Function: `emergencyShutdownFixedExpiryMarket(uint256 marketId)`
-- Required role: `bondmanager_admin` (DAO MS)
-- Address: `0xf577c77ee3578c7F216327F41B5D7221EaD2B2A3`
-- [ABI](abis/bond_manager.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)
-
-## Reserve Migrator
-
-The [ReserveMigrator policy](../../src/policies/ReserveMigrator.sol) can be shut down using the following:
-
-- Function: `deactivate()`
-- Required role: `reserve_migrator_admin` (DAO MS, OCG Timelock)
-- Address: `0x986b99579BEc7B990331474b66CcDB94Fa2419F5`
-- [ABI](abis/reserve_migrator.json) (the Safe UI should automatically load the ABI from Etherscan, but this is provided just in case)

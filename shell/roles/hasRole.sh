@@ -3,11 +3,16 @@
 # Checks whether the specified address has the role
 #
 # Usage:
-# ./hasRole.sh --role <role name> --address <recipient address> --account <cast wallet> --broadcast <false> --env <file>
+# ./hasRole.sh --role <role name> --address <recipient address> --chain <chain name> --account <cast wallet> OR --ledger <mnemonic-index> --env <file>
 #
-# Environment variables:
-# RPC_URL
-# CHAIN
+# The chain is determined automatically from block.chainid. The --chain parameter specifies the RPC URL (from foundry.toml).
+#
+# Examples:
+# Using cast wallet:
+#   ./hasRole.sh --role minter_admin --address 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --chain sepolia --account mywallet
+#
+# Using Ledger:
+#   ./hasRole.sh --role minter_admin --address 0x1A5309F208f161a393E8b5A253de8Ab894A67188 --chain sepolia --ledger 0
 
 # Exit if any error occurs
 set -e
@@ -20,43 +25,30 @@ load_named_args "$@"
 # Load environment variables
 load_env
 
-# Set sane defaults
-BROADCAST=${broadcast:-false}
-
 # Validate named arguments
 echo ""
 echo "Validating arguments"
 validate_text "$role" "No role specified. Please provide the role after the --role flag."
 validate_address "$address" "No address specified or it is not an EVM address. Provide the address after the --address flag."
-validate_text "$account" "No account specified. Provide the cast wallet after the --account flag."
-
-# Validate environment variables
-echo ""
-echo "Validating environment variables"
-validate_text "$RPC_URL" "No RPC URL specified. Specify the RPC_URL in the $ENV_FILE file."
-validate_text "$CHAIN" "No chain specified. Specify the CHAIN in the $ENV_FILE file."
-
-echo ""
-echo "Summary:"
-echo "  Deploying from account: $account"
-echo "  Chain: $CHAIN"
-echo "  Using RPC at URL: $RPC_URL"
-echo "  Role: $role"
-echo "  Address: $address"
+validate_text "$chain" "No chain specified. Provide the chain after the --chain flag."
 
 # Validate and set forge script flags
 source $SCRIPT_DIR/../lib/forge.sh
-set_broadcast_flag $BROADCAST
-set_account_address $account
+validate_and_set_account "$account" "$ledger"
+
+echo ""
+echo "Summary:"
+echo "  Chain: $chain"
+echo "  Role: $role"
+echo "  Address: $address"
 
 # Deploy using script
 echo ""
 echo "Running forge script"
 forge script ./src/scripts/ops/Roles.s.sol:RolesScript \
-    --sig "hasRole(string,string,address)()" $CHAIN $role $address \
-    --rpc-url $RPC_URL --account $account --slow -vvv \
-    --sender $ACCOUNT_ADDRESS \
-    $BROADCAST_FLAG
+    --sig "hasRole(string,address)()" $role $address \
+    --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv \
+    --sender $ACCOUNT_ADDRESS
 
 echo ""
 echo "hasRole complete"

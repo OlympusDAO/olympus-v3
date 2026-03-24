@@ -58,7 +58,6 @@ import {Distributor} from "policies/Distributor/Distributor.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
-import {Burner} from "policies/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
@@ -126,7 +125,6 @@ contract OlympusDeploy is Script {
     ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
-    Burner public burner;
     BLVaultManagerLido public lidoVaultManager;
     BLVaultLido public lidoVault;
     BLVaultManagerLusd public lusdVaultManager;
@@ -249,7 +247,6 @@ contract OlympusDeploy is Script {
         selectorMap["ZeroDistributor"] = this._deployZeroDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
-        selectorMap["Burner"] = this._deployBurner.selector;
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
@@ -355,7 +352,6 @@ contract OlympusDeploy is Script {
         zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
         bondManager = BondManager(envAddress("olympus.policies.BondManager"));
-        burner = Burner(envAddress("olympus.policies.Burner"));
         lidoVaultManager = BLVaultManagerLido(envAddress("olympus.policies.BLVaultManagerLido"));
         lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
@@ -755,17 +751,6 @@ contract OlympusDeploy is Script {
         console2.log("BondManager deployed at:", address(bondManager));
 
         return address(bondManager);
-    }
-
-    function _deployBurner(bytes memory) public returns (address) {
-        // No additional arguments for Burner policy
-
-        // Deploy Burner policy
-        vm.broadcast();
-        burner = new Burner(kernel, ohm);
-        console2.log("Burner deployed at:", address(burner));
-
-        return address(burner);
     }
 
     function _deployBLVaultLido(bytes memory) public returns (address) {
@@ -1672,7 +1657,6 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
         bondManager = BondManager(vm.envAddress("BONDMANAGER"));
-        burner = Burner(vm.envAddress("BURNER"));
 
         /// Operator Roles
         require(ROLES.hasRole(address(heart), "heart"));
@@ -1705,9 +1689,6 @@ contract OlympusDeploy is Script {
 
         /// BondManager Roles
         require(ROLES.hasRole(policy_, "bondmanager_admin"));
-
-        /// Burner Roles
-        require(ROLES.hasRole(guardian_, "burner_admin"));
     }
 
     function _saveDeployment(string memory chain_) internal {
