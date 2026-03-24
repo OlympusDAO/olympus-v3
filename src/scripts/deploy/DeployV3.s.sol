@@ -995,9 +995,8 @@ contract DeployV3 is WithEnvironment {
         address teller = _getAddressNotZero("olympus.policies.ConvertibleOHMTeller");
 
         // Input parameters
-        uint256 lastEpochEndDate = _readDeploymentArgUint256(
-            "IncentiveDistributorConvertible",
-            "lastEpochEndDate"
+        uint40 lastEpochEndDate = SafeCast.encodeUInt40(
+            _readDeploymentArgUint256("IncentiveDistributorConvertible", "lastEpochEndDate")
         );
 
         // Validate lastEpochEndDate is not stale (more than 90 days in the past)

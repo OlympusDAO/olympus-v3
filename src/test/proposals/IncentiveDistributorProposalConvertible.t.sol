@@ -93,7 +93,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
             // Deploy distributor
             // lastEpochEndDate = end of yesterday (23:59:59 UTC)
-            uint256 lastEpochEndDate = _roundToDay(uint48(block.timestamp)) - 1;
+            uint40 lastEpochEndDate = uint40(_roundToDay(uint48(block.timestamp)) - 1);
             distributor = new IncentiveDistributorConvertible(
                 address(kernel),
                 lastEpochEndDate,

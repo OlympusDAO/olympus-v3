@@ -47,7 +47,7 @@ contract IncentiveDistributorConvertible is
     /// @param teller_ The address of the ConvertibleOHMTeller
     constructor(
         address kernel_,
-        uint256 lastEpochEndDate_,
+        uint40 lastEpochEndDate_,
         address teller_
     ) BaseIncentiveDistributor(kernel_, lastEpochEndDate_) {
         if (teller_ == address(0)) revert IncentiveDistributor_InvalidAddress();

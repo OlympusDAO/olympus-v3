@@ -85,7 +85,7 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         // Deploy the distributor
         distributor = new IncentiveDistributorConvertible(
             address(kernel),
-            startTimestamp - 1,
+            uint40(startTimestamp - 1),
             address(teller)
         );
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
@@ -197,7 +197,11 @@ contract IncentiveDistributorConvertibleConstructorTests is
 
     function test_constructor_rejectsZeroTeller() external {
         vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidAddress.selector);
-        new IncentiveDistributorConvertible(address(kernel), startTimestamp - 1, address(0));
+        new IncentiveDistributorConvertible(
+            address(kernel),
+            uint40(startTimestamp - 1),
+            address(0)
+        );
     }
 
     function test_constructor_rejectsZeroStartTimestamp() external {
@@ -206,7 +210,7 @@ contract IncentiveDistributorConvertibleConstructorTests is
     }
 
     function test_constructor_rejectsEpochNotEndOfDay() external {
-        uint256 notEndOfDay = startTimestamp; // Midnight is not end-of-day (23:59:59)
+        uint40 notEndOfDay = startTimestamp; // Midnight is not end-of-day (23:59:59)
         vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidEpochTimestamp.selector);
         new IncentiveDistributorConvertible(address(kernel), notEndOfDay, address(teller));
     }
@@ -588,7 +592,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         MockConvertibleOHMTellerZeroDeploy mockTeller = new MockConvertibleOHMTellerZeroDeploy();
         IncentiveDistributorConvertible mockDistributor = new IncentiveDistributorConvertible(
             address(kernel),
-            startTimestamp - 1,
+            uint40(startTimestamp - 1),
             address(mockTeller)
         );
         kernel.executeAction(Actions.ActivatePolicy, address(mockDistributor));

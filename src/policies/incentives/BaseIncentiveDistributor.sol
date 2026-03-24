@@ -61,12 +61,11 @@ abstract contract BaseIncentiveDistributor is
     ///
     /// @param  kernel_             The Kernel address
     /// @param  lastEpochEndDate_   The end-of-day timestamp (23:59:59 UTC) of the day before the first epoch
-    constructor(address kernel_, uint256 lastEpochEndDate_) Policy(Kernel(kernel_)) {
+    constructor(address kernel_, uint40 lastEpochEndDate_) Policy(Kernel(kernel_)) {
         if (lastEpochEndDate_ == 0) revert IncentiveDistributor_EpochIsZero();
         _validateEpochEndOfDay(lastEpochEndDate_);
 
-        // Note: lastEpochEndDate_ is truncated to uint40. Max uint40 is ~year 36812.
-        lastEpochEndDate = uint40(lastEpochEndDate_);
+        lastEpochEndDate = lastEpochEndDate_;
         EPOCH_START_DATE = lastEpochEndDate + 1;
         // Disabled by default by PolicyEnabler
     }
