@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.30;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";

@@ -1095,7 +1095,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     }
 
     function test_setMinDuration_revertsIfNotAdmin() external {
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(user0);
         teller.setMinDuration(7 days);
     }
