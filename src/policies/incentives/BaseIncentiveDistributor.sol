@@ -176,7 +176,7 @@ abstract contract BaseIncentiveDistributor is
         }
 
         bytes32 leaf = _computeLeaf(user_, epochEndDate_, amount_);
-        isValid = MerkleProof.verify(proof_, epochMerkleRoots[epochEndDate_], leaf);
+        isValid = MerkleProof.verifyCalldata(proof_, epochMerkleRoots[epochEndDate_], leaf);
 
         if (!isValid && revertOnFailure_) revert IncentiveDistributor_InvalidProof();
     }
