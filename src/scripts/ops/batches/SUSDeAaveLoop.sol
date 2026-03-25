@@ -18,6 +18,19 @@ import {FullMath} from "src/libraries/FullMath.sol";
 ///
 ///         Aave Pool: Ethereum Core Pool (includes sUSDe, USDe, USDT, and many other assets)
 ///         Pool Address: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
+///
+///         DECIMAL SCALE ASSUMPTIONS:
+///         - sUSDe: 18 decimals
+///         - USDe:  18 decimals
+///         - USDT:  6 decimals
+///         - Aave base currency (USD): 8 decimals
+///
+///         KEY CONVERSIONS:
+///         - Aave returns `availableBorrowsBase` in 8 decimals (USD)
+///         - borrow() expects amount in asset's native decimals (6 for USDT)
+///         - For USDT ~$1: USDT_amount = base_amount / 100 (8 dec → 6 dec)
+///         - For sUSDe ~$1: base_amount = sUSDe_amount * 10^8 / 10^18 (18 dec → 8 dec)
+///         - eMode category 2 LTV: 90% = 9000 bps (sUSDe reserve LTV is 0, only usable in eMode)
 contract SUSDeAaveLoop is BatchScriptV2 {
     using stdJson for string;
     using Surl for *;
@@ -91,7 +104,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
 
-        // ALL CALCULATIONS BEFORE addToBatch
+        // ============ DECIMAL SCALE CALCULATIONS ============
+        // sUSDe: 18 decimals | USDT: 6 decimals | Aave base: 8 decimals (USD)
+        //
         // Check if eMode is set to the correct category
         uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
         bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
@@ -176,7 +191,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("Owner:", _owner);
         console2.log("Slippage (bps):", slippageBps);
 
-        // ALL CALCULATIONS BEFORE addToBatch
+        // ============ DECIMAL SCALE CALCULATIONS ============
+        // USDT: 6 decimals | USDe: 18 decimals
+        // KyberSwap handles all decimal conversions internally
+        // amountOut is in tokenOut's native decimals (18 for USDe)
+
         uint256 usdtBalance = _usdt.balanceOf(_owner);
         console2.log("\n2a. USDT balance:", usdtBalance);
 
@@ -242,7 +261,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("Borrow percentage (bps):", borrowPercentage);
         console2.log("Slippage (bps):", slippageBps);
 
-        // ALL CALCULATIONS BEFORE addToBatch
+        // ============ DECIMAL SCALE CALCULATIONS ============
+        // USDT: 6 decimals | sUSDe: 18 decimals | Aave base: 8 decimals (USD)
+        //
+        // availableBorrowsBase: 8 decimals (USD)
+        // usdtBorrowAmount: 6 decimals (USDT native)
+
         (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
         uint256 usdtBorrowAmountBase = (availableBorrowsBase * borrowPercentage) / 10000;
 
