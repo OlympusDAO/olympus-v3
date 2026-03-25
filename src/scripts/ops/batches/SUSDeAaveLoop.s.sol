@@ -9,6 +9,7 @@ import {Surl} from "@surl-1.0.0/Surl.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IAaveV3Pool} from "src/external/interfaces/IAaveV3Pool.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 
 /// @title SUSDeAaveLoop
 /// @notice Batch script to execute sUSDe Aave loop yield strategy
@@ -40,9 +41,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
+    // Aave eMode category for sUSDe/USDe/USDT stablecoins (hardcoded)
+    // Category 2 on Aave Ethereum Core Pool
+    uint8 internal constant EMODE_CATEGORY = 2;
+
     // KyberSwap API
     string internal constant KYBERSWAP_BASE_URL = "https://aggregator-api.kyberswap.com/ethereum";
     string internal constant KYBERSWAP_CLIENT_ID = "OlympusDAO";
+
+    // Aave base currency decimals (USD = 8 decimals)
+    uint256 internal constant BASE_CURRENCY_DECIMALS = 8;
 
     /// @notice Load token addresses from env.json
     function _loadTokens() internal {
@@ -81,23 +89,57 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
 
-        // Approve and Supply sUSDe
-        console2.log("\n1a. Supply sUSDe to Aave");
+        // ALL CALCULATIONS BEFORE addToBatch
+        // Check if eMode is set to the correct category
+        uint8 currentEMode = AAVE_POOL.getUserEMode(_owner);
+        bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
+
+        // Get current available borrows
+        (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
+
+        // Get sUSDe LTV from Aave configuration
+        (uint256 ltv, , , , , , , , , ) = AAVE_POOL.getReserveConfigurationData(address(_susde));
+
+        // Calculate expected increase in available borrows from the supply
+        // Convert from 18 decimals (sUSDe) to 8 decimals (Aave base currency USD)
+        uint256 supplyValueBase = FullMath.mulDiv(
+            susdeSupplyAmount,
+            10 ** BASE_CURRENCY_DECIMALS,
+            1e18
+        );
+        uint256 expectedBorrowsIncrease = (supplyValueBase * ltv) / 10000;
+        uint256 totalExpectedBorrows = availableBorrowsBase + expectedBorrowsIncrease;
+
+        uint256 usdtBorrowAmount = (totalExpectedBorrows * borrowPercentage) / 10000;
+
+        console2.log("\n1a. Calculations:");
+        console2.log("Current eMode category:", currentEMode);
+        console2.log("Target eMode category:", EMODE_CATEGORY);
+        console2.log("Should set eMode:", shouldSetEMode);
+        console2.log("Current available borrows (base):", availableBorrowsBase);
+        console2.log("sUSDe LTV (bps):", ltv);
+        console2.log("Expected borrows increase (base):", expectedBorrowsIncrease);
+        console2.log("Total expected borrows (base):", totalExpectedBorrows);
+        console2.log("USDT borrow amount:", usdtBorrowAmount);
+
+        // NOW add to batch
+        // Set eMode if not already set to target category
+        if (shouldSetEMode) {
+            console2.log("\n1b. Set eMode category to", EMODE_CATEGORY);
+            addToBatch(address(AAVE_POOL), _encodeSetUserEMode(EMODE_CATEGORY));
+        }
+
+        console2.log("\n1c. Supply sUSDe to Aave");
         addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), susdeSupplyAmount));
         addToBatch(address(AAVE_POOL), _encodeSupply(address(_susde), susdeSupplyAmount, _owner));
 
-        // Borrow USDT
-        (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
-        uint256 usdtBorrowAmount = (availableBorrowsBase * borrowPercentage) / 10000;
+        console2.log("\n1d. Set sUSDe as collateral");
+        addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_susde), true));
 
-        console2.log("\n1b. Borrow USDT from Aave");
-        console2.log("Available borrows (base):", availableBorrowsBase);
-        console2.log("USDT borrow amount:", usdtBorrowAmount);
-
+        console2.log("\n1e. Borrow USDT from Aave");
         addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount, _owner));
 
-        // Zero approval
-        console2.log("\n1c. Zero sUSDe approval to Aave Pool");
+        console2.log("\n1f. Zero sUSDe approval to Aave Pool");
         addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), 0));
 
         console2.log("\n=== Batch prepared ===");
@@ -127,6 +169,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("Owner:", _owner);
         console2.log("Slippage (bps):", slippageBps);
 
+        // ALL CALCULATIONS BEFORE addToBatch
         uint256 usdtBalance = _usdt.balanceOf(_owner);
         console2.log("\n2a. USDT balance:", usdtBalance);
 
@@ -142,18 +185,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("\n2b. KyberSwap route obtained");
         console2.log("Expected USDe output:", usdeAmountOut);
 
-        // Swap USDT → USDe
+        // NOW add to batch
         console2.log("\n2c. Swap USDT to USDe");
         addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, usdtBalance));
         addToBatch(KYBERSWAP_ROUTER, swapCalldata);
 
-        // Supply USDe
         console2.log("\n2d. Supply USDe to Aave");
         addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), usdeAmountOut));
         addToBatch(address(AAVE_POOL), _encodeSupply(address(_usde), usdeAmountOut, _owner));
 
-        // Zero approvals
-        console2.log("\n2e. Zero approvals");
+        console2.log("\n2e. Set USDe as collateral");
+        addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_usde), true));
+
+        console2.log("\n2f. Zero approvals");
         addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, 0));
         addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), 0));
 
@@ -191,17 +235,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("Borrow percentage (bps):", borrowPercentage);
         console2.log("Slippage (bps):", slippageBps);
 
-        // Borrow USDT
+        // ALL CALCULATIONS BEFORE addToBatch
         (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
         uint256 usdtBorrowAmount = (availableBorrowsBase * borrowPercentage) / 10000;
 
-        console2.log("\n3a. Borrow USDT from Aave");
+        console2.log("\n3a. Calculations:");
         console2.log("Available borrows (base):", availableBorrowsBase);
         console2.log("USDT borrow amount:", usdtBorrowAmount);
 
-        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount, _owner));
-
-        // Swap to sUSDe
         (bytes memory swapCalldata, ) = _getKyberSwapCalldata(
             address(_usdt),
             address(_susde),
@@ -211,12 +252,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         console2.log("\n3b. KyberSwap route obtained");
 
-        console2.log("\n3c. Swap USDT to sUSDe");
+        // NOW add to batch
+        console2.log("\n3c. Borrow USDT from Aave");
+        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount, _owner));
+
+        console2.log("\n3d. Swap USDT to sUSDe");
         addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, usdtBorrowAmount));
         addToBatch(KYBERSWAP_ROUTER, swapCalldata);
 
-        // Zero approval
-        console2.log("\n3d. Zero USDT approval to Router");
+        console2.log("\n3e. Zero USDT approval to Router");
         addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, 0));
 
         console2.log("\n=== Batch prepared ===");
@@ -253,6 +297,22 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 0,
                 onBehalfOf
             );
+    }
+
+    function _encodeSetUserUseReserveAsCollateral(
+        address asset,
+        bool useAsCollateral
+    ) internal pure returns (bytes memory) {
+        return
+            abi.encodeWithSelector(
+                IAaveV3Pool.setUserUseReserveAsCollateral.selector,
+                asset,
+                useAsCollateral
+            );
+    }
+
+    function _encodeSetUserEMode(uint8 categoryId) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IAaveV3Pool.setUserEMode.selector, categoryId);
     }
 
     // ============ KyberSwap API ============

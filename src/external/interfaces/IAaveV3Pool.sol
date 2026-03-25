@@ -16,6 +16,18 @@ interface IAaveV3Pool {
         uint16 referralCode
     ) external;
 
+    /// @notice Deposits an asset to the pool (alias for supply, for backwards compatibility)
+    /// @param asset The address of the underlying asset to deposit
+    /// @param amount The amount to be deposited
+    /// @param onBehalfOf The address that will receive the aToken
+    /// @param referralCode Code used to register the integrator originating the operation
+    function deposit(
+        address asset,
+        uint256 amount,
+        address onBehalfOf,
+        uint16 referralCode
+    ) external;
+
     /// @notice Borrows an asset from the pool
     /// @param asset The address of the underlying asset to borrow
     /// @param amount The amount to be borrowed
@@ -86,4 +98,60 @@ interface IAaveV3Pool {
     /// @param asset The address of the underlying asset of the reserve
     /// @return The reserve normalized variable debt
     function getReserveNormalizedVariableDebt(address asset) external view returns (uint256);
+
+    /// @notice Returns reserve data including LTV and liquidation threshold
+    /// @param asset The address of the underlying asset of the reserve
+    /// @return ltv The loan to value of the reserve in basis points
+    /// @return liquidationThreshold The liquidation threshold in basis points
+    function getReserveConfigurationData(
+        address asset
+    )
+        external
+        view
+        returns (
+            uint256 ltv,
+            uint256 liquidationThreshold,
+            uint256 liquidationBonus,
+            uint256 decimals,
+            bool active,
+            bool frozen,
+            bool borrowingEnabled,
+            bool stableBorrowRateEnabled,
+            bool paused,
+            bool siloedBorrowing
+        );
+
+    /// @notice Sets the asset of msg.sender to be used as collateral
+    /// @param asset The address of the underlying asset
+    /// @param useAsCollateral True if the asset should be used as collateral
+    function setUserUseReserveAsCollateral(address asset, bool useAsCollateral) external;
+
+    /// @notice Sets the eMode category for the user
+    /// @param categoryId The eMode category id (0 to disable)
+    function setUserEMode(uint8 categoryId) external;
+
+    /// @notice Returns the eMode category id for the user
+    /// @param user The address of the user
+    /// @return The eMode category id (0 if no eMode set)
+    function getUserEMode(address user) external view returns (uint8);
+
+    /// @notice Returns eMode category data
+    /// @param id The eMode category id
+    /// @return ltv The loan to value for the category
+    /// @return liquidationThreshold The liquidation threshold for the category
+    /// @return liquidationBonus The liquidation bonus for the category
+    /// @return priceSource The address of the price source
+    /// @return label The label of the category
+    function getEModeCategoryData(
+        uint8 id
+    )
+        external
+        view
+        returns (
+            uint16 ltv,
+            uint16 liquidationThreshold,
+            uint16 liquidationBonus,
+            address priceSource,
+            string memory label
+        );
 }
