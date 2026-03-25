@@ -84,9 +84,9 @@ interface IAaveV3Pool {
             uint256 healthFactor
         );
 
-    /// @notice Returns the configuration of the reserve
+    /// @notice Returns the configuration bitmap of the reserve
     /// @param asset The address of the underlying asset of the reserve
-    /// @return The configuration of the reserve
+    /// @return The configuration bitmap (decode LTV from bits 0-15)
     function getConfiguration(address asset) external view returns (uint256);
 
     /// @notice Returns the normalized income of the reserve
@@ -98,28 +98,6 @@ interface IAaveV3Pool {
     /// @param asset The address of the underlying asset of the reserve
     /// @return The reserve normalized variable debt
     function getReserveNormalizedVariableDebt(address asset) external view returns (uint256);
-
-    /// @notice Returns reserve data including LTV and liquidation threshold
-    /// @param asset The address of the underlying asset of the reserve
-    /// @return ltv The loan to value of the reserve in basis points
-    /// @return liquidationThreshold The liquidation threshold in basis points
-    function getReserveConfigurationData(
-        address asset
-    )
-        external
-        view
-        returns (
-            uint256 ltv,
-            uint256 liquidationThreshold,
-            uint256 liquidationBonus,
-            uint256 decimals,
-            bool active,
-            bool frozen,
-            bool borrowingEnabled,
-            bool stableBorrowRateEnabled,
-            bool paused,
-            bool siloedBorrowing
-        );
 
     /// @notice Sets the asset of msg.sender to be used as collateral
     /// @param asset The address of the underlying asset
@@ -133,7 +111,7 @@ interface IAaveV3Pool {
     /// @notice Returns the eMode category id for the user
     /// @param user The address of the user
     /// @return The eMode category id (0 if no eMode set)
-    function getUserEMode(address user) external view returns (uint8);
+    function getUserEMode(address user) external view returns (uint256);
 
     /// @notice Returns eMode category data
     /// @param id The eMode category id

@@ -44,6 +44,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // Aave eMode category for sUSDe/USDe/USDT stablecoins (hardcoded)
     // Category 2 on Aave Ethereum Core Pool
     uint8 internal constant EMODE_CATEGORY = 2;
+    // eMode category 2 LTV (90% = 9000 bps)
+    uint256 internal constant EMODE_LTV = 9000;
 
     // KyberSwap API
     string internal constant KYBERSWAP_BASE_URL = "https://aggregator-api.kyberswap.com/ethereum";
@@ -91,14 +93,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         // ALL CALCULATIONS BEFORE addToBatch
         // Check if eMode is set to the correct category
-        uint8 currentEMode = AAVE_POOL.getUserEMode(_owner);
+        uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
         bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
         // Get current available borrows
         (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
 
-        // Get sUSDe LTV from Aave configuration
-        (uint256 ltv, , , , , , , , , ) = AAVE_POOL.getReserveConfigurationData(address(_susde));
+        // Use eMode category LTV (90%) since we're setting eMode
+        // sUSDe reserve-level LTV is 0 because it can only be used in eMode
+        uint256 ltv = EMODE_LTV;
 
         // Calculate expected increase in available borrows from the supply
         // Convert from 18 decimals (sUSDe) to 8 decimals (Aave base currency USD)
