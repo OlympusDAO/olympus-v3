@@ -113,7 +113,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 expectedBorrowsIncrease = (supplyValueBase * ltv) / 10000;
         uint256 totalExpectedBorrows = availableBorrowsBase + expectedBorrowsIncrease;
 
-        uint256 usdtBorrowAmount = (totalExpectedBorrows * borrowPercentage) / 10000;
+        uint256 usdtBorrowAmountBase = (totalExpectedBorrows * borrowPercentage) / 10000;
+
+        // Convert from base currency (USD 8 decimals) to USDT (6 decimals)
+        // USDT is priced at ~$1, so: usdt_amount = base_amount * 10^6 / 10^8 = base_amount / 100
+        uint256 usdtBorrowAmount = usdtBorrowAmountBase / 1e2;
 
         console2.log("\n1a. Calculations:");
         console2.log("Current eMode category:", currentEMode);
@@ -240,7 +244,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         // ALL CALCULATIONS BEFORE addToBatch
         (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
-        uint256 usdtBorrowAmount = (availableBorrowsBase * borrowPercentage) / 10000;
+        uint256 usdtBorrowAmountBase = (availableBorrowsBase * borrowPercentage) / 10000;
+
+        // Convert from base currency (USD 8 decimals) to USDT (6 decimals)
+        uint256 usdtBorrowAmount = usdtBorrowAmountBase / 1e2;
 
         console2.log("\n3a. Calculations:");
         console2.log("Available borrows (base):", availableBorrowsBase);
