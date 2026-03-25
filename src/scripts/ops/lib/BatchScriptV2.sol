@@ -95,6 +95,25 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _;
     }
 
+    /// @notice Set up with yield multisig as owner
+    /// @dev    Reads from olympus.multisig.yield in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithYieldMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_,
+        bytes memory signature_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+        // useDaoMS_ is ignored - always use yield multisig
+        address owner = _envAddressNotZero("olympus.multisig.yield");
+        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
+        _;
+    }
+
     function _hasSignature() internal view returns (bool) {
         return bytes(_signature).length > 0;
     }

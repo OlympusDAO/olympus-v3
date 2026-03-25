@@ -1,0 +1,24 @@
+{
+    "functions": [
+        {
+            "args": {
+                "borrowPercentage": "9000",
+                "susdeSupplyAmount": ""
+            },
+            "name": "supplySusdeAndBorrow"
+        },
+        {
+            "args": {
+                "slippageBps": "50"
+            },
+            "name": "swapAndSupplyUsde"
+        },
+        {
+            "args": {
+                "borrowPercentage": "9000",
+                "slippageBps": "50"
+            },
+            "name": "borrowAndSwapToSusde"
+        }
+    ]
+}
