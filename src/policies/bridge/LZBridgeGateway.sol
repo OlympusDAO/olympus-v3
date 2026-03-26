@@ -144,13 +144,17 @@ contract LZBridgeGateway is
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         Keycode kc = MINTR.KEYCODE();
         permissions[0] = Permissions({keycode: kc, funcSelector: MINTRv1.mintOhm.selector});
         permissions[1] = Permissions({keycode: kc, funcSelector: MINTRv1.burnOhm.selector});
         permissions[2] = Permissions({
             keycode: kc,
             funcSelector: MINTRv1.increaseMintApproval.selector
+        });
+        permissions[3] = Permissions({
+            keycode: kc,
+            funcSelector: MINTRv1.decreaseMintApproval.selector
         });
     }
 
@@ -184,6 +188,10 @@ contract LZBridgeGateway is
                 revert LZBridgeGateway_BridgedSupplyCapExceeded(newSupply, bridgedSupplyCap);
             bridgedSupply = newSupply;
             emit BridgedSupplyIncreased(amount_);
+
+            // Pre-fund mint approval so future inflow can mint without JIT self approval.
+            // Bounds the canonical inflow mint to the amount of OHM actually burned via outflow.
+            MINTR.increaseMintApproval(address(this), amount_);
         }
 
         // Burn OHM held by the gateway (transferred here by the facilitator)
@@ -288,6 +296,16 @@ contract LZBridgeGateway is
         uint256 bridgedSupply_
     ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
         _requireCanonical();
+
+        // Sync mint approval with the bridgedSupply delta to maintain the invariant:
+        // mint approval == bridgedSupply (only OHM that was bridged out can be minted back).
+        uint256 oldSupply = bridgedSupply;
+        if (bridgedSupply_ > oldSupply) {
+            MINTR.increaseMintApproval(address(this), bridgedSupply_ - oldSupply);
+        } else if (bridgedSupply_ < oldSupply) {
+            MINTR.decreaseMintApproval(address(this), oldSupply - bridgedSupply_);
+        }
+
         bridgedSupply = bridgedSupply_;
         emit BridgedSupplySet(bridgedSupply_);
     }
@@ -474,7 +492,8 @@ contract LZBridgeGateway is
     }
 
     /// @notice Processes a received OHM bridge message.
-    /// @dev On canonical chains, decrements bridgedSupply. Mints OHM to the recipient.
+    /// @dev On canonical chains, decrements bridgedSupply and mints from pre-funded approval
+    ///      (set during outflow). On non-canonical chains, uses JIT self approval.
     function _receiveBridgeOhm(uint32 srcEid_, bytes32 guid_, bytes memory data_) private {
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
@@ -487,11 +506,14 @@ contract LZBridgeGateway is
                 bridgedSupply -= amount;
             }
             emit BridgedSupplyDecreased(amount);
+            // Approval already exists from outflow, no JIT needed
+        } else {
+            // Non-canonical: JIT self approval
+            MINTR.increaseMintApproval(address(this), amount);
         }
 
         _inflow(srcEid_, amount); // Rate limit inflow
 
-        MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
 
         emit Received(to, amount, srcEid_, guid_);

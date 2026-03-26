@@ -11,17 +11,33 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
+// Contracts
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+
 /// @dev Inbound message handling (mint on receive).
 contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
     function test_lzReceive_canonical_decrementsSupply() external {
         // 1. Preparation: bridge out first
         _sendCanonicalToNonCanonical(recipient, 5000e9);
         assertEq(gateway.bridgedSupply(), 5000e9, "Supply should be 5000e9 after send");
+        // Outflow pre-funded mint approval = 5000e9
+        assertEq(
+            mintr.mintApproval(address(gateway)),
+            5000e9,
+            "Mint approval should equal bridged supply after outflow"
+        );
 
         // 2. Test: bridge back
         _sendNonCanonicalToCanonical(recipient, 2000e9);
 
         assertEq(gateway.bridgedSupply(), 3000e9, "Supply should decrease on receive");
+        // Canonical inflow consumed 2000e9 from pre-funded approval
+        // 5000e9 (outflow) - 2000e9 (inflow mint) = 3000e9
+        assertEq(
+            mintr.mintApproval(address(gateway)),
+            3000e9,
+            "Mint approval should decrease by inflow amount"
+        );
         // Recipient got 5000e9 from first bridge + 2000e9 from second = 7000e9
         assertEq(ohm.balanceOf(recipient), 7000e9, "Recipient should have OHM from both bridges");
     }
@@ -31,6 +47,12 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
 
         assertEq(ohm.balanceOf(recipient), 5000e9, "Recipient should receive OHM");
         assertEq(gateway2.bridgedSupply(), 0, "Non-canonical should not track supply");
+        // Non-canonical uses JIT: approval is fully consumed each mint, so remains 0
+        assertEq(
+            mintr2.mintApproval(address(gateway2)),
+            0,
+            "Non-canonical JIT approval should be fully consumed"
+        );
     }
 
     function test_lzReceive_revertsIfNotEndpoint() external {

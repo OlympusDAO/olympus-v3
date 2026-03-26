@@ -14,6 +14,7 @@ import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 // Contracts
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev Outbound OHM bridging (burn + LZ send).
@@ -56,6 +57,12 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         assertEq(ohm.balanceOf(address(gateway)), 0, "Gateway should have no OHM after burn");
         assertEq(gateway.bridgedSupply(), amount, "Bridged supply should increase by amount");
+        // Canonical outflow pre-funds mint approval for future inflow
+        assertEq(
+            mintr.mintApproval(address(gateway)),
+            amount,
+            "Mint approval should equal bridged supply after outflow"
+        );
         assertEq(
             facilitator.balance,
             facilitatorEthBefore - fee.nativeFee,
@@ -94,6 +101,12 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
 
         assertEq(gateway2.bridgedSupply(), 0, "Non-canonical should not track supply");
+        // Non-canonical outflow does not pre-fund mint approval
+        assertEq(
+            mintr2.mintApproval(address(gateway2)),
+            0,
+            "Non-canonical outflow should not change mint approval"
+        );
         assertEq(
             ohm.balanceOf(facilitator),
             facilitatorBalanceBefore - amount,

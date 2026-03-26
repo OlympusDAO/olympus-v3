@@ -13,6 +13,11 @@ contract LZBridgeGatewayTests_EndToEndWithMock is LZBridgeGatewayTestBase {
 
         assertEq(gateway.bridgedSupply(), sendAmount, "Canonical supply should increase");
         assertEq(
+            mintr.mintApproval(address(gateway)),
+            sendAmount,
+            "Canonical mint approval should equal bridged supply after outflow"
+        );
+        assertEq(
             ohm.balanceOf(recipient),
             sendAmount,
             "Recipient should receive OHM on non-canonical"
@@ -31,6 +36,11 @@ contract LZBridgeGatewayTests_EndToEndWithMock is LZBridgeGatewayTestBase {
             gateway.bridgedSupply(),
             sendAmount - returnAmount,
             "Canonical supply should decrease"
+        );
+        assertEq(
+            mintr.mintApproval(address(gateway)),
+            sendAmount - returnAmount,
+            "Canonical mint approval should decrease by return amount"
         );
         assertEq(ohm.balanceOf(recipient), sendAmount, "Recipient should have original + returned");
     }

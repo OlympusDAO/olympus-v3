@@ -15,8 +15,8 @@ contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
     function test_requestPermissions() external view {
         Permissions[] memory perms = gateway.requestPermissions();
 
-        assertEq(perms.length, 3, "Should request 3 permissions");
-        // All three should be on MINTR keycode
+        assertEq(perms.length, 4, "Should request 4 permissions");
+        // All four should be on MINTR keycode
         assertEq(
             Keycode.unwrap(perms[0].keycode),
             bytes5("MINTR"),
@@ -31,6 +31,11 @@ contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
             Keycode.unwrap(perms[2].keycode),
             bytes5("MINTR"),
             "Permission 2 should be on MINTR"
+        );
+        assertEq(
+            Keycode.unwrap(perms[3].keycode),
+            bytes5("MINTR"),
+            "Permission 3 should be on MINTR"
         );
     }
 
