@@ -134,13 +134,21 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     function _afterDeploy(Addresses addresses, address) internal override {}
 
     function _build(Addresses addresses) internal override {
-        ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
+        address rolesAddr = addresses.getAddress("olympus-module-roles");
         address rolesAdmin = addresses.getAddress("olympus-policy-roles-admin");
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         address lzCrossChainBridge = addresses.getAddress(
             "olympus-periphery-lz-cross-chain-bridge"
         );
         address activator = addresses.getAddress("olympus-lz-bridge-activator");
+
+        _requireNonZeroAddress(rolesAddr, "olympus-module-roles");
+        _requireNonZeroAddress(rolesAdmin, "olympus-policy-roles-admin");
+        _requireNonZeroAddress(daoMS, "olympus-multisig-dao");
+        _requireNonZeroAddress(lzCrossChainBridge, "olympus-periphery-lz-cross-chain-bridge");
+        _requireNonZeroAddress(activator, "olympus-lz-bridge-activator");
+
+        ROLESv1 roles = ROLESv1(rolesAddr);
 
         // 1. Grant bridge_admin role to DAO MS (conditional)
         /// forge-lint: disable-next-line(unsafe-typecast)
@@ -448,6 +456,14 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             bytes memory opts = gw.enforcedOptions(remoteEids[i], gw.MSG_BRIDGE_OHM());
             require(keccak256(opts) == expectedHash, "Enforced options mismatch");
         }
+    }
+
+    // ========== INTERNAL HELPERS ========== //
+
+    /// @notice Reverts if the address is zero, including the registry key in the message.
+    // solhint-disable-next-line custom-errors
+    function _requireNonZeroAddress(address addr_, string memory key_) internal pure {
+        require(addr_ != address(0), string.concat(key_, " address is zero"));
     }
 }
 
