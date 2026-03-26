@@ -8,6 +8,7 @@ import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IAaveV3Pool} from "src/external/interfaces/IAaveV3Pool.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
@@ -50,14 +51,17 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _expectedMinSusdeOut;
     uint256 internal _initialSusdeBalance;
     uint256 internal _susdeSuppliedAmount;
+    uint256 internal _plannedUsdeToSusdeDepositAmount;
 
     // Aave interest rate mode
     uint256 internal constant VARIABLE_RATE = 2;
 
     // Default values
-    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 9000; // 90%
+    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
     uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 9900; // 99.00%
+    uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9950; // 99.50% (USDT -> USDe)
+    uint256 internal constant DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS = 9950; // 99.50% (USDT -> sUSDe value)
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
@@ -124,10 +128,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
             bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
-            (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
+            (
+                ,
+                ,
+                uint256 availableBorrowsBase,
+                uint256 currentLiquidationThreshold,
+                ,
+                uint256 healthFactor
+            ) = AAVE_POOL.getUserAccountData(_owner);
 
+            uint256 susdeSupplyValueUsde = _susdeToUsdeValue(susdeSupplyAmount);
             uint256 supplyValueBase = FullMath.mulDiv(
-                susdeSupplyAmount,
+                susdeSupplyValueUsde,
                 10 ** BASE_CURRENCY_DECIMALS,
                 1e18
             );
@@ -144,6 +156,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             console2.log("Current eMode category:", currentEMode);
             console2.log("Will set eMode in batch:", shouldSetEMode);
             console2.log("Current available borrows base (8dp USD):", availableBorrowsBase);
+            console2.log("Current liquidation threshold (bps):", currentLiquidationThreshold);
+            console2.log("Current health factor (1e18):", healthFactor);
+            console2.log("sUSDe supply value (USDe, 18dp):", susdeSupplyValueUsde);
             console2.log("sUSDe supply value base (8dp USD):", supplyValueBase);
             console2.log(
                 "Projected available borrows after sUSDe supply (8dp USD):",
@@ -151,6 +166,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
             console2.log("Borrow #1 target base (8dp USD):", usdtBorrowAmount1 * 1e2);
             console2.log("Borrow #1 amount USDT (6dp):", usdtBorrowAmount1);
+            console2.log(
+                "Borrow #1 utilization vs projected capacity (bps):",
+                _ratioBps(usdtBorrowAmount1 * 1e2, totalExpectedBorrowsAfterSusdeSupply)
+            );
 
             if (shouldSetEMode) {
                 console2.log("\n2. Set eMode category to", EMODE_CATEGORY);
@@ -162,11 +181,32 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             address routerUsdtToUsde,
             bytes memory swapCalldataUsdtToUsde,
             uint256 usdeAmountOut
-        ) = _getKyberSwapCalldata(address(_usdt), address(_usde), usdtBorrowAmount1, slippageBps);
+        ) = _getKyberSwapCalldata(
+                "Swap #1 (USDT -> USDe)",
+                address(_usdt),
+                address(_usde),
+                usdtBorrowAmount1,
+                slippageBps
+            );
         if (usdeAmountOut == 0) revert("USDe quote amount is zero");
 
         console2.log("\n--- Step 2: Build swap #1 (USDT -> USDe) ---");
         console2.log("Expected USDe out from quote (18dp):", usdeAmountOut);
+        {
+            uint256 minSwap1ValueRatioBps = _readOptionalUint256(
+                "minSwap1ValueRatioBps",
+                _readOptionalUint256("minSwap1QuoteRatioBps", DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS)
+            );
+            if (minSwap1ValueRatioBps == 0 || minSwap1ValueRatioBps > 10000) {
+                revert("Swap #1 min value ratio invalid");
+            }
+            _logAndValidateValueRatio(
+                "Swap #1 (USDT -> USDe)",
+                usdeAmountOut,
+                _usdtToUsd18(usdtBorrowAmount1),
+                minSwap1ValueRatioBps
+            );
+        }
 
         uint256 usdeSupplyAmount = _getConservativeUsdeSupplyAmount(
             usdeAmountOut,
@@ -174,6 +214,20 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             slippageBps
         );
         if (usdeSupplyAmount == 0) revert("USDe supply amount is zero");
+        console2.log(
+            "Conservative USDe supply haircut vs quote (bps):",
+            _ratioBps(usdeSupplyAmount, usdeAmountOut)
+        );
+
+        _plannedUsdeToSusdeDepositAmount = _getPlannedUsdeToSusdeDepositAmount(
+            usdeAmountOut,
+            usdeSupplyAmount,
+            slippageBps
+        );
+        console2.log(
+            "Planned USDe -> sUSDe deposit amount (conservative, 18dp):",
+            _plannedUsdeToSusdeDepositAmount
+        );
 
         uint256 usdtBorrowAmount2;
         {
@@ -199,24 +253,59 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
             console2.log("Borrow #2 target base (8dp USD):", usdtBorrowAmount2 * 1e2);
             console2.log("Borrow #2 amount USDT (6dp):", usdtBorrowAmount2);
+            console2.log(
+                "Borrow #2 utilization vs projected capacity (bps):",
+                _ratioBps(usdtBorrowAmount2 * 1e2, totalExpectedBorrowsAfterUsdeSupply)
+            );
         }
 
         (
             address routerUsdtToSusde,
             bytes memory swapCalldataUsdtToSusde,
             uint256 susdeAmountOut
-        ) = _getKyberSwapCalldata(address(_usdt), address(_susde), usdtBorrowAmount2, slippageBps);
+        ) = _getKyberSwapCalldata(
+                "Swap #2 (USDT -> sUSDe)",
+                address(_usdt),
+                address(_susde),
+                usdtBorrowAmount2,
+                slippageBps
+            );
 
         console2.log("\n--- Step 4: Build swap #2 (USDT -> sUSDe) ---");
         console2.log("Expected sUSDe out from quote (18dp):", susdeAmountOut);
+        {
+            uint256 minSwap2ValueRatioBps = _readOptionalUint256(
+                "minSwap2ValueRatioBps",
+                _readOptionalUint256("minSwap2QuoteRatioBps", DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS)
+            );
+            if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
+                revert("Swap #2 min value ratio invalid");
+            }
+            uint256 susdeUsdeRate = _susdeExchangeRate();
+            uint256 swap2ValueOutUsd = _susdeToUsdeValue(susdeAmountOut);
+            console2.log("sUSDe exchange rate (USDe per 1 sUSDe, 1e18):", susdeUsdeRate);
+            console2.log("Swap #2 quoted value out (USDe 18dp):", swap2ValueOutUsd);
+
+            _logAndValidateValueRatio(
+                "Swap #2 (USDT -> sUSDe)",
+                swap2ValueOutUsd,
+                _usdtToUsd18(usdtBorrowAmount2),
+                minSwap2ValueRatioBps
+            );
+        }
         _expectedMinSusdeOut = FullMath.mulDiv(susdeAmountOut, 10000 - slippageBps, 10000);
         console2.log("Expected min sUSDe out after slippage buffer (18dp):", _expectedMinSusdeOut);
+        console2.log(
+            "Min-out buffer vs quote (bps):",
+            _ratioBps(_expectedMinSusdeOut, susdeAmountOut)
+        );
 
         _addLoopActionsToBatch(
             susdeSupplyAmount,
             usdtBorrowAmount1,
             usdeSupplyAmount,
             usdtBorrowAmount2,
+            _plannedUsdeToSusdeDepositAmount,
             routerUsdtToUsde,
             swapCalldataUsdtToUsde,
             routerUsdtToSusde,
@@ -236,6 +325,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 usdtBorrowAmount1,
         uint256 usdeSupplyAmount,
         uint256 usdtBorrowAmount2,
+        uint256 usdeToSusdeDepositAmount,
         address routerUsdtToUsde,
         bytes memory swapCalldataUsdtToUsde,
         address routerUsdtToSusde,
@@ -286,14 +376,22 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         // Debug: inspect realized sUSDe balance after second swap
         addToBatch(address(_susde), _encodeBalanceOf(_owner));
 
-        // 9. Zero approvals
-        console2.log("\n9. Zero approvals");
+        // 9. Deposit conservative leftover USDe into sUSDe
+        if (usdeToSusdeDepositAmount > 0) {
+            console2.log("\n9. Deposit conservative leftover USDe into sUSDe");
+            addToBatch(address(_usde), _encodeApprove(address(_susde), usdeToSusdeDepositAmount));
+            addToBatch(address(_susde), _encodeDeposit4626(usdeToSusdeDepositAmount, _owner));
+        }
+
+        // 10. Zero approvals
+        console2.log("\n10. Zero approvals");
         addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), 0));
         addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
         if (routerUsdtToSusde != routerUsdtToUsde) {
             addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
         }
         addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), 0));
+        addToBatch(address(_usde), _encodeApprove(address(_susde), 0));
     }
 
     function _validateExecuteLoopPostBatch() external view {
@@ -315,12 +413,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         uint256 actualSusdeOut = (susdeBalanceAfter + _susdeSuppliedAmount) - _initialSusdeBalance;
         uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _initialSusdeBalance);
+        uint256 usdeBalanceAfter = _usde.balanceOf(_owner);
+        uint256 usdtBalanceAfter = _usdt.balanceOf(_owner);
+        (, , , , , uint256 healthFactorAfter) = AAVE_POOL.getUserAccountData(_owner);
 
         console2.log("sUSDe balance after batch:", susdeBalanceAfter);
         console2.log("Initial sUSDe balance (MS):", _initialSusdeBalance);
         console2.log("sUSDe supplied to Aave:", _susdeSuppliedAmount);
+        console2.log("Planned USDe -> sUSDe deposit:", _plannedUsdeToSusdeDepositAmount);
         console2.log("Actual sUSDe out (swap #2):", actualSusdeOut);
         console2.log("sUSDe out efficiency vs initial balance (bps):", efficiencyBps);
+        console2.log("USDe balance leftover after batch:", usdeBalanceAfter);
+        console2.log("USDT balance leftover after batch:", usdtBalanceAfter);
+        console2.log("Aave health factor after batch (1e18):", healthFactorAfter);
         console2.log("Expected min sUSDe out:", _expectedMinSusdeOut);
         console2.log("executeLoop post-batch validation passed");
     }
@@ -375,6 +480,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return abi.encodeWithSelector(IERC20.balanceOf.selector, account);
     }
 
+    function _encodeDeposit4626(
+        uint256 assets,
+        address receiver
+    ) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IERC4626.deposit.selector, assets, receiver);
+    }
+
     function _getConservativeUsdeSupplyAmount(
         uint256 usdeAmountOut,
         uint256 usdtAmountIn,
@@ -391,9 +503,57 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return FullMath.mulDiv(conservativeAmount, DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS, 10000);
     }
 
+    function _getPlannedUsdeToSusdeDepositAmount(
+        uint256 usdeAmountOut,
+        uint256 usdeSupplyAmount,
+        uint256 slippageBps
+    ) internal pure returns (uint256) {
+        uint256 usdeAmountOutMin = FullMath.mulDiv(usdeAmountOut, 10000 - slippageBps, 10000);
+        return usdeAmountOutMin > usdeSupplyAmount ? usdeAmountOutMin - usdeSupplyAmount : 0;
+    }
+
+    function _ratioBps(uint256 numerator, uint256 denominator) internal pure returns (uint256) {
+        if (denominator == 0) return 0;
+        return FullMath.mulDiv(numerator, 10000, denominator);
+    }
+
+    function _usdtToUsd18(uint256 usdtAmount) internal pure returns (uint256) {
+        return FullMath.mulDiv(usdtAmount, 1e18, 1e6);
+    }
+
+    function _susdeToUsdeValue(uint256 susdeAmount) internal view returns (uint256) {
+        try IERC4626(address(_susde)).convertToAssets(susdeAmount) returns (uint256 assets) {
+            if (susdeAmount > 0 && assets == 0) revert("sUSDe convertToAssets returned zero");
+            return assets;
+        } catch {
+            revert("sUSDe convertToAssets failed");
+        }
+    }
+
+    function _susdeExchangeRate() internal view returns (uint256) {
+        return _susdeToUsdeValue(1e18);
+    }
+
+    function _logAndValidateValueRatio(
+        string memory stepLabel,
+        uint256 valueOutUsd,
+        uint256 inputNotionalUsd,
+        uint256 minRatioBps
+    ) internal pure {
+        uint256 ratioBps = _ratioBps(valueOutUsd, inputNotionalUsd);
+        console2.log(stepLabel);
+        console2.log("Value/input notional ratio (bps):", ratioBps);
+        console2.log("Minimum accepted value ratio (bps):", minRatioBps);
+
+        if (ratioBps < minRatioBps) {
+            revert(string.concat(stepLabel, " value ratio below minimum"));
+        }
+    }
+
     // ============ KyberSwap API ============
 
     function _getKyberSwapCalldata(
+        string memory stepLabel,
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
@@ -413,6 +573,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         headers[0] = "Accept: application/json";
         headers[1] = string.concat("X-Client-Id: ", KYBERSWAP_CLIENT_ID);
 
+        console2.log("\n--- %s: Query Kyber route ---", stepLabel);
         console2.log("Calling KyberSwap GET /api/v1/routes");
 
         (uint256 getStatus, bytes memory getResponse) = getUrl.get(headers);
