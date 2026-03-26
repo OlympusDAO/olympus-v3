@@ -51,7 +51,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _expectedMinSusdeOut;
     uint256 internal _initialSusdeBalance;
     uint256 internal _susdeSuppliedAmount;
+    uint256 internal _usdeSuppliedAmount;
     uint256 internal _plannedUsdeToSusdeDepositAmount;
+    uint256 internal _initialTotalCollateralBase;
+    uint256 internal _initialTotalDebtBase;
+    uint256 internal _initialNetAccountValueBase;
 
     // Aave interest rate mode
     uint256 internal constant VARIABLE_RATE = 2;
@@ -70,6 +74,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint8 internal constant EMODE_CATEGORY = 2;
     // eMode category 2 LTV (90% = 9000 bps)
     uint256 internal constant EMODE_LTV = 9000;
+    // Reporting wallet (Yield MS on mainnet)
+    address internal constant REPORTING_MS = 0x2075e3b46470cfcE124Daaf52b46Dcf965727Dd1;
 
     // KyberSwap API
     string internal constant KYBERSWAP_BASE_URL = "https://aggregator-api.kyberswap.com/ethereum";
@@ -100,6 +106,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _loadTokens();
 
         _initialSusdeBalance = _susde.balanceOf(_owner);
+        _captureInitialAccountSnapshot();
 
         uint256 susdeSupplyAmount = _readOptionalUint256("susdeSupplyAmount", 0);
         uint256 borrowPercentage = _readOptionalUint256(
@@ -214,6 +221,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             slippageBps
         );
         if (usdeSupplyAmount == 0) revert("USDe supply amount is zero");
+        _usdeSuppliedAmount = usdeSupplyAmount;
         console2.log(
             "Conservative USDe supply haircut vs quote (bps):",
             _ratioBps(usdeSupplyAmount, usdeAmountOut)
@@ -413,21 +421,88 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         uint256 actualSusdeOut = (susdeBalanceAfter + _susdeSuppliedAmount) - _initialSusdeBalance;
         uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _initialSusdeBalance);
-        uint256 usdeBalanceAfter = _usde.balanceOf(_owner);
-        uint256 usdtBalanceAfter = _usdt.balanceOf(_owner);
-        (, , , , , uint256 healthFactorAfter) = AAVE_POOL.getUserAccountData(_owner);
 
-        console2.log("sUSDe balance after batch:", susdeBalanceAfter);
-        console2.log("Initial sUSDe balance (MS):", _initialSusdeBalance);
-        console2.log("sUSDe supplied to Aave:", _susdeSuppliedAmount);
-        console2.log("Planned USDe -> sUSDe deposit:", _plannedUsdeToSusdeDepositAmount);
+        (, , , , , uint256 healthFactorAfter) = AAVE_POOL.getUserAccountData(REPORTING_MS);
+
+        console2.log("\n--- Post-batch summary ---");
         console2.log("Actual sUSDe out (swap #2):", actualSusdeOut);
         console2.log("sUSDe out efficiency vs initial balance (bps):", efficiencyBps);
-        console2.log("USDe balance leftover after batch:", usdeBalanceAfter);
-        console2.log("USDT balance leftover after batch:", usdtBalanceAfter);
+        _logAaveBalanceSheetReport();
         console2.log("Aave health factor after batch (1e18):", healthFactorAfter);
-        console2.log("Expected min sUSDe out:", _expectedMinSusdeOut);
         console2.log("executeLoop post-batch validation passed");
+    }
+
+    function _logAaveBalanceSheetReport() internal view {
+        (
+            uint256 totalCollateralBaseAfter,
+            uint256 totalDebtBaseAfter,
+            uint256 netAccountValueBaseAfter
+        ) = _getAccountSummaryBase(REPORTING_MS);
+
+        uint256 collateralDelta;
+        bool collateralIncreased = totalCollateralBaseAfter >= _initialTotalCollateralBase;
+        if (collateralIncreased) {
+            collateralDelta = totalCollateralBaseAfter - _initialTotalCollateralBase;
+        } else {
+            collateralDelta = _initialTotalCollateralBase - totalCollateralBaseAfter;
+        }
+
+        uint256 debtDelta;
+        bool debtIncreased = totalDebtBaseAfter >= _initialTotalDebtBase;
+        if (debtIncreased) {
+            debtDelta = totalDebtBaseAfter - _initialTotalDebtBase;
+        } else {
+            debtDelta = _initialTotalDebtBase - totalDebtBaseAfter;
+        }
+
+        uint256 netDelta;
+        bool netIncreased = netAccountValueBaseAfter >= _initialNetAccountValueBase;
+        if (netIncreased) {
+            netDelta = netAccountValueBaseAfter - _initialNetAccountValueBase;
+        } else {
+            netDelta = _initialNetAccountValueBase - netAccountValueBaseAfter;
+        }
+
+        if (collateralIncreased) {
+            console2.log("Loop collateral change (8dp USD): +", collateralDelta);
+        } else {
+            console2.log("Loop collateral change (8dp USD): -", collateralDelta);
+        }
+
+        if (debtIncreased) {
+            console2.log("Loop debt change (8dp USD): +", debtDelta);
+        } else {
+            console2.log("Loop debt change (8dp USD): -", debtDelta);
+        }
+
+        if (netIncreased) {
+            console2.log("Loop net account value change (8dp USD): +", netDelta);
+        } else {
+            console2.log("Loop net account value change (8dp USD): -", netDelta);
+        }
+
+        console2.log("Position total collateral (8dp USD):", totalCollateralBaseAfter);
+        console2.log("Position total debt (8dp USD):", totalDebtBaseAfter);
+        console2.log("Position net account value (8dp USD):", netAccountValueBaseAfter);
+    }
+
+    function _getAccountSummaryBase(
+        address account
+    )
+        internal
+        view
+        returns (uint256 collateralBase, uint256 debtBase, uint256 netAccountValueBase)
+    {
+        (collateralBase, debtBase, , , , ) = AAVE_POOL.getUserAccountData(account);
+        netAccountValueBase = collateralBase > debtBase ? collateralBase - debtBase : 0;
+    }
+
+    function _captureInitialAccountSnapshot() internal {
+        (
+            _initialTotalCollateralBase,
+            _initialTotalDebtBase,
+            _initialNetAccountValueBase
+        ) = _getAccountSummaryBase(REPORTING_MS);
     }
 
     // ============ Encoding Helpers ============
