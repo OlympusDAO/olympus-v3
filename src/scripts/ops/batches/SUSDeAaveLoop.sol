@@ -58,10 +58,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     // Default values
     uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 10000; // 100%
-    uint256 internal constant DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
-    uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 9900; // 99.00%
-    uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9950; // 99.50% (USDT -> USDe)
-    uint256 internal constant DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS = 9950; // 99.50% (USDT -> sUSDe value)
+    uint256 internal constant DEFAULT_SLIPPAGE_BPS = 5; // 0.05%
+    uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 10_000; // 100%
+    uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> USDe)
+    uint256 internal constant DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> sUSDe value)
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
