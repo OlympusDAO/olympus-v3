@@ -320,6 +320,16 @@ contract DeployV3 is WithEnvironment {
         return uint8Array;
     }
 
+    function _readDeploymentArgBool(
+        string memory deploymentName_,
+        string memory key_
+    ) internal view returns (bool) {
+        return
+            sequenceFile.readBool(
+                string.concat(".sequence[?(@.name == '", deploymentName_, "')].args.", key_)
+            );
+    }
+
     function _readDeploymentArgAddressArray(
         string memory deploymentName_,
         string memory key_
@@ -973,7 +983,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
         address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
-        bool isCanonical = _readDeploymentArgUint256("LZBridgeGateway", "isCanonical") == 1;
+        bool isCanonical = _readDeploymentArgBool("LZBridgeGateway", "isCanonical");
 
         // Log parameters
         console2.log("LZBridgeGateway parameters:");
