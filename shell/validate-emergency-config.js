@@ -250,6 +250,39 @@ function validate() {
       contractsWithComponents.add(contractName);
     }
 
+    // Check statusCheck references (if present)
+    if (component.statusCheck) {
+      const sc = component.statusCheck;
+
+      // Validate ABI key exists
+      if (!abiKeys.includes(sc.abi)) {
+        errors.push(
+          `Component "${component.id}" statusCheck references unknown ABI: "${sc.abi}"`
+        );
+      } else {
+        // Validate function exists in the ABI
+        const abiDef = abis[sc.abi];
+        const functionExists = abiDef.some((fn) => fn.name === sc.functionName);
+        if (!functionExists) {
+          errors.push(
+            `Component "${component.id}" statusCheck references ABI "${sc.abi}" but missing function "${sc.functionName}"`
+          );
+        }
+      }
+
+      // Validate contractKey resolves to a known contract on at least one availableOn chain
+      const scContractName = sc.contractKey.split(".").pop();
+      const hasAddress = component.availableOn.some((chainName) => {
+        const contracts = config.chains[chainName] && config.chains[chainName].contracts;
+        return contracts && contracts[scContractName];
+      });
+      if (!hasAddress) {
+        errors.push(
+          `Component "${component.id}" statusCheck contractKey "${sc.contractKey}" has no address in any availableOn chain`
+        );
+      }
+    }
+
     // Check owner is valid
     if (!["emergency", "dao"].includes(component.owner)) {
       errors.push(
