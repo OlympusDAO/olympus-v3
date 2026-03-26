@@ -6,6 +6,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 // Interfaces
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -21,6 +22,21 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
         emit ILZBridgeGateway.BridgedSupplySet(42e9);
 
         vm.prank(bridgeAdmin);
+        gateway.setBridgedSupply(42e9);
+
+        assertEq(gateway.bridgedSupply(), 42e9, "Bridged supply should be set");
+        assertEq(
+            mintr.mintApproval(address(gateway)),
+            42e9,
+            "Mint approval should match bridged supply"
+        );
+    }
+
+    function test_setBridgedSupply_adminCanCall() external {
+        vm.expectEmit(true, true, true, true);
+        emit ILZBridgeGateway.BridgedSupplySet(42e9);
+
+        vm.prank(admin);
         gateway.setBridgedSupply(42e9);
 
         assertEq(gateway.bridgedSupply(), 42e9, "Bridged supply should be set");
@@ -73,10 +89,8 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
         gateway2.setBridgedSupply(100);
     }
 
-    function test_setBridgedSupply_revertsIfNotBridgeAdmin() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
+    function test_setBridgedSupply_revertsIfNotBridgeAdminOrAdmin() external {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(user);
         gateway.setBridgedSupply(100);
     }

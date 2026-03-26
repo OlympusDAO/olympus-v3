@@ -5,12 +5,10 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
-
-// Contracts
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev Emergency rate limit reset.
 contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
@@ -69,13 +67,54 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         assertEq(canSend, 1_000e9, "Full limit should be available after reset");
     }
 
-    function test_resetRateLimits_revertsIfNotBridgeAdmin() external {
+    function test_resetRateLimits_adminCanCall() external {
+        // Configure rate limit
+        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
+        configs[0] = RateLimiter.RateLimitConfig({
+            dstEid: NONCANONICAL_EID,
+            limit: 1_000e9,
+            window: 3600
+        });
+        vm.prank(bridgeAdmin);
+        gateway.setRateLimits(configs);
+
+        // Use up the full limit
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            1_000e9,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 1_000e9);
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            1_000e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // Reset with admin role
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
-        );
+        vm.expectEmit(true, true, true, true);
+        emit RateLimiter.RateLimitsReset(eids);
+
+        vm.prank(admin);
+        gateway.resetRateLimits(eids);
+
+        (uint192 amountInFlight, , , ) = gateway.rateLimits(NONCANONICAL_EID);
+        assertEq(amountInFlight, 0, "amountInFlight should be reset");
+    }
+
+    function test_resetRateLimits_revertsIfNotBridgeAdminOrAdmin() external {
+        uint32[] memory eids = new uint32[](1);
+        eids[0] = NONCANONICAL_EID;
+
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(user);
         gateway.resetRateLimits(eids);
     }

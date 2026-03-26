@@ -39,6 +39,7 @@ import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @title LZBridgeGateway
 /// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
@@ -73,6 +74,15 @@ contract LZBridgeGateway is
 
     /// @notice Type 3 option type identifier.
     uint16 internal constant _OPTION_TYPE_3 = 3;
+
+    // ========= MODIFIERS ========= //
+
+    /// @notice Modifier that reverts if the caller does not have the bridge_admin or admin role.
+    modifier onlyBridgeAdminOrAdmin() {
+        if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+            revert PolicyAdmin.NotAuthorised();
+        _;
+    }
 
     // ========= IMMUTABLES ========= //
 
@@ -279,7 +289,7 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setDelegate(address delegate_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    function setDelegate(address delegate_) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
         emit DelegateSet(delegate_);
     }
@@ -292,9 +302,7 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function setBridgedSupply(
-        uint256 bridgedSupply_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    function setBridgedSupply(uint256 bridgedSupply_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
 
         // Sync mint approval with the bridgedSupply delta to maintain the invariant:
@@ -326,24 +334,19 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     function setRateLimits(
         RateLimitConfig[] calldata rateLimitConfigs_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         _setRateLimits(rateLimitConfigs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    function resetRateLimits(
-        uint32[] calldata eids_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    function resetRateLimits(uint32[] calldata eids_) external override onlyBridgeAdminOrAdmin {
         _resetRateLimits(eids_);
     }
 
     // ========= LZ ENDPOINT CONFIG ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
-    function setSendLibrary(
-        uint32 eid_,
-        address lib_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
     }
 
@@ -352,7 +355,7 @@ contract LZBridgeGateway is
         uint32 eid_,
         address lib_,
         uint256 gracePeriod_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibrary(
             address(this),
             eid_,
@@ -366,7 +369,7 @@ contract LZBridgeGateway is
         uint32 eid_,
         address lib_,
         uint256 expiry_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibraryTimeout(
             address(this),
             eid_,
@@ -379,7 +382,7 @@ contract LZBridgeGateway is
     function setEndpointConfig(
         address lib_,
         SetConfigParam[] calldata params_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, params_);
     }
 
@@ -390,7 +393,7 @@ contract LZBridgeGateway is
         uint32 srcEid_,
         bytes32 sender_,
         uint64 nonce_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
     }
 
@@ -400,7 +403,7 @@ contract LZBridgeGateway is
         bytes32 sender_,
         uint64 nonce_,
         bytes32 payloadHash_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
             address(this),
             srcEid_,
@@ -416,7 +419,7 @@ contract LZBridgeGateway is
         bytes32 sender_,
         uint64 nonce_,
         bytes32 payloadHash_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
             address(this),
             srcEid_,
@@ -431,7 +434,7 @@ contract LZBridgeGateway is
         Origin calldata origin_,
         bytes32 guid_,
         bytes calldata message_
-    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
+    ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
     }
 

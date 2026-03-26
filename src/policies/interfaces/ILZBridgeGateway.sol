@@ -158,7 +158,7 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     function setPeer(uint32 eid_, bytes32 peer_) external;
 
     /// @notice Sets the delegate on the LayerZero endpoint.
-    /// @dev Only callable by the bridge_admin role.
+    /// @dev Only callable by the bridge_admin or admin role.
     ///
     ///      The delegate is authorized to configure anything on the LayerZero endpoint
     ///      on behalf of this contract (e.g. send/receive libraries, DVN config).
@@ -168,7 +168,7 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     function setDelegate(address delegate_) external;
 
     /// @notice Manually sets the bridged supply value and syncs the MINTR mint approval.
-    /// @dev Only callable by the bridge_admin role. Only available on canonical chains.
+    /// @dev Only callable by the bridge_admin or admin role. Only available on canonical chains.
     ///      Required during bridge migration: the bridged amount at deployment differs from
     ///      the amount at OCG proposal execution, so the MS sets this value after the old
     ///      bridge is disabled and before the new one is enabled. Also used to correct
@@ -178,7 +178,7 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///      to maintain the invariant: mint approval == bridgedSupply.
     ///
     ///      Reverts if:
-    ///      - The caller does not have the bridge_admin role.
+    ///      - The caller does not have the bridge_admin or admin role.
     ///      - IS_CANONICAL is false.
     ///
     /// @param bridgedSupply_ The new bridged supply value.
@@ -203,13 +203,13 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     function setEnforcedOptions(EnforcedOptionParam[] calldata enforcedOptions_) external;
 
     /// @notice Sets rate limits for destination endpoints.
-    /// @dev Only callable by the admin role.
+    /// @dev Only callable by the bridge_admin or admin role.
     ///
     /// @param rateLimitConfigs_ Array of rate limit configurations.
     function setRateLimits(RateLimiter.RateLimitConfig[] memory rateLimitConfigs_) external;
 
     /// @notice Resets rate limit state (amountInFlight) for the given endpoint IDs.
-    /// @dev Only callable by the bridge_admin role. Does not modify limit or window.
+    /// @dev Only callable by the bridge_admin or admin role. Does not modify limit or window.
     ///
     /// @param eids_ The endpoint IDs to reset.
     function resetRateLimits(uint32[] memory eids_) external;
