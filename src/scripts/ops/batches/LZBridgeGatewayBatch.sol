@@ -6,6 +6,7 @@ import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
@@ -21,6 +22,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== ERRORS =========== //
 
     error LZBridgeGatewayBatch_NonCanonicalChain();
+
+    // =========== STATE =========== //
+
+    /// @notice Expected bridged supply for post-batch validation.
+    uint256 internal _expectedBridgedSupply;
 
     // =========== ENTRY POINTS =========== //
 
@@ -87,12 +93,74 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         console2.log("\n=== Ethereum Phase 2: Set Bridged Supply ===");
         console2.log("Setting initial bridged supply:", initialBridgedSupply);
 
+        // Pre-condition: bridgedSupply and mintApproval must be zero
+        LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+        uint256 currentSupply = gateway.bridgedSupply();
+        // solhint-disable-next-line custom-errors
+        require(currentSupply == 0, "bridgedSupply must be 0 before setting initial value");
+
+        MINTRv1 mintr = gateway.MINTR();
+        uint256 currentApproval = mintr.mintApproval(gatewayAddr);
+        // solhint-disable-next-line custom-errors
+        require(currentApproval == 0, "mintApproval must be 0 before setting initial value");
+
+        console2.log("  Pre-condition: bridgedSupply is 0");
+        console2.log("  Pre-condition: mintApproval is 0");
+
+        // Store for post-batch validation
+        _expectedBridgedSupply = initialBridgedSupply;
+
         addToBatch(
             gatewayAddr,
             abi.encodeWithSelector(LZBridgeGateway.setBridgedSupply.selector, initialBridgedSupply)
         );
 
+        _setPostBatchValidateSelector(this._validateSetBridgedSupply.selector);
+
         proposeBatch();
+    }
+
+    // =========== VALIDATION =========== //
+
+    /// @notice Validate setBridgedSupply state after batch execution.
+    /// @dev Checks that bridgedSupply was set correctly and that the MINTR
+    ///      mint approval matches (invariant: mintApproval == bridgedSupply).
+    function _validateSetBridgedSupply() external view {
+        address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+
+        console2.log("\nValidating setBridgedSupply post-batch state");
+
+        // 1. Validate bridgedSupply
+        uint256 actualSupply = gateway.bridgedSupply();
+        if (actualSupply != _expectedBridgedSupply) {
+            revert(
+                string.concat(
+                    "bridgedSupply should be ",
+                    vm.toString(_expectedBridgedSupply),
+                    ", but is ",
+                    vm.toString(actualSupply)
+                )
+            );
+        }
+        console2.log("  bridgedSupply:", actualSupply);
+
+        // 2. Validate mint approval == bridgedSupply (invariant)
+        MINTRv1 mintr = gateway.MINTR();
+        uint256 approval = mintr.mintApproval(gatewayAddr);
+        if (approval != _expectedBridgedSupply) {
+            revert(
+                string.concat(
+                    "mintApproval should be ",
+                    vm.toString(_expectedBridgedSupply),
+                    ", but is ",
+                    vm.toString(approval)
+                )
+            );
+        }
+        console2.log("  mintApproval:", approval);
+
+        console2.log("setBridgedSupply post-batch validation passed");
     }
 
     // =========== INTERNAL HELPERS =========== //
