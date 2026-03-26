@@ -217,6 +217,16 @@
         }
     ],
 
+    "mintr": [
+        {
+            "inputs": [],
+            "name": "active",
+            "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ],
+
     "periphery_enabler": [
         {
             "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
@@ -266,6 +276,16 @@
         {
             "inputs": [],
             "name": "isActive",
+            "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ],
+
+    "trsry": [
+        {
+            "inputs": [],
+            "name": "active",
             "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
             "stateMutability": "view",
             "type": "function"
