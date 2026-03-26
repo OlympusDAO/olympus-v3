@@ -465,25 +465,37 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         if (collateralIncreased) {
             console2.log("Loop collateral change (8dp USD): +", collateralDelta);
+            console2.log("Loop collateral change (USD, 2dp): +", collateralDelta / 1e6);
         } else {
             console2.log("Loop collateral change (8dp USD): -", collateralDelta);
+            console2.log("Loop collateral change (USD, 2dp): -", collateralDelta / 1e6);
         }
 
         if (debtIncreased) {
             console2.log("Loop debt change (8dp USD): +", debtDelta);
+            console2.log("Loop debt change (USD, 2dp): +", debtDelta / 1e6);
         } else {
             console2.log("Loop debt change (8dp USD): -", debtDelta);
+            console2.log("Loop debt change (USD, 2dp): -", debtDelta / 1e6);
         }
 
         if (netIncreased) {
             console2.log("Loop net account value change (8dp USD): +", netDelta);
+            console2.log("Loop net account value change (USD, 2dp): +", netDelta / 1e6);
         } else {
             console2.log("Loop net account value change (8dp USD): -", netDelta);
+            console2.log("Loop net account value change (USD, 2dp): -", netDelta / 1e6);
         }
 
         console2.log("Position total collateral (8dp USD):", totalCollateralBaseAfter);
+        console2.log("Position total collateral (USD, 2dp):", totalCollateralBaseAfter / 1e6);
         console2.log("Position total debt (8dp USD):", totalDebtBaseAfter);
-        console2.log("Position net account value (8dp USD):", netAccountValueBaseAfter);
+        console2.log("Position total debt (USD, 2dp):", totalDebtBaseAfter / 1e6);
+        console2.log("Position net (collateral - debt) (8dp USD):", netAccountValueBaseAfter);
+        console2.log(
+            "Position net (collateral - debt) (USD, 2dp):",
+            netAccountValueBaseAfter / 1e6
+        );
     }
 
     function _getAccountSummaryBase(
