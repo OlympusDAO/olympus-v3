@@ -264,7 +264,7 @@ contract LZBridgeGateway is
         bytes calldata
     ) external payable override onlyEnabled {
         if (msg.sender != LZ_ENDPOINT) revert LZBridgeGateway_OnlyEndpoint();
-        if (peers[origin_.srcEid] != origin_.sender)
+        if (_getPeerOrRevert(origin_.srcEid) != origin_.sender)
             revert LZBridgeGateway_OnlyPeer(origin_.srcEid, origin_.sender);
 
         _decodeAndRoute(origin_.srcEid, guid_, message_);
@@ -272,7 +272,7 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILayerZeroReceiver
     function allowInitializePath(Origin calldata origin_) external view override returns (bool) {
-        return peers[origin_.srcEid] == origin_.sender;
+        return peers[origin_.srcEid] != bytes32(0) && peers[origin_.srcEid] == origin_.sender;
     }
 
     /// @inheritdoc ILayerZeroReceiver

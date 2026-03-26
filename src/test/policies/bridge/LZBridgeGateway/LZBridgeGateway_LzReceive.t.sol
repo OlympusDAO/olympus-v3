@@ -193,6 +193,21 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         gateway2.lzReceive(origin, bytes32(0), payload, address(0), bytes(""));
     }
 
+    function test_lzReceive_revertsIfPeerCleared() external {
+        // Clear peer so peers[CANONICAL_EID] == bytes32(0)
+        vm.prank(admin);
+        gateway2.setPeer(CANONICAL_EID, bytes32(0));
+
+        // origin.sender == bytes32(0) would match the cleared slot without the fix
+        Origin memory origin = Origin({srcEid: CANONICAL_EID, sender: bytes32(0), nonce: 1});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_NoPeer.selector, CANONICAL_EID)
+        );
+        vm.prank(address(endpointSetup.endpointList[1]));
+        gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
+    }
+
     function test_lzReceive_revertsIfNotEnabled() external {
         vm.prank(admin);
         gateway2.disable(bytes(""));

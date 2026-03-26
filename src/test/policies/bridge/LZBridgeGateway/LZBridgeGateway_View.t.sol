@@ -29,6 +29,16 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         assertFalse(gateway.allowInitializePath(origin), "Should not allow unknown peer");
     }
 
+    function test_allowInitializePath_clearedPeerRejectsZeroSender() external {
+        // Clear peer so peers[NONCANONICAL_EID] == bytes32(0)
+        vm.prank(admin);
+        gateway.setPeer(NONCANONICAL_EID, bytes32(0));
+
+        // origin.sender == bytes32(0) would match the cleared slot without the fix
+        Origin memory origin = Origin({srcEid: NONCANONICAL_EID, sender: bytes32(0), nonce: 0});
+        assertFalse(gateway.allowInitializePath(origin), "Cleared peer must not match zero sender");
+    }
+
     function test_nextNonce_returnsZero() external view {
         assertEq(
             gateway.nextNonce(NONCANONICAL_EID, bytes32(0)),
