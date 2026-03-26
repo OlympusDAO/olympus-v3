@@ -145,7 +145,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     function _setRateLimit(uint32 dstEid_, uint192 limit_, uint64 window_) internal {
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({dstEid: dstEid_, limit: limit_, window: window_});
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway.setRateLimits(configs);
     }
 
@@ -547,7 +547,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             limit: 10_000e9,
             window: 3600
         });
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway.setRateLimits(configs);
 
         // Send some out
@@ -571,7 +571,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             limit: 10_000e9,
             window: 3600
         });
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway2.setRateLimits(configs);
 
         // No outflow from gateway2: amountInFlight for CANONICAL_EID is 0
@@ -598,7 +598,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             limit: 5_000e9,
             window: 3600
         });
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway.setRateLimits(configs);
 
         // Send within limit succeeds
@@ -1336,7 +1336,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         vm.expectEmit(true, true, true, true);
         emit RateLimiter.RateLimitsChanged(configs);
 
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway.setRateLimits(configs);
 
         (uint192 amountInFlight, , uint192 limit, uint64 window) = gateway.rateLimits(
@@ -1347,7 +1347,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         assertEq(amountInFlight, 0, "AmountInFlight should be 0");
     }
 
-    function test_setRateLimits_revertsIfNotAdmin() external {
+    function test_setRateLimits_revertsIfNotBridgeAdmin() external {
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
@@ -1355,7 +1355,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
             window: 3600
         });
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin")));
         vm.prank(user);
         gateway.setRateLimits(configs);
     }
@@ -1371,7 +1371,7 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
             limit: 1_000e9,
             window: 3600
         });
-        vm.prank(admin);
+        vm.prank(bridgeAdmin);
         gateway.setRateLimits(configs);
 
         // Use up the full limit

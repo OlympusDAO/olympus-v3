@@ -331,7 +331,7 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     function setRateLimits(
         RateLimitConfig[] calldata rateLimitConfigs_
-    ) external override onlyAdminRole {
+    ) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
         _setRateLimits(rateLimitConfigs_);
     }
 
