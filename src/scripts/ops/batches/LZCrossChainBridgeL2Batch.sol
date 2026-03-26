@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
-import {LZBridgeL2BatchScript} from "./lib/LZBridgeL2BatchScript.sol";
+import {LZBridgeBatchScript} from "./lib/LZBridgeBatchScript.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -16,7 +16,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///         - `setupL2`         : enable bridge (gateway set in constructor)
 ///         - `enable`          : enable only
 ///         - `disable`         : disable only
-contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
+contract LZCrossChainBridgeL2Batch is LZBridgeBatchScript {
     // =========== ENTRY POINTS =========== //
 
     /// @notice L2 (pre-migration): disable old CrossChainBridge.
@@ -29,7 +29,7 @@ contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
 
         addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 
     /// @notice L2 setup: enable the periphery bridge (gateway set in constructor).
@@ -42,7 +42,7 @@ contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
 
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 
     /// @notice Enable the periphery bridge on L2.
@@ -53,7 +53,7 @@ contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
         console2.log("\n=== Enabling LZCrossChainBridge (L2:", chain, ") ===");
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 
     /// @notice Disable the periphery bridge on L2.
@@ -64,7 +64,7 @@ contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
         console2.log("\n=== Disabling LZCrossChainBridge (L2:", chain, ") ===");
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.disable.selector, ""));
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -556,7 +556,13 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    Warps through a full 24-hour cycle (3 beats) and calls beat() to validate
     ///         Temporarily increases price feed update thresholds to prevent stale feed errors
     ///         Restores original timestamp and thresholds after validation to avoid signature issues
+    ///         Skips validation on non-canonical chains (L2s) where OlympusHeart is not deployed
     function _validateHeartBeat() internal {
+        if (!ChainUtils._isCanonicalChain(chain)) {
+            console2.log("\n=== Skipping heart beat validation (non-canonical chain:", chain, ") ===");
+            return;
+        }
+
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         console2.log("\n=== Validating heart beat (full 24-hour cycle - 3 beats) ===");
         console2.log("Heart address:", heart);

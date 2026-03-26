@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
-import {LZBridgeL2BatchScript} from "./lib/LZBridgeL2BatchScript.sol";
+import {LZBridgeBatchScript} from "./lib/LZBridgeBatchScript.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -24,7 +24,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         1. `activateGateway`    as Kernel executor               deactivates old bridge and activates new gateway
 ///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
 ///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
-contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
+contract LZBridgeGatewayL2Batch is LZBridgeBatchScript {
     // =========== CONSTANTS =========== //
 
     /// @dev Role constants.
@@ -66,7 +66,7 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
             )
         );
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 
     /// @notice Step 2. RolesAdmin admin actions: grant bridge_admin, admin, and bridge_facilitator roles.
@@ -121,7 +121,7 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
             );
         }
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 
     /// @notice Step 3. DAO MS actions (requires bridge_admin & admin roles):
@@ -145,7 +145,7 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
         // 3.4. Enable LZBridgeGateway
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
-        _proposeL2Batch();
+        proposeBatch();
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
