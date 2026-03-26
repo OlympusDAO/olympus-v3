@@ -270,16 +270,15 @@ function validate() {
         }
       }
 
-      // Validate contractKey resolves to a known contract on at least one availableOn chain
+      // Validate contractKey resolves to a known contract on every availableOn chain
       const scContractName = sc.contractKey.split(".").pop();
-      const hasAddress = component.availableOn.some((chainName) => {
+      for (const chainName of component.availableOn) {
         const contracts = config.chains[chainName] && config.chains[chainName].contracts;
-        return contracts && contracts[scContractName];
-      });
-      if (!hasAddress) {
-        errors.push(
-          `Component "${component.id}" statusCheck contractKey "${sc.contractKey}" has no address in any availableOn chain`
-        );
+        if (!contracts || !contracts[scContractName]) {
+          errors.push(
+            `Component "${component.id}" statusCheck contractKey "${sc.contractKey}" has no address in chain "${chainName}"`
+          );
+        }
       }
     }
 
