@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
-import {LZBridgeBatchScript} from "./lib/LZBridgeBatchScript.sol";
+import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -16,7 +16,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///         - `setupL2`         : enable bridge (gateway set in constructor)
 ///         - `enable`          : enable only
 ///         - `disable`         : disable only
-contract LZCrossChainBridgeL2Batch is LZBridgeBatchScript {
+contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
     // =========== ENTRY POINTS =========== //
 
     /// @notice L2 (pre-migration): disable old CrossChainBridge.

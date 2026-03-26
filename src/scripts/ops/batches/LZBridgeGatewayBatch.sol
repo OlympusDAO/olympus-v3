@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
-import {LZBridgeBatchScript} from "./lib/LZBridgeBatchScript.sol";
+import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -16,7 +16,7 @@ import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 ///         - `setBridgedSupply` (post-OCG): set initial bridged supply tracking
 ///
 ///         The old CrossChainBridge is deactivated post-OCG via LZCrossChainBridgeBatch.setup().
-contract LZBridgeGatewayBatch is LZBridgeBatchScript {
+contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== ENTRY POINTS =========== //
 
     /// @notice Ethereum Phase 1 (pre-OCG): activate new gateway in Kernel.
