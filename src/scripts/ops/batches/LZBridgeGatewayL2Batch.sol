@@ -5,6 +5,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeL2BatchScript} from "./lib/LZBridgeL2BatchScript.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -24,6 +25,12 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
 ///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
 contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
+    // =========== CONSTANTS =========== //
+
+    /// @dev Role constants.
+    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
+    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+
     // =========== ENTRY POINTS =========== //
 
     /// @notice Step 1. Kernel executor actions: deactivate old bridge, activate new gateway.
@@ -62,24 +69,25 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
         _proposeL2Batch();
     }
 
-    /// @notice Step 2. RolesAdmin admin actions: grant bridge_admin & admin roles to the DAO MS.
+    /// @notice Step 2. RolesAdmin admin actions: grant bridge_admin, admin, and bridge_facilitator roles.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     function grantRoles(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address rolesAdminAddr = _envAddressNotZero("olympus.policies.RolesAdmin");
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
         ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
 
         console2.log("\n=== [L2] [Step 2] Grant Roles:", chain, "===");
 
         // 2.1. Grant bridge_admin role to the DAO MS
         /// forge-lint: disable-next-line(unsafe-typecast)
-        if (!rolesModule.hasRole(daoMS, bytes32("bridge_admin"))) {
+        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
                     /// forge-lint: disable-next-line(unsafe-typecast)
-                    bytes32("bridge_admin"),
+                    _BRIDGE_ADMIN_ROLE,
                     daoMS
                 )
             );
@@ -87,14 +95,28 @@ contract LZBridgeGatewayL2Batch is LZBridgeL2BatchScript {
 
         // 2.2. Grant admin role to the DAO MS
         /// forge-lint: disable-next-line(unsafe-typecast)
-        if (!rolesModule.hasRole(daoMS, bytes32("admin"))) {
+        if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
                     /// forge-lint: disable-next-line(unsafe-typecast)
-                    bytes32("admin"),
+                    ADMIN_ROLE,
                     daoMS
+                )
+            );
+        }
+
+        // 2.3. Grant bridge_facilitator role to LZCrossChainBridge
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    _BRIDGE_FACILITATOR_ROLE,
+                    bridgeAddr
                 )
             );
         }

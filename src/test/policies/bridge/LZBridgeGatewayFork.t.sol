@@ -85,16 +85,14 @@ contract LZBridgeGatewayForkTests is Test {
 
     function _deployEthStack() internal {
         ethOhm = new MockOhm("OHM", "OHM", 9);
-        ethBridge = new LZCrossChainBridge(address(ethOhm), admin);
         ethKernel = new Kernel();
         ethMintr = new OlympusMinter(ethKernel, address(ethOhm));
         ethRoles = new OlympusRoles(ethKernel);
         ethRolesAdmin = new RolesAdmin(ethKernel);
         ethGateway = new LZBridgeGateway(
             ethKernel,
-            LZConfigLib.LZ_ENDPOINT,
-            true, // Canonical
-            address(ethBridge)
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            true // Canonical
         );
 
         ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
@@ -103,11 +101,12 @@ contract LZBridgeGatewayForkTests is Test {
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
         ethRolesAdmin.grantRole("admin", admin);
+        ethBridge = new LZCrossChainBridge(address(ethOhm), admin, address(ethGateway));
+        ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
 
         vm.startPrank(admin);
         ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
         ethGateway.enable(bytes(""));
-        ethBridge.setGateway(address(ethGateway));
         ethBridge.enable(bytes(""));
         vm.stopPrank();
 
@@ -127,16 +126,14 @@ contract LZBridgeGatewayForkTests is Test {
 
     function _deployArbStack() internal {
         arbOhm = new MockOhm("OHM", "OHM", 9);
-        arbBridge = new LZCrossChainBridge(address(arbOhm), admin);
         arbKernel = new Kernel();
         arbMintr = new OlympusMinter(arbKernel, address(arbOhm));
         arbRoles = new OlympusRoles(arbKernel);
         arbRolesAdmin = new RolesAdmin(arbKernel);
         arbGateway = new LZBridgeGateway(
             arbKernel,
-            LZConfigLib.LZ_ENDPOINT,
-            false, // Non-canonical
-            address(arbBridge)
+            LZConfigLib.ARB_LZ_ENDPOINT,
+            false // Non-canonical
         );
 
         arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
@@ -145,10 +142,11 @@ contract LZBridgeGatewayForkTests is Test {
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
         arbRolesAdmin.grantRole("admin", admin);
+        arbBridge = new LZCrossChainBridge(address(arbOhm), admin, address(arbGateway));
+        arbRolesAdmin.grantRole("bridge_facilitator", address(arbBridge));
 
         vm.startPrank(admin);
         arbGateway.enable(bytes(""));
-        arbBridge.setGateway(address(arbGateway));
         arbBridge.enable(bytes(""));
         vm.stopPrank();
 
@@ -204,7 +202,7 @@ contract LZBridgeGatewayForkTests is Test {
         });
         bytes memory message = abi.encode(uint8(1), abi.encode(to, amount));
 
-        vm.prank(LZConfigLib.LZ_ENDPOINT);
+        vm.prank(dstGw.LZ_ENDPOINT());
         dstGw.lzReceive(origin, bytes32(0), message, address(0), bytes(""));
     }
 
@@ -406,16 +404,14 @@ contract LZBridgeGatewayForkTests_E2E is Test {
 
     function _deployEthStack() internal {
         ethOhm = new MockOhm("OHM", "OHM", 9);
-        ethBridge = new LZCrossChainBridge(address(ethOhm), admin);
         ethKernel = new Kernel();
         ethMintr = new OlympusMinter(ethKernel, address(ethOhm));
         ethRoles = new OlympusRoles(ethKernel);
         ethRolesAdmin = new RolesAdmin(ethKernel);
         ethGateway = new LZBridgeGateway(
             ethKernel,
-            LZConfigLib.LZ_ENDPOINT,
-            true, // Canonical
-            address(ethBridge)
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            true // Canonical
         );
 
         ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
@@ -424,11 +420,12 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
         ethRolesAdmin.grantRole("admin", admin);
+        ethBridge = new LZCrossChainBridge(address(ethOhm), admin, address(ethGateway));
+        ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
 
         vm.startPrank(admin);
         ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
         ethGateway.enable(bytes(""));
-        ethBridge.setGateway(address(ethGateway));
         ethBridge.enable(bytes(""));
         vm.stopPrank();
 
@@ -448,16 +445,14 @@ contract LZBridgeGatewayForkTests_E2E is Test {
 
     function _deployArbStack() internal {
         arbOhm = new MockOhm("OHM", "OHM", 9);
-        arbBridge = new LZCrossChainBridge(address(arbOhm), admin);
         arbKernel = new Kernel();
         arbMintr = new OlympusMinter(arbKernel, address(arbOhm));
         arbRoles = new OlympusRoles(arbKernel);
         arbRolesAdmin = new RolesAdmin(arbKernel);
         arbGateway = new LZBridgeGateway(
             arbKernel,
-            LZConfigLib.LZ_ENDPOINT,
-            false, // Non-canonical
-            address(arbBridge)
+            LZConfigLib.ARB_LZ_ENDPOINT,
+            false // Non-canonical
         );
 
         arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
@@ -466,10 +461,11 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
         arbRolesAdmin.grantRole("admin", admin);
+        arbBridge = new LZCrossChainBridge(address(arbOhm), admin, address(arbGateway));
+        arbRolesAdmin.grantRole("bridge_facilitator", address(arbBridge));
 
         vm.startPrank(admin);
         arbGateway.enable(bytes(""));
-        arbBridge.setGateway(address(arbGateway));
         arbBridge.enable(bytes(""));
         vm.stopPrank();
 
@@ -596,7 +592,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         // === DESTINATION: ARB fork ===
         vm.selectFork(arbForkId);
 
-        vm.prank(LZConfigLib.LZ_ENDPOINT);
+        vm.prank(arbGateway.LZ_ENDPOINT());
         arbGateway.lzReceive(origin, guid, message, address(0), bytes(""));
 
         // Verify destination: recipient received OHM

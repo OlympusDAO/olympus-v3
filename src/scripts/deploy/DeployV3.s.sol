@@ -968,30 +968,11 @@ contract DeployV3 is WithEnvironment {
 
     // ===== LZ BRIDGE CONTRACTS ===== //
 
-    function deployLZCrossChainBridge() public returns (address, string memory) {
-        // Dependencies
-        console2.log("Checking dependencies");
-        address ohm = _getAddressNotZero("olympus.legacy.OHM");
-        address owner = _getDeployer();
-
-        // Log parameters
-        console2.log("LZCrossChainBridge parameters:");
-        console2.log("  ohm", ohm);
-        console2.log("  owner", owner);
-
-        // Deploy
-        vm.broadcast();
-        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(ohm, owner);
-
-        return (address(lzCrossChainBridge), "olympus.periphery");
-    }
-
     function deployLZBridgeGateway() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
         address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
-        address facilitator = _getAddressNotZero("olympus.periphery.LZCrossChainBridge");
         bool isCanonical = _readDeploymentArgUint256("LZBridgeGateway", "isCanonical") == 1;
 
         // Log parameters
@@ -999,18 +980,36 @@ contract DeployV3 is WithEnvironment {
         console2.log("  kernel", kernel);
         console2.log("  lzEndpoint", lzEndpoint);
         console2.log("  isCanonical", isCanonical);
-        console2.log("  facilitator", facilitator);
 
         // Deploy
         vm.broadcast();
         LZBridgeGateway lzBridgeGateway = new LZBridgeGateway(
             Kernel(kernel),
             lzEndpoint,
-            isCanonical,
-            facilitator
+            isCanonical
         );
 
         return (address(lzBridgeGateway), "olympus.policies");
+    }
+
+    function deployLZCrossChainBridge() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address owner = _getDeployer();
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+
+        // Log parameters
+        console2.log("LZCrossChainBridge parameters:");
+        console2.log("  ohm", ohm);
+        console2.log("  owner", owner);
+        console2.log("  gateway", gateway);
+
+        // Deploy
+        vm.broadcast();
+        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(ohm, owner, gateway);
+
+        return (address(lzCrossChainBridge), "olympus.periphery");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

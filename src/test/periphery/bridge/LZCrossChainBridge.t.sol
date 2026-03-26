@@ -61,20 +61,12 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         // Deploy mock tokens
         ohm = new MockOhm("Olympus", "OHM", 9);
 
-        // Deploy bridge (periphery, owned by this test contract)
-        bridge = new LZCrossChainBridge(address(ohm), owner);
-
         // Deploy canonical stack
         kernel = new Kernel();
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        gateway = new LZBridgeGateway(
-            kernel,
-            address(endpointSetup.endpointList[0]),
-            true,
-            address(bridge)
-        );
+        gateway = new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true);
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -88,12 +80,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         mintr2 = new OlympusMinter(kernel2, address(ohm));
         roles2 = new OlympusRoles(kernel2);
         rolesAdmin2 = new RolesAdmin(kernel2);
-        gateway2 = new LZBridgeGateway(
-            kernel2,
-            address(endpointSetup.endpointList[1]),
-            false,
-            address(bridge)
-        );
+        gateway2 = new LZBridgeGateway(kernel2, address(endpointSetup.endpointList[1]), false);
 
         kernel2.executeAction(Actions.InstallModule, address(mintr2));
         kernel2.executeAction(Actions.InstallModule, address(roles2));
@@ -101,6 +88,13 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
 
         rolesAdmin2.grantRole("admin", admin);
+
+        // Deploy bridge (periphery, owned by this test contract)
+        bridge = new LZCrossChainBridge(address(ohm), owner, address(gateway));
+
+        // Grant bridge_facilitator role to bridge on both kernels
+        rolesAdmin.grantRole("bridge_facilitator", address(bridge));
+        rolesAdmin2.grantRole("bridge_facilitator", address(bridge));
 
         // Configure gateways
         vm.startPrank(admin);
@@ -133,7 +127,6 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         vm.stopPrank();
 
         // Configure bridge
-        bridge.setGateway(address(gateway));
         bridge.enable(bytes(""));
 
         // Mint OHM to user and approve bridge
@@ -148,11 +141,15 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
 contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
     function test_constructor() external {
-        LZCrossChainBridge fresh = new LZCrossChainBridge(address(ohm), address(this));
+        LZCrossChainBridge fresh = new LZCrossChainBridge(
+            address(ohm),
+            address(this),
+            address(gateway)
+        );
 
         assertEq(fresh.OHM(), address(ohm), "OHM should be set");
         assertEq(fresh.owner(), address(this), "Owner should be the deployer");
-        assertEq(fresh.gateway(), address(0), "Gateway should default to zero address");
+        assertEq(fresh.gateway(), address(gateway), "Gateway should be set from constructor");
         assertFalse(fresh.isEnabled(), "Bridge should start disabled");
     }
 
@@ -163,7 +160,7 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
                 "ohm"
             )
         );
-        new LZCrossChainBridge(address(0), address(this));
+        new LZCrossChainBridge(address(0), address(this), address(gateway));
     }
 
     function test_constructor_revertsIfOwnerZero() external {
@@ -173,7 +170,17 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
                 "owner"
             )
         );
-        new LZCrossChainBridge(address(ohm), address(0));
+        new LZCrossChainBridge(address(ohm), address(0), address(gateway));
+    }
+
+    function test_constructor_revertsIfGatewayZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
+                "gateway"
+            )
+        );
+        new LZCrossChainBridge(address(ohm), address(this), address(0));
     }
 }
 

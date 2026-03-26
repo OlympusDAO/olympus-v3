@@ -29,11 +29,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     /// @inheritdoc ILZCrossChainBridge
     address public override gateway;
 
-    constructor(address ohm_, address owner_) Owned(owner_) {
+    constructor(address ohm_, address owner_, address gateway_) Owned(owner_) {
         _requireNonzeroAddress(ohm_, "ohm");
         _requireNonzeroAddress(owner_, "owner");
 
         OHM = ohm_;
+        _setGateway(gateway_);
 
         // PeripheryEnabler starts disabled; must be explicitly enabled after configuration.
     }
@@ -69,10 +70,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     /// @inheritdoc ILZCrossChainBridge
     function setGateway(address gateway_) external override onlyOwner {
-        _requireNonzeroAddress(gateway_, "gateway");
-
-        gateway = gateway_;
-        emit GatewaySet(gateway_);
+        _setGateway(gateway_);
     }
 
     /// @inheritdoc ILZCrossChainBridge
@@ -104,6 +102,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
         // String literal for consistency with solmate's Owned.onlyOwner modifier
         // solhint-disable-next-line gas-custom-errors
         if (msg.sender != owner) revert("UNAUTHORIZED");
+    }
+
+    function _setGateway(address gateway_) private {
+        _requireNonzeroAddress(gateway_, "gateway");
+        gateway = gateway_;
+        emit GatewaySet(gateway_);
     }
 
     function _requireNonzeroAddress(address address_, string memory parameter_) private pure {

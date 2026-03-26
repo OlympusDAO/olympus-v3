@@ -24,9 +24,6 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
     // =========== CONSTANTS =========== //
 
-    /// @dev Number of remote chains per deployment (each chain has 3 remotes).
-    uint256 internal constant _REMOTE_CHAIN_COUNT = 3;
-
     // TODO: Set before execution
     uint256 internal constant INITIAL_BRIDGED_SUPPLY = 0;
 
@@ -34,11 +31,13 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
     /// @notice Configures LZ libraries and ULN/Executor config for all remote chains
     ///         via the gateway's ILZEndpointV2Admin functions.
+    /// @dev DVN selection is per-route: Berachain routes use Nethermind DVN instead of
+    ///      Google Cloud DVN (which is unavailable on Berachain).
     function _configureLZ(LZBridgeGateway gateway_) internal {
         uint32[] memory remoteEids = _getRemoteEids();
+        uint32 localEid = _getLocalEid();
         address sendLib = _getSendUln302();
         address recvLib = _getRecvUln302();
-        address[] memory dvns = _getDVNs();
         uint64 localConf = _outboundConfirmations();
         address gatewayAddr = address(gateway_);
 
@@ -46,6 +45,8 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
         for (uint256 i = 0; i < remoteEids.length; ++i) {
             uint32 remoteEid = remoteEids[i];
+            // Select DVNs based on route (Nethermind for Berachain routes, Google Cloud otherwise)
+            address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
             console2.log("  Configuring remote EID:", remoteEid);
 
             // Pin send library via gateway
@@ -70,7 +71,7 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
             sendParams[1] = SetConfigParam({
                 eid: remoteEid,
                 configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
-                config: LZConfigLib.encodeExecutorConfig()
+                config: LZConfigLib.encodeExecutorConfig(localEid)
             });
             addToBatch(
                 gatewayAddr,
@@ -95,12 +96,12 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
     /// @notice Sets peers for all remote chains from env.json addresses.
     function _setPeers(LZBridgeGateway gateway_) internal {
         address gatewayAddr = address(gateway_);
-        string[_REMOTE_CHAIN_COUNT] memory remoteChains = _getRemoteChainNames();
+        string[] memory remoteChains = _getRemoteChainNames();
         uint32[] memory remoteEids = _getRemoteEids();
 
         console2.log("\nSetting peers");
 
-        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+        for (uint256 i = 0; i < remoteChains.length; ++i) {
             address remoteGateway = _envAddressNotZero(
                 remoteChains[i],
                 "olympus.policies.LZBridgeGateway"
@@ -156,6 +157,7 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         if (_isChain("arbitrum")) return LZConfigLib.ARB_LZ_DVN;
         if (_isChain("optimism")) return LZConfigLib.OPT_LZ_DVN;
         if (_isChain("base")) return LZConfigLib.BASE_LZ_DVN;
+        if (_isChain("berachain")) return LZConfigLib.BERA_LZ_DVN;
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 
@@ -165,44 +167,89 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         if (_isChain("arbitrum")) return LZConfigLib.ARB_EID;
         if (_isChain("optimism")) return LZConfigLib.OPT_EID;
         if (_isChain("base")) return LZConfigLib.BASE_EID;
+        if (_isChain("berachain")) return LZConfigLib.BERA_EID;
         revert LZBridgeBatchScript_UnsupportedChain();
     }
 
-    /// @notice Returns the 3 remote EIDs for the current chain.
+    /// @notice Returns the remote EIDs for the current chain.
+    /// @dev Topology: Ethereum peers with all 4 chains. Arb/Opt/Base peer with each other
+    ///      and Ethereum (3 each). Berachain peers only with Ethereum (1).
     function _getRemoteEids() internal view returns (uint32[] memory eids) {
-        eids = new uint32[](_REMOTE_CHAIN_COUNT);
         if (_isChain("mainnet")) {
+            eids = new uint32[](4);
             eids[0] = LZConfigLib.ARB_EID;
             eids[1] = LZConfigLib.OPT_EID;
             eids[2] = LZConfigLib.BASE_EID;
+            eids[3] = LZConfigLib.BERA_EID;
         } else if (_isChain("arbitrum")) {
+            eids = new uint32[](4);
             eids[0] = LZConfigLib.ETH_EID;
             eids[1] = LZConfigLib.OPT_EID;
             eids[2] = LZConfigLib.BASE_EID;
+            eids[3] = LZConfigLib.BERA_EID;
         } else if (_isChain("optimism")) {
+            eids = new uint32[](4);
             eids[0] = LZConfigLib.ETH_EID;
             eids[1] = LZConfigLib.ARB_EID;
             eids[2] = LZConfigLib.BASE_EID;
+            eids[3] = LZConfigLib.BERA_EID;
         } else if (_isChain("base")) {
+            eids = new uint32[](4);
             eids[0] = LZConfigLib.ETH_EID;
             eids[1] = LZConfigLib.ARB_EID;
             eids[2] = LZConfigLib.OPT_EID;
+            eids[3] = LZConfigLib.BERA_EID;
+        } else if (_isChain("berachain")) {
+            eids = new uint32[](4);
+            eids[0] = LZConfigLib.ETH_EID;
+            eids[1] = LZConfigLib.ARB_EID;
+            eids[2] = LZConfigLib.OPT_EID;
+            eids[3] = LZConfigLib.BASE_EID;
         } else {
             revert LZBridgeBatchScript_UnsupportedChain();
         }
     }
 
-    /// @notice Returns the 3 remote chain names (env.json keys) for the current chain.
+    /// @notice Returns the remote chain names (env.json keys) for the current chain.
+    /// @dev Array length matches _getRemoteEids(). All chains have 4 remotes.
     function _getRemoteChainNames()
         internal
         view
-        returns (string[_REMOTE_CHAIN_COUNT] memory names)
+        returns (string[] memory names)
     {
-        if (_isChain("mainnet")) return ["arbitrum", "optimism", "base"];
-        if (_isChain("arbitrum")) return ["mainnet", "optimism", "base"];
-        if (_isChain("optimism")) return ["mainnet", "arbitrum", "base"];
-        if (_isChain("base")) return ["mainnet", "arbitrum", "optimism"];
-        revert LZBridgeBatchScript_UnsupportedChain();
+        if (_isChain("mainnet")) {
+            names = new string[](4);
+            names[0] = "arbitrum";
+            names[1] = "optimism";
+            names[2] = "base";
+            names[3] = "berachain";
+        } else if (_isChain("arbitrum")) {
+            names = new string[](4);
+            names[0] = "mainnet";
+            names[1] = "optimism";
+            names[2] = "base";
+            names[3] = "berachain";
+        } else if (_isChain("optimism")) {
+            names = new string[](4);
+            names[0] = "mainnet";
+            names[1] = "arbitrum";
+            names[2] = "base";
+            names[3] = "berachain";
+        } else if (_isChain("base")) {
+            names = new string[](4);
+            names[0] = "mainnet";
+            names[1] = "arbitrum";
+            names[2] = "optimism";
+            names[3] = "berachain";
+        } else if (_isChain("berachain")) {
+            names = new string[](4);
+            names[0] = "mainnet";
+            names[1] = "arbitrum";
+            names[2] = "optimism";
+            names[3] = "base";
+        } else {
+            revert LZBridgeBatchScript_UnsupportedChain();
+        }
     }
 
     /// @notice Returns the SendUln302 address for the current chain.
@@ -220,9 +267,10 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
         return LZConfigLib.outboundConfirmationsForEid(_getLocalEid());
     }
 
-    /// @notice Returns [localLzDVN, GCLOUD_DVN] sorted ascending.
-    function _getDVNs() internal view returns (address[] memory) {
-        return LZConfigLib.dvnsForEid(_getLocalEid());
+    /// @notice Returns the DVN pair for a specific remote EID, sorted ascending.
+    /// @dev Uses Nethermind DVN for Berachain routes, Google Cloud DVN otherwise.
+    function _getDVNsForRoute(uint32 remoteEid_) internal view returns (address[] memory) {
+        return LZConfigLib.dvnsForRoute(_getLocalEid(), remoteEid_);
     }
 
     /// @notice Checks if the current chain matches the given name.

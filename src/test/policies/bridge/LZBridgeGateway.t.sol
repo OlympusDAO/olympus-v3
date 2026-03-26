@@ -72,12 +72,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        gateway = new LZBridgeGateway(
-            kernel,
-            address(endpointSetup.endpointList[0]),
-            true,
-            facilitator
-        );
+        gateway = new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true);
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -86,18 +81,14 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin.grantRole("bridge_facilitator", facilitator);
 
         // ---- Non-canonical stack (endpoint 2) ----
         kernel2 = new Kernel();
         mintr2 = new OlympusMinter(kernel2, address(ohm));
         roles2 = new OlympusRoles(kernel2);
         rolesAdmin2 = new RolesAdmin(kernel2);
-        gateway2 = new LZBridgeGateway(
-            kernel2,
-            address(endpointSetup.endpointList[1]),
-            false,
-            facilitator
-        );
+        gateway2 = new LZBridgeGateway(kernel2, address(endpointSetup.endpointList[1]), false);
 
         kernel2.executeAction(Actions.InstallModule, address(mintr2));
         kernel2.executeAction(Actions.InstallModule, address(roles2));
@@ -106,6 +97,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin2.grantRole("bridge_facilitator", facilitator);
 
         // ---- Wire peers ----
         vm.startPrank(admin);
@@ -198,14 +190,10 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 /// @dev Deployment and immutable state validation.
 contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
     function test_constructor_canonical() external {
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.FacilitatorSet(facilitator);
-
         LZBridgeGateway fresh = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true,
-            facilitator
+            true
         );
 
         // Immutables
@@ -218,21 +206,16 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
 
         // State
         assertEq(address(fresh.kernel()), address(kernel), "Kernel should be set");
-        assertEq(fresh.facilitator(), facilitator, "Facilitator should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
         assertEq(fresh.bridgedSupply(), 0, "Bridged supply should be zero");
         assertEq(fresh.bridgedSupplyCap(), 0, "Bridged supply cap should be zero");
     }
 
     function test_constructor_nonCanonical() external {
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.FacilitatorSet(facilitator);
-
         LZBridgeGateway fresh = new LZBridgeGateway(
             kernel2,
             address(endpointSetup.endpointList[1]),
-            false,
-            facilitator
+            false
         );
 
         assertEq(address(fresh.kernel()), address(kernel2), "Kernel should be set");
@@ -242,7 +225,6 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
             "LZ_ENDPOINT should be the non-canonical endpoint"
         );
         assertFalse(fresh.IS_CANONICAL(), "IS_CANONICAL should be false");
-        assertEq(fresh.facilitator(), facilitator, "Facilitator should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
     }
 
@@ -253,7 +235,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
                 "kernel"
             )
         );
-        new LZBridgeGateway(Kernel(address(0)), address(1), true, facilitator);
+        new LZBridgeGateway(Kernel(address(0)), address(1), true);
     }
 
     function test_constructor_revertsIfEndpointZero() external {
@@ -263,17 +245,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
                 "lzEndpoint"
             )
         );
-        new LZBridgeGateway(kernel, address(0), true, facilitator);
-    }
-
-    function test_constructor_revertsIfFacilitatorZero() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector,
-                "facilitator"
-            )
-        );
-        new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true, address(0));
+        new LZBridgeGateway(kernel, address(0), true);
     }
 }
 
@@ -784,11 +756,14 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
-    function test_burnAndSend_revertsIfNotFacilitator() external {
+    function test_burnAndSend_revertsIfNotBridgeFacilitator() external {
         vm.deal(user, 10 ether);
         vm.prank(user);
         vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_OnlyFacilitator.selector)
+            abi.encodeWithSelector(
+                ROLESv1.ROLES_RequireRole.selector,
+                bytes32("bridge_facilitator")
+            )
         );
         gateway.burnAndSend{value: 1 ether}(
             NONCANONICAL_EID,
@@ -1058,38 +1033,6 @@ contract LZBridgeGatewayTests_SetDelegate is LZBridgeGatewayTestBase {
     }
 }
 
-/// @dev Facilitator address management.
-contract LZBridgeGatewayTests_SetFacilitator is LZBridgeGatewayTestBase {
-    function test_setFacilitator() external {
-        address newFac = makeAddr("newFac");
-
-        vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.FacilitatorSet(newFac);
-
-        vm.prank(admin);
-        gateway.setFacilitator(newFac);
-
-        assertEq(gateway.facilitator(), newFac, "Facilitator should be updated");
-    }
-
-    function test_setFacilitator_revertsIfZero() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector,
-                "facilitator"
-            )
-        );
-        vm.prank(admin);
-        gateway.setFacilitator(address(0));
-    }
-
-    function test_setFacilitator_revertsIfNotAdmin() external {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user);
-        gateway.setFacilitator(makeAddr("x"));
-    }
-}
-
 /// @dev Bridged supply tracking and cap enforcement.
 contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
     function test_setBridgedSupply() external {
@@ -1355,7 +1298,9 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
             window: 3600
         });
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin")));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("bridge_admin"))
+        );
         vm.prank(user);
         gateway.setRateLimits(configs);
     }
@@ -1799,10 +1744,6 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
 
     function test_ohm() external view {
         assertEq(gateway.ohm(), address(ohm), "OHM should match token address");
-    }
-
-    function test_facilitator() external view {
-        assertEq(gateway.facilitator(), facilitator, "Facilitator should match configured address");
     }
 
     function test_bridgedSupply() external view {

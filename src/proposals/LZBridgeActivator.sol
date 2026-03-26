@@ -1,0 +1,222 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.30;
+
+import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IMessageLibManager, SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
+import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+
+/// @title LZBridgeActivator
+/// @notice Single-use contract to configure and activate the LZBridgeGateway during the
+///         OCG proposal. Batches all endpoint configuration, peer setup, enforced options,
+///         supply cap, and enablement into a single proposal action, working around the
+///         governor's 15-action limit.
+///
+/// @dev Assumes:
+///      - The `admin` and `bridge_admin` roles have been granted to this contract.
+///      - The gateway has been activated in the Kernel (by the DAO MS pre-OCG).
+///      - The caller is this contract's owner (the OCG timelock).
+///
+///      This contract sets itself as the gateway's LZ endpoint delegate at the start of
+///      `activate()` and revokes the delegate at the end. While set as delegate, it
+///      calls the LZ endpoint directly (setSendLibrary, setReceiveLibrary, setConfig)
+///      on behalf of the gateway. Gateway-level operations (setPeer, setEnforcedOptions,
+///      setBridgedSupplyCap, enable) are called through the gateway's role-gated functions.
+contract LZBridgeActivator is Owned {
+    // ========== CONSTANTS ========== //
+
+    /// @dev Number of remote chains configured by this activator.
+    uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
+
+    // TODO: Set before submission
+    uint256 public constant BRIDGED_SUPPLY_CAP = 100_000e9;
+
+    // TODO: Set before submission (deployed remote gateway addresses)
+    address public constant ARB_GATEWAY = address(uint160(uint256(keccak256("ARB_GATEWAY"))));
+    address public constant OPT_GATEWAY = address(uint160(uint256(keccak256("OPT_GATEWAY"))));
+    address public constant BASE_GATEWAY = address(uint160(uint256(keccak256("BASE_GATEWAY"))));
+    address public constant BERA_GATEWAY = address(uint160(uint256(keccak256("BERA_GATEWAY"))));
+
+    // ========== IMMUTABLES ========== //
+
+    address public immutable GATEWAY;
+    address public immutable ENDPOINT;
+
+    // ========== STATE ========== //
+
+    bool public isActivated;
+
+    // ========== EVENTS & ERRORS ========== //
+
+    event Activated(address caller);
+    error AlreadyActivated();
+    error InvalidParams(string reason);
+
+    // ========== CONSTRUCTOR ========== //
+
+    /// @param owner_ The OCG timelock address.
+    constructor(address owner_, address gateway_, address endpoint_) Owned(owner_) {
+        _requireNonzeroAddress(gateway_, "gateway");
+        _requireNonzeroAddress(endpoint_, "endpoint");
+
+        GATEWAY = gateway_;
+        ENDPOINT = endpoint_;
+    }
+
+    // ========== ACTIVATION ========== //
+
+    /// @notice Configures and activates the LZBridgeGateway.
+    /// @dev  This function assumes:
+    ///       - The `admin` and `bridge_admin` roles have been granted to this contract.
+    ///
+    ///       This function reverts if:
+    ///       - The caller is not the owner.
+    ///       - The function has already been run.
+    function activate() external onlyOwner {
+        if (isActivated) revert AlreadyActivated();
+
+        // Set this contract as the LZ endpoint delegate for the gateway.
+        // This allows us to call endpoint config functions directly.
+        ILZBridgeGateway(GATEWAY).setDelegate(address(this));
+
+        _configureLZEndpoint();
+        _setPeers();
+        _setEnforcedOptions();
+        _setBridgedSupplyCap();
+        _enable();
+
+        // Revoke delegate. Endpoint config is now locked to gateway-only.
+        ILZBridgeGateway(GATEWAY).setDelegate(address(0));
+
+        isActivated = true;
+        emit Activated(msg.sender);
+    }
+
+    // ========== INTERNAL ========== //
+
+    /// @dev Configures LZ V2 endpoint via delegate: pin libraries and set ULN/Executor
+    ///      config for all 4 remote chains. Calls the endpoint directly.
+    function _configureLZEndpoint() internal {
+        address gw = GATEWAY;
+        address ep = ENDPOINT;
+        address sendLib = LZConfigLib.ETH_SEND_ULN_302;
+        address recvLib = LZConfigLib.ETH_RECV_ULN_302;
+        uint64 localConf = LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS;
+
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        uint64[_REMOTE_CHAIN_COUNT] memory remoteConfs = [
+            LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.BERA_OUTBOUND_CONFIRMATIONS
+        ];
+
+        IMessageLibManager libManager = IMessageLibManager(ep);
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint32 eid = remoteEids[i];
+            address[] memory dvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
+
+            // Pin libraries (delegate calls endpoint directly)
+            libManager.setSendLibrary(gw, eid, sendLib);
+            libManager.setReceiveLibrary(gw, eid, recvLib, 0);
+
+            // Send ULN + Executor config
+            SetConfigParam[] memory sendParams = new SetConfigParam[](2);
+            sendParams[0] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(localConf, dvns)
+            });
+            sendParams[1] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
+                config: LZConfigLib.encodeExecutorConfig(LZConfigLib.ETH_EID)
+            });
+            libManager.setConfig(gw, sendLib, sendParams);
+
+            // Receive ULN config
+            SetConfigParam[] memory recvParams = new SetConfigParam[](1);
+            recvParams[0] = SetConfigParam({
+                eid: eid,
+                configType: LZConfigLib.CONFIG_TYPE_ULN,
+                config: LZConfigLib.encodeUlnConfig(remoteConfs[i], dvns)
+            });
+            libManager.setConfig(gw, recvLib, recvParams);
+        }
+    }
+
+    /// @dev Sets peers on the gateway for all 4 remote chains.
+    function _setPeers() internal {
+        address gw = GATEWAY;
+
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        address[_REMOTE_CHAIN_COUNT] memory remoteGateways = [
+            ARB_GATEWAY,
+            OPT_GATEWAY,
+            BASE_GATEWAY,
+            BERA_GATEWAY
+        ];
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            if (remoteGateways[i] == address(0)) continue;
+            ILZBridgeGateway(gw).setPeer(
+                remoteEids[i],
+                LZConfigLib.addressToBytes32(remoteGateways[i])
+            );
+        }
+    }
+
+    /// @dev Sets enforced options (200k gas minimum) for all 4 remote chains.
+    function _setEnforcedOptions() internal {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](_REMOTE_CHAIN_COUNT);
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            opts[i] = EnforcedOptionParam({
+                eid: remoteEids[i],
+                msgType: 1, // MSG_BRIDGE_OHM
+                options: abi.encodePacked(
+                    uint16(3), // Type 3
+                    uint8(1), // WORKER_ID (Executor)
+                    uint16(17), // size
+                    uint8(1), // OPTION_TYPE_LZRECEIVE
+                    uint128(200_000)
+                )
+            });
+        }
+
+        ILZBridgeGateway(GATEWAY).setEnforcedOptions(opts);
+    }
+
+    /// @dev Sets the bridged supply cap on the gateway.
+    function _setBridgedSupplyCap() internal {
+        ILZBridgeGateway(GATEWAY).setBridgedSupplyCap(BRIDGED_SUPPLY_CAP);
+    }
+
+    /// @dev Enables the gateway policy.
+    function _enable() internal {
+        PolicyEnabler(GATEWAY).enable("");
+    }
+
+    function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
+        if (address_ == address(0)) revert InvalidParams(parameter_);
+    }
+}

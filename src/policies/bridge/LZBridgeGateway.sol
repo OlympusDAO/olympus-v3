@@ -21,7 +21,7 @@ pragma solidity >=0.8.30;
 ///                     -> Adds _assertOptionsType3Calldata() for calldata inputs.
 ///
 /// Not ported: oAppVersion() (-> IVersioned), isComposeMsgSender(), _payNative()/_payLzToken().
-/// Access control: onlyOwner -> onlyAdminRole / onlyRole("bridge_admin").
+/// Access control: onlyOwner -> the ROLES module.
 
 // Interfaces
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
@@ -59,6 +59,9 @@ contract LZBridgeGateway is
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
 
+    /// @notice Role required to call burnAndSend (granted to periphery facilitator contracts).
+    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
 
@@ -88,9 +91,6 @@ contract LZBridgeGateway is
     address public override ohm;
 
     /// @inheritdoc ILZBridgeGateway
-    address public override facilitator;
-
-    /// @inheritdoc ILZBridgeGateway
     uint256 public override bridgedSupply;
 
     /// @inheritdoc ILZBridgeGateway
@@ -104,19 +104,12 @@ contract LZBridgeGateway is
 
     // ========= INITIALIZATION & POLICY SETUP ========= //
 
-    constructor(
-        Kernel kernel_,
-        address lzEndpoint_,
-        bool isCanonical_,
-        address facilitator_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, address lzEndpoint_, bool isCanonical_) Policy(kernel_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(lzEndpoint_, "lzEndpoint");
 
         LZ_ENDPOINT = lzEndpoint_;
         IS_CANONICAL = isCanonical_;
-
-        _setFacilitator(facilitator_);
 
         // PolicyEnabler starts disabled; must be explicitly enabled after configuration.
         // Gateway is always authorized to call endpoint functions.
@@ -167,17 +160,6 @@ contract LZBridgeGateway is
         return (1, 0);
     }
 
-    // ========= MODIFIERS ========= //
-
-    modifier onlyFacilitator() {
-        _onlyFacilitator();
-        _;
-    }
-
-    function _onlyFacilitator() internal view {
-        if (msg.sender != facilitator) revert LZBridgeGateway_OnlyFacilitator();
-    }
-
     // ========= OHM BRIDGING ========= //
 
     /// @inheritdoc ILZBridgeGateway
@@ -187,7 +169,7 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable override onlyEnabled onlyFacilitator {
+    ) external payable override onlyEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
         // Note: zero-amount validation is the facilitator's responsibility
         _requireNonzeroAddress(to_, "to");
 
@@ -292,11 +274,6 @@ contract LZBridgeGateway is
     function setDelegate(address delegate_) external override onlyRole(_BRIDGE_ADMIN_ROLE) {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
         emit DelegateSet(delegate_);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function setFacilitator(address facilitator_) external override onlyAdminRole {
-        _setFacilitator(facilitator_);
     }
 
     /// @inheritdoc ILZBridgeGateway
@@ -518,12 +495,6 @@ contract LZBridgeGateway is
         MINTR.mintOhm(to, amount);
 
         emit Received(to, amount, srcEid_, guid_);
-    }
-
-    function _setFacilitator(address facilitator_) private {
-        _requireNonzeroAddress(facilitator_, "facilitator");
-        facilitator = facilitator_;
-        emit FacilitatorSet(facilitator_);
     }
 
     function _getPeerOrRevert(uint32 eid_) private view returns (bytes32) {

@@ -5,7 +5,6 @@ pragma solidity >=0.8.30;
 import {LZBridgeL2BatchScript} from "./lib/LZBridgeL2BatchScript.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @title LZCrossChainBridgeL2Batch
@@ -14,7 +13,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///
 ///         Entry points:
 ///         - `disableOldBridge`: disable old CrossChainBridge (pre-migration)
-///         - `setupL2`         : setGateway + enable (skips OlympusHeart validation)
+///         - `setupL2`         : enable bridge (gateway set in constructor)
 ///         - `enable`          : enable only
 ///         - `disable`         : disable only
 contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
@@ -33,23 +32,14 @@ contract LZCrossChainBridgeL2Batch is LZBridgeL2BatchScript {
         _proposeL2Batch();
     }
 
-    /// @notice L2 setup: set gateway and enable the periphery bridge.
+    /// @notice L2 setup: enable the periphery bridge (gateway set in constructor).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     function setupL2(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
-        address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
 
         console2.log("\n=== LZCrossChainBridge Setup (L2:", chain, ") ===");
         console2.log("Bridge:", bridgeAddr);
-        console2.log("Gateway:", gatewayAddr);
 
-        // 1. Set gateway
-        addToBatch(
-            bridgeAddr,
-            abi.encodeWithSelector(LZCrossChainBridge.setGateway.selector, gatewayAddr)
-        );
-
-        // 2. Enable bridge
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         _proposeL2Batch();

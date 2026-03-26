@@ -21,9 +21,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Thrown when msg.sender is not the LayerZero endpoint.
     error LZBridgeGateway_OnlyEndpoint();
 
-    /// @notice Thrown when msg.sender is not the facilitator.
-    error LZBridgeGateway_OnlyFacilitator();
-
     /// @notice Thrown when a message originates from a non-peer source.
     /// @param eid The source endpoint ID.
     /// @param sender The sender bytes32 address.
@@ -82,10 +79,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param delegate The new delegate address.
     event DelegateSet(address delegate);
 
-    /// @notice Emitted when the facilitator is set.
-    /// @param facilitator The new facilitator address.
-    event FacilitatorSet(address facilitator);
-
     /// @notice Emitted when the bridged supply is set.
     /// @param bridgedSupply The new bridged supply value.
     event BridgedSupplySet(uint256 bridgedSupply);
@@ -109,14 +102,14 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     // ========= CORE FUNCTIONS ========= //
 
     /// @notice Burns OHM held by the gateway and sends a bridge message to a destination chain.
-    /// @dev Only callable by the facilitator. The facilitator must transfer OHM to the gateway
-    ///      before calling this function. The gateway burns the OHM via MINTR and sends a
-    ///      LayerZero V2 message.
+    /// @dev Only callable by an address with the `bridge_facilitator` role. The caller must
+    ///      transfer OHM to the gateway before calling this function. The gateway burns the OHM
+    ///      via MINTR and sends a LayerZero V2 message.
     ///
     ///      On canonical chains, increments bridgedSupply and checks against bridgedSupplyCap.
     ///
     ///      Reverts if:
-    ///      - The caller is not the facilitator.
+    ///      - The caller does not have the `bridge_facilitator` role.
     ///      - The gateway is not enabled.
     ///      - No peer exists for the destination endpoint ID.
     ///      - The bridged supply cap would be exceeded (canonical only).
@@ -174,15 +167,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param delegate_ The new delegate address, or `address(0)` to clear.
     function setDelegate(address delegate_) external;
 
-    /// @notice Sets the facilitator address.
-    /// @dev Only callable by the admin role.
-    ///
-    ///      Reverts if:
-    ///      - facilitator_ is the zero address.
-    ///
-    /// @param facilitator_ The new facilitator address.
-    function setFacilitator(address facilitator_) external;
-
     /// @notice Manually sets the bridged supply value.
     /// @dev Only callable by the bridge_admin role. Only available on canonical chains.
     ///      Required during bridge migration: the bridged amount at deployment differs from
@@ -235,9 +219,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
 
     /// @notice Returns the OHM token address.
     function ohm() external view returns (address);
-
-    /// @notice Returns the facilitator address.
-    function facilitator() external view returns (address);
 
     /// @notice Returns the current bridged supply (canonical only).
     function bridgedSupply() external view returns (uint256);

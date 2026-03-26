@@ -13,11 +13,15 @@ import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
+// Constants
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 // Proposal
@@ -26,15 +30,19 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24685696;
+    uint256 public constant BLOCK = 24727221;
 
-    /// @dev Number of remote chains (Arbitrum, Optimism, Base).
-    uint256 internal constant _REMOTE_CHAIN_COUNT = 3;
+    /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
+    uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
+
+    /// @dev Role constants.
+    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
+    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
 
     // ========== DEPLOYMENT TOGGLES ==========
 
-    /// @dev Set to true once LZBridgeGateway has been deployed on Ethereum.
-    ///      When false, setUp() deploys it locally and registers it in
+    /// @dev Set to true once contracts have been deployed on Ethereum.
+    ///      When false, setUp() deploys them locally and registers in
     ///      the address registry before proposal simulation.
     bool public constant IS_CONTRACTS_DEPLOYED = false;
 
@@ -42,6 +50,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     Kernel public kernel;
     LZBridgeGateway public gateway;
+    LZBridgeActivator public activator;
     LZBridgeSecurityUpgradeProposal public proposal;
     ROLESv1 public roles;
     IERC20 public ohm;
@@ -51,6 +60,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     address public daoMS;
     address public timelock;
     address public oldCrossChainBridge;
+    address public lzCrossChainBridge;
 
     function setUp() public virtual {
         // Mainnet fork at a fixed block
@@ -79,20 +89,34 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         if (IS_CONTRACTS_DEPLOYED) {
             gateway = LZBridgeGateway(addresses.getAddress("olympus-policy-lz-bridge-gateway"));
+            activator = LZBridgeActivator(addresses.getAddress("olympus-lz-bridge-activator"));
+            lzCrossChainBridge = addresses.getAddress("olympus-periphery-lz-cross-chain-bridge");
             console2.log("Contracts already deployed on mainnet");
         } else {
-            // Deploy LZCrossChainBridge (periphery, owned by DAO MS - configured via MS batch)
-            LZCrossChainBridge bridge = new LZCrossChainBridge(address(ohm), daoMS);
-            vm.label(address(bridge), "LZCrossChainBridge");
-
             // Deploy LZBridgeGateway (policy, canonical on mainnet)
             gateway = new LZBridgeGateway(
                 kernel,
-                LZConfigLib.LZ_ENDPOINT,
-                true, // isCanonical
-                address(bridge) // facilitator
+                LZConfigLib.ETH_LZ_ENDPOINT,
+                true // isCanonical
             );
             vm.label(address(gateway), "LZBridgeGateway");
+
+            // Deploy LZCrossChainBridge (periphery, owned by DAO MS)
+            LZCrossChainBridge bridge = new LZCrossChainBridge(
+                address(ohm),
+                daoMS,
+                address(gateway)
+            );
+            vm.label(address(bridge), "LZCrossChainBridge");
+            lzCrossChainBridge = address(bridge);
+
+            // Deploy LZBridgeActivator (single-use, owned by timelock)
+            activator = new LZBridgeActivator(
+                timelock,
+                address(gateway),
+                LZConfigLib.ETH_LZ_ENDPOINT
+            );
+            vm.label(address(activator), "LZBridgeActivator");
 
             // Register in the address registry
             addresses.addAddress(
@@ -100,6 +124,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 address(gateway),
                 block.chainid
             );
+            addresses.addAddress(
+                "olympus-periphery-lz-cross-chain-bridge",
+                address(bridge),
+                block.chainid
+            );
+            addresses.addAddress("olympus-lz-bridge-activator", address(activator), block.chainid);
             console2.log("Contracts deployed locally");
         }
 
@@ -120,8 +150,9 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     // ========== LZ CONFIG VERIFICATION HELPERS ==========
 
+    /// @dev Verifies Send ULN config for a remote EID, with route-aware DVN checks.
     function _verifySendUlnConfig(uint32 remoteEid_) internal view {
-        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
         bytes memory cfg = ep.getConfig(
             address(gateway),
             LZConfigLib.ETH_SEND_ULN_302,
@@ -138,22 +169,17 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
         assertEq(uln.requiredDVNCount, 2, "Send ULN should require 2 DVNs");
         assertEq(uln.requiredDVNs.length, 2, "Send ULN should have 2 required DVNs");
-        // DVNs sorted ascending: ETH_LZ_DVN (0x589d...) < GCLOUD_DVN (0xD56e...)
-        assertEq(
-            uln.requiredDVNs[0],
-            LZConfigLib.ETH_LZ_DVN,
-            "Send ULN DVN[0] should be ETH_LZ_DVN"
-        );
-        assertEq(
-            uln.requiredDVNs[1],
-            LZConfigLib.GCLOUD_DVN,
-            "Send ULN DVN[1] should be GCLOUD_DVN"
-        );
+
+        // Route-aware DVN verification
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
+        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Send ULN DVN[0] mismatch");
+        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Send ULN DVN[1] mismatch");
         assertEq(uln.optionalDVNCount, 0, "Send ULN should have 0 optional DVNs");
     }
 
+    /// @dev Verifies Recv ULN config for a remote EID, with route-aware DVN checks.
     function _verifyRecvUlnConfig(uint32 remoteEid_, uint64 expectedConfirmations_) internal view {
-        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
         bytes memory cfg = ep.getConfig(
             address(gateway),
             LZConfigLib.ETH_RECV_ULN_302,
@@ -166,21 +192,16 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertEq(uln.confirmations, expectedConfirmations_, "Recv ULN confirmations mismatch");
         assertEq(uln.requiredDVNCount, 2, "Recv ULN should require 2 DVNs");
         assertEq(uln.requiredDVNs.length, 2, "Recv ULN should have 2 required DVNs");
-        assertEq(
-            uln.requiredDVNs[0],
-            LZConfigLib.ETH_LZ_DVN,
-            "Recv ULN DVN[0] should be ETH_LZ_DVN"
-        );
-        assertEq(
-            uln.requiredDVNs[1],
-            LZConfigLib.GCLOUD_DVN,
-            "Recv ULN DVN[1] should be GCLOUD_DVN"
-        );
+
+        // Route-aware DVN verification
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
+        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Recv ULN DVN[0] mismatch");
+        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Recv ULN DVN[1] mismatch");
         assertEq(uln.optionalDVNCount, 0, "Recv ULN should have 0 optional DVNs");
     }
 
     function _verifyExecutorConfig(uint32 remoteEid_) internal view {
-        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
         bytes memory cfg = ep.getConfig(
             address(gateway),
             LZConfigLib.ETH_SEND_ULN_302,
@@ -195,19 +216,21 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             LZConfigLib.MAX_MESSAGE_SIZE,
             "Executor maxMessageSize mismatch"
         );
-        assertEq(exec.executor, LZConfigLib.LZ_EXECUTOR, "Executor address mismatch");
+        assertEq(exec.executor, LZConfigLib.ETH_LZ_EXECUTOR, "Executor address mismatch");
     }
 
     function _verifyPeers() internal view {
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,
             LZConfigLib.OPT_EID,
-            LZConfigLib.BASE_EID
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
         ];
         address[_REMOTE_CHAIN_COUNT] memory remoteGateways = [
-            proposal.ARB_GATEWAY(),
-            proposal.OPT_GATEWAY(),
-            proposal.BASE_GATEWAY()
+            activator.ARB_GATEWAY(),
+            activator.OPT_GATEWAY(),
+            activator.BASE_GATEWAY(),
+            activator.BERA_GATEWAY()
         ];
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
@@ -233,33 +256,55 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         // 2. DAO MS has bridge_admin role
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, bytes32("bridge_admin")),
+            roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "DAO MS should have bridge_admin role"
         );
 
-        // 3. Gateway immutables
-        assertEq(gateway.LZ_ENDPOINT(), LZConfigLib.LZ_ENDPOINT, "Endpoint should match");
+        // 3. LZCrossChainBridge has bridge_facilitator role
+        assertTrue(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
+            "LZCrossChainBridge should have bridge_facilitator role"
+        );
+
+        // 4. Activator roles revoked and spent
+        assertFalse(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(address(activator), ADMIN_ROLE),
+            "Activator should not have admin role"
+        );
+        assertFalse(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
+            "Activator should not have bridge_admin role"
+        );
+        assertTrue(activator.isActivated(), "Activator should be marked as activated");
+
+        // 5. Gateway immutables
+        assertEq(gateway.LZ_ENDPOINT(), LZConfigLib.ETH_LZ_ENDPOINT, "Endpoint should match");
         assertTrue(gateway.IS_CANONICAL(), "Gateway should be canonical on mainnet");
         assertEq(gateway.ohm(), address(ohm), "OHM should match");
 
-        // 4. Bridged supply cap
+        // 6. Bridged supply cap
         assertEq(
             gateway.bridgedSupplyCap(),
-            proposal.BRIDGED_SUPPLY_CAP(),
-            "Bridged supply cap should match proposal constant"
+            activator.BRIDGED_SUPPLY_CAP(),
+            "Bridged supply cap should match activator constant"
         );
 
-        // 5. Per-remote LZ config (send library pinned, receive library pinned, ULN + Executor config)
-        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        // 7. Per-remote LZ config
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,
             LZConfigLib.OPT_EID,
-            LZConfigLib.BASE_EID
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
         ];
         uint64[_REMOTE_CHAIN_COUNT] memory remoteConfs = [
             LZConfigLib.ARB_OUTBOUND_CONFIRMATIONS,
             LZConfigLib.OPT_OUTBOUND_CONFIRMATIONS,
-            LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS
+            LZConfigLib.BASE_OUTBOUND_CONFIRMATIONS,
+            LZConfigLib.BERA_OUTBOUND_CONFIRMATIONS
         ];
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
@@ -285,10 +330,10 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             _verifyRecvUlnConfig(eid, remoteConfs[i]);
         }
 
-        // 6. Peers
+        // 8. Peers
         _verifyPeers();
 
-        // 7. Enforced options
+        // 9. Enforced options
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes memory opts = gateway.enforcedOptions(remoteEids[i], gateway.MSG_BRIDGE_OHM());
             assertGt(opts.length, 0, "Enforced options should be set");

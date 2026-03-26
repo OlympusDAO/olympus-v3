@@ -7,7 +7,8 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {Test} from "forge-std/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {LZConfigLib, ILayerZeroDVNState} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {ILayerZeroDVNState} from "src/interfaces/layerzero/ILayerZeroDVNState.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -100,7 +101,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             ethRolesAdmin,
             ethGateway,
             ethBridge
-        ) = _deployStack(true);
+        ) = _deployStack(true, LZConfigLib.ETH_EID);
 
         vm.selectFork(arbForkId);
         (
@@ -111,7 +112,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             arbRolesAdmin,
             arbGateway,
             arbBridge
-        ) = _deployStack(false);
+        ) = _deployStack(false, LZConfigLib.ARB_EID);
 
         vm.selectFork(optForkId);
         (
@@ -122,7 +123,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             optRolesAdmin,
             optGateway,
             optBridge
-        ) = _deployStack(false);
+        ) = _deployStack(false, LZConfigLib.OPT_EID);
 
         vm.selectFork(baseForkId);
         (
@@ -133,7 +134,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             baseRolesAdmin,
             baseGateway,
             baseBridge
-        ) = _deployStack(false);
+        ) = _deployStack(false, LZConfigLib.BASE_EID);
 
         // Set peers (full mesh)
         _crossPeer(
@@ -189,7 +190,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     // =========== DEPLOY HELPERS =========== //
 
     function _deployStack(
-        bool isCanonical_
+        bool isCanonical_,
+        uint32 localEid_
     )
         internal
         returns (
@@ -203,16 +205,14 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         )
     {
         ohm_ = new MockOhm("OHM", "OHM", 9);
-        bridge_ = new LZCrossChainBridge(address(ohm_), admin);
         kernel_ = new Kernel();
         mintr_ = new OlympusMinter(kernel_, address(ohm_));
         roles_ = new OlympusRoles(kernel_);
         rolesAdmin_ = new RolesAdmin(kernel_);
         gateway_ = new LZBridgeGateway(
             kernel_,
-            LZConfigLib.LZ_ENDPOINT,
-            isCanonical_,
-            address(bridge_)
+            LZConfigLib.endpointForEid(localEid_),
+            isCanonical_
         );
 
         kernel_.executeAction(Actions.InstallModule, address(mintr_));
@@ -221,11 +221,12 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         kernel_.executeAction(Actions.ActivatePolicy, address(gateway_));
         rolesAdmin_.grantRole("admin", admin);
         rolesAdmin_.grantRole("bridge_admin", bridgeAdmin);
+        bridge_ = new LZCrossChainBridge(address(ohm_), admin, address(gateway_));
+        rolesAdmin_.grantRole("bridge_facilitator", address(bridge_));
 
         vm.startPrank(admin);
         if (isCanonical_) gateway_.setBridgedSupplyCap(SUPPLY_CAP);
         gateway_.enable(bytes(""));
-        bridge_.setGateway(address(gateway_));
         bridge_.enable(bytes(""));
         vm.stopPrank();
 
@@ -303,7 +304,6 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         LZBridgeGateway gw = _gateway(localEid);
         address sendLib = LZConfigLib.sendUln302ForEid(localEid);
         address recvLib = LZConfigLib.recvUln302ForEid(localEid);
-        address[] memory dvns = LZConfigLib.dvnsForEid(localEid);
         uint64 sendConf = LZConfigLib.outboundConfirmationsForEid(localEid);
 
         uint32[CHAIN_COUNT] memory eids = _allEids();
@@ -312,6 +312,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
             if (eids[i] == localEid) continue;
             uint32 remoteEid = eids[i];
+            address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
 
             // Pin libraries
             gw.setSendLibrary(remoteEid, sendLib);
@@ -327,7 +328,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             sendParams[1] = SetConfigParam({
                 eid: remoteEid,
                 configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
-                config: LZConfigLib.encodeExecutorConfig()
+                config: LZConfigLib.encodeExecutorConfig(localEid)
             });
             gw.setEndpointConfig(sendLib, sendParams);
 
@@ -347,7 +348,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     /// @dev Verifies that libraries are pinned and configs are stored for all remote EIDs.
     function _verifyChainConfig(uint32 localEid) internal {
         vm.selectFork(_forkId(localEid));
-        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+        ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.endpointForEid(localEid));
         LZBridgeGateway gw = _gateway(localEid);
         address sendLib = LZConfigLib.sendUln302ForEid(localEid);
         address recvLib = LZConfigLib.recvUln302ForEid(localEid);
@@ -416,7 +417,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             assertEq(lzVid, uint32(v1ChainIds[i]), "LZ DVN vid should match LZ chain ID");
 
             // Google Cloud DVN
-            uint32 gcVid = ILayerZeroDVNState(LZConfigLib.GCLOUD_DVN).vid();
+            uint32 gcVid = ILayerZeroDVNState(LZConfigLib.gcloudDvnForEid(eids[i])).vid();
             assertEq(gcVid, uint32(v1ChainIds[i]), "GCLOUD DVN vid should match LZ chain ID");
         }
     }
@@ -427,7 +428,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
             vm.selectFork(_forkId(eids[i]));
-            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.endpointForEid(eids[i]));
             LZBridgeGateway gw = _gateway(eids[i]);
 
             // For any remote EID, receive library should be default
@@ -486,7 +487,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
                 // Read send ULN config from chain A for chain B
                 vm.selectFork(_forkId(eidA));
-                ILayerZeroEndpointV2 epA = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+                ILayerZeroEndpointV2 epA = ILayerZeroEndpointV2(LZConfigLib.endpointForEid(eidA));
                 bytes memory sendCfg = epA.getConfig(
                     address(_gateway(eidA)),
                     LZConfigLib.sendUln302ForEid(eidA),
@@ -496,7 +497,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
                 // Read receive ULN config from chain B for chain A
                 vm.selectFork(_forkId(eidB));
-                ILayerZeroEndpointV2 epB = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+                ILayerZeroEndpointV2 epB = ILayerZeroEndpointV2(LZConfigLib.endpointForEid(eidB));
                 bytes memory recvCfg = epB.getConfig(
                     address(_gateway(eidB)),
                     LZConfigLib.recvUln302ForEid(eidB),
@@ -522,7 +523,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
             vm.selectFork(_forkId(eids[i]));
-            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.LZ_ENDPOINT);
+            ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.endpointForEid(eids[i]));
 
             // Pick any remote EID to query the default
             uint32 someRemoteEid = (eids[i] == LZConfigLib.ETH_EID)
