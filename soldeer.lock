@@ -77,13 +77,7 @@ checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
 integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
 
 [[dependencies]]
-name = "layer-zero-endpoint-v1"
-version = "0.0.6"
-git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
-rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
-
-[[dependencies]]
-name = "layer-zero-endpoint-v1-new"
+name = "layer-zero-endpoint-v1-110"
 version = "1.1.0"
 git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
 rev = "cdc93994911829b1348f6ac18000000a43432ef1"
