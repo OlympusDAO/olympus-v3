@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std/Test.sol";
 // Interfaces
 import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {Errors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
 
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
@@ -322,11 +323,24 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
         vm.stopPrank();
 
-        // Send with less than estimated fee should revert
+        // Send with less than estimated fee should revert with exact error
         uint256 amount2 = 500e9;
+        MessagingFee memory fee2 = ethBridge.estimateSendFee(
+            LZConfigLib.ARB_EID,
+            recipient,
+            amount2
+        );
         vm.startPrank(sender);
         ethOhm.approve(address(ethBridge), amount2);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.LZ_InsufficientFee.selector,
+                fee2.nativeFee,
+                uint256(1),
+                uint256(0),
+                uint256(0)
+            )
+        );
         ethBridge.sendOhm{value: 1}(LZConfigLib.ARB_EID, recipient, amount2);
         vm.stopPrank();
     }

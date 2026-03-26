@@ -5,6 +5,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Contracts
 import {Permissions, Keycode} from "src/Kernel.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
 contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
     function test_configureDependencies() external view {
@@ -36,6 +37,28 @@ contract LZBridgeGatewayTests_PolicySetup is LZBridgeGatewayTestBase {
             Keycode.unwrap(perms[3].keycode),
             bytes5("MINTR"),
             "Permission 3 should be on MINTR"
+        );
+
+        // Verify funcSelectors target the correct MINTR functions
+        assertEq(
+            perms[0].funcSelector,
+            MINTRv1.mintOhm.selector,
+            "Permission 0 should target mintOhm"
+        );
+        assertEq(
+            perms[1].funcSelector,
+            MINTRv1.burnOhm.selector,
+            "Permission 1 should target burnOhm"
+        );
+        assertEq(
+            perms[2].funcSelector,
+            MINTRv1.increaseMintApproval.selector,
+            "Permission 2 should target increaseMintApproval"
+        );
+        assertEq(
+            perms[3].funcSelector,
+            MINTRv1.decreaseMintApproval.selector,
+            "Permission 3 should target decreaseMintApproval"
         );
     }
 
