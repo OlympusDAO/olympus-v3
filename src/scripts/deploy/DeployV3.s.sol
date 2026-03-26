@@ -996,7 +996,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
-        address owner = _getDeployer();
+        address owner = _getAddressNotZero("olympus.multisig.dao");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
 
         // Log parameters
