@@ -1,6 +1,16 @@
 {
     "sequence": [
         { "name": "LZCrossChainBridge", "args": {} },
-        { "name": "LZBridgeGateway", "args": { "isCanonical": true } }
+        { "name": "LZBridgeGateway", "args": { "isCanonical": true } },
+        {
+            "name": "LZBridgeActivator",
+            "args": {
+                "bridgedSupplyCap": 0,
+                "arbGateway": "0x0000000000000000000000000000000000000000",
+                "optGateway": "0x0000000000000000000000000000000000000000",
+                "baseGateway": "0x0000000000000000000000000000000000000000",
+                "beraGateway": "0x0000000000000000000000000000000000000000"
+            }
+        }
     ]
 }

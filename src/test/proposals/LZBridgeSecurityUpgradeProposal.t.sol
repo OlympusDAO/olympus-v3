@@ -114,7 +114,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             activator = new LZBridgeActivator(
                 timelock,
                 address(gateway),
-                LZConfigLib.ETH_LZ_ENDPOINT
+                LZConfigLib.ETH_LZ_ENDPOINT,
+                100_000e9,
+                makeAddr("ARB_GATEWAY"),
+                makeAddr("OPT_GATEWAY"),
+                makeAddr("BASE_GATEWAY"),
+                makeAddr("BERA_GATEWAY")
             );
             vm.label(address(activator), "LZBridgeActivator");
 
@@ -235,11 +240,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes32 peer = gateway.peers(remoteEids[i]);
-            if (remoteGateways[i] == address(0)) {
-                assertEq(peer, bytes32(0), "Peer should be empty for zero gateway");
-            } else {
-                assertEq(peer, LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
-            }
+            assertEq(peer, LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
         }
     }
 

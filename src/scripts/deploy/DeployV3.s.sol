@@ -25,6 +25,7 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -1000,6 +1001,60 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(lzBridgeGateway), "olympus.policies");
+    }
+
+    function deployLZBridgeActivator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address timelock = _getAddressNotZero("olympus.governance.Timelock");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
+        uint256 bridgedSupplyCap = _readDeploymentArgUint256(
+            "LZBridgeActivator",
+            "bridgedSupplyCap"
+        );
+        address arbGateway = _readDeploymentArgAddress("LZBridgeActivator", "arbGateway");
+        address optGateway = _readDeploymentArgAddress("LZBridgeActivator", "optGateway");
+        address baseGateway = _readDeploymentArgAddress("LZBridgeActivator", "baseGateway");
+        address beraGateway = _readDeploymentArgAddress("LZBridgeActivator", "beraGateway");
+
+        // Validate args before broadcasting (failed deploy costs gas)
+        // solhint-disable-next-line custom-errors
+        require(bridgedSupplyCap > 0, "bridgedSupplyCap must be > 0");
+        // solhint-disable-next-line custom-errors
+        require(arbGateway != address(0), "arbGateway is zero");
+        // solhint-disable-next-line custom-errors
+        require(optGateway != address(0), "optGateway is zero");
+        // solhint-disable-next-line custom-errors
+        require(baseGateway != address(0), "baseGateway is zero");
+        // solhint-disable-next-line custom-errors
+        require(beraGateway != address(0), "beraGateway is zero");
+
+        // Log parameters
+        console2.log("LZBridgeActivator parameters:");
+        console2.log("  timelock", timelock);
+        console2.log("  gateway", gateway);
+        console2.log("  lzEndpoint", lzEndpoint);
+        console2.log("  bridgedSupplyCap", bridgedSupplyCap);
+        console2.log("  arbGateway", arbGateway);
+        console2.log("  optGateway", optGateway);
+        console2.log("  baseGateway", baseGateway);
+        console2.log("  beraGateway", beraGateway);
+
+        // Deploy
+        vm.broadcast();
+        LZBridgeActivator activator = new LZBridgeActivator(
+            timelock,
+            gateway,
+            lzEndpoint,
+            bridgedSupplyCap,
+            arbGateway,
+            optGateway,
+            baseGateway,
+            beraGateway
+        );
+
+        return (address(activator), "olympus.periphery");
     }
 
     function deployLZCrossChainBridge() public returns (address, string memory) {

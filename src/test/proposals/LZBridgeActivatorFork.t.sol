@@ -27,7 +27,7 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24727221;
+    uint256 internal constant FORK_BLOCK = 24742168;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -61,7 +61,16 @@ contract LZBridgeActivatorForkTest is Test {
         gateway = new LZBridgeGateway(kernel, LZConfigLib.ETH_LZ_ENDPOINT, true);
 
         // Deploy activator (owned by timelock)
-        activator = new LZBridgeActivator(TIMELOCK, address(gateway), LZConfigLib.ETH_LZ_ENDPOINT);
+        activator = new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            100_000e9,
+            makeAddr("ARB_GATEWAY"),
+            makeAddr("OPT_GATEWAY"),
+            makeAddr("BASE_GATEWAY"),
+            makeAddr("BERA_GATEWAY")
+        );
 
         // Activate gateway in kernel (as DAO MS, which is the kernel executor)
         vm.prank(DAO_MS);
@@ -77,10 +86,15 @@ contract LZBridgeActivatorForkTest is Test {
 
     // ========== CONSTRUCTOR TESTS ========== //
 
-    function test_constructor_setsParametersCorrectly() public view {
+    function test_constructor_setsParametersCorrectly() public {
         assertEq(activator.owner(), TIMELOCK);
         assertEq(activator.GATEWAY(), address(gateway));
         assertEq(activator.ENDPOINT(), LZConfigLib.ETH_LZ_ENDPOINT);
+        assertEq(activator.BRIDGED_SUPPLY_CAP(), 100_000e9);
+        assertEq(activator.ARB_GATEWAY(), makeAddr("ARB_GATEWAY"));
+        assertEq(activator.OPT_GATEWAY(), makeAddr("OPT_GATEWAY"));
+        assertEq(activator.BASE_GATEWAY(), makeAddr("BASE_GATEWAY"));
+        assertEq(activator.BERA_GATEWAY(), makeAddr("BERA_GATEWAY"));
         assertFalse(activator.isActivated());
     }
 
@@ -88,14 +102,32 @@ contract LZBridgeActivatorForkTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "gateway")
         );
-        new LZBridgeActivator(TIMELOCK, address(0), LZConfigLib.ETH_LZ_ENDPOINT);
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(0),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            100_000e9,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
     }
 
     function test_constructor_revertsWhen_zeroEndpoint() public {
         vm.expectRevert(
             abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "endpoint")
         );
-        new LZBridgeActivator(TIMELOCK, address(gateway), address(0));
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
+            address(0),
+            100_000e9,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
     }
 
     // ========== ACCESS CONTROL TESTS ========== //
@@ -340,11 +372,7 @@ contract LZBridgeActivatorForkTest is Test {
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes32 peer = gateway.peers(remoteEids[i]);
-            if (remoteGateways[i] == address(0)) {
-                assertEq(peer, bytes32(0), "Peer should be empty for zero gateway");
-            } else {
-                assertEq(peer, LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
-            }
+            assertEq(peer, LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
         }
     }
 

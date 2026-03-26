@@ -30,19 +30,17 @@ contract LZBridgeActivator is Owned {
     /// @dev Number of remote chains configured by this activator.
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
 
-    // TODO: Set before submission
-    uint256 public constant BRIDGED_SUPPLY_CAP = 100_000e9;
-
-    // TODO: Set before submission (deployed remote gateway addresses)
-    address public constant ARB_GATEWAY = address(uint160(uint256(keccak256("ARB_GATEWAY"))));
-    address public constant OPT_GATEWAY = address(uint160(uint256(keccak256("OPT_GATEWAY"))));
-    address public constant BASE_GATEWAY = address(uint160(uint256(keccak256("BASE_GATEWAY"))));
-    address public constant BERA_GATEWAY = address(uint160(uint256(keccak256("BERA_GATEWAY"))));
-
     // ========== IMMUTABLES ========== //
 
     address public immutable GATEWAY;
     address public immutable ENDPOINT;
+
+    uint256 public immutable BRIDGED_SUPPLY_CAP;
+
+    address public immutable ARB_GATEWAY;
+    address public immutable OPT_GATEWAY;
+    address public immutable BASE_GATEWAY;
+    address public immutable BERA_GATEWAY;
 
     // ========== STATE ========== //
 
@@ -57,12 +55,38 @@ contract LZBridgeActivator is Owned {
     // ========== CONSTRUCTOR ========== //
 
     /// @param owner_ The OCG timelock address.
-    constructor(address owner_, address gateway_, address endpoint_) Owned(owner_) {
+    /// @param gateway_ The LZBridgeGateway address on this chain.
+    /// @param endpoint_ The LayerZero V2 endpoint address.
+    /// @param bridgedSupplyCap_ The maximum bridged supply cap.
+    /// @param arbGateway_ Remote gateway on Arbitrum.
+    /// @param optGateway_ Remote gateway on Optimism.
+    /// @param baseGateway_ Remote gateway on Base.
+    /// @param beraGateway_ Remote gateway on Berachain.
+    constructor(
+        address owner_,
+        address gateway_,
+        address endpoint_,
+        uint256 bridgedSupplyCap_,
+        address arbGateway_,
+        address optGateway_,
+        address baseGateway_,
+        address beraGateway_
+    ) Owned(owner_) {
         _requireNonzeroAddress(gateway_, "gateway");
         _requireNonzeroAddress(endpoint_, "endpoint");
+        _requireNonzeroAddress(arbGateway_, "arbGateway");
+        _requireNonzeroAddress(optGateway_, "optGateway");
+        _requireNonzeroAddress(baseGateway_, "baseGateway");
+        _requireNonzeroAddress(beraGateway_, "beraGateway");
+        if (bridgedSupplyCap_ == 0) revert InvalidParams("bridgedSupplyCap");
 
         GATEWAY = gateway_;
         ENDPOINT = endpoint_;
+        BRIDGED_SUPPLY_CAP = bridgedSupplyCap_;
+        ARB_GATEWAY = arbGateway_;
+        OPT_GATEWAY = optGateway_;
+        BASE_GATEWAY = baseGateway_;
+        BERA_GATEWAY = beraGateway_;
     }
 
     // ========== ACTIVATION ========== //
@@ -171,7 +195,6 @@ contract LZBridgeActivator is Owned {
         ];
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
-            if (remoteGateways[i] == address(0)) continue;
             ILZBridgeGateway(gw).setPeer(
                 remoteEids[i],
                 LZConfigLib.addressToBytes32(remoteGateways[i])

@@ -427,11 +427,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes32 peer = gw.peers(remoteEids[i]);
-            if (remoteGateways[i] == address(0)) {
-                require(peer == bytes32(0), "Peer should be empty for zero gateway");
-            } else {
-                require(peer == LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
-            }
+            require(peer == LZConfigLib.addressToBytes32(remoteGateways[i]), "Peer mismatch");
         }
     }
 
