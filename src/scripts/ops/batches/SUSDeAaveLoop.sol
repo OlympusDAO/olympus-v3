@@ -14,7 +14,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 /// @title SUSDeAaveLoop
 /// @notice Batch script to execute sUSDe Aave loop yield strategy
 /// @dev    Strategy: Supply sUSDe → Borrow USDT → Swap to USDe → Supply USDe → Borrow USDT → Swap to sUSDe
-///         Split into 3 functions to handle dynamic amounts between steps
+///         Single function builds one full loop iteration batch
 ///
 ///         Aave Pool: Ethereum Core Pool (includes sUSDe, USDe, USDT, and many other assets)
 ///         Pool Address: 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
@@ -38,12 +38,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // Hardcoded protocol addresses (specific to this script)
     IAaveV3Pool internal constant AAVE_POOL =
         IAaveV3Pool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
-    address internal constant KYBERSWAP_ROUTER = 0x6131B37d65fE405d9820C9B10FBb9a118BA031B3;
+    address internal constant KYBERSWAP_ROUTER_FALLBACK =
+        0x6131B37d65fE405d9820C9B10FBb9a118BA031B3;
 
     // Token addresses (loaded from env.json)
     IERC20 internal _susde;
     IERC20 internal _usde;
     IERC20 internal _usdt;
+
+    // Expected post-batch state for validation
+    uint256 internal _expectedMinSusdeOut;
+    uint256 internal _initialSusdeBalance;
+    uint256 internal _susdeSuppliedAmount;
 
     // Aave interest rate mode
     uint256 internal constant VARIABLE_RATE = 2;
@@ -51,6 +57,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // Default values
     uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 9000; // 90%
     uint256 internal constant DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
+    uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 9900; // 99.00%
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
@@ -74,9 +81,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _usdt = IERC20(_envAddressNotZero("external.tokens.USDT"));
     }
 
-    /// @notice Step 1: Supply sUSDe to Aave and borrow USDT
+    /// @notice Execute one full sUSDe Aave loop iteration in a single multisig batch
     /// @dev    If susdeSupplyAmount is 0 or not provided, uses full sUSDe balance
-    function supplySusdeAndBorrow(
+    function executeLoop(
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFilePath_,
@@ -87,6 +94,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
     {
         _loadTokens();
+
+        _initialSusdeBalance = _susde.balanceOf(_owner);
 
         uint256 susdeSupplyAmount = _readOptionalUint256("susdeSupplyAmount", 0);
         uint256 borrowPercentage = _readOptionalUint256(
@@ -95,212 +104,225 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         );
 
         if (borrowPercentage > MAX_BORROW_PERCENTAGE) revert("Borrow percentage exceeds max");
-        if (susdeSupplyAmount == 0) susdeSupplyAmount = _susde.balanceOf(_owner);
+        uint256 slippageBps = _readOptionalUint256("slippageBps", DEFAULT_SLIPPAGE_BPS);
+        if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
 
-        console2.log("=== Step 1: Supply sUSDe and Borrow USDT ===");
-        console2.log("Owner:", _owner);
-        console2.log("sUSDe supply amount:", susdeSupplyAmount);
-        console2.log("Borrow percentage (bps):", borrowPercentage);
-
+        if (susdeSupplyAmount == 0) susdeSupplyAmount = _initialSusdeBalance;
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
+        _susdeSuppliedAmount = susdeSupplyAmount;
 
-        // ============ DECIMAL SCALE CALCULATIONS ============
-        // sUSDe: 18 decimals | USDT: 6 decimals | Aave base: 8 decimals (USD)
-        //
-        // Check if eMode is set to the correct category
-        uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
-        bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
+        console2.log("=== Execute Loop: sUSDe -> USDT -> USDe -> sUSDe ===");
+        console2.log("Owner:", _owner);
+        console2.log("sUSDe supply amount (from wallet):", susdeSupplyAmount);
+        console2.log("Borrow percentage (bps):", borrowPercentage);
+        console2.log("Slippage (bps):", slippageBps);
 
-        // Get current available borrows
-        (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
+        uint256 totalExpectedBorrowsAfterSusdeSupply;
+        uint256 usdtBorrowAmount1;
 
-        // Use eMode category LTV (90%) since we're setting eMode
-        // sUSDe reserve-level LTV is 0 because it can only be used in eMode
-        uint256 ltv = EMODE_LTV;
+        {
+            uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
+            bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
-        // Calculate expected increase in available borrows from the supply
-        // Convert from 18 decimals (sUSDe) to 8 decimals (Aave base currency USD)
-        uint256 supplyValueBase = FullMath.mulDiv(
-            susdeSupplyAmount,
-            10 ** BASE_CURRENCY_DECIMALS,
-            1e18
-        );
-        uint256 expectedBorrowsIncrease = (supplyValueBase * ltv) / 10000;
-        uint256 totalExpectedBorrows = availableBorrowsBase + expectedBorrowsIncrease;
+            (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
 
-        uint256 usdtBorrowAmountBase = (totalExpectedBorrows * borrowPercentage) / 10000;
+            uint256 supplyValueBase = FullMath.mulDiv(
+                susdeSupplyAmount,
+                10 ** BASE_CURRENCY_DECIMALS,
+                1e18
+            );
+            totalExpectedBorrowsAfterSusdeSupply =
+                availableBorrowsBase +
+                ((supplyValueBase * EMODE_LTV) / 10000);
 
-        // Convert from base currency (USD 8 decimals) to USDT (6 decimals)
-        // USDT is priced at ~$1, so: usdt_amount = base_amount * 10^6 / 10^8 = base_amount / 100
-        uint256 usdtBorrowAmount = usdtBorrowAmountBase / 1e2;
+            usdtBorrowAmount1 =
+                ((totalExpectedBorrowsAfterSusdeSupply * borrowPercentage) / 10000) /
+                1e2;
+            if (usdtBorrowAmount1 == 0) revert("USDT borrow amount 1 is zero");
 
-        console2.log("\n1a. Calculations:");
-        console2.log("Current eMode category:", currentEMode);
-        console2.log("Target eMode category:", EMODE_CATEGORY);
-        console2.log("Should set eMode:", shouldSetEMode);
-        console2.log("Current available borrows (base):", availableBorrowsBase);
-        console2.log("sUSDe LTV (bps):", ltv);
-        console2.log("Expected borrows increase (base):", expectedBorrowsIncrease);
-        console2.log("Total expected borrows (base):", totalExpectedBorrows);
-        console2.log("USDT borrow amount:", usdtBorrowAmount);
+            console2.log("\n--- Step 1: Estimate Borrow #1 from sUSDe supply ---");
+            console2.log("Current eMode category:", currentEMode);
+            console2.log("Will set eMode in batch:", shouldSetEMode);
+            console2.log("Current available borrows base (8dp USD):", availableBorrowsBase);
+            console2.log("sUSDe supply value base (8dp USD):", supplyValueBase);
+            console2.log(
+                "Projected available borrows after sUSDe supply (8dp USD):",
+                totalExpectedBorrowsAfterSusdeSupply
+            );
+            console2.log("Borrow #1 target base (8dp USD):", usdtBorrowAmount1 * 1e2);
+            console2.log("Borrow #1 amount USDT (6dp):", usdtBorrowAmount1);
 
-        // NOW add to batch
-        // Set eMode if not already set to target category
-        if (shouldSetEMode) {
-            console2.log("\n1b. Set eMode category to", EMODE_CATEGORY);
-            addToBatch(address(AAVE_POOL), _encodeSetUserEMode(EMODE_CATEGORY));
+            if (shouldSetEMode) {
+                console2.log("\n2. Set eMode category to", EMODE_CATEGORY);
+                addToBatch(address(AAVE_POOL), _encodeSetUserEMode(EMODE_CATEGORY));
+            }
         }
 
-        console2.log("\n1c. Supply sUSDe to Aave");
+        (
+            address routerUsdtToUsde,
+            bytes memory swapCalldataUsdtToUsde,
+            uint256 usdeAmountOut
+        ) = _getKyberSwapCalldata(address(_usdt), address(_usde), usdtBorrowAmount1, slippageBps);
+        if (usdeAmountOut == 0) revert("USDe quote amount is zero");
+
+        console2.log("\n--- Step 2: Build swap #1 (USDT -> USDe) ---");
+        console2.log("Expected USDe out from quote (18dp):", usdeAmountOut);
+
+        uint256 usdeSupplyAmount = _getConservativeUsdeSupplyAmount(
+            usdeAmountOut,
+            usdtBorrowAmount1,
+            slippageBps
+        );
+        if (usdeSupplyAmount == 0) revert("USDe supply amount is zero");
+
+        uint256 usdtBorrowAmount2;
+        {
+            uint256 usdeSupplyValueBase = FullMath.mulDiv(
+                usdeSupplyAmount,
+                10 ** BASE_CURRENCY_DECIMALS,
+                1e18
+            );
+            uint256 totalExpectedBorrowsAfterUsdeSupply = (totalExpectedBorrowsAfterSusdeSupply -
+                (usdtBorrowAmount1 * 1e2)) + ((usdeSupplyValueBase * EMODE_LTV) / 10000);
+
+            usdtBorrowAmount2 =
+                ((totalExpectedBorrowsAfterUsdeSupply * borrowPercentage) / 10000) /
+                1e2;
+            if (usdtBorrowAmount2 == 0) revert("USDT borrow amount 2 is zero");
+
+            console2.log("\n--- Step 3: Estimate Borrow #2 after USDe supply ---");
+            console2.log("Conservative USDe supply amount (18dp):", usdeSupplyAmount);
+            console2.log("USDe supply value base (8dp USD):", usdeSupplyValueBase);
+            console2.log(
+                "Projected available borrows after USDe supply (8dp USD):",
+                totalExpectedBorrowsAfterUsdeSupply
+            );
+            console2.log("Borrow #2 target base (8dp USD):", usdtBorrowAmount2 * 1e2);
+            console2.log("Borrow #2 amount USDT (6dp):", usdtBorrowAmount2);
+        }
+
+        (
+            address routerUsdtToSusde,
+            bytes memory swapCalldataUsdtToSusde,
+            uint256 susdeAmountOut
+        ) = _getKyberSwapCalldata(address(_usdt), address(_susde), usdtBorrowAmount2, slippageBps);
+
+        console2.log("\n--- Step 4: Build swap #2 (USDT -> sUSDe) ---");
+        console2.log("Expected sUSDe out from quote (18dp):", susdeAmountOut);
+        _expectedMinSusdeOut = FullMath.mulDiv(susdeAmountOut, 10000 - slippageBps, 10000);
+        console2.log("Expected min sUSDe out after slippage buffer (18dp):", _expectedMinSusdeOut);
+
+        _addLoopActionsToBatch(
+            susdeSupplyAmount,
+            usdtBorrowAmount1,
+            usdeSupplyAmount,
+            usdtBorrowAmount2,
+            routerUsdtToUsde,
+            swapCalldataUsdtToUsde,
+            routerUsdtToSusde,
+            swapCalldataUsdtToSusde
+        );
+
+        console2.log("\n=== Batch prepared ===");
+        console2.log("Total batch operations:", _batchTargets.length);
+
+        _setPostBatchValidateSelector(this._validateExecuteLoopPostBatch.selector);
+
+        proposeBatch();
+    }
+
+    function _addLoopActionsToBatch(
+        uint256 susdeSupplyAmount,
+        uint256 usdtBorrowAmount1,
+        uint256 usdeSupplyAmount,
+        uint256 usdtBorrowAmount2,
+        address routerUsdtToUsde,
+        bytes memory swapCalldataUsdtToUsde,
+        address routerUsdtToSusde,
+        bytes memory swapCalldataUsdtToSusde
+    ) internal {
+        // 3. Approve & supply sUSDe, set collateral
+        console2.log("\n3. Approve and supply sUSDe to Aave");
         addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), susdeSupplyAmount));
         addToBatch(address(AAVE_POOL), _encodeSupply(address(_susde), susdeSupplyAmount, _owner));
-
-        console2.log("\n1d. Set sUSDe as collateral");
         addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_susde), true));
 
-        console2.log("\n1e. Borrow USDT from Aave");
-        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount, _owner));
+        // 4. Borrow USDT amount 1
+        console2.log("\n4. Borrow USDT amount 1 from Aave");
+        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount1, _owner));
 
-        console2.log("\n1f. Zero sUSDe approval to Aave Pool");
-        addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), 0));
+        // Debug: inspect borrowed USDT balance before first swap
+        addToBatch(address(_usdt), _encodeBalanceOf(_owner));
 
-        console2.log("\n=== Batch prepared ===");
-        console2.log("Total batch operations:", _batchTargets.length);
+        // 5. Swap USDT -> USDe
+        console2.log("\n5. Swap USDT amount 1 to USDe");
+        // USDT requires resetting allowance to zero before setting a new non-zero allowance.
+        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
+        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, usdtBorrowAmount1));
+        addToBatch(routerUsdtToUsde, swapCalldataUsdtToUsde);
 
-        proposeBatch();
-    }
+        // Debug: inspect realized USDe balance after swap, before supply
+        addToBatch(address(_usde), _encodeBalanceOf(_owner));
+        // Debug: inspect remaining USDT after first swap
+        addToBatch(address(_usdt), _encodeBalanceOf(_owner));
 
-    /// @notice Step 2: Swap USDT to USDe and supply to Aave
-    /// @dev    Reads actual USDT balance on-chain and calls KyberSwap API
-    function swapAndSupplyUsde(
-        bool useDaoMS_,
-        bool signOnly_,
-        string calldata argsFilePath_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
-    {
-        _loadTokens();
-
-        uint256 slippageBps = _readOptionalUint256("slippageBps", DEFAULT_SLIPPAGE_BPS);
-        if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
-
-        console2.log("=== Step 2: Swap USDT to USDe and Supply ===");
-        console2.log("Owner:", _owner);
-        console2.log("Slippage (bps):", slippageBps);
-
-        // ============ DECIMAL SCALE CALCULATIONS ============
-        // USDT: 6 decimals | USDe: 18 decimals
-        // KyberSwap handles all decimal conversions internally
-        // amountOut is in tokenOut's native decimals (18 for USDe)
-
-        uint256 usdtBalance = _usdt.balanceOf(_owner);
-        console2.log("\n2a. USDT balance:", usdtBalance);
-
-        if (usdtBalance == 0) revert("No USDT to swap");
-
-        (bytes memory swapCalldata, uint256 usdeAmountOut) = _getKyberSwapCalldata(
-            address(_usdt),
-            address(_usde),
-            usdtBalance,
-            slippageBps
-        );
-
-        console2.log("\n2b. KyberSwap route obtained");
-        console2.log("Expected USDe output:", usdeAmountOut);
-
-        // NOW add to batch
-        console2.log("\n2c. Swap USDT to USDe");
-        addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, usdtBalance));
-        addToBatch(KYBERSWAP_ROUTER, swapCalldata);
-
-        console2.log("\n2d. Supply USDe to Aave");
-        addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), usdeAmountOut));
-        addToBatch(address(AAVE_POOL), _encodeSupply(address(_usde), usdeAmountOut, _owner));
-
-        console2.log("\n2e. Set USDe as collateral");
+        // 6. Approve & supply USDe, set collateral
+        console2.log("\n6. Approve and supply USDe to Aave");
+        addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), usdeSupplyAmount));
+        addToBatch(address(AAVE_POOL), _encodeSupply(address(_usde), usdeSupplyAmount, _owner));
         addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_usde), true));
 
-        console2.log("\n2f. Zero approvals");
-        addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, 0));
+        // 7. Borrow USDT amount 2
+        console2.log("\n7. Borrow USDT amount 2 from Aave");
+        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner));
+
+        // 8. Swap USDT -> sUSDe
+        console2.log("\n8. Swap USDT amount 2 to sUSDe");
+        // USDT requires resetting allowance to zero before setting a new non-zero allowance.
+        addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
+        addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2));
+        addToBatch(routerUsdtToSusde, swapCalldataUsdtToSusde);
+
+        // Debug: inspect realized sUSDe balance after second swap
+        addToBatch(address(_susde), _encodeBalanceOf(_owner));
+
+        // 9. Zero approvals
+        console2.log("\n9. Zero approvals");
+        addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), 0));
+        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
+        if (routerUsdtToSusde != routerUsdtToUsde) {
+            addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
+        }
         addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), 0));
-
-        console2.log("\n=== Batch prepared ===");
-        console2.log("Total batch operations:", _batchTargets.length);
-
-        proposeBatch();
     }
 
-    /// @notice Step 3: Borrow more USDT and swap to sUSDe
-    /// @dev    Calculates borrow amount, borrows, then swaps to sUSDe
-    function borrowAndSwapToSusde(
-        bool useDaoMS_,
-        bool signOnly_,
-        string calldata argsFilePath_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
-    {
-        _loadTokens();
+    function _validateExecuteLoopPostBatch() external view {
+        uint256 susdeBalanceAfter = _susde.balanceOf(_owner);
+        if (susdeBalanceAfter < _expectedMinSusdeOut) {
+            revert(
+                string.concat(
+                    "sUSDe balance should be at least ",
+                    vm.toString(_expectedMinSusdeOut),
+                    ", but is ",
+                    vm.toString(susdeBalanceAfter)
+                )
+            );
+        }
 
-        uint256 borrowPercentage = _readOptionalUint256(
-            "borrowPercentage",
-            DEFAULT_BORROW_PERCENTAGE
-        );
-        uint256 slippageBps = _readOptionalUint256("slippageBps", DEFAULT_SLIPPAGE_BPS);
+        if (susdeBalanceAfter + _susdeSuppliedAmount < _initialSusdeBalance) {
+            revert("Unexpected sUSDe accounting");
+        }
 
-        if (borrowPercentage > MAX_BORROW_PERCENTAGE) revert("Borrow percentage exceeds max");
-        if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
+        uint256 actualSusdeOut = (susdeBalanceAfter + _susdeSuppliedAmount) - _initialSusdeBalance;
+        uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _initialSusdeBalance);
 
-        console2.log("=== Step 3: Borrow USDT and Swap to sUSDe ===");
-        console2.log("Owner:", _owner);
-        console2.log("Borrow percentage (bps):", borrowPercentage);
-        console2.log("Slippage (bps):", slippageBps);
-
-        // ============ DECIMAL SCALE CALCULATIONS ============
-        // USDT: 6 decimals | sUSDe: 18 decimals | Aave base: 8 decimals (USD)
-        //
-        // availableBorrowsBase: 8 decimals (USD)
-        // usdtBorrowAmount: 6 decimals (USDT native)
-
-        (, , uint256 availableBorrowsBase, , , ) = AAVE_POOL.getUserAccountData(_owner);
-        uint256 usdtBorrowAmountBase = (availableBorrowsBase * borrowPercentage) / 10000;
-
-        // Convert from base currency (USD 8 decimals) to USDT (6 decimals)
-        uint256 usdtBorrowAmount = usdtBorrowAmountBase / 1e2;
-
-        console2.log("\n3a. Calculations:");
-        console2.log("Available borrows (base):", availableBorrowsBase);
-        console2.log("USDT borrow amount:", usdtBorrowAmount);
-
-        (bytes memory swapCalldata, ) = _getKyberSwapCalldata(
-            address(_usdt),
-            address(_susde),
-            usdtBorrowAmount,
-            slippageBps
-        );
-
-        console2.log("\n3b. KyberSwap route obtained");
-
-        // NOW add to batch
-        console2.log("\n3c. Borrow USDT from Aave");
-        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount, _owner));
-
-        console2.log("\n3d. Swap USDT to sUSDe");
-        addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, usdtBorrowAmount));
-        addToBatch(KYBERSWAP_ROUTER, swapCalldata);
-
-        console2.log("\n3e. Zero USDT approval to Router");
-        addToBatch(address(_usdt), _encodeApprove(KYBERSWAP_ROUTER, 0));
-
-        console2.log("\n=== Batch prepared ===");
-        console2.log("Total batch operations:", _batchTargets.length);
-
-        proposeBatch();
+        console2.log("sUSDe balance after batch:", susdeBalanceAfter);
+        console2.log("Initial sUSDe balance (MS):", _initialSusdeBalance);
+        console2.log("sUSDe supplied to Aave:", _susdeSuppliedAmount);
+        console2.log("Actual sUSDe out (swap #2):", actualSusdeOut);
+        console2.log("sUSDe out efficiency vs initial balance (bps):", efficiencyBps);
+        console2.log("Expected min sUSDe out:", _expectedMinSusdeOut);
+        console2.log("executeLoop post-batch validation passed");
     }
 
     // ============ Encoding Helpers ============
@@ -349,6 +371,26 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return abi.encodeWithSelector(IAaveV3Pool.setUserEMode.selector, categoryId);
     }
 
+    function _encodeBalanceOf(address account) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IERC20.balanceOf.selector, account);
+    }
+
+    function _getConservativeUsdeSupplyAmount(
+        uint256 usdeAmountOut,
+        uint256 usdtAmountIn,
+        uint256 slippageBps
+    ) internal pure returns (uint256) {
+        // Quote-based minimum (18 decimals): amountOut * (1 - slippage)
+        uint256 quoteBased = FullMath.mulDiv(usdeAmountOut, 10000 - slippageBps, 10000);
+
+        // Input-notional minimum (18 decimals): usdt(6) -> usde(18) at 1:1, then apply slippage
+        uint256 inputBased = FullMath.mulDiv(usdtAmountIn, 1e18, 1e6);
+        inputBased = FullMath.mulDiv(inputBased, 10000 - slippageBps, 10000);
+
+        uint256 conservativeAmount = inputBased < quoteBased ? inputBased : quoteBased;
+        return FullMath.mulDiv(conservativeAmount, DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS, 10000);
+    }
+
     // ============ KyberSwap API ============
 
     function _getKyberSwapCalldata(
@@ -356,7 +398,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         address tokenOut,
         uint256 amountIn,
         uint256 slippageBps
-    ) internal returns (bytes memory swapCalldata, uint256 amountOut) {
+    ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
         string memory getUrl = string.concat(
             KYBERSWAP_BASE_URL,
             "/api/v1/routes?tokenIn=",
@@ -377,14 +419,17 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (getStatus >= 400) revert(string.concat("KyberSwap GET failed: ", string(getResponse)));
 
         string memory getResponseStr = string(getResponse);
-        bytes memory routeSummaryBytes = vm.parseJson(getResponseStr, ".data.routeSummary");
+        string memory routeSummaryJson = _extractJsonObjectForKey(getResponseStr, '"routeSummary"');
         amountOut = vm.parseUint(getResponseStr.readString(".data.routeSummary.amountOut"));
+        router = vm.parseJsonAddress(getResponseStr, ".data.routerAddress");
+        if (router == address(0)) router = KYBERSWAP_ROUTER_FALLBACK;
 
         console2.log("Route obtained, amountOut:", amountOut);
+        console2.log("Router:", router);
 
         string memory postBody = string.concat(
             '{"routeSummary":',
-            string(routeSummaryBytes),
+            routeSummaryJson,
             ',"sender":"',
             vm.toString(_owner),
             '","recipient":"',
@@ -404,6 +449,104 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         swapCalldata = vm.parseBytes(string(postResponse).readString(".data.data"));
         console2.log("Swap calldata obtained, length:", bytes(swapCalldata).length);
+    }
+
+    function _extractJsonObjectForKey(
+        string memory json,
+        string memory key
+    ) internal pure returns (string memory) {
+        bytes memory jsonBytes = bytes(json);
+        bytes memory keyBytes = bytes(key);
+
+        uint256 keyIndex = _indexOf(jsonBytes, keyBytes);
+        if (keyIndex == type(uint256).max) revert("JSON key not found");
+
+        uint256 i = keyIndex + keyBytes.length;
+        while (i < jsonBytes.length) {
+            bytes1 char_ = jsonBytes[i];
+            if (
+                char_ == 0x3a || // :
+                char_ == 0x20 || // space
+                char_ == 0x0a || // \n
+                char_ == 0x0d || // \r
+                char_ == 0x09 // \t
+            ) {
+                ++i;
+                continue;
+            }
+            break;
+        }
+
+        if (i >= jsonBytes.length || jsonBytes[i] != 0x7b) revert("JSON object not found");
+
+        uint256 start = i;
+        uint256 depth = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        for (; i < jsonBytes.length; ++i) {
+            bytes1 char_ = jsonBytes[i];
+
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (char_ == 0x5c) {
+                    escaped = true;
+                } else if (char_ == 0x22) {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (char_ == 0x22) {
+                inString = true;
+                continue;
+            }
+
+            if (char_ == 0x7b) {
+                ++depth;
+            } else if (char_ == 0x7d) {
+                --depth;
+                if (depth == 0) {
+                    return _sliceToString(jsonBytes, start, i + 1);
+                }
+            }
+        }
+
+        revert("JSON object unterminated");
+    }
+
+    function _indexOf(bytes memory haystack, bytes memory needle) internal pure returns (uint256) {
+        if (needle.length == 0 || needle.length > haystack.length) return type(uint256).max;
+
+        uint256 lastStart = haystack.length - needle.length;
+        for (uint256 i = 0; i <= lastStart; ++i) {
+            bool matches = true;
+            for (uint256 j = 0; j < needle.length; ++j) {
+                if (haystack[i + j] != needle[j]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) return i;
+        }
+
+        return type(uint256).max;
+    }
+
+    function _sliceToString(
+        bytes memory data,
+        uint256 start,
+        uint256 end
+    ) internal pure returns (string memory) {
+        if (end <= start || end > data.length) revert("Invalid slice");
+
+        bytes memory out = new bytes(end - start);
+        for (uint256 i = 0; i < out.length; ++i) {
+            out[i] = data[start + i];
+        }
+
+        return string(out);
     }
 
     // ============ Args Helpers ============
