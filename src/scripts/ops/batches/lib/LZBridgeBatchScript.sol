@@ -22,11 +22,6 @@ abstract contract LZBridgeBatchScript is BatchScriptV2 {
 
     error LZBridgeBatchScript_UnsupportedChain();
 
-    // =========== CONSTANTS =========== //
-
-    // TODO: Set before execution
-    uint256 internal constant INITIAL_BRIDGED_SUPPLY = 0;
-
     // =========== LZ CONFIGURATION HELPERS =========== //
 
     /// @notice Configures LZ libraries and ULN/Executor config for all remote chains

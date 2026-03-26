@@ -12,7 +12,7 @@
 #   3. Checks for stored (failed) payloads on LZ V1 endpoints
 #   4. Queries OHM totalSupply on each non-canonical chain
 #   5. Verifies CCIP bridge doesn't affect L2 supply (Solana only)
-#   6. Reports the INITIAL_BRIDGED_SUPPLY value for LZBridgeGateway
+#   6. Reports the initialBridgedSupply value for LZBridgeGatewayBatch
 #
 # Bridged supply = totalSupply(OHM_Arb) + totalSupply(OHM_Opt) + totalSupply(OHM_Base) + totalSupply(OHM_Bera)
 #
@@ -564,13 +564,13 @@ calculate_supply() {
 
     echo ""
 
-    # Output the constant to set
-    printf '  %b+---------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
-    printf '  %b|  Set in: src/scripts/ops/batches/lib/LZBridgeBatchScript.sol  |%b\n' "${BOLD}" "${NC}"
-    printf '  %b|                                                         |%b\n' "${BOLD}" "${NC}"
-    printf '  %b|  uint256 internal constant INITIAL_BRIDGED_SUPPLY       |%b\n' "${BOLD}" "${NC}"
-    printf '  %b|      = %-48s|%b\n' "${BOLD}" "$bridged_supply;" "${NC}"
-    printf '  %b+---------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
+    # Output the value to set in the args file
+    printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
+    printf '  %b|  Set in: src/scripts/ops/batches/args/                            |%b\n' "${BOLD}" "${NC}"
+    printf '  %b|          LZBridgeGatewayBatch_setBridgedSupply.json               |%b\n' "${BOLD}" "${NC}"
+    printf '  %b|                                                                  |%b\n' "${BOLD}" "${NC}"
+    printf '  %b|  "initialBridgedSupply": %-40s|%b\n' "${BOLD}" "$bridged_supply" "${NC}"
+    printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
 }
 
 # =====================================================================

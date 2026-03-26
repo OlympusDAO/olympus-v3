@@ -46,18 +46,30 @@ contract LZBridgeGatewayBatch is LZBridgeBatchScript {
     /// @notice Ethereum Phase 2 (post-OCG): set initial bridged supply.
     ///         LZ config and peers are set by the OCG proposal.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    function setBridgedSupply(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (must contain "setBridgedSupply.initialBridgedSupply").
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function setBridgedSupply(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        // TODO: Set initialBridgedSupply in args file before execution
+        uint256 initialBridgedSupply = _readBatchArgUint256(
+            "setBridgedSupply",
+            "initialBridgedSupply"
+        );
 
         console2.log("\n=== Ethereum Phase 2: Set Bridged Supply ===");
-        console2.log("Setting initial bridged supply:", INITIAL_BRIDGED_SUPPLY);
+        console2.log("Setting initial bridged supply:", initialBridgedSupply);
 
         addToBatch(
             gatewayAddr,
-            abi.encodeWithSelector(
-                LZBridgeGateway.setBridgedSupply.selector,
-                INITIAL_BRIDGED_SUPPLY
-            )
+            abi.encodeWithSelector(LZBridgeGateway.setBridgedSupply.selector, initialBridgedSupply)
         );
 
         proposeBatch();
