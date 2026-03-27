@@ -116,9 +116,6 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         });
         gateway2.setEnforcedOptions(enforcedOpts2);
 
-        // Set bridged supply cap on canonical
-        gateway.setBridgedSupplyCap(SUPPLY_CAP);
-
         // Enable gateways
         gateway.enable(bytes(""));
         gateway2.enable(bytes(""));

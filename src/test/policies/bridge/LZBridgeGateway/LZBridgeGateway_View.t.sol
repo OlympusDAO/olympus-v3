@@ -72,14 +72,6 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         assertEq(gateway.bridgedSupply(), 0, "Bridged supply should be zero initially");
     }
 
-    function test_bridgedSupplyCap() external view {
-        assertEq(
-            gateway.bridgedSupplyCap(),
-            SUPPLY_CAP,
-            "Bridged supply cap should match setUp value"
-        );
-    }
-
     function test_MSG_BRIDGE_OHM() external view {
         assertEq(gateway.MSG_BRIDGE_OHM(), 1, "MSG_BRIDGE_OHM should be 1");
     }

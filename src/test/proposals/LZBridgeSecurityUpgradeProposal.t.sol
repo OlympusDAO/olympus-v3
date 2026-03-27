@@ -115,7 +115,6 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 timelock,
                 address(gateway),
                 LZConfigLib.ETH_LZ_ENDPOINT,
-                100_000e9,
                 makeAddr("ARB_GATEWAY"),
                 makeAddr("OPT_GATEWAY"),
                 makeAddr("BASE_GATEWAY"),
@@ -286,14 +285,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertTrue(gateway.IS_CANONICAL(), "Gateway should be canonical on mainnet");
         assertEq(gateway.ohm(), address(ohm), "OHM should match");
 
-        // 6. Bridged supply cap
-        assertEq(
-            gateway.bridgedSupplyCap(),
-            activator.BRIDGED_SUPPLY_CAP(),
-            "Bridged supply cap should match activator constant"
-        );
-
-        // 7. Per-remote LZ config
+        // 6. Per-remote LZ config
         ILayerZeroEndpointV2 ep = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
         uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
             LZConfigLib.ARB_EID,

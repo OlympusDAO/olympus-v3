@@ -37,11 +37,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Thrown when a received message payload has an invalid length.
     error LZBridgeGateway_InvalidPayload();
 
-    /// @notice Thrown when the bridged supply would exceed the cap.
-    /// @param newSupply The resulting supply after the operation.
-    /// @param cap The current cap.
-    error LZBridgeGateway_BridgedSupplyCapExceeded(uint256 newSupply, uint256 cap);
-
     /// @notice Thrown when the bridged supply would underflow on receive.
     /// @param bridgedSupply The current bridged supply.
     /// @param amount The amount being received.
@@ -91,10 +86,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param amount The amount subtracted.
     event BridgedSupplyDecreased(uint256 amount);
 
-    /// @notice Emitted when the bridged supply cap is set.
-    /// @param bridgedSupplyCap The new bridged supply cap.
-    event BridgedSupplyCapSet(uint256 bridgedSupplyCap);
-
     /// @notice Emitted when enforced options are set.
     /// @param enforcedOptions The enforced option parameters.
     event EnforcedOptionsSet(EnforcedOptionParam[] enforcedOptions);
@@ -106,7 +97,7 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///      transfer OHM to the gateway before calling this function. The gateway burns the OHM
     ///      via MINTR and sends a LayerZero V2 message.
     ///
-    ///      On canonical chains, increments bridgedSupply and checks against bridgedSupplyCap.
+    ///      On canonical chains, increments bridgedSupply.
     ///
     ///      Reverts if:
     ///      - The caller does not have the `bridge_facilitator` role.
@@ -184,18 +175,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param bridgedSupply_ The new bridged supply value.
     function setBridgedSupply(uint256 bridgedSupply_) external;
 
-    /// @notice Sets the maximum permitted bridged supply.
-    /// @dev Only callable by the admin role. Only available on canonical chains.
-    ///      The cap may be set below the current `bridgedSupply` to prevent further
-    ///      outbound bridging without affecting already-bridged tokens.
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the admin role.
-    ///      - IS_CANONICAL is false.
-    ///
-    /// @param bridgedSupplyCap_ The new bridged supply cap.
-    function setBridgedSupplyCap(uint256 bridgedSupplyCap_) external;
-
     /// @notice Sets enforced options for specific endpoint and message type combinations.
     /// @dev Only callable by the admin role. Each option must be Type 3.
     ///
@@ -225,9 +204,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
 
     /// @notice Returns the current bridged supply (canonical only).
     function bridgedSupply() external view returns (uint256);
-
-    /// @notice Returns the bridged supply cap (canonical only).
-    function bridgedSupplyCap() external view returns (uint256);
 
     /// @notice Returns the peer for a given endpoint ID.
     /// @param eid The remote endpoint ID.

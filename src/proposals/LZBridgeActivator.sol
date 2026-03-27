@@ -23,7 +23,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///      `activate()` and revokes the delegate at the end. While set as delegate, it
 ///      calls the LZ endpoint directly (setSendLibrary, setReceiveLibrary, setConfig)
 ///      on behalf of the gateway. Gateway-level operations (setPeer, setEnforcedOptions,
-///      setBridgedSupplyCap, enable) are called through the gateway's role-gated functions.
+///      enable) are called through the gateway's role-gated functions.
 contract LZBridgeActivator is Owned {
     // ========== CONSTANTS ========== //
 
@@ -34,8 +34,6 @@ contract LZBridgeActivator is Owned {
 
     address public immutable GATEWAY;
     address public immutable ENDPOINT;
-
-    uint256 public immutable BRIDGED_SUPPLY_CAP;
 
     address public immutable ARB_GATEWAY;
     address public immutable OPT_GATEWAY;
@@ -57,7 +55,6 @@ contract LZBridgeActivator is Owned {
     /// @param owner_ The OCG timelock address.
     /// @param gateway_ The LZBridgeGateway address on this chain.
     /// @param endpoint_ The LayerZero V2 endpoint address.
-    /// @param bridgedSupplyCap_ The maximum bridged supply cap.
     /// @param arbGateway_ Remote gateway on Arbitrum.
     /// @param optGateway_ Remote gateway on Optimism.
     /// @param baseGateway_ Remote gateway on Base.
@@ -66,7 +63,6 @@ contract LZBridgeActivator is Owned {
         address owner_,
         address gateway_,
         address endpoint_,
-        uint256 bridgedSupplyCap_,
         address arbGateway_,
         address optGateway_,
         address baseGateway_,
@@ -78,11 +74,9 @@ contract LZBridgeActivator is Owned {
         _requireNonzeroAddress(optGateway_, "optGateway");
         _requireNonzeroAddress(baseGateway_, "baseGateway");
         _requireNonzeroAddress(beraGateway_, "beraGateway");
-        if (bridgedSupplyCap_ == 0) revert InvalidParams("bridgedSupplyCap");
 
         GATEWAY = gateway_;
         ENDPOINT = endpoint_;
-        BRIDGED_SUPPLY_CAP = bridgedSupplyCap_;
         ARB_GATEWAY = arbGateway_;
         OPT_GATEWAY = optGateway_;
         BASE_GATEWAY = baseGateway_;
@@ -108,7 +102,6 @@ contract LZBridgeActivator is Owned {
         _configureLZEndpoint();
         _setPeers();
         _setEnforcedOptions();
-        _setBridgedSupplyCap();
         _enable();
 
         // Revoke delegate. Endpoint config is now locked to gateway-only.
@@ -227,11 +220,6 @@ contract LZBridgeActivator is Owned {
         }
 
         ILZBridgeGateway(GATEWAY).setEnforcedOptions(opts);
-    }
-
-    /// @dev Sets the bridged supply cap on the gateway.
-    function _setBridgedSupplyCap() internal {
-        ILZBridgeGateway(GATEWAY).setBridgedSupplyCap(BRIDGED_SUPPLY_CAP);
     }
 
     /// @dev Enables the gateway policy.

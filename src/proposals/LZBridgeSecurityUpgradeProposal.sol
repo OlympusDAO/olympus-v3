@@ -84,11 +84,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "The existing CrossChainBridge contract contains a number of security flaws and limitations, which are addressed in this upgrade by introducing the following:\n",
                 "\n",
-                "- A cap on the total supply bridged out from Ethereum, limiting blast radius. Combined with an underflow check on inbound receives, this prevents unlimited mints from non-canonical chains.\n",
+                "- Bridged supply tracking with underflow checks on inbound receives, preventing unlimited mints from non-canonical chains.\n",
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
                 "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
-                "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle independent of the supply cap. Rate limits are left unconfigured by default and configured separately as needed.\n",
+                "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle. Rate limits are left unconfigured by default and configured separately as needed.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
                 "- Retained mint/burn model to avoid supply inflation and double-counting.\n",
@@ -116,8 +116,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
-                // TODO: Update the supply cap value before submission
-                "   - Sets the bridged supply cap to TODO OHM.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
                 "5. Revoke temporary roles from the LZBridgeActivator contract.\n",
                 "\n",
@@ -288,22 +286,16 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 5. Validate activator is spent
         require(activator.isActivated(), "Activator should be marked as activated");
 
-        // 6. Validate bridged supply cap
-        require(
-            gw.bridgedSupplyCap() == activator.BRIDGED_SUPPLY_CAP(),
-            "Bridged supply cap does not match"
-        );
-
-        // 7. Validate per-remote LZ config
+        // 6. Validate per-remote LZ config
         _validateLZConfig(gw, ep);
 
-        // 8. Validate peers
+        // 7. Validate peers
         _validatePeers(gw, activator);
 
-        // 9. Validate enforced options
+        // 8. Validate enforced options
         _validateEnforcedOptions(gw);
 
-        // 10. Validate delegate is revoked
+        // 9. Validate delegate is revoked
         require(
             IEndpointV2State(address(ep)).delegates(address(gw)) == address(0),
             "Delegate should be revoked"

@@ -409,30 +409,6 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
-    function test_burnAndSend_revertsIfSupplyCapExceeded() external {
-        uint256 overCap = SUPPLY_CAP + 1;
-        ohm.mint(facilitator, overCap);
-
-        vm.startPrank(facilitator);
-        ohm.transfer(address(gateway), overCap);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_BridgedSupplyCapExceeded.selector,
-                overCap,
-                SUPPLY_CAP
-            )
-        );
-        gateway.burnAndSend{value: 1 ether}(
-            NONCANONICAL_EID,
-            recipient,
-            overCap,
-            payable(facilitator),
-            bytes("")
-        );
-        vm.stopPrank();
-    }
-
     function test_burnAndSend_revertsIfNotEnabled() external {
         vm.prank(admin);
         gateway.disable(bytes(""));

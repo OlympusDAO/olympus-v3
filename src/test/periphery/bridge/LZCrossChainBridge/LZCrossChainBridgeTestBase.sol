@@ -97,7 +97,6 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
         // Configure gateways
         vm.startPrank(admin);
-        gateway.setBridgedSupplyCap(SUPPLY_CAP);
 
         // Set peers
         gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));

@@ -65,7 +65,6 @@ contract LZBridgeActivatorForkTest is Test {
             TIMELOCK,
             address(gateway),
             LZConfigLib.ETH_LZ_ENDPOINT,
-            100_000e9,
             makeAddr("ARB_GATEWAY"),
             makeAddr("OPT_GATEWAY"),
             makeAddr("BASE_GATEWAY"),
@@ -90,7 +89,6 @@ contract LZBridgeActivatorForkTest is Test {
         assertEq(activator.owner(), TIMELOCK);
         assertEq(activator.GATEWAY(), address(gateway));
         assertEq(activator.ENDPOINT(), LZConfigLib.ETH_LZ_ENDPOINT);
-        assertEq(activator.BRIDGED_SUPPLY_CAP(), 100_000e9);
         assertEq(activator.ARB_GATEWAY(), makeAddr("ARB_GATEWAY"));
         assertEq(activator.OPT_GATEWAY(), makeAddr("OPT_GATEWAY"));
         assertEq(activator.BASE_GATEWAY(), makeAddr("BASE_GATEWAY"));
@@ -106,7 +104,6 @@ contract LZBridgeActivatorForkTest is Test {
             TIMELOCK,
             address(0),
             LZConfigLib.ETH_LZ_ENDPOINT,
-            100_000e9,
             makeAddr("A"),
             makeAddr("O"),
             makeAddr("B"),
@@ -122,7 +119,6 @@ contract LZBridgeActivatorForkTest is Test {
             TIMELOCK,
             address(gateway),
             address(0),
-            100_000e9,
             makeAddr("A"),
             makeAddr("O"),
             makeAddr("B"),
@@ -132,12 +128,11 @@ contract LZBridgeActivatorForkTest is Test {
 
     // ========== ACCESS CONTROL TESTS ========== //
 
-    function test_activate_revertsWhen_notOwner(address caller_) public {
-        vm.assume(caller_ != TIMELOCK);
+    function test_activate_revertsWhen_notOwner() public {
         _grantRequiredRoles();
 
         vm.expectRevert("UNAUTHORIZED");
-        vm.prank(caller_);
+        vm.prank(DAO_MS);
         activator.activate();
     }
 
@@ -184,15 +179,6 @@ contract LZBridgeActivatorForkTest is Test {
         activator.activate();
 
         assertTrue(PolicyEnabler(address(gateway)).isEnabled());
-    }
-
-    function test_activate_setsBridgedSupplyCap() public {
-        _grantRequiredRoles();
-
-        vm.prank(TIMELOCK);
-        activator.activate();
-
-        assertEq(gateway.bridgedSupplyCap(), activator.BRIDGED_SUPPLY_CAP());
     }
 
     function test_activate_revokesDelegateAfterExecution() public {

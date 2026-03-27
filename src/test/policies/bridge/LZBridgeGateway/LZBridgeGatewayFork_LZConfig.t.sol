@@ -225,7 +225,6 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         rolesAdmin_.grantRole("bridge_facilitator", address(bridge_));
 
         vm.startPrank(admin);
-        if (isCanonical_) gateway_.setBridgedSupplyCap(SUPPLY_CAP);
         gateway_.enable(bytes(""));
         bridge_.enable(bytes(""));
         vm.stopPrank();

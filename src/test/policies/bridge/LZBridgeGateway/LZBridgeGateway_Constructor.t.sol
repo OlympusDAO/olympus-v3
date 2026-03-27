@@ -31,7 +31,6 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
         assertEq(address(fresh.kernel()), address(kernel), "Kernel should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
         assertEq(fresh.bridgedSupply(), 0, "Bridged supply should be zero");
-        assertEq(fresh.bridgedSupplyCap(), 0, "Bridged supply cap should be zero");
     }
 
     function test_constructor_nonCanonical() external {

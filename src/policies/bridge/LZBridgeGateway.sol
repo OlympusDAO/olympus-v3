@@ -104,9 +104,6 @@ contract LZBridgeGateway is
     uint256 public override bridgedSupply;
 
     /// @inheritdoc ILZBridgeGateway
-    uint256 public override bridgedSupplyCap;
-
-    /// @inheritdoc ILZBridgeGateway
     mapping(uint32 eid_ => bytes32) public override peers;
 
     /// @inheritdoc ILZBridgeGateway
@@ -193,10 +190,7 @@ contract LZBridgeGateway is
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
-            uint256 newSupply = bridgedSupply + amount_;
-            if (newSupply > bridgedSupplyCap)
-                revert LZBridgeGateway_BridgedSupplyCapExceeded(newSupply, bridgedSupplyCap);
-            bridgedSupply = newSupply;
+            bridgedSupply += amount_;
             emit BridgedSupplyIncreased(amount_);
 
             // Pre-fund mint approval so future inflow can mint without JIT self approval.
@@ -292,13 +286,6 @@ contract LZBridgeGateway is
     function setDelegate(address delegate_) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
         emit DelegateSet(delegate_);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function setBridgedSupplyCap(uint256 bridgedSupplyCap_) external override onlyAdminRole {
-        _requireCanonical();
-        bridgedSupplyCap = bridgedSupplyCap_;
-        emit BridgedSupplyCapSet(bridgedSupplyCap_);
     }
 
     /// @inheritdoc ILZBridgeGateway

@@ -109,7 +109,6 @@ contract LZBridgeGatewayForkTests is Test {
         ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
 
         vm.startPrank(admin);
-        ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
         ethGateway.enable(bytes(""));
         ethBridge.enable(bytes(""));
         vm.stopPrank();

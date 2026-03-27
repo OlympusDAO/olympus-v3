@@ -135,7 +135,6 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
 
         vm.startPrank(admin);
-        ethGateway.setBridgedSupplyCap(SUPPLY_CAP);
         ethGateway.enable(bytes(""));
         ethBridge.enable(bytes(""));
         vm.stopPrank();
@@ -342,21 +341,6 @@ contract LZBridgeGatewayForkTests_E2E is Test {
             )
         );
         ethBridge.sendOhm{value: 1}(LZConfigLib.ARB_EID, recipient, amount2);
-        vm.stopPrank();
-    }
-
-    /// @notice Verifies bridgedSupply cap enforcement on the real endpoint send path.
-    function test_e2e_bridgedSupplyCap_enforced() external {
-        // Set a low cap
-        vm.prank(admin);
-        ethGateway.setBridgedSupplyCap(500e9);
-
-        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, 1000e9);
-
-        vm.startPrank(sender);
-        ethOhm.approve(address(ethBridge), 1000e9);
-        vm.expectRevert();
-        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, 1000e9);
         vm.stopPrank();
     }
 }
