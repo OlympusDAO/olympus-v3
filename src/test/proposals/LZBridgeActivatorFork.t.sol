@@ -127,9 +127,7 @@ contract LZBridgeActivatorForkTest is Test {
     }
 
     function test_constructor_revertsWhen_zeroOwner() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "owner")
-        );
+        vm.expectRevert(abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "owner"));
         new LZBridgeActivator(
             address(0),
             address(gateway),
