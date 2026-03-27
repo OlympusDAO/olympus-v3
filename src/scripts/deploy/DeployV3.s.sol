@@ -983,7 +983,7 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
-        address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
+        address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         bool isCanonical = _readDeploymentArgBool("LZBridgeGateway", "isCanonical");
 
         // Log parameters
@@ -1008,34 +1008,17 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address timelock = _getAddressNotZero("olympus.governance.Timelock");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
-        address lzEndpoint = _envAddressNotZero("external.layerzero.endpoint");
-        uint256 bridgedSupplyCap = _readDeploymentArgUint256(
-            "LZBridgeActivator",
-            "bridgedSupplyCap"
-        );
-        address arbGateway = _readDeploymentArgAddress("LZBridgeActivator", "arbGateway");
-        address optGateway = _readDeploymentArgAddress("LZBridgeActivator", "optGateway");
-        address baseGateway = _readDeploymentArgAddress("LZBridgeActivator", "baseGateway");
-        address beraGateway = _readDeploymentArgAddress("LZBridgeActivator", "beraGateway");
-
-        // Validate args before broadcasting (failed deploy costs gas)
-        // solhint-disable-next-line custom-errors
-        require(bridgedSupplyCap > 0, "bridgedSupplyCap must be > 0");
-        // solhint-disable-next-line custom-errors
-        require(arbGateway != address(0), "arbGateway is zero");
-        // solhint-disable-next-line custom-errors
-        require(optGateway != address(0), "optGateway is zero");
-        // solhint-disable-next-line custom-errors
-        require(baseGateway != address(0), "baseGateway is zero");
-        // solhint-disable-next-line custom-errors
-        require(beraGateway != address(0), "beraGateway is zero");
+        address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
+        address arbGateway = _envAddressNotZero("arbitrum", "olympus.policies.LZBridgeGateway");
+        address optGateway = _envAddressNotZero("optimism", "olympus.policies.LZBridgeGateway");
+        address baseGateway = _envAddressNotZero("base", "olympus.policies.LZBridgeGateway");
+        address beraGateway = _envAddressNotZero("berachain", "olympus.policies.LZBridgeGateway");
 
         // Log parameters
         console2.log("LZBridgeActivator parameters:");
         console2.log("  timelock", timelock);
         console2.log("  gateway", gateway);
         console2.log("  lzEndpoint", lzEndpoint);
-        console2.log("  bridgedSupplyCap", bridgedSupplyCap);
         console2.log("  arbGateway", arbGateway);
         console2.log("  optGateway", optGateway);
         console2.log("  baseGateway", baseGateway);
@@ -1047,7 +1030,6 @@ contract DeployV3 is WithEnvironment {
             timelock,
             gateway,
             lzEndpoint,
-            bridgedSupplyCap,
             arbGateway,
             optGateway,
             baseGateway,
