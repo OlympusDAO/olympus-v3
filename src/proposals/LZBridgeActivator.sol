@@ -68,12 +68,14 @@ contract LZBridgeActivator is Owned {
         address baseGateway_,
         address beraGateway_
     ) Owned(owner_) {
+        _requireNonzeroAddress(owner_, "owner");
         _requireNonzeroAddress(gateway_, "gateway");
         _requireNonzeroAddress(endpoint_, "endpoint");
         _requireNonzeroAddress(arbGateway_, "arbGateway");
         _requireNonzeroAddress(optGateway_, "optGateway");
         _requireNonzeroAddress(baseGateway_, "baseGateway");
         _requireNonzeroAddress(beraGateway_, "beraGateway");
+        if (endpoint_ != ILZBridgeGateway(gateway_).LZ_ENDPOINT()) revert InvalidParams("endpoint");
 
         GATEWAY = gateway_;
         ENDPOINT = endpoint_;

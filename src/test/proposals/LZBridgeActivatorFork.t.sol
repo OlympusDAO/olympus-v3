@@ -27,7 +27,7 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24742168;
+    uint256 internal constant FORK_BLOCK = 24751208;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -119,6 +119,37 @@ contract LZBridgeActivatorForkTest is Test {
             TIMELOCK,
             address(gateway),
             address(0),
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
+    }
+
+    function test_constructor_revertsWhen_zeroOwner() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "owner")
+        );
+        new LZBridgeActivator(
+            address(0),
+            address(gateway),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
+    }
+
+    function test_constructor_revertsWhen_endpointMismatch() public {
+        address wrongEndpoint = makeAddr("WRONG_ENDPOINT");
+        vm.expectRevert(
+            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "endpoint")
+        );
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
+            wrongEndpoint,
             makeAddr("A"),
             makeAddr("O"),
             makeAddr("B"),
