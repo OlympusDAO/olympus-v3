@@ -306,6 +306,66 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
+    /// @notice Outflow rate limit blocks burnAndSend, but succeeds after the window elapses.
+    function test_burnAndSend_outflowRateLimitSoRetryAfterWindowElapsed() external {
+        // Set tight rate limit: 5000 OHM per hour
+        uint192 limit = 5_000e9;
+        uint64 window = 3600;
+        _setRateLimit(NONCANONICAL_EID, limit, window);
+
+        // Send up to the limit
+        uint256 firstAmount = 5_000e9;
+        _sendCanonicalToNonCanonical(recipient, firstAmount);
+
+        (, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        assertEq(canSend, 0, "No capacity remaining");
+
+        // Attempt to send more — reverts
+        uint256 retryAmount = 1_000e9;
+        ohm.mint(facilitator, retryAmount);
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            retryAmount,
+            bytes("")
+        );
+
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), retryAmount);
+        vm.expectRevert(abi.encodeWithSelector(RateLimiter.RateLimitExceeded.selector));
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            retryAmount,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // Wait for rate limit window to fully elapse
+        skip(window);
+
+        // Retry — succeeds
+        fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, retryAmount, bytes(""));
+        vm.startPrank(facilitator);
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            retryAmount,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // Deliver
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+        assertEq(
+            ohm.balanceOf(recipient),
+            firstAmount + retryAmount,
+            "Recipient should receive OHM from both sends"
+        );
+    }
+
     function test_burnAndSend_revertsIfEnforcedOptionsLackExecutorGas() external {
         // Override enforced options to Type 3 prefix only (no executor lzReceive entry).
         // The LZ endpoint executor rejects options without a gas specification.
@@ -401,6 +461,42 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         gateway.burnAndSend{value: 1 ether}(
             NONCANONICAL_EID,
+            recipient,
+            100e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    function test_burnAndSend_revertsIfSameEID() external {
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 100e9);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_NoPeer.selector, CANONICAL_EID)
+        );
+        gateway.burnAndSend{value: 1 ether}(
+            CANONICAL_EID,
+            recipient,
+            100e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    function test_burnAndSend_revertsIfUnconfiguredEID() external {
+        uint32 unknownEid = 999;
+
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 100e9);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_NoPeer.selector, unknownEid)
+        );
+        gateway.burnAndSend{value: 1 ether}(
+            unknownEid,
             recipient,
             100e9,
             payable(facilitator),

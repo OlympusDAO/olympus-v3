@@ -89,6 +89,43 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         bridge.sendOhm{value: fee.nativeFee}(NONCANONICAL_EID, recipient, 1000e9);
     }
 
+    function test_sendOhm_revertsIfInsufficientNativeFee() external {
+        uint256 amount = 1000e9;
+        MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
+
+        // Send half the required fee
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "LZ_InsufficientFee(uint256,uint256,uint256,uint256)",
+                fee.nativeFee,
+                fee.nativeFee / 2,
+                0,
+                0
+            )
+        );
+        vm.prank(user);
+        bridge.sendOhm{value: fee.nativeFee / 2}(NONCANONICAL_EID, recipient, amount);
+    }
+
+    function test_sendOhm_revertsIfInsufficientNativeFeeBalance() external {
+        uint256 amount = 1000e9;
+        MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
+
+        // Drain user's ETH so they can't cover the fee
+        uint256 userBalance = user.balance;
+        vm.prank(user);
+        payable(address(0xdead)).transfer(userBalance);
+        assertEq(user.balance, 0, "User should have no ETH");
+
+        // Low-level call because vm.prank + {value} reverts at cheatcode level
+        // when sender has insufficient balance
+        vm.prank(user);
+        (bool success, ) = address(bridge).call{value: fee.nativeFee}(
+            abi.encodeWithSelector(bridge.sendOhm.selector, NONCANONICAL_EID, recipient, amount)
+        );
+        assertFalse(success, "Should revert with insufficient ETH balance");
+    }
+
     function testFuzz_sendOhm_variousAmounts(uint256 amount_) external {
         amount_ = bound(amount_, 1, 100_000e9);
 

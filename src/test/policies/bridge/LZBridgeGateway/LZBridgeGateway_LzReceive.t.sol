@@ -11,9 +11,6 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
-// Contracts
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-
 /// @dev Inbound message handling (mint on receive).
 contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
     function test_lzReceive_canonical_decrementsSupply() external {
