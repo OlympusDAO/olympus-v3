@@ -22,6 +22,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== ERRORS =========== //
 
     error LZBridgeGatewayBatch_NonCanonicalChain();
+    error LZBridgeGatewayBatch_ZeroInitialBridgedSupply();
 
     // =========== STATE =========== //
 
@@ -89,6 +90,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
             "setBridgedSupply",
             "initialBridgedSupply"
         );
+        if (initialBridgedSupply == 0) revert LZBridgeGatewayBatch_ZeroInitialBridgedSupply();
 
         console2.log("\n=== Ethereum Phase 2: Set Bridged Supply ===");
         console2.log("Setting initial bridged supply:", initialBridgedSupply);
@@ -131,8 +133,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
         console2.log("\nValidating setBridgedSupply post-batch state");
 
-        // 1. Validate bridgedSupply
+        // 1. Validate bridgedSupply is non-zero and matches expected value
         uint256 actualSupply = gateway.bridgedSupply();
+        if (actualSupply == 0) {
+            revert("bridgedSupply is 0 after setBridgedSupply");
+        }
         if (actualSupply != _expectedBridgedSupply) {
             revert(
                 string.concat(
