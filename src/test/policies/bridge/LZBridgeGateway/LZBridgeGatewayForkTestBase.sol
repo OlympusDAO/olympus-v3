@@ -6,7 +6,6 @@ import {Test, Vm} from "forge-std/Test.sol";
 // Interfaces
 import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
-import {Errors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
 
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
@@ -20,23 +19,17 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-/// @notice E2E fork tests: full send path via LZCrossChainBridge -> gateway -> real EndpointV2,
-///         then relay by parsing the PacketSent event and delivering on the destination fork.
-/// @dev Unlike the tests above (which construct messages manually), these tests exercise the
-///      complete send path on production LZ V2 endpoints, verifying encoding, fee estimation,
-///      burn, bridgedSupply tracking, and the real PacketSent event payload.
-contract LZBridgeGatewayForkTests_E2E is Test {
+/// @notice Shared setup, deploy helpers, and packet-parsing utilities for LZBridgeGateway fork tests.
+/// @dev Deploys full Eth (canonical) and Arb (non-canonical) stacks against real LZ V2 endpoints,
+///      cross-configures peers and enforced options, and provides helpers that exercise the real
+///      sendOhm() -> burnAndSend() -> EndpointV2.send() path.
+abstract contract LZBridgeGatewayForkTestBase is Test {
     // ========= CONSTANTS ========= //
 
-    /// @dev PacketV1Codec byte offsets for decoding the encoded packet.
-    uint256 constant NONCE_OFFSET = 1;
-    uint256 constant SRC_EID_OFFSET = 9;
-    uint256 constant SENDER_OFFSET = 13;
-    uint256 constant GUID_OFFSET = 81;
+    /// @dev PacketV1Codec: message bytes start at offset 113.
     uint256 constant MESSAGE_OFFSET = 113;
 
     uint256 constant MINT_AMOUNT = 10_000e9;
-    uint256 constant SUPPLY_CAP = 1_000_000e9;
 
     // ========= FORKS ========= //
 
@@ -71,7 +64,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
 
     // ========= SETUP ========= //
 
-    function setUp() public {
+    function setUp() public virtual {
         ethForkId = vm.createFork("mainnet");
         arbForkId = vm.createFork("arbitrum");
 
@@ -90,7 +83,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         vm.selectFork(arbForkId);
         _deployArbStack();
 
-        // Cross-configure peers (end on ethFork to avoid fork-switch issues)
+        // Cross-configure peers
         vm.selectFork(arbForkId);
         vm.prank(admin);
         arbGateway.setPeer(LZConfigLib.ETH_EID, LZConfigLib.addressToBytes32(address(ethGateway)));
@@ -99,19 +92,40 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         vm.prank(admin);
         ethGateway.setPeer(LZConfigLib.ARB_EID, LZConfigLib.addressToBytes32(address(arbGateway)));
 
-        // Set enforced options on ethGateway for LZConfigLib.ARB_EID (required for endpoint.send)
-        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
-        opts[0] = EnforcedOptionParam({
+        // Set enforced options on both gateways (required for endpoint.send)
+        // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
+        bytes memory lzReceiveOptions = abi.encodePacked(
+            uint16(3),
+            uint8(1),
+            uint16(17),
+            uint8(1),
+            uint128(200_000)
+        );
+
+        EnforcedOptionParam[] memory ethOpts = new EnforcedOptionParam[](1);
+        ethOpts[0] = EnforcedOptionParam({
             eid: LZConfigLib.ARB_EID,
             msgType: 1, // MSG_BRIDGE_OHM
-            // Type 3 options: WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
-            options: abi.encodePacked(uint16(3), uint8(1), uint16(17), uint8(1), uint128(200_000))
+            options: lzReceiveOptions
         });
         vm.prank(admin);
-        ethGateway.setEnforcedOptions(opts);
+        ethGateway.setEnforcedOptions(ethOpts);
 
-        // setUp ends on ethFork
+        vm.selectFork(arbForkId);
+        EnforcedOptionParam[] memory arbOpts = new EnforcedOptionParam[](1);
+        arbOpts[0] = EnforcedOptionParam({
+            eid: LZConfigLib.ETH_EID,
+            msgType: 1, // MSG_BRIDGE_OHM
+            options: lzReceiveOptions
+        });
+        vm.prank(admin);
+        arbGateway.setEnforcedOptions(arbOpts);
+
+        // End on ethFork
+        vm.selectFork(ethForkId);
     }
+
+    // ========= DEPLOY HELPERS ========= //
 
     function _deployEthStack() internal {
         ethOhm = new MockOhm("OHM", "OHM", 9);
@@ -233,7 +247,7 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         uint32 srcEid_;
         bytes32 senderB32_;
 
-        // PacketV1Codec layout: [version(1)][nonce(8)][srcEid(4)][sender(32)][dstEid(4)][receiver(32)][guid(32)][message(...)]
+        // PacketV1Codec: [version(1)][nonce(8)][srcEid(4)][sender(32)][dstEid(4)][receiver(32)][guid(32)][message(...)]
         assembly {
             let p := add(pkt_, 32) // skip memory length prefix
             nonce_ := shr(192, mload(add(p, 1))) // uint64 at offset 1
@@ -244,7 +258,6 @@ contract LZBridgeGatewayForkTests_E2E is Test {
 
         origin = Origin({srcEid: srcEid_, sender: senderB32_, nonce: nonce_});
 
-        // Extract message bytes from offset 113 onwards
         uint256 msgLen = pkt_.length - MESSAGE_OFFSET;
         message = new bytes(msgLen);
         for (uint256 i = 0; i < msgLen; ++i) {
@@ -252,95 +265,38 @@ contract LZBridgeGatewayForkTests_E2E is Test {
         }
     }
 
-    // ========= E2E TESTS ========= //
+    /// @dev Sends OHM via the real bridge path on srcFork and delivers the parsed packet on dstFork.
+    ///      Exercises: sendOhm() -> transferFrom -> burnAndSend() -> burn -> EndpointV2.send().
+    function _sendAndDeliver(
+        uint256 srcForkId_,
+        uint256 dstForkId_,
+        LZCrossChainBridge srcBridge_,
+        LZBridgeGateway dstGw_,
+        MockOhm srcOhm_,
+        uint32 dstEid_,
+        address from_,
+        address to_,
+        uint256 amount_
+    ) internal {
+        // === SOURCE: estimate fee, approve, send ===
+        vm.selectFork(srcForkId_);
 
-    /// @notice Full e2e: sendOhm on ETH fork via real EndpointV2, parse PacketSent, deliver on ARB fork.
-    function test_e2e_ethToArb_sendAndRelay() external {
-        uint256 amount = 1000e9;
+        MessagingFee memory fee = srcBridge_.estimateSendFee(dstEid_, to_, amount_);
 
-        // === SOURCE: ETH fork (already selected by setUp) ===
-
-        // Estimate fee
-        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
-        assertGt(fee.nativeFee, 0, "Fee should be non-zero");
-
-        // Send OHM cross-chain
-        uint256 senderBalBefore = ethOhm.balanceOf(sender);
-
-        vm.startPrank(sender);
-        ethOhm.approve(address(ethBridge), amount);
+        vm.startPrank(from_);
+        srcOhm_.approve(address(srcBridge_), amount_);
         vm.recordLogs();
-        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
+        srcBridge_.sendOhm{value: fee.nativeFee}(dstEid_, to_, amount_);
         vm.stopPrank();
 
-        // Verify source side: OHM burned, bridgedSupply increased
-        assertEq(ethOhm.balanceOf(sender), senderBalBefore - amount, "Sender OHM should decrease");
-        assertEq(ethGateway.bridgedSupply(), amount, "BridgedSupply should increase");
-
-        // Parse the PacketSent event from the real V2 endpoint
+        // Parse the real PacketSent event
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes memory encodedPacket = _findPacketSent(logs);
         (Origin memory origin, bytes32 guid, bytes memory message) = _parsePacket(encodedPacket);
 
-        // Verify parsed packet matches expected values
-        assertEq(origin.srcEid, LZConfigLib.ETH_EID, "Packet srcEid should be ETH");
-        assertEq(
-            origin.sender,
-            LZConfigLib.addressToBytes32(address(ethGateway)),
-            "Packet sender should be ethGateway"
-        );
-        assertGt(origin.nonce, 0, "Packet nonce should be non-zero");
-        assertTrue(guid != bytes32(0), "GUID should be non-zero");
-
-        // Decode the payload to verify encoding correctness
-        (uint8 msgType, bytes memory data) = abi.decode(message, (uint8, bytes));
-        assertEq(msgType, 1, "Message type should be MSG_BRIDGE_OHM");
-        (address decodedTo, uint256 decodedAmount) = abi.decode(data, (address, uint256));
-        assertEq(decodedTo, recipient, "Decoded recipient should match");
-        assertEq(decodedAmount, amount, "Decoded amount should match");
-
-        // === DESTINATION: ARB fork ===
-        vm.selectFork(arbForkId);
-
-        vm.prank(arbGateway.LZ_ENDPOINT());
-        arbGateway.lzReceive(origin, guid, message, address(0), bytes(""));
-
-        // Verify destination: recipient received OHM
-        assertEq(arbOhm.balanceOf(recipient), amount, "Recipient should receive OHM on Arb");
-    }
-
-    /// @notice Verifies that fee estimation is consistent with actual send cost.
-    function test_e2e_feeEstimation_matchesSend() external {
-        uint256 amount = 500e9;
-
-        // Estimate fee
-        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
-
-        // Send with exact fee should succeed
-        vm.startPrank(sender);
-        ethOhm.approve(address(ethBridge), amount);
-        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
-        vm.stopPrank();
-
-        // Send with less than estimated fee should revert with exact error
-        uint256 amount2 = 500e9;
-        MessagingFee memory fee2 = ethBridge.estimateSendFee(
-            LZConfigLib.ARB_EID,
-            recipient,
-            amount2
-        );
-        vm.startPrank(sender);
-        ethOhm.approve(address(ethBridge), amount2);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.LZ_InsufficientFee.selector,
-                fee2.nativeFee,
-                uint256(1),
-                uint256(0),
-                uint256(0)
-            )
-        );
-        ethBridge.sendOhm{value: 1}(LZConfigLib.ARB_EID, recipient, amount2);
-        vm.stopPrank();
+        // === DESTINATION: deliver the real packet ===
+        vm.selectFork(dstForkId_);
+        vm.prank(dstGw_.LZ_ENDPOINT());
+        dstGw_.lzReceive(origin, guid, message, address(0), bytes(""));
     }
 }

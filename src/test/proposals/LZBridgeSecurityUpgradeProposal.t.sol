@@ -30,7 +30,7 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24742168;
+    uint256 public constant BLOCK = 24751208;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;

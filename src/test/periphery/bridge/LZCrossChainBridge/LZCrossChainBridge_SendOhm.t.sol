@@ -31,7 +31,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
 
         assertEq(ohm.balanceOf(user), userOhmBefore - amount, "User balance should decrease");
         assertEq(ohm.balanceOf(address(gateway)), 0, "Gateway should have no OHM after burn");
-        assertEq(ohm.balanceOf(recipient), amount, "Recipient should receive OHM on destination");
+        assertEq(ohm2.balanceOf(recipient), amount, "Recipient should receive OHM on destination");
         assertEq(
             user.balance,
             userEthBefore - fee.nativeFee,
@@ -141,7 +141,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
 
         assertEq(ohm.balanceOf(user), userBalBefore - amount_, "User should lose exactly amount");
-        assertEq(ohm.balanceOf(recipient), amount_, "Recipient should receive exactly amount");
+        assertEq(ohm2.balanceOf(recipient), amount_, "Recipient should receive exactly amount");
         assertEq(
             user.balance,
             userEthBefore - fee.nativeFee,

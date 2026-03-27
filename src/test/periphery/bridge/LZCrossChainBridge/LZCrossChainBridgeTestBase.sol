@@ -37,6 +37,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
     LZCrossChainBridge bridge;
     MockOhm ohm;
+    MockOhm ohm2;
 
     address owner;
     address admin = makeAddr("admin");
@@ -59,6 +60,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
         // Deploy mock tokens
         ohm = new MockOhm("Olympus", "OHM", 9);
+        ohm2 = new MockOhm("Olympus", "OHM", 9);
 
         // Deploy canonical stack
         kernel = new Kernel();
@@ -76,7 +78,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
         // Deploy non-canonical stack for destination
         kernel2 = new Kernel();
-        mintr2 = new OlympusMinter(kernel2, address(ohm));
+        mintr2 = new OlympusMinter(kernel2, address(ohm2));
         roles2 = new OlympusRoles(kernel2);
         rolesAdmin2 = new RolesAdmin(kernel2);
         gateway2 = new LZBridgeGateway(kernel2, address(endpointSetup.endpointList[1]), false);

@@ -1,303 +1,175 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Test.sol";
 
 // Interfaces
-import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {Errors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
 
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Contracts
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
-import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
-import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {LZBridgeGatewayForkTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayForkTestBase.sol";
 
-/// @notice Fork-based end-to-end tests for LZBridgeGateway cross-chain bridge (LZ V2).
-/// @dev Message delivery is simulated by pranking the LZ V2 endpoint to call
-///      `gateway.lzReceive()` directly.
-contract LZBridgeGatewayForkTests is Test {
-    // ========= CONSTANTS ========= //
-
-    uint256 constant MINT_AMOUNT = 10_000e9;
-    uint256 constant SUPPLY_CAP = 1_000_000e9;
-
-    // ========= FORKS ========= //
-
-    uint256 ethForkId;
-    uint256 arbForkId;
-
-    // ========= ETHEREUM CONTRACTS ========= //
-
-    MockOhm ethOhm;
-    Kernel ethKernel;
-    OlympusMinter ethMintr;
-    OlympusRoles ethRoles;
-    RolesAdmin ethRolesAdmin;
-    LZBridgeGateway ethGateway;
-    LZCrossChainBridge ethBridge;
-
-    // ========= ARBITRUM CONTRACTS ========= //
-
-    MockOhm arbOhm;
-    Kernel arbKernel;
-    OlympusMinter arbMintr;
-    OlympusRoles arbRoles;
-    RolesAdmin arbRolesAdmin;
-    LZBridgeGateway arbGateway;
-    LZCrossChainBridge arbBridge;
-
-    // ========= ADDRESSES ========= //
-
-    address admin;
-    address sender;
-    address recipient;
-
-    function setUp() external {
-        ethForkId = vm.createFork("mainnet");
-        arbForkId = vm.createFork("arbitrum");
-
-        admin = makeAddr("admin");
-        sender = makeAddr("sender");
-        recipient = makeAddr("recipient");
-        vm.makePersistent(admin);
-        vm.makePersistent(sender);
-        vm.makePersistent(recipient);
-
-        // Deploy Ethereum stack
-        vm.selectFork(ethForkId);
-        _deployEthStack();
-
-        // Deploy Arbitrum stack
-        vm.selectFork(arbForkId);
-        _deployArbStack();
-
-        // Cross-configure peers
-        vm.selectFork(ethForkId);
-        vm.prank(admin);
-        ethGateway.setPeer(LZConfigLib.ARB_EID, LZConfigLib.addressToBytes32(address(arbGateway)));
-
-        vm.selectFork(arbForkId);
-        vm.prank(admin);
-        arbGateway.setPeer(LZConfigLib.ETH_EID, LZConfigLib.addressToBytes32(address(ethGateway)));
-    }
-
-    function _deployEthStack() internal {
-        ethOhm = new MockOhm("OHM", "OHM", 9);
-        ethKernel = new Kernel();
-        ethMintr = new OlympusMinter(ethKernel, address(ethOhm));
-        ethRoles = new OlympusRoles(ethKernel);
-        ethRolesAdmin = new RolesAdmin(ethKernel);
-        ethGateway = new LZBridgeGateway(
-            ethKernel,
-            LZConfigLib.ETH_LZ_ENDPOINT,
-            true // Canonical
-        );
-
-        ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
-        ethKernel.executeAction(Actions.InstallModule, address(ethRoles));
-        ethKernel.executeAction(Actions.ActivatePolicy, address(ethRolesAdmin));
-        ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
-
-        ethRolesAdmin.grantRole("admin", admin);
-        ethBridge = new LZCrossChainBridge(address(ethOhm), admin, address(ethGateway));
-        ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
-
-        vm.startPrank(admin);
-        ethGateway.enable(bytes(""));
-        ethBridge.enable(bytes(""));
-        vm.stopPrank();
-
-        ethOhm.mint(sender, MINT_AMOUNT);
-        vm.deal(sender, 100 ether);
-
-        _makePersistent(
-            ethOhm,
-            ethKernel,
-            ethMintr,
-            ethRoles,
-            ethRolesAdmin,
-            ethGateway,
-            ethBridge
-        );
-    }
-
-    function _deployArbStack() internal {
-        arbOhm = new MockOhm("OHM", "OHM", 9);
-        arbKernel = new Kernel();
-        arbMintr = new OlympusMinter(arbKernel, address(arbOhm));
-        arbRoles = new OlympusRoles(arbKernel);
-        arbRolesAdmin = new RolesAdmin(arbKernel);
-        arbGateway = new LZBridgeGateway(
-            arbKernel,
-            LZConfigLib.ARB_LZ_ENDPOINT,
-            false // Non-canonical
-        );
-
-        arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
-        arbKernel.executeAction(Actions.InstallModule, address(arbRoles));
-        arbKernel.executeAction(Actions.ActivatePolicy, address(arbRolesAdmin));
-        arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
-
-        arbRolesAdmin.grantRole("admin", admin);
-        arbBridge = new LZCrossChainBridge(address(arbOhm), admin, address(arbGateway));
-        arbRolesAdmin.grantRole("bridge_facilitator", address(arbBridge));
-
-        vm.startPrank(admin);
-        arbGateway.enable(bytes(""));
-        arbBridge.enable(bytes(""));
-        vm.stopPrank();
-
-        arbOhm.mint(sender, MINT_AMOUNT);
-        vm.deal(sender, 100 ether);
-
-        _makePersistent(
-            arbOhm,
-            arbKernel,
-            arbMintr,
-            arbRoles,
-            arbRolesAdmin,
-            arbGateway,
-            arbBridge
-        );
-    }
-
-    function _makePersistent(
-        MockOhm ohm_,
-        Kernel kernel_,
-        OlympusMinter mintr_,
-        OlympusRoles roles_,
-        RolesAdmin rolesAdmin_,
-        LZBridgeGateway gateway_,
-        LZCrossChainBridge bridge_
-    ) internal {
-        vm.makePersistent(address(ohm_));
-        vm.makePersistent(address(kernel_));
-        vm.makePersistent(address(mintr_));
-        vm.makePersistent(address(roles_));
-        vm.makePersistent(address(rolesAdmin_));
-        vm.makePersistent(address(gateway_));
-        vm.makePersistent(address(bridge_));
-    }
-
-    // ========= HELPERS ========= //
-
-    /// @dev Simulates LZ V2 message delivery by pranking the endpoint to call lzReceive.
-    function _deliverMessage(
-        uint256 dstForkId,
-        LZBridgeGateway dstGw,
-        uint32 srcEid,
-        address srcGw,
-        address to,
-        uint256 amount
-    ) internal {
-        vm.selectFork(dstForkId);
-
-        Origin memory origin = Origin({
-            srcEid: srcEid,
-            sender: LZConfigLib.addressToBytes32(srcGw),
-            nonce: 1
-        });
-        bytes memory message = abi.encode(uint8(1), abi.encode(to, amount));
-
-        vm.prank(dstGw.LZ_ENDPOINT());
-        dstGw.lzReceive(origin, bytes32(0), message, address(0), bytes(""));
-    }
-
-    // ========= TESTS ========= //
-
-    function test_ethToArb() external {
+/// @notice Fork-based tests for LZBridgeGateway cross-chain bridge (LZ V2).
+/// @dev Each test exercises the real sendOhm() -> burnAndSend() -> EndpointV2.send() path,
+///      verifying encoding, fee estimation, burn, bridgedSupply tracking, and packet delivery.
+contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
+    /// @notice Full e2e: sendOhm on ETH fork via real EndpointV2, parse PacketSent, deliver on ARB fork.
+    function test_ethToArb_sendAndRelay() external {
         uint256 amount = 1000e9;
 
-        // Deliver message to arb (simulates LZ V2 endpoint calling lzReceive)
-        // In production, burnAndSend on eth sends the LZ message; here we simulate the receive side.
-        _deliverMessage(
-            arbForkId,
-            arbGateway,
-            LZConfigLib.ETH_EID,
-            address(ethGateway),
-            recipient,
-            amount
-        );
+        // === SOURCE: ETH fork (already selected by setUp) ===
 
-        // Verify arb: recipient received OHM
+        // Estimate fee
+        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
+        assertGt(fee.nativeFee, 0, "Fee should be non-zero");
+
+        // Send OHM cross-chain
+        uint256 senderBalBefore = ethOhm.balanceOf(sender);
+
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount);
+        vm.recordLogs();
+        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
+        vm.stopPrank();
+
+        // Verify source side: OHM burned, bridgedSupply increased
+        assertEq(ethOhm.balanceOf(sender), senderBalBefore - amount, "Sender OHM should decrease");
+        assertEq(ethGateway.bridgedSupply(), amount, "BridgedSupply should increase");
+
+        // Parse the PacketSent event from the real V2 endpoint
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes memory encodedPacket = _findPacketSent(logs);
+        (Origin memory origin, bytes32 guid, bytes memory message) = _parsePacket(encodedPacket);
+
+        // Verify parsed packet matches expected values
+        assertEq(origin.srcEid, LZConfigLib.ETH_EID, "Packet srcEid should be ETH");
+        assertEq(
+            origin.sender,
+            LZConfigLib.addressToBytes32(address(ethGateway)),
+            "Packet sender should be ethGateway"
+        );
+        assertGt(origin.nonce, 0, "Packet nonce should be non-zero");
+        assertTrue(guid != bytes32(0), "GUID should be non-zero");
+
+        // Decode the payload to verify encoding correctness
+        (uint8 msgType, bytes memory data) = abi.decode(message, (uint8, bytes));
+        assertEq(msgType, 1, "Message type should be MSG_BRIDGE_OHM");
+        (address decodedTo, uint256 decodedAmount) = abi.decode(data, (address, uint256));
+        assertEq(decodedTo, recipient, "Decoded recipient should match");
+        assertEq(decodedAmount, amount, "Decoded amount should match");
+
+        // === DESTINATION: ARB fork ===
         vm.selectFork(arbForkId);
-        assertEq(arbOhm.balanceOf(recipient), amount, "Arb: recipient should receive OHM");
+
+        vm.prank(arbGateway.LZ_ENDPOINT());
+        arbGateway.lzReceive(origin, guid, message, address(0), bytes(""));
+
+        // Verify destination: recipient received OHM
+        assertEq(arbOhm.balanceOf(recipient), amount, "Recipient should receive OHM on Arb");
     }
 
-    function test_arbToEth() external {
-        uint256 amount = 1000e9;
-
-        // First bridge to arb so we have bridgedSupply
-        _deliverMessage(
-            arbForkId,
-            arbGateway,
-            LZConfigLib.ETH_EID,
-            address(ethGateway),
-            recipient,
-            amount
-        );
-
-        // Set bridgedSupply on eth (simulates the outbound tracking)
-        vm.selectFork(ethForkId);
-        ethRolesAdmin.grantRole("bridge_admin", admin);
-        vm.prank(admin);
-        ethGateway.setBridgedSupply(amount);
-
-        // Deliver message from arb to eth
-        _deliverMessage(
-            ethForkId,
-            ethGateway,
-            LZConfigLib.ARB_EID,
-            address(arbGateway),
-            recipient,
-            amount
-        );
-
-        // Verify eth: bridgedSupply decreases, recipient gets OHM
-        vm.selectFork(ethForkId);
-        assertEq(ethGateway.bridgedSupply(), 0, "Eth: bridgedSupply should decrease to 0");
-        assertEq(ethOhm.balanceOf(recipient), amount, "Eth: recipient should receive OHM");
-    }
-
-    function test_roundTrip_fullFlow() external {
+    /// @notice Verifies that fee estimation is consistent with actual send cost.
+    function test_feeEstimationMatchesSend() external {
         uint256 amount = 500e9;
 
-        // Step 1: eth -> arb (deliver on arb)
-        _deliverMessage(
+        // Estimate fee
+        MessagingFee memory fee = ethBridge.estimateSendFee(LZConfigLib.ARB_EID, recipient, amount);
+
+        // Send with exact fee should succeed
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount);
+        ethBridge.sendOhm{value: fee.nativeFee}(LZConfigLib.ARB_EID, recipient, amount);
+        vm.stopPrank();
+
+        // Send with less than estimated fee should revert with exact error
+        uint256 amount2 = 500e9;
+        MessagingFee memory fee2 = ethBridge.estimateSendFee(
+            LZConfigLib.ARB_EID,
+            recipient,
+            amount2
+        );
+        vm.startPrank(sender);
+        ethOhm.approve(address(ethBridge), amount2);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.LZ_InsufficientFee.selector,
+                fee2.nativeFee,
+                uint256(1),
+                uint256(0),
+                uint256(0)
+            )
+        );
+        ethBridge.sendOhm{value: 1}(LZConfigLib.ARB_EID, recipient, amount2);
+        vm.stopPrank();
+    }
+
+    /// @notice Fork-based round-trip test for LZBridgeGateway cross-chain bridge (LZ V2).
+    /// @dev Exercises the real sendOhm() -> burnAndSend() -> EndpointV2.send() path in both
+    ///      directions, proving source-side burn and bridgedSupply tracking end-to-end.
+    function test_roundTrip() external {
+        uint256 amount = 500e9;
+
+        // Step 1: Eth->Arb via real sendOhm path
+        vm.selectFork(ethForkId);
+        uint256 ethSenderBalBefore = ethOhm.balanceOf(sender);
+
+        _sendAndDeliver(
+            ethForkId,
             arbForkId,
+            ethBridge,
             arbGateway,
-            LZConfigLib.ETH_EID,
-            address(ethGateway),
+            ethOhm,
+            LZConfigLib.ARB_EID,
+            sender,
             recipient,
             amount
         );
 
+        // Verify Eth source: OHM burned, bridgedSupply increased
+        vm.selectFork(ethForkId);
+        assertEq(
+            ethOhm.balanceOf(sender),
+            ethSenderBalBefore - amount,
+            "Eth: sender balance after bridge out"
+        );
+        assertEq(ethGateway.bridgedSupply(), amount, "Eth: bridgedSupply after outbound");
+
+        // Verify Arb destination: recipient received OHM
         vm.selectFork(arbForkId);
         assertEq(arbOhm.balanceOf(recipient), amount, "Arb: recipient balance after bridge");
 
-        // Set bridgedSupply on eth
-        vm.selectFork(ethForkId);
-        ethRolesAdmin.grantRole("bridge_admin", admin);
-        vm.prank(admin);
-        ethGateway.setBridgedSupply(amount);
+        // Transfer bridged OHM from recipient to sender for the return leg
+        vm.prank(recipient);
+        arbOhm.transfer(sender, amount);
 
-        // Step 2: arb -> eth (deliver on eth)
-        _deliverMessage(
+        // Step 2: Arb->Eth via real sendOhm path (proves Arb-side burn happens)
+        uint256 arbSenderBalBefore = arbOhm.balanceOf(sender);
+
+        _sendAndDeliver(
+            arbForkId,
             ethForkId,
+            arbBridge,
             ethGateway,
-            LZConfigLib.ARB_EID,
-            address(arbGateway),
+            arbOhm,
+            LZConfigLib.ETH_EID,
+            sender,
             recipient,
             amount
         );
 
-        // Verify round-trip
+        // Verify Arb: OHM was actually burned
+        vm.selectFork(arbForkId);
+        assertEq(
+            arbOhm.balanceOf(sender),
+            arbSenderBalBefore - amount,
+            "Arb: sender OHM burned on return leg"
+        );
+
+        // Verify round-trip on Eth: bridgedSupply back to zero, recipient received OHM
         vm.selectFork(ethForkId);
         assertEq(
             ethGateway.bridgedSupply(),

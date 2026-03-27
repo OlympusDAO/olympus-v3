@@ -30,6 +30,8 @@ contract LZBridgeGatewayTests_SetPeer is LZBridgeGatewayTestBase {
     }
 
     function test_setPeer_clears() external {
+        assertTrue(gateway.peers(NONCANONICAL_EID) != bytes32(0), "Peer should be non-zero before clear");
+
         vm.prank(admin);
         gateway.setPeer(NONCANONICAL_EID, bytes32(0));
 
