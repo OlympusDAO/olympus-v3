@@ -66,6 +66,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _unwindMinSwap1ValueRatioBps;
     uint256 internal _unwindMinSwap2ValueRatioBps;
     uint256 internal _unwindMaxSusdeSwapIn;
+    uint256 internal _loopActionsBaseStep;
     string internal _kyberExcludedSources;
 
     struct UnwindConfig {
@@ -130,11 +131,20 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         bytes swapCalldataWalletSusdeToUsdt;
     }
 
+    struct UnwindActionSteps {
+        uint256 walletSwap;
+        uint256 walletRepay;
+        uint256 usdeWithdraw;
+        uint256 usdeSwap;
+        uint256 usdeRepay;
+        uint256 susdeWithdraw;
+    }
+
     // Aave interest rate mode
     uint256 internal constant VARIABLE_RATE = 2;
 
     // Default values
-    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 9900; // 99%
+    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant DEFAULT_SLIPPAGE_BPS = 5; // 0.05%
     uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 10_000; // 100%
     uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> USDe)
@@ -272,7 +282,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 1e2;
             if (usdtBorrowAmount1 == 0) revert("USDT borrow amount 1 is zero");
 
-            console2.log("\n--- Step 1: Estimate Borrow #1 from sUSDe supply (this iteration) ---");
+            _logBatchStepHeader(
+                shouldSetEMode ? _batchTargets.length + 4 : _batchTargets.length + 3,
+                "Estimate Borrow #1 from sUSDe supply (this iteration)"
+            );
             console2.log("[Position] Current eMode category:", currentEMode);
             console2.log("[Position] Will set eMode in batch:", shouldSetEMode);
             console2.log(
@@ -301,11 +314,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 "[Iteration] Borrow #1 utilization vs projected capacity (bps):",
                 _ratioBps(usdtBorrowAmount1 * 1e2, totalExpectedBorrowsAfterSusdeSupply)
             );
-
             if (shouldSetEMode) {
-                console2.log("\n2. Set eMode category to", EMODE_CATEGORY);
-                addToBatch(address(AAVE_POOL), _encodeSetUserEMode(EMODE_CATEGORY));
+                _addToBatchWithStepLog(
+                    address(AAVE_POOL),
+                    _encodeSetUserEMode(EMODE_CATEGORY),
+                    string.concat("Set eMode category to ", vm.toString(EMODE_CATEGORY))
+                );
             }
+
+            _loopActionsBaseStep = _batchTargets.length;
         }
 
         (
@@ -321,7 +338,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         if (usdeAmountOut == 0) revert("USDe quote amount is zero");
 
-        console2.log("\n--- Step 2: Build swap #1 (USDT -> USDe) [this iteration] ---");
+        _logBatchStepHeader(
+            _loopActionsBaseStep + 6,
+            "Build swap #1 (USDT -> USDe) [this iteration]"
+        );
         console2.log(
             "[Iteration] Expected USDe out from quote:",
             _toDecimalString(usdeAmountOut, 18)
@@ -389,7 +409,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 1e2;
             if (usdtBorrowAmount2 == 0) revert("USDT borrow amount 2 is zero");
 
-            console2.log("\n--- Step 3: Estimate Borrow #2 after USDe supply (this iteration) ---");
+            _logBatchStepHeader(
+                _loopActionsBaseStep + 10,
+                "Estimate Borrow #2 after USDe supply (this iteration)"
+            );
             console2.log(
                 "[Iteration] Conservative USDe supply amount:",
                 _toDecimalString(usdeSupplyAmount, 18)
@@ -424,7 +447,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 slippageBps
             );
 
-        console2.log("\n--- Step 4: Build swap #2 (USDT -> sUSDe) [this iteration] ---");
+        _logBatchStepHeader(
+            _loopActionsBaseStep + 13,
+            "Build swap #2 (USDT -> sUSDe) [this iteration]"
+        );
         console2.log(
             "[Iteration] Expected sUSDe out from quote:",
             _toDecimalString(susdeAmountOut, 18)
@@ -579,64 +605,112 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             plan.susdeWithdrawAmountFinal;
 
         if (plan.walletSusdeSwapAmount > 0) {
-            addToBatch(address(_susde), _encodeApprove(plan.routerWalletSusdeToUsdt, 0));
-            addToBatch(
+            _addToBatchWithStepLog(
                 address(_susde),
-                _encodeApprove(plan.routerWalletSusdeToUsdt, plan.walletSusdeSwapAmount)
+                _encodeApprove(plan.routerWalletSusdeToUsdt, 0),
+                "Reset sUSDe approval for wallet swap"
             );
-            addToBatch(plan.routerWalletSusdeToUsdt, plan.swapCalldataWalletSusdeToUsdt);
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeApprove(plan.routerWalletSusdeToUsdt, plan.walletSusdeSwapAmount),
+                "Approve sUSDe for wallet swap"
+            );
+            _addToBatchWithStepLog(
+                plan.routerWalletSusdeToUsdt,
+                plan.swapCalldataWalletSusdeToUsdt,
+                "Swap sUSDe -> USDT"
+            );
             if (plan.conservativeRepay0 > 0) {
-                addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
-                addToBatch(
+                _addToBatchWithStepLog(
                     address(_usdt),
-                    _encodeApprove(address(AAVE_POOL), plan.conservativeRepay0)
+                    _encodeApprove(address(AAVE_POOL), 0),
+                    "Reset USDT approval for repay 0"
                 );
-                addToBatch(
+                _addToBatchWithStepLog(
+                    address(_usdt),
+                    _encodeApprove(address(AAVE_POOL), plan.conservativeRepay0),
+                    "Approve USDT for repay 0"
+                );
+                _addToBatchWithStepLog(
                     address(AAVE_POOL),
-                    _encodeRepay(address(_usdt), plan.conservativeRepay0, _owner)
+                    _encodeRepay(address(_usdt), plan.conservativeRepay0, _owner),
+                    "Repay USDT debt (wallet leg)"
                 );
             }
         }
 
         if (plan.usdeWithdrawAmount1 > 0) {
-            addToBatch(
+            _addToBatchWithStepLog(
                 address(AAVE_POOL),
-                _encodeWithdraw(address(_usde), plan.usdeWithdrawAmount1, _owner)
+                _encodeWithdraw(address(_usde), plan.usdeWithdrawAmount1, _owner),
+                "Withdraw USDe collateral"
             );
-            addToBatch(address(_usde), _encodeApprove(plan.routerUsdeToUsdt, 0));
-            addToBatch(
+            _addToBatchWithStepLog(
                 address(_usde),
-                _encodeApprove(plan.routerUsdeToUsdt, plan.usdeWithdrawAmount1)
+                _encodeApprove(plan.routerUsdeToUsdt, 0),
+                "Reset USDe approval for swap"
             );
-            addToBatch(plan.routerUsdeToUsdt, plan.swapCalldataUsdeToUsdt);
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(plan.routerUsdeToUsdt, plan.usdeWithdrawAmount1),
+                "Approve USDe for swap"
+            );
+            _addToBatchWithStepLog(
+                plan.routerUsdeToUsdt,
+                plan.swapCalldataUsdeToUsdt,
+                "Swap USDe -> USDT"
+            );
             if (plan.conservativeRepay1 > 0) {
-                addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
-                addToBatch(
+                _addToBatchWithStepLog(
                     address(_usdt),
-                    _encodeApprove(address(AAVE_POOL), plan.conservativeRepay1)
+                    _encodeApprove(address(AAVE_POOL), 0),
+                    "Reset USDT approval for repay 1"
                 );
-                addToBatch(
+                _addToBatchWithStepLog(
+                    address(_usdt),
+                    _encodeApprove(address(AAVE_POOL), plan.conservativeRepay1),
+                    "Approve USDT for repay 1"
+                );
+                _addToBatchWithStepLog(
                     address(AAVE_POOL),
-                    _encodeRepay(address(_usdt), plan.conservativeRepay1, _owner)
+                    _encodeRepay(address(_usdt), plan.conservativeRepay1, _owner),
+                    "Repay USDT debt (USDe leg)"
                 );
             }
         }
 
         if (plan.susdeWithdrawAmountFinal > 0) {
-            addToBatch(
+            _addToBatchWithStepLog(
                 address(AAVE_POOL),
-                _encodeWithdraw(address(_susde), plan.susdeWithdrawAmountFinal, _owner)
+                _encodeWithdraw(address(_susde), plan.susdeWithdrawAmountFinal, _owner),
+                "Withdraw sUSDe collateral"
             );
         }
 
-        addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(address(AAVE_POOL), 0),
+            "Zero USDT -> Aave approval"
+        );
         if (plan.routerUsdeToUsdt != address(0)) {
-            addToBatch(address(_usde), _encodeApprove(plan.routerUsdeToUsdt, 0));
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(plan.routerUsdeToUsdt, 0),
+                "Zero USDe -> swap router approval"
+            );
         }
         if (plan.routerWalletSusdeToUsdt != address(0)) {
-            addToBatch(address(_susde), _encodeApprove(plan.routerWalletSusdeToUsdt, 0));
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeApprove(plan.routerWalletSusdeToUsdt, 0),
+                "Zero sUSDe -> wallet swap router approval"
+            );
         }
-        addToBatch(address(_usde), _encodeApprove(address(_susde), 0));
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(_susde), 0),
+            "Zero USDe -> sUSDe approval"
+        );
 
         _setPostBatchValidateSelector(this._validateExecuteUnwindLoopPostBatch.selector);
 
@@ -675,31 +749,108 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _baseToSusdeAmount(finalCollateralReductionBase)
         );
 
-        console2.log("\n--- Unwind plan (conservative) ---");
-        console2.log(
-            "[Step 1] Wallet sUSDe swap input:",
-            _toDecimalString(plan.walletSusdeSwapAmount, 18)
-        );
-        console2.log(
-            "[Step 1] Conservative USDT repay:",
-            _toDecimalString(plan.conservativeRepay0, 6)
-        );
-        console2.log(
-            "[Step 2] USDe collateral withdraw:",
-            _toDecimalString(plan.usdeWithdrawAmount1, 18)
-        );
-        console2.log(
-            "[Step 3] Conservative USDT repay:",
-            _toDecimalString(plan.conservativeRepay1, 6)
-        );
-        console2.log(
-            "[Step 4] sUSDe collateral withdraw:",
-            _toDecimalString(plan.susdeWithdrawAmountFinal, 18)
-        );
+        _logUnwindPlanWithBatchSteps(plan, _batchTargets.length);
+    }
+
+    function _logUnwindPlanWithBatchSteps(UnwindPlan memory plan, uint256 baseStep) internal pure {
+        UnwindActionSteps memory steps = _computeUnwindActionSteps(plan, baseStep);
+
+        console2.log("\n--- Unwind plan (conservative, batch-index aligned) ---");
+        if (plan.walletSusdeSwapAmount > 0) {
+            console2.log(
+                string.concat(
+                    "[Step ",
+                    vm.toString(steps.walletSwap),
+                    "] Wallet sUSDe swap input:"
+                ),
+                _toDecimalString(plan.walletSusdeSwapAmount, 18)
+            );
+        }
+        if (plan.conservativeRepay0 > 0) {
+            console2.log(
+                string.concat(
+                    "[Step ",
+                    vm.toString(steps.walletRepay),
+                    "] Conservative USDT repay:"
+                ),
+                _toDecimalString(plan.conservativeRepay0, 6)
+            );
+        }
+        if (plan.usdeWithdrawAmount1 > 0) {
+            console2.log(
+                string.concat(
+                    "[Step ",
+                    vm.toString(steps.usdeWithdraw),
+                    "] USDe collateral withdraw:"
+                ),
+                _toDecimalString(plan.usdeWithdrawAmount1, 18)
+            );
+            console2.log(
+                string.concat(
+                    "[Step ",
+                    vm.toString(steps.usdeSwap),
+                    "] Swap USDe -> USDT quote leg"
+                )
+            );
+        }
+        if (plan.conservativeRepay1 > 0) {
+            console2.log(
+                string.concat("[Step ", vm.toString(steps.usdeRepay), "] Conservative USDT repay:"),
+                _toDecimalString(plan.conservativeRepay1, 6)
+            );
+        }
+        if (plan.susdeWithdrawAmountFinal > 0) {
+            console2.log(
+                string.concat(
+                    "[Step ",
+                    vm.toString(steps.susdeWithdraw),
+                    "] sUSDe collateral withdraw:"
+                ),
+                _toDecimalString(plan.susdeWithdrawAmountFinal, 18)
+            );
+        }
         console2.log(
             "[Iteration] Total conservative USDT repay:",
             _toDecimalString(plan.conservativeRepay0 + plan.conservativeRepay1, 6)
         );
+    }
+
+    function _computeUnwindActionSteps(
+        UnwindPlan memory plan,
+        uint256 baseStep
+    ) internal pure returns (UnwindActionSteps memory steps) {
+        uint256 step = baseStep;
+
+        if (plan.walletSusdeSwapAmount > 0) {
+            step += 2;
+            steps.walletSwap = step;
+            step += 1;
+
+            if (plan.conservativeRepay0 > 0) {
+                step += 2;
+                steps.walletRepay = step;
+                step += 1;
+            }
+        }
+
+        if (plan.usdeWithdrawAmount1 > 0) {
+            steps.usdeWithdraw = step;
+            step += 1;
+
+            step += 2;
+            steps.usdeSwap = step;
+            step += 1;
+
+            if (plan.conservativeRepay1 > 0) {
+                step += 2;
+                steps.usdeRepay = step;
+                step += 1;
+            }
+        }
+
+        if (plan.susdeWithdrawAmountFinal > 0) {
+            steps.susdeWithdraw = step;
+        }
     }
 
     function _computeUnwindStep1() internal returns (UnwindStep1Outputs memory step1) {
@@ -1145,6 +1296,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 step = _batchTargets.length;
         console2.log(string.concat("step ", vm.toString(step), ": ", label));
         addToBatch(target, data);
+    }
+
+    function _logBatchStepHeader(uint256 step, string memory title) internal pure {
+        console2.log(string.concat("\n--- Step ", vm.toString(step), ": ", title, " ---"));
     }
 
     /// @notice Post-batch validation: verify the loop produced expected results

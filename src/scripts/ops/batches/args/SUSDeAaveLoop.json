@@ -2,9 +2,8 @@
     "functions": [
         {
             "args": {
-                "kyberExcludedSources": "ekubo-v3",
-                "slippageBps": 30,
-                "susdeSupplyAmount": "1639344262295081967213114"
+                "slippageBps": 5,
+                "susdeSupplyAmount": "815977000000000000000000"
             },
             "name": "executeLoop"
         },
