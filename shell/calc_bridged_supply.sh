@@ -7,23 +7,23 @@
 # messages drained) and BEFORE Step 5 (setBridgedSupply).
 #
 # What this script does:
-#   1. Verifies all old CrossChainBridge contracts are disabled
-#   2. Checks for in-flight LZ V1 messages across all configured routes
-#   3. Checks for stored (failed) payloads on LZ V1 endpoints
-#   4. Queries OHM totalSupply on each non-canonical chain
-#   5. Verifies CCIP bridge doesn't affect L2 supply (Solana only)
-#   6. Reports the initialBridgedSupply value for LZBridgeGatewayBatch
+#   1.  Verifies all old CrossChainBridge contracts are disabled
+#   2.  Checks for in-flight LZ V1 messages (nonce comparison + stored payloads)
+#   2b. Checks for unretried failedMessages (delta from verified nonces)
+#   3.  Cross-checks via LayerZero Scan API (paginated, supplementary)
+#   4.  Queries OHM totalSupply, verifies no CCIP BurnMint pools on L2s
+#   5.  Reports the initialBridgedSupply value for LZBridgeGatewayBatch
 #
 # Bridged supply = totalSupply(OHM_Arb) + totalSupply(OHM_Opt) + totalSupply(OHM_Base) + totalSupply(OHM_Bera)
 #
 # Why this is correct:
-#   - All OHM on Arb/Opt/Base was minted by the old CrossChainBridge
+#   - All OHM on non-canonical chains was minted by the old CrossChainBridge
 #     (burn on source, mint on destination via MINTR)
-#   - CCIP only bridges Ethereum<>Solana via LockRelease pool on
-#     Ethereum only (no CCIPBurnMintTokenPool on Arb/Opt/Base mainnet)
+#   - CCIP only bridges Ethereum<>Solana via LockRelease pool on Ethereum;
+#     no CCIP BurnMint pool exists for OHM on L2s (verified dynamically)
 #   - L2<>L2 transfers are net-neutral (burn on one L2, mint on another),
-#     so sum of totalSupply across L2s == net OHM bridged from Ethereum
-#   - Berachain is included: will be part of the new bridge
+#     so sum of totalSupply across non-canonical chains == net OHM bridged
+#     from Ethereum
 #
 # Prerequisites: cast (foundry), python3
 #
@@ -102,6 +102,14 @@ declare -A RPC=(
 
 # --- CCIP LockRelease pool (Ethereum, for Solana bridge) ---
 CCIP_LOCK_RELEASE_POOL="0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD"
+
+# --- CCIP TokenAdminRegistry addresses (to check for BurnMint pools) ---
+declare -A CCIP_REGISTRY=(
+    [arbitrum]="0x39AE1032cF4B334a1Ed41cdD0833bdD7c7E7751E"
+    [optimism]="0x657c42abE4CD8aa731Aec322f871B5b90cf6274F"
+    [base]="0x6f6C373d09C07425BaAE72317863d7F6bb731e37"
+    [berachain]="0x0944C3Fb1dB7D165336569221995B31cBE6c8A55"
+)
 
 # --- Verified failedMessages nonces (2026-03-24) ---
 # All nonces from 1 to these values have been checked: 0 unretried failures.
@@ -232,8 +240,13 @@ check_inflight() {
                 "${LZID[$dst]}" "${BRIDGE[$src]}" \
                 --rpc-url "${RPC[$src]}")
 
-            # Route never used or RPC error; skip silently
-            if [[ "$out_nonce" == "0" || "$out_nonce" == "ERROR" ]]; then
+            # Route never used: skip silently (legitimate for e.g. Berachain<>L2 pairs)
+            [[ "$out_nonce" == "0" ]] && continue
+
+            # RPC error: cannot skip, this route may have in-flight messages
+            if [[ "$out_nonce" == "ERROR" ]]; then
+                err "$src -> $dst: failed to query outbound nonce. Check ${RPC[$src]}"
+                has_issues=true
                 continue
             fi
 
@@ -245,8 +258,16 @@ check_inflight() {
                 "${LZID[$src]}" \
                 --rpc-url "${RPC[$dst]}")
 
-            # Route not configured on receive side; skip
-            if [[ "$path" == "0x" || "$path" == "ERROR" || -z "$path" ]]; then
+            # Path not configured: unusual since outbound nonce > 0 means messages were sent
+            if [[ "$path" == "0x" || -z "$path" ]]; then
+                warn "$src -> $dst: outbound nonce $out_nonce but no trustedRemote on $dst"
+                continue
+            fi
+
+            # RPC error: cannot skip, we know messages were sent on this route
+            if [[ "$path" == "ERROR" ]]; then
+                err "$src -> $dst: failed to query trustedRemoteLookup on $dst. Check ${RPC[$dst]}"
+                has_issues=true
                 continue
             fi
 
@@ -261,7 +282,8 @@ check_inflight() {
                 --rpc-url "${RPC[$dst]}")
 
             if [[ "$in_nonce" == "ERROR" ]]; then
-                warn "Could not query inbound nonce on $dst for $src"
+                err "$src -> $dst: failed to query inbound nonce on $dst. Cannot confirm delivery"
+                has_issues=true
                 continue
             fi
 
@@ -296,6 +318,14 @@ check_inflight() {
 
     echo ""
     info "Checked $routes_checked active route(s) across ${#ALL_CHAINS[@]} chains"
+
+    # Expect 12 directed routes:
+    #   ETH<>ARB, ETH<>OPT, ETH<>BASE, ARB<>OPT, ARB<>BASE (10) + ETH<>BERA (2)
+    #   OPT<>BASE has never been used (outbound nonce 0)
+    local expected_routes=12
+    if [[ $routes_checked -lt $expected_routes ]]; then
+        warn "Expected $expected_routes routes but only checked $routes_checked (RPC failure or unconfigured trustedRemote?)"
+    fi
 
     if $has_issues; then
         echo ""
@@ -339,7 +369,12 @@ check_failed_messages() {
                 "getOutboundNonce(uint16,address)(uint64)" \
                 "${LZID[$dst]}" "${BRIDGE[$src]}" \
                 --rpc-url "${RPC[$src]}")
-            [[ "$out_nonce" == "0" || "$out_nonce" == "ERROR" ]] && continue
+            [[ "$out_nonce" == "0" ]] && continue
+            if [[ "$out_nonce" == "ERROR" ]]; then
+                err "$src -> $dst: failed to query outbound nonce (already flagged in Step 2)"
+                has_failures=true
+                continue
+            fi
 
             # Get trusted remote path
             local path
@@ -347,7 +382,12 @@ check_failed_messages() {
                 "trustedRemoteLookup(uint16)(bytes)" \
                 "${LZID[$src]}" \
                 --rpc-url "${RPC[$dst]}")
-            [[ "$path" == "0x" || "$path" == "ERROR" || -z "$path" ]] && continue
+            [[ "$path" == "0x" || -z "$path" ]] && continue
+            if [[ "$path" == "ERROR" ]]; then
+                err "$src -> $dst: failed to query trustedRemoteLookup on $dst"
+                has_failures=true
+                continue
+            fi
 
             # Get current inbound nonce
             local in_nonce
@@ -355,7 +395,12 @@ check_failed_messages() {
                 "getInboundNonce(uint16,bytes)(uint64)" \
                 "${LZID[$src]}" "$path" \
                 --rpc-url "${RPC[$dst]}")
-            [[ "$in_nonce" == "ERROR" || "$in_nonce" == "0" ]] && continue
+            [[ "$in_nonce" == "0" ]] && continue
+            if [[ "$in_nonce" == "ERROR" ]]; then
+                err "$src -> $dst: failed to query inbound nonce on $dst"
+                has_failures=true
+                continue
+            fi
 
             # Determine start nonce (skip already verified range)
             local verified="${VERIFIED_NONCE[$dst:$src]:-0}"
@@ -377,7 +422,9 @@ check_failed_messages() {
                     "${LZID[$src]}" "$path" "$n" \
                     --rpc-url "${RPC[$dst]}")
 
-                if [[ "$result" != "$ZERO_BYTES32" && "$result" != "ERROR" ]]; then
+                if [[ "$result" == "ERROR" ]]; then
+                    warn "$src->$dst nonce $n: failed to query failedMessages, cannot confirm clean"
+                elif [[ "$result" != "$ZERO_BYTES32" ]]; then
                     err "UNRETRIED failed message: $src->$dst nonce $n (hash: $result)"
                     route_failed=$((route_failed + 1))
                     has_failures=true
@@ -424,67 +471,109 @@ check_lz_scan() {
     info "Swagger docs: https://scan.layerzero-api.com/v1/swagger"
     echo ""
 
-    # Non-DELIVERED statuses that indicate unfinished messages
-    local PENDING_STATUSES=("INFLIGHT" "CONFIRMING" "PAYLOAD_STORED" "BLOCKED" "FAILED")
-
     for chain in "${ALL_CHAINS[@]}"; do
         local bridge_addr="${BRIDGE[$chain]}"
         local eid="${LZID[$chain]}"
 
-        # LayerZero Scan API: GET /v1/messages/oapp/{srcEid}/{oappAddress}
-        # Response: { "data": [ { "source": { "status": "SUCCEEDED" }, "destination": { "status": "SUCCEEDED" }, ... } ], "nextToken": ... }
-        local api_url="https://scan.layerzero-api.com/v1/messages/oapp/${eid}/${bridge_addr}"
-        local response
-        if ! response=$(curl -sf --max-time 15 "$api_url" 2>/dev/null); then
-            warn "$chain: LayerZero Scan API request failed or timed out"
-            continue
-        fi
+        # Paginate through all messages via nextToken
+        # GET /v1/messages/oapp/{srcEid}/{oappAddress}[?nextToken=...]
+        # Response: { "data": [...], "nextToken": "..." | null }
+        local base_url="https://scan.layerzero-api.com/v1/messages/oapp/${eid}/${bridge_addr}"
+        local total_msgs=0
+        local total_pending=0
+        local -A pending_statuses=()
+        local page=0
+        local next_token=""
+        local fetch_error=false
 
-        # Parse response via stdin to avoid shell escaping issues
-        local result
-        result=$(echo "$response" | python3 -c "
+        while true; do
+            page=$((page + 1))
+            local url="$base_url"
+            [[ -n "$next_token" ]] && url="${base_url}?nextToken=${next_token}"
+
+            local response
+            if ! response=$(curl -sf --max-time 20 "$url" 2>/dev/null); then
+                if [[ $page -eq 1 ]]; then
+                    warn "$chain: LayerZero Scan API request failed or timed out"
+                    fetch_error=true
+                else
+                    warn "$chain: pagination stopped on page $page ($total_msgs messages fetched so far)"
+                    fetch_error=true
+                fi
+                break
+            fi
+
+            # Parse one page: return "page_total:page_pending:status_breakdown:next_token_or_empty"
+            local parsed
+            parsed=$(echo "$response" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    messages = data.get('data', []) if isinstance(data, dict) else data if isinstance(data, list) else []
-    total = len(messages)
+    messages = data.get('data', []) if isinstance(data, dict) else []
+    next_token = data.get('nextToken') or ''
+    page_total = len(messages)
     def is_delivered(m):
         dst = m.get('destination', {})
-        # Explicit SUCCEEDED status
         if dst.get('status') == 'SUCCEEDED':
             return True
-        # Has a delivery tx hash, so consider delivered even without status field (old messages)
         tx = dst.get('tx', {})
         if isinstance(tx, dict) and tx.get('txHash'):
             return True
         return False
     pending = [m for m in messages if isinstance(m, dict) and not is_delivered(m)]
-    if pending:
-        statuses = {}
-        for m in pending:
-            s = m.get('destination', {}).get('status') or m.get('source', {}).get('status') or 'UNKNOWN'
-            statuses[s] = statuses.get(s, 0) + 1
-        parts = [f'{v} {k}' for k, v in statuses.items()]
-        print(f'PENDING:{len(pending)}:' + ', '.join(parts))
-    else:
-        print(f'OK:{total}')
+    statuses = {}
+    for m in pending:
+        s = m.get('destination', {}).get('status') or m.get('source', {}).get('status') or 'UNKNOWN'
+        statuses[s] = statuses.get(s, 0) + 1
+    breakdown = ','.join(f'{v} {k}' for k, v in statuses.items()) if statuses else ''
+    print(f'{page_total}:{len(pending)}:{breakdown}:{next_token}')
 except Exception as e:
-    print(f'PARSE_ERROR:{e}')
-" 2>/dev/null || echo "PARSE_ERROR:python failed")
+    print(f'ERROR:{e}::')
+" 2>/dev/null || echo "ERROR:python failed::")
 
-        if [[ "$result" == PARSE_ERROR:* ]]; then
-            warn "$chain: Could not parse LayerZero Scan response"
-        elif [[ "$result" == OK:* ]]; then
-            local total="${result#OK:}"
-            ok "$chain: $total messages checked, all SUCCEEDED (LayerZero Scan)"
-        elif [[ "$result" == PENDING:* ]]; then
-            local details="${result#PENDING:}"
-            local count="${details%%:*}"
-            local breakdown="${details#*:}"
-            # API results are supplementary; use warn, not err
-            # On-chain nonce comparison (Step 2) is the definitive check
-            warn "$chain: $count message(s) without SUCCEEDED status: $breakdown"
+            # Parse fields
+            local page_total page_pending breakdown token_next
+            IFS=':' read -r page_total page_pending breakdown token_next <<< "$parsed"
+
+            if [[ "$page_total" == "ERROR" ]]; then
+                warn "$chain: Could not parse LayerZero Scan response (page $page)"
+                fetch_error=true
+                break
+            fi
+
+            total_msgs=$((total_msgs + page_total))
+            total_pending=$((total_pending + page_pending))
+
+            # Accumulate status breakdown across pages
+            if [[ -n "$breakdown" ]]; then
+                IFS=',' read -ra parts <<< "$breakdown"
+                for part in "${parts[@]}"; do
+                    local count="${part%% *}"
+                    local status="${part#* }"
+                    pending_statuses[$status]=$(( ${pending_statuses[$status]:-0} + count ))
+                done
+            fi
+
+            # No more pages: empty nextToken or partial page (< 100 results)
+            if [[ -z "$token_next" || "$page_total" -lt 100 ]]; then
+                break
+            fi
+            next_token="$token_next"
+        done
+
+        $fetch_error && continue
+
+        if [[ $total_pending -gt 0 ]]; then
+            local combined=""
+            for s in "${!pending_statuses[@]}"; do
+                [[ -n "$combined" ]] && combined+=", "
+                combined+="${pending_statuses[$s]} ${s}"
+            done
+            # API results are supplementary, use warn not err
+            warn "$chain: $total_pending/$total_msgs message(s) without SUCCEEDED status: $combined"
             info "  Cross-check with Step 2 nonce results. Verify at: https://layerzeroscan.com/address/${bridge_addr}"
+        else
+            ok "$chain: $total_msgs messages checked across $page page(s), all SUCCEEDED"
         fi
     done
 }
@@ -532,7 +621,28 @@ calculate_supply() {
     else
         warn "Could not query CCIP LockRelease pool balance"
     fi
-    info "Confirmed: No CCIPBurnMintTokenPool deployed on Arb/Opt/Base mainnet"
+
+    # Check CCIP TokenAdminRegistry on each non-canonical chain for a BurnMint pool
+    local ccip_ok=true
+    for chain in "${BRIDGE_CHAINS[@]}"; do
+        local registry="${CCIP_REGISTRY[$chain]:-}"
+        [[ -z "$registry" ]] && continue
+
+        local pool
+        pool=$(safe_call "$registry" "getPool(address)(address)" "${OHM[$chain]}" --rpc-url "${RPC[$chain]}")
+
+        if [[ "$pool" == "ERROR" ]]; then
+            warn "$chain: could not query CCIP TokenAdminRegistry"
+            ccip_ok=false
+        elif [[ "$pool" != "0x0000000000000000000000000000000000000000" ]]; then
+            err "$chain: CCIP BurnMint pool registered for OHM at $pool, totalSupply may be affected"
+            ccip_ok=false
+        fi
+    done
+
+    if $ccip_ok; then
+        ok "No CCIP BurnMint pool registered for OHM on non-canonical chains"
+    fi
 
     # --- Sum bridged supply ---
     for chain in "${BRIDGE_CHAINS[@]}"; do
