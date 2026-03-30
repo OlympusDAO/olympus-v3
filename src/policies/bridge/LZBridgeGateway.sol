@@ -45,7 +45,7 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 /// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
 ///         OHM transfers.
 ///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
-///         tracks bridged supply, and enforces a bridged supply cap on canonical chains.
+///         tracks bridged supply on canonical chains, and bounds inflow minting to previously burned OHM via mint approval.
 contract LZBridgeGateway is
     Policy,
     PolicyEnabler,

@@ -36,12 +36,12 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy
-///         that separates infrastructure from user-facing concerns, caps bridged supply,
+///         that separates infrastructure from user-facing concerns, tracks bridged supply,
 ///         and migrates to LayerZero V2 with explicit endpoint configuration, eliminating drag-along vulnerability.
 ///         The periphery LZCrossChainBridge is configured separately by the DAO MS.
 ///
 ///         The LZBridgeActivator performs all endpoint configuration,
-///         peer setup, enforced options, supply cap, and enablement in a single proposal action.
+///         peer setup, enforced options, and enablement in a single proposal action.
 ///         It is used to work around the governor's 15-action limit,
 ///
 ///         Assumes:
@@ -200,7 +200,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Grant bridge_admin role to temporary activator contract"
         );
 
-        // 4. Execute activator (single action: LZ config + peers + options + cap + enable)
+        // 4. Execute activator (single action: LZ config + peers + options + enable)
         _pushAction(
             activator,
             abi.encodeWithSelector(LZBridgeActivator.activate.selector),

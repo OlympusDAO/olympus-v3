@@ -11,7 +11,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @title LZBridgeActivator
 /// @notice Single-use contract to configure and activate the LZBridgeGateway during the
 ///         OCG proposal. Batches all endpoint configuration, peer setup, enforced options,
-///         supply cap, and enablement into a single proposal action, working around the
+///         and enablement into a single proposal action, working around the
 ///         governor's 15-action limit.
 ///
 /// @dev Assumes:

@@ -10,7 +10,7 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
-///      enforced options, rate limiting, and bridged supply cap enforcement.
+///      enforced options, rate limiting, and bridged supply tracking.
 interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     // ========= ERRORS ========= //
 
@@ -102,8 +102,8 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///      Reverts if:
     ///      - The caller does not have the `bridge_facilitator` role.
     ///      - The gateway is not enabled.
+    ///      - The recipient address is the zero address.
     ///      - No peer exists for the destination endpoint ID.
-    ///      - The bridged supply cap would be exceeded (canonical only).
     ///      - The rate limit would be exceeded.
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
