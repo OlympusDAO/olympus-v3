@@ -9,6 +9,7 @@ import {Surl} from "@surl-1.0.0/Surl.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IAaveV3DataProvider} from "src/external/interfaces/IAaveV3DataProvider.sol";
 import {IAaveV3Pool} from "src/external/interfaces/IAaveV3Pool.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
@@ -39,6 +40,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // Hardcoded protocol addresses (specific to this script)
     IAaveV3Pool internal constant AAVE_POOL =
         IAaveV3Pool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    IAaveV3DataProvider internal constant AAVE_DATA_PROVIDER =
+        IAaveV3DataProvider(0x41393e5e337606dc3821075Af65AeE84D7688CBD);
     address internal constant KYBERSWAP_ROUTER_FALLBACK =
         0x6131B37d65fE405d9820C9B10FBb9a118BA031B3;
 
@@ -56,6 +59,58 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _initialTotalCollateralBase;
     uint256 internal _initialTotalDebtBase;
     uint256 internal _initialNetAccountValueBase;
+    uint256 internal _expectedMinHealthFactor;
+    uint256 internal _expectedMaxDebtBase;
+    uint256 internal _unwindSlippageBps;
+    uint256 internal _unwindMinHealthFactor;
+    uint256 internal _unwindMinSwap1ValueRatioBps;
+    uint256 internal _unwindMinSwap2ValueRatioBps;
+    uint256 internal _unwindMaxSusdeSwapIn;
+
+    struct UnwindConfig {
+        uint256 slippageBps;
+        uint256 minHealthFactor;
+        uint256 minSwap1ValueRatioBps;
+        uint256 minSwap2ValueRatioBps;
+        uint256 maxSusdeSwapIn;
+    }
+
+    struct UnwindPlan {
+        uint256 conservativeRepay1;
+        uint256 conservativeRepay2;
+        uint256 usdeWithdrawAmount1;
+        uint256 susdeSwapAmount;
+        uint256 usdeWithdrawAmountFinal;
+        uint256 susdeWithdrawAmountFinal;
+        uint256 debtAfterStep2;
+        address routerUsdeToUsdt;
+        bytes swapCalldataUsdeToUsdt;
+        address routerSusdeToUsdt;
+        bytes swapCalldataSusdeToUsdt;
+    }
+
+    struct UnwindStep2Inputs {
+        uint256 collateralAfterStep1;
+        uint256 debtAfterStep1;
+        uint256 usdtDebtAfterStep1;
+        uint256 currentLiquidationThreshold;
+        uint256 usdeATokenBalance;
+        uint256 susdeATokenBalance;
+        uint256 usdeWithdrawAmount1;
+    }
+
+    struct UnwindStep1Outputs {
+        uint256 currentLiquidationThreshold;
+        uint256 usdeATokenBalance;
+        uint256 susdeATokenBalance;
+        uint256 usdeWithdrawAmount1;
+        uint256 conservativeRepay1;
+        uint256 collateralAfterStep1;
+        uint256 debtAfterStep1;
+        uint256 usdtDebtAfterStep1;
+        address routerUsdeToUsdt;
+        bytes swapCalldataUsdeToUsdt;
+    }
 
     // Aave interest rate mode
     uint256 internal constant VARIABLE_RATE = 2;
@@ -66,6 +121,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 10_000; // 100%
     uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> USDe)
     uint256 internal constant DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> sUSDe value)
+    uint256 internal constant DEFAULT_MIN_HEALTH_FACTOR = 1.02e18;
+    uint256 internal constant DEFAULT_MAX_SUSDE_SWAP_IN = 0;
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
@@ -86,6 +143,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     // Aave base currency decimals (USD = 8 decimals)
     uint256 internal constant BASE_CURRENCY_DECIMALS = 8;
+    uint256 internal constant BASE_CURRENCY_SCALE = 10 ** BASE_CURRENCY_DECIMALS;
 
     /// @notice Load token addresses from env.json
     function _loadTokens() internal {
@@ -118,14 +176,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _initialSusdeBalance = _susde.balanceOf(_owner);
         _captureInitialAccountSnapshot();
 
-        uint256 susdeSupplyAmount = _readOptionalUint256("susdeSupplyAmount", 0);
+        uint256 susdeSupplyAmount = _readOptionalUint256("executeLoop", "susdeSupplyAmount", 0);
         uint256 borrowPercentage = _readOptionalUint256(
+            "executeLoop",
             "borrowPercentage",
             DEFAULT_BORROW_PERCENTAGE
         );
 
         if (borrowPercentage > MAX_BORROW_PERCENTAGE) revert("Borrow percentage exceeds max");
-        uint256 slippageBps = _readOptionalUint256("slippageBps", DEFAULT_SLIPPAGE_BPS);
+        uint256 slippageBps = _readOptionalUint256(
+            "executeLoop",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
         if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
 
         _skipHeartbeatValidation = SKIP_HEARTBEAT;
@@ -232,8 +295,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         );
         {
             uint256 minSwap1ValueRatioBps = _readOptionalUint256(
+                "executeLoop",
                 "minSwap1ValueRatioBps",
-                _readOptionalUint256("minSwap1QuoteRatioBps", DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS)
+                _readOptionalUint256(
+                    "executeLoop",
+                    "minSwap1QuoteRatioBps",
+                    DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+                )
             );
             if (minSwap1ValueRatioBps == 0 || minSwap1ValueRatioBps > 10000) {
                 revert("Swap #1 min value ratio invalid");
@@ -330,8 +398,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         );
         {
             uint256 minSwap2ValueRatioBps = _readOptionalUint256(
+                "executeLoop",
                 "minSwap2ValueRatioBps",
-                _readOptionalUint256("minSwap2QuoteRatioBps", DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS)
+                _readOptionalUint256(
+                    "executeLoop",
+                    "minSwap2QuoteRatioBps",
+                    DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+                )
             );
             if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
                 revert("Swap #2 min value ratio invalid");
@@ -381,6 +454,483 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _setPostBatchValidateSelector(this._validateExecuteLoopPostBatch.selector);
 
         proposeBatch();
+    }
+
+    /// @notice Execute one max-safe unwind iteration for the sUSDe/USDe Aave loop position
+    /// @dev    Unwind order is repay-first for each collateral leg:
+    ///         1) withdraw USDe -> swap USDe->USDT -> repay USDT
+    ///         2) withdraw sUSDe (swap leg) -> swap sUSDe->USDT -> repay USDT
+    ///         3) withdraw remaining safe collateral and convert final USDe to sUSDe
+    function executeUnwindLoop(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFilePath_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    )
+        external
+        setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
+    {
+        _loadTokens();
+
+        _initialSusdeBalance = _susde.balanceOf(_owner);
+        _captureInitialAccountSnapshot();
+
+        uint256 slippageBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
+        if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
+
+        uint256 minHealthFactor = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minHealthFactor",
+            DEFAULT_MIN_HEALTH_FACTOR
+        );
+        if (minHealthFactor < 1e18) revert("minHealthFactor below 1.0");
+
+        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minSwap1ValueRatioBps",
+            DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+        );
+        if (minSwap1ValueRatioBps == 0 || minSwap1ValueRatioBps > 10000) {
+            revert("Swap #1 min value ratio invalid");
+        }
+
+        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minSwap2ValueRatioBps",
+            DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+        );
+        if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
+            revert("Swap #2 min value ratio invalid");
+        }
+
+        uint256 maxSusdeSwapIn = _readOptionalUint256(
+            "executeUnwindLoop",
+            "maxSusdeSwapIn",
+            DEFAULT_MAX_SUSDE_SWAP_IN
+        );
+
+        _skipHeartbeatValidation = SKIP_HEARTBEAT;
+        UnwindConfig memory config = UnwindConfig({
+            slippageBps: slippageBps,
+            minHealthFactor: minHealthFactor,
+            minSwap1ValueRatioBps: minSwap1ValueRatioBps,
+            minSwap2ValueRatioBps: minSwap2ValueRatioBps,
+            maxSusdeSwapIn: maxSusdeSwapIn
+        });
+        UnwindPlan memory plan = _computeUnwindPlan(config);
+
+        if (
+            plan.conservativeRepay1 == 0 &&
+            plan.conservativeRepay2 == 0 &&
+            plan.susdeWithdrawAmountFinal == 0
+        ) {
+            revert("No safe unwind action available");
+        }
+
+        _expectedMinHealthFactor = minHealthFactor;
+        _expectedMaxDebtBase = plan.debtAfterStep2;
+        _expectedMinSusdeOut = _initialSusdeBalance + plan.susdeWithdrawAmountFinal;
+
+        if (plan.usdeWithdrawAmount1 > 0) {
+            addToBatch(
+                address(AAVE_POOL),
+                _encodeWithdraw(address(_usde), plan.usdeWithdrawAmount1, _owner)
+            );
+            addToBatch(address(_usde), _encodeApprove(plan.routerUsdeToUsdt, 0));
+            addToBatch(
+                address(_usde),
+                _encodeApprove(plan.routerUsdeToUsdt, plan.usdeWithdrawAmount1)
+            );
+            addToBatch(plan.routerUsdeToUsdt, plan.swapCalldataUsdeToUsdt);
+            addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
+            addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), type(uint256).max));
+            addToBatch(address(AAVE_POOL), _encodeRepay(address(_usdt), type(uint256).max, _owner));
+        }
+
+        if (plan.susdeSwapAmount > 0) {
+            addToBatch(
+                address(AAVE_POOL),
+                _encodeWithdraw(address(_susde), plan.susdeSwapAmount, _owner)
+            );
+            addToBatch(address(_susde), _encodeApprove(plan.routerSusdeToUsdt, 0));
+            addToBatch(
+                address(_susde),
+                _encodeApprove(plan.routerSusdeToUsdt, plan.susdeSwapAmount)
+            );
+            addToBatch(plan.routerSusdeToUsdt, plan.swapCalldataSusdeToUsdt);
+            addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
+            addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), type(uint256).max));
+            addToBatch(address(AAVE_POOL), _encodeRepay(address(_usdt), type(uint256).max, _owner));
+        }
+
+        if (plan.usdeWithdrawAmountFinal > 0) {
+            addToBatch(
+                address(AAVE_POOL),
+                _encodeWithdraw(address(_usde), plan.usdeWithdrawAmountFinal, _owner)
+            );
+            addToBatch(
+                address(_usde),
+                _encodeApprove(address(_susde), plan.usdeWithdrawAmountFinal)
+            );
+            addToBatch(address(_susde), _encodeDeposit4626(plan.usdeWithdrawAmountFinal, _owner));
+        }
+
+        if (plan.susdeWithdrawAmountFinal > 0) {
+            addToBatch(
+                address(AAVE_POOL),
+                _encodeWithdraw(address(_susde), plan.susdeWithdrawAmountFinal, _owner)
+            );
+        }
+
+        addToBatch(address(_usdt), _encodeApprove(address(AAVE_POOL), 0));
+        if (plan.routerUsdeToUsdt != address(0)) {
+            addToBatch(address(_usde), _encodeApprove(plan.routerUsdeToUsdt, 0));
+        }
+        if (plan.routerSusdeToUsdt != address(0)) {
+            addToBatch(address(_susde), _encodeApprove(plan.routerSusdeToUsdt, 0));
+        }
+        addToBatch(address(_usde), _encodeApprove(address(_susde), 0));
+
+        _setPostBatchValidateSelector(this._validateExecuteUnwindLoopPostBatch.selector);
+
+        proposeBatch();
+    }
+
+    function _computeUnwindPlan(
+        UnwindConfig memory config
+    ) internal returns (UnwindPlan memory plan) {
+        _unwindSlippageBps = config.slippageBps;
+        _unwindMinHealthFactor = config.minHealthFactor;
+        _unwindMinSwap1ValueRatioBps = config.minSwap1ValueRatioBps;
+        _unwindMinSwap2ValueRatioBps = config.minSwap2ValueRatioBps;
+        _unwindMaxSusdeSwapIn = config.maxSusdeSwapIn;
+
+        UnwindStep1Outputs memory step1 = _computeUnwindStep1();
+
+        plan.usdeWithdrawAmount1 = step1.usdeWithdrawAmount1;
+        plan.conservativeRepay1 = step1.conservativeRepay1;
+        plan.routerUsdeToUsdt = step1.routerUsdeToUsdt;
+        plan.swapCalldataUsdeToUsdt = step1.swapCalldataUsdeToUsdt;
+
+        uint256 susdeSwapAmount;
+        address routerSusdeToUsdt;
+        bytes memory swapCalldataSusdeToUsdt;
+        uint256 conservativeRepay2;
+        uint256 debtAfterStep2;
+        uint256 usdeWithdrawAmountFinal;
+        uint256 susdeWithdrawAmountFinal;
+        UnwindStep2Inputs memory step2Inputs;
+        step2Inputs.collateralAfterStep1 = step1.collateralAfterStep1;
+        step2Inputs.debtAfterStep1 = step1.debtAfterStep1;
+        step2Inputs.usdtDebtAfterStep1 = step1.usdtDebtAfterStep1;
+        step2Inputs.currentLiquidationThreshold = step1.currentLiquidationThreshold;
+        step2Inputs.usdeATokenBalance = step1.usdeATokenBalance;
+        step2Inputs.susdeATokenBalance = step1.susdeATokenBalance;
+        step2Inputs.usdeWithdrawAmount1 = step1.usdeWithdrawAmount1;
+        (
+            susdeSwapAmount,
+            routerSusdeToUsdt,
+            swapCalldataSusdeToUsdt,
+            conservativeRepay2,
+            debtAfterStep2,
+            usdeWithdrawAmountFinal,
+            susdeWithdrawAmountFinal
+        ) = _computeUnwindStep2(step2Inputs);
+
+        plan.susdeSwapAmount = susdeSwapAmount;
+        plan.routerSusdeToUsdt = routerSusdeToUsdt;
+        plan.swapCalldataSusdeToUsdt = swapCalldataSusdeToUsdt;
+        plan.conservativeRepay2 = conservativeRepay2;
+        plan.debtAfterStep2 = debtAfterStep2;
+        plan.usdeWithdrawAmountFinal = usdeWithdrawAmountFinal;
+        plan.susdeWithdrawAmountFinal = susdeWithdrawAmountFinal;
+
+        console2.log("\n--- Unwind plan (conservative) ---");
+        console2.log(
+            "[Iteration] Withdraw #1 USDe:",
+            _toDecimalString(plan.usdeWithdrawAmount1, 18)
+        );
+        console2.log(
+            "[Iteration] Conservative repay #1 USDT:",
+            _toDecimalString(plan.conservativeRepay1, 6)
+        );
+        console2.log(
+            "[Iteration] Swap #2 sUSDe input:",
+            _toDecimalString(plan.susdeSwapAmount, 18)
+        );
+        console2.log(
+            "[Iteration] Conservative repay #2 USDT:",
+            _toDecimalString(plan.conservativeRepay2, 6)
+        );
+        console2.log(
+            "[Iteration] Final USDe withdraw:",
+            _toDecimalString(plan.usdeWithdrawAmountFinal, 18)
+        );
+        console2.log(
+            "[Iteration] Final sUSDe withdraw:",
+            _toDecimalString(plan.susdeWithdrawAmountFinal, 18)
+        );
+    }
+
+    function _computeUnwindStep1() internal returns (UnwindStep1Outputs memory step1) {
+        (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            ,
+            uint256 currentLiquidationThreshold,
+            ,
+            uint256 healthFactor
+        ) = AAVE_POOL.getUserAccountData(_owner);
+
+        if (totalDebtBase == 0) revert("No debt to unwind");
+        if (currentLiquidationThreshold == 0) revert("Liquidation threshold is zero");
+
+        (step1.usdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_usde),
+            _owner
+        );
+        (step1.susdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_susde),
+            _owner
+        );
+        (, uint256 usdtStableDebt, uint256 usdtVariableDebt, , , , , , ) = AAVE_DATA_PROVIDER
+            .getUserReserveData(address(_usdt), _owner);
+
+        if (usdtStableDebt > 0) revert("Stable USDT debt not supported");
+        if (usdtVariableDebt == 0) revert("No variable USDT debt");
+
+        console2.log(
+            "=== Execute Unwind Iteration: USDe/sUSDe -> USDT repay -> collateral release ==="
+        );
+        console2.log("Owner:", _owner);
+        console2.log("Slippage (bps):", _unwindSlippageBps);
+        console2.log("Minimum health factor:", _toDecimalString(_unwindMinHealthFactor, 18));
+        console2.log("Current health factor:", _toDecimalString(healthFactor, 18));
+        console2.log("Current collateral:", _toDecimalString(totalCollateralBase, 8));
+        console2.log("Current debt:", _toDecimalString(totalDebtBase, 8));
+        console2.log("Current USDT variable debt:", _toDecimalString(usdtVariableDebt, 6));
+
+        step1.currentLiquidationThreshold = currentLiquidationThreshold;
+
+        uint256 collateralReductionBase = _maxCollateralReductionForMinHealthFactor(
+            totalCollateralBase,
+            totalDebtBase,
+            currentLiquidationThreshold,
+            _unwindMinHealthFactor
+        );
+        if (collateralReductionBase == 0) revert("No safe collateral headroom");
+
+        uint256 usdeWithdrawBase = _min(
+            collateralReductionBase,
+            _usdeToBaseValue(step1.usdeATokenBalance)
+        );
+        uint256 debtNotionalUsde = FullMath.mulDiv(usdtVariableDebt, 1e18, 1e6);
+        if (usdeWithdrawBase > 0) {
+            uint256 usdeWithdrawAmountPreview = _baseToUsdeAmount(usdeWithdrawBase);
+            if (usdeWithdrawAmountPreview > debtNotionalUsde) {
+                usdeWithdrawBase = _usdeToBaseValue(debtNotionalUsde);
+            }
+        }
+        step1.usdeWithdrawAmount1 = _baseToUsdeAmount(usdeWithdrawBase);
+
+        (
+            step1.routerUsdeToUsdt,
+            step1.swapCalldataUsdeToUsdt,
+            step1.conservativeRepay1
+        ) = _planUsdeRepayLeg(step1.usdeWithdrawAmount1, usdtVariableDebt);
+
+        step1.collateralAfterStep1 = totalCollateralBase - usdeWithdrawBase;
+        step1.debtAfterStep1 = totalDebtBase - (step1.conservativeRepay1 * 1e2);
+        step1.usdtDebtAfterStep1 = usdtVariableDebt - step1.conservativeRepay1;
+    }
+
+    function _planUsdeRepayLeg(
+        uint256 usdeWithdrawAmount,
+        uint256 maxRepayAmount
+    ) internal returns (address router, bytes memory swapCalldata, uint256 conservativeRepay) {
+        if (usdeWithdrawAmount == 0) return (address(0), bytes(""), 0);
+
+        uint256 usdtAmountOut;
+        (router, swapCalldata, usdtAmountOut) = _getKyberSwapCalldata(
+            "Swap #1 (USDe -> USDT)",
+            address(_usde),
+            address(_usdt),
+            usdeWithdrawAmount,
+            _unwindSlippageBps
+        );
+
+        _logAndValidateValueRatio(
+            "Swap #1 (USDe -> USDT)",
+            _usdtToUsd18(usdtAmountOut),
+            usdeWithdrawAmount,
+            _unwindMinSwap1ValueRatioBps
+        );
+
+        conservativeRepay = _min(
+            FullMath.mulDiv(usdtAmountOut, 10000 - _unwindSlippageBps, 10000),
+            maxRepayAmount
+        );
+    }
+
+    function _planSusdeRepayLeg(
+        uint256 susdeSwapAmount,
+        uint256 maxRepayAmount
+    )
+        internal
+        returns (
+            address router,
+            bytes memory swapCalldata,
+            uint256 conservativeRepay,
+            uint256 susdeSwapValueBase
+        )
+    {
+        if (susdeSwapAmount == 0) return (address(0), bytes(""), 0, 0);
+
+        uint256 usdtAmountOut;
+        (router, swapCalldata, usdtAmountOut) = _getKyberSwapCalldata(
+            "Swap #2 (sUSDe -> USDT)",
+            address(_susde),
+            address(_usdt),
+            susdeSwapAmount,
+            _unwindSlippageBps
+        );
+
+        uint256 susdeInputNotionalUsd = _susdeToUsdeValue(susdeSwapAmount);
+        _logAndValidateValueRatio(
+            "Swap #2 (sUSDe -> USDT)",
+            _usdtToUsd18(usdtAmountOut),
+            susdeInputNotionalUsd,
+            _unwindMinSwap2ValueRatioBps
+        );
+
+        conservativeRepay = _min(
+            FullMath.mulDiv(usdtAmountOut, 10000 - _unwindSlippageBps, 10000),
+            maxRepayAmount
+        );
+        susdeSwapValueBase = _susdeToBaseValue(susdeSwapAmount);
+    }
+
+    function _computeUnwindStep2(
+        UnwindStep2Inputs memory inputs
+    )
+        internal
+        returns (
+            uint256 susdeSwapAmount,
+            address routerSusdeToUsdt,
+            bytes memory swapCalldataSusdeToUsdt,
+            uint256 conservativeRepay2,
+            uint256 debtAfterStep2,
+            uint256 usdeWithdrawAmountFinal,
+            uint256 susdeWithdrawAmountFinal
+        )
+    {
+        uint256 collateralReductionBaseStep2 = _maxCollateralReductionForMinHealthFactor(
+            inputs.collateralAfterStep1,
+            inputs.debtAfterStep1,
+            inputs.currentLiquidationThreshold,
+            _unwindMinHealthFactor
+        );
+
+        uint256 susdeSwapCap = _unwindMaxSusdeSwapIn == 0
+            ? inputs.susdeATokenBalance
+            : _min(_unwindMaxSusdeSwapIn, inputs.susdeATokenBalance);
+        uint256 susdeSwapByHealthFactor = _baseToSusdeAmount(collateralReductionBaseStep2);
+        susdeSwapAmount = _min(susdeSwapCap, susdeSwapByHealthFactor);
+        if (susdeSwapAmount > 0) {
+            uint256 debtNotionalSusde = _usdeToSusdeShares(
+                FullMath.mulDiv(inputs.usdtDebtAfterStep1, 1e18, 1e6)
+            );
+            susdeSwapAmount = _min(susdeSwapAmount, debtNotionalSusde);
+        }
+
+        uint256 susdeSwapValueBase;
+        (
+            routerSusdeToUsdt,
+            swapCalldataSusdeToUsdt,
+            conservativeRepay2,
+            susdeSwapValueBase
+        ) = _planSusdeRepayLeg(susdeSwapAmount, inputs.usdtDebtAfterStep1);
+
+        uint256 collateralAfterStep2 = inputs.collateralAfterStep1 - susdeSwapValueBase;
+        debtAfterStep2 = inputs.debtAfterStep1 - (conservativeRepay2 * 1e2);
+
+        (usdeWithdrawAmountFinal, susdeWithdrawAmountFinal) = _computeFinalUnwindWithdrawals(
+            inputs,
+            collateralAfterStep2,
+            debtAfterStep2,
+            susdeSwapAmount
+        );
+    }
+
+    function _computeFinalUnwindWithdrawals(
+        UnwindStep2Inputs memory inputs,
+        uint256 collateralAfterStep2,
+        uint256 debtAfterStep2,
+        uint256 susdeSwapAmount
+    ) internal view returns (uint256 usdeWithdrawAmountFinal, uint256 susdeWithdrawAmountFinal) {
+        uint256 finalCollateralReductionBase = _maxCollateralReductionForMinHealthFactor(
+            collateralAfterStep2,
+            debtAfterStep2,
+            inputs.currentLiquidationThreshold,
+            _unwindMinHealthFactor
+        );
+
+        uint256 usdeRemainingAToken = inputs.usdeATokenBalance > inputs.usdeWithdrawAmount1
+            ? inputs.usdeATokenBalance - inputs.usdeWithdrawAmount1
+            : 0;
+        uint256 usdeWithdrawBaseFinal = _min(
+            finalCollateralReductionBase,
+            _usdeToBaseValue(usdeRemainingAToken)
+        );
+        usdeWithdrawAmountFinal = _baseToUsdeAmount(usdeWithdrawBaseFinal);
+
+        uint256 susdeRemainingAToken = inputs.susdeATokenBalance > susdeSwapAmount
+            ? inputs.susdeATokenBalance - susdeSwapAmount
+            : 0;
+        uint256 remainingCollateralReductionBase = finalCollateralReductionBase -
+            usdeWithdrawBaseFinal;
+        susdeWithdrawAmountFinal = _min(
+            susdeRemainingAToken,
+            _baseToSusdeAmount(remainingCollateralReductionBase)
+        );
+    }
+
+    function _validateExecuteUnwindLoopPostBatch() external view {
+        (uint256 collateralAfter, uint256 debtAfter, , , , uint256 healthFactorAfter) = AAVE_POOL
+            .getUserAccountData(_owner);
+
+        if (healthFactorAfter < _expectedMinHealthFactor) {
+            revert(
+                string.concat(
+                    "Health factor below minimum: ",
+                    _toDecimalString(healthFactorAfter, 18),
+                    " < ",
+                    _toDecimalString(_expectedMinHealthFactor, 18)
+                )
+            );
+        }
+
+        if (debtAfter > _expectedMaxDebtBase) {
+            revert("Debt reduction below conservative expectation");
+        }
+
+        uint256 susdeBalanceAfter = _susde.balanceOf(_owner);
+        if (susdeBalanceAfter < _expectedMinSusdeOut) {
+            revert("sUSDe balance below conservative expectation");
+        }
+
+        console2.log("\n--- Post-batch summary (unwind) ---");
+        console2.log("[Position] Collateral after:", _toDecimalString(collateralAfter, 8));
+        console2.log("[Position] Debt after:", _toDecimalString(debtAfter, 8));
+        console2.log("[Position] Health factor after:", _toDecimalString(healthFactorAfter, 18));
+        console2.log("[Position] sUSDe wallet balance:", _toDecimalString(susdeBalanceAfter, 18));
+        _logAaveBalanceSheetReport();
+        console2.log("executeUnwindLoop post-batch validation passed");
     }
 
     function _addLoopActionsToBatch(
@@ -678,6 +1228,29 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
     }
 
+    function _encodeWithdraw(
+        address asset,
+        uint256 amount,
+        address to
+    ) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(IAaveV3Pool.withdraw.selector, asset, amount, to);
+    }
+
+    function _encodeRepay(
+        address asset,
+        uint256 amount,
+        address onBehalfOf
+    ) internal pure returns (bytes memory) {
+        return
+            abi.encodeWithSelector(
+                IAaveV3Pool.repay.selector,
+                asset,
+                amount,
+                VARIABLE_RATE,
+                onBehalfOf
+            );
+    }
+
     function _encodeSetUserUseReserveAsCollateral(
         address asset,
         bool useAsCollateral
@@ -752,6 +1325,57 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     function _ratioBps(uint256 numerator, uint256 denominator) internal pure returns (uint256) {
         if (denominator == 0) return 0;
         return FullMath.mulDiv(numerator, 10000, denominator);
+    }
+
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
+    function _usdeToBaseValue(uint256 usdeAmount) internal pure returns (uint256) {
+        return FullMath.mulDiv(usdeAmount, BASE_CURRENCY_SCALE, 1e18);
+    }
+
+    function _baseToUsdeAmount(uint256 baseAmount) internal pure returns (uint256) {
+        return FullMath.mulDiv(baseAmount, 1e18, BASE_CURRENCY_SCALE);
+    }
+
+    function _susdeToBaseValue(uint256 susdeAmount) internal view returns (uint256) {
+        return FullMath.mulDiv(_susdeToUsdeValue(susdeAmount), BASE_CURRENCY_SCALE, 1e18);
+    }
+
+    function _baseToSusdeAmount(uint256 baseAmount) internal view returns (uint256) {
+        uint256 usdeAmount = _baseToUsdeAmount(baseAmount);
+        uint256 oneSusdeValue = _susdeExchangeRate();
+        if (oneSusdeValue == 0) revert("sUSDe exchange rate is zero");
+        return FullMath.mulDiv(usdeAmount, 1e18, oneSusdeValue);
+    }
+
+    function _usdeToSusdeShares(uint256 usdeAmount) internal view returns (uint256) {
+        try IERC4626(address(_susde)).convertToShares(usdeAmount) returns (uint256 shares) {
+            return shares;
+        } catch {
+            revert("sUSDe convertToShares failed");
+        }
+    }
+
+    function _maxCollateralReductionForMinHealthFactor(
+        uint256 collateralBase,
+        uint256 debtBase,
+        uint256 liquidationThresholdBps,
+        uint256 minHealthFactor
+    ) internal pure returns (uint256) {
+        if (debtBase == 0 || collateralBase == 0 || liquidationThresholdBps == 0) {
+            return collateralBase;
+        }
+
+        uint256 requiredCollateralBase = FullMath.mulDivUp(
+            minHealthFactor,
+            debtBase * 10000,
+            uint256(liquidationThresholdBps) * 1e18
+        );
+
+        if (requiredCollateralBase >= collateralBase) return 0;
+        return collateralBase - requiredCollateralBase;
     }
 
     function _toDecimalString(
@@ -883,8 +1507,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         (uint256 postStatus, bytes memory postResponse) = string
             .concat(KYBERSWAP_BASE_URL, "/api/v1/route/build")
             .post(headers, postBody);
-        if (postStatus >= 400)
+        if (postStatus >= 400) {
             revert(string.concat("KyberSwap POST failed: ", string(postResponse)));
+        }
 
         swapCalldata = vm.parseBytes(string(postResponse).readString(".data.data"));
     }
@@ -990,17 +1615,31 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // ============ Args Helpers ============
 
     function _readOptionalUint256(
+        string memory functionName,
         string memory key,
         uint256 defaultValue
     ) internal view returns (uint256) {
         if (bytes(_argsFile).length == 0) return defaultValue;
 
-        string memory path = string.concat(".functions[0].args.", key);
-        try vm.parseJson(_argsFile, path) returns (bytes memory parsed) {
-            if (parsed.length == 0) return defaultValue;
-            return abi.decode(parsed, (uint256));
+        string memory path = string.concat(
+            ".functions[?(@.name == '",
+            functionName,
+            "')].args.",
+            key
+        );
+        try vm.parseJsonUint(_argsFile, path) returns (uint256 value) {
+            return value;
         } catch {
-            return defaultValue;
+            try vm.parseJsonString(_argsFile, path) returns (string memory valueString) {
+                if (bytes(valueString).length == 0) return defaultValue;
+                try vm.parseUint(valueString) returns (uint256 parsedValue) {
+                    return parsedValue;
+                } catch {
+                    return defaultValue;
+                }
+            } catch {
+                return defaultValue;
+            }
         }
     }
 }
