@@ -66,6 +66,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _unwindMinSwap1ValueRatioBps;
     uint256 internal _unwindMinSwap2ValueRatioBps;
     uint256 internal _unwindMaxSusdeSwapIn;
+    string internal _kyberExcludedSources;
 
     struct UnwindConfig {
         uint256 slippageBps;
@@ -208,10 +209,21 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             DEFAULT_SLIPPAGE_BPS
         );
         if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
+        _kyberExcludedSources = _readOptionalString("executeLoop", "kyberExcludedSources", "");
 
         _skipHeartbeatValidation = SKIP_HEARTBEAT;
 
         if (susdeSupplyAmount == 0) susdeSupplyAmount = _initialSusdeBalance;
+        if (susdeSupplyAmount > _initialSusdeBalance) {
+            revert(
+                string.concat(
+                    "sUSDe wallet balance below requested supply: ",
+                    _toDecimalString(_initialSusdeBalance, 18),
+                    " < ",
+                    _toDecimalString(susdeSupplyAmount, 18)
+                )
+            );
+        }
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
         _susdeSuppliedAmount = susdeSupplyAmount;
 
@@ -220,6 +232,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("sUSDe supply amount (from wallet):", _toDecimalString(susdeSupplyAmount, 18));
         console2.log("Borrow percentage (bps):", borrowPercentage);
         console2.log("Slippage (bps):", slippageBps);
+        if (bytes(_kyberExcludedSources).length > 0) {
+            console2.log("Kyber excluded sources:", _kyberExcludedSources);
+        }
 
         uint256 totalExpectedBorrowsAfterSusdeSupply;
         uint256 usdtBorrowAmount1;
@@ -531,6 +546,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "executeUnwindLoop",
             "maxSusdeSwapIn",
             DEFAULT_MAX_SUSDE_SWAP_IN
+        );
+        _kyberExcludedSources = _readOptionalString(
+            "executeUnwindLoop",
+            "kyberExcludedSources",
+            ""
         );
 
         _skipHeartbeatValidation = SKIP_HEARTBEAT;
@@ -1545,6 +1565,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "&amountIn=",
             vm.toString(amountIn)
         );
+        if (bytes(_kyberExcludedSources).length > 0) {
+            getUrl = string.concat(getUrl, "&excludedSources=", _kyberExcludedSources);
+        }
 
         string[] memory headers = new string[](2);
         headers[0] = "Accept: application/json";
@@ -1720,6 +1743,27 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             } catch {
                 return defaultValue;
             }
+        }
+    }
+
+    function _readOptionalString(
+        string memory functionName,
+        string memory key,
+        string memory defaultValue
+    ) internal view returns (string memory) {
+        if (bytes(_argsFile).length == 0) return defaultValue;
+
+        string memory path = string.concat(
+            ".functions[?(@.name == '",
+            functionName,
+            "')].args.",
+            key
+        );
+        try vm.parseJsonString(_argsFile, path) returns (string memory value) {
+            if (bytes(value).length == 0) return defaultValue;
+            return value;
+        } catch {
+            return defaultValue;
         }
     }
 }

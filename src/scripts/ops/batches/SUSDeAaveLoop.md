@@ -37,10 +37,11 @@ Opens or extends the loop in a single batch:
 Optional args (all read from the `executeLoop` function entry in args JSON):
 
 -   `susdeSupplyAmount` (default `0`): if `0`, uses full owner sUSDe balance.
--   `borrowPercentage` (default `9000`): bps of available borrow capacity, max `10000`.
--   `slippageBps` (default `50`): max `100`.
+-   `borrowPercentage` (default `10000`): bps of available borrow capacity, max `10000`.
+-   `slippageBps` (default `5`): max `100`.
 -   `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for swap 1.
 -   `minSwap2ValueRatioBps` (default `9990`): minimum value ratio for swap 2.
+-   `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
 
 Backward compatibility aliases for the loop value checks are still accepted:
 
@@ -63,6 +64,7 @@ Optional args (all read from the `executeUnwindLoop` function entry in args JSON
 -   `slippageBps` (default `50`): max `100`.
 -   `minHealthFactor` (default `1020000000000000000`, i.e. `1.02e18`): must be `>= 1e18`.
 -   `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for USDe -> USDT swap.
+-   `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
 
 Post-batch validation enforces:
 
@@ -82,12 +84,14 @@ Example: `src/scripts/ops/batches/args/SUSDeAaveLoop.json`
         {
             "args": {
                 "borrowPercentage": "9000",
+                "kyberExcludedSources": "ekubo-v3",
                 "slippageBps": "50"
             },
             "name": "executeLoop"
         },
         {
             "args": {
+                "kyberExcludedSources": "ekubo-v3",
                 "minHealthFactor": "1020000000000000000",
                 "minSwap1ValueRatioBps": "9990",
                 "slippageBps": "50"
