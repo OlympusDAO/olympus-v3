@@ -134,7 +134,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal constant VARIABLE_RATE = 2;
 
     // Default values
-    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 10000; // 100%
+    uint256 internal constant DEFAULT_BORROW_PERCENTAGE = 9900; // 99%
     uint256 internal constant DEFAULT_SLIPPAGE_BPS = 5; // 0.05%
     uint256 internal constant DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS = 10_000; // 100%
     uint256 internal constant DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> USDe)
@@ -1024,69 +1024,127 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         address routerUsdtToSusde,
         bytes memory swapCalldataUsdtToSusde
     ) internal {
-        // 3. Approve & supply sUSDe, set collateral
-        console2.log("\n3. Approve and supply sUSDe to Aave");
-        addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), susdeSupplyAmount));
-        addToBatch(address(AAVE_POOL), _encodeSupply(address(_susde), susdeSupplyAmount, _owner));
-        addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_susde), true));
+        _addToBatchWithStepLog(
+            address(_susde),
+            _encodeApprove(address(AAVE_POOL), susdeSupplyAmount),
+            "Approve sUSDe -> Aave"
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSupply(address(_susde), susdeSupplyAmount, _owner),
+            "Supply sUSDe"
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSetUserUseReserveAsCollateral(address(_susde), true),
+            "Enable sUSDe as collateral"
+        );
 
-        // 4. Borrow USDT amount 1
-        console2.log("\n4. Borrow USDT amount 1 from Aave");
-        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount1, _owner));
-
-        // Debug: inspect borrowed USDT balance before first swap
-        addToBatch(address(_usdt), _encodeBalanceOf(_owner));
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeBorrow(address(_usdt), usdtBorrowAmount1, _owner),
+            "Borrow USDT amount 1"
+        );
 
         // USDT uses a non-standard approve that requires resetting to 0 before setting a new value.
         // This pattern is applied before each swap below (steps 5 and 8).
-        // Debug balanceOf calls are included to trace intermediate balances during simulation.
 
-        // 5. Swap USDT -> USDe
-        console2.log("\n5. Swap USDT amount 1 to USDe");
-        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
-        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, usdtBorrowAmount1));
-        addToBatch(routerUsdtToUsde, swapCalldataUsdtToUsde);
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(routerUsdtToUsde, 0),
+            "Reset USDT approval for swap 1 router"
+        );
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(routerUsdtToUsde, usdtBorrowAmount1),
+            "Approve USDT for swap 1"
+        );
+        _addToBatchWithStepLog(routerUsdtToUsde, swapCalldataUsdtToUsde, "Swap USDT -> USDe");
 
-        // Debug: inspect realized USDe balance after swap, before supply
-        addToBatch(address(_usde), _encodeBalanceOf(_owner));
-        // Debug: inspect remaining USDT after first swap
-        addToBatch(address(_usdt), _encodeBalanceOf(_owner));
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(AAVE_POOL), usdeSupplyAmount),
+            "Approve USDe -> Aave"
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSupply(address(_usde), usdeSupplyAmount, _owner),
+            "Supply USDe"
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSetUserUseReserveAsCollateral(address(_usde), true),
+            "Enable USDe as collateral"
+        );
 
-        // 6. Approve & supply USDe, set collateral
-        console2.log("\n6. Approve and supply USDe to Aave");
-        addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), usdeSupplyAmount));
-        addToBatch(address(AAVE_POOL), _encodeSupply(address(_usde), usdeSupplyAmount, _owner));
-        addToBatch(address(AAVE_POOL), _encodeSetUserUseReserveAsCollateral(address(_usde), true));
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner),
+            "Borrow USDT amount 2"
+        );
 
-        // 7. Borrow USDT amount 2
-        console2.log("\n7. Borrow USDT amount 2 from Aave");
-        addToBatch(address(AAVE_POOL), _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner));
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(routerUsdtToSusde, 0),
+            "Reset USDT approval for swap 2 router"
+        );
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2),
+            "Approve USDT for swap 2"
+        );
+        _addToBatchWithStepLog(routerUsdtToSusde, swapCalldataUsdtToSusde, "Swap USDT -> sUSDe");
 
-        // 8. Swap USDT -> sUSDe
-        console2.log("\n8. Swap USDT amount 2 to sUSDe");
-        addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
-        addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2));
-        addToBatch(routerUsdtToSusde, swapCalldataUsdtToSusde);
-
-        // Debug: inspect realized sUSDe balance after second swap
-        addToBatch(address(_susde), _encodeBalanceOf(_owner));
-
-        // 9. Deposit conservative leftover USDe into sUSDe
         if (usdeToSusdeDepositAmount > 0) {
-            console2.log("\n9. Deposit conservative leftover USDe into sUSDe");
-            addToBatch(address(_usde), _encodeApprove(address(_susde), usdeToSusdeDepositAmount));
-            addToBatch(address(_susde), _encodeDeposit4626(usdeToSusdeDepositAmount, _owner));
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), usdeToSusdeDepositAmount),
+                "Approve leftover USDe -> sUSDe"
+            );
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeDeposit4626(usdeToSusdeDepositAmount, _owner),
+                "Deposit leftover USDe into sUSDe"
+            );
         }
 
-        // 10. Zero approvals
-        console2.log("\n10. Zero approvals");
-        addToBatch(address(_susde), _encodeApprove(address(AAVE_POOL), 0));
-        addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
+        _addToBatchWithStepLog(
+            address(_susde),
+            _encodeApprove(address(AAVE_POOL), 0),
+            "Zero sUSDe -> Aave approval"
+        );
+        _addToBatchWithStepLog(
+            address(_usdt),
+            _encodeApprove(routerUsdtToUsde, 0),
+            "Zero USDT -> swap 1 router approval"
+        );
         if (routerUsdtToSusde != routerUsdtToUsde) {
-            addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
+            _addToBatchWithStepLog(
+                address(_usdt),
+                _encodeApprove(routerUsdtToSusde, 0),
+                "Zero USDT -> swap 2 router approval"
+            );
         }
-        addToBatch(address(_usde), _encodeApprove(address(AAVE_POOL), 0));
-        addToBatch(address(_usde), _encodeApprove(address(_susde), 0));
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(AAVE_POOL), 0),
+            "Zero USDe -> Aave approval"
+        );
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(_susde), 0),
+            "Zero USDe -> sUSDe approval"
+        );
+    }
+
+    function _addToBatchWithStepLog(
+        address target,
+        bytes memory data,
+        string memory label
+    ) internal {
+        uint256 step = _batchTargets.length;
+        console2.log(string.concat("step ", vm.toString(step), ": ", label));
+        addToBatch(target, data);
     }
 
     /// @notice Post-batch validation: verify the loop produced expected results
@@ -1345,10 +1403,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     function _encodeSetUserEMode(uint8 categoryId) internal pure returns (bytes memory) {
         return abi.encodeWithSelector(IAaveV3Pool.setUserEMode.selector, categoryId);
-    }
-
-    function _encodeBalanceOf(address account) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(IERC20.balanceOf.selector, account);
     }
 
     function _encodeDeposit4626(
