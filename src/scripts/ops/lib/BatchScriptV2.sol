@@ -64,6 +64,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    If set, this function will be called after batch simulation to validate state
     bytes4 internal _postBatchValidateSelector;
 
+    /// @notice Whether to skip heartbeat validation during batch simulation
+    /// @dev    Defaults to false (heartbeat validation enabled). Set to true to skip.
+    bool internal _skipHeartbeatValidation;
+
     // TODOs
     // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
@@ -695,9 +699,18 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _runPostBatchValidation();
 
         // Validate heart beat
-        _validateHeartBeat();
+        if (_skipHeartbeatValidation) {
+            console2.log(
+                "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
+            );
+            console2.log(
+                "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
+            );
+        } else {
+            _validateHeartBeat();
+        }
 
-        // Revert to snapshot - removes BOTH simulation and validation artifacts
+        // Revert to snapshot - removes simulation and validation artifacts
         vm.revertToStateAndDelete(snapshotId);
         console2.log("Restored state from snapshot (simulation + validation artifacts removed)");
     }

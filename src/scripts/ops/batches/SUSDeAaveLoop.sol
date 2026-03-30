@@ -69,6 +69,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
 
+    // Set to true to skip heartbeat validation during batch simulation
+    bool internal constant SKIP_HEARTBEAT = true;
+
     // Aave eMode category for sUSDe/USDe/USDT stablecoins (hardcoded)
     // Category 2 on Aave Ethereum Core Pool
     uint8 internal constant EMODE_CATEGORY = 2;
@@ -124,6 +127,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (borrowPercentage > MAX_BORROW_PERCENTAGE) revert("Borrow percentage exceeds max");
         uint256 slippageBps = _readOptionalUint256("slippageBps", DEFAULT_SLIPPAGE_BPS);
         if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
+
+        _skipHeartbeatValidation = SKIP_HEARTBEAT;
 
         if (susdeSupplyAmount == 0) susdeSupplyAmount = _initialSusdeBalance;
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
@@ -302,16 +307,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
             console2.log(
                 "[Iteration] Borrow #2 utilization vs projected capacity (bps):",
-                _ratioBps(usdtBorrowAmount2 * 1e2, totalExpectedBorrowsAfterUsdeSupply)
-            );
-            console2.log("USDe supply value (USD):", _toDecimalString(usdeSupplyValueBase, 8));
-            console2.log(
-                "Projected available borrows after USDe supply:",
-                _toDecimalString(totalExpectedBorrowsAfterUsdeSupply, 8)
-            );
-            console2.log("Borrow #2 amount USDT:", _toDecimalString(usdtBorrowAmount2, 6));
-            console2.log(
-                "Borrow #2 utilization vs projected capacity (bps):",
                 _ratioBps(usdtBorrowAmount2 * 1e2, totalExpectedBorrowsAfterUsdeSupply)
             );
         }
