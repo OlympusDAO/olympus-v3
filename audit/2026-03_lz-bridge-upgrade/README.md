@@ -94,7 +94,7 @@ You can review previous audits here:
 ### Key Security Improvements Over CrossChainBridge
 
 1. **Bridged supply tracking** (canonical chain only): Tracks outbound OHM (`bridgedSupply`) with an underflow check on inbound receives, preventing unlimited mints from non-canonical chains.
-2. **`onlyEnabled` on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway checks `onlyEnabled`, meaning disabling the bridge blocks both inbound and outbound transfers.
+2. **`onlyEnabled` on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway checks `onlyEnabled`, meaning disabling the bridge blocks both inbound and outbound transfers. Note: disabling the bridge does **not** block recovery functions (`skip`, `nilify`, `burn`, `clear`), which are gated by `onlyBridgeAdminOrAdmin` instead of `onlyEnabled`, allowing `bridge_admin` or `admin` to retry or recover messages while the bridge is disabled.
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`. This limits the blast radius if the facilitator is compromised.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
@@ -102,7 +102,7 @@ You can review previous audits here:
 7. **`bridge_admin` role separation**: LZ endpoint configuration (`setSendLibrary`, `setReceiveLibrary`, `setEndpointConfig`, `skip`, `nilify`, `burn`, `clear`), `setBridgedSupply`, and `setDelegate` use a dedicated `bridge_admin` role, separate from the `admin` role used for business-level configuration. The `setDelegate` function allows setting an LZ endpoint delegate as a fallback mechanism for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set and all endpoint administration flows through the gateway's own functions.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount (enabling more outbound), but are not independently capped. The gateway overrides both `RateLimiter._outflow` and `_inflow`: `_outflow` skips unconfigured EIDs (`limit == 0 && window == 0`); `_inflow` short-circuits when `amountInFlight == 0` for the EID, covering unconfigured EIDs and fully-settled configured ones alike.
-10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by the `bridge_admin` role.
+10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`).
 
 ### LZ V2 Receiver Callbacks
 
@@ -120,7 +120,7 @@ On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 
 On non-canonical chains: supply tracking is skipped entirely.
 
-`setBridgedSupply` is available to the `bridge_admin` role for migration bootstrapping and error recovery.
+`setBridgedSupply` is available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery.
 
 ### Message Flow
 
@@ -173,19 +173,19 @@ sequenceDiagram
 | `burnAndSend`              | `onlyRole("bridge_facilitator")` + `onlyEnabled`         | Burn OHM and send cross-chain                |
 | `lzReceive`                | `onlyEnabled` + `msg.sender == LZ_ENDPOINT` + peer check | Receive LZ V2 messages                       |
 | `setPeer`                  | `onlyAdminRole`                                          | Set/clear peer gateway for a remote EID      |
-| `setDelegate`              | `onlyRole("bridge_admin")`                               | Set delegate on LZ endpoint                  |
-| `setBridgedSupply`         | `onlyRole("bridge_admin")`                               | Manual supply correction (canonical only)    |
+| `setDelegate`              | `onlyBridgeAdminOrAdmin`                                 | Set delegate on LZ endpoint                  |
+| `setBridgedSupply`         | `onlyBridgeAdminOrAdmin`                                 | Manual supply correction (canonical only)    |
 | `setEnforcedOptions`       | `onlyAdminRole`                                          | Set enforced Type 3 options per EID/msgType  |
-| `setRateLimits`            | `onlyAdminRole`                                          | Set rate limit configs per EID               |
-| `resetRateLimits`          | `onlyRole("bridge_admin")`                               | Reset rate limit state (amountInFlight)      |
-| `setSendLibrary`           | `onlyRole("bridge_admin")`                               | Pin send library on LZ endpoint              |
-| `setReceiveLibrary`        | `onlyRole("bridge_admin")`                               | Pin receive library on LZ endpoint           |
-| `setReceiveLibraryTimeout` | `onlyRole("bridge_admin")`                               | Set receive library migration timeout        |
-| `setEndpointConfig`        | `onlyRole("bridge_admin")`                               | Set ULN/Executor config on a message library |
-| `skip`                     | `onlyRole("bridge_admin")`                               | Skip a nonce on the LZ endpoint              |
-| `nilify`                   | `onlyRole("bridge_admin")`                               | Nilify a payload on the LZ endpoint          |
-| `burn`                     | `onlyRole("bridge_admin")`                               | Burn a payload on the LZ endpoint            |
-| `clear`                    | `onlyRole("bridge_admin")`                               | Clear a message on the LZ endpoint           |
+| `setRateLimits`            | `onlyBridgeAdminOrAdmin`                                 | Set rate limit configs per EID               |
+| `resetRateLimits`          | `onlyBridgeAdminOrAdmin`                                 | Reset rate limit state (amountInFlight)      |
+| `setSendLibrary`           | `onlyBridgeAdminOrAdmin`                                 | Pin send library on LZ endpoint              |
+| `setReceiveLibrary`        | `onlyBridgeAdminOrAdmin`                                 | Pin receive library on LZ endpoint           |
+| `setReceiveLibraryTimeout` | `onlyBridgeAdminOrAdmin`                                 | Set receive library migration timeout        |
+| `setEndpointConfig`        | `onlyBridgeAdminOrAdmin`                                 | Set ULN/Executor config on a message library |
+| `skip`                     | `onlyBridgeAdminOrAdmin`                                 | Skip a nonce on the LZ endpoint              |
+| `nilify`                   | `onlyBridgeAdminOrAdmin`                                 | Nilify a payload on the LZ endpoint          |
+| `burn`                     | `onlyBridgeAdminOrAdmin`                                 | Burn a payload on the LZ endpoint            |
+| `clear`                    | `onlyBridgeAdminOrAdmin`                                 | Clear a message on the LZ endpoint           |
 | `enable` / `disable`       | `onlyAdminRole` / `onlyEmergencyOrAdminRole`             | PolicyEnabler                                |
 
 #### LZCrossChainBridge (Periphery)

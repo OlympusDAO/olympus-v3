@@ -18,6 +18,8 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
+| bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery (skip/nilify/burn/clear), set delegate, set bridged supply, rate limits (also accessible via admin role) |
+| bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
