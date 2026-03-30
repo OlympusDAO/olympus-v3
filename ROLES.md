@@ -14,11 +14,11 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
+| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, and all bridge_admin functions as override |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
-| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, and all bridge_admin functions as override |
 | bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, rate limits via `onlyBridgeAdminOrAdmin` (admin can also call). `setPeer` and `setEnforcedOptions` are admin-only. |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | callback_admin | BondCallback | Administers the policy |
@@ -30,6 +30,7 @@ This document describes the roles that are used in the Olympus protocol.
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
+| em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
 | emergency | CoolerLtvOracle | Allows enable/disable on the CoolerLtvOracle |
@@ -43,7 +44,6 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
-| em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
