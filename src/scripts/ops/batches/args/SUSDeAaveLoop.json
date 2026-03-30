@@ -9,10 +9,8 @@
         },
         {
             "args": {
-                "maxSusdeSwapIn": "0",
                 "minHealthFactor": "1020000000000000000",
                 "minSwap1ValueRatioBps": "9990",
-                "minSwap2ValueRatioBps": "9990",
                 "slippageBps": "50"
             },
             "name": "executeUnwindLoop"

@@ -51,26 +51,24 @@ Backward compatibility aliases for the loop value checks are still accepted:
 
 Runs one partial unwind iteration with max-safe sizing (no percentage throttle):
 
-1. Withdraw safe USDe collateral.
-2. Swap USDe -> USDT and repay USDT debt.
-3. Withdraw safe sUSDe collateral for swap leg.
-4. Swap sUSDe -> USDT and repay USDT debt.
-5. Withdraw additional safe collateral.
-6. Convert final withdrawn USDe -> sUSDe so unwind output ends in sUSDe.
+1. Swap wallet sUSDe -> USDT and repay USDT debt (wallet-first repay leg).
+2. Withdraw safe USDe collateral.
+3. Swap withdrawn USDe -> USDT and repay USDT debt.
+4. Withdraw safe sUSDe collateral back to wallet.
+
+Unwind stops after Step 4 for this iteration.
 
 Optional args (all read from the `executeUnwindLoop` function entry in args JSON):
 
 -   `slippageBps` (default `50`): max `100`.
 -   `minHealthFactor` (default `1020000000000000000`, i.e. `1.02e18`): must be `>= 1e18`.
 -   `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for USDe -> USDT swap.
--   `minSwap2ValueRatioBps` (default `9990`): minimum value ratio for sUSDe -> USDT swap using sUSDe->USDe conversion value.
--   `maxSusdeSwapIn` (default `0`): cap on sUSDe used in swap leg; `0` means uncapped.
 
 Post-batch validation enforces:
 
 -   resulting health factor >= configured minimum,
 -   debt reduction meets conservative expectation,
--   resulting sUSDe wallet balance meets conservative minimum.
+-   resulting sUSDe wallet balance is not below the conservative floor (after subtracting any wallet sUSDe used in repay leg).
 
 ## Args File Format
 
@@ -90,10 +88,8 @@ Example: `src/scripts/ops/batches/args/SUSDeAaveLoop.json`
         },
         {
             "args": {
-                "maxSusdeSwapIn": "0",
                 "minHealthFactor": "1020000000000000000",
                 "minSwap1ValueRatioBps": "9990",
-                "minSwap2ValueRatioBps": "9990",
                 "slippageBps": "50"
             },
             "name": "executeUnwindLoop"
