@@ -92,7 +92,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     }
 
     /// @notice Execute one full sUSDe Aave loop iteration in a single multisig batch
-    /// @dev    If susdeSupplyAmount is 0 or not provided, uses full sUSDe balance
+    /// @dev    Two-phase design:
+    ///         1. CALC PHASE (off-chain simulation): fetches on-chain state, queries KyberSwap for
+    ///            swap quotes, and computes all amounts. No state changes occur during this phase.
+    ///         2. BATCH ASSEMBLY PHASE: encodes all actions (supply, borrow, swap, approve) into a
+    ///            single multisig batch transaction. The batch is proposed and must be signed/executed
+    ///            on-chain by the multisig.
+    ///
+    ///         If susdeSupplyAmount is 0 or not provided, uses full sUSDe balance
     function executeLoop(
         bool useDaoMS_,
         bool signOnly_,
@@ -124,7 +131,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         console2.log("=== Execute Loop: sUSDe -> USDT -> USDe -> sUSDe ===");
         console2.log("Owner:", _owner);
-        console2.log("sUSDe supply amount (from wallet):", susdeSupplyAmount);
+        console2.log("sUSDe supply amount (from wallet):", _toDecimalString(susdeSupplyAmount, 18));
         console2.log("Borrow percentage (bps):", borrowPercentage);
         console2.log("Slippage (bps):", slippageBps);
 
@@ -138,22 +145,27 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             (
                 ,
                 ,
-                uint256 availableBorrowsBase,
-                uint256 currentLiquidationThreshold,
+                uint256 availableBorrowsBase, // 8dp USD
+                uint256 currentLiquidationThreshold, // bps
                 ,
-                uint256 healthFactor
+                uint256 healthFactor // 1e18 ray
             ) = AAVE_POOL.getUserAccountData(_owner);
 
+            // Convert sUSDe amount (18dp) to its USDe value using live exchange rate (18dp)
             uint256 susdeSupplyValueUsde = _susdeToUsdeValue(susdeSupplyAmount);
+            // Convert USDe value (18dp) to Aave base currency (8dp USD): value * 1e8 / 1e18
             uint256 supplyValueBase = FullMath.mulDiv(
                 susdeSupplyValueUsde,
                 10 ** BASE_CURRENCY_DECIMALS,
                 1e18
             );
+            // Projected borrow capacity after sUSDe supply = existing + new LTV contribution (8dp USD)
             totalExpectedBorrowsAfterSusdeSupply =
                 availableBorrowsBase +
                 ((supplyValueBase * EMODE_LTV) / 10000);
 
+            // Convert projected capacity (8dp USD) to USDT (6dp): divide by 100
+            // Apply borrowPercentage haircut (e.g. 90% = 9000 bps)
             usdtBorrowAmount1 =
                 ((totalExpectedBorrowsAfterSusdeSupply * borrowPercentage) / 10000) /
                 1e2;
@@ -162,17 +174,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             console2.log("\n--- Step 1: Estimate Borrow #1 from sUSDe supply ---");
             console2.log("Current eMode category:", currentEMode);
             console2.log("Will set eMode in batch:", shouldSetEMode);
-            console2.log("Current available borrows base (8dp USD):", availableBorrowsBase);
+            console2.log("Current available borrows:", _toDecimalString(availableBorrowsBase, 8));
             console2.log("Current liquidation threshold (bps):", currentLiquidationThreshold);
-            console2.log("Current health factor (1e18):", healthFactor);
-            console2.log("sUSDe supply value (USDe, 18dp):", susdeSupplyValueUsde);
-            console2.log("sUSDe supply value base (8dp USD):", supplyValueBase);
+            console2.log("Current health factor:", _toDecimalString(healthFactor, 18));
+            console2.log("sUSDe supply value (USDe):", _toDecimalString(susdeSupplyValueUsde, 18));
+            console2.log("sUSDe supply value (USD):", _toDecimalString(supplyValueBase, 8));
             console2.log(
-                "Projected available borrows after sUSDe supply (8dp USD):",
-                totalExpectedBorrowsAfterSusdeSupply
+                "Projected available borrows after sUSDe supply:",
+                _toDecimalString(totalExpectedBorrowsAfterSusdeSupply, 8)
             );
-            console2.log("Borrow #1 target base (8dp USD):", usdtBorrowAmount1 * 1e2);
-            console2.log("Borrow #1 amount USDT (6dp):", usdtBorrowAmount1);
+            console2.log("Borrow #1 amount USDT:", _toDecimalString(usdtBorrowAmount1, 6));
             console2.log(
                 "Borrow #1 utilization vs projected capacity (bps):",
                 _ratioBps(usdtBorrowAmount1 * 1e2, totalExpectedBorrowsAfterSusdeSupply)
@@ -198,7 +209,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (usdeAmountOut == 0) revert("USDe quote amount is zero");
 
         console2.log("\n--- Step 2: Build swap #1 (USDT -> USDe) ---");
-        console2.log("Expected USDe out from quote (18dp):", usdeAmountOut);
+        console2.log("Expected USDe out from quote:", _toDecimalString(usdeAmountOut, 18));
         {
             uint256 minSwap1ValueRatioBps = _readOptionalUint256(
                 "minSwap1ValueRatioBps",
@@ -233,34 +244,41 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             slippageBps
         );
         console2.log(
-            "Planned USDe -> sUSDe deposit amount (conservative, 18dp):",
-            _plannedUsdeToSusdeDepositAmount
+            "Planned USDe -> sUSDe deposit amount:",
+            _toDecimalString(_plannedUsdeToSusdeDepositAmount, 18)
         );
 
         uint256 usdtBorrowAmount2;
         {
+            // USDe supply amount is already in 18dp; convert to Aave base (8dp USD)
             uint256 usdeSupplyValueBase = FullMath.mulDiv(
                 usdeSupplyAmount,
                 10 ** BASE_CURRENCY_DECIMALS,
                 1e18
             );
+            // Projected borrow capacity after both supplies:
+            // Start from post-sUSDe capacity, subtract borrow #1 (converted 6dp→8dp via *100),
+            // then add USDe LTV contribution
             uint256 totalExpectedBorrowsAfterUsdeSupply = (totalExpectedBorrowsAfterSusdeSupply -
                 (usdtBorrowAmount1 * 1e2)) + ((usdeSupplyValueBase * EMODE_LTV) / 10000);
 
+            // Convert projected capacity (8dp USD) to USDT (6dp): divide by 100
             usdtBorrowAmount2 =
                 ((totalExpectedBorrowsAfterUsdeSupply * borrowPercentage) / 10000) /
                 1e2;
             if (usdtBorrowAmount2 == 0) revert("USDT borrow amount 2 is zero");
 
             console2.log("\n--- Step 3: Estimate Borrow #2 after USDe supply ---");
-            console2.log("Conservative USDe supply amount (18dp):", usdeSupplyAmount);
-            console2.log("USDe supply value base (8dp USD):", usdeSupplyValueBase);
             console2.log(
-                "Projected available borrows after USDe supply (8dp USD):",
-                totalExpectedBorrowsAfterUsdeSupply
+                "Conservative USDe supply amount:",
+                _toDecimalString(usdeSupplyAmount, 18)
             );
-            console2.log("Borrow #2 target base (8dp USD):", usdtBorrowAmount2 * 1e2);
-            console2.log("Borrow #2 amount USDT (6dp):", usdtBorrowAmount2);
+            console2.log("USDe supply value (USD):", _toDecimalString(usdeSupplyValueBase, 8));
+            console2.log(
+                "Projected available borrows after USDe supply:",
+                _toDecimalString(totalExpectedBorrowsAfterUsdeSupply, 8)
+            );
+            console2.log("Borrow #2 amount USDT:", _toDecimalString(usdtBorrowAmount2, 6));
             console2.log(
                 "Borrow #2 utilization vs projected capacity (bps):",
                 _ratioBps(usdtBorrowAmount2 * 1e2, totalExpectedBorrowsAfterUsdeSupply)
@@ -280,7 +298,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
 
         console2.log("\n--- Step 4: Build swap #2 (USDT -> sUSDe) ---");
-        console2.log("Expected sUSDe out from quote (18dp):", susdeAmountOut);
+        console2.log("Expected sUSDe out from quote:", _toDecimalString(susdeAmountOut, 18));
         {
             uint256 minSwap2ValueRatioBps = _readOptionalUint256(
                 "minSwap2ValueRatioBps",
@@ -289,10 +307,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
                 revert("Swap #2 min value ratio invalid");
             }
-            uint256 susdeUsdeRate = _susdeExchangeRate();
             uint256 swap2ValueOutUsd = _susdeToUsdeValue(susdeAmountOut);
-            console2.log("sUSDe exchange rate (USDe per 1 sUSDe, 1e18):", susdeUsdeRate);
-            console2.log("Swap #2 quoted value out (USDe 18dp):", swap2ValueOutUsd);
+            console2.log(
+                "sUSDe exchange rate (USDe per 1 sUSDe):",
+                _toDecimalString(_susdeExchangeRate(), 18)
+            );
+            console2.log(
+                "Swap #2 quoted value out (USDe):",
+                _toDecimalString(swap2ValueOutUsd, 18)
+            );
 
             _logAndValidateValueRatio(
                 "Swap #2 (USDT -> sUSDe)",
@@ -302,7 +325,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
         _expectedMinSusdeOut = FullMath.mulDiv(susdeAmountOut, 10000 - slippageBps, 10000);
-        console2.log("Expected min sUSDe out after slippage buffer (18dp):", _expectedMinSusdeOut);
+        console2.log(
+            "Expected min sUSDe out after slippage buffer:",
+            _toDecimalString(_expectedMinSusdeOut, 18)
+        );
         console2.log(
             "Min-out buffer vs quote (bps):",
             _ratioBps(_expectedMinSusdeOut, susdeAmountOut)
@@ -352,9 +378,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         // Debug: inspect borrowed USDT balance before first swap
         addToBatch(address(_usdt), _encodeBalanceOf(_owner));
 
+        // USDT uses a non-standard approve that requires resetting to 0 before setting a new value.
+        // This pattern is applied before each swap below (steps 5 and 8).
+        // Debug balanceOf calls are included to trace intermediate balances during simulation.
+
         // 5. Swap USDT -> USDe
         console2.log("\n5. Swap USDT amount 1 to USDe");
-        // USDT requires resetting allowance to zero before setting a new non-zero allowance.
         addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, 0));
         addToBatch(address(_usdt), _encodeApprove(routerUsdtToUsde, usdtBorrowAmount1));
         addToBatch(routerUsdtToUsde, swapCalldataUsdtToUsde);
@@ -376,7 +405,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         // 8. Swap USDT -> sUSDe
         console2.log("\n8. Swap USDT amount 2 to sUSDe");
-        // USDT requires resetting allowance to zero before setting a new non-zero allowance.
         addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, 0));
         addToBatch(address(_usdt), _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2));
         addToBatch(routerUsdtToSusde, swapCalldataUsdtToSusde);
@@ -402,15 +430,20 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         addToBatch(address(_usde), _encodeApprove(address(_susde), 0));
     }
 
+    /// @notice Post-batch validation: verify the loop produced expected results
+    /// @dev    Two validation checks:
+    ///         1. sUSDe balance >= _expectedMinSusdeOut (slippage guard on swap #2)
+    ///         2. Accounting check: wallet sUSDe + supplied sUSDe >= initial balance (no sUSDe lost)
+    ///         Also reports sUSDe efficiency, collateral summary, and Aave balance sheet deltas.
     function _validateExecuteLoopPostBatch() external view {
         uint256 susdeBalanceAfter = _susde.balanceOf(_owner);
         if (susdeBalanceAfter < _expectedMinSusdeOut) {
             revert(
                 string.concat(
                     "sUSDe balance should be at least ",
-                    vm.toString(_expectedMinSusdeOut),
+                    _toDecimalString(_expectedMinSusdeOut, 18),
                     ", but is ",
-                    vm.toString(susdeBalanceAfter)
+                    _toDecimalString(susdeBalanceAfter, 18)
                 )
             );
         }
@@ -425,13 +458,17 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         (, , , , , uint256 healthFactorAfter) = AAVE_POOL.getUserAccountData(REPORTING_MS);
 
         console2.log("\n--- Post-batch summary ---");
-        console2.log("Actual sUSDe out (swap #2):", actualSusdeOut);
+        console2.log("Actual sUSDe out:", _toDecimalString(actualSusdeOut, 18));
         console2.log("sUSDe out efficiency vs initial balance (bps):", efficiencyBps);
+        _logCollateralSuppliedSummary();
         _logAaveBalanceSheetReport();
-        console2.log("Aave health factor after batch (1e18):", healthFactorAfter);
+        console2.log("Aave health factor after batch:", _toDecimalString(healthFactorAfter, 18));
         console2.log("executeLoop post-batch validation passed");
     }
 
+    /// @notice Log Aave balance sheet deltas (loop iteration) and total position (full account)
+    /// @dev    "Loop" deltas = change from this iteration only (after - before).
+    ///         "Position total" = full Aave account state including prior positions.
     function _logAaveBalanceSheetReport() internal view {
         (
             uint256 totalCollateralBaseAfter,
@@ -464,38 +501,75 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
 
         if (collateralIncreased) {
-            console2.log("Loop collateral change (8dp USD): +", collateralDelta);
-            console2.log("Loop collateral change (USD, 2dp): +", collateralDelta / 1e6);
+            console2.log(
+                string.concat("Loop collateral change: +", _toDecimalString(collateralDelta, 8))
+            );
         } else {
-            console2.log("Loop collateral change (8dp USD): -", collateralDelta);
-            console2.log("Loop collateral change (USD, 2dp): -", collateralDelta / 1e6);
+            console2.log(
+                string.concat("Loop collateral change: -", _toDecimalString(collateralDelta, 8))
+            );
         }
 
         if (debtIncreased) {
-            console2.log("Loop debt change (8dp USD): +", debtDelta);
-            console2.log("Loop debt change (USD, 2dp): +", debtDelta / 1e6);
+            console2.log(string.concat("Loop debt change: +", _toDecimalString(debtDelta, 8)));
         } else {
-            console2.log("Loop debt change (8dp USD): -", debtDelta);
-            console2.log("Loop debt change (USD, 2dp): -", debtDelta / 1e6);
+            console2.log(string.concat("Loop debt change: -", _toDecimalString(debtDelta, 8)));
         }
 
         if (netIncreased) {
-            console2.log("Loop net account value change (8dp USD): +", netDelta);
-            console2.log("Loop net account value change (USD, 2dp): +", netDelta / 1e6);
+            console2.log(
+                string.concat("Loop net account value change: +", _toDecimalString(netDelta, 8))
+            );
         } else {
-            console2.log("Loop net account value change (8dp USD): -", netDelta);
-            console2.log("Loop net account value change (USD, 2dp): -", netDelta / 1e6);
+            console2.log(
+                string.concat("Loop net account value change: -", _toDecimalString(netDelta, 8))
+            );
         }
 
-        console2.log("Position total collateral (8dp USD):", totalCollateralBaseAfter);
-        console2.log("Position total collateral (USD, 2dp):", totalCollateralBaseAfter / 1e6);
-        console2.log("Position total debt (8dp USD):", totalDebtBaseAfter);
-        console2.log("Position total debt (USD, 2dp):", totalDebtBaseAfter / 1e6);
-        console2.log("Position net (collateral - debt) (8dp USD):", netAccountValueBaseAfter);
+        console2.log("Position total collateral:", _toDecimalString(totalCollateralBaseAfter, 8));
+        console2.log("Position total debt:", _toDecimalString(totalDebtBaseAfter, 8));
         console2.log(
-            "Position net (collateral - debt) (USD, 2dp):",
-            netAccountValueBaseAfter / 1e6
+            "Position net (collateral - debt):",
+            _toDecimalString(netAccountValueBaseAfter, 8)
         );
+
+        if (collateralDelta > 0 && debtIncreased) {
+            uint256 efficiencyBps = FullMath.mulDiv(debtDelta, 10000, collateralDelta);
+            console2.log("Loop iteration efficiency (debt/collateral, bps):", efficiencyBps);
+            console2.log("  = %d.%d%%", efficiencyBps / 100, efficiencyBps % 100);
+        }
+    }
+
+    function _logCollateralSuppliedSummary() internal view {
+        uint256 susdeSuppliedValue = _susdeToUsdeValue(_susdeSuppliedAmount);
+        uint256 susdeSuppliedValueBase = FullMath.mulDiv(
+            susdeSuppliedValue,
+            10 ** BASE_CURRENCY_DECIMALS,
+            1e18
+        );
+        uint256 usdeSuppliedValueBase = FullMath.mulDiv(
+            _usdeSuppliedAmount,
+            10 ** BASE_CURRENCY_DECIMALS,
+            1e18
+        );
+        uint256 totalNewCollateralBase = susdeSuppliedValueBase + usdeSuppliedValueBase;
+
+        console2.log("\n--- Collateral supplied summary ---");
+        console2.log("sUSDe supplied:", _toDecimalString(_susdeSuppliedAmount, 18));
+        console2.log("sUSDe supplied value (USD):", _toDecimalString(susdeSuppliedValueBase, 8));
+        console2.log("USDe supplied:", _toDecimalString(_usdeSuppliedAmount, 18));
+        console2.log("USDe supplied value (USD):", _toDecimalString(usdeSuppliedValueBase, 8));
+        console2.log("Total new collateral (USD):", _toDecimalString(totalNewCollateralBase, 8));
+        if (totalNewCollateralBase > 0) {
+            console2.log(
+                "sUSDe share (bps):",
+                _ratioBps(susdeSuppliedValueBase, totalNewCollateralBase)
+            );
+            console2.log(
+                "USDe share (bps):",
+                _ratioBps(usdeSuppliedValueBase, totalNewCollateralBase)
+            );
+        }
     }
 
     function _getAccountSummaryBase(
@@ -574,15 +648,25 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return abi.encodeWithSelector(IERC4626.deposit.selector, assets, receiver);
     }
 
+    /// @notice Compute a conservative USDe supply amount to avoid reverts from rounding/swap slippage
+    /// @dev    Takes the minimum of two estimates:
+    ///         1. Quote-based: the Kyber quote output minus slippage buffer (18dp)
+    ///         2. Input-notional: the USDT input converted 1:1 to USDe (6dp→18dp) minus slippage buffer
+    ///         The quote may overestimate due to route optimization, while the input-notional is a
+    ///         hard floor at 1:1 exchange rate. Taking the minimum protects against both overestimation
+    ///         and swap shortfall. A final percentage haircut (DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS)
+    ///         is applied for additional safety margin.
+    /// @param usdeAmountOut  Quoted USDe output from KyberSwap (18dp)
+    /// @param usdtAmountIn   USDT amount being swapped (6dp)
+    /// @param slippageBps    Slippage tolerance in basis points
+    /// @return Conservative USDe supply amount (18dp)
     function _getConservativeUsdeSupplyAmount(
         uint256 usdeAmountOut,
         uint256 usdtAmountIn,
         uint256 slippageBps
     ) internal pure returns (uint256) {
-        // Quote-based minimum (18 decimals): amountOut * (1 - slippage)
         uint256 quoteBased = FullMath.mulDiv(usdeAmountOut, 10000 - slippageBps, 10000);
 
-        // Input-notional minimum (18 decimals): usdt(6) -> usde(18) at 1:1, then apply slippage
         uint256 inputBased = FullMath.mulDiv(usdtAmountIn, 1e18, 1e6);
         inputBased = FullMath.mulDiv(inputBased, 10000 - slippageBps, 10000);
 
@@ -590,6 +674,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return FullMath.mulDiv(conservativeAmount, DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS, 10000);
     }
 
+    /// @notice Compute the amount of leftover USDe (after supplying to Aave) to deposit into sUSDe
+    /// @dev    After swap #1, we may receive more USDe than we supply to Aave (due to conservative
+    ///         sizing). This leftover is deposited into sUSDe via IERC4626.deposit to capture yield
+    ///         rather than leaving it idle. The amount is: min(quote output) - conservative supply amount.
+    ///         If supply >= quote min, there's no planned leftover and this returns 0.
+    /// @param usdeAmountOut      Quoted USDe output from KyberSwap (18dp)
+    /// @param usdeSupplyAmount   Conservative USDe supply amount from _getConservativeUsdeSupplyAmount (18dp)
+    /// @param slippageBps        Slippage tolerance in basis points
+    /// @return Amount of USDe to deposit into sUSDe (18dp), or 0 if no leftover is expected
     function _getPlannedUsdeToSusdeDepositAmount(
         uint256 usdeAmountOut,
         uint256 usdeSupplyAmount,
@@ -602,6 +695,50 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     function _ratioBps(uint256 numerator, uint256 denominator) internal pure returns (uint256) {
         if (denominator == 0) return 0;
         return FullMath.mulDiv(numerator, 10000, denominator);
+    }
+
+    function _toDecimalString(
+        uint256 value,
+        uint256 decimals
+    ) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        string memory raw = vm.toString(value);
+        if (decimals == 0) return raw;
+        bytes memory rawBytes = bytes(raw);
+        bytes memory result;
+        if (rawBytes.length <= decimals) {
+            bytes memory lead = new bytes(2 + decimals - rawBytes.length);
+            lead[0] = "0";
+            lead[1] = ".";
+            for (uint256 i = 0; i < decimals - rawBytes.length; i++) {
+                lead[i + 2] = "0";
+            }
+            result = bytes(string.concat(string(lead), raw));
+        } else {
+            uint256 intPartLen = rawBytes.length - decimals;
+            result = new bytes(rawBytes.length + 1);
+            uint256 j;
+            for (uint256 i = 0; i < rawBytes.length; i++) {
+                if (i == intPartLen) {
+                    result[j] = ".";
+                    j++;
+                }
+                result[j] = rawBytes[i];
+                j++;
+            }
+        }
+        uint256 end = result.length;
+        while (end > 0 && result[end - 1] == "0") {
+            end--;
+        }
+        if (end > 0 && result[end - 1] == ".") {
+            end--;
+        }
+        bytes memory trimmed = new bytes(end);
+        for (uint256 i = 0; i < end; i++) {
+            trimmed[i] = result[i];
+        }
+        return string(trimmed);
     }
 
     function _usdtToUsd18(uint256 usdtAmount) internal pure returns (uint256) {
@@ -661,7 +798,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         headers[1] = string.concat("X-Client-Id: ", KYBERSWAP_CLIENT_ID);
 
         console2.log("\n--- %s: Query Kyber route ---", stepLabel);
-        console2.log("Calling KyberSwap GET /api/v1/routes");
 
         (uint256 getStatus, bytes memory getResponse) = getUrl.get(headers);
         if (getStatus >= 400) revert(string.concat("KyberSwap GET failed: ", string(getResponse)));
@@ -672,7 +808,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         router = vm.parseJsonAddress(getResponseStr, ".data.routerAddress");
         if (router == address(0)) router = KYBERSWAP_ROUTER_FALLBACK;
 
-        console2.log("Route obtained, amountOut:", amountOut);
+        console2.log("Route obtained, amountOut:", _toDecimalString(amountOut, 18));
         console2.log("Router:", router);
 
         string memory postBody = string.concat(
@@ -687,8 +823,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "}"
         );
 
-        console2.log("Calling KyberSwap POST /api/v1/route/build");
-
         (uint256 postStatus, bytes memory postResponse) = string
             .concat(KYBERSWAP_BASE_URL, "/api/v1/route/build")
             .post(headers, postBody);
@@ -696,7 +830,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             revert(string.concat("KyberSwap POST failed: ", string(postResponse)));
 
         swapCalldata = vm.parseBytes(string(postResponse).readString(".data.data"));
-        console2.log("Swap calldata obtained, length:", bytes(swapCalldata).length);
     }
 
     function _extractJsonObjectForKey(
