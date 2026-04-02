@@ -22,9 +22,14 @@ jobs:
 
             - name: Install pnpm
               uses: pnpm/action-setup@v5
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
             - name: Install dependencies
               # Frozen lockfile policy is enforced in .npmrc.
               run: pnpm install
+
             - name: Audit pnpm dependencies (fail on moderate+)
               uses: JamesRobertWiseman/pnpm-audit@v3
               with:
