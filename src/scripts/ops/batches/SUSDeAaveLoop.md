@@ -4,8 +4,8 @@
 
 `SUSDeAaveLoop` is a batch script for the Olympus Yield MS that supports:
 
--   `executeLoop`: open/increase a leveraged sUSDe/USDe loop position on Aave.
--   `executeUnwindLoop`: run one max-safe unwind iteration that repays USDT debt and releases collateral while preserving a minimum health factor.
+- `executeLoop`: open/increase a leveraged sUSDe/USDe loop position on Aave.
+- `executeUnwindLoop`: run one max-safe unwind iteration that repays USDT debt and releases collateral while preserving a minimum health factor.
 
 The script builds all swap routes and amounts before adding operations to the batch.
 
@@ -36,17 +36,17 @@ Opens or extends the loop in a single batch:
 
 Optional args (all read from the `executeLoop` function entry in args JSON):
 
--   `susdeSupplyAmount` (default `0`): if `0`, uses full owner sUSDe balance.
--   `borrowPercentage` (default `10000`): bps of available borrow capacity, max `10000`.
--   `slippageBps` (default `5`): max `100`.
--   `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for swap 1.
--   `minSwap2ValueRatioBps` (default `9990`): minimum value ratio for swap 2.
--   `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
+- `susdeSupplyAmount` (default `0`): if `0`, uses full owner sUSDe balance.
+- `borrowPercentage` (default `10000`): bps of available borrow capacity, max `10000`.
+- `slippageBps` (default `5`): max `100`.
+- `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for swap 1.
+- `minSwap2ValueRatioBps` (default `9990`): minimum value ratio for swap 2.
+- `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
 
 Backward compatibility aliases for the loop value checks are still accepted:
 
--   `minSwap1QuoteRatioBps`
--   `minSwap2QuoteRatioBps`
+- `minSwap1QuoteRatioBps`
+- `minSwap2QuoteRatioBps`
 
 ### `executeUnwindLoop`
 
@@ -61,16 +61,16 @@ Unwind stops after Step 4 for this iteration.
 
 Optional args (all read from the `executeUnwindLoop` function entry in args JSON):
 
--   `slippageBps` (default `50`): max `100`.
--   `minHealthFactor` (default `1020000000000000000`, i.e. `1.02e18`): must be `>= 1e18`.
--   `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for USDe -> USDT swap.
--   `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
+- `slippageBps` (default `50`): max `100`.
+- `minHealthFactor` (default `1020000000000000000`, i.e. `1.02e18`): must be `>= 1e18`.
+- `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for USDe -> USDT swap.
+- `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
 
 Post-batch validation enforces:
 
--   resulting health factor >= configured minimum,
--   debt reduction meets conservative expectation,
--   resulting sUSDe wallet balance is not below the conservative floor (after subtracting any wallet sUSDe used in repay leg).
+- resulting health factor >= configured minimum,
+- debt reduction meets conservative expectation,
+- resulting sUSDe wallet balance is not below the conservative floor (after subtracting any wallet sUSDe used in repay leg).
 
 ## Args File Format
 
