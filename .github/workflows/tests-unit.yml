@@ -6,7 +6,7 @@ on:
     pull_request:
 
 jobs:
-    run-ci:
+    unit-tests:
         runs-on: ubuntu-latest
 
         steps:
@@ -18,15 +18,14 @@ jobs:
               with:
                   node-version: 20
 
-            - uses: pnpm/action-setup@v2
-              with:
-                  version: 9
+            - uses: pnpm/action-setup@v5
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
 
             - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+              # Frozen lockfile policy is enforced in .npmrc.
+              run: pnpm install
 
             - name: Build
               run: pnpm run build
