@@ -18,11 +18,10 @@ src/scripts/deploy/DeployV3.s.sol
 # OCG Proposal
 
 src/proposals/LZBridgeSecurityUpgradeProposal.sol
+src/proposals/LZBridgeActivator.sol
 
 # Multisig Batch Scripts
 
-src/scripts/ops/batches/lib/LZBridgeBatchScript.sol
-src/scripts/ops/batches/lib/LZBridgeL2BatchScript.sol
 src/scripts/ops/batches/LZBridgeGatewayBatch.sol
 src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol
 src/scripts/ops/batches/LZCrossChainBridgeBatch.sol

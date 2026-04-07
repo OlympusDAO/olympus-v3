@@ -59,12 +59,10 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
         - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) - Shared LZ V2 constants (endpoints, SendUln302/ReceiveUln302 libraries, DVNs, executor, confirmation counts) and encoding helpers
     - [proposals/](../../src/proposals/)
         - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) - OCG proposal: configures gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options)
+        - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) - OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (e.g. Nethermind DVN for Berachain where Google Cloud DVN is unavailable)
     - [scripts/ops/batches/](../../src/scripts/ops/batches/)
-        - [lib/](../../src/scripts/ops/batches/lib/)
-            - [LZBridgeBatchScript.sol](../../src/scripts/ops/batches/lib/LZBridgeBatchScript.sol) - Base class with shared constants, per-chain DVN addresses, and LZ V2 configuration helpers
-            - [LZBridgeL2BatchScript.sol](../../src/scripts/ops/batches/lib/LZBridgeL2BatchScript.sol) - Base class for non-canonical chains (skips OlympusHeart validation)
-        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: activate gateway, set initial bridged supply
-        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch: deactivate old bridge, activate gateway, grant roles, configure LZ V2, set peers, set enforced options, enable
+        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (delta-based initial supply snapshot, canonical chain only)
+        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into three entry points to stay within action limits: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant `bridge_admin` and related roles), and `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses (previously housed in separate base-class files).
         - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
         - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
 
@@ -120,7 +118,7 @@ On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 
 On non-canonical chains: supply tracking is skipped entirely.
 
-`setBridgedSupply` is available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery.
+`increaseBridgedSupply` and `decreaseBridgedSupply` are available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery. These delta-based functions replaced an earlier absolute `setBridgedSupply` setter to remove the risk of accidentally overwriting live supply state with a stale value.
 
 ### Message Flow
 
@@ -174,7 +172,8 @@ sequenceDiagram
 | `lzReceive`                | `onlyEnabled` + `msg.sender == LZ_ENDPOINT` + peer check | Receive LZ V2 messages                       |
 | `setPeer`                  | `onlyAdminRole`                                          | Set/clear peer gateway for a remote EID      |
 | `setDelegate`              | `onlyBridgeAdminOrAdmin`                                 | Set delegate on LZ endpoint                  |
-| `setBridgedSupply`         | `onlyBridgeAdminOrAdmin`                                 | Manual supply correction (canonical only)    |
+| `increaseBridgedSupply`    | `onlyBridgeAdminOrAdmin`                                 | Increase bridged supply by delta (canonical) |
+| `decreaseBridgedSupply`    | `onlyBridgeAdminOrAdmin`                                 | Decrease bridged supply by delta (canonical) |
 | `setEnforcedOptions`       | `onlyAdminRole`                                          | Set enforced Type 3 options per EID/msgType  |
 | `setRateLimits`            | `onlyBridgeAdminOrAdmin`                                 | Set rate limit configs per EID               |
 | `resetRateLimits`          | `onlyBridgeAdminOrAdmin`                                 | Reset rate limit state (amountInFlight)      |
