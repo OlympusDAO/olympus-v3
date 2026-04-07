@@ -25,7 +25,7 @@ On receive:
 LZ Endpoint V2 -> LZBridgeGateway.lzReceive -> validate peer -> mint OHM to recipient
 ```
 
-Additionally, an OCG proposal and multisig batch scripts handle the on-chain migration: deployment, pre-OCG gateway wiring, OCG execution (LZ V2 config + peers + options + enable gateway), old bridge disablement, bridged supply snapshot, non-canonical chain setup, and Ethereum periphery activation.
+Additionally, an OCG proposal (backed by the `LZBridgeActivator` helper contract that splits configuration across multiple sub-actions to stay within the governance 15-action limit) and multisig batch scripts handle the on-chain migration: deployment, pre-OCG gateway wiring, OCG execution (LZ V2 config + peers + options + enable gateway), old bridge disablement, bridged supply snapshot, non-canonical chain setup, and Ethereum periphery activation.
 
 ## Scope
 
@@ -61,8 +61,8 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
         - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) - OCG proposal: configures gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options)
         - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) - OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (e.g. Nethermind DVN for Berachain where Google Cloud DVN is unavailable)
     - [scripts/ops/batches/](../../src/scripts/ops/batches/)
-        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (delta-based initial supply snapshot, canonical chain only)
-        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into three entry points to stay within action limits: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant `bridge_admin` and related roles), and `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses (previously housed in separate base-class files).
+        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (initial bridged supply setter, canonical chain only)
+        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into three entry points by caller responsibility: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant the bridge roles), and `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses.
         - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
         - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
 
@@ -96,8 +96,8 @@ You can review previous audits here:
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`. This limits the blast radius if the facilitator is compromised.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
-6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation (LayerZero DVN + Google Cloud DVN).
-7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration and recovery. Functions guarded by `onlyBridgeAdminOrAdmin` — `setSendLibrary`, `setReceiveLibrary`, `setReceiveLibraryTimeout`, `setEndpointConfig`, `skip`, `nilify`, `burn`, `clear`, `setBridgedSupply`, `setDelegate`, `setRateLimits`, and `resetRateLimits` — are normally controlled by `bridge_admin`, while `admin` remains available as an emergency/override actor. The `setDelegate` function allows setting an LZ endpoint delegate as a fallback mechanism for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set and all endpoint administration flows through the gateway's own functions.
+6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation: LayerZero DVN plus a second DVN selected per route — Google Cloud DVN on chains where it is available, and Nethermind DVN for Berachain routes (where Google Cloud DVN is not available).
+7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration and recovery. Functions guarded by `onlyBridgeAdminOrAdmin` — `setSendLibrary`, `setReceiveLibrary`, `setReceiveLibraryTimeout`, `setEndpointConfig`, `skip`, `nilify`, `burn`, `clear`, `increaseBridgedSupply`, `decreaseBridgedSupply`, `setDelegate`, `setRateLimits`, and `resetRateLimits` — are normally controlled by `bridge_admin`, while `admin` remains available as an emergency/override actor. The `setDelegate` function allows setting an LZ endpoint delegate as a fallback mechanism for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set and all endpoint administration flows through the gateway's own functions.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount (enabling more outbound), but are not independently capped. The gateway overrides both `RateLimiter._outflow` and `_inflow`: `_outflow` skips unconfigured EIDs (`limit == 0 && window == 0`); `_inflow` short-circuits when `amountInFlight == 0` for the EID, covering unconfigured EIDs and fully-settled configured ones alike.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`).
@@ -118,8 +118,7 @@ On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 
 On non-canonical chains: supply tracking is skipped entirely.
 
-`increaseBridgedSupply` and `decreaseBridgedSupply` are available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery. These delta-based functions replaced an earlier absolute `setBridgedSupply` setter to remove the risk of accidentally overwriting live supply state with a stale value.
-
+`increaseBridgedSupply` and `decreaseBridgedSupply` are available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery.
 ### Message Flow
 
 #### Sending OHM (Source Chain)
@@ -158,7 +157,8 @@ sequenceDiagram
     LZBridgeGateway->>LZBridgeGateway: decode msgType, route to _receiveBridgeOhm
     LZBridgeGateway->>LZBridgeGateway: [canonical] bridgedSupply -= amount (revert on underflow)
     LZBridgeGateway->>LZBridgeGateway: rate limit inflow
-    LZBridgeGateway->>MINTR: [non-canonical] increaseMintApproval + mintOhm(to, amount)
+    LZBridgeGateway->>MINTR: [non-canonical] increaseMintApproval (JIT; canonical uses pre-funded approval)
+    LZBridgeGateway->>MINTR: mintOhm(to, amount)
     MINTR->>Recipient: OHM minted
 ```
 
