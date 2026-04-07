@@ -185,6 +185,62 @@ fmt_ohm() {
     python3 -c "v=int('$1'); print(f'{v/1e9:,.9f}')"
 }
 
+# Attempt to fetch the original payload for a failed message via LZ Scan API.
+# Paginates through source bridge messages to find one matching the given nonce.
+# Returns the payload hex string, or empty on failure.
+fetch_failed_payload() {
+    local src="$1" dst="$2" nonce="$3"
+    local src_eid="${LZID[$src]}"
+    local src_bridge="${BRIDGE[$src]}"
+
+    if ! command -v curl &>/dev/null; then
+        return
+    fi
+
+    local api_url="https://scan.layerzero-api.com/v1/messages/oapp/${src_eid}/${src_bridge}"
+    local next_token=""
+    for ((page = 0; page < 200; page++)); do
+        local url="$api_url"
+        [[ -n "$next_token" ]] && url="${api_url}?nextToken=${next_token}"
+
+        local response
+        response=$(curl -sf --max-time 15 "$url" 2>/dev/null) || break
+
+        local found
+        found=$(echo "$response" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for m in data.get('data', []):
+        pw = m.get('pathway', {})
+        if pw.get('nonce') == $nonce:
+            p = m.get('source', {}).get('tx', {}).get('payload', '')
+            if p:
+                print(p)
+                sys.exit(0)
+    print('')
+except:
+    print('')
+" 2>/dev/null)
+
+        if [[ -n "$found" ]]; then
+            echo "$found"
+            return
+        fi
+
+        # Next page
+        next_token=$(echo "$response" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('nextToken') or '')
+except:
+    print('')
+" 2>/dev/null)
+        [[ -z "$next_token" ]] && break
+    done
+}
+
 # Run cast call, return stdout on success or literal "ERROR" on failure
 safe_call() {
     local result
@@ -448,6 +504,17 @@ check_failed_messages() {
                     err "UNRETRIED failed message: $src->$dst nonce $n (hash: $result)"
                     route_failed=$((route_failed + 1))
                     has_failures=true
+
+                    # Try to auto-fetch payload from LZ Scan API / on-chain event logs
+                    local fetched_payload=""
+                    info "  Attempting to fetch payload from LZ Scan API and on-chain logs..."
+                    fetched_payload=$(fetch_failed_payload "$src" "$dst" "$n")
+                    if [[ -n "$fetched_payload" ]]; then
+                        ok "  Payload auto-fetched: ${fetched_payload:0:42}..."
+                    else
+                        warn "  Could not auto-fetch payload. Fill in manually from LZ Scan or MessageFailed event logs"
+                    fi
+
                     # Append to JSON array for retry script
                     failed_entries=$(echo "$failed_entries" | jq \
                         --arg src "$src" \
@@ -458,7 +525,8 @@ check_failed_messages() {
                         --arg hash "$result" \
                         --arg bridge "${BRIDGE[$dst]}" \
                         --arg rpc "${RPC[$dst]}" \
-                        '. += [{src: $src, dst: $dst, srcChainId: ($srcChainId | tonumber), trustedRemotePath: $trustedRemotePath, nonce: $nonce, hash: $hash, bridge: $bridge, rpc: $rpc, payload: ""}]')
+                        --arg payload "$fetched_payload" \
+                        '. += [{src: $src, dst: $dst, srcChainId: ($srcChainId | tonumber), trustedRemotePath: $trustedRemotePath, nonce: $nonce, hash: $hash, bridge: $bridge, rpc: $rpc, payload: $payload}]')
                 fi
             done
 
@@ -479,9 +547,15 @@ check_failed_messages() {
     if $has_failures; then
         if [[ "$total_failed" -gt 0 ]]; then
             echo "$failed_entries" | jq '.' > "$FAILED_MESSAGES_FILE"
+            local missing_payloads
+            missing_payloads=$(echo "$failed_entries" | jq '[.[] | select(.payload == "")] | length')
             info "Wrote $total_failed failed message(s) to $FAILED_MESSAGES_FILE"
-            info "Fill in the 'payload' field for each entry (from LZ Scan or MessageFailed event logs),"
-            info "then run: ./shell/retry_failed_messages.sh"
+            if [[ "$missing_payloads" -gt 0 ]]; then
+                warn "$missing_payloads message(s) missing payload. Fill in manually from LZ Scan or MessageFailed event logs"
+            else
+                ok "All payloads auto-fetched"
+            fi
+            info "Review $FAILED_MESSAGES_FILE, then run: ./shell/retry_failed_messages.sh --account <name>"
         fi
         err "$total_failed unretried failed message(s). Run retryMessage() before snapshot"
     else
