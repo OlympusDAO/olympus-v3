@@ -18,7 +18,6 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
-| bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, rate limits via `onlyBridgeAdminOrAdmin` (admin can also call). `setPeer` and `setEnforcedOptions` are admin-only. |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | callback_admin | BondCallback | Administers the policy |
@@ -39,6 +38,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
+| emergency | LZBridgeGateway | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
