@@ -35,18 +35,18 @@ Branch: `lz-bridge-upgrade`
 
 #### Core Contracts
 
--   [src/](../../src)
-    -   [periphery/](../../src/periphery/)
-        -   [bridge/](../../src/periphery/bridge/)
-            -   [LZCrossChainBridge.sol](../../src/periphery/bridge/LZCrossChainBridge.sol) - Facilitator (periphery)
-        -   [interfaces/](../../src/periphery/interfaces/)
-            -   [ILZCrossChainBridge.sol](../../src/periphery/interfaces/ILZCrossChainBridge.sol) - Facilitator interface
-    -   [policies/](../../src/policies/)
-        -   [bridge/](../../src/policies/bridge/)
-            -   [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) - Gateway infrastructure policy
-        -   [interfaces/](../../src/policies/interfaces/)
-            -   [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
-            -   [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
+- [src/](../../src)
+    - [periphery/](../../src/periphery/)
+        - [bridge/](../../src/periphery/bridge/)
+            - [LZCrossChainBridge.sol](../../src/periphery/bridge/LZCrossChainBridge.sol) - Facilitator (periphery)
+        - [interfaces/](../../src/periphery/interfaces/)
+            - [ILZCrossChainBridge.sol](../../src/periphery/interfaces/ILZCrossChainBridge.sol) - Facilitator interface
+    - [policies/](../../src/policies/)
+        - [bridge/](../../src/policies/bridge/)
+            - [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) - Gateway infrastructure policy
+        - [interfaces/](../../src/policies/interfaces/)
+            - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
+            - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
 
 **OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
 
@@ -54,38 +54,38 @@ Branch: `lz-bridge-upgrade`
 
 These contracts configure and deploy the core contracts. Misconfiguration here (wrong addresses, wrong confirmation counts, incorrect role grants, wrong migration ordering) can undermine the security properties of the core contracts.
 
--   [src/](../../src)
-    -   [scripts/deploy/](../../src/scripts/deploy/)
-        -   [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) - `deployLZBridgeGateway()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
-    -   [libraries/](../../src/libraries/)
-        -   [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) - Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
-    -   [proposals/](../../src/proposals/)
-        -   [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) - OCG proposal: configures and enables the gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options, grants bridge roles)
-        -   [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) - OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (e.g. Nethermind DVN for Berachain where Google Cloud DVN is unavailable)
-    -   [scripts/ops/batches/](../../src/scripts/ops/batches/)
-        -   [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (initial bridged supply setter)
-        -   [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into three entry points by caller responsibility: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant the bridge roles), and `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses.
-        -   [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
-        -   [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
+- [src/](../../src)
+    - [scripts/deploy/](../../src/scripts/deploy/)
+        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) - `deployLZBridgeGateway()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
+    - [libraries/](../../src/libraries/)
+        - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) - Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
+    - [proposals/](../../src/proposals/)
+        - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) - OCG proposal: configures and enables the gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options, grants bridge roles)
+        - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) - OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (e.g. Nethermind DVN for Berachain where Google Cloud DVN is unavailable)
+    - [scripts/ops/batches/](../../src/scripts/ops/batches/)
+        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (initial bridged supply setter)
+        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into three entry points by caller responsibility: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant the bridge roles), and `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses.
+        - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
+        - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
 
 ### Previous Audits
 
 You can review previous audits here:
 
--   Spearbit (07/2022)
-    -   [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2022-08%20Code4rena.pdf)
--   Code4rena Olympus V3 Audit (08/2022)
-    -   [Repo](https://github.com/code-423n4/2022-08-olympus)
-    -   [Findings](https://github.com/code-423n4/2022-08-olympus-findings)
--   Kebabsec Olympus V3 Remediation and Follow-up Audits (10/2022 - 11/2022)
-    -   [Remediation Audit Phase 1 Report](https://hackmd.io/tJdujc0gSICv06p_9GgeFQ)
-    -   [Remediation Audit Phase 2 Report](https://hackmd.io/@12og4u7y8i/rk5PeIiEs)
-    -   [Follow-on Audit Report](https://hackmd.io/@12og4u7y8i/Sk56otcBs)
--   Cross-Chain Bridge by OtterSec (04/2023)
-    -   [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus-CrossChain-Audit.pdf)
--   Cooler V2 by Electisec (03/2025)
-    -   [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf)
-    -   The PolicyEnabler and PolicyAdmin mix-ins are audited here
+- Spearbit (07/2022)
+    - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2022-08%20Code4rena.pdf)
+- Code4rena Olympus V3 Audit (08/2022)
+    - [Repo](https://github.com/code-423n4/2022-08-olympus)
+    - [Findings](https://github.com/code-423n4/2022-08-olympus-findings)
+- Kebabsec Olympus V3 Remediation and Follow-up Audits (10/2022 - 11/2022)
+    - [Remediation Audit Phase 1 Report](https://hackmd.io/tJdujc0gSICv06p_9GgeFQ)
+    - [Remediation Audit Phase 2 Report](https://hackmd.io/@12og4u7y8i/rk5PeIiEs)
+    - [Follow-on Audit Report](https://hackmd.io/@12og4u7y8i/Sk56otcBs)
+- Cross-Chain Bridge by OtterSec (04/2023)
+    - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus-CrossChain-Audit.pdf)
+- Cooler V2 by Electisec (03/2025)
+    - [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf)
+    - The PolicyEnabler and PolicyAdmin mix-ins are audited here
 
 ## Implementation
 
@@ -107,15 +107,15 @@ You can review previous audits here:
 
 The gateway implements `ILayerZeroReceiver`:
 
--   **`allowInitializePath(origin)`**: Returns `true` only if the peer for `origin.srcEid` is non-zero and equals `origin.sender`. The explicit zero check prevents a cleared or unset peer from matching a zero sender. Controls which communication paths the LZ V2 endpoint can initialize for this contract.
--   **`nextNonce(_, _)`**: Returns `0` — unordered (nonce-independent) delivery, the default per `OAppReceiver` (`@lz-oapp-evm-0.4.1`). Matches the original V1 CrossChainBridge, which also does not enforce message ordering.
+- **`allowInitializePath(origin)`**: Returns `true` only if the peer for `origin.srcEid` is non-zero and equals `origin.sender`. The explicit zero check prevents a cleared or unset peer from matching a zero sender. Controls which communication paths the LZ V2 endpoint can initialize for this contract.
+- **`nextNonce(_, _)`**: Returns `0` — unordered (nonce-independent) delivery, the default per `OAppReceiver` (`@lz-oapp-evm-0.4.1`). Matches the original V1 CrossChainBridge, which also does not enforce message ordering.
 
 ### Bridged Supply Tracking
 
 On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 
--   **Outbound** (`burnAndSend`): `bridgedSupply += amount`
--   **Inbound** (`_receiveBridgeOhm`): `bridgedSupply -= amount`; reverts if underflow
+- **Outbound** (`burnAndSend`): `bridgedSupply += amount`
+- **Inbound** (`_receiveBridgeOhm`): `bridgedSupply -= amount`; reverts if underflow
 
 On non-canonical chains: supply tracking is skipped entirely.
 
