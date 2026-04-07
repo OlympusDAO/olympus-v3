@@ -437,8 +437,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Returns the remote EIDs for the current chain.
-    /// @dev Topology: Ethereum peers with all 4 chains. Arb/Opt/Base peer with each other
-    ///      and Ethereum (3 each). Berachain peers only with Ethereum (1).
+    /// @dev Topology: full mesh, every chain peers with all 4 others.
     function _getRemoteEids() internal view returns (uint32[] memory eids) {
         if (_isChain("mainnet")) {
             eids = new uint32[](4);
