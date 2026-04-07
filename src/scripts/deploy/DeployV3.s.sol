@@ -25,7 +25,6 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
-import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -52,6 +51,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
+import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 
 // solhint-disable gas-custom-errors
 
