@@ -48,9 +48,18 @@ ACCOUNT=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dry-run) DRY_RUN=true; shift ;;
-        --account) ACCOUNT="$2"; shift 2 ;;
-        *) printf '%bUnknown option: %s%b\n' "${RED}" "$1" "${NC}"; exit 1 ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --account)
+            ACCOUNT="$2"
+            shift 2
+            ;;
+        *)
+            printf '%bUnknown option: %s%b\n' "${RED}" "$1" "${NC}"
+            exit 1
+            ;;
     esac
 done
 
@@ -61,11 +70,11 @@ if ! $DRY_RUN && [[ -z "$ACCOUNT" ]]; then
 fi
 
 # Prerequisites
-if ! command -v cast &>/dev/null; then
+if ! command -v cast &> /dev/null; then
     printf '%bError: cast (foundry) not found.%b\n' "${RED}" "${NC}"
     exit 1
 fi
-if ! command -v jq &>/dev/null; then
+if ! command -v jq &> /dev/null; then
     printf '%bError: jq not found.%b\n' "${RED}" "${NC}"
     exit 1
 fi
@@ -76,7 +85,7 @@ fi
 
 # Resolve sender address from account
 if ! $DRY_RUN; then
-    SENDER=$(cast wallet address --account "$ACCOUNT" 2>/dev/null) || {
+    SENDER=$(cast wallet address --account "$ACCOUNT" 2> /dev/null) || {
         printf '%bError: could not resolve address for account "%s". Create with: cast wallet import %s --interactive%b\n' "${RED}" "$ACCOUNT" "$ACCOUNT" "${NC}"
         exit 1
     }
@@ -105,7 +114,7 @@ if ! $DRY_RUN; then
         [[ -n "${checked_chains[$dst]:-}" ]] && continue
         checked_chains[$dst]=1
 
-        balance=$(cast balance "$SENDER" --rpc-url "$rpc" 2>/dev/null || echo "ERROR")
+        balance=$(cast balance "$SENDER" --rpc-url "$rpc" 2> /dev/null || echo "ERROR")
         if [[ "$balance" == "ERROR" ]]; then
             printf '%b[X] %s: could not query balance on %s%b\n' "${RED}" "$dst" "$rpc" "${NC}"
             exit 1
@@ -155,7 +164,7 @@ for ((i = 0; i < count; i++)); do
         current_hash=$(cast call "$bridge" \
             "failedMessages(uint16,bytes,uint64)(bytes32)" \
             "$srcChainId" "$path" "$nonce" \
-            --rpc-url "$rpc" 2>/dev/null | tr -d '[:space:]') || current_hash="ERROR"
+            --rpc-url "$rpc" 2> /dev/null | tr -d '[:space:]') || current_hash="ERROR"
 
         if [[ "$current_hash" == "ERROR" ]]; then
             printf '  %b[X] Could not verify on-chain hash. Skipping.%b\n' "${RED}" "${NC}"
@@ -190,7 +199,7 @@ for ((i = 0; i < count; i++)); do
             post_hash=$(cast call "$bridge" \
                 "failedMessages(uint16,bytes,uint64)(bytes32)" \
                 "$srcChainId" "$path" "$nonce" \
-                --rpc-url "$rpc" 2>/dev/null | tr -d '[:space:]') || post_hash="ERROR"
+                --rpc-url "$rpc" 2> /dev/null | tr -d '[:space:]') || post_hash="ERROR"
 
             if [[ "$post_hash" == "$ZERO_BYTES32" ]]; then
                 printf '  %b[OK] Retry successful, hash cleared%b\n' "${GREEN}" "${NC}"
