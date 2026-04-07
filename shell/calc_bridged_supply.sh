@@ -25,12 +25,15 @@
 #     so sum of totalSupply across non-canonical chains == net OHM bridged
 #     from Ethereum
 #
-# Prerequisites: cast (foundry), python3
+# Prerequisites: cast (foundry), jq, python3, ALCHEMY_API_KEY in env or .env
+#   If using Alchemy, all networks (Ethereum, Arbitrum, Optimism, Base, Berachain)
+#   must be enabled in the Alchemy dashboard: https://dashboard.alchemy.com/apps/<app-id>/networks
 #
 # Usage:
 #   ./shell/calc_bridged_supply.sh
 #
-# Override RPC endpoints via env vars:
+# RPC endpoints are resolved from foundry.toml [rpc_endpoints] aliases by default.
+# Override per-chain via env vars:
 #   ETH_RPC_URL, ARB_RPC_URL, OPT_RPC_URL, BASE_RPC_URL, BERA_RPC_URL
 # =====================================================================
 
@@ -55,6 +58,16 @@ BRIDGE_CHAINS=("arbitrum" "optimism" "base" "berachain")
 # All chains with an old CrossChainBridge deployment
 ALL_CHAINS=("ethereum" "arbitrum" "optimism" "base" "berachain")
 
+# --- env.json chain key mapping (ethereum -> mainnet, others match) ---
+ENV_JSON="src/scripts/env.json"
+declare -A ENV_KEY=(
+    [ethereum]="mainnet"
+    [arbitrum]="arbitrum"
+    [optimism]="optimism"
+    [base]="base"
+    [berachain]="berachain"
+)
+
 # --- OHM token addresses (9 decimals) ---
 declare -A OHM=(
     [ethereum]="0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5"
@@ -64,23 +77,25 @@ declare -A OHM=(
     [berachain]="0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
 )
 
-# --- Old CrossChainBridge policy addresses ---
-declare -A BRIDGE=(
-    [ethereum]="0x45e563c39cDdbA8699A90078F42353A57509543a"
-    [arbitrum]="0x20B3834091f038Ce04D8686FAC99CA44A0FB285c"
-    [optimism]="0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0"
-    [base]="0x6CA1a916e883c7ce2BFBcF59dc70F2c1EF9dac6e"
-    [berachain]="0xBA42BE149e5260EbA4B82418A6306f55D532eA47"
-)
+# --- Old CrossChainBridge policy addresses (loaded from env.json) ---
+declare -A BRIDGE
+for _chain in "${ALL_CHAINS[@]}"; do
+    BRIDGE[$_chain]=$(jq -r ".current.${ENV_KEY[$_chain]}.olympus.policies.CrossChainBridge // empty" "$ENV_JSON")
+    if [[ -z "${BRIDGE[$_chain]}" ]]; then
+        printf '%bError: CrossChainBridge address not found in env.json for %s (key: %s)%b\n' "${RED}" "$_chain" "${ENV_KEY[$_chain]}" "${NC}"
+        exit 1
+    fi
+done
 
-# --- LZ V1 Endpoint addresses ---
-declare -A ENDPOINT=(
-    [ethereum]="0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675"
-    [arbitrum]="0x3c2269811836af69497E5F486A85D7316753cf62"
-    [optimism]="0x3c2269811836af69497E5F486A85D7316753cf62"
-    [base]="0xb6319cC6c8c27A8F5dAF0dD3DF91EA35C4720dd7"
-    [berachain]="0xb6319cC6c8c27A8F5dAF0dD3DF91EA35C4720dd7"
-)
+# --- LZ V1 Endpoint addresses (loaded from env.json) ---
+declare -A ENDPOINT
+for _chain in "${ALL_CHAINS[@]}"; do
+    ENDPOINT[$_chain]=$(jq -r ".current.${ENV_KEY[$_chain]}.external.layerzero.endpoint // empty" "$ENV_JSON")
+    if [[ -z "${ENDPOINT[$_chain]}" ]]; then
+        printf '%bError: LZ V1 endpoint not found in env.json for %s (key: %s)%b\n' "${RED}" "$_chain" "${ENV_KEY[$_chain]}" "${NC}"
+        exit 1
+    fi
+done
 
 # --- LZ V1 chain IDs ---
 declare -A LZID=(
@@ -91,13 +106,15 @@ declare -A LZID=(
     [berachain]=362
 )
 
-# --- RPC URLs (public endpoints as defaults) ---
+# --- RPC URLs ---
+# Uses foundry.toml [rpc_endpoints] aliases by default (requires ALCHEMY_API_KEY).
+# Override per-chain via env vars: ETH_RPC_URL, ARB_RPC_URL, OPT_RPC_URL, BASE_RPC_URL, BERA_RPC_URL.
 declare -A RPC=(
-    [ethereum]="${ETH_RPC_URL:-https://ethereum-rpc.publicnode.com}"
-    [arbitrum]="${ARB_RPC_URL:-https://arbitrum-one-rpc.publicnode.com}"
-    [optimism]="${OPT_RPC_URL:-https://optimism-rpc.publicnode.com}"
-    [base]="${BASE_RPC_URL:-https://base-rpc.publicnode.com}"
-    [berachain]="${BERA_RPC_URL:-https://berachain-rpc.publicnode.com}"
+    [ethereum]="${ETH_RPC_URL:-mainnet}"
+    [arbitrum]="${ARB_RPC_URL:-arbitrum}"
+    [optimism]="${OPT_RPC_URL:-optimism}"
+    [base]="${BASE_RPC_URL:-base}"
+    [berachain]="${BERA_RPC_URL:-berachain}"
 )
 
 # --- CCIP LockRelease pool (Ethereum, for Solana bridge) ---
@@ -350,6 +367,7 @@ check_inflight() {
 # This step only checks the delta: VERIFIED_NONCE+1 .. current inbound nonce.
 # =====================================================================
 ZERO_BYTES32="0x0000000000000000000000000000000000000000000000000000000000000000"
+FAILED_MESSAGES_FILE="shell/failed_messages.json"
 
 check_failed_messages() {
     section "STEP 2b: Failed Messages Check (delta from verified nonces)"
@@ -358,6 +376,7 @@ check_failed_messages() {
     local total_checked=0
     local total_skipped=0
     local total_failed=0
+    local failed_entries="[]"
 
     for dst in "${ALL_CHAINS[@]}"; do
         for src in "${ALL_CHAINS[@]}"; do
@@ -423,11 +442,23 @@ check_failed_messages() {
                     --rpc-url "${RPC[$dst]}")
 
                 if [[ "$result" == "ERROR" ]]; then
-                    warn "$src->$dst nonce $n: failed to query failedMessages, cannot confirm clean"
+                    err "$src->$dst nonce $n: failed to query failedMessages, cannot confirm clean"
+                    has_failures=true
                 elif [[ "$result" != "$ZERO_BYTES32" ]]; then
                     err "UNRETRIED failed message: $src->$dst nonce $n (hash: $result)"
                     route_failed=$((route_failed + 1))
                     has_failures=true
+                    # Append to JSON array for retry script
+                    failed_entries=$(echo "$failed_entries" | jq \
+                        --arg src "$src" \
+                        --arg dst "$dst" \
+                        --arg srcChainId "${LZID[$src]}" \
+                        --arg trustedRemotePath "$path" \
+                        --argjson nonce "$n" \
+                        --arg hash "$result" \
+                        --arg bridge "${BRIDGE[$dst]}" \
+                        --arg rpc "${RPC[$dst]}" \
+                        '. += [{src: $src, dst: $dst, srcChainId: ($srcChainId | tonumber), trustedRemotePath: $trustedRemotePath, nonce: $nonce, hash: $hash, bridge: $bridge, rpc: $rpc, payload: ""}]')
                 fi
             done
 
@@ -446,6 +477,12 @@ check_failed_messages() {
     info "Newly checked: $total_checked nonces"
 
     if $has_failures; then
+        if [[ "$total_failed" -gt 0 ]]; then
+            echo "$failed_entries" | jq '.' > "$FAILED_MESSAGES_FILE"
+            info "Wrote $total_failed failed message(s) to $FAILED_MESSAGES_FILE"
+            info "Fill in the 'payload' field for each entry (from LZ Scan or MessageFailed event logs),"
+            info "then run: ./shell/retry_failed_messages.sh"
+        fi
         err "$total_failed unretried failed message(s). Run retryMessage() before snapshot"
     else
         ok "No unretried failed messages (verified: $((total_skipped + total_checked)) total)"
@@ -677,7 +714,7 @@ calculate_supply() {
     # Output the value to set in the args file
     printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
     printf '  %b|  Set in: src/scripts/ops/batches/args/                            |%b\n' "${BOLD}" "${NC}"
-    printf '  %b|          LZBridgeGatewayBatch_setBridgedSupply.json               |%b\n' "${BOLD}" "${NC}"
+    printf '  %b|          LZBridgeGatewayBatch_initBridgedSupply.json              |%b\n' "${BOLD}" "${NC}"
     printf '  %b|                                                                  |%b\n' "${BOLD}" "${NC}"
     printf '  %b|  "initialBridgedSupply": %-40s|%b\n' "${BOLD}" "$bridged_supply" "${NC}"
     printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
@@ -697,6 +734,10 @@ printf '%b\n' "${NC}"
 # Prerequisites
 if ! command -v cast &>/dev/null; then
     printf '%bError: cast (foundry) not found. Install via: curl -L https://foundry.paradigm.xyz | bash%b\n' "${RED}" "${NC}"
+    exit 1
+fi
+if ! command -v jq &>/dev/null; then
+    printf '%bError: jq not found. Required for reading env.json.%b\n' "${RED}" "${NC}"
     exit 1
 fi
 if ! command -v python3 &>/dev/null; then
@@ -725,6 +766,6 @@ if [[ $WARNINGS -gt 0 ]]; then
     echo ""
 fi
 
-ok "All checks passed. Ready for Step 5: LZBridgeGatewayBatch.setBridgedSupply()"
+ok "All checks passed. Ready for Step 5: LZBridgeGatewayBatch.initBridgedSupply()"
 echo ""
 exit 0
