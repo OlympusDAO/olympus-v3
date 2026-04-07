@@ -67,7 +67,7 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         assertEq(canSend, 1_000e9, "Full limit should be available after reset");
     }
 
-    function test_resetRateLimits_adminCanCall() external {
+    function _test_resetRateLimits(address caller_) internal {
         // Configure rate limit
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({
@@ -96,18 +96,26 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         );
         vm.stopPrank();
 
-        // Reset with admin role
+        // Reset
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;
 
         vm.expectEmit(true, true, true, true);
         emit RateLimiter.RateLimitsReset(eids);
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.resetRateLimits(eids);
 
         (uint192 amountInFlight, , , ) = gateway.rateLimits(NONCANONICAL_EID);
         assertEq(amountInFlight, 0, "amountInFlight should be reset");
+    }
+
+    function test_resetRateLimits_adminCanCall() external {
+        _test_resetRateLimits(admin);
+    }
+
+    function test_resetRateLimits_bridgeAdminCanCall() external {
+        _test_resetRateLimits(bridgeAdmin);
     }
 
     function testFuzz_resetRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {

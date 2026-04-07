@@ -32,11 +32,11 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_setBridgedSupply_adminCanCall() external {
+    function _test_setBridgedSupply(address caller_) internal {
         vm.expectEmit(true, true, true, true);
         emit ILZBridgeGateway.BridgedSupplySet(42e9);
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setBridgedSupply(42e9);
 
         assertEq(gateway.bridgedSupply(), 42e9, "Bridged supply should be set");
@@ -45,6 +45,14 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
             42e9,
             "Mint approval should match bridged supply"
         );
+    }
+
+    function test_setBridgedSupply_adminCanCall() external {
+        _test_setBridgedSupply(admin);
+    }
+
+    function test_setBridgedSupply_bridgeAdminCanCall() external {
+        _test_setBridgedSupply(bridgeAdmin);
     }
 
     function test_setBridgedSupply_decreaseSyncsMintApproval() external {

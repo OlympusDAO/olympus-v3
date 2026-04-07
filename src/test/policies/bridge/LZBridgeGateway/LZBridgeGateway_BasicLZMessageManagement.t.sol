@@ -43,10 +43,10 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM");
     }
 
-    function test_skip_adminCanCall() external {
+    function _test_skip(address caller_) internal {
         bytes32 peer = _canonicalPeer();
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway2.skip(CANONICAL_EID, peer, 1);
 
         assertEq(
@@ -54,6 +54,14 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
             1,
             "Lazy nonce should advance"
         );
+    }
+
+    function test_skip_adminCanCall() external {
+        _test_skip(admin);
+    }
+
+    function test_skip_bridgeAdminCanCall() external {
+        _test_skip(bridgeAdmin);
     }
 
     function testFuzz_skip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
@@ -93,14 +101,14 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM");
     }
 
-    function test_nilify_adminCanCall() external {
+    function _test_nilify(address caller_) internal {
         bytes memory packetBytes = _sendAndVerify();
 
         IMessagingChannel ep = _nonCanonicalEndpoint();
         bytes32 peer = _canonicalPeer();
         bytes32 hash = ep.inboundPayloadHash(address(gateway2), CANONICAL_EID, peer, 1);
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway2.nilify(CANONICAL_EID, peer, 1, hash);
 
         assertEq(
@@ -108,6 +116,14 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
             bytes32(type(uint256).max),
             "Hash should be NIL"
         );
+    }
+
+    function test_nilify_adminCanCall() external {
+        _test_nilify(admin);
+    }
+
+    function test_nilify_bridgeAdminCanCall() external {
+        _test_nilify(bridgeAdmin);
     }
 
     function testFuzz_nilify_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
@@ -159,7 +175,7 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM");
     }
 
-    function test_burn_adminCanCall() external {
+    function _test_burn(address caller_) internal {
         bytes memory packetBytes = _sendAndVerify();
 
         IMessagingChannel ep = _nonCanonicalEndpoint();
@@ -167,7 +183,7 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         bytes32 hash = ep.inboundPayloadHash(address(gateway2), CANONICAL_EID, peer, 1);
 
         // nilify first, then advance nonce, then burn
-        vm.startPrank(admin);
+        vm.startPrank(caller_);
         gateway2.nilify(CANONICAL_EID, peer, 1, hash);
         gateway2.skip(CANONICAL_EID, peer, 2);
         gateway2.burn(CANONICAL_EID, peer, 1, bytes32(type(uint256).max));
@@ -178,6 +194,14 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
             bytes32(0),
             "Hash should be deleted"
         );
+    }
+
+    function test_burn_adminCanCall() external {
+        _test_burn(admin);
+    }
+
+    function test_burn_bridgeAdminCanCall() external {
+        _test_burn(bridgeAdmin);
     }
 
     function testFuzz_burn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
@@ -226,7 +250,7 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         assertFalse(delivered, "Re-delivery should fail after clear");
     }
 
-    function test_clear_adminCanCall() external {
+    function _test_clear(address caller_) internal {
         bytes memory packetBytes = _sendAndVerify();
 
         IMessagingChannel ep = _nonCanonicalEndpoint();
@@ -236,7 +260,7 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         (bytes32 guid, bytes memory message) = this.extractGuidAndMessage(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway2.clear(origin, guid, message);
 
         assertEq(
@@ -249,6 +273,14 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
             1,
             "Lazy nonce should advance"
         );
+    }
+
+    function test_clear_adminCanCall() external {
+        _test_clear(admin);
+    }
+
+    function test_clear_bridgeAdminCanCall() external {
+        _test_clear(bridgeAdmin);
     }
 
     function testFuzz_clear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {

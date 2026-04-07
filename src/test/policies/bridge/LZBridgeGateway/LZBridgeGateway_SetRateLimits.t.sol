@@ -33,7 +33,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         assertEq(amountInFlight, 0, "AmountInFlight should be 0");
     }
 
-    function test_setRateLimits_adminCanCall() external {
+    function _test_setRateLimits(address caller_) internal {
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
@@ -44,7 +44,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         vm.expectEmit(true, true, true, true);
         emit RateLimiter.RateLimitsChanged(configs);
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setRateLimits(configs);
 
         (uint192 amountInFlight, , uint192 limit, uint64 window) = gateway.rateLimits(
@@ -53,6 +53,14 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         assertEq(limit, 10_000e9, "Limit should be set");
         assertEq(window, 3600, "Window should be set");
         assertEq(amountInFlight, 0, "AmountInFlight should be 0");
+    }
+
+    function test_setRateLimits_adminCanCall() external {
+        _test_setRateLimits(admin);
+    }
+
+    function test_setRateLimits_bridgeAdminCanCall() external {
+        _test_setRateLimits(bridgeAdmin);
     }
 
     function testFuzz_setRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {

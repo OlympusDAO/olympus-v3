@@ -19,14 +19,22 @@ contract LZBridgeGatewayTests_SetDelegate is LZBridgeGatewayTestBase {
         gateway.setDelegate(newDelegate);
     }
 
-    function test_setDelegate_adminCanCall() external {
+    function _test_setDelegate(address caller_) internal {
         address newDelegate = makeAddr("newDelegate");
 
         vm.expectEmit(true, true, true, true);
         emit ILZBridgeGateway.DelegateSet(newDelegate);
 
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setDelegate(newDelegate);
+    }
+
+    function test_setDelegate_adminCanCall() external {
+        _test_setDelegate(admin);
+    }
+
+    function test_setDelegate_bridgeAdminCanCall() external {
+        _test_setDelegate(bridgeAdmin);
     }
 
     function testFuzz_setDelegate_revertsIfNotBridgeAdminOrAdmin(address caller_) external {

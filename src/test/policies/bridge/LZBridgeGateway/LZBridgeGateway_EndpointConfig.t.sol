@@ -36,7 +36,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setSendLibrary(NONCANONICAL_EID, lib);
     }
 
-    function test_setSendLibrary_adminCanCall() external {
+    function _test_setSendLibrary(address caller_) internal {
         address lib = address(0xBEEF);
         address endpoint_ = gateway.LZ_ENDPOINT();
 
@@ -59,8 +59,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 lib
             )
         );
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setSendLibrary(NONCANONICAL_EID, lib);
+    }
+
+    function test_setSendLibrary_adminCanCall() external {
+        _test_setSendLibrary(admin);
+    }
+
+    function test_setSendLibrary_bridgeAdminCanCall() external {
+        _test_setSendLibrary(bridgeAdmin);
     }
 
     function testFuzz_setSendLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
@@ -101,7 +109,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setReceiveLibrary(NONCANONICAL_EID, lib, gracePeriod);
     }
 
-    function test_setReceiveLibrary_adminCanCall() external {
+    function _test_setReceiveLibrary(address caller_) internal {
         address lib = address(0xBEEF);
         uint256 gracePeriod = 100;
         address endpoint_ = gateway.LZ_ENDPOINT();
@@ -127,8 +135,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 gracePeriod
             )
         );
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setReceiveLibrary(NONCANONICAL_EID, lib, gracePeriod);
+    }
+
+    function test_setReceiveLibrary_adminCanCall() external {
+        _test_setReceiveLibrary(admin);
+    }
+
+    function test_setReceiveLibrary_bridgeAdminCanCall() external {
+        _test_setReceiveLibrary(bridgeAdmin);
     }
 
     function testFuzz_setReceiveLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
@@ -169,7 +185,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setReceiveLibraryTimeout(NONCANONICAL_EID, lib, expiry);
     }
 
-    function test_setReceiveLibraryTimeout_adminCanCall() external {
+    function _test_setReceiveLibraryTimeout(address caller_) internal {
         address lib = address(0xBEEF);
         uint256 expiry = block.timestamp + 1 days;
         address endpoint_ = gateway.LZ_ENDPOINT();
@@ -195,8 +211,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 expiry
             )
         );
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setReceiveLibraryTimeout(NONCANONICAL_EID, lib, expiry);
+    }
+
+    function test_setReceiveLibraryTimeout_adminCanCall() external {
+        _test_setReceiveLibraryTimeout(admin);
+    }
+
+    function test_setReceiveLibraryTimeout_bridgeAdminCanCall() external {
+        _test_setReceiveLibraryTimeout(bridgeAdmin);
     }
 
     function testFuzz_setReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin(
@@ -237,7 +261,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setEndpointConfig(lib, params);
     }
 
-    function test_setEndpointConfig_adminCanCall() external {
+    function _test_setEndpointConfig(address caller_) internal {
         address lib = address(0xBEEF);
         SetConfigParam[] memory params = new SetConfigParam[](0);
         address endpoint_ = gateway.LZ_ENDPOINT();
@@ -261,8 +285,16 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
                 params
             )
         );
-        vm.prank(admin);
+        vm.prank(caller_);
         gateway.setEndpointConfig(lib, params);
+    }
+
+    function test_setEndpointConfig_adminCanCall() external {
+        _test_setEndpointConfig(admin);
+    }
+
+    function test_setEndpointConfig_bridgeAdminCanCall() external {
+        _test_setEndpointConfig(bridgeAdmin);
     }
 
     function testFuzz_setEndpointConfig_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
