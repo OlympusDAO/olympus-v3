@@ -63,8 +63,9 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
 
         // Recovery: correct bridgedSupply (OHM was burned but never minted on destination)
+        uint256 currentSupply = gateway.bridgedSupply();
         vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(0);
+        gateway.decreaseBridgedSupply(currentSupply);
 
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply should be corrected");
 
@@ -193,7 +194,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         // 7. Correct bridgedSupply on canonical (send increased it, but receive never happened)
         assertEq(gateway.bridgedSupply(), amount, "bridgedSupply was increased by the send");
         vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(0);
+        gateway.decreaseBridgedSupply(amount);
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
 
         // NOTE: The user's OHM was burned on canonical but never minted on destination.

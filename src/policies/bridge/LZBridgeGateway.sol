@@ -317,20 +317,31 @@ contract LZBridgeGateway is
     /// @dev Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     ///      - IS_CANONICAL is false.
-    function setBridgedSupply(uint256 bridgedSupply_) external override onlyBridgeAdminOrAdmin {
+    function increaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
 
-        // Sync mint approval with the bridgedSupply delta to maintain the invariant:
-        // mint approval == bridgedSupply (only OHM that was bridged out can be minted back).
-        uint256 oldSupply = bridgedSupply;
-        if (bridgedSupply_ > oldSupply) {
-            MINTR.increaseMintApproval(address(this), bridgedSupply_ - oldSupply);
-        } else if (bridgedSupply_ < oldSupply) {
-            MINTR.decreaseMintApproval(address(this), oldSupply - bridgedSupply_);
-        }
+        bridgedSupply += amount_;
+        MINTR.increaseMintApproval(address(this), amount_);
 
-        bridgedSupply = bridgedSupply_;
-        emit BridgedSupplySet(bridgedSupply_);
+        emit BridgedSupplyForciblyIncreased(amount_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - IS_CANONICAL is false.
+    ///      - The bridged supply would underflow.
+    function decreaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
+        _requireCanonical();
+
+        if (bridgedSupply < amount_)
+            revert LZBridgeGateway_BridgedSupplyUnderflow(bridgedSupply, amount_);
+        unchecked {
+            bridgedSupply -= amount_;
+        }
+        MINTR.decreaseMintApproval(address(this), amount_);
+
+        emit BridgedSupplyForciblyDecreased(amount_);
     }
 
     /// @inheritdoc ILZBridgeGateway

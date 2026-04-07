@@ -74,9 +74,13 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param delegate The new delegate address.
     event DelegateSet(address delegate);
 
-    /// @notice Emitted when the bridged supply is set.
-    /// @param bridgedSupply The new bridged supply value.
-    event BridgedSupplySet(uint256 bridgedSupply);
+    /// @notice Emitted when bridged supply is forcibly increased by an admin.
+    /// @param amount The amount added.
+    event BridgedSupplyForciblyIncreased(uint256 amount);
+
+    /// @notice Emitted when bridged supply is forcibly decreased by an admin.
+    /// @param amount The amount subtracted.
+    event BridgedSupplyForciblyDecreased(uint256 amount);
 
     /// @notice Emitted when bridged supply increases (outbound transfer on canonical chain).
     /// @param amount The amount added.
@@ -147,18 +151,22 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param delegate_ The new delegate address, or `address(0)` to clear.
     function setDelegate(address delegate_) external;
 
-    /// @notice Manually sets the bridged supply value and syncs the MINTR mint approval.
+    /// @notice Increases the bridged supply by the given amount and syncs the MINTR mint approval.
     /// @dev Only callable by the bridge_admin or admin role. Only available on canonical chains.
-    ///      Required during bridge migration: the bridged amount at deployment differs from
-    ///      the amount at OCG proposal execution, so the MS sets this value after the old
-    ///      bridge is disabled and before the new one is enabled. Also used to correct
-    ///      bridgedSupply in error-recovery scenarios (e.g. misrouted messages).
+    ///      Used during bridge migration to set the initial bridged supply (from zero) and
+    ///      for error-recovery (e.g. supply underflow caused by misrouted messages).
+    ///      Delta-based to avoid race conditions with concurrent bridge messages.
     ///
-    ///      The mint approval is adjusted by the delta between the old and new bridgedSupply
-    ///      to maintain the invariant: mint approval == bridgedSupply.
+    /// @param amount_ The amount to increase bridged supply by.
+    function increaseBridgedSupply(uint256 amount_) external;
+
+    /// @notice Decreases the bridged supply by the given amount and syncs the MINTR mint approval.
+    /// @dev Only callable by the bridge_admin or admin role. Only available on canonical chains.
+    ///      Used for error-recovery (e.g. correcting supply after undeliverable messages).
+    ///      Delta-based to avoid race conditions with concurrent bridge messages.
     ///
-    /// @param bridgedSupply_ The new bridged supply value.
-    function setBridgedSupply(uint256 bridgedSupply_) external;
+    /// @param amount_ The amount to decrease bridged supply by.
+    function decreaseBridgedSupply(uint256 amount_) external;
 
     /// @notice Sets enforced options for specific endpoint and message type combinations.
     /// @dev Only callable by the admin role. Each option must be Type 3.

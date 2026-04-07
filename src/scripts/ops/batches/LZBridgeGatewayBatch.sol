@@ -15,7 +15,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///
 ///         Entry points:
 ///         - `activateGateway` (pre-OCG): activate new gateway in Kernel
-///         - `setBridgedSupply` (post-OCG): set initial bridged supply tracking
+///         - `initBridgedSupply` (post-OCG): set initial bridged supply tracking
 ///
 ///         The old CrossChainBridge is deactivated post-OCG via LZCrossChainBridgeBatch.setup().
 contract LZBridgeGatewayBatch is BatchScriptV2 {
@@ -74,10 +74,10 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     ///         LZ config and peers are set by the OCG proposal.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
-    /// @param argsFile_ Path to the arguments file (must contain "setBridgedSupply.initialBridgedSupply").
+    /// @param argsFile_ Path to the arguments file (must contain "initBridgedSupply.initialBridgedSupply").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
     /// @param signature_ Optional pre-computed signature for the batch.
-    function setBridgedSupply(
+    function initBridgedSupply(
         bool useDaoMS_,
         bool signOnly_,
         string calldata argsFile_,
@@ -89,7 +89,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         // TODO: Set initialBridgedSupply in args file before execution
         uint256 initialBridgedSupply = _readBatchArgUint256(
-            "setBridgedSupply",
+            "initBridgedSupply",
             "initialBridgedSupply"
         );
         if (initialBridgedSupply == 0) revert LZBridgeGatewayBatch_ZeroInitialBridgedSupply();
@@ -116,10 +116,13 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
         addToBatch(
             gatewayAddr,
-            abi.encodeWithSelector(LZBridgeGateway.setBridgedSupply.selector, initialBridgedSupply)
+            abi.encodeWithSelector(
+                LZBridgeGateway.increaseBridgedSupply.selector,
+                initialBridgedSupply
+            )
         );
 
-        _setPostBatchValidateSelector(this._validateSetBridgedSupply.selector);
+        _setPostBatchValidateSelector(this._validateInitBridgedSupply.selector);
 
         proposeBatch();
     }
@@ -142,19 +145,19 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         console2.log("activateGateway post-batch validation passed");
     }
 
-    /// @notice Validate setBridgedSupply state after batch execution.
+    /// @notice Validate initBridgedSupply state after batch execution.
     /// @dev Checks that bridgedSupply was set correctly and that the MINTR
     ///      mint approval matches (invariant: mintApproval == bridgedSupply).
-    function _validateSetBridgedSupply() external view {
+    function _validateInitBridgedSupply() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
 
-        console2.log("\nValidating setBridgedSupply post-batch state");
+        console2.log("\nValidating initBridgedSupply post-batch state");
 
         // 1. Validate bridgedSupply is non-zero and matches expected value
         uint256 actualSupply = gateway.bridgedSupply();
         if (actualSupply == 0) {
-            revert("bridgedSupply is 0 after setBridgedSupply");
+            revert("bridgedSupply is 0 after initBridgedSupply");
         }
         if (actualSupply != _expectedBridgedSupply) {
             revert(
@@ -183,7 +186,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         }
         console2.log("  mintApproval:", approval);
 
-        console2.log("setBridgedSupply post-batch validation passed");
+        console2.log("initBridgedSupply post-batch validation passed");
     }
 
     // =========== INTERNAL HELPERS =========== //

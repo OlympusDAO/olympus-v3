@@ -75,9 +75,9 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         bool delivered = _tryDeliverPacket(packetBytes);
         assertFalse(delivered, "Delivery should fail (underflow)");
 
-        // Recovery: set correct bridgedSupply (should have been 1000e9 or more)
+        // Recovery: increase bridgedSupply (should have been 1000e9 or more)
         vm.prank(bridgeAdmin);
-        gateway.setBridgedSupply(1000e9);
+        gateway.increaseBridgedSupply(1000e9);
 
         // Retry: succeeds now that bridgedSupply can absorb the decrement
         _manualDeliver(packetBytes, 0);
@@ -90,7 +90,7 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
 
     /// @notice Inbound on canonical: bridgedSupply check passes but OlympusMinter
     ///         reverts on mintOhm() because mintApproval was externally decreased
-    ///         (invariant broken). Recovery: re-sync approval via setBridgedSupply, retry.
+    ///         (invariant broken). Recovery: re-sync approval via decrease+increase, retry.
     function test_lzReceive_mintApprovalDesyncSoFixApprovalAndRetry() external {
         // Build up bridgedSupply + mintApproval via outflow
         _sendCanonicalToNonCanonical(recipient, 2000e9);
@@ -112,13 +112,12 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         bool delivered = _tryDeliverPacket(packetBytes);
         assertFalse(delivered, "Delivery should fail (insufficient mint approval)");
 
-        // Recovery: re-sync mintApproval via setBridgedSupply.
-        // Set to current value triggers delta = 0 (no change). Instead,
-        // set to 0 then back to correct value to force approval re-sync.
+        // Recovery: re-sync mintApproval via decrease+increase.
+        // Decrease to 0 (clears approval), then increase back to force re-sync.
         uint256 currentSupply = gateway.bridgedSupply();
         vm.startPrank(bridgeAdmin);
-        gateway.setBridgedSupply(0);
-        gateway.setBridgedSupply(currentSupply);
+        gateway.decreaseBridgedSupply(currentSupply);
+        gateway.increaseBridgedSupply(currentSupply);
         vm.stopPrank();
 
         assertEq(
