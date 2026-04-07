@@ -119,6 +119,7 @@ On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 On non-canonical chains: supply tracking is skipped entirely.
 
 `increaseBridgedSupply` and `decreaseBridgedSupply` are available to `bridge_admin` or `admin` (via `onlyBridgeAdminOrAdmin`) for migration bootstrapping and error recovery.
+
 ### Message Flow
 
 #### Sending OHM (Source Chain)
