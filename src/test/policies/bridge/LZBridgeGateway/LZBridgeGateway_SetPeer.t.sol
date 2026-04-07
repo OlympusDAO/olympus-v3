@@ -41,9 +41,11 @@ contract LZBridgeGatewayTests_SetPeer is LZBridgeGatewayTestBase {
         assertEq(gateway.peers(NONCANONICAL_EID), bytes32(0), "Peer should be cleared");
     }
 
-    function test_setPeer_revertsIfNotAdmin() external {
+    function testFuzz_setPeer_revertsIfNotAdmin(address caller_) external {
+        vm.assume(caller_ != admin);
+
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setPeer(uint32(42), bytes32(uint256(1)));
     }
 }

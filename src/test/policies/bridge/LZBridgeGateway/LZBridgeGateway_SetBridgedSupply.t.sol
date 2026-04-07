@@ -89,9 +89,11 @@ contract LZBridgeGatewayTests_SetBridgedSupply is LZBridgeGatewayTestBase {
         gateway2.setBridgedSupply(100);
     }
 
-    function test_setBridgedSupply_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setBridgedSupply_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setBridgedSupply(100);
     }
 }

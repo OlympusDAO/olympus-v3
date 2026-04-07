@@ -55,7 +55,9 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         assertEq(amountInFlight, 0, "AmountInFlight should be 0");
     }
 
-    function test_setRateLimits_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({
             dstEid: NONCANONICAL_EID,
@@ -64,7 +66,7 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         });
 
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setRateLimits(configs);
     }
 }

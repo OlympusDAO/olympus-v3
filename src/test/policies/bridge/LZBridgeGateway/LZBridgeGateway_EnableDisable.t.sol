@@ -31,13 +31,15 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         gateway.enable(bytes(""));
     }
 
-    function test_enable_revertsIfNotAdmin() external {
+    function testFuzz_enable_revertsIfNotAdmin(address caller_) external {
+        vm.assume(caller_ != admin);
+
         // Disable first so enable is valid
         vm.prank(admin);
         gateway.disable(bytes(""));
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.enable(bytes(""));
     }
 
@@ -56,9 +58,11 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         gateway.disable(bytes(""));
     }
 
-    function test_disable_revertsIfNotAdmin() external {
+    function testFuzz_disable_revertsIfNotAdmin(address caller_) external {
+        vm.assume(caller_ != admin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.disable(bytes(""));
     }
 }

@@ -110,12 +110,14 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         assertEq(amountInFlight, 0, "amountInFlight should be reset");
     }
 
-    function test_resetRateLimits_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_resetRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;
 
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.resetRateLimits(eids);
     }
 }

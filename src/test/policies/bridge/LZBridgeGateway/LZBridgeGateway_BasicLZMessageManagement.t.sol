@@ -56,9 +56,11 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         );
     }
 
-    function test_skip_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_skip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway2.skip(CANONICAL_EID, bytes32(uint256(1)), 1);
     }
 
@@ -108,9 +110,11 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         );
     }
 
-    function test_nilify_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_nilify_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway2.nilify(CANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(1)));
     }
 
@@ -176,9 +180,11 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         );
     }
 
-    function test_burn_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_burn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway2.burn(CANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(1)));
     }
 
@@ -245,14 +251,16 @@ contract LZBridgeGatewayTests_BasicLZMessageManagement is LZBridgeGatewayTestBas
         );
     }
 
-    function test_clear_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_clear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         Origin memory origin = Origin({
             srcEid: CANONICAL_EID,
             sender: bytes32(uint256(1)),
             nonce: 1
         });
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway2.clear(origin, bytes32(0), bytes(""));
     }
 }

@@ -523,9 +523,11 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
-    function test_burnAndSend_revertsIfNotBridgeFacilitator() external {
-        vm.deal(user, 10 ether);
-        vm.prank(user);
+    function testFuzz_burnAndSend_revertsIfNotBridgeFacilitator(address caller_) external {
+        vm.assume(caller_ != facilitator);
+
+        vm.deal(caller_, 10 ether);
+        vm.prank(caller_);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
@@ -536,7 +538,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             NONCANONICAL_EID,
             recipient,
             100e9,
-            payable(user),
+            payable(caller_),
             bytes("")
         );
     }

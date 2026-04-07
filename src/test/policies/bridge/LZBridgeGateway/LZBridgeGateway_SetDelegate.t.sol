@@ -29,9 +29,11 @@ contract LZBridgeGatewayTests_SetDelegate is LZBridgeGatewayTestBase {
         gateway.setDelegate(newDelegate);
     }
 
-    function test_setDelegate_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setDelegate_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setDelegate(makeAddr("delegate2"));
     }
 }

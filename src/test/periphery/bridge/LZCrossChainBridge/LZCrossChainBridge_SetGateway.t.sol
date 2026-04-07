@@ -18,9 +18,11 @@ contract LZCrossChainBridgeTests_SetGateway is LZCrossChainBridgeTestBase {
         assertEq(bridge.gateway(), newGateway, "Gateway should be updated");
     }
 
-    function test_setGateway_revertsIfNotOwner() external {
+    function testFuzz_setGateway_revertsIfNotOwner(address caller_) external {
+        vm.assume(caller_ != owner);
+
         vm.expectRevert("UNAUTHORIZED");
-        vm.prank(user);
+        vm.prank(caller_);
         bridge.setGateway(makeAddr("newGateway"));
     }
 

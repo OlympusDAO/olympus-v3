@@ -50,7 +50,9 @@ contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
         gateway.setEnforcedOptions(opts);
     }
 
-    function test_setEnforcedOptions_revertsIfNotAdmin() external {
+    function testFuzz_setEnforcedOptions_revertsIfNotAdmin(address caller_) external {
+        vm.assume(caller_ != admin);
+
         EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
         opts[0] = EnforcedOptionParam({
             eid: uint32(42),
@@ -59,7 +61,7 @@ contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
         });
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setEnforcedOptions(opts);
     }
 }

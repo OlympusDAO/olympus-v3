@@ -16,8 +16,9 @@ contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
         assertTrue(bridge.isEnabled(), "Should be enabled");
     }
 
-    function test_enable_revertsIfAlreadyEnabled() external {
+    function testFuzz_enable_revertsIfAlreadyEnabled(address caller_) external {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
+        vm.prank(caller_);
         bridge.enable(bytes(""));
     }
 
@@ -41,9 +42,11 @@ contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
         bridge.disable(bytes(""));
     }
 
-    function test_disable_revertsIfNotOwner() external {
+    function testFuzz_disable_revertsIfNotOwner(address caller_) external {
+        vm.assume(caller_ != owner);
+
         vm.expectRevert("UNAUTHORIZED");
-        vm.prank(user);
+        vm.prank(caller_);
         bridge.disable(bytes(""));
     }
 }

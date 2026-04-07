@@ -157,11 +157,12 @@ contract LZBridgeActivatorForkTest is Test {
 
     // ========== ACCESS CONTROL TESTS ========== //
 
-    function test_activate_revertsWhen_notOwner() public {
+    function testFuzz_activate_revertsWhen_notOwner(address caller_) public {
+        vm.assume(caller_ != TIMELOCK);
         _grantRequiredRoles();
 
         vm.expectRevert("UNAUTHORIZED");
-        vm.prank(DAO_MS);
+        vm.prank(caller_);
         activator.activate();
     }
 

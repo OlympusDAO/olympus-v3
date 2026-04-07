@@ -63,9 +63,11 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setSendLibrary(NONCANONICAL_EID, lib);
     }
 
-    function test_setSendLibrary_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setSendLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setSendLibrary(NONCANONICAL_EID, address(1));
     }
 
@@ -129,9 +131,11 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setReceiveLibrary(NONCANONICAL_EID, lib, gracePeriod);
     }
 
-    function test_setReceiveLibrary_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setReceiveLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setReceiveLibrary(NONCANONICAL_EID, address(1), 0);
     }
 
@@ -195,9 +199,13 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setReceiveLibraryTimeout(NONCANONICAL_EID, lib, expiry);
     }
 
-    function test_setReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin(
+        address caller_
+    ) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setReceiveLibraryTimeout(NONCANONICAL_EID, address(1), 0);
     }
 
@@ -257,10 +265,12 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
         gateway.setEndpointConfig(lib, params);
     }
 
-    function test_setEndpointConfig_revertsIfNotBridgeAdminOrAdmin() external {
+    function testFuzz_setEndpointConfig_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
         SetConfigParam[] memory params = new SetConfigParam[](0);
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(user);
+        vm.prank(caller_);
         gateway.setEndpointConfig(address(1), params);
     }
 }
