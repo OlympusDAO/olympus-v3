@@ -65,6 +65,8 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
             )
         );
 
+        _setPostBatchValidateSelector(this._validateActivateGateway.selector);
+
         proposeBatch();
     }
 
@@ -123,6 +125,22 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     }
 
     // =========== VALIDATION =========== //
+
+    /// @notice Validate activateGateway state after batch execution.
+    /// @dev Checks that the gateway is active in the Kernel.
+    function _validateActivateGateway() external view {
+        address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+
+        console2.log("\nValidating activateGateway post-batch state");
+
+        if (!gateway.isActive()) {
+            revert("LZBridgeGateway is not active in the Kernel");
+        }
+        console2.log("  LZBridgeGateway is active in the Kernel");
+
+        console2.log("activateGateway post-batch validation passed");
+    }
 
     /// @notice Validate setBridgedSupply state after batch execution.
     /// @dev Checks that bridgedSupply was set correctly and that the MINTR
