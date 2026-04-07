@@ -99,13 +99,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///
     ///      On canonical chains, increments bridgedSupply.
     ///
-    ///      Reverts if:
-    ///      - The caller does not have the `bridge_facilitator` role.
-    ///      - The gateway is not enabled.
-    ///      - The recipient address is the zero address.
-    ///      - No peer exists for the destination endpoint ID.
-    ///      - The rate limit would be exceeded.
-    ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
     /// @param amount_ The amount of OHM to burn and send.
@@ -122,10 +115,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     // ========= FEE ESTIMATION ========= //
 
     /// @notice Estimates the fee for sending OHM to a destination chain.
-    ///
-    ///         Reverts if:
-    ///         - The recipient address is zero.
-    ///         - No peer exists for the destination endpoint ID.
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
@@ -167,10 +156,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///
     ///      The mint approval is adjusted by the delta between the old and new bridgedSupply
     ///      to maintain the invariant: mint approval == bridgedSupply.
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    ///      - IS_CANONICAL is false.
     ///
     /// @param bridgedSupply_ The new bridged supply value.
     function setBridgedSupply(uint256 bridgedSupply_) external;

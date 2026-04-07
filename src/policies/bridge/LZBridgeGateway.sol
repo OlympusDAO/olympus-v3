@@ -111,6 +111,9 @@ contract LZBridgeGateway is
 
     // ========= INITIALIZATION & POLICY SETUP ========= //
 
+    /// @dev Reverts if:
+    ///      - The kernel address is the zero address.
+    ///      - The LZ endpoint address is the zero address.
     constructor(Kernel kernel_, address lzEndpoint_, bool isCanonical_) Policy(kernel_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(lzEndpoint_, "lzEndpoint");
@@ -174,6 +177,12 @@ contract LZBridgeGateway is
     // ========= OHM BRIDGING ========= //
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the `bridge_facilitator` role.
+    ///      - The gateway is not enabled.
+    ///      - The recipient address is the zero address.
+    ///      - No peer exists for the destination endpoint ID.
+    ///      - The rate limit would be exceeded.
     function burnAndSend(
         uint32 dstEid_,
         address to_,
@@ -223,6 +232,9 @@ contract LZBridgeGateway is
     // ========= FEE ESTIMATION ========= //
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The recipient address is zero.
+    ///      - No peer exists for the destination endpoint ID.
     function estimateSendFee(
         uint32 dstEid_,
         address to_,
@@ -250,6 +262,15 @@ contract LZBridgeGateway is
     // ========= LZ RECEIVE FUNCTIONS (ILayerZeroReceiver) ========= //
 
     /// @inheritdoc ILayerZeroReceiver
+    /// @dev Reverts if:
+    ///      - The gateway is not enabled.
+    ///      - The caller is not the LayerZero endpoint.
+    ///      - The origin sender is not the configured peer for the source endpoint ID.
+    ///      - No peer is configured for the source endpoint ID.
+    ///      - The message payload is shorter than the minimum encoded length.
+    ///      - The message type is not MSG_BRIDGE_OHM.
+    ///      - The bridge data payload has an unexpected length.
+    ///      - (Canonical) The bridged supply would underflow.
     function lzReceive(
         Origin calldata origin_,
         bytes32 guid_,
@@ -277,18 +298,25 @@ contract LZBridgeGateway is
     // ========= ADMIN FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the admin role.
     function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
         peers[eid_] = peer_;
         emit PeerSet(eid_, peer_);
     }
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setDelegate(address delegate_) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
         emit DelegateSet(delegate_);
     }
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - IS_CANONICAL is false.
     function setBridgedSupply(uint256 bridgedSupply_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
 
@@ -306,6 +334,9 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the admin role.
+    ///      - Any option entry is not Type 3 format.
     function setEnforcedOptions(
         EnforcedOptionParam[] calldata enforcedOptions_
     ) external override onlyAdminRole {
@@ -319,6 +350,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setRateLimits(
         RateLimitConfig[] calldata rateLimitConfigs_
     ) external override onlyBridgeAdminOrAdmin {
@@ -326,6 +359,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function resetRateLimits(uint32[] calldata eids_) external override onlyBridgeAdminOrAdmin {
         _resetRateLimits(eids_);
     }
@@ -333,11 +368,15 @@ contract LZBridgeGateway is
     // ========= LZ ENDPOINT CONFIG ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setReceiveLibrary(
         uint32 eid_,
         address lib_,
@@ -352,6 +391,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setReceiveLibraryTimeout(
         uint32 eid_,
         address lib_,
@@ -366,6 +407,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function setEndpointConfig(
         address lib_,
         SetConfigParam[] calldata params_
@@ -376,6 +419,8 @@ contract LZBridgeGateway is
     // ========= LZ MESSAGE MANAGEMENT ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function skip(
         uint32 srcEid_,
         bytes32 sender_,
@@ -385,6 +430,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function nilify(
         uint32 srcEid_,
         bytes32 sender_,
@@ -401,6 +448,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function burn(
         uint32 srcEid_,
         bytes32 sender_,
@@ -417,6 +466,8 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_admin or admin role.
     function clear(
         Origin calldata origin_,
         bytes32 guid_,
@@ -428,6 +479,9 @@ contract LZBridgeGateway is
     // ========= VIEW FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - Extra options are provided but are not Type 3 format.
+    ///      - Extra options have length 1 (insufficient for Type 3 prefix).
     function combineOptions(
         uint32 eid_,
         uint16 msgType_,
