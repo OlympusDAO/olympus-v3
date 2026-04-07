@@ -505,6 +505,32 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
+    function test_burnAndSend_revertsIfInsufficientOhmBalance() external {
+        uint256 amount = 1000e9;
+        uint256 transferAmount = 500e9;
+
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            amount,
+            bytes("")
+        );
+
+        vm.startPrank(facilitator);
+        // Transfer less OHM than specified in burnAndSend
+        ohm.transfer(address(gateway), transferAmount);
+
+        vm.expectRevert("ERC20: burn amount exceeds balance");
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            amount,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
     function test_burnAndSend_revertsIfNotEnabled() external {
         vm.prank(admin);
         gateway.disable(bytes(""));
