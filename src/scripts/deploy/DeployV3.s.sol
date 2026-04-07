@@ -984,7 +984,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
         address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
-        bool isCanonical = _readDeploymentArgBool("LZBridgeGateway", "isCanonical");
+        bool isCanonical = ChainUtils._isCanonicalChain(chain);
 
         // Log parameters
         console2.log("LZBridgeGateway parameters:");
