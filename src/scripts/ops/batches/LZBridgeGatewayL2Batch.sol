@@ -59,6 +59,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address kernel = _envAddressNotZero("olympus.Kernel");
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
@@ -110,6 +111,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address rolesAdminAddr = _envAddressNotZero("olympus.policies.RolesAdmin");
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
@@ -181,6 +183,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);

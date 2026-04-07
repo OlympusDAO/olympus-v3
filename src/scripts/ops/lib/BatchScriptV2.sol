@@ -64,6 +64,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    If set, this function will be called after batch simulation to validate state
     bytes4 internal _postBatchValidateSelector;
 
+    /// @notice Whether to skip heartbeat validation during batch simulation
+    /// @dev    Defaults to false (heartbeat validation enabled). Set to true to skip.
+    bool internal _skipHeartbeatValidation;
+
     // TODOs
     // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
@@ -556,13 +560,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    Warps through a full 24-hour cycle (3 beats) and calls beat() to validate
     ///         Temporarily increases price feed update thresholds to prevent stale feed errors
     ///         Restores original timestamp and thresholds after validation to avoid signature issues
-    ///         Skips validation on non-canonical chains (L2s) where OlympusHeart is not deployed
     function _validateHeartBeat() internal {
-        if (!ChainUtils._isCanonicalChain(chain)) {
-            console2.log("\n=== Skipping heart beat validation (non-canonical chain:", chain, ") ===");
-            return;
-        }
-
         address heart = _envAddressNotZero("olympus.policies.OlympusHeart");
         console2.log("\n=== Validating heart beat (full 24-hour cycle - 3 beats) ===");
         console2.log("Heart address:", heart);
@@ -682,7 +680,20 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _runPostBatchValidation();
 
         // Validate heart beat
-        _validateHeartBeat();
+        if (_skipHeartbeatValidation) {
+            if (ChainUtils._isCanonicalChain(chain)) {
+                console2.log(
+                    "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
+                );
+                console2.log(
+                    "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
+                );
+            } else {
+                console2.log("\n=== Skipping heart beat validation (non-canonical chain:", chain, ") ===");
+            }
+        } else {
+            _validateHeartBeat();
+        }
 
         // Revert to snapshot - removes BOTH simulation and validation artifacts
         vm.revertToStateAndDelete(snapshotId);

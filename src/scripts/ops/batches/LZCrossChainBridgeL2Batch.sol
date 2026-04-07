@@ -39,6 +39,7 @@ contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
 
@@ -65,6 +66,7 @@ contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
 
@@ -91,6 +93,7 @@ contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
 
@@ -115,6 +118,7 @@ contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
         _requireNonCanonical();
+        _skipHeartbeatValidation = true;
 
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
 
