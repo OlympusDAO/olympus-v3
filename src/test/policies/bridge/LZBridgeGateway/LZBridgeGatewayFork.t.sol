@@ -116,6 +116,10 @@ contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
         // Step 1: Eth->Arb via real sendOhm path
         vm.selectFork(ethForkId);
         uint256 ethSenderBalBefore = ethOhm.balanceOf(sender);
+        uint256 ethTotalSupplyBeforeOutbound = ethOhm.totalSupply();
+        vm.selectFork(arbForkId);
+        uint256 arbTotalSupplyBeforeInbound = arbOhm.totalSupply();
+        vm.selectFork(ethForkId);
 
         _sendAndDeliver(
             ethForkId,
@@ -129,7 +133,7 @@ contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
             amount
         );
 
-        // Verify Eth source: OHM burned, bridgedSupply increased
+        // Verify Eth source: OHM burned, bridgedSupply increased, total supply decreased
         vm.selectFork(ethForkId);
         assertEq(
             ethOhm.balanceOf(sender),
@@ -137,17 +141,33 @@ contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
             "Eth: sender balance after bridge out"
         );
         assertEq(ethGateway.bridgedSupply(), amount, "Eth: bridgedSupply after outbound");
+        assertEq(
+            ethOhm.totalSupply(),
+            ethTotalSupplyBeforeOutbound - amount,
+            "Eth: total supply should decrease after burn"
+        );
 
-        // Verify Arb destination: recipient received OHM
+        // Verify Arb destination: recipient received OHM, total supply increased
         vm.selectFork(arbForkId);
         assertEq(arbOhm.balanceOf(recipient), amount, "Arb: recipient balance after bridge");
+        assertEq(
+            arbOhm.totalSupply(),
+            arbTotalSupplyBeforeInbound + amount,
+            "Arb: total supply should increase after mint"
+        );
 
         // Transfer bridged OHM from recipient to sender for the return leg
         vm.prank(recipient);
         arbOhm.transfer(sender, amount);
 
+        // Snapshot Eth total supply before the return leg delivers (mint on Eth)
+        vm.selectFork(ethForkId);
+        uint256 ethTotalSupplyBefore = ethOhm.totalSupply();
+
         // Step 2: Arb->Eth via real sendOhm path (proves Arb-side burn happens)
+        vm.selectFork(arbForkId);
         uint256 arbSenderBalBefore = arbOhm.balanceOf(sender);
+        uint256 arbTotalSupplyBefore = arbOhm.totalSupply();
 
         _sendAndDeliver(
             arbForkId,
@@ -168,8 +188,13 @@ contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
             arbSenderBalBefore - amount,
             "Arb: sender OHM burned on return leg"
         );
+        assertEq(
+            arbOhm.totalSupply(),
+            arbTotalSupplyBefore - amount,
+            "Arb: total supply should decrease after burn"
+        );
 
-        // Verify round-trip on Eth: bridgedSupply back to zero, recipient received OHM
+        // Verify round-trip on Eth: bridgedSupply back to zero, recipient received OHM, supply increased
         vm.selectFork(ethForkId);
         assertEq(
             ethGateway.bridgedSupply(),
@@ -180,6 +205,11 @@ contract LZBridgeGatewayForkTests is LZBridgeGatewayForkTestBase {
             ethOhm.balanceOf(recipient),
             amount,
             "Recipient should receive OHM after round-trip on mainnet"
+        );
+        assertEq(
+            ethOhm.totalSupply(),
+            ethTotalSupplyBefore + amount,
+            "Eth: total supply should increase after mint"
         );
     }
 }

@@ -52,7 +52,9 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_lzReceive_revertsIfNotEndpoint() external {
+    function testFuzz_lzReceive_revertsIfNotEndpoint(address caller_) external {
+        vm.assume(caller_ != address(endpointSetup.endpointList[1]));
+
         Origin memory origin = Origin({
             srcEid: CANONICAL_EID,
             sender: LZConfigLib.addressToBytes32(address(gateway)),
@@ -62,7 +64,7 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_OnlyEndpoint.selector)
         );
-        vm.prank(user);
+        vm.prank(caller_);
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
     }
 
