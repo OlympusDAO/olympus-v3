@@ -7,7 +7,7 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -90,6 +90,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             )
         );
 
+        _setPostBatchValidateSelector(this._validateActivateGateway.selector);
+
         proposeBatch();
     }
 
@@ -158,6 +160,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             );
         }
 
+        _setPostBatchValidateSelector(this._validateGrantRoles.selector);
+
         proposeBatch();
     }
 
@@ -195,7 +199,101 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         // 3.4. Enable LZBridgeGateway
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
+        _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
+
         proposeBatch();
+    }
+
+    // =========== VALIDATION =========== //
+
+    /// @notice Validate activateGateway state after batch execution.
+    /// @dev Checks that old bridge is deactivated and new gateway is active.
+    function _validateActivateGateway() external view {
+        address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+        address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+
+        console2.log("\nValidating activateGateway post-batch state");
+
+        if (Policy(oldBridge).isActive()) {
+            revert("Old CrossChainBridge is still active in the Kernel");
+        }
+        console2.log("  Old CrossChainBridge is deactivated");
+
+        if (!LZBridgeGateway(gatewayAddr).isActive()) {
+            revert("LZBridgeGateway is not active in the Kernel");
+        }
+        console2.log("  LZBridgeGateway is active in the Kernel");
+
+        console2.log("activateGateway post-batch validation passed");
+    }
+
+    /// @notice Validate grantRoles state after batch execution.
+    /// @dev Checks that DAO MS has bridge_admin and admin roles, and bridge has facilitator role.
+    function _validateGrantRoles() external view {
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
+        ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
+
+        console2.log("\nValidating grantRoles post-batch state");
+
+        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+            revert("DAO MS does not have bridge_admin role");
+        }
+        console2.log("  DAO MS has bridge_admin role");
+
+        if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
+            revert("DAO MS does not have admin role");
+        }
+        console2.log("  DAO MS has admin role");
+
+        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+            revert("LZCrossChainBridge does not have bridge_facilitator role");
+        }
+        console2.log("  LZCrossChainBridge has bridge_facilitator role");
+
+        console2.log("grantRoles post-batch validation passed");
+    }
+
+    /// @notice Validate configureAndEnable state after batch execution.
+    /// @dev Checks that gateway is enabled, peers are set, and enforced options exist.
+    function _validateConfigureAndEnable() external view {
+        address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+        uint32[] memory remoteEids = _getRemoteEids();
+
+        console2.log("\nValidating configureAndEnable post-batch state");
+
+        // 1. Gateway must be enabled
+        if (!gateway.isEnabled()) {
+            revert("LZBridgeGateway is not enabled");
+        }
+        console2.log("  LZBridgeGateway is enabled");
+
+        // 2. Peers must be set for all remote EIDs
+        for (uint256 i = 0; i < remoteEids.length; ++i) {
+            bytes32 peer = gateway.peers(remoteEids[i]);
+            if (peer == bytes32(0)) {
+                revert(string.concat("Peer not set for EID ", vm.toString(uint256(remoteEids[i]))));
+            }
+            console2.log("  Peer set for EID:", remoteEids[i]);
+        }
+
+        // 3. Enforced options must be set for all remote EIDs
+        uint8 msgType = gateway.MSG_BRIDGE_OHM();
+        for (uint256 i = 0; i < remoteEids.length; ++i) {
+            bytes memory opts = gateway.enforcedOptions(remoteEids[i], msgType);
+            if (opts.length == 0) {
+                revert(
+                    string.concat(
+                        "Enforced options not set for EID ",
+                        vm.toString(uint256(remoteEids[i]))
+                    )
+                );
+            }
+            console2.log("  Enforced options set for EID:", remoteEids[i]);
+        }
+
+        console2.log("configureAndEnable post-batch validation passed");
     }
 
     // =========== LZ CONFIGURATION HELPERS =========== //
