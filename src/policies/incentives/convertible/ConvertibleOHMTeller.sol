@@ -70,6 +70,9 @@ contract ConvertibleOHMTeller is
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
     uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
 
+    /// @notice Maximum allowed duration from current time to token expiry (~2 years)
+    uint48 private constant _MAX_EXPIRY_HORIZON = 730 days;
+
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
@@ -210,6 +213,10 @@ contract ConvertibleOHMTeller is
         // Truncate block.timestamp to the nearest day for comparison
         if (eligible_ < uint48(block.timestamp) + minEligibleDelay)
             revert Teller_InvalidParams(1, abi.encodePacked(eligible_));
+
+        // Revert if expiry exceeds the maximum allowed horizon
+        if (expiry_ > uint48(block.timestamp) + _MAX_EXPIRY_HORIZON)
+            revert Teller_InvalidParams(2, abi.encodePacked(expiry_));
 
         // Revert if the difference between eligible and expiry is less than min duration or eligible is after expiry
         // Don't need to check expiry against current timestamp since eligible is already checked

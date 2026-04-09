@@ -565,6 +565,19 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         teller.deploy(address(usds), eligibleTimestamp, shortExpiry, STRIKE_PRICE);
     }
 
+    function test_deploy_revertsIfExpiryTooFarInFuture() external {
+        uint48 farExpiry = _roundToDay(uint48(block.timestamp) + 731 days);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                2,
+                abi.encodePacked(farExpiry)
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(usds), eligibleTimestamp, farExpiry, STRIKE_PRICE);
+    }
+
     function test_deploy_revertsIfStrikePriceIsZero() external {
         vm.expectRevert(
             abi.encodeWithSelector(
