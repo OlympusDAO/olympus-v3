@@ -1518,6 +1518,36 @@ contract IncentiveDistributorConvertiblePreviewClaimTests is
         assertEq(claimableAmounts[0], 0, "Claimable amount should be zero for expired token");
     }
 
+    function test_previewClaim_returnsEmptyForZeroAddress() external {
+        uint256 amount = 100e9;
+        uint40 epochEndDate = _firstEpochEndDate();
+
+        bytes32 leaf = _generateLeaf(user0, epochEndDate, amount);
+        vm.prank(admin);
+        distributor.endEpoch(
+            epochEndDate,
+            leaf,
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
+        );
+
+        uint256[] memory epochEndDates = new uint256[](1);
+        epochEndDates[0] = epochEndDate;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32[][] memory proofs = new bytes32[][](1);
+        proofs[0] = new bytes32[](0);
+
+        (address[] memory tokens, uint256[] memory claimableAmounts) = distributor.previewClaim(
+            address(0),
+            epochEndDates,
+            amounts,
+            proofs
+        );
+
+        assertEq(tokens.length, 0, "Should return empty tokens array for zero address");
+        assertEq(claimableAmounts.length, 0, "Should return empty amounts array for zero address");
+    }
+
     function test_previewClaim_returnsEmptyArraysForInvalidInput() external view {
         uint256[] memory epochEndDates = new uint256[](0);
         uint256[] memory amounts = new uint256[](0);

@@ -163,7 +163,7 @@ contract IncentiveDistributorConvertible is
         bytes32[][] calldata proofs_
     ) external view returns (address[] memory tokens, uint256[] memory claimableAmounts) {
         uint256 len = epochEndDates_.length;
-        if (len == 0 || len != amounts_.length || len != proofs_.length)
+        if (user_ == address(0) || len == 0 || len != amounts_.length || len != proofs_.length)
             return (tokens, claimableAmounts);
 
         tokens = new address[](len);
