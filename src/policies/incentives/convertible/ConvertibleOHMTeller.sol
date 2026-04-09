@@ -561,8 +561,8 @@ contract ConvertibleOHMTeller is
     /// @dev This produces canonical timestamps for token hash computation.
     ///      Tokens are identified by day, not by exact second, so all timestamps
     ///      within the same UTC day are mapped to the same hash.
-    function _truncateToUTCDay(uint48 timestamp) internal pure returns (uint48) {
-        return uint48(timestamp / 1 days) * 1 days;
+    function _truncateToUTCDay(uint48 timestamp_) internal pure returns (uint48) {
+        return uint48(timestamp_ / 1 days) * 1 days;
     }
 
     /// @dev Convenience wrapper that truncates both eligible and expiry to 00:00:00 UTC.
@@ -573,12 +573,12 @@ contract ConvertibleOHMTeller is
         return (_truncateToUTCDay(eligible_), _truncateToUTCDay(expiry_));
     }
 
-    function _requireNonzeroAmount(uint256 index, uint256 a) private pure {
-        if (a == 0) revert Teller_InvalidParams(index, abi.encodePacked(a));
+    function _requireNonzeroAmount(uint256 index_, uint256 a_) private pure {
+        if (a_ == 0) revert Teller_InvalidParams(index_, abi.encodePacked(a_));
     }
 
-    function _requireNonzeroAddress(uint256 index, address a) private pure {
-        if (a == address(0)) revert Teller_InvalidParams(index, abi.encodePacked(a));
+    function _requireNonzeroAddress(uint256 index_, address a_) private pure {
+        if (a_ == address(0)) revert Teller_InvalidParams(index_, abi.encodePacked(a_));
     }
 
     // ========== ADMIN CONFIG ========== //
@@ -639,10 +639,10 @@ contract ConvertibleOHMTeller is
     // ========== IERC165 ========== //
 
     /// @inheritdoc PolicyEnabler
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
-            interfaceId == type(IConvertibleOHMTeller).interfaceId ||
-            interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            interfaceId_ == type(IConvertibleOHMTeller).interfaceId ||
+            interfaceId_ == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }

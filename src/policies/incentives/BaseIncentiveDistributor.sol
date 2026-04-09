@@ -229,11 +229,11 @@ abstract contract BaseIncentiveDistributor is
     // ========== ERC165 ========== //
 
     function supportsInterface(
-        bytes4 interfaceId
+        bytes4 interfaceId_
     ) public view virtual override(PolicyEnabler, IERC165) returns (bool) {
         return
-            interfaceId == type(IIncentiveDistributor).interfaceId ||
-            interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            interfaceId_ == type(IIncentiveDistributor).interfaceId ||
+            interfaceId_ == type(IVersioned).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }

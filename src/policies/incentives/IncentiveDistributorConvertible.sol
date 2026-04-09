@@ -188,10 +188,10 @@ contract IncentiveDistributorConvertible is
     // ========== ERC165 ========== //
 
     function supportsInterface(
-        bytes4 interfaceId
+        bytes4 interfaceId_
     ) public view virtual override(BaseIncentiveDistributor, IERC165) returns (bool) {
         return
-            interfaceId == type(IIncentiveDistributorConvertible).interfaceId ||
-            super.supportsInterface(interfaceId);
+            interfaceId_ == type(IIncentiveDistributorConvertible).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }
