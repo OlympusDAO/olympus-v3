@@ -29,6 +29,10 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     /// @notice Initial mint cap for the ConvertibleOHMTeller (in OHM units, 9 decimals)
     uint256 internal constant _INITIAL_MINT_CAP = 1000e9;
 
+    /// TODO: Decide on the initial distributor mint limit
+    /// @notice Per creator admin mint limit for the IncentiveDistributorConvertible (in OHM units, 9 decimals)
+    uint256 internal constant _INITIAL_DISTRIBUTOR_MINT_LIMIT = 1000e9;
+
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 internal constant _ROLE_CONVERTIBLE_DISTRIBUTOR = bytes32("convertible_distributor");
     /// forge-lint: disable-next-line(unsafe-typecast)
@@ -126,7 +130,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             address[] memory creators = new address[](1);
             creators[0] = incentiveDistributorConvertible;
             uint256[] memory limits = new uint256[](1);
-            limits[0] = _INITIAL_MINT_CAP;
+            limits[0] = _INITIAL_DISTRIBUTOR_MINT_LIMIT;
             _pushAction(
                 iohmTeller,
                 abi.encodeWithSelector(
@@ -196,8 +200,8 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         // Validate the distributor's admin mint limit was set
         require(
             ConvertibleOHMTeller(iohmTeller).adminMintLimits(incentiveDistributorConvertible) ==
-                _INITIAL_MINT_CAP,
-            "ConvertibleOHMTeller admin mint limit does not match _INITIAL_MINT_CAP"
+                _INITIAL_DISTRIBUTOR_MINT_LIMIT,
+            "ConvertibleOHMTeller admin mint limit does not match _INITIAL_DISTRIBUTOR_MINT_LIMIT"
         );
 
         // Validate IncentiveDistributorConvertible is enabled
