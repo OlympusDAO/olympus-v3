@@ -26,6 +26,7 @@ import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesW
 import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 
@@ -43,6 +44,7 @@ contract ConvertibleOHMTeller is
     PolicyEnabler,
     ReentrancyGuardTransient
 {
+    using SafeCast for int256;
     using SafeERC20 for IERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
@@ -502,7 +504,8 @@ contract ConvertibleOHMTeller is
     }
 
     /// @notice Calculates a number of price decimals in the provided price
-    /// @dev Used for validation in deploy() to ensure a strike price has sufficient precision
+    /// @dev Used for validation in deploy() to ensure a strike price has sufficient precision.
+    ///      Reverts via SafeCast if tokenDecimals_ exceeds int8 range (> 127).
     /// @param price_ The price to calculate the number of decimals for
     /// @param tokenDecimals_ The number of decimals in the quote token
     /// @return The number of price decimals (can be negative for prices < 1)
@@ -514,7 +517,7 @@ contract ConvertibleOHMTeller is
                 ++decimals;
             }
         }
-        return decimals - int8(tokenDecimals_);
+        return decimals - int256(uint256(tokenDecimals_)).toInt8();
     }
 
     function _getToken(

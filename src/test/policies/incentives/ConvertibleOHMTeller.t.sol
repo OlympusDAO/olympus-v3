@@ -7,6 +7,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {Test, stdError} from "forge-std/Test.sol";
 
 // Contracts
@@ -588,6 +589,16 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
         vm.prank(incentiveDistributor);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, tooLowStrike);
+    }
+
+    function test_deploy_revertsIfQuoteTokenDecimalsTooHigh() external {
+        // Quote token with 128 decimals overflows int8 (max 127) in SafeCast
+        MockERC20 highDecToken = new MockERC20("HIGH", "HIGH", 128);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedIntDowncast.selector, 8, int256(128))
+        );
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(highDecToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
     function test_deploy_revertsIfNotIncentiveDistributor() external {
