@@ -61,8 +61,9 @@ contract ConvertibleOHMTeller is
     /// @notice The OHM token decimals
     uint8 private constant _OHM_DECIMALS = 9;
 
-    /// @notice Expected byte length of enableData_ (one ABI-encoded uint256)
-    uint256 private constant _ENABLE_DATA_LENGTH = 32;
+    /// @notice Minimum byte length of enableData_ (one ABI-encoded uint256 mintCap + two dynamic arrays)
+    /// @dev    abi.encode(uint256, address[], uint256[]) with empty arrays = 32 + 32 + 32 + 32 + 32 = 160
+    uint256 private constant _MIN_ENABLE_DATA_LENGTH = 160;
 
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
     uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
@@ -88,6 +89,10 @@ contract ConvertibleOHMTeller is
     uint48 public override minDuration;
 
     uint48 public minEligibleDelay;
+
+    mapping(address creator => uint256) public ohmMinted;
+
+    mapping(address creator => uint256 adminMintLimit) public adminMintLimits;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -150,13 +155,27 @@ contract ConvertibleOHMTeller is
         return (1, 0);
     }
 
-    /// @notice Overrides _enable to set the initial minting cap
-    /// @param enableData_ ABI-encoded (uint256 mintCap)
+    /// @notice Enables the teller with a mint cap and optional per-creator mint limits.
+    /// @param enableData_ ABI-encoded (uint256 mintCap, address[] creators, uint256[] limits)
     function _enable(bytes calldata enableData_) internal override {
-        if (enableData_.length != _ENABLE_DATA_LENGTH) revert Teller_InvalidParams(0, enableData_);
+        if (enableData_.length < _MIN_ENABLE_DATA_LENGTH)
+            revert Teller_InvalidParams(0, enableData_);
 
-        uint256 mintCap = abi.decode(enableData_, (uint256));
+        (uint256 mintCap, address[] memory creators, uint256[] memory limits) = abi.decode(
+            enableData_,
+            (uint256, address[], uint256[])
+        );
+
+        if (creators.length != limits.length)
+            revert Teller_InvalidParams(1, abi.encodePacked(creators.length, limits.length));
+
         _setMintCap(mintCap);
+
+        for (uint256 i = 0; i < creators.length; ++i) {
+            if (creators[i] == address(0))
+                revert Teller_InvalidParams(1, abi.encodePacked(creators[i]));
+            adminMintLimits[creators[i]] = limits[i];
+        }
     }
 
     // ========== TOKEN DEPLOYMENTS ========== //
@@ -247,7 +266,7 @@ contract ConvertibleOHMTeller is
         (
             ConvertibleOHMToken token,
             address quoteToken,
-            ,
+            address creator,
             uint48 eligible,
             uint48 expiry,
             uint256 price
@@ -262,6 +281,9 @@ contract ConvertibleOHMTeller is
 
         // Burn convertible tokens
         token.burnFrom(msg.sender, amount_);
+
+        ohmMinted[creator] += amount_;
+        require(ohmMinted[creator] <= adminMintLimits[creator], "mint limit exceeded");
 
         // Mint OHM to user
         MINTR.mintOhm(msg.sender, amount_);
@@ -558,6 +580,10 @@ contract ConvertibleOHMTeller is
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
+    }
+
+    function setAdminMintLimit(address creator_, uint256 limit_) external onlyEnabled onlyAdminRole {
+        adminMintLimits[creator_] = limit_;
     }
 
     function setMinEligibleDelay(uint48 delay_) external onlyEnabled onlyAdminRole {
