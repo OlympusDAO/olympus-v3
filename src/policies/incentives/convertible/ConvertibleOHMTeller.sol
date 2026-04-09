@@ -465,6 +465,13 @@ contract ConvertibleOHMTeller is
     /// @dev Examples:
     ///      - Strike 21.42 USDS, expiry 2025-06-01: Name "OHM/USDS 21.42 20250601",  Symbol "convOHM-20250601"
     ///      - Strike 150   USDS, expiry 2025-12-31: Name "OHM/USDS 150.00 20251231", Symbol "convOHM-20251231"
+    ///
+    ///      The name is stored as bytes32, which limits the total length to 32 characters.
+    ///      With a 5 character quote symbol the fixed parts ("OHM/" + symbol + " " + " " + "YYYYMMDD")
+    ///      consume 19 bytes, leaving 13 bytes for the formatted price (e.g. "150.00" = 6 bytes).
+    ///      Strike prices with more than ~10 whole digits may cause the name to be silently truncated.
+    ///      This is a cosmetic limitation only: the token's immutable parameters (strike, expiry, etc.)
+    ///      are unaffected by name truncation.
     function _getNameAndSymbol(
         address quoteToken_,
         uint256 expiry_,
