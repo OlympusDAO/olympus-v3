@@ -30,7 +30,20 @@ import {CloneERC20Permit} from "src/external/clones/CloneERC20Permit.sol";
 contract ConvertibleOHMToken is CloneERC20Permit {
     // ========== ERRORS ========== //
 
+    error ConvertibleOHMToken_ImplementationLocked();
     error ConvertibleOHMToken_OnlyTeller();
+
+    // ========== STATE ========== //
+
+    /// @dev True only on the reference implementation deployed by the teller constructor.
+    ///      Clones do not execute the constructor, so this remains false on every clone.
+    bool private _isImplementation;
+
+    // ========== CONSTRUCTOR ========== //
+
+    constructor() {
+        _isImplementation = true;
+    }
 
     // ========== IMMUTABLE PARAMETERS ========== //
 
@@ -84,6 +97,7 @@ contract ConvertibleOHMToken is CloneERC20Permit {
     // ========== MINT & BURN ========== //
 
     modifier onlyTeller() {
+        if (_isImplementation) revert ConvertibleOHMToken_ImplementationLocked();
         if (msg.sender != teller()) revert ConvertibleOHMToken_OnlyTeller();
         _;
     }

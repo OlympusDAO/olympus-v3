@@ -337,3 +337,19 @@ contract ConvertibleOHMTokenTests is ConvertibleOHMTokenTestBase {
         assertEq(token.balanceOf(user0), 0, "All tokens should be burned");
     }
 }
+
+contract ConvertibleOHMTokenImplementationTests is ConvertibleOHMTokenTestBase {
+    function test_implementation_mintFor_reverts() external {
+        ConvertibleOHMToken impl = ConvertibleOHMToken(teller.TOKEN_IMPLEMENTATION());
+
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_ImplementationLocked.selector);
+        impl.mintFor(user0, 100e9);
+    }
+
+    function test_implementation_burnFrom_reverts() external {
+        ConvertibleOHMToken impl = ConvertibleOHMToken(teller.TOKEN_IMPLEMENTATION());
+
+        vm.expectRevert(ConvertibleOHMToken.ConvertibleOHMToken_ImplementationLocked.selector);
+        impl.burnFrom(user0, 100e9);
+    }
+}
