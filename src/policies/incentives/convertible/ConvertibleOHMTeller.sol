@@ -87,6 +87,8 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     uint48 public override minDuration;
 
+    uint48 public minEligibleDelay;
+
     // ========== CONSTRUCTOR ========== //
 
     /// @param kernel_ The address of the Olympus kernel
@@ -104,6 +106,7 @@ contract ConvertibleOHMTeller is
 
         // Set the minimum duration during which a convertible token must be eligible for exercise to 1 day initially
         minDuration = uint48(1 days);
+        minEligibleDelay = uint48(1 days);
     }
 
     // ========== POLICY CONFIGURATION ========== //
@@ -172,15 +175,18 @@ contract ConvertibleOHMTeller is
         nonReentrant
         returns (address)
     {
-        // If eligible is zero, use the current timestamp
-        if (eligible_ == 0) eligible_ = uint48(block.timestamp);
+        if (eligible_ == 0) {
+            // Smallest UTC midnight >= block.timestamp + minEligibleDelay
+            uint48 minTimestamp = uint48(block.timestamp) + minEligibleDelay;
+            eligible_ = _truncateToUTCDay(minTimestamp + 1 days - 1);
+        }
 
         // Note: Convertible tokens are only unique to a day, not a specific timestamp
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
         // Revert if eligible is in the past, we do this to avoid duplicates tokens with the same parameters otherwise
         // Truncate block.timestamp to the nearest day for comparison
-        if (eligible_ < _truncateToUTCDay(uint48(block.timestamp)))
+        if (eligible_ < uint48(block.timestamp) + minEligibleDelay)
             revert Teller_InvalidParams(1, abi.encodePacked(eligible_));
 
         // Revert if the difference between eligible and expiry is less than min duration or eligible is after expiry
@@ -552,6 +558,11 @@ contract ConvertibleOHMTeller is
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         minDuration = duration_;
+    }
+
+    function setMinEligibleDelay(uint48 delay_) external onlyEnabled onlyAdminRole {
+        if (delay_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(delay_));
+        minEligibleDelay = delay_;
     }
 
     /// @inheritdoc IConvertibleOHMTeller
