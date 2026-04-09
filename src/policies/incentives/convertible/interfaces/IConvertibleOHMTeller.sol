@@ -29,6 +29,19 @@ interface IConvertibleOHMTeller {
     /// @notice Emitted when the minting cap is updated.
     event MintCapUpdated(uint256 newCap);
 
+    /// @notice Emitted when an admin mint limit is updated for a creator.
+    /// @param creator The incentive distributor address.
+    /// @param limit The new mint limit (in OHM units).
+    event AdminMintLimitSet(address indexed creator, uint256 limit);
+
+    /// @notice Emitted when the minimum duration is updated.
+    /// @param duration The new minimum duration in seconds.
+    event MinDurationSet(uint48 duration);
+
+    /// @notice Emitted when the minimum eligible delay is updated.
+    /// @param delay The new delay in seconds.
+    event MinEligibleDelaySet(uint48 delay);
+
     /// @notice Thrown when invalid parameters are provided.
     /// @param index The index of the invalid parameter.
     /// @param value The invalid value.
@@ -59,6 +72,12 @@ interface IConvertibleOHMTeller {
     /// @param expected The expected amount to be received.
     /// @param actual The actual amount received.
     error Teller_FeeOnTransfer(uint256 expected, uint256 actual);
+
+    /// @notice Thrown when exercising would exceed the admin-configured mint limit for the token's creator.
+    /// @param creator The incentive distributor that created the token.
+    /// @param minted The cumulative OHM minted so far (including the current amount).
+    /// @param limit The configured mint limit.
+    error Teller_MintLimitExceeded(address creator, uint256 minted, uint256 limit);
 
     /// @notice Deploys a new convertible token and returns its address.
     /// @dev Only callable by addresses with the incentive distributor role.
@@ -102,6 +121,21 @@ interface IConvertibleOHMTeller {
     ///      The absolute minimum is 1 day due to rounding of eligible and expiry timestamps.
     /// @param duration_ The minimum duration in seconds.
     function setMinDuration(uint48 duration_) external;
+
+    /// @notice Sets the per-creator mint limit for OHM minted through exercise.
+    /// @dev Only callable by admin (on-chain governance).
+    ///      If a creator's limit is not set (defaults to 0), exercise will revert for
+    ///      tokens created by that creator. This is intentional fail-closed behaviour.
+    /// @param creator_ The address of the incentive distributor (creator).
+    /// @param limit_ The maximum cumulative OHM that can be minted for this creator.
+    function setAdminMintLimit(address creator_, uint256 limit_) external;
+
+    /// @notice Sets the minimum delay between token deployment and eligibility.
+    /// @dev Only callable by admin. Minimum value is 1 day.
+    ///      Ensures the emergency role has a time window to disable the contract
+    ///      before tokens become exercisable.
+    /// @param delay_ The minimum eligible delay in seconds.
+    function setMinEligibleDelay(uint48 delay_) external;
 
     /// @notice Sets the maximum amount of OHM that can be minted via the exercise.
     /// @dev Only callable by addresses with the admin or convertible_admin role.
@@ -164,4 +198,18 @@ interface IConvertibleOHMTeller {
     /// @notice Returns the minimum duration in seconds during which a convertible token must be eligible for exercise.
     /// @return duration The minimum duration in seconds.
     function minDuration() external view returns (uint48 duration);
+
+    /// @notice Returns the minimum delay in seconds between token deployment and eligibility.
+    /// @return delay The minimum eligible delay in seconds.
+    function minEligibleDelay() external view returns (uint48 delay);
+
+    /// @notice Returns the cumulative OHM minted via exercise for a given creator.
+    /// @param creator The incentive distributor address.
+    /// @return minted The cumulative OHM amount minted.
+    function ohmMinted(address creator) external view returns (uint256 minted);
+
+    /// @notice Returns the admin-configured mint limit for a given creator.
+    /// @param creator The incentive distributor address.
+    /// @return limit The mint limit in OHM units.
+    function adminMintLimits(address creator) external view returns (uint256 limit);
 }

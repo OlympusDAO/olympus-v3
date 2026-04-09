@@ -76,11 +76,11 @@ contract ConvertibleOHMTellerTestBase is Test {
         roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
         roles.saveRole(ADMIN_ROLE, address(this));
 
-        // Enable the teller policy with infinite minting cap
-        teller.enable(abi.encode(type(uint256).max));
-
         // Grant the incentive distributor role (required for the functions deploy and create)
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor);
+
+        // Enable the teller policy with infinite minting cap and default creator limits
+        teller.enable(_enableData(type(uint256).max));
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -92,6 +92,20 @@ contract ConvertibleOHMTellerTestBase is Test {
         eligibleTimestamp = _roundToDay(startTimestamp + 90 days);
         // Set the expiry time to 6 months from now (rounded to the nearest day)
         expiryTimestamp = _roundToDay(startTimestamp + 180 days);
+    }
+
+    /// @dev Encodes enableData with a mint cap and the default incentiveDistributor limit
+    function _enableData(uint256 mintCap_) internal view returns (bytes memory) {
+        address[] memory creators = new address[](1);
+        creators[0] = incentiveDistributor;
+        uint256[] memory limits = new uint256[](1);
+        limits[0] = type(uint256).max;
+        return abi.encode(mintCap_, creators, limits);
+    }
+
+    /// @dev Encodes enableData with a mint cap and no creator limits
+    function _enableDataNoLimits(uint256 mintCap_) internal pure returns (bytes memory) {
+        return abi.encode(mintCap_, new address[](0), new uint256[](0));
     }
 
     function _grantModulePermission(Keycode keycode, bytes4 selector) internal {
@@ -174,6 +188,68 @@ contract ConvertibleOHMTellerTestBase is Test {
     }
 }
 
+contract ConvertibleOHMTellerConstructorTests is ConvertibleOHMTellerTestBase {
+    function test_constructor_setsStateAndEmitsEvents() external {
+        // Expect constructor events
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MinDurationSet(uint48(1 days));
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MinEligibleDelaySet(uint48(1 days));
+
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+
+        // Verify immutables
+        assertEq(newTeller.OHM(), address(ohm), "OHM should be set");
+        assertTrue(
+            newTeller.TOKEN_IMPLEMENTATION() != address(0),
+            "TOKEN_IMPLEMENTATION should be deployed"
+        );
+
+        // Verify initial state
+        assertEq(newTeller.minDuration(), uint48(1 days), "minDuration should default to 1 day");
+        assertEq(
+            newTeller.minEligibleDelay(),
+            uint48(1 days),
+            "minEligibleDelay should default to 1 day"
+        );
+        assertFalse(newTeller.isEnabled(), "Should not be enabled after construction");
+    }
+
+    function test_constructor_revertsIfKernelIsZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(address(0))
+            )
+        );
+        new ConvertibleOHMTeller(address(0), address(ohm));
+    }
+
+    function test_constructor_revertsIfOhmIsZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                1,
+                abi.encodePacked(address(0))
+            )
+        );
+        new ConvertibleOHMTeller(address(kernel), address(0));
+    }
+
+    function test_constructor_revertsIfOhmDecimalsNot9() external {
+        MockERC20 badOhm = new MockERC20("Bad OHM", "bOHM", 18);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                1,
+                abi.encodePacked(address(badOhm))
+            )
+        );
+        new ConvertibleOHMTeller(address(kernel), address(badOhm));
+    }
+}
+
 contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
     function test_deploy_createsConvertibleTokenWithCorrectParams() external {
         // The deployment should emit the event
@@ -229,23 +305,27 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         assertEq(token.chainId(), block.chainid, "The chainId should match");
     }
 
-    function test_deploy_createsTokenWithZeroEligibleUsingCurrentTimestamp() external {
+    function test_deploy_createsTokenWithZeroEligibleUsingMinDelay() external {
         // Deploy a token with zero eligible time
         vm.prank(incentiveDistributor);
         ConvertibleOHMToken token = ConvertibleOHMToken(
             teller.deploy(
                 address(usds),
-                0, // Should use the current timestamp rounded to the nearest day
+                0, // Should compute earliest UTC midnight >= block.timestamp + minEligibleDelay
                 expiryTimestamp,
                 STRIKE_PRICE
             )
         );
 
+        // Expected: smallest UTC midnight >= block.timestamp + minEligibleDelay
+        uint48 minTimestamp = uint48(vm.getBlockTimestamp()) + teller.minEligibleDelay();
+        uint48 expectedEligible = _roundToDay(minTimestamp + 1 days - 1);
+
         // Verify
         assertEq(
             token.eligible(),
-            _roundToDay(uint48(vm.getBlockTimestamp())),
-            "The eligible should be the current timestamp rounded to the nearest day"
+            expectedEligible,
+            "The eligible should be the earliest UTC midnight satisfying minEligibleDelay"
         );
     }
 
@@ -1069,7 +1149,8 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
 contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     function test_setMinDuration_updatesMinDuration() external {
         uint48 newDuration = 7 days;
-        // vm.prank(address(this));
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MinDurationSet(newDuration);
         teller.setMinDuration(newDuration);
         assertEq(teller.minDuration(), newDuration, "The minimum duration should be updated");
     }
@@ -1109,6 +1190,137 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // vm.prank(address(this));
         teller.setMinDuration(7 days);
     }
+
+    // ========== setAdminMintLimit ========== //
+
+    function test_setAdminMintLimit_setsLimit() external {
+        teller.setAdminMintLimit(incentiveDistributor, 500e9);
+        assertEq(
+            teller.adminMintLimits(incentiveDistributor),
+            500e9,
+            "Admin mint limit should be set"
+        );
+    }
+
+    function test_setAdminMintLimit_emitsEvent() external {
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, 500e9);
+        teller.setAdminMintLimit(incentiveDistributor, 500e9);
+    }
+
+    function test_setAdminMintLimit_revertsIfZeroAddress() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(address(0))
+            )
+        );
+        teller.setAdminMintLimit(address(0), 500e9);
+    }
+
+    function test_setAdminMintLimit_revertsIfNotAdmin() external {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.prank(user0);
+        teller.setAdminMintLimit(incentiveDistributor, 500e9);
+    }
+
+    function test_setAdminMintLimit_revertsIfPolicyDisabled() external {
+        teller.disable("");
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        teller.setAdminMintLimit(incentiveDistributor, 500e9);
+    }
+
+    // ========== setMinEligibleDelay ========== //
+
+    function test_setMinEligibleDelay_setsDelay() external {
+        teller.setMinEligibleDelay(2 days);
+        assertEq(teller.minEligibleDelay(), 2 days, "Min eligible delay should be 2 days");
+    }
+
+    function test_setMinEligibleDelay_emitsEvent() external {
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.MinEligibleDelaySet(uint48(2 days));
+        teller.setMinEligibleDelay(2 days);
+    }
+
+    function test_setMinEligibleDelay_revertsIfLessThanOneDay() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(uint48(12 hours))
+            )
+        );
+        teller.setMinEligibleDelay(12 hours);
+    }
+
+    function test_setMinEligibleDelay_revertsIfNotAdmin() external {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.prank(user0);
+        teller.setMinEligibleDelay(2 days);
+    }
+
+    function test_setMinEligibleDelay_revertsIfPolicyDisabled() external {
+        teller.disable("");
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        teller.setMinEligibleDelay(2 days);
+    }
+
+    // ========== exercise: mint limit ========== //
+
+    function test_exercise_revertsIfMintLimitExceeded() external {
+        // 1. Preparation: set a low mint limit for the creator
+        teller.setAdminMintLimit(incentiveDistributor, 50e9);
+
+        // Deploy and mint
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        // Warp to eligible
+        vm.warp(eligibleTimestamp);
+
+        // Approve
+        uint256 cost = _exerciseCost(token, 100e9);
+        vm.startPrank(user0);
+        token.approve(address(teller), 100e9);
+        usds.approve(address(teller), cost);
+
+        // 2. Test: exercise above the limit
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_MintLimitExceeded.selector,
+                incentiveDistributor,
+                100e9,
+                50e9
+            )
+        );
+        teller.exercise(address(token), 100e9);
+        vm.stopPrank();
+    }
+
+    function test_exercise_succeedsWithinMintLimit() external {
+        // 1. Preparation: set exact limit
+        teller.setAdminMintLimit(incentiveDistributor, 100e9);
+
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        vm.warp(eligibleTimestamp);
+        uint256 cost = _exerciseCost(token, 100e9);
+        vm.startPrank(user0);
+        token.approve(address(teller), 100e9);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), 100e9);
+        vm.stopPrank();
+
+        // Verify: ohmMinted tracks the amount
+        assertEq(teller.ohmMinted(incentiveDistributor), 100e9, "OHM minted should be tracked");
+    }
+
+    // ========== setMintCap ========== //
 
     function test_setMintCap_increasesMintApproval() external {
         // 1. Preparation: reduce the minting cap to 0 first
@@ -1243,11 +1455,13 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // Verify the initial approval is 0
         assertEq(newTeller.remainingMintApproval(), 0, "The initial approval should be 0");
 
-        // 2. Test: enable with the initial minting cap
+        // 2. Test: enable with the initial minting cap and creator limits
         uint256 initialCap = _DEFAULT_MINT_CAP;
         vm.expectEmit(true, true, false, true);
         emit IConvertibleOHMTeller.MintCapUpdated(initialCap);
-        newTeller.enable(abi.encode(initialCap));
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Enabled();
+        newTeller.enable(_enableDataNoLimits(initialCap));
 
         // Verify
         assertEq(
@@ -1255,6 +1469,51 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
             initialCap,
             "The approval should match the initial cap"
         );
+    }
+
+    function test_enable_withCreatorLimits() external {
+        // 1. Preparation: deploy a fresh teller
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        // 2. Test: enable with creator limits
+        address[] memory creators = new address[](1);
+        creators[0] = incentiveDistributor;
+        uint256[] memory limits = new uint256[](1);
+        limits[0] = 500e9;
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, 500e9);
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Enabled();
+        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
+
+        // Verify
+        assertEq(
+            newTeller.adminMintLimits(incentiveDistributor),
+            500e9,
+            "Creator limit should be set"
+        );
+    }
+
+    function test_enable_revertsIfCreatorLimitArrayMismatch() external {
+        // 1. Preparation: deploy a fresh teller
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        // 2. Test: mismatched arrays
+        address[] memory creators = new address[](1);
+        creators[0] = incentiveDistributor;
+        uint256[] memory limits = new uint256[](0); // mismatch
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                1,
+                abi.encodePacked(creators.length, limits.length)
+            )
+        );
+        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
     }
 
     function test_enable_revertsIfNoMintCap() external {
@@ -1289,7 +1548,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
 
     function test_enable_revertsIfAlreadyEnabled() external {
         vm.expectRevert(IEnabler.NotDisabled.selector);
-        teller.enable(abi.encode(uint256(_DEFAULT_MINT_CAP)));
+        teller.enable(_enableDataNoLimits(_DEFAULT_MINT_CAP));
     }
 
     function test_enable_revertsIfNotAdmin() external {
@@ -1300,7 +1559,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // 2. Test
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(user0);
-        newTeller.enable(abi.encode(uint256(_DEFAULT_MINT_CAP)));
+        newTeller.enable(_enableDataNoLimits(_DEFAULT_MINT_CAP));
     }
 
     function test_disable_disablesPolicy() external {
@@ -1308,6 +1567,8 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         assertTrue(teller.isEnabled(), "The teller should be enabled");
 
         // Test
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Disabled();
         teller.disable("");
 
         // Verify

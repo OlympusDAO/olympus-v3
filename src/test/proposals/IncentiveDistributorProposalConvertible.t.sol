@@ -288,9 +288,11 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     ///      (which checks remainingMintApproval == INITIAL_MINT_CAP) should still pass.
     ///      Analogous to migration cleanup tests that verify _validate holds after state changes.
     function test_validate_passesAfterEndEpoch() public {
+        uint40 epochEndDate = _firstEpochEndDate();
+        vm.warp(uint256(epochEndDate) + 1);
         vm.prank(distributorMS);
         distributor.endEpoch(
-            _firstEpochEndDate(),
+            epochEndDate,
             bytes32(uint256(1)),
             _encodeParams(
                 address(usds),
@@ -311,6 +313,7 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         uint256 claimAmount = 100e9;
         bytes32 leaf = _generateLeaf(user0, epochEndDate, claimAmount);
 
+        vm.warp(uint256(epochEndDate) + 1);
         vm.prank(distributorMS);
         distributor.endEpoch(
             epochEndDate,
@@ -346,6 +349,10 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     function test_endEpoch_succeeds() public {
         uint40 epochEndDate = _firstEpochEndDate();
         bytes32 merkleRoot = bytes32(uint256(1));
+
+        // Warp past epoch end so endEpoch() passes the timestamp check
+        vm.warp(uint256(epochEndDate) + 1);
+
         uint48 eligibleTimestamp = _roundToDay(uint48(block.timestamp) + 90 days);
         uint48 expiryTimestamp = _roundToDay(uint48(block.timestamp) + 180 days);
 
@@ -398,6 +405,10 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         // 1. Setup: end epoch with a single-leaf merkle tree for user0
         uint40 epochEndDate = _firstEpochEndDate();
         uint256 claimAmount = 100e9; // 100 OHM (9 decimals)
+
+        // Warp past epoch end so endEpoch() passes the timestamp check
+        vm.warp(uint256(epochEndDate) + 1);
+
         uint48 eligibleTimestamp = _roundToDay(uint48(block.timestamp) + 90 days);
         uint48 expiryTimestamp = _roundToDay(uint48(block.timestamp) + 180 days);
 
@@ -444,6 +455,10 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         // 1. Setup: end epoch
         uint40 epochEndDate = _firstEpochEndDate();
         uint256 claimAmount = 100e9; // 100 OHM (9 decimals)
+
+        // Warp past epoch end so endEpoch() passes the timestamp check
+        vm.warp(uint256(epochEndDate) + 1);
+
         uint48 eligibleTimestamp = _roundToDay(uint48(block.timestamp) + 90 days);
         uint48 expiryTimestamp = _roundToDay(uint48(block.timestamp) + 180 days);
 

@@ -60,12 +60,16 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
                 "2. Grant `convertible_admin` role to DAO MS.\n",
                 "3. Grant `incentive_manager` role to Distributor MS.\n",
                 // TODO: specify the specific minting cap value when it becomes known
-                "4. Enable the ConvertibleOHMTeller policy (with initial mint cap).\n",
+                "4. Enable the ConvertibleOHMTeller policy (with initial mint cap and distributor mint limit).\n",
                 "5. Enable the IncentiveDistributorConvertible policy.\n\n",
                 "## Result\n\n",
                 "After execution, the Distributor MS will be able to post weekly merkle roots and deploy ",
                 "Convertible OHM tokens for each epoch. Users will be able to claim their Convertible OHM incentives ",
                 "and exercise them for OHM by paying the conversion price in the quote token.\n\n",
+                "The ConvertibleOHMTeller is deployed with the following defaults (adjustable by governance):\n",
+                "- `minDuration` = 1 day: minimum exercise window between eligible and expiry.\n",
+                "- `minEligibleDelay` = 1 day: minimum delay between token deployment and eligibility, ",
+                "providing the emergency role a time window to disable the contract if needed.\n\n",
                 "## References\n\n",
                 "TODO: Add RFC/OIP reference.\n",
                 "TODO: Add link to PR.\n",
@@ -117,12 +121,21 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             "Grant incentive_manager role to Distributor MS"
         );
 
-        // 4. Enable ConvertibleOHMTeller (with initial mint cap)
-        _pushAction(
-            iohmTeller,
-            abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(_INITIAL_MINT_CAP)),
-            "Enable ConvertibleOHMTeller policy"
-        );
+        // 4. Enable ConvertibleOHMTeller (with initial mint cap and distributor mint limit)
+        {
+            address[] memory creators = new address[](1);
+            creators[0] = incentiveDistributorConvertible;
+            uint256[] memory limits = new uint256[](1);
+            limits[0] = _INITIAL_MINT_CAP;
+            _pushAction(
+                iohmTeller,
+                abi.encodeWithSelector(
+                    PolicyEnabler.enable.selector,
+                    abi.encode(_INITIAL_MINT_CAP, creators, limits)
+                ),
+                "Enable ConvertibleOHMTeller policy"
+            );
+        }
 
         // 5. Enable IncentiveDistributorConvertible
         _pushAction(
@@ -178,6 +191,13 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         require(
             ConvertibleOHMTeller(iohmTeller).remainingMintApproval() == _INITIAL_MINT_CAP,
             "ConvertibleOHMTeller mint cap does not match _INITIAL_MINT_CAP"
+        );
+
+        // Validate the distributor's admin mint limit was set
+        require(
+            ConvertibleOHMTeller(iohmTeller).adminMintLimits(incentiveDistributorConvertible) ==
+                _INITIAL_MINT_CAP,
+            "ConvertibleOHMTeller admin mint limit does not match _INITIAL_MINT_CAP"
         );
 
         // Validate IncentiveDistributorConvertible is enabled

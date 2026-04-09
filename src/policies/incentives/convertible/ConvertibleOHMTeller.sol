@@ -62,7 +62,7 @@ contract ConvertibleOHMTeller is
     uint8 private constant _OHM_DECIMALS = 9;
 
     /// @notice Minimum byte length of enableData_ (one ABI-encoded uint256 mintCap + two dynamic arrays)
-    /// @dev    abi.encode(uint256, address[], uint256[]) with empty arrays = 32 + 32 + 32 + 32 + 32 = 160
+    /// @dev abi.encode(uint256, address[], uint256[]) with empty arrays = 32 + 32 + 32 + 32 + 32 = 160
     uint256 private constant _MIN_ENABLE_DATA_LENGTH = 160;
 
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
@@ -88,11 +88,14 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     uint48 public override minDuration;
 
-    uint48 public minEligibleDelay;
+    /// @inheritdoc IConvertibleOHMTeller
+    uint48 public override minEligibleDelay;
 
-    mapping(address creator => uint256) public ohmMinted;
+    /// @inheritdoc IConvertibleOHMTeller
+    mapping(address creator => uint256) public override ohmMinted;
 
-    mapping(address creator => uint256 adminMintLimit) public adminMintLimits;
+    /// @inheritdoc IConvertibleOHMTeller
+    mapping(address creator => uint256) public override adminMintLimits;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -109,9 +112,9 @@ contract ConvertibleOHMTeller is
         if (IERC20Metadata(ohm_).decimals() != _OHM_DECIMALS)
             revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
 
-        // Set the minimum duration during which a convertible token must be eligible for exercise to 1 day initially
-        minDuration = uint48(1 days);
-        minEligibleDelay = uint48(1 days);
+        // Set the minimum duration and eligible delay to 1 day initially
+        _setMinDuration(uint48(1 days));
+        _setMinEligibleDelay(uint48(1 days));
     }
 
     // ========== POLICY CONFIGURATION ========== //
@@ -172,9 +175,7 @@ contract ConvertibleOHMTeller is
         _setMintCap(mintCap);
 
         for (uint256 i = 0; i < creators.length; ++i) {
-            if (creators[i] == address(0))
-                revert Teller_InvalidParams(1, abi.encodePacked(creators[i]));
-            adminMintLimits[creators[i]] = limits[i];
+            _setAdminMintLimit(1, creators[i], limits[i]);
         }
     }
 
@@ -283,7 +284,8 @@ contract ConvertibleOHMTeller is
         token.burnFrom(msg.sender, amount_);
 
         ohmMinted[creator] += amount_;
-        require(ohmMinted[creator] <= adminMintLimits[creator], "mint limit exceeded");
+        if (ohmMinted[creator] > adminMintLimits[creator])
+            revert Teller_MintLimitExceeded(creator, ohmMinted[creator], adminMintLimits[creator]);
 
         // Mint OHM to user
         MINTR.mintOhm(msg.sender, amount_);
@@ -579,16 +581,37 @@ contract ConvertibleOHMTeller is
     function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
-        minDuration = duration_;
+        _setMinDuration(duration_);
     }
 
-    function setAdminMintLimit(address creator_, uint256 limit_) external onlyEnabled onlyAdminRole {
+    /// @inheritdoc IConvertibleOHMTeller
+    function setAdminMintLimit(
+        address creator_,
+        uint256 limit_
+    ) external onlyEnabled onlyAdminRole {
+        _setAdminMintLimit(0, creator_, limit_);
+    }
+
+    function _setAdminMintLimit(uint256 paramIndex_, address creator_, uint256 limit_) private {
+        _requireNonzeroAddress(paramIndex_, creator_);
         adminMintLimits[creator_] = limit_;
+        emit AdminMintLimitSet(creator_, limit_);
     }
 
+    function _setMinDuration(uint48 duration_) private {
+        minDuration = duration_;
+        emit MinDurationSet(duration_);
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
     function setMinEligibleDelay(uint48 delay_) external onlyEnabled onlyAdminRole {
         if (delay_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(delay_));
+        _setMinEligibleDelay(delay_);
+    }
+
+    function _setMinEligibleDelay(uint48 delay_) private {
         minEligibleDelay = delay_;
+        emit MinEligibleDelaySet(delay_);
     }
 
     /// @inheritdoc IConvertibleOHMTeller

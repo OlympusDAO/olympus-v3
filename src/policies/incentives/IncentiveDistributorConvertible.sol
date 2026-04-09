@@ -89,7 +89,10 @@ contract IncentiveDistributorConvertible is
             (IIncentiveDistributorConvertible.EndEpochParams)
         );
 
+        // Epoch must have ended before rewards can be distributed
         if (block.timestamp <= epochEndDate_) revert IncentiveDistributor_InvalidToken();
+        // Token must expire after the epoch ends so users have time to claim
+        if (p.expiry <= epochEndDate_) revert IncentiveDistributor_InvalidToken();
 
         // Set and validate the merkle root
         _setMerkleRoot(epochEndDate_, merkleRoot_);

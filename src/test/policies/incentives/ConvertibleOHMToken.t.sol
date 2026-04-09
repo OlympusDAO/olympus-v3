@@ -66,11 +66,17 @@ contract ConvertibleOHMTokenTestBase is Test {
         roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
         roles.saveRole(ADMIN_ROLE, address(this));
 
-        // Enable the teller policy with infinite minting cap
-        teller.enable(abi.encode(type(uint256).max));
-
         // Grant the incentive distributor role (required for the functions deploy and create)
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor);
+
+        // Enable the teller policy with infinite minting cap and default creator limits
+        {
+            address[] memory creators = new address[](1);
+            creators[0] = incentiveDistributor;
+            uint256[] memory limits = new uint256[](1);
+            limits[0] = type(uint256).max;
+            teller.enable(abi.encode(type(uint256).max, creators, limits));
+        }
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);

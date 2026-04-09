@@ -83,9 +83,8 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         // Setup roles for teller
         roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
 
-        // Enable the teller policy with infinite minting cap
+        // Setup admin role (needed to enable teller and distributor)
         roles.saveRole(ADMIN_ROLE, address(this));
-        teller.enable(abi.encode(type(uint256).max));
 
         // Deploy the distributor
         distributor = new IncentiveDistributorConvertible(
@@ -98,13 +97,25 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         // Grant the incentive distributor role to the distributor policy
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), address(distributor));
 
+        // Enable the teller policy with infinite minting cap and distributor limits
+        {
+            address[] memory creators = new address[](1);
+            creators[0] = address(distributor);
+            uint256[] memory limits = new uint256[](1);
+            limits[0] = type(uint256).max;
+            teller.enable(abi.encode(type(uint256).max, creators, limits));
+        }
+
         // Setup roles for distributor
         roles.saveRole(distributor.ROLE_INCENTIVE_MANAGER(), admin);
 
         // Enable the distributor policy
         distributor.enable("");
 
-        // Prepare test parameters for convertible tokens
+        // Warp past the first epoch end date so endEpoch() passes the timestamp check
+        vm.warp(uint256(_firstEpochEndDate()) + 1);
+
+        // Prepare test parameters for convertible tokens (relative to current time)
         // Set the eligible time to 3 months from now (rounded to the nearest day)
         eligibleTimestamp = _roundToDay(uint48(vm.getBlockTimestamp()) + 90 days);
         // Set the expiry time to 6 months from now (rounded to the nearest day)
@@ -292,12 +303,19 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         uint40 epochEndDate = startTimestamp + uint40(n) * 1 days - 1;
         bytes32 merkleRoot = bytes32(uint256(n));
 
+        // Warp past the epoch end date to satisfy the timestamp check
+        vm.warp(uint256(epochEndDate) + 1);
+
+        // Recompute eligible/expiry relative to new block.timestamp (warp may overshoot original values)
+        uint48 fuzzEligible = _roundToDay(uint48(vm.getBlockTimestamp()) + 90 days);
+        uint48 fuzzExpiry = _roundToDay(uint48(vm.getBlockTimestamp()) + 180 days);
+
         vm.prank(admin);
         ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epochEndDate,
                 merkleRoot,
-                _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
+                _encodeParams(address(usds), fuzzEligible, fuzzExpiry, STRIKE_PRICE)
             )
         );
 
@@ -319,9 +337,8 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         bytes32 root2 = bytes32(uint256(2));
         bytes32 root3 = bytes32(uint256(3));
 
-        vm.startPrank(admin);
-
-        // End epoch 1
+        // End epoch 1 (block.timestamp already past epoch1EndDate from setUp warp)
+        vm.prank(admin);
         ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
@@ -336,7 +353,9 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
             "lastEpochEndDate should be epoch1"
         );
 
-        // End epoch 2
+        // End epoch 2 (warp past epoch2EndDate)
+        vm.warp(uint256(epoch2EndDate) + 1);
+        vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
@@ -356,7 +375,9 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
             "lastEpochEndDate should be epoch2"
         );
 
-        // End epoch 3
+        // End epoch 3 (warp past epoch3EndDate)
+        vm.warp(uint256(epoch3EndDate) + 1);
+        vm.prank(admin);
         ConvertibleOHMToken token3 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch3EndDate,
@@ -386,6 +407,8 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
     function test_endEpoch_differentTokensPerEpoch_skipOnCoverage() external {
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 1 days;
+        // Warp past epoch2EndDate so both epochs can be ended
+        vm.warp(uint256(epoch2EndDate) + 1);
 
         bytes32 root1 = _generateLeaf(user0, epoch1EndDate, 100e9);
         bytes32 root2 = _generateLeaf(user0, epoch2EndDate, 200e9);
@@ -523,6 +546,23 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
             epochEndDate,
             bytes32(uint256(1)),
             _encodeParams(address(usds), eligibleTimestamp, invalidExpiry, STRIKE_PRICE)
+        );
+    }
+
+    function test_endEpoch_revertsIfEpochInFuture() external {
+        // Use an epoch end date in the future (7 days from now)
+        uint40 futureEpochEndDate = uint40(vm.getBlockTimestamp()) + 7 days - 1;
+        // Ensure it's formatted as 23:59:59 UTC
+        futureEpochEndDate = uint40(((uint256(futureEpochEndDate) + 1) / 1 days) * 1 days - 1);
+
+        vm.prank(admin);
+        vm.expectRevert(
+            IIncentiveDistributorConvertible.IncentiveDistributor_InvalidToken.selector
+        );
+        distributor.endEpoch(
+            futureEpochEndDate,
+            bytes32(uint256(1)),
+            _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
     }
 
@@ -719,6 +759,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
             )
         );
 
+        vm.warp(uint256(epoch2EndDate) + 1);
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
@@ -782,6 +823,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
             )
         );
 
+        vm.warp(uint256(epoch2EndDate) + 1);
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, normalAmount);
         vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
@@ -892,7 +934,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         bytes32 root1 = _generateLeaf(user0, epoch1EndDate, amount1);
         bytes32 root2 = _generateLeaf(user0, epoch2EndDate, amount2);
 
-        vm.startPrank(admin);
+        vm.prank(admin);
         ConvertibleOHMToken token1 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
@@ -900,6 +942,8 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
+        vm.warp(uint256(epoch2EndDate) + 1);
+        vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch2EndDate,
@@ -907,7 +951,6 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2) // Different strike
             )
         );
-        vm.stopPrank();
 
         // 2. Test
         // Prepare claim data
@@ -990,6 +1033,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
             )
         );
 
+        vm.warp(uint256(epoch2EndDate) + 1);
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
@@ -1141,23 +1185,26 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         uint40 epoch2EndDate = epoch1EndDate + 7 days;
         uint40 epoch3EndDate = epoch2EndDate + 7 days;
 
-        vm.startPrank(admin);
+        vm.prank(admin);
         distributor.endEpoch(
             epoch1EndDate,
             _generateLeaf(user0, epoch1EndDate, 100e9),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
+        vm.warp(uint256(epoch2EndDate) + 1);
+        vm.prank(admin);
         distributor.endEpoch(
             epoch2EndDate,
             _generateLeaf(user0, epoch2EndDate, 200e9),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
+        vm.warp(uint256(epoch3EndDate) + 1);
+        vm.prank(admin);
         distributor.endEpoch(
             epoch3EndDate,
             _generateLeaf(user0, epoch3EndDate, 300e9),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
-        vm.stopPrank();
 
         // Claim epoch 2 first
         {
@@ -1554,6 +1601,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         );
 
         // Setup epoch 2 (same token params = same token)
+        vm.warp(uint256(epoch2EndDate) + 1);
         bytes32 leaf2 = _generateLeaf(user0, epoch2EndDate, amount2);
         vm.prank(admin);
         ConvertibleOHMToken token2 = ConvertibleOHMToken(
@@ -1749,7 +1797,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         uint256 amount3 = 200e9;
 
         // Set up merkle roots for each epoch (same token params = same token)
-        vm.startPrank(admin);
+        vm.prank(admin);
         ConvertibleOHMToken token = ConvertibleOHMToken(
             distributor.endEpoch(
                 epoch1EndDate,
@@ -1757,17 +1805,20 @@ contract IncentiveDistributorConvertibleIntegrationTests is
                 _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
             )
         );
+        vm.warp(uint256(epoch2EndDate) + 1);
+        vm.prank(admin);
         distributor.endEpoch(
             epoch2EndDate,
             _generateLeaf(user0, epoch2EndDate, amount2),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
+        vm.warp(uint256(epoch3EndDate) + 1);
+        vm.prank(admin);
         distributor.endEpoch(
             epoch3EndDate,
             _generateLeaf(user0, epoch3EndDate, amount3),
             _encodeParams(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
-        vm.stopPrank();
 
         // Claim all epochs in one transaction
         uint256[] memory epochEndDates = new uint256[](3);
