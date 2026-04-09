@@ -89,10 +89,7 @@ contract IncentiveDistributorConvertible is
             (IIncentiveDistributorConvertible.EndEpochParams)
         );
 
-        // Validate that the token expires after the end of the epoch (users need time to claim their tokens)
-        // Note: epochEndDate_ is always 23:59:59 UTC (validated by _setMerkleRoot), so
-        // p.expiry > epochEndDate_ guarantees expiry falls on a strictly later day
-        if (p.expiry <= epochEndDate_) revert IncentiveDistributor_InvalidToken();
+        if (block.timestamp <= epochEndDate_) revert IncentiveDistributor_InvalidToken();
 
         // Set and validate the merkle root
         _setMerkleRoot(epochEndDate_, merkleRoot_);
