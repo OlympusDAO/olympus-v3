@@ -220,6 +220,15 @@ contract IncentiveDistributorConvertibleConstructorTests is
         );
     }
 
+    function test_constructor_rejectsZeroKernel() external {
+        vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_InvalidAddress.selector);
+        new IncentiveDistributorConvertible(
+            address(0),
+            uint40(startTimestamp - 1),
+            address(teller)
+        );
+    }
+
     function test_constructor_rejectsZeroStartTimestamp() external {
         vm.expectRevert(IIncentiveDistributor.IncentiveDistributor_EpochIsZero.selector);
         new IncentiveDistributorConvertible(address(kernel), 0, address(teller));
