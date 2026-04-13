@@ -10,6 +10,7 @@
     },
     "packageManager": "pnpm@10.33.0",
     "engines": {
+        "node": ">=22 <23",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
         "pnpm": "10.33.0"
