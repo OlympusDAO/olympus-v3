@@ -1,16 +1,6 @@
 name: Bootstrap CI environment
 description: Standardizes repository checkout, toolchain setup, and dependency installation.
 
-inputs:
-    node-version-file:
-        description: Path to the Node version file used by setup-node
-        required: false
-        default: .nvmrc
-    install-command:
-        description: Command used to install Node dependencies
-        required: false
-        default: pnpm install --frozen-lockfile
-
 runs:
     using: composite
     steps:
@@ -19,7 +9,7 @@ runs:
         - name: Setup Node.js
           uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
           with:
-              node-version-file: ${{ inputs.node-version-file }}
+              node-version-file: .nvmrc
 
         - name: Install pnpm
           uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -29,4 +19,4 @@ runs:
 
         - name: Install dependencies
           # Frozen lockfile policy is enforced in .npmrc.
-          run: ${{ inputs.install-command }}
+          run: pnpm install --frozen-lockfile
