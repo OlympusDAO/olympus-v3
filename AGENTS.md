@@ -10,7 +10,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 **Installation and Build:**
 
-- Node.js 22.x is required for local development and CI
+- Node.js >=24 is required for local development and CI
 - `pnpm install` - Install all dependencies (runs postinstall script)
 - `pnpm build` or `forge build` - Build all files
 - `forge build --contracts path/to/contract.sol` - Build a specific contract

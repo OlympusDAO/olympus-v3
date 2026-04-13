@@ -4,7 +4,7 @@ Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is
 
 Prerequisites:
 
-- Node.js 22.x
+- Node.js >=24
 - pnpm 10.33.0
 
 Run `pnpm install` to install all dependencies.
