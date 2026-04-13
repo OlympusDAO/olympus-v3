@@ -13,25 +13,25 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
               with:
                   node-version: 22
 
             - name: Install pnpm
-              uses: pnpm/action-setup@v5
+              uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
 
             - name: Install Foundry
-              uses: foundry-rs/foundry-toolchain@v1
+              uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1.7.0
 
             - name: Install dependencies
               # Frozen lockfile policy is enforced in .npmrc.
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
 
             - name: Audit pnpm dependencies (fail on moderate+)
-              uses: JamesRobertWiseman/pnpm-audit@v3
+              uses: JamesRobertWiseman/pnpm-audit@a6a8cc297d146014c029926e49d43571e776f85e # v3.2.0
               with:
                   package_json_path: ./
                   github_token: ${{ secrets.GITHUB_TOKEN }}
