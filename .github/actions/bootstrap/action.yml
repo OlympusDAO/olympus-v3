@@ -18,3 +18,4 @@ runs:
         - name: Install dependencies
           # Frozen lockfile policy is enforced in .npmrc.
           run: pnpm install --frozen-lockfile
+          shell: bash
