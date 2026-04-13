@@ -147,6 +147,9 @@
                         "type": "string"
                     },
                     "type": "array"
+                },
+                "statusCheck": {
+                    "$ref": "#/$defs/statusCheck"
                 }
             },
             "required": [
@@ -165,6 +168,29 @@
             "description": "Ethereum address (checksummed or lowercase)",
             "pattern": "^0x[a-fA-F0-9]{40}$",
             "type": "string"
+        },
+        "statusCheck": {
+            "description": "How to check if this component is currently active or disabled. When omitted, the frontend derives the status check from calls[0].abi and calls[0].contractKey. Use this field when the status check target differs from the shutdown action target.",
+            "properties": {
+                "abi": {
+                    "description": "Key in the ABIs file for the status check ABI",
+                    "type": "string"
+                },
+                "contractKey": {
+                    "description": "Key in env.json to resolve the contract address to read status from (e.g., olympus.modules.OlympusMinter)",
+                    "type": "string"
+                },
+                "functionName": {
+                    "description": "View function to call for status (e.g., active, isActive, isEnabled)",
+                    "type": "string"
+                },
+                "trueIsShutdown": {
+                    "description": "If true, the function returning true means the component is shut down. If false, the function returning false means shutdown.",
+                    "type": "boolean"
+                }
+            },
+            "required": ["contractKey", "abi", "functionName", "trueIsShutdown"],
+            "type": "object"
         }
     },
     "$id": "https://github.com/OlympusDAO/olympus-v3/blob/master/documentation/emergency/emergency-config.schema.json",
