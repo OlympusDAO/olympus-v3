@@ -5,7 +5,7 @@ inputs:
   install-foundry:
     description: Install foundry toolchain if required by the project.
     required: false
-    default: "false"
+    default: "true"
 
 runs:
   using: composite
