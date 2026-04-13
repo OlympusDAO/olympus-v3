@@ -2,6 +2,7 @@
     "functions": [
         {
             "args": {
+                "borrowPercentage": 9980,
                 "slippageBps": 5,
                 "susdeSupplyAmount": "815977000000000000000000"
             },
