@@ -360,55 +360,102 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     }
 
     function _cacheReadUint(string memory key_) internal view returns (uint256) {
-        if (!_cacheConfig.exists(key_)) {
+        string memory storageKey = _cacheStorageKey(key_);
+        if (!_cacheConfig.exists(storageKey)) {
             _revertCacheFailure(string.concat("missing cache uint key ", key_));
         }
-        return _cacheConfig.get(key_).toUint256();
+
+        bytes memory encoded = _cacheConfig.get(storageKey).toBytes();
+        if (encoded.length != 32) {
+            _revertCacheFailure(string.concat("invalid encoded uint key ", key_));
+        }
+        return abi.decode(encoded, (uint256));
     }
 
     function _cacheReadString(string memory key_) internal view returns (string memory) {
-        if (!_cacheConfig.exists(key_)) {
+        string memory storageKey = _cacheStorageKey(key_);
+        if (!_cacheConfig.exists(storageKey)) {
             _revertCacheFailure(string.concat("missing cache string key ", key_));
         }
-        return _cacheConfig.get(key_).toString();
+        return _cacheConfig.get(storageKey).toString();
     }
 
     function _cacheReadBytes32(string memory key_) internal view returns (bytes32) {
-        if (!_cacheConfig.exists(key_)) {
+        string memory storageKey = _cacheStorageKey(key_);
+        if (!_cacheConfig.exists(storageKey)) {
             _revertCacheFailure(string.concat("missing cache bytes32 key ", key_));
         }
-        return _cacheConfig.get(key_).toBytes32();
+        return _cacheConfig.get(storageKey).toBytes32();
     }
 
     function _cacheReadAddress(string memory key_) internal view returns (address) {
-        if (!_cacheConfig.exists(key_)) {
+        string memory storageKey = _cacheStorageKey(key_);
+        if (!_cacheConfig.exists(storageKey)) {
             _revertCacheFailure(string.concat("missing cache address key ", key_));
         }
-        return _cacheConfig.get(key_).toAddress();
+        return _cacheConfig.get(storageKey).toAddress();
     }
 
     function _cacheReadBytes(string memory key_) internal view returns (bytes memory) {
-        if (!_cacheConfig.exists(key_)) {
+        string memory storageKey = _cacheStorageKey(key_);
+        if (!_cacheConfig.exists(storageKey)) {
             _revertCacheFailure(string.concat("missing cache bytes key ", key_));
         }
-        return _cacheConfig.get(key_).toBytes();
+        return _cacheConfig.get(storageKey).toBytes();
+    }
+
+    function _cacheStorageKey(string memory key_) internal pure returns (string memory) {
+        bytes memory rawKey = bytes(key_);
+        uint256 dotCount;
+        for (uint256 i = 0; i < rawKey.length; i++) {
+            if (rawKey[i] == ".") dotCount++;
+        }
+
+        // Replace '.' with '__' so StdConfig does not interpret dotted keys as
+        // nested TOML objects.
+        bytes memory storageKey = new bytes(rawKey.length + dotCount);
+        uint256 j;
+        for (uint256 i = 0; i < rawKey.length; i++) {
+            if (rawKey[i] == ".") {
+                storageKey[j] = "_";
+                storageKey[j + 1] = "_";
+                j += 2;
+            } else {
+                storageKey[j] = rawKey[i];
+                j++;
+            }
+        }
+
+        return string(storageKey);
     }
 
     function _cacheSetUint(string memory key_, uint256 value_) internal {
         if (_cacheModeWrite) {
-            _cacheConfig.set(key_, value_);
+            _cacheConfig.set(_cacheStorageKey(key_), abi.encode(value_));
         }
     }
 
     function _cacheSetAddress(string memory key_, address value_) internal {
         if (_cacheModeWrite) {
-            _cacheConfig.set(key_, value_);
+            _cacheConfig.set(_cacheStorageKey(key_), value_);
         }
     }
 
     function _cacheSetBytes(string memory key_, bytes memory value_) internal {
         if (_cacheModeWrite) {
-            _cacheConfig.set(key_, value_);
+            _cacheConfig.set(_cacheStorageKey(key_), value_);
+        }
+    }
+
+    function _cacheSetString(string memory key_, string memory value_) internal {
+        if (_cacheModeWrite) {
+            _cacheConfig.set(_cacheStorageKey(key_), value_);
+        }
+    }
+
+    function _cacheSetBytes32(string memory key_, bytes32 value_) internal {
+        if (_cacheModeWrite) {
+            _cacheConfig.set(_cacheStorageKey(key_), value_);
         }
     }
 
@@ -525,16 +572,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     ) internal {
         if (_cacheMode != CacheMode.ExecuteLoop || !_cacheModeWrite) return;
 
-        _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
-        _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
-        _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
-        _cacheConfig.set(CACHE_KEY_OWNER, _owner);
-        _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
-        _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_LOOP);
-        _cacheConfig.set(CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT, susdeSupplyAmount_);
-        _cacheConfig.set(CACHE_KEY_LOOP_BORROW_PERCENTAGE, borrowPercentage_);
-        _cacheConfig.set(CACHE_KEY_LOOP_SLIPPAGE_BPS, slippageBps_);
-        _cacheConfig.set(CACHE_KEY_LOOP_EXCLUDED_SOURCES, excludedSources_);
+        _cacheSetUint(CACHE_KEY_CREATED_AT, block.timestamp);
+        _cacheSetBytes32(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
+        _cacheSetUint(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheSetAddress(CACHE_KEY_OWNER, _owner);
+        _cacheSetString(CACHE_KEY_VERSION, CACHE_VERSION);
+        _cacheSetString(CACHE_KEY_FUNCTION, CACHE_FUNCTION_LOOP);
+        _cacheSetUint(CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT, susdeSupplyAmount_);
+        _cacheSetUint(CACHE_KEY_LOOP_BORROW_PERCENTAGE, borrowPercentage_);
+        _cacheSetUint(CACHE_KEY_LOOP_SLIPPAGE_BPS, slippageBps_);
+        _cacheSetString(CACHE_KEY_LOOP_EXCLUDED_SOURCES, excludedSources_);
     }
 
     function _writeUnwindMetadataCache(
@@ -548,19 +595,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     ) internal {
         if (_cacheMode != CacheMode.ExecuteUnwind || !_cacheModeWrite) return;
 
-        _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
-        _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
-        _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
-        _cacheConfig.set(CACHE_KEY_OWNER, _owner);
-        _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
-        _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_UNWIND);
-        _cacheConfig.set(CACHE_KEY_UNWIND_SLIPPAGE_BPS, slippageBps_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_HEALTH_FACTOR, minHealthFactor_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_SWAP1_VALUE_RATIO_BPS, minSwap1ValueRatioBps_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_SWAP2_VALUE_RATIO_BPS, minSwap2ValueRatioBps_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_MAX_SUSDE_SWAP_IN, maxSusdeSwapIn_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_EXCLUDED_SOURCES, excludedSources_);
-        _cacheConfig.set(CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE, initialSusdeBalance_);
+        _cacheSetUint(CACHE_KEY_CREATED_AT, block.timestamp);
+        _cacheSetBytes32(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
+        _cacheSetUint(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheSetAddress(CACHE_KEY_OWNER, _owner);
+        _cacheSetString(CACHE_KEY_VERSION, CACHE_VERSION);
+        _cacheSetString(CACHE_KEY_FUNCTION, CACHE_FUNCTION_UNWIND);
+        _cacheSetUint(CACHE_KEY_UNWIND_SLIPPAGE_BPS, slippageBps_);
+        _cacheSetUint(CACHE_KEY_UNWIND_MIN_HEALTH_FACTOR, minHealthFactor_);
+        _cacheSetUint(CACHE_KEY_UNWIND_MIN_SWAP1_VALUE_RATIO_BPS, minSwap1ValueRatioBps_);
+        _cacheSetUint(CACHE_KEY_UNWIND_MIN_SWAP2_VALUE_RATIO_BPS, minSwap2ValueRatioBps_);
+        _cacheSetUint(CACHE_KEY_UNWIND_MAX_SUSDE_SWAP_IN, maxSusdeSwapIn_);
+        _cacheSetString(CACHE_KEY_UNWIND_EXCLUDED_SOURCES, excludedSources_);
+        _cacheSetUint(CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE, initialSusdeBalance_);
     }
 
     function _computeLoopArgsFingerprint(

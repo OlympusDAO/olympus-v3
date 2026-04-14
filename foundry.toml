@@ -9,6 +9,7 @@ fs_permissions = [
     { access = "read", path = "./src/scripts/" },
     { access = "read", path = "./src/proposals/addresses.json" },
     { access = "read-write", path = "./src/scripts/env.json" },
+    { access = "read-write", path = "./cache/" },
 ]
 gas_limit = "18446744073709551615"
 

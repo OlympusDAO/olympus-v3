@@ -42,6 +42,11 @@ Cached planning data includes:
 - critical ERC4626 conversions (`convertToAssets`, `convertToShares`) with input/output checks,
 - reporting baseline snapshots used in post-step reporting.
 
+Implementation details that matter for idempotency:
+
+- Cache keys are normalized from dotted names (for example `swaps.loop.swap1.router`) to TOML-safe keys (`swaps__loop__swap1__router`) so `StdConfig` does not parse them as nested objects.
+- Numeric cache values are stored and read back as fixed-width encoded integers (`abi.encode(uint256)`), not TOML decimals, to avoid precision loss on large 18-decimal values.
+
 ## Key Mainnet Addresses
 
 | Component                            | Address                                      |
@@ -184,3 +189,7 @@ Expected behavior when replaying successfully:
 - planning values match the sign-only run,
 - quoted swap outputs and calldata are reused from cache,
 - replay does not depend on new Kyber route responses or new 4626 planning conversions.
+
+Practical verification signal:
+
+- Compare `Safe tx hash (idempotency key)` and `Multisend calldata hash` across `--signonly` and `--signature --broadcast false`; both should match when replay is fully idempotent.
