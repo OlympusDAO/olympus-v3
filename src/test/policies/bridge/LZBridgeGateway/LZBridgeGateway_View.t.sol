@@ -84,6 +84,10 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         );
     }
 
+    function test_isReceiveEnabled_defaultsFalse() external view {
+        assertFalse(gateway.isReceiveEnabled(), "isReceiveEnabled should default to false");
+    }
+
     function test_getAmountCanBeSent() external {
         // Configure rate limit: 10_000e9 over 1 hour
         uint192 limit = 10_000e9;

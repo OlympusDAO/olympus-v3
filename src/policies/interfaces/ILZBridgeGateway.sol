@@ -49,6 +49,9 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param options The invalid options bytes.
     error LZBridgeGateway_InvalidOptions(bytes options);
 
+    /// @notice Thrown when setIsReceiveEnabled is called with the current value.
+    error LZBridgeGateway_ReceiveAlreadyInDesiredState();
+
     // ========= EVENTS ========= //
 
     /// @notice Emitted when OHM is burned and sent to another chain.
@@ -93,6 +96,10 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Emitted when enforced options are set.
     /// @param enforcedOptions The enforced option parameters.
     event EnforcedOptionsSet(EnforcedOptionParam[] enforcedOptions);
+
+    /// @notice Emitted when the isReceiveEnabled flag is changed.
+    /// @param isReceiveEnabled The new value.
+    event IsReceiveEnabledSet(bool isReceiveEnabled);
 
     // ========= CORE FUNCTIONS ========= //
 
@@ -140,6 +147,14 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param eid_ The remote endpoint ID.
     /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
     function setPeer(uint32 eid_, bytes32 peer_) external;
+
+    /// @notice Sets whether the gateway can receive messages while disabled.
+    /// @dev Only callable by the emergency or admin role.
+    ///      Only takes effect when isEnabled == false. When isEnabled == true,
+    ///      lzReceive() always works regardless of this flag.
+    ///
+    /// @param isReceiveEnabled_ The desired state.
+    function setIsReceiveEnabled(bool isReceiveEnabled_) external;
 
     /// @notice Sets the delegate on the LayerZero endpoint.
     /// @dev Only callable by the bridge_admin or admin role.
@@ -219,6 +234,9 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
         uint16 msgType_,
         bytes calldata extraOptions_
     ) external view returns (bytes memory);
+
+    /// @notice Whether receiving is allowed while the gateway is disabled.
+    function isReceiveEnabled() external view returns (bool);
 
     /// @notice Returns whether this is the canonical (mainnet) chain.
     // solhint-disable-next-line func-name-mixedcase

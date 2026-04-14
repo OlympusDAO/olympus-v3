@@ -65,4 +65,20 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         vm.prank(caller_);
         gateway.disable(bytes(""));
     }
+
+    function test_disable_disablesIsReceiveEnabledIfNeeded() external {
+        vm.startPrank(admin);
+
+        // Enable receive while disabled
+        gateway.disable(bytes(""));
+        gateway.setIsReceiveEnabled(true);
+        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true");
+
+        // Re-enable, then disable again — isReceiveEnabled should be reset
+        gateway.enable(bytes(""));
+        gateway.disable(bytes(""));
+        assertFalse(gateway.isReceiveEnabled(), "disable should reset isReceiveEnabled");
+
+        vm.stopPrank();
+    }
 }

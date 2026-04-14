@@ -207,7 +207,7 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
     }
 
-    function test_lzReceive_revertsIfNotEnabled() external {
+    function test_lzReceive_revertsIfBridgeDisabledAndReceiveEnabledFalse() external {
         vm.prank(admin);
         gateway2.disable(bytes(""));
 
@@ -220,5 +220,31 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(address(endpointSetup.endpointList[1]));
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
+    }
+
+    function test_lzReceive_succeedsWhenBridgeEnabledAndReceiveEnabledFalse() external {
+        // Default state: isEnabled=true, isReceiveEnabled=false
+        assertFalse(gateway2.isReceiveEnabled(), "isReceiveEnabled should be false");
+        assertTrue(gateway2.isEnabled(), "isEnabled should be true");
+
+        _sendCanonicalToNonCanonical(recipient, 1000e9);
+
+        assertEq(ohm.balanceOf(recipient), 1000e9, "Recipient should receive OHM");
+    }
+
+    function test_lzReceive_succeedsWhenBridgeDisabledButReceiveEnabled() external {
+        // Disable gateway2 but allow receiving
+        vm.startPrank(admin);
+        gateway2.disable(bytes(""));
+        gateway2.setIsReceiveEnabled(true);
+        vm.stopPrank();
+
+        assertFalse(gateway2.isEnabled(), "isEnabled should be false");
+        assertTrue(gateway2.isReceiveEnabled(), "isReceiveEnabled should be true");
+
+        // Send from canonical — gateway2 should still receive
+        _sendCanonicalToNonCanonical(recipient, 1000e9);
+
+        assertEq(ohm.balanceOf(recipient), 1000e9, "Recipient should receive OHM despite disabled");
     }
 }

@@ -29,6 +29,7 @@ import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, O
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
@@ -104,6 +105,9 @@ contract LZBridgeGateway is
     uint256 public override bridgedSupply;
 
     /// @inheritdoc ILZBridgeGateway
+    bool public override isReceiveEnabled;
+
+    /// @inheritdoc ILZBridgeGateway
     mapping(uint32 eid_ => bytes32) public override peers;
 
     /// @inheritdoc ILZBridgeGateway
@@ -172,6 +176,13 @@ contract LZBridgeGateway is
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
+    }
+
+    // ========= POLICY ENABLER ========= //
+
+    /// @dev Resets isReceiveEnabled to false when the gateway is disabled.
+    function _disable(bytes calldata) internal override {
+        if (isReceiveEnabled) _setIsReceiveEnabled(false);
     }
 
     // ========= OHM BRIDGING ========= //
@@ -277,7 +288,9 @@ contract LZBridgeGateway is
         bytes calldata message_,
         address,
         bytes calldata
-    ) external payable override onlyEnabled {
+    ) external payable override {
+        // When enabled, receive always works. When disabled, only if isReceiveEnabled is set.
+        if (!isEnabled && !isReceiveEnabled) revert IEnabler.NotEnabled();
         if (msg.sender != LZ_ENDPOINT) revert LZBridgeGateway_OnlyEndpoint();
         if (_getPeerOrRevert(origin_.srcEid) != origin_.sender)
             revert LZBridgeGateway_OnlyPeer(origin_.srcEid, origin_.sender);
@@ -303,6 +316,18 @@ contract LZBridgeGateway is
     function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
         peers[eid_] = peer_;
         emit PeerSet(eid_, peer_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the emergency or admin role.
+    ///      - The value is already in the desired state.
+    function setIsReceiveEnabled(
+        bool isReceiveEnabled_
+    ) external override onlyEmergencyOrAdminRole {
+        if (isReceiveEnabled == isReceiveEnabled_)
+            revert LZBridgeGateway_ReceiveAlreadyInDesiredState();
+        _setIsReceiveEnabled(isReceiveEnabled_);
     }
 
     /// @inheritdoc ILZBridgeGateway
@@ -533,6 +558,11 @@ contract LZBridgeGateway is
     }
 
     // ========= PRIVATE FUNCTIONS ========= //
+
+    function _setIsReceiveEnabled(bool isReceiveEnabled_) private {
+        isReceiveEnabled = isReceiveEnabled_;
+        emit IsReceiveEnabledSet(isReceiveEnabled_);
+    }
 
     /// @notice Decodes the message type from the payload and routes to the appropriate handler.
     function _decodeAndRoute(uint32 srcEid_, bytes32 guid_, bytes calldata payload_) private {
