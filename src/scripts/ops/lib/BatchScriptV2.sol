@@ -219,6 +219,21 @@ abstract contract BatchScriptV2 is WithEnvironment {
         return nonce;
     }
 
+    function _logSafeTxDetails(address to, bytes memory data, uint256 nonce) internal view {
+        bytes32 safeTxHash = _multiSig.getSafeTxHash(
+            to,
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            nonce
+        );
+        console2.log("  Safe tx hash (idempotency key):");
+        console2.logBytes32(safeTxHash);
+        console2.log("  Multisend target:", to);
+        console2.log("  Multisend calldata hash:");
+        console2.logBytes32(keccak256(data));
+    }
+
     function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
         if (_signOnly) {
             revert("BatchScriptV2: Cannot propose batch when signOnly is true");
@@ -240,18 +255,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
             nonce: nonce
         });
 
-        bytes32 safeTxHash = _multiSig.getSafeTxHash(
-            to,
-            0,
-            data,
-            Enum.Operation.DelegateCall,
-            nonce
-        );
-        console2.log("  Safe tx hash (idempotency key):");
-        console2.logBytes32(safeTxHash);
-        console2.log("  Multisend target:", to);
-        console2.log("  Multisend calldata hash:");
-        console2.logBytes32(keccak256(data));
+        _logSafeTxDetails(to, data, nonce);
 
         // If there is no signature, get the signature
         if (!_hasSignature()) {
@@ -298,18 +302,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
             (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
 
-            bytes32 safeTxHash = _multiSig.getSafeTxHash(
-                to,
-                0,
-                data,
-                Enum.Operation.DelegateCall,
-                nonce
-            );
-            console2.log("  Safe tx hash (idempotency key):");
-            console2.logBytes32(safeTxHash);
-            console2.log("  Multisend target:", to);
-            console2.log("  Multisend calldata hash:");
-            console2.logBytes32(keccak256(data));
+            _logSafeTxDetails(to, data, nonce);
 
             // This will revert if the user is using a Ledger and the derivation path is not provided
             bytes memory signature = _multiSig.sign(
@@ -331,18 +324,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 _batchTargets,
                 _batchData
             );
-            bytes32 safeTxHash = _multiSig.getSafeTxHash(
-                to,
-                0,
-                data,
-                Enum.Operation.DelegateCall,
-                nonce
-            );
-            console2.log("  Safe tx hash (idempotency key):");
-            console2.logBytes32(safeTxHash);
-            console2.log("  Multisend target:", to);
-            console2.log("  Multisend calldata hash:");
-            console2.logBytes32(keccak256(data));
+            _logSafeTxDetails(to, data, nonce);
         }
 
         // Check if we're in broadcast mode before proposing
