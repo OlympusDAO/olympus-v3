@@ -3,9 +3,9 @@
 // solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
-import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
+import {console2} from "forge-std/console2.sol";
+import {VmSafe} from "forge-std/Vm.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 
 import {Surl} from "@surl-1.0.0/Surl.sol";
 

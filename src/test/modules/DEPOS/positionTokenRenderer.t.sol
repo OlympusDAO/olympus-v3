@@ -6,7 +6,7 @@ import {Base64} from "@base64-1.1.0/base64.sol";
 import {Strings} from "@openzeppelin-5.3.0/utils/Strings.sol";
 import {String} from "src/libraries/String.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager.sol";
 
 // solhint-disable quotes

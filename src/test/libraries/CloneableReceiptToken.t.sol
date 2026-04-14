@@ -2,12 +2,12 @@
 /// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
 pragma solidity >=0.8.15;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
 import {IDepositReceiptToken} from "src/interfaces/IDepositReceiptToken.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {stdError} from "@forge-std-1.9.6/StdError.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC20BurnableMintable} from "src/interfaces/IERC20BurnableMintable.sol";

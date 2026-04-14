@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -25,7 +25,7 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
-import {stdError} from "@forge-std-1.9.6/StdError.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 // solhint-disable max-states-count
 contract DepositManagerTest is Test {

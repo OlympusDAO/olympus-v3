@@ -9,7 +9,7 @@ import {MockPriceFeedOwned} from "src/test/mocks/MockPriceFeedOwned.sol";
 
 import {Owned} from "solmate/auth/Owned.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 
 /// @notice Configures MockPriceFeedOwned contracts with price data
 /// @dev    This script sets the latest answer, timestamp, and round ID for mock price feeds

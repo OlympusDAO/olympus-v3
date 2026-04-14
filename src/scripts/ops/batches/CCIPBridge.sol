@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";

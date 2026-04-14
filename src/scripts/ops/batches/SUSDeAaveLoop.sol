@@ -3,8 +3,8 @@
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
+import {console2} from "forge-std/console2.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";

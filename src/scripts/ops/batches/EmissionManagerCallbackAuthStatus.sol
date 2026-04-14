@@ -4,7 +4,7 @@
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
