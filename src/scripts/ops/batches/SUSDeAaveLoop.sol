@@ -1899,6 +1899,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             revert("Unexpected sUSDe accounting");
         }
 
+        uint256 walletSusdeDelta;
+        bool walletSusdeIncreased = susdeBalanceAfter >= _initialSusdeBalance;
+        if (walletSusdeIncreased) {
+            walletSusdeDelta = susdeBalanceAfter - _initialSusdeBalance;
+        } else {
+            walletSusdeDelta = _initialSusdeBalance - susdeBalanceAfter;
+        }
+
         uint256 actualSusdeOut = (susdeBalanceAfter + _susdeSuppliedAmount) - _initialSusdeBalance;
         uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _susdeSuppliedAmount);
 
@@ -1907,6 +1915,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("\n--- Post-batch summary ---");
         console2.log("[Iteration] Actual sUSDe out:", _toDecimalString(actualSusdeOut, 18));
         console2.log("[Iteration] sUSDe out efficiency vs supplied sUSDe (bps):", efficiencyBps);
+        if (walletSusdeIncreased) {
+            console2.log(
+                string.concat("[Iteration] Wallet sUSDe change: +", _toDecimalString(walletSusdeDelta, 18))
+            );
+        } else {
+            console2.log(
+                string.concat("[Iteration] Wallet sUSDe change: -", _toDecimalString(walletSusdeDelta, 18))
+            );
+        }
         _logCollateralSuppliedSummary();
         _logAaveBalanceSheetReport();
         console2.log(
@@ -2001,8 +2018,30 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         if (collateralDelta > 0 && debtIncreased) {
             uint256 efficiencyBps = FullMath.mulDiv(debtDelta, 10000, collateralDelta);
+            uint256 debtCoverageBps = _ratioBps(collateralDelta, debtDelta);
             console2.log("Loop iteration efficiency (debt/collateral, bps):", efficiencyBps);
             console2.log("  = %d.%d%%", efficiencyBps / 100, efficiencyBps % 100);
+            console2.log("[Iteration] Collateral/debt coverage (bps):", debtCoverageBps);
+
+            uint256 unwindGap;
+            bool unwindGapPositive = collateralDelta >= debtDelta;
+            if (unwindGapPositive) {
+                unwindGap = collateralDelta - debtDelta;
+                console2.log(
+                    string.concat(
+                        "[Iteration] Immediate unwind surplus (USD): +",
+                        _toDecimalString(unwindGap, 8)
+                    )
+                );
+            } else {
+                unwindGap = debtDelta - collateralDelta;
+                console2.log(
+                    string.concat(
+                        "[Iteration] Immediate unwind gap (USD): -",
+                        _toDecimalString(unwindGap, 8)
+                    )
+                );
+            }
         }
     }
 
