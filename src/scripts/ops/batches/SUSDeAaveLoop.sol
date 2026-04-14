@@ -223,6 +223,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         "reporting.initialCollateralBase";
     string internal constant CACHE_KEY_REPORTING_INITIAL_DEBT_BASE = "reporting.initialDebtBase";
     string internal constant CACHE_KEY_REPORTING_INITIAL_NET_BASE = "reporting.initialNetBase";
+    string internal constant CACHE_KEY_LOOP_SWAP1_PREFIX = "swaps.loop.swap1";
+    string internal constant CACHE_KEY_LOOP_SWAP2_PREFIX = "swaps.loop.swap2";
+    string internal constant CACHE_KEY_UNWIND_SWAP1_PREFIX = "swaps.unwind.swap1";
+    string internal constant CACHE_KEY_UNWIND_SWAP3_PREFIX = "swaps.unwind.swap3";
+    string internal constant CACHE_KEY_UNWIND_SWAP5_PREFIX = "swaps.unwind.swap5";
 
     CacheMode internal _cacheMode;
     bool internal _cacheModeWrite;
@@ -354,7 +359,33 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return _cacheConfig.get(key_).toBytes32();
     }
 
+    function _cacheReadAddress(string memory key_) internal view returns (address) {
+        if (!_cacheConfig.exists(key_)) {
+            _revertCacheFailure(string.concat("missing cache address key ", key_));
+        }
+        return _cacheConfig.get(key_).toAddress();
+    }
+
+    function _cacheReadBytes(string memory key_) internal view returns (bytes memory) {
+        if (!_cacheConfig.exists(key_)) {
+            _revertCacheFailure(string.concat("missing cache bytes key ", key_));
+        }
+        return _cacheConfig.get(key_).toBytes();
+    }
+
     function _cacheSetUint(string memory key_, uint256 value_) internal {
+        if (_cacheModeWrite) {
+            _cacheConfig.set(key_, value_);
+        }
+    }
+
+    function _cacheSetAddress(string memory key_, address value_) internal {
+        if (_cacheModeWrite) {
+            _cacheConfig.set(key_, value_);
+        }
+    }
+
+    function _cacheSetBytes(string memory key_, bytes memory value_) internal {
         if (_cacheModeWrite) {
             _cacheConfig.set(key_, value_);
         }
@@ -2200,6 +2231,31 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 amountIn,
         uint256 slippageBps
     ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
+        if (_isCacheReplay()) {
+            (router, swapCalldata, amountOut) = _cacheReadKyberSwap(stepLabel);
+            _logKyberAmountOut(tokenOut, amountOut);
+            console2.log("[Iteration] Router:", router);
+            return (router, swapCalldata, amountOut);
+        }
+
+        (router, swapCalldata, amountOut) = _getKyberSwapCalldataLive(
+            stepLabel,
+            tokenIn,
+            tokenOut,
+            amountIn,
+            slippageBps
+        );
+        _cacheWriteKyberSwap(stepLabel, router, swapCalldata, amountOut);
+    }
+
+    function _getKyberSwapCalldataLive(
+        string memory stepLabel,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 slippageBps
+    ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
+
         string memory getUrl = string.concat(
             KYBERSWAP_BASE_URL,
             "/api/v1/routes?tokenIn=",
@@ -2251,6 +2307,48 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
 
         swapCalldata = vm.parseBytes(string(postResponse).readString(".data.data"));
+    }
+
+    function _cacheReadKyberSwap(
+        string memory stepLabel
+    ) internal view returns (address router, bytes memory swapCalldata, uint256 amountOut) {
+        string memory cacheKeyPrefix = _kyberCacheKeyPrefix(stepLabel);
+        router = _cacheReadAddress(string.concat(cacheKeyPrefix, ".router"));
+        swapCalldata = _cacheReadBytes(string.concat(cacheKeyPrefix, ".swapCalldata"));
+        amountOut = _cacheReadUint(string.concat(cacheKeyPrefix, ".amountOut"));
+    }
+
+    function _cacheWriteKyberSwap(
+        string memory stepLabel,
+        address router,
+        bytes memory swapCalldata,
+        uint256 amountOut
+    ) internal {
+        string memory cacheKeyPrefix = _kyberCacheKeyPrefix(stepLabel);
+        _cacheSetAddress(string.concat(cacheKeyPrefix, ".router"), router);
+        _cacheSetBytes(string.concat(cacheKeyPrefix, ".swapCalldata"), swapCalldata);
+        _cacheSetUint(string.concat(cacheKeyPrefix, ".amountOut"), amountOut);
+    }
+
+    function _kyberCacheKeyPrefix(string memory stepLabel) internal pure returns (string memory) {
+        bytes32 stepHash = keccak256(bytes(stepLabel));
+        if (stepHash == keccak256(bytes("Swap #1 (USDT -> USDe)"))) {
+            return CACHE_KEY_LOOP_SWAP1_PREFIX;
+        }
+        if (stepHash == keccak256(bytes("Swap #2 (USDT -> sUSDe)"))) {
+            return CACHE_KEY_LOOP_SWAP2_PREFIX;
+        }
+        if (stepHash == keccak256(bytes("Step 1 swap (wallet sUSDe -> USDT)"))) {
+            return CACHE_KEY_UNWIND_SWAP1_PREFIX;
+        }
+        if (stepHash == keccak256(bytes("Step 3 swap (USDe -> USDT)"))) {
+            return CACHE_KEY_UNWIND_SWAP3_PREFIX;
+        }
+        if (stepHash == keccak256(bytes("Step 5 swap (sUSDe -> USDT)"))) {
+            return CACHE_KEY_UNWIND_SWAP5_PREFIX;
+        }
+
+        revert("Unknown Kyber cache step");
     }
 
     function _logKyberAmountOut(address tokenOut, uint256 amountOut) internal view {
