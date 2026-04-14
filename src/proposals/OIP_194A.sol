@@ -54,12 +54,11 @@ contract OIP_194A is GovernorBravoProposal {
                 " 3123.1833 USDS/gOHM in a phased manner.\n\n",
                 "This is equivalent to ~131.9269 USDS/gOHM over six months and is implemented as a linear target via the cooler LTV oracle so borrowers can benefit progressively instead of through a discrete jump.\n\n",
                 "## Actions\n\n",
-                "1. Temporarily relax the max origination LTV rate-of-change guard on `olympus-policy-cooler-v2-ltv-oracle` to permit scheduling the proposed target increment.\n",
+                "1. Relax the max origination LTV rate-of-change guard on CoolerLtvOracle to permit scheduling the proposed target increment.\n",
                 "   - Current guard: 1_157_407_407_407 (1_157_407_407_407 / 1e18 = 0.000001157407407 USDS/gOHM/second; * 86400 = 0.1 USDS/gOHM/day)\n",
                 "   - Proposal guard: 10_000_000_000_000 (10_000_000_000_000 / 1e18 = 0.00001 USDS/gOHM/second; * 86400 = 0.864 USDS/gOHM/day)\n",
-                "   - Rationale: required to move to 3123.1833 USDS/gOHM by 2026-10-27 while execution occurs at current schedule state.\n",
-                "   - Required schedule rate from current on-chain state at execution: 7_964_547_568_016 (7_964_547_568_016 / 1e18 = 0.000007964547568016 USDS/gOHM/second; * 86400 = 0.6881369098765824 USDS/gOHM/day).\n",
-                "2. Set the target origination LTV on `olympus-policy-cooler-v2-ltv-oracle` to 3123.1833 USDS/gOHM (3123183268921960038400 in 18dp) with a target date of 1793059200."
+                "   - Rationale: required to move to 3123.1833 USDS/gOHM by 2026-10-27 while submission occurs against the current schedule state. Required schedule rate from current on-chain state at submission: 7_964_547_568_016 (7_964_547_568_016 / 1e18 = 0.000007964547568016 USDS/gOHM/second; * 86400 = 0.6881369098765824 USDS/gOHM/day).\n",
+                "2. Set the target origination LTV on CoolerLtvOracle to 3123.1833 USDS/gOHM (3123183268921960038400 in 18dp) with a target date of 2026-10-27 00:00:00 UTC (1793059200)."
             );
     }
 
