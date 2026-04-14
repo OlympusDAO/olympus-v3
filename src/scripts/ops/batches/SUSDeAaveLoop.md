@@ -9,6 +9,39 @@
 
 The script builds all swap routes and amounts before adding operations to the batch.
 
+## Cache + Replay Workflow
+
+`SUSDeAaveLoop` persists planning inputs in per-flow TOML cache files via `StdConfig`:
+
+- loop path: `./cache/SUSDeAaveLoop-loop.toml`
+- unwind path: `./cache/SUSDeAaveLoop-unwind.toml`
+
+The cache is used only for multisig replay determinism:
+
+- `--signonly` writes cache entries from live planning reads.
+- `--signature` replays from cache and does not re-quote or re-read planning inputs that were cached.
+
+The script validates replay safety before planning continues:
+
+- cache file exists,
+- `createdAt` is fresh (TTL: 300 seconds),
+- `chainId` matches current chain,
+- `owner` matches current Safe owner,
+- `version` and `function` match expected values,
+- args fingerprint matches the effective function args.
+
+If validation fails, the script reverts with a recovery hint:
+
+- rerun `--signonly` and reuse the produced signature, or
+- clear the cache files in `./cache`.
+
+Cached planning data includes:
+
+- Aave account and reserve snapshots used for sizing,
+- Kyber route build outputs per swap leg (`router`, calldata, quoted `amountOut`),
+- critical ERC4626 conversions (`convertToAssets`, `convertToShares`) with input/output checks,
+- reporting baseline snapshots used in post-step reporting.
+
 ## Key Mainnet Addresses
 
 | Component                            | Address                                      |
@@ -137,3 +170,17 @@ Unwind iteration:
     --args src/scripts/ops/batches/args/SUSDeAaveLoop.json \
     --chain mainnet
 ```
+
+## Idempotency Runbook (`--signonly` vs `--signature`)
+
+Recommended operator flow for each function (`executeLoop` or `executeUnwindLoop`):
+
+1. Run `safeBatchV2.sh` with `--signonly` using final args.
+2. Submit replay with `--signature` using the same args and signature payload.
+3. If replay reverts with cache validation failure, regenerate with a fresh `--signonly` run.
+
+Expected behavior when replaying successfully:
+
+- planning values match the sign-only run,
+- quoted swap outputs and calldata are reused from cache,
+- replay does not depend on new Kyber route responses or new 4626 planning conversions.
