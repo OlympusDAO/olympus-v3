@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// solhint-disable one-contract-per-file
 pragma solidity ^0.8.15;
 
 // OCG Proposal Simulator
@@ -15,6 +16,7 @@ import {ICoolerLtvOracle} from "src/policies/interfaces/cooler/ICoolerLtvOracle.
 import {ProposalScript} from "./ProposalScript.sol";
 
 /// @notice OIP-194A updates the Cooler V2 origination LTV target.
+// solhint-disable-next-line contract-name-camelcase
 contract OIP_194A is GovernorBravoProposal {
     Kernel internal _kernel;
 
@@ -106,6 +108,7 @@ contract OIP_194A is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
+    // solhint-disable custom-errors
     function _validate(Addresses addresses, address) internal view override {
         ICoolerLtvOracle ltvOracle = ICoolerLtvOracle(
             addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle")
@@ -140,8 +143,10 @@ contract OIP_194A is GovernorBravoProposal {
             "Current LTV should equal starting value after scheduling"
         );
     }
+    // solhint-enable custom-errors
 }
 
+// solhint-disable-next-line contract-name-camelcase
 contract OIP_194AProposalScript is ProposalScript {
     constructor() ProposalScript(new OIP_194A()) {}
 }
