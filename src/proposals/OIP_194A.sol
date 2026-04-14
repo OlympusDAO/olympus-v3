@@ -19,6 +19,7 @@ import {ProposalScript} from "./ProposalScript.sol";
 // solhint-disable-next-line contract-name-camelcase
 contract OIP_194A is GovernorBravoProposal {
     Kernel internal _kernel;
+    uint96 internal _previousMaxOriginationLtvRate;
 
     uint96 private constant TARGET_ORIGINATION_LTV = 3_123_183_268_921_960_038_400;
     // 2026-10-27 00:00:00 UTC (2026-04-15 00:00:00 + 12 days + 6 months).
@@ -30,6 +31,8 @@ contract OIP_194A is GovernorBravoProposal {
     // 0.00001 * 86400 = 0.864 USDS/gOHM/day.
     uint96 private constant PROPOSAL_MAX_ORIGINATION_LTV_RATE = 10_000_000_000_000;
     uint32 private constant PROPOSAL_MAX_ORIGINATION_LTV_RATE_TIME_DELTA = 1;
+
+    uint32 private constant PREVIOUS_MAX_ORIGINATION_LTV_RATE_TIME_DELTA = 1;
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
@@ -58,7 +61,8 @@ contract OIP_194A is GovernorBravoProposal {
                 "   - Current guard: 1_157_407_407_407 (1_157_407_407_407 / 1e18 = 0.000001157407407 USDS/gOHM/second; * 86400 = 0.1 USDS/gOHM/day)\n",
                 "   - Proposal guard: 10_000_000_000_000 (10_000_000_000_000 / 1e18 = 0.00001 USDS/gOHM/second; * 86400 = 0.864 USDS/gOHM/day)\n",
                 "   - Rationale: required to move to 3123.1833 USDS/gOHM by 2026-10-27 while submission occurs against the current schedule state. Required schedule rate from current on-chain state at submission: 7_964_547_568_016 (7_964_547_568_016 / 1e18 = 0.000007964547568016 USDS/gOHM/second; * 86400 = 0.6881369098765824 USDS/gOHM/day).\n",
-                "2. Set the target origination LTV on CoolerLtvOracle to 3123.1833 USDS/gOHM (3123183268921960038400 in 18dp) with a target date of 2026-10-27 00:00:00 UTC (1793059200)."
+                "2. Set the target origination LTV on CoolerLtvOracle to 3123.1833 USDS/gOHM (3123183268921960038400 in 18dp) with a target date of 2026-10-27 00:00:00 UTC (1793059200).\n",
+                "3. Restore the max origination LTV rate-of-change guard on CoolerLtvOracle to the value in effect before Action 1."
             );
     }
 
@@ -73,6 +77,9 @@ contract OIP_194A is GovernorBravoProposal {
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
         address coolerV2LtvOracle = addresses.getAddress("olympus-policy-cooler-v2-ltv-oracle");
+
+        _previousMaxOriginationLtvRate = ICoolerLtvOracle(coolerV2LtvOracle)
+            .maxOriginationLtvRateOfChange();
 
         _pushAction(
             coolerV2LtvOracle,
@@ -92,6 +99,16 @@ contract OIP_194A is GovernorBravoProposal {
                 TARGET_ORIGINATION_LTV_TIME
             ),
             "Set target origination LTV for Cooler drip acceleration"
+        );
+
+        _pushAction(
+            coolerV2LtvOracle,
+            abi.encodeWithSelector(
+                ICoolerLtvOracle.setMaxOriginationLtvRateOfChange.selector,
+                _previousMaxOriginationLtvRate,
+                PREVIOUS_MAX_ORIGINATION_LTV_RATE_TIME_DELTA
+            ),
+            "Restore max rate-of-change guard to previous value"
         );
     }
 
@@ -130,8 +147,8 @@ contract OIP_194A is GovernorBravoProposal {
         require(slope > 0, "Slope should be positive");
 
         require(
-            ltvOracle.maxOriginationLtvRateOfChange() == PROPOSAL_MAX_ORIGINATION_LTV_RATE,
-            "Max rate-of-change should match proposal value"
+            ltvOracle.maxOriginationLtvRateOfChange() == _previousMaxOriginationLtvRate,
+            "Max rate-of-change should be restored to previous value"
         );
 
         uint96 expectedSlope = (TARGET_ORIGINATION_LTV - startingValue) / (targetTime - startTime);
