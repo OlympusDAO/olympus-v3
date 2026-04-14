@@ -191,6 +191,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_CREATED_AT = "createdAt";
     string internal constant CACHE_KEY_ARGS_FINGERPRINT = "argsFingerprint";
     string internal constant CACHE_KEY_CHAIN_ID = "chainId";
+    string internal constant CACHE_KEY_OWNER = "owner";
     string internal constant CACHE_KEY_VERSION = "version";
     string internal constant CACHE_KEY_FUNCTION = "function";
     string internal constant CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT = "susdeSupplyAmount";
@@ -228,6 +229,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_UNWIND_SWAP1_PREFIX = "swaps.unwind.swap1";
     string internal constant CACHE_KEY_UNWIND_SWAP3_PREFIX = "swaps.unwind.swap3";
     string internal constant CACHE_KEY_UNWIND_SWAP5_PREFIX = "swaps.unwind.swap5";
+    string internal constant CACHE_KEY_LOOP_4626_SUPPLY_VALUE = "erc4626.loop.susdeSupplyValue";
+    string internal constant CACHE_KEY_LOOP_4626_SWAP2_VALUE = "erc4626.loop.swap2Value";
+    string internal constant CACHE_KEY_UNWIND_4626_STEP1_DEBT_SHARES =
+        "erc4626.unwind.step1DebtShares";
+    string internal constant CACHE_KEY_UNWIND_4626_STEP2_DEBT_SHARES =
+        "erc4626.unwind.step2DebtShares";
+    string internal constant CACHE_KEY_UNWIND_4626_STEP1_INPUT_VALUE =
+        "erc4626.unwind.step1InputValue";
+    string internal constant CACHE_KEY_UNWIND_4626_STEP5_INPUT_VALUE =
+        "erc4626.unwind.step5InputValue";
 
     CacheMode internal _cacheMode;
     bool internal _cacheModeWrite;
@@ -320,6 +331,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         if (_cacheReadUint(CACHE_KEY_CHAIN_ID) != block.chainid) {
             _revertCacheFailure("cache chainId mismatch");
+        }
+
+        if (_cacheReadAddress(CACHE_KEY_OWNER) != _owner) {
+            _revertCacheFailure("cache owner mismatch");
         }
 
         if (keccak256(bytes(_cacheReadString(CACHE_KEY_VERSION))) != keccak256(bytes(CACHE_VERSION))) {
@@ -503,6 +518,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
         _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
         _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheConfig.set(CACHE_KEY_OWNER, _owner);
         _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
         _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_LOOP);
         _cacheConfig.set(CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT, susdeSupplyAmount_);
@@ -525,6 +541,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
         _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
         _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheConfig.set(CACHE_KEY_OWNER, _owner);
         _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
         _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_UNWIND);
         _cacheConfig.set(CACHE_KEY_UNWIND_SLIPPAGE_BPS, slippageBps_);
@@ -704,7 +721,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
             // Convert sUSDe amount (18dp) to its USDe value using live exchange rate (18dp)
-            uint256 susdeSupplyValueUsde = _susdeToUsdeValue(susdeSupplyAmount);
+            uint256 susdeSupplyValueUsde = _susdeToUsdeValueCached(
+                CACHE_KEY_LOOP_4626_SUPPLY_VALUE,
+                susdeSupplyAmount
+            );
             // Convert USDe value (18dp) to Aave base currency (8dp USD): value * 1e8 / 1e18
             uint256 supplyValueBase = FullMath.mulDiv(
                 susdeSupplyValueUsde,
@@ -909,7 +929,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
                 revert("Swap #2 min value ratio invalid");
             }
-            uint256 swap2ValueOutUsd = _susdeToUsdeValue(susdeAmountOut);
+            uint256 swap2ValueOutUsd = _susdeToUsdeValueCached(
+                CACHE_KEY_LOOP_4626_SWAP2_VALUE,
+                susdeAmountOut
+            );
             console2.log(
                 "[Iteration] sUSDe exchange rate (USDe per 1 sUSDe):",
                 _toDecimalString(_susdeExchangeRate(), 18)
@@ -1397,7 +1420,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 totalDebtBase,
         uint256 usdtVariableDebt
     ) internal returns (UnwindWalletRepayOutputs memory walletRepay) {
-        uint256 debtNotionalSusde = _usdeToSusdeShares(
+        uint256 debtNotionalSusde = _usdeToSusdeSharesCached(
+            CACHE_KEY_UNWIND_4626_STEP1_DEBT_SHARES,
             FullMath.mulDiv(usdtVariableDebt, 1e18, 1e6)
         );
         walletRepay.walletSusdeSwapAmount = _min(_initialSusdeBalance, debtNotionalSusde);
@@ -1408,6 +1432,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         ) = _planSusdeRepayLeg(
             "Step 1 swap (wallet sUSDe -> USDT)",
+            CACHE_KEY_UNWIND_4626_STEP1_INPUT_VALUE,
             walletRepay.walletSusdeSwapAmount,
             usdtVariableDebt
         );
@@ -1449,6 +1474,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     function _planSusdeRepayLeg(
         string memory swapLabel,
+        string memory susdeInputValueCacheKey,
         uint256 susdeSwapAmount,
         uint256 maxRepayAmount
     )
@@ -1471,7 +1497,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _unwindSlippageBps
         );
 
-        uint256 susdeInputNotionalUsd = _susdeToUsdeValue(susdeSwapAmount);
+        uint256 susdeInputNotionalUsd = _susdeToUsdeValueCached(
+            susdeInputValueCacheKey,
+            susdeSwapAmount
+        );
         _logAndValidateValueRatio(
             swapLabel,
             _usdtToUsd18(usdtAmountOut),
@@ -1513,7 +1542,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 susdeSwapByHealthFactor = _baseToSusdeAmount(collateralReductionBaseStep2);
         susdeSwapAmount = _min(susdeSwapCap, susdeSwapByHealthFactor);
         if (susdeSwapAmount > 0) {
-            uint256 debtNotionalSusde = _usdeToSusdeShares(
+            uint256 debtNotionalSusde = _usdeToSusdeSharesCached(
+                CACHE_KEY_UNWIND_4626_STEP2_DEBT_SHARES,
                 FullMath.mulDiv(inputs.usdtDebtAfterStep1, 1e18, 1e6)
             );
             susdeSwapAmount = _min(susdeSwapAmount, debtNotionalSusde);
@@ -1527,6 +1557,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             susdeSwapValueBase
         ) = _planSusdeRepayLeg(
             "Step 5 swap (sUSDe -> USDT)",
+            CACHE_KEY_UNWIND_4626_STEP5_INPUT_VALUE,
             susdeSwapAmount,
             inputs.usdtDebtAfterStep1
         );
@@ -2113,6 +2144,23 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
     }
 
+    function _usdeToSusdeSharesCached(
+        string memory cacheKeyPrefix,
+        uint256 usdeAmount
+    ) internal returns (uint256 shares) {
+        if (_isCacheReplay()) {
+            uint256 cachedInput = _cacheReadUint(string.concat(cacheKeyPrefix, ".input"));
+            if (cachedInput != usdeAmount) {
+                _revertCacheFailure(string.concat("4626 convertToShares input mismatch ", cacheKeyPrefix));
+            }
+            return _cacheReadUint(string.concat(cacheKeyPrefix, ".output"));
+        }
+
+        shares = _usdeToSusdeShares(usdeAmount);
+        _cacheSetUint(string.concat(cacheKeyPrefix, ".input"), usdeAmount);
+        _cacheSetUint(string.concat(cacheKeyPrefix, ".output"), shares);
+    }
+
     function _maxCollateralReductionForMinHealthFactor(
         uint256 collateralBase,
         uint256 debtBase,
@@ -2200,6 +2248,23 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         } catch {
             revert("sUSDe convertToAssets failed");
         }
+    }
+
+    function _susdeToUsdeValueCached(
+        string memory cacheKeyPrefix,
+        uint256 susdeAmount
+    ) internal returns (uint256 assets) {
+        if (_isCacheReplay()) {
+            uint256 cachedInput = _cacheReadUint(string.concat(cacheKeyPrefix, ".input"));
+            if (cachedInput != susdeAmount) {
+                _revertCacheFailure(string.concat("4626 convertToAssets input mismatch ", cacheKeyPrefix));
+            }
+            return _cacheReadUint(string.concat(cacheKeyPrefix, ".output"));
+        }
+
+        assets = _susdeToUsdeValue(susdeAmount);
+        _cacheSetUint(string.concat(cacheKeyPrefix, ".input"), susdeAmount);
+        _cacheSetUint(string.concat(cacheKeyPrefix, ".output"), assets);
     }
 
     function _susdeExchangeRate() internal view returns (uint256) {
