@@ -301,6 +301,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             inputs[0] = "mkdir";
             inputs[1] = "-p";
             inputs[2] = "./cache";
+            /// forge-lint: disable-next-line(unsafe-cheatcode)
             vm.ffi(inputs);
         }
     }
@@ -316,6 +317,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "]\n",
             'endpoint_url = "https://example.invalid"\n'
         );
+        /// forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(path_, fileContents);
     }
 
@@ -647,17 +649,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             ""
         );
 
-        return
-            keccak256(
-                abi.encode(
-                    effectiveSusdeSupplyAmount_,
-                    borrowPercentage,
-                    slippageBps,
-                    minSwap1ValueRatioBps,
-                    minSwap2ValueRatioBps,
-                    excludedSources
-                )
-            );
+        /// forge-lint: disable-start(asm-keccak256)
+        bytes32 fingerprint = keccak256(
+            abi.encode(
+                effectiveSusdeSupplyAmount_,
+                borrowPercentage,
+                slippageBps,
+                minSwap1ValueRatioBps,
+                minSwap2ValueRatioBps,
+                excludedSources
+            )
+        );
+        /// forge-lint: disable-end(asm-keccak256)
+        return fingerprint;
     }
 
     function _computeUnwindArgsFingerprint() internal view returns (bytes32) {
@@ -692,18 +696,20 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             ""
         );
 
-        return
-            keccak256(
-                abi.encode(
-                    slippageBps,
-                    minHealthFactor,
-                    minSwap1ValueRatioBps,
-                    minSwap2ValueRatioBps,
-                    maxSusdeSwapIn,
-                    excludedSources,
-                    _initialSusdeBalance
-                )
-            );
+        /// forge-lint: disable-start(asm-keccak256)
+        bytes32 fingerprint = keccak256(
+            abi.encode(
+                slippageBps,
+                minHealthFactor,
+                minSwap1ValueRatioBps,
+                minSwap2ValueRatioBps,
+                maxSusdeSwapIn,
+                excludedSources,
+                _initialSusdeBalance
+            )
+        );
+        /// forge-lint: disable-end(asm-keccak256)
+        return fingerprint;
     }
 
     function _revertCacheFailure(string memory detail_) internal pure {
@@ -2484,6 +2490,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     }
 
     function _kyberCacheKeyPrefix(string memory stepLabel) internal pure returns (string memory) {
+        /// forge-lint: disable-next-line(asm-keccak256)
         bytes32 stepHash = keccak256(bytes(stepLabel));
         if (stepHash == keccak256(bytes("Swap #1 (USDT -> USDe)"))) {
             return CACHE_KEY_LOOP_SWAP1_PREFIX;
