@@ -1900,13 +1900,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
 
         uint256 actualSusdeOut = (susdeBalanceAfter + _susdeSuppliedAmount) - _initialSusdeBalance;
-        uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _initialSusdeBalance);
+        uint256 efficiencyBps = FullMath.mulDiv(actualSusdeOut, 10000, _susdeSuppliedAmount);
 
         (, , , , , uint256 healthFactorAfter) = AAVE_POOL.getUserAccountData(REPORTING_MS);
 
         console2.log("\n--- Post-batch summary ---");
         console2.log("[Iteration] Actual sUSDe out:", _toDecimalString(actualSusdeOut, 18));
-        console2.log("[Iteration] sUSDe out efficiency vs initial balance (bps):", efficiencyBps);
+        console2.log("[Iteration] sUSDe out efficiency vs supplied sUSDe (bps):", efficiencyBps);
         _logCollateralSuppliedSummary();
         _logAaveBalanceSheetReport();
         console2.log(
@@ -2391,6 +2391,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 amountIn,
         uint256 slippageBps
     ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
+        console2.log("amountIn", amountIn);
         if (_isCacheReplay()) {
             (router, swapCalldata, amountOut) = _cacheReadKyberSwap(stepLabel);
             _logKyberAmountOut(tokenOut, amountOut);

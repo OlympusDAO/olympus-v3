@@ -55,7 +55,7 @@ Implementation details that matter for idempotency:
 | Aave V3 Pool                         | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` |
 | Aave Data Provider                   | `0x41393e5e337606dc3821075Af65AeE84D7688CBD` |
 | KyberSwap Router (quoted at runtime) | hardcoded route API + build API              |
-| sUSDe                                | `0x9D39A5DE30E57443BfF2A8307A4256c8797A3497` |
+| sUSDe                                | `0x9D39A5DE30e57443BfF2A8307A4256c8797A3497` |
 | USDe                                 | `0x4c9EDD5852cd905f086C759E8383e09bff1E68B3` |
 | USDT                                 | `0xdAC17F958D2ee523a2206206994597C13D831ec7` |
 
