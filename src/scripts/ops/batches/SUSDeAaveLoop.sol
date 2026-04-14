@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {StdConfig} from "forge-std/StdConfig.sol";
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -36,6 +37,12 @@ import {FullMath} from "src/libraries/FullMath.sol";
 contract SUSDeAaveLoop is BatchScriptV2 {
     using stdJson for string;
     using Surl for *;
+
+    enum CacheMode {
+        None,
+        ExecuteLoop,
+        ExecuteUnwind
+    }
 
     // Hardcoded protocol addresses (specific to this script)
     IAaveV3Pool internal constant AAVE_POOL =
@@ -170,9 +177,411 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant KYBERSWAP_BASE_URL = "https://aggregator-api.kyberswap.com/ethereum";
     string internal constant KYBERSWAP_CLIENT_ID = "OlympusDAO";
 
+    uint256 internal constant CACHE_TTL_SECONDS = 300;
+    string internal constant CACHE_VERSION = "1";
+    string internal constant CACHE_ERROR_PREFIX = "cache failed";
+    string internal constant CACHE_FUNCTION_LOOP = "executeLoop";
+    string internal constant CACHE_FUNCTION_UNWIND = "executeUnwindLoop";
+    string internal constant CACHE_ERROR_RECOVERY =
+        "rerun with --signonly then reuse the same signature, or clear cache files in ./cache";
+
+    string internal constant LOOP_CACHE_FILE_PATH = "./cache/SUSDeAaveLoop-loop.toml";
+    string internal constant UNWIND_CACHE_FILE_PATH = "./cache/SUSDeAaveLoop-unwind.toml";
+
+    string internal constant CACHE_KEY_CREATED_AT = "createdAt";
+    string internal constant CACHE_KEY_ARGS_FINGERPRINT = "argsFingerprint";
+    string internal constant CACHE_KEY_CHAIN_ID = "chainId";
+    string internal constant CACHE_KEY_VERSION = "version";
+    string internal constant CACHE_KEY_FUNCTION = "function";
+    string internal constant CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT = "susdeSupplyAmount";
+    string internal constant CACHE_KEY_LOOP_BORROW_PERCENTAGE = "borrowPercentage";
+    string internal constant CACHE_KEY_LOOP_SLIPPAGE_BPS = "slippageBps";
+    string internal constant CACHE_KEY_LOOP_EXCLUDED_SOURCES = "kyberExcludedSources";
+    string internal constant CACHE_KEY_UNWIND_SLIPPAGE_BPS = "slippageBps";
+    string internal constant CACHE_KEY_UNWIND_MIN_HEALTH_FACTOR = "minHealthFactor";
+    string internal constant CACHE_KEY_UNWIND_MIN_SWAP1_VALUE_RATIO_BPS = "minSwap1ValueRatioBps";
+    string internal constant CACHE_KEY_UNWIND_MIN_SWAP2_VALUE_RATIO_BPS = "minSwap2ValueRatioBps";
+    string internal constant CACHE_KEY_UNWIND_MAX_SUSDE_SWAP_IN = "maxSusdeSwapIn";
+    string internal constant CACHE_KEY_UNWIND_EXCLUDED_SOURCES = "kyberExcludedSources";
+    string internal constant CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE = "initialSusdeBalance";
+    string internal constant CACHE_KEY_LOOP_ACCOUNT_EMODE = "account.currentEMode";
+    string internal constant CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS = "account.availableBorrowsBase";
+    string internal constant CACHE_KEY_LOOP_ACCOUNT_CURRENT_LT =
+        "account.currentLiquidationThreshold";
+    string internal constant CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR = "account.healthFactor";
+    string internal constant CACHE_KEY_UNWIND_ACCOUNT_COLLATERAL = "account.totalCollateralBase";
+    string internal constant CACHE_KEY_UNWIND_ACCOUNT_DEBT = "account.totalDebtBase";
+    string internal constant CACHE_KEY_UNWIND_ACCOUNT_CURRENT_LT =
+        "account.currentLiquidationThreshold";
+    string internal constant CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR = "account.healthFactor";
+    string internal constant CACHE_KEY_UNWIND_RESERVE_USDE_ATOKEN = "reserve.usde.aTokenBalance";
+    string internal constant CACHE_KEY_UNWIND_RESERVE_SUSDE_ATOKEN = "reserve.susde.aTokenBalance";
+    string internal constant CACHE_KEY_UNWIND_RESERVE_USDT_STABLE_DEBT = "reserve.usdt.stableDebt";
+    string internal constant CACHE_KEY_UNWIND_RESERVE_USDT_VARIABLE_DEBT =
+        "reserve.usdt.variableDebt";
+    string internal constant CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE =
+        "reporting.initialCollateralBase";
+    string internal constant CACHE_KEY_REPORTING_INITIAL_DEBT_BASE = "reporting.initialDebtBase";
+    string internal constant CACHE_KEY_REPORTING_INITIAL_NET_BASE = "reporting.initialNetBase";
+
+    CacheMode internal _cacheMode;
+    bool internal _cacheModeWrite;
+    bytes32 internal _cacheArgsFingerprint;
+    string internal _cacheFilePath;
+    StdConfig internal _cacheConfig;
+
     // Aave base currency decimals (USD = 8 decimals)
     uint256 internal constant BASE_CURRENCY_DECIMALS = 8;
     uint256 internal constant BASE_CURRENCY_SCALE = 10 ** BASE_CURRENCY_DECIMALS;
+
+    function _initCacheMode(CacheMode mode_) internal {
+        _cacheMode = mode_;
+        _cacheModeWrite = _signOnly && mode_ != CacheMode.None;
+        _cacheArgsFingerprint = bytes32(0);
+
+        if (mode_ == CacheMode.ExecuteLoop) {
+            _cacheFilePath = LOOP_CACHE_FILE_PATH;
+        } else if (mode_ == CacheMode.ExecuteUnwind) {
+            _cacheFilePath = UNWIND_CACHE_FILE_PATH;
+        } else {
+            _cacheFilePath = "";
+        }
+
+        if (mode_ != CacheMode.None && !_cacheModeWrite && !_hasSignature()) {
+            _cacheFilePath = "";
+        }
+
+        if (_isCacheReplay() && !vm.exists(_cacheFilePath)) {
+            _revertCacheFailure(string.concat("cache file does not exist ", _cacheFilePath));
+        }
+
+        console2.log("  Cache mode", _cacheModeWrite ? "write" : (_isCacheReplay() ? "replay" : "none"));
+        if (_cacheMode != CacheMode.None && bytes(_cacheFilePath).length > 0) {
+            console2.log("  Cache file", _cacheFilePath);
+        }
+
+        if (_cacheModeWrite) {
+            _prepareCacheDir();
+            if (!vm.exists(_cacheFilePath)) {
+                _initializeCacheTomlFile(_cacheFilePath);
+            }
+            _cacheConfig = new StdConfig(_cacheFilePath, true);
+        } else if (_isCacheReplay()) {
+            _cacheConfig = new StdConfig(_cacheFilePath, false);
+        }
+    }
+
+    function _isCacheReplay() internal view returns (bool) {
+        return _cacheMode != CacheMode.None && !_cacheModeWrite && _hasSignature();
+    }
+
+    function _prepareCacheDir() internal {
+        if (!vm.isDir("./cache")) {
+            string[] memory inputs = new string[](3);
+            inputs[0] = "mkdir";
+            inputs[1] = "-p";
+            inputs[2] = "./cache";
+            vm.ffi(inputs);
+        }
+    }
+
+    function _initializeCacheTomlFile(string memory path_) internal {
+        string memory chainIdKey = vm.toString(block.chainid);
+        // StdConfig requires each chain section to include an endpoint URL.
+        // This cache file never uses RPC routing from StdConfig, so this is a
+        // schema placeholder only.
+        string memory fileContents = string.concat(
+            "[",
+            chainIdKey,
+            "]\n",
+            'endpoint_url = "https://example.invalid"\n'
+        );
+        vm.writeFile(path_, fileContents);
+    }
+
+    function _validateReplayCacheMetadata(
+        string memory expectedFunctionName_,
+        bytes32 expectedArgsFingerprint_
+    ) internal view {
+        if (!_isCacheReplay()) return;
+
+        uint256 createdAt = _cacheReadUint(CACHE_KEY_CREATED_AT);
+        if (createdAt == 0) {
+            _revertCacheFailure("cache createdAt is missing or zero");
+        }
+        if (createdAt + CACHE_TTL_SECONDS < block.timestamp) {
+            _revertCacheFailure("cache expired");
+        }
+
+        if (_cacheReadUint(CACHE_KEY_CHAIN_ID) != block.chainid) {
+            _revertCacheFailure("cache chainId mismatch");
+        }
+
+        if (keccak256(bytes(_cacheReadString(CACHE_KEY_VERSION))) != keccak256(bytes(CACHE_VERSION))) {
+            _revertCacheFailure("cache version mismatch");
+        }
+
+        if (
+            keccak256(bytes(_cacheReadString(CACHE_KEY_FUNCTION))) !=
+            keccak256(bytes(expectedFunctionName_))
+        ) {
+            _revertCacheFailure("cache function mismatch");
+        }
+
+        if (_cacheReadBytes32(CACHE_KEY_ARGS_FINGERPRINT) != expectedArgsFingerprint_) {
+            _revertCacheFailure("cache argsFingerprint mismatch");
+        }
+    }
+
+    function _cacheReadUint(string memory key_) internal view returns (uint256) {
+        if (!_cacheConfig.exists(key_)) {
+            _revertCacheFailure(string.concat("missing cache uint key ", key_));
+        }
+        return _cacheConfig.get(key_).toUint256();
+    }
+
+    function _cacheReadString(string memory key_) internal view returns (string memory) {
+        if (!_cacheConfig.exists(key_)) {
+            _revertCacheFailure(string.concat("missing cache string key ", key_));
+        }
+        return _cacheConfig.get(key_).toString();
+    }
+
+    function _cacheReadBytes32(string memory key_) internal view returns (bytes32) {
+        if (!_cacheConfig.exists(key_)) {
+            _revertCacheFailure(string.concat("missing cache bytes32 key ", key_));
+        }
+        return _cacheConfig.get(key_).toBytes32();
+    }
+
+    function _cacheSetUint(string memory key_, uint256 value_) internal {
+        if (_cacheModeWrite) {
+            _cacheConfig.set(key_, value_);
+        }
+    }
+
+    function _getLoopPlanningAccountData(
+    )
+        internal
+        returns (
+            uint256 currentEMode_,
+            uint256 availableBorrowsBase_,
+            uint256 currentLiquidationThreshold_,
+            uint256 healthFactor_
+        )
+    {
+        if (_isCacheReplay()) {
+            currentEMode_ = _cacheReadUint(CACHE_KEY_LOOP_ACCOUNT_EMODE);
+            availableBorrowsBase_ = _cacheReadUint(CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS);
+            currentLiquidationThreshold_ = _cacheReadUint(CACHE_KEY_LOOP_ACCOUNT_CURRENT_LT);
+            healthFactor_ = _cacheReadUint(CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR);
+            return (
+                currentEMode_,
+                availableBorrowsBase_,
+                currentLiquidationThreshold_,
+                healthFactor_
+            );
+        }
+
+        currentEMode_ = AAVE_POOL.getUserEMode(_owner);
+        (, , availableBorrowsBase_, currentLiquidationThreshold_, , healthFactor_) = AAVE_POOL
+            .getUserAccountData(_owner);
+
+        _cacheSetUint(CACHE_KEY_LOOP_ACCOUNT_EMODE, currentEMode_);
+        _cacheSetUint(CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS, availableBorrowsBase_);
+        _cacheSetUint(CACHE_KEY_LOOP_ACCOUNT_CURRENT_LT, currentLiquidationThreshold_);
+        _cacheSetUint(CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR, healthFactor_);
+    }
+
+    function _getUnwindPlanningAccountData(
+    )
+        internal
+        returns (
+            uint256 totalCollateralBase_,
+            uint256 totalDebtBase_,
+            uint256 currentLiquidationThreshold_,
+            uint256 healthFactor_
+        )
+    {
+        if (_isCacheReplay()) {
+            totalCollateralBase_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_COLLATERAL);
+            totalDebtBase_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_DEBT);
+            currentLiquidationThreshold_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_CURRENT_LT);
+            healthFactor_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR);
+            return (totalCollateralBase_, totalDebtBase_, currentLiquidationThreshold_, healthFactor_);
+        }
+
+        (
+            totalCollateralBase_,
+            totalDebtBase_,
+            ,
+            currentLiquidationThreshold_,
+            ,
+            healthFactor_
+        ) = AAVE_POOL.getUserAccountData(_owner);
+
+        _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_COLLATERAL, totalCollateralBase_);
+        _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_DEBT, totalDebtBase_);
+        _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_CURRENT_LT, currentLiquidationThreshold_);
+        _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR, healthFactor_);
+    }
+
+    function _getUnwindReserveData(
+    )
+        internal
+        returns (
+            uint256 usdeATokenBalance_,
+            uint256 susdeATokenBalance_,
+            uint256 usdtStableDebt_,
+            uint256 usdtVariableDebt_
+        )
+    {
+        if (_isCacheReplay()) {
+            usdeATokenBalance_ = _cacheReadUint(CACHE_KEY_UNWIND_RESERVE_USDE_ATOKEN);
+            susdeATokenBalance_ = _cacheReadUint(CACHE_KEY_UNWIND_RESERVE_SUSDE_ATOKEN);
+            usdtStableDebt_ = _cacheReadUint(CACHE_KEY_UNWIND_RESERVE_USDT_STABLE_DEBT);
+            usdtVariableDebt_ = _cacheReadUint(CACHE_KEY_UNWIND_RESERVE_USDT_VARIABLE_DEBT);
+            return (usdeATokenBalance_, susdeATokenBalance_, usdtStableDebt_, usdtVariableDebt_);
+        }
+
+        (usdeATokenBalance_, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_usde),
+            _owner
+        );
+        (susdeATokenBalance_, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_susde),
+            _owner
+        );
+        (, usdtStableDebt_, usdtVariableDebt_, , , , , , ) = AAVE_DATA_PROVIDER
+            .getUserReserveData(address(_usdt), _owner);
+
+        _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_USDE_ATOKEN, usdeATokenBalance_);
+        _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_SUSDE_ATOKEN, susdeATokenBalance_);
+        _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_USDT_STABLE_DEBT, usdtStableDebt_);
+        _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_USDT_VARIABLE_DEBT, usdtVariableDebt_);
+    }
+
+    function _writeLoopMetadataCache(
+        uint256 susdeSupplyAmount_,
+        uint256 borrowPercentage_,
+        uint256 slippageBps_,
+        string memory excludedSources_
+    ) internal {
+        if (_cacheMode != CacheMode.ExecuteLoop || !_cacheModeWrite) return;
+
+        _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
+        _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
+        _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
+        _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_LOOP);
+        _cacheConfig.set(CACHE_KEY_LOOP_SUSDE_SUPPLY_AMOUNT, susdeSupplyAmount_);
+        _cacheConfig.set(CACHE_KEY_LOOP_BORROW_PERCENTAGE, borrowPercentage_);
+        _cacheConfig.set(CACHE_KEY_LOOP_SLIPPAGE_BPS, slippageBps_);
+        _cacheConfig.set(CACHE_KEY_LOOP_EXCLUDED_SOURCES, excludedSources_);
+    }
+
+    function _writeUnwindMetadataCache(
+        uint256 slippageBps_,
+        uint256 minHealthFactor_,
+        uint256 minSwap1ValueRatioBps_,
+        uint256 minSwap2ValueRatioBps_,
+        uint256 maxSusdeSwapIn_,
+        string memory excludedSources_,
+        uint256 initialSusdeBalance_
+    ) internal {
+        if (_cacheMode != CacheMode.ExecuteUnwind || !_cacheModeWrite) return;
+
+        _cacheConfig.set(CACHE_KEY_CREATED_AT, block.timestamp);
+        _cacheConfig.set(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
+        _cacheConfig.set(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheConfig.set(CACHE_KEY_VERSION, CACHE_VERSION);
+        _cacheConfig.set(CACHE_KEY_FUNCTION, CACHE_FUNCTION_UNWIND);
+        _cacheConfig.set(CACHE_KEY_UNWIND_SLIPPAGE_BPS, slippageBps_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_HEALTH_FACTOR, minHealthFactor_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_SWAP1_VALUE_RATIO_BPS, minSwap1ValueRatioBps_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_MIN_SWAP2_VALUE_RATIO_BPS, minSwap2ValueRatioBps_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_MAX_SUSDE_SWAP_IN, maxSusdeSwapIn_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_EXCLUDED_SOURCES, excludedSources_);
+        _cacheConfig.set(CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE, initialSusdeBalance_);
+    }
+
+    function _computeLoopArgsFingerprint(uint256 effectiveSusdeSupplyAmount_) internal view returns (bytes32) {
+        uint256 borrowPercentage = _readOptionalUint256(
+            "executeLoop",
+            "borrowPercentage",
+            DEFAULT_BORROW_PERCENTAGE
+        );
+        uint256 slippageBps = _readOptionalUint256("executeLoop", "slippageBps", DEFAULT_SLIPPAGE_BPS);
+        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
+            "executeLoop",
+            "minSwap1ValueRatioBps",
+            _readOptionalUint256("executeLoop", "minSwap1QuoteRatioBps", DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS)
+        );
+        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
+            "executeLoop",
+            "minSwap2ValueRatioBps",
+            _readOptionalUint256("executeLoop", "minSwap2QuoteRatioBps", DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS)
+        );
+        string memory excludedSources = _readOptionalString("executeLoop", "kyberExcludedSources", "");
+
+        return
+            keccak256(
+                abi.encode(
+                    effectiveSusdeSupplyAmount_,
+                    borrowPercentage,
+                    slippageBps,
+                    minSwap1ValueRatioBps,
+                    minSwap2ValueRatioBps,
+                    excludedSources
+                )
+            );
+    }
+
+    function _computeUnwindArgsFingerprint() internal view returns (bytes32) {
+        uint256 slippageBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
+        uint256 minHealthFactor = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minHealthFactor",
+            DEFAULT_MIN_HEALTH_FACTOR
+        );
+        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minSwap1ValueRatioBps",
+            DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+        );
+        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
+            "executeUnwindLoop",
+            "minSwap2ValueRatioBps",
+            DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+        );
+        uint256 maxSusdeSwapIn = _readOptionalUint256(
+            "executeUnwindLoop",
+            "maxSusdeSwapIn",
+            DEFAULT_MAX_SUSDE_SWAP_IN
+        );
+        string memory excludedSources = _readOptionalString("executeUnwindLoop", "kyberExcludedSources", "");
+
+        return
+            keccak256(
+                abi.encode(
+                    slippageBps,
+                    minHealthFactor,
+                    minSwap1ValueRatioBps,
+                    minSwap2ValueRatioBps,
+                    maxSusdeSwapIn,
+                    excludedSources,
+                    _initialSusdeBalance
+                )
+            );
+    }
+
+    function _revertCacheFailure(string memory detail_) internal pure {
+        revert(string.concat(CACHE_ERROR_PREFIX, ": ", detail_, " | ", CACHE_ERROR_RECOVERY));
+    }
 
     /// @notice Load token addresses from env.json
     function _loadTokens() internal {
@@ -201,9 +610,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
     {
         _loadTokens();
+        _initCacheMode(CacheMode.ExecuteLoop);
 
         _initialSusdeBalance = _susde.balanceOf(_owner);
-        _captureInitialAccountSnapshot();
 
         uint256 susdeSupplyAmount = _readOptionalUint256("executeLoop", "susdeSupplyAmount", 0);
         uint256 borrowPercentage = _readOptionalUint256(
@@ -235,6 +644,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
         if (susdeSupplyAmount == 0) revert("No sUSDe to supply");
+
+        _cacheArgsFingerprint = _computeLoopArgsFingerprint(susdeSupplyAmount);
+        _validateReplayCacheMetadata(CACHE_FUNCTION_LOOP, _cacheArgsFingerprint);
+
+        _captureInitialAccountSnapshot();
         _susdeSuppliedAmount = susdeSupplyAmount;
 
         console2.log("=== Execute Loop Iteration: sUSDe -> USDT -> USDe -> sUSDe ===");
@@ -250,17 +664,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 usdtBorrowAmount1;
 
         {
-            uint256 currentEMode = AAVE_POOL.getUserEMode(_owner);
-            bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
-
             (
-                ,
-                ,
-                uint256 availableBorrowsBase, // 8dp USD
-                uint256 currentLiquidationThreshold, // bps
-                ,
-                uint256 healthFactor // 1e18 ray
-            ) = AAVE_POOL.getUserAccountData(_owner);
+                uint256 currentEMode,
+                uint256 availableBorrowsBase,
+                uint256 currentLiquidationThreshold,
+                uint256 healthFactor
+            ) = _getLoopPlanningAccountData();
+            bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
             // Convert sUSDe amount (18dp) to its USDe value using live exchange rate (18dp)
             uint256 susdeSupplyValueUsde = _susdeToUsdeValue(susdeSupplyAmount);
@@ -513,6 +923,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _setPostBatchValidateSelector(this._validateExecuteLoopPostBatch.selector);
 
         proposeBatch();
+
+        _writeLoopMetadataCache(
+            susdeSupplyAmount,
+            borrowPercentage,
+            slippageBps,
+            _kyberExcludedSources
+        );
     }
 
     /// @notice Execute one max-safe unwind iteration for the sUSDe/USDe Aave loop position
@@ -532,9 +949,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
     {
         _loadTokens();
+        _initCacheMode(CacheMode.ExecuteUnwind);
 
         _initialSusdeBalance = _susde.balanceOf(_owner);
-        _captureInitialAccountSnapshot();
 
         uint256 slippageBps = _readOptionalUint256(
             "executeUnwindLoop",
@@ -578,6 +995,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "kyberExcludedSources",
             ""
         );
+
+        _cacheArgsFingerprint = _computeUnwindArgsFingerprint();
+        _validateReplayCacheMetadata(CACHE_FUNCTION_UNWIND, _cacheArgsFingerprint);
+
+        _captureInitialAccountSnapshot();
 
         _skipHeartbeatValidation = SKIP_HEARTBEAT;
         UnwindConfig memory config = UnwindConfig({
@@ -715,6 +1137,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _setPostBatchValidateSelector(this._validateExecuteUnwindLoopPostBatch.selector);
 
         proposeBatch();
+
+        _writeUnwindMetadataCache(
+            slippageBps,
+            minHealthFactor,
+            minSwap1ValueRatioBps,
+            minSwap2ValueRatioBps,
+            maxSusdeSwapIn,
+            _kyberExcludedSources,
+            _initialSusdeBalance
+        );
     }
 
     function _computeUnwindPlan(
@@ -857,25 +1289,17 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         (
             uint256 totalCollateralBase,
             uint256 totalDebtBase,
-            ,
             uint256 currentLiquidationThreshold,
-            ,
             uint256 healthFactor
-        ) = AAVE_POOL.getUserAccountData(_owner);
+        ) = _getUnwindPlanningAccountData();
 
         if (totalDebtBase == 0) revert("No debt to unwind");
         if (currentLiquidationThreshold == 0) revert("Liquidation threshold is zero");
 
-        (step1.usdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
-            address(_usde),
-            _owner
-        );
-        (step1.susdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
-            address(_susde),
-            _owner
-        );
-        (, uint256 usdtStableDebt, uint256 usdtVariableDebt, , , , , , ) = AAVE_DATA_PROVIDER
-            .getUserReserveData(address(_usdt), _owner);
+        uint256 usdtStableDebt;
+        uint256 usdtVariableDebt;
+        (step1.usdeATokenBalance, step1.susdeATokenBalance, usdtStableDebt, usdtVariableDebt) =
+            _getUnwindReserveData();
 
         if (usdtStableDebt > 0) revert("Stable USDT debt not supported");
         if (usdtVariableDebt == 0) revert("No variable USDT debt");
@@ -1484,11 +1908,22 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     }
 
     function _captureInitialAccountSnapshot() internal {
+        if (_isCacheReplay()) {
+            _initialTotalCollateralBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE);
+            _initialTotalDebtBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_DEBT_BASE);
+            _initialNetAccountValueBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_NET_BASE);
+            return;
+        }
+
         (
             _initialTotalCollateralBase,
             _initialTotalDebtBase,
             _initialNetAccountValueBase
         ) = _getAccountSummaryBase(REPORTING_MS);
+
+        _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE, _initialTotalCollateralBase);
+        _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_DEBT_BASE, _initialTotalDebtBase);
+        _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_NET_BASE, _initialNetAccountValueBase);
     }
 
     // ============ Encoding Helpers ============
