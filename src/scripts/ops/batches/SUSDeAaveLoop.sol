@@ -206,7 +206,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_UNWIND_EXCLUDED_SOURCES = "kyberExcludedSources";
     string internal constant CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE = "initialSusdeBalance";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_EMODE = "account.currentEMode";
-    string internal constant CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS = "account.availableBorrowsBase";
+    string internal constant CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS =
+        "account.availableBorrowsBase";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_CURRENT_LT =
         "account.currentLiquidationThreshold";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR = "account.healthFactor";
@@ -271,7 +272,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _revertCacheFailure(string.concat("cache file does not exist ", _cacheFilePath));
         }
 
-        console2.log("  Cache mode", _cacheModeWrite ? "write" : (_isCacheReplay() ? "replay" : "none"));
+        console2.log(
+            "  Cache mode",
+            _cacheModeWrite ? "write" : (_isCacheReplay() ? "replay" : "none")
+        );
         if (_cacheMode != CacheMode.None && bytes(_cacheFilePath).length > 0) {
             console2.log("  Cache file", _cacheFilePath);
         }
@@ -337,7 +341,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _revertCacheFailure("cache owner mismatch");
         }
 
-        if (keccak256(bytes(_cacheReadString(CACHE_KEY_VERSION))) != keccak256(bytes(CACHE_VERSION))) {
+        if (
+            keccak256(bytes(_cacheReadString(CACHE_KEY_VERSION))) != keccak256(bytes(CACHE_VERSION))
+        ) {
             _revertCacheFailure("cache version mismatch");
         }
 
@@ -406,8 +412,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
     }
 
-    function _getLoopPlanningAccountData(
-    )
+    function _getLoopPlanningAccountData()
         internal
         returns (
             uint256 currentEMode_,
@@ -439,8 +444,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheSetUint(CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR, healthFactor_);
     }
 
-    function _getUnwindPlanningAccountData(
-    )
+    function _getUnwindPlanningAccountData()
         internal
         returns (
             uint256 totalCollateralBase_,
@@ -454,7 +458,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             totalDebtBase_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_DEBT);
             currentLiquidationThreshold_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_CURRENT_LT);
             healthFactor_ = _cacheReadUint(CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR);
-            return (totalCollateralBase_, totalDebtBase_, currentLiquidationThreshold_, healthFactor_);
+            return (
+                totalCollateralBase_,
+                totalDebtBase_,
+                currentLiquidationThreshold_,
+                healthFactor_
+            );
         }
 
         (
@@ -472,8 +481,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR, healthFactor_);
     }
 
-    function _getUnwindReserveData(
-    )
+    function _getUnwindReserveData()
         internal
         returns (
             uint256 usdeATokenBalance_,
@@ -498,8 +506,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             address(_susde),
             _owner
         );
-        (, usdtStableDebt_, usdtVariableDebt_, , , , , , ) = AAVE_DATA_PROVIDER
-            .getUserReserveData(address(_usdt), _owner);
+        (, usdtStableDebt_, usdtVariableDebt_, , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_usdt),
+            _owner
+        );
 
         _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_USDE_ATOKEN, usdeATokenBalance_);
         _cacheSetUint(CACHE_KEY_UNWIND_RESERVE_SUSDE_ATOKEN, susdeATokenBalance_);
@@ -553,24 +563,42 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheConfig.set(CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE, initialSusdeBalance_);
     }
 
-    function _computeLoopArgsFingerprint(uint256 effectiveSusdeSupplyAmount_) internal view returns (bytes32) {
+    function _computeLoopArgsFingerprint(
+        uint256 effectiveSusdeSupplyAmount_
+    ) internal view returns (bytes32) {
         uint256 borrowPercentage = _readOptionalUint256(
             "executeLoop",
             "borrowPercentage",
             DEFAULT_BORROW_PERCENTAGE
         );
-        uint256 slippageBps = _readOptionalUint256("executeLoop", "slippageBps", DEFAULT_SLIPPAGE_BPS);
+        uint256 slippageBps = _readOptionalUint256(
+            "executeLoop",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
         uint256 minSwap1ValueRatioBps = _readOptionalUint256(
             "executeLoop",
             "minSwap1ValueRatioBps",
-            _readOptionalUint256("executeLoop", "minSwap1QuoteRatioBps", DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS)
+            _readOptionalUint256(
+                "executeLoop",
+                "minSwap1QuoteRatioBps",
+                DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+            )
         );
         uint256 minSwap2ValueRatioBps = _readOptionalUint256(
             "executeLoop",
             "minSwap2ValueRatioBps",
-            _readOptionalUint256("executeLoop", "minSwap2QuoteRatioBps", DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS)
+            _readOptionalUint256(
+                "executeLoop",
+                "minSwap2QuoteRatioBps",
+                DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+            )
         );
-        string memory excludedSources = _readOptionalString("executeLoop", "kyberExcludedSources", "");
+        string memory excludedSources = _readOptionalString(
+            "executeLoop",
+            "kyberExcludedSources",
+            ""
+        );
 
         return
             keccak256(
@@ -611,7 +639,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "maxSusdeSwapIn",
             DEFAULT_MAX_SUSDE_SWAP_IN
         );
-        string memory excludedSources = _readOptionalString("executeUnwindLoop", "kyberExcludedSources", "");
+        string memory excludedSources = _readOptionalString(
+            "executeUnwindLoop",
+            "kyberExcludedSources",
+            ""
+        );
 
         return
             keccak256(
@@ -1352,8 +1384,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         uint256 usdtStableDebt;
         uint256 usdtVariableDebt;
-        (step1.usdeATokenBalance, step1.susdeATokenBalance, usdtStableDebt, usdtVariableDebt) =
-            _getUnwindReserveData();
+        (
+            step1.usdeATokenBalance,
+            step1.susdeATokenBalance,
+            usdtStableDebt,
+            usdtVariableDebt
+        ) = _getUnwindReserveData();
 
         if (usdtStableDebt > 0) revert("Stable USDT debt not supported");
         if (usdtVariableDebt == 0) revert("No variable USDT debt");
@@ -1971,7 +2007,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     function _captureInitialAccountSnapshot() internal {
         if (_isCacheReplay()) {
-            _initialTotalCollateralBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE);
+            _initialTotalCollateralBase = _cacheReadUint(
+                CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE
+            );
             _initialTotalDebtBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_DEBT_BASE);
             _initialNetAccountValueBase = _cacheReadUint(CACHE_KEY_REPORTING_INITIAL_NET_BASE);
             return;
@@ -2151,7 +2189,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (_isCacheReplay()) {
             uint256 cachedInput = _cacheReadUint(string.concat(cacheKeyPrefix, ".input"));
             if (cachedInput != usdeAmount) {
-                _revertCacheFailure(string.concat("4626 convertToShares input mismatch ", cacheKeyPrefix));
+                _revertCacheFailure(
+                    string.concat("4626 convertToShares input mismatch ", cacheKeyPrefix)
+                );
             }
             return _cacheReadUint(string.concat(cacheKeyPrefix, ".output"));
         }
@@ -2257,7 +2297,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (_isCacheReplay()) {
             uint256 cachedInput = _cacheReadUint(string.concat(cacheKeyPrefix, ".input"));
             if (cachedInput != susdeAmount) {
-                _revertCacheFailure(string.concat("4626 convertToAssets input mismatch ", cacheKeyPrefix));
+                _revertCacheFailure(
+                    string.concat("4626 convertToAssets input mismatch ", cacheKeyPrefix)
+                );
             }
             return _cacheReadUint(string.concat(cacheKeyPrefix, ".output"));
         }
@@ -2320,7 +2362,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 amountIn,
         uint256 slippageBps
     ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
-
         string memory getUrl = string.concat(
             KYBERSWAP_BASE_URL,
             "/api/v1/routes?tokenIn=",
