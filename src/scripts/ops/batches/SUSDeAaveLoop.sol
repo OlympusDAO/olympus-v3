@@ -646,24 +646,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "slippageBps",
             DEFAULT_SLIPPAGE_BPS
         );
-        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
-            "executeLoop",
-            "minSwap1ValueRatioBps",
-            _readOptionalUint256(
-                "executeLoop",
-                "minSwap1QuoteRatioBps",
-                DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
-            )
-        );
-        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
-            "executeLoop",
-            "minSwap2ValueRatioBps",
-            _readOptionalUint256(
-                "executeLoop",
-                "minSwap2QuoteRatioBps",
-                DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
-            )
-        );
+        uint256 minSwap1ValueRatioBps = _getLoopMinSwapUsdtUsdeValueRatioBps();
+        uint256 minSwap2ValueRatioBps = _getLoopMinSwapUsdtSusdeValueRatioBps();
         string memory excludedSources = _readOptionalString(
             "executeLoop",
             "kyberExcludedSources",
@@ -696,16 +680,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             "minHealthFactor",
             DEFAULT_MIN_HEALTH_FACTOR
         );
-        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
-            "executeUnwindLoop",
-            "minSwap1ValueRatioBps",
-            DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
-        );
-        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
-            "executeUnwindLoop",
-            "minSwap2ValueRatioBps",
-            DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
-        );
+        uint256 minSwap1ValueRatioBps = _getUnwindMinSwapUsdeUsdtValueRatioBps();
+        uint256 minSwap2ValueRatioBps = _getUnwindMinSwapSusdeUsdtValueRatioBps();
         uint256 maxSusdeSwapIn = _readOptionalUint256(
             "executeUnwindLoop",
             "maxSusdeSwapIn",
@@ -914,15 +890,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _toDecimalString(usdeAmountOut, 18)
         );
         {
-            uint256 minSwap1ValueRatioBps = _readOptionalUint256(
-                "executeLoop",
-                "minSwap1ValueRatioBps",
-                _readOptionalUint256(
-                    "executeLoop",
-                    "minSwap1QuoteRatioBps",
-                    DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
-                )
-            );
+            uint256 minSwap1ValueRatioBps = _getLoopMinSwapUsdtUsdeValueRatioBps();
             if (minSwap1ValueRatioBps == 0 || minSwap1ValueRatioBps > 10000) {
                 revert("Swap #1 min value ratio invalid");
             }
@@ -1023,15 +991,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _toDecimalString(susdeAmountOut, 18)
         );
         {
-            uint256 minSwap2ValueRatioBps = _readOptionalUint256(
-                "executeLoop",
-                "minSwap2ValueRatioBps",
-                _readOptionalUint256(
-                    "executeLoop",
-                    "minSwap2QuoteRatioBps",
-                    DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
-                )
-            );
+            uint256 minSwap2ValueRatioBps = _getLoopMinSwapUsdtSusdeValueRatioBps();
             if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
                 revert("Swap #2 min value ratio invalid");
             }
@@ -1127,20 +1087,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         );
         if (minHealthFactor < 1e18) revert("minHealthFactor below 1.0");
 
-        uint256 minSwap1ValueRatioBps = _readOptionalUint256(
-            "executeUnwindLoop",
-            "minSwap1ValueRatioBps",
-            DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
-        );
+        uint256 minSwap1ValueRatioBps = _getUnwindMinSwapUsdeUsdtValueRatioBps();
         if (minSwap1ValueRatioBps == 0 || minSwap1ValueRatioBps > 10000) {
             revert("Swap #1 min value ratio invalid");
         }
 
-        uint256 minSwap2ValueRatioBps = _readOptionalUint256(
-            "executeUnwindLoop",
-            "minSwap2ValueRatioBps",
-            DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
-        );
+        uint256 minSwap2ValueRatioBps = _getUnwindMinSwapSusdeUsdtValueRatioBps();
         if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
             revert("Swap #2 min value ratio invalid");
         }
@@ -2991,6 +2943,42 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
 
         return string(out);
+    }
+
+    function _getLoopMinSwapUsdtUsdeValueRatioBps() internal view returns (uint256) {
+        return
+            _readOptionalUint256(
+                "executeLoop",
+                "minSwapUsdtUsdeValueRatioBps",
+                DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+            );
+    }
+
+    function _getLoopMinSwapUsdtSusdeValueRatioBps() internal view returns (uint256) {
+        return
+            _readOptionalUint256(
+                "executeLoop",
+                "minSwapUsdtSusdeValueRatioBps",
+                DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+            );
+    }
+
+    function _getUnwindMinSwapUsdeUsdtValueRatioBps() internal view returns (uint256) {
+        return
+            _readOptionalUint256(
+                "executeUnwindLoop",
+                "minSwapUsdeUsdtValueRatioBps",
+                DEFAULT_MIN_SWAP1_VALUE_RATIO_BPS
+            );
+    }
+
+    function _getUnwindMinSwapSusdeUsdtValueRatioBps() internal view returns (uint256) {
+        return
+            _readOptionalUint256(
+                "executeUnwindLoop",
+                "minSwapSusdeUsdtValueRatioBps",
+                DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS
+            );
     }
 
     // ============ Args Helpers ============

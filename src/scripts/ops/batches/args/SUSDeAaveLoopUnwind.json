@@ -4,7 +4,7 @@
             "args": {
                 "kyberExcludedSources": "ekubo-v3",
                 "minHealthFactor": "1020000000000000000",
-                "minSwap1ValueRatioBps": "9990",
+                "minSwapSusdeUsdtValueRatioBps": "9985",
                 "slippageBps": "5"
             },
             "name": "executeUnwindLoop"
