@@ -62,7 +62,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _initialSusdeBalance;
     uint256 internal _susdeSuppliedAmount;
     uint256 internal _usdeSuppliedAmount;
-    uint256 internal _plannedUsdeToSusdeDepositAmount;
+    uint256 internal _plannedExtraUsdeSupplyAmount;
     uint256 internal _initialTotalCollateralBase;
     uint256 internal _initialTotalDebtBase;
     uint256 internal _initialNetAccountValueBase;
@@ -781,7 +781,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _captureInitialAccountSnapshot();
         _susdeSuppliedAmount = susdeSupplyAmount;
 
-        console2.log("=== Execute Loop Iteration: sUSDe -> USDT -> USDe -> sUSDe ===");
+        console2.log("=== Execute Loop Iteration: sUSDe -> USDT -> USDe (+extra USDe to Aave) ===");
         console2.log("Owner:", _owner);
         console2.log("sUSDe supply amount (from wallet):", _toDecimalString(susdeSupplyAmount, 18));
         console2.log("Borrow percentage (bps):", borrowPercentage);
@@ -914,14 +914,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _ratioBps(usdeSupplyAmount, usdeAmountOut)
         );
 
-        _plannedUsdeToSusdeDepositAmount = _getPlannedUsdeToSusdeDepositAmount(
+        _plannedExtraUsdeSupplyAmount = _getPlannedExtraUsdeSupplyAmount(
             usdeAmountOut,
             usdeSupplyAmount,
             slippageBps
         );
         console2.log(
-            "[Iteration] Planned USDe -> sUSDe deposit amount:",
-            _toDecimalString(_plannedUsdeToSusdeDepositAmount, 18)
+            "[Iteration] Planned extra USDe supply amount:",
+            _toDecimalString(_plannedExtraUsdeSupplyAmount, 18)
         );
 
         uint256 usdtBorrowAmount2;
@@ -1030,7 +1030,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             usdtBorrowAmount1,
             usdeSupplyAmount,
             usdtBorrowAmount2,
-            _plannedUsdeToSusdeDepositAmount,
+            _plannedExtraUsdeSupplyAmount,
             routerUsdtToUsde,
             swapCalldataUsdtToUsde,
             routerUsdtToSusde,
@@ -1147,7 +1147,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(_susde),
                 _encodeApprove(plan.routerWalletSusdeToUsdt, plan.walletSusdeSwapAmount),
-                "Approve sUSDe for wallet swap"
+                string.concat(
+                    "Approve sUSDe for wallet swap amount=",
+                    _toDecimalString(plan.walletSusdeSwapAmount, 18)
+                )
             );
             _addToBatchWithStepLog(
                 plan.routerWalletSusdeToUsdt,
@@ -1163,12 +1166,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 _addToBatchWithStepLog(
                     address(_usdt),
                     _encodeApprove(address(AAVE_POOL), plan.conservativeRepay0),
-                    "Approve USDT for repay 0"
+                    string.concat(
+                        "Approve USDT for repay 0 amount=",
+                        _toDecimalString(plan.conservativeRepay0, 6)
+                    )
                 );
                 _addToBatchWithStepLog(
                     address(AAVE_POOL),
                     _encodeRepay(address(_usdt), plan.conservativeRepay0, _owner),
-                    "Repay USDT debt (wallet leg)"
+                    string.concat(
+                        "Repay USDT debt (wallet leg) amount=",
+                        _toDecimalString(plan.conservativeRepay0, 6)
+                    )
                 );
             }
         }
@@ -1177,7 +1186,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
                 _encodeWithdraw(address(_usde), plan.usdeWithdrawAmount1, _owner),
-                "Withdraw USDe collateral"
+                string.concat(
+                    "Withdraw USDe collateral amount=",
+                    _toDecimalString(plan.usdeWithdrawAmount1, 18)
+                )
             );
             _addToBatchWithStepLog(
                 address(_usde),
@@ -1187,7 +1199,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(_usde),
                 _encodeApprove(plan.routerUsdeToUsdt, plan.usdeWithdrawAmount1),
-                "Approve USDe for swap"
+                string.concat(
+                    "Approve USDe for swap amount=",
+                    _toDecimalString(plan.usdeWithdrawAmount1, 18)
+                )
             );
             _addToBatchWithStepLog(
                 plan.routerUsdeToUsdt,
@@ -1203,12 +1218,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 _addToBatchWithStepLog(
                     address(_usdt),
                     _encodeApprove(address(AAVE_POOL), plan.conservativeRepay1),
-                    "Approve USDT for repay 1"
+                    string.concat(
+                        "Approve USDT for repay 1 amount=",
+                        _toDecimalString(plan.conservativeRepay1, 6)
+                    )
                 );
                 _addToBatchWithStepLog(
                     address(AAVE_POOL),
                     _encodeRepay(address(_usdt), plan.conservativeRepay1, _owner),
-                    "Repay USDT debt (USDe leg)"
+                    string.concat(
+                        "Repay USDT debt (USDe leg) amount=",
+                        _toDecimalString(plan.conservativeRepay1, 6)
+                    )
                 );
             }
         }
@@ -1217,7 +1238,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
                 _encodeWithdraw(address(_susde), plan.susdeWithdrawAmountFinal, _owner),
-                "Withdraw sUSDe collateral"
+                string.concat(
+                    "Withdraw sUSDe collateral amount=",
+                    _toDecimalString(plan.susdeWithdrawAmountFinal, 18)
+                )
             );
         }
 
@@ -1240,12 +1264,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 "Zero sUSDe -> wallet swap router approval"
             );
         }
-        _addToBatchWithStepLog(
-            address(_usde),
-            _encodeApprove(address(_susde), 0),
-            "Zero USDe -> sUSDe approval"
-        );
-
         _setPostBatchValidateSelector(this._validateExecuteUnwindLoopPostBatch.selector);
 
         proposeBatch();
@@ -1717,7 +1735,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 usdtBorrowAmount1,
         uint256 usdeSupplyAmount,
         uint256 usdtBorrowAmount2,
-        uint256 usdeToSusdeDepositAmount,
+        uint256 extraUsdeSupplyAmount,
         address routerUsdtToUsde,
         bytes memory swapCalldataUsdtToUsde,
         address routerUsdtToSusde,
@@ -1726,12 +1744,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _addToBatchWithStepLog(
             address(_susde),
             _encodeApprove(address(AAVE_POOL), susdeSupplyAmount),
-            "Approve sUSDe -> Aave"
+            string.concat("Approve sUSDe -> Aave amount=", _toDecimalString(susdeSupplyAmount, 18))
         );
         _addToBatchWithStepLog(
             address(AAVE_POOL),
             _encodeSupply(address(_susde), susdeSupplyAmount, _owner),
-            "Supply sUSDe"
+            string.concat("Supply sUSDe amount=", _toDecimalString(susdeSupplyAmount, 18))
         );
         _addToBatchWithStepLog(
             address(AAVE_POOL),
@@ -1742,7 +1760,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _addToBatchWithStepLog(
             address(AAVE_POOL),
             _encodeBorrow(address(_usdt), usdtBorrowAmount1, _owner),
-            "Borrow USDT amount 1"
+            string.concat("Borrow USDT amount 1 amount=", _toDecimalString(usdtBorrowAmount1, 6))
         );
 
         // USDT uses a non-standard approve that requires resetting to 0 before setting a new value.
@@ -1756,19 +1774,23 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _addToBatchWithStepLog(
             address(_usdt),
             _encodeApprove(routerUsdtToUsde, usdtBorrowAmount1),
-            "Approve USDT for swap 1"
+            string.concat("Approve USDT for swap 1 amount=", _toDecimalString(usdtBorrowAmount1, 6))
         );
-        _addToBatchWithStepLog(routerUsdtToUsde, swapCalldataUsdtToUsde, "Swap USDT -> USDe");
+        _addToBatchWithStepLog(
+            routerUsdtToUsde,
+            swapCalldataUsdtToUsde,
+            string.concat("Swap USDT -> USDe amountIn=", _toDecimalString(usdtBorrowAmount1, 6))
+        );
 
         _addToBatchWithStepLog(
             address(_usde),
             _encodeApprove(address(AAVE_POOL), usdeSupplyAmount),
-            "Approve USDe -> Aave"
+            string.concat("Approve USDe -> Aave amount=", _toDecimalString(usdeSupplyAmount, 18))
         );
         _addToBatchWithStepLog(
             address(AAVE_POOL),
             _encodeSupply(address(_usde), usdeSupplyAmount, _owner),
-            "Supply USDe"
+            string.concat("Supply USDe amount=", _toDecimalString(usdeSupplyAmount, 18))
         );
         _addToBatchWithStepLog(
             address(AAVE_POOL),
@@ -1779,7 +1801,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _addToBatchWithStepLog(
             address(AAVE_POOL),
             _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner),
-            "Borrow USDT amount 2"
+            string.concat("Borrow USDT amount 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
         );
 
         _addToBatchWithStepLog(
@@ -1790,20 +1812,30 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _addToBatchWithStepLog(
             address(_usdt),
             _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2),
-            "Approve USDT for swap 2"
+            string.concat("Approve USDT for swap 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
         );
-        _addToBatchWithStepLog(routerUsdtToSusde, swapCalldataUsdtToSusde, "Swap USDT -> sUSDe");
+        _addToBatchWithStepLog(
+            routerUsdtToSusde,
+            swapCalldataUsdtToSusde,
+            string.concat("Swap USDT -> sUSDe amountIn=", _toDecimalString(usdtBorrowAmount2, 6))
+        );
 
-        if (usdeToSusdeDepositAmount > 0) {
+        if (extraUsdeSupplyAmount > 0) {
             _addToBatchWithStepLog(
                 address(_usde),
-                _encodeApprove(address(_susde), usdeToSusdeDepositAmount),
-                "Approve leftover USDe -> sUSDe"
+                _encodeApprove(address(AAVE_POOL), extraUsdeSupplyAmount),
+                string.concat(
+                    "Approve extra USDe -> Aave amount=",
+                    _toDecimalString(extraUsdeSupplyAmount, 18)
+                )
             );
             _addToBatchWithStepLog(
-                address(_susde),
-                _encodeDeposit4626(usdeToSusdeDepositAmount, _owner),
-                "Deposit leftover USDe into sUSDe"
+                address(AAVE_POOL),
+                _encodeSupply(address(_usde), extraUsdeSupplyAmount, _owner),
+                string.concat(
+                    "Supply extra USDe amount=",
+                    _toDecimalString(extraUsdeSupplyAmount, 18)
+                )
             );
         }
 
@@ -1828,11 +1860,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             address(_usde),
             _encodeApprove(address(AAVE_POOL), 0),
             "Zero USDe -> Aave approval"
-        );
-        _addToBatchWithStepLog(
-            address(_usde),
-            _encodeApprove(address(_susde), 0),
-            "Zero USDe -> sUSDe approval"
         );
     }
 
@@ -1904,6 +1931,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
         _logCollateralSuppliedSummary();
+        console2.log(
+            "[Iteration] Extra USDe supplied to Aave (batch amount):",
+            _toDecimalString(_plannedExtraUsdeSupplyAmount, 18)
+        );
         _logBalanceSheetValidationReport("Wind");
         console2.log(
             "[Position] Aave health factor after batch:",
@@ -2472,13 +2503,6 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return abi.encodeWithSelector(IAaveV3Pool.setUserEMode.selector, categoryId);
     }
 
-    function _encodeDeposit4626(
-        uint256 assets,
-        address receiver
-    ) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(IERC4626.deposit.selector, assets, receiver);
-    }
-
     /// @notice Compute a conservative USDe supply amount to avoid reverts from rounding/swap slippage
     /// @dev    Takes the minimum of two estimates:
     ///         1. Quote-based: the Kyber quote output minus slippage buffer (18dp)
@@ -2505,16 +2529,16 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return FullMath.mulDiv(conservativeAmount, DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS, 10000);
     }
 
-    /// @notice Compute the amount of leftover USDe (after supplying to Aave) to deposit into sUSDe
-    /// @dev    After swap #1, we may receive more USDe than we supply to Aave (due to conservative
-    ///         sizing). This leftover is deposited into sUSDe via IERC4626.deposit to capture yield
-    ///         rather than leaving it idle. The amount is: min(quote output) - conservative supply amount.
-    ///         If supply >= quote min, there's no planned leftover and this returns 0.
+    /// @notice Compute extra USDe (after primary supply) to also supply into Aave
+    /// @dev    After swap #1, we may receive more USDe than the conservative primary supply amount.
+    ///         This function computes that conservative extra amount:
+    ///         min(quote output after slippage buffer) - primary supply amount.
+    ///         If primary supply >= quote min, returns 0.
     /// @param usdeAmountOut      Quoted USDe output from KyberSwap (18dp)
     /// @param usdeSupplyAmount   Conservative USDe supply amount from _getConservativeUsdeSupplyAmount (18dp)
     /// @param slippageBps        Slippage tolerance in basis points
-    /// @return Amount of USDe to deposit into sUSDe (18dp), or 0 if no leftover is expected
-    function _getPlannedUsdeToSusdeDepositAmount(
+    /// @return Extra USDe amount to supply into Aave (18dp), or 0 if none is expected
+    function _getPlannedExtraUsdeSupplyAmount(
         uint256 usdeAmountOut,
         uint256 usdeSupplyAmount,
         uint256 slippageBps
