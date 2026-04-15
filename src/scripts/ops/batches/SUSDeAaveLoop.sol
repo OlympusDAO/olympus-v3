@@ -2225,57 +2225,57 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     ) internal pure {
         console2.log(string.concat("--- ", label, " ---"));
 
-        console2.log("[Wallet] sUSDe amount:", _toDecimalString(snapshot.walletSusdeAmount, 18));
-        console2.log("[Wallet] sUSDe USD:", _toDecimalString(snapshot.walletSusdeValueBase, 8));
-        console2.log("[Wallet] USDe amount:", _toDecimalString(snapshot.walletUsdeAmount, 18));
-        console2.log("[Wallet] USDe USD:", _toDecimalString(snapshot.walletUsdeValueBase, 8));
-        console2.log("[Wallet] USDT amount:", _toDecimalString(snapshot.walletUsdtAmount, 6));
-        console2.log("[Wallet] USDT USD:", _toDecimalString(snapshot.walletUsdtValueBase, 8));
+        console2.log("[Wallet] sUSDe amount:", _toTwoDpString(snapshot.walletSusdeAmount, 18));
+        console2.log("[Wallet] sUSDe USD:", _toTwoDpString(snapshot.walletSusdeValueBase, 8));
+        console2.log("[Wallet] USDe amount:", _toTwoDpString(snapshot.walletUsdeAmount, 18));
+        console2.log("[Wallet] USDe USD:", _toTwoDpString(snapshot.walletUsdeValueBase, 8));
+        console2.log("[Wallet] USDT amount:", _toTwoDpString(snapshot.walletUsdtAmount, 6));
+        console2.log("[Wallet] USDT USD:", _toTwoDpString(snapshot.walletUsdtValueBase, 8));
 
         console2.log(
             "[Aave collateral] sUSDe amount:",
-            _toDecimalString(snapshot.aaveSusdeCollateralAmount, 18)
+            _toTwoDpString(snapshot.aaveSusdeCollateralAmount, 18)
         );
         console2.log(
             "[Aave collateral] sUSDe USD:",
-            _toDecimalString(snapshot.aaveSusdeCollateralValueBase, 8)
+            _toTwoDpString(snapshot.aaveSusdeCollateralValueBase, 8)
         );
         console2.log(
             "[Aave collateral] USDe amount:",
-            _toDecimalString(snapshot.aaveUsdeCollateralAmount, 18)
+            _toTwoDpString(snapshot.aaveUsdeCollateralAmount, 18)
         );
         console2.log(
             "[Aave collateral] USDe USD:",
-            _toDecimalString(snapshot.aaveUsdeCollateralValueBase, 8)
+            _toTwoDpString(snapshot.aaveUsdeCollateralValueBase, 8)
         );
         console2.log(
             "[Aave collateral] USDT amount:",
-            _toDecimalString(snapshot.aaveUsdtCollateralAmount, 6)
+            _toTwoDpString(snapshot.aaveUsdtCollateralAmount, 6)
         );
         console2.log(
             "[Aave collateral] USDT USD:",
-            _toDecimalString(snapshot.aaveUsdtCollateralValueBase, 8)
+            _toTwoDpString(snapshot.aaveUsdtCollateralValueBase, 8)
         );
 
-        console2.log("[Aave debt] USDT amount:", _toDecimalString(snapshot.aaveUsdtDebtAmount, 6));
-        console2.log("[Aave debt] USD:", _toDecimalString(snapshot.aaveDebtTotalBase, 8));
+        console2.log("[Aave debt] USDT amount:", _toTwoDpString(snapshot.aaveUsdtDebtAmount, 6));
+        console2.log("[Aave debt] USD:", _toTwoDpString(snapshot.aaveDebtTotalBase, 8));
         console2.log(
             "[Totals] Assets (wallet + Aave collateral) USD:",
-            _toDecimalString(snapshot.totalAssetsBase, 8)
+            _toTwoDpString(snapshot.totalAssetsBase, 8)
         );
 
         if (snapshot.netAssetsPositive) {
             console2.log(
                 string.concat(
                     "[Totals] Net assets USD: +",
-                    _toDecimalString(snapshot.netAssetsAbsBase, 8)
+                    _toTwoDpString(snapshot.netAssetsAbsBase, 8)
                 )
             );
         } else {
             console2.log(
                 string.concat(
                     "[Totals] Net assets USD: -",
-                    _toDecimalString(snapshot.netAssetsAbsBase, 8)
+                    _toTwoDpString(snapshot.netAssetsAbsBase, 8)
                 )
             );
         }
@@ -2404,11 +2404,11 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     ) internal pure {
         if (afterValue >= beforeValue) {
             console2.log(
-                string.concat(label, " +", _toDecimalString(afterValue - beforeValue, decimals))
+                string.concat(label, " +", _toTwoDpString(afterValue - beforeValue, decimals))
             );
         } else {
             console2.log(
-                string.concat(label, " -", _toDecimalString(beforeValue - afterValue, decimals))
+                string.concat(label, " -", _toTwoDpString(beforeValue - afterValue, decimals))
             );
         }
     }
@@ -2433,10 +2433,22 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         uint256 magnitude = beforeAbs + afterAbs;
         if (afterPositive) {
-            console2.log(string.concat(label, " +", _toDecimalString(magnitude, decimals)));
+            console2.log(string.concat(label, " +", _toTwoDpString(magnitude, decimals)));
         } else {
-            console2.log(string.concat(label, " -", _toDecimalString(magnitude, decimals)));
+            console2.log(string.concat(label, " -", _toTwoDpString(magnitude, decimals)));
         }
+    }
+
+    function _toTwoDpString(uint256 value, uint256 decimals) internal pure returns (string memory) {
+        if (decimals == 2) return _toDecimalString(value, 2);
+
+        if (decimals > 2) {
+            uint256 scaledDown = value / (10 ** (decimals - 2));
+            return _toDecimalString(scaledDown, 2);
+        }
+
+        uint256 scaledUp = value * (10 ** (2 - decimals));
+        return _toDecimalString(scaledUp, 2);
     }
 
     // ============ Encoding Helpers ============
