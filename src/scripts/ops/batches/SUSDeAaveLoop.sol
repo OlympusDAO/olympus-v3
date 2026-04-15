@@ -2742,6 +2742,12 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("amountIn", amountIn);
         if (_isCacheReplay()) {
             console2.log("[Iteration] Kyber source: cache replay");
+            if (bytes(_kyberExcludedSources).length > 0) {
+                console2.log("[Iteration] Kyber excluded sources (arg):", _kyberExcludedSources);
+            } else {
+                console2.log("[Iteration] Kyber excluded sources (arg): (none)");
+            }
+            console2.log("[Iteration] Route source breakdown: unavailable in cache replay");
             (router, swapCalldata, amountOut) = _cacheReadKyberSwap(stepLabel);
             _logKyberAmountOut(tokenOut, amountOut);
             console2.log("[Iteration] Router:", router);
@@ -2791,6 +2797,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         string memory getResponseStr = string(getResponse);
         string memory routeSummaryJson = _extractJsonObjectForKey(getResponseStr, '"routeSummary"');
+        _logKyberRouteSourceDetails(routeSummaryJson);
         amountOut = vm.parseUint(getResponseStr.readString(".data.routeSummary.amountOut"));
         router = vm.parseJsonAddress(getResponseStr, ".data.routerAddress");
         if (router == address(0)) router = KYBERSWAP_ROUTER_FALLBACK;
@@ -2952,6 +2959,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
 
         return type(uint256).max;
+    }
+
+    function _logKyberRouteSourceDetails(string memory routeSummaryJson) internal view {
+        if (bytes(_kyberExcludedSources).length > 0) {
+            console2.log("[Iteration] Kyber excluded sources (arg):", _kyberExcludedSources);
+        } else {
+            console2.log("[Iteration] Kyber excluded sources (arg): (none)");
+        }
+        console2.log("[Iteration] Kyber route summary JSON:", routeSummaryJson);
     }
 
     function _sliceToString(
