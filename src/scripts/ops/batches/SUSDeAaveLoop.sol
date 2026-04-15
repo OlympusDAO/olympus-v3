@@ -75,6 +75,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _unwindMaxSusdeSwapIn;
     uint256 internal _loopActionsBaseStep;
     string internal _kyberExcludedSources;
+    BalanceSheetSnapshot internal _initialBalanceSheet;
 
     struct UnwindConfig {
         uint256 slippageBps;
@@ -145,6 +146,26 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 usdeSwap;
         uint256 usdeRepay;
         uint256 susdeWithdraw;
+    }
+
+    struct BalanceSheetSnapshot {
+        uint256 walletSusdeAmount;
+        uint256 walletUsdeAmount;
+        uint256 walletUsdtAmount;
+        uint256 aaveSusdeCollateralAmount;
+        uint256 aaveUsdeCollateralAmount;
+        uint256 aaveUsdtCollateralAmount;
+        uint256 aaveUsdtDebtAmount;
+        uint256 walletSusdeValueBase;
+        uint256 walletUsdeValueBase;
+        uint256 walletUsdtValueBase;
+        uint256 aaveSusdeCollateralValueBase;
+        uint256 aaveUsdeCollateralValueBase;
+        uint256 aaveUsdtCollateralValueBase;
+        uint256 aaveDebtTotalBase;
+        uint256 totalAssetsBase;
+        bool netAssetsPositive;
+        uint256 netAssetsAbsBase;
     }
 
     // Aave interest rate mode
@@ -1735,7 +1756,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("[Position] Debt after:", _toDecimalString(debtAfter, 8));
         console2.log("[Position] Health factor after:", _toDecimalString(healthFactorAfter, 18));
         console2.log("[Position] sUSDe wallet balance:", _toDecimalString(susdeBalanceAfter, 18));
-        _logAaveBalanceSheetReport();
+        _logBalanceSheetValidationReport("Unwind");
         console2.log("executeUnwindLoop post-batch validation passed");
     }
 
@@ -1917,15 +1938,21 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("[Iteration] sUSDe out efficiency vs supplied sUSDe (bps):", efficiencyBps);
         if (walletSusdeIncreased) {
             console2.log(
-                string.concat("[Iteration] Wallet sUSDe change: +", _toDecimalString(walletSusdeDelta, 18))
+                string.concat(
+                    "[Iteration] Wallet sUSDe change: +",
+                    _toDecimalString(walletSusdeDelta, 18)
+                )
             );
         } else {
             console2.log(
-                string.concat("[Iteration] Wallet sUSDe change: -", _toDecimalString(walletSusdeDelta, 18))
+                string.concat(
+                    "[Iteration] Wallet sUSDe change: -",
+                    _toDecimalString(walletSusdeDelta, 18)
+                )
             );
         }
         _logCollateralSuppliedSummary();
-        _logAaveBalanceSheetReport();
+        _logBalanceSheetValidationReport("Wind");
         console2.log(
             "[Position] Aave health factor after batch:",
             _toDecimalString(healthFactorAfter, 18)
@@ -2098,6 +2125,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     }
 
     function _captureInitialAccountSnapshot() internal {
+        _initialBalanceSheet = _collectBalanceSheet(_owner);
+
         if (_isCacheReplay()) {
             _initialTotalCollateralBase = _cacheReadUint(
                 CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE
@@ -2116,6 +2145,298 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_COLLATERAL_BASE, _initialTotalCollateralBase);
         _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_DEBT_BASE, _initialTotalDebtBase);
         _cacheSetUint(CACHE_KEY_REPORTING_INITIAL_NET_BASE, _initialNetAccountValueBase);
+    }
+
+    function _collectBalanceSheet(
+        address account
+    ) internal view returns (BalanceSheetSnapshot memory snapshot) {
+        snapshot.walletSusdeAmount = _susde.balanceOf(account);
+        snapshot.walletUsdeAmount = _usde.balanceOf(account);
+        snapshot.walletUsdtAmount = _usdt.balanceOf(account);
+
+        (snapshot.aaveUsdeCollateralAmount, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_usde),
+            account
+        );
+        (snapshot.aaveSusdeCollateralAmount, , , , , , , , ) = AAVE_DATA_PROVIDER
+            .getUserReserveData(address(_susde), account);
+        uint256 usdtStableDebt;
+        uint256 usdtVariableDebt;
+        (
+            snapshot.aaveUsdtCollateralAmount,
+            usdtStableDebt,
+            usdtVariableDebt,
+            ,
+            ,
+            ,
+            ,
+            ,
+
+        ) = AAVE_DATA_PROVIDER.getUserReserveData(address(_usdt), account);
+
+        snapshot.aaveUsdtDebtAmount = usdtStableDebt + usdtVariableDebt;
+
+        snapshot.walletSusdeValueBase = _susdeToBaseValue(snapshot.walletSusdeAmount);
+        snapshot.walletUsdeValueBase = _usdeToBaseValue(snapshot.walletUsdeAmount);
+        snapshot.walletUsdtValueBase = FullMath.mulDiv(
+            snapshot.walletUsdtAmount,
+            BASE_CURRENCY_SCALE,
+            1e6
+        );
+        snapshot.aaveSusdeCollateralValueBase = _susdeToBaseValue(
+            snapshot.aaveSusdeCollateralAmount
+        );
+        snapshot.aaveUsdeCollateralValueBase = _usdeToBaseValue(snapshot.aaveUsdeCollateralAmount);
+        snapshot.aaveUsdtCollateralValueBase = FullMath.mulDiv(
+            snapshot.aaveUsdtCollateralAmount,
+            BASE_CURRENCY_SCALE,
+            1e6
+        );
+
+        (, snapshot.aaveDebtTotalBase, , , , ) = AAVE_POOL.getUserAccountData(account);
+
+        snapshot.totalAssetsBase =
+            snapshot.walletSusdeValueBase +
+            snapshot.walletUsdeValueBase +
+            snapshot.walletUsdtValueBase +
+            snapshot.aaveSusdeCollateralValueBase +
+            snapshot.aaveUsdeCollateralValueBase +
+            snapshot.aaveUsdtCollateralValueBase;
+
+        snapshot.netAssetsPositive = snapshot.totalAssetsBase >= snapshot.aaveDebtTotalBase;
+        snapshot.netAssetsAbsBase = snapshot.netAssetsPositive
+            ? snapshot.totalAssetsBase - snapshot.aaveDebtTotalBase
+            : snapshot.aaveDebtTotalBase - snapshot.totalAssetsBase;
+    }
+
+    function _logBalanceSheetValidationReport(string memory phase) internal view {
+        BalanceSheetSnapshot memory finalSnapshot = _collectBalanceSheet(_owner);
+
+        console2.log(string.concat("\n=== ", phase, " balance sheet (validation) ==="));
+        _logBalanceSheetSnapshot("Before", _initialBalanceSheet);
+        _logBalanceSheetSnapshot("After", finalSnapshot);
+        _logBalanceSheetDelta(_initialBalanceSheet, finalSnapshot);
+        console2.log("");
+    }
+
+    function _logBalanceSheetSnapshot(
+        string memory label,
+        BalanceSheetSnapshot memory snapshot
+    ) internal pure {
+        console2.log(string.concat("--- ", label, " ---"));
+
+        console2.log("[Wallet] sUSDe amount:", _toDecimalString(snapshot.walletSusdeAmount, 18));
+        console2.log("[Wallet] sUSDe USD:", _toDecimalString(snapshot.walletSusdeValueBase, 8));
+        console2.log("[Wallet] USDe amount:", _toDecimalString(snapshot.walletUsdeAmount, 18));
+        console2.log("[Wallet] USDe USD:", _toDecimalString(snapshot.walletUsdeValueBase, 8));
+        console2.log("[Wallet] USDT amount:", _toDecimalString(snapshot.walletUsdtAmount, 6));
+        console2.log("[Wallet] USDT USD:", _toDecimalString(snapshot.walletUsdtValueBase, 8));
+
+        console2.log(
+            "[Aave collateral] sUSDe amount:",
+            _toDecimalString(snapshot.aaveSusdeCollateralAmount, 18)
+        );
+        console2.log(
+            "[Aave collateral] sUSDe USD:",
+            _toDecimalString(snapshot.aaveSusdeCollateralValueBase, 8)
+        );
+        console2.log(
+            "[Aave collateral] USDe amount:",
+            _toDecimalString(snapshot.aaveUsdeCollateralAmount, 18)
+        );
+        console2.log(
+            "[Aave collateral] USDe USD:",
+            _toDecimalString(snapshot.aaveUsdeCollateralValueBase, 8)
+        );
+        console2.log(
+            "[Aave collateral] USDT amount:",
+            _toDecimalString(snapshot.aaveUsdtCollateralAmount, 6)
+        );
+        console2.log(
+            "[Aave collateral] USDT USD:",
+            _toDecimalString(snapshot.aaveUsdtCollateralValueBase, 8)
+        );
+
+        console2.log("[Aave debt] USDT amount:", _toDecimalString(snapshot.aaveUsdtDebtAmount, 6));
+        console2.log("[Aave debt] USD:", _toDecimalString(snapshot.aaveDebtTotalBase, 8));
+        console2.log(
+            "[Totals] Assets (wallet + Aave collateral) USD:",
+            _toDecimalString(snapshot.totalAssetsBase, 8)
+        );
+
+        if (snapshot.netAssetsPositive) {
+            console2.log(
+                string.concat(
+                    "[Totals] Net assets USD: +",
+                    _toDecimalString(snapshot.netAssetsAbsBase, 8)
+                )
+            );
+        } else {
+            console2.log(
+                string.concat(
+                    "[Totals] Net assets USD: -",
+                    _toDecimalString(snapshot.netAssetsAbsBase, 8)
+                )
+            );
+        }
+    }
+
+    function _logBalanceSheetDelta(
+        BalanceSheetSnapshot memory beforeSnapshot,
+        BalanceSheetSnapshot memory afterSnapshot
+    ) internal pure {
+        console2.log("--- Delta (after - before) ---");
+
+        _logSignedDelta(
+            "[Wallet] sUSDe amount delta:",
+            beforeSnapshot.walletSusdeAmount,
+            afterSnapshot.walletSusdeAmount,
+            18
+        );
+        _logSignedDelta(
+            "[Wallet] sUSDe USD delta:",
+            beforeSnapshot.walletSusdeValueBase,
+            afterSnapshot.walletSusdeValueBase,
+            8
+        );
+        _logSignedDelta(
+            "[Wallet] USDe amount delta:",
+            beforeSnapshot.walletUsdeAmount,
+            afterSnapshot.walletUsdeAmount,
+            18
+        );
+        _logSignedDelta(
+            "[Wallet] USDe USD delta:",
+            beforeSnapshot.walletUsdeValueBase,
+            afterSnapshot.walletUsdeValueBase,
+            8
+        );
+        _logSignedDelta(
+            "[Wallet] USDT amount delta:",
+            beforeSnapshot.walletUsdtAmount,
+            afterSnapshot.walletUsdtAmount,
+            6
+        );
+        _logSignedDelta(
+            "[Wallet] USDT USD delta:",
+            beforeSnapshot.walletUsdtValueBase,
+            afterSnapshot.walletUsdtValueBase,
+            8
+        );
+
+        _logSignedDelta(
+            "[Aave collateral] sUSDe amount delta:",
+            beforeSnapshot.aaveSusdeCollateralAmount,
+            afterSnapshot.aaveSusdeCollateralAmount,
+            18
+        );
+        _logSignedDelta(
+            "[Aave collateral] sUSDe USD delta:",
+            beforeSnapshot.aaveSusdeCollateralValueBase,
+            afterSnapshot.aaveSusdeCollateralValueBase,
+            8
+        );
+        _logSignedDelta(
+            "[Aave collateral] USDe amount delta:",
+            beforeSnapshot.aaveUsdeCollateralAmount,
+            afterSnapshot.aaveUsdeCollateralAmount,
+            18
+        );
+        _logSignedDelta(
+            "[Aave collateral] USDe USD delta:",
+            beforeSnapshot.aaveUsdeCollateralValueBase,
+            afterSnapshot.aaveUsdeCollateralValueBase,
+            8
+        );
+        _logSignedDelta(
+            "[Aave collateral] USDT amount delta:",
+            beforeSnapshot.aaveUsdtCollateralAmount,
+            afterSnapshot.aaveUsdtCollateralAmount,
+            6
+        );
+        _logSignedDelta(
+            "[Aave collateral] USDT USD delta:",
+            beforeSnapshot.aaveUsdtCollateralValueBase,
+            afterSnapshot.aaveUsdtCollateralValueBase,
+            8
+        );
+
+        _logSignedDelta(
+            "[Aave debt] USDT amount delta:",
+            beforeSnapshot.aaveUsdtDebtAmount,
+            afterSnapshot.aaveUsdtDebtAmount,
+            6
+        );
+        _logSignedDelta(
+            "[Aave debt] USD delta:",
+            beforeSnapshot.aaveDebtTotalBase,
+            afterSnapshot.aaveDebtTotalBase,
+            8
+        );
+        _logSignedDelta(
+            "[Totals] Liabilities USD delta:",
+            beforeSnapshot.aaveDebtTotalBase,
+            afterSnapshot.aaveDebtTotalBase,
+            8
+        );
+        _logSignedDelta(
+            "[Totals] Assets USD delta:",
+            beforeSnapshot.totalAssetsBase,
+            afterSnapshot.totalAssetsBase,
+            8
+        );
+
+        _logSignedDeltaWithSigns(
+            "[Totals] Net assets USD delta:",
+            beforeSnapshot.netAssetsPositive,
+            beforeSnapshot.netAssetsAbsBase,
+            afterSnapshot.netAssetsPositive,
+            afterSnapshot.netAssetsAbsBase,
+            8
+        );
+    }
+
+    function _logSignedDelta(
+        string memory label,
+        uint256 beforeValue,
+        uint256 afterValue,
+        uint256 decimals
+    ) internal pure {
+        if (afterValue >= beforeValue) {
+            console2.log(
+                string.concat(label, " +", _toDecimalString(afterValue - beforeValue, decimals))
+            );
+        } else {
+            console2.log(
+                string.concat(label, " -", _toDecimalString(beforeValue - afterValue, decimals))
+            );
+        }
+    }
+
+    function _logSignedDeltaWithSigns(
+        string memory label,
+        bool beforePositive,
+        uint256 beforeAbs,
+        bool afterPositive,
+        uint256 afterAbs,
+        uint256 decimals
+    ) internal pure {
+        if (beforePositive && afterPositive) {
+            _logSignedDelta(label, beforeAbs, afterAbs, decimals);
+            return;
+        }
+
+        if (!beforePositive && !afterPositive) {
+            _logSignedDelta(label, afterAbs, beforeAbs, decimals);
+            return;
+        }
+
+        uint256 magnitude = beforeAbs + afterAbs;
+        if (afterPositive) {
+            console2.log(string.concat(label, " +", _toDecimalString(magnitude, decimals)));
+        } else {
+            console2.log(string.concat(label, " -", _toDecimalString(magnitude, decimals)));
+        }
     }
 
     // ============ Encoding Helpers ============
@@ -2432,11 +2753,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     ) internal returns (address router, bytes memory swapCalldata, uint256 amountOut) {
         console2.log("amountIn", amountIn);
         if (_isCacheReplay()) {
+            console2.log("[Iteration] Kyber source: cache replay");
             (router, swapCalldata, amountOut) = _cacheReadKyberSwap(stepLabel);
             _logKyberAmountOut(tokenOut, amountOut);
             console2.log("[Iteration] Router:", router);
             return (router, swapCalldata, amountOut);
         }
+
+        console2.log("[Iteration] Kyber source: live API");
 
         (router, swapCalldata, amountOut) = _getKyberSwapCalldataLive(
             stepLabel,
