@@ -81,6 +81,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _loopTargetSusdeShareBps;
     bool internal _loopImbalanceBeforeSusdeOverweight;
     uint256 internal _loopImbalanceBeforeAbsUsde;
+    uint256 internal _loopSusdeCollateralValueUsdeBefore;
+    uint256 internal _loopUsdeCollateralValueUsdeBefore;
     bool internal _loopImbalancePostSusdeSupplySusdeOverweight;
     uint256 internal _loopImbalancePostSusdeSupplyAbsUsde;
     uint256 internal _loopUsdeSupplyCapTarget;
@@ -262,6 +264,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_LOOP_ACCOUNT_CURRENT_LT =
         "account.currentLiquidationThreshold";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_HEALTH_FACTOR = "account.healthFactor";
+    string internal constant CACHE_KEY_LOOP_COLLATERAL_SIDE = "loop.collateral.side";
+    string internal constant CACHE_KEY_LOOP_COLLATERAL_ABS = "loop.collateral.abs";
+    string internal constant CACHE_KEY_LOOP_COLLATERAL_SUSDE_VALUE = "loop.collateral.susdeValue";
+    string internal constant CACHE_KEY_LOOP_COLLATERAL_USDE_VALUE = "loop.collateral.usdeValue";
     string internal constant CACHE_KEY_UNWIND_ACCOUNT_COLLATERAL = "account.totalCollateralBase";
     string internal constant CACHE_KEY_UNWIND_ACCOUNT_DEBT = "account.totalDebtBase";
     string internal constant CACHE_KEY_UNWIND_ACCOUNT_CURRENT_LT =
@@ -584,6 +590,43 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheSetUint(CACHE_KEY_UNWIND_ACCOUNT_HEALTH_FACTOR, healthFactor_);
     }
 
+    function _getLoopPreSupplyCollateralSnapshot(
+        uint256 targetSusdeShareBps_
+    )
+        internal
+        returns (
+            bool susdeAboveTarget_,
+            uint256 absGapUsde_,
+            uint256 susdeCollateralValueUsde_,
+            uint256 usdeCollateralValueUsde_
+        )
+    {
+        if (_isCacheReplay()) {
+            susdeAboveTarget_ = _cacheReadUint(CACHE_KEY_LOOP_COLLATERAL_SIDE) == 1;
+            absGapUsde_ = _cacheReadUint(CACHE_KEY_LOOP_COLLATERAL_ABS);
+            susdeCollateralValueUsde_ = _cacheReadUint(CACHE_KEY_LOOP_COLLATERAL_SUSDE_VALUE);
+            usdeCollateralValueUsde_ = _cacheReadUint(CACHE_KEY_LOOP_COLLATERAL_USDE_VALUE);
+            return (
+                susdeAboveTarget_,
+                absGapUsde_,
+                susdeCollateralValueUsde_,
+                usdeCollateralValueUsde_
+            );
+        }
+
+        (susdeCollateralValueUsde_, usdeCollateralValueUsde_) = _getAaveCollateralValuesUsde(_owner);
+        (susdeAboveTarget_, absGapUsde_) = _getCollateralTargetGapFromValues(
+            susdeCollateralValueUsde_,
+            usdeCollateralValueUsde_,
+            targetSusdeShareBps_
+        );
+
+        _cacheSetUint(CACHE_KEY_LOOP_COLLATERAL_SIDE, susdeAboveTarget_ ? 1 : 0);
+        _cacheSetUint(CACHE_KEY_LOOP_COLLATERAL_ABS, absGapUsde_);
+        _cacheSetUint(CACHE_KEY_LOOP_COLLATERAL_SUSDE_VALUE, susdeCollateralValueUsde_);
+        _cacheSetUint(CACHE_KEY_LOOP_COLLATERAL_USDE_VALUE, usdeCollateralValueUsde_);
+    }
+
     function _getUnwindReserveData()
         internal
         returns (
@@ -897,9 +940,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         (
             _loopImbalanceBeforeSusdeOverweight,
             _loopImbalanceBeforeAbsUsde,
-            ,
-
-        ) = _getAaveCollateralTargetGapUsde(_owner, _loopTargetSusdeShareBps);
+            _loopSusdeCollateralValueUsdeBefore,
+            _loopUsdeCollateralValueUsdeBefore
+        ) = _getLoopPreSupplyCollateralSnapshot(_loopTargetSusdeShareBps);
 
         console2.log(
             "=== Execute Loop Iteration: sUSDe -> USDT -> USDe (target-capped) -> USDT -> sUSDe ==="
@@ -1046,18 +1089,15 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 _ratioBps(conservativeUsdeSupplyAmount, usdeAmountOut)
             );
 
-            (
-                uint256 susdeCollateralValueUsdeBefore,
-                uint256 usdeCollateralValueUsdeBefore
-            ) = _getAaveCollateralValuesUsde(_owner);
-            uint256 susdeCollateralValueUsdePostSusdeSupply = susdeCollateralValueUsdeBefore +
+            uint256 susdeCollateralValueUsdePostSusdeSupply =
+                _loopSusdeCollateralValueUsdeBefore +
                 susdeSupplyValueUsdeForRatio;
             (
                 _loopImbalancePostSusdeSupplySusdeOverweight,
                 _loopImbalancePostSusdeSupplyAbsUsde
             ) = _getCollateralTargetGapFromValues(
                 susdeCollateralValueUsdePostSusdeSupply,
-                usdeCollateralValueUsdeBefore,
+                _loopUsdeCollateralValueUsdeBefore,
                 _loopTargetSusdeShareBps
             );
             _loopUsdeSupplyCapTarget = _loopImbalancePostSusdeSupplySusdeOverweight
@@ -1074,7 +1114,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 _loopProjectedImbalanceAbsUsde
             ) = _getCollateralTargetGapFromValues(
                 susdeCollateralValueUsdePostSusdeSupply,
-                usdeCollateralValueUsdeBefore + usdeSupplyAmount,
+                _loopUsdeCollateralValueUsdeBefore + usdeSupplyAmount,
                 _loopTargetSusdeShareBps
             );
             _logLoopProjectedImbalance(
