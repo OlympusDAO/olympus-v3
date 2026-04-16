@@ -10,12 +10,13 @@
     },
     "packageManager": "pnpm@10.33.0",
     "engines": {
+        "node": ">=24",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
         "pnpm": "10.33.0"
     },
     "scripts": {
-        "preinstall": "npx only-allow pnpm",
+        "preinstall": "npx only-allow@1.2.2 pnpm",
         "postinstall": "./shell/postinstall.sh",
         "build": "forge build",
         "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",

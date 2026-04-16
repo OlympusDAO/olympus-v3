@@ -10,42 +10,30 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-
-            - uses: pnpm/action-setup@v5
-
-            - name: Install Foundry
-              uses: foundry-rs/foundry-toolchain@v1
-
-            - name: Install dependencies
-              # Frozen lockfile policy is enforced in .npmrc.
-              run: pnpm install
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
 
             - name: Build
               run: pnpm run build
 
-            # FYI: currently version 1.14
             - name: Setup lcov
-              uses: hrishikesh-kadam/setup-lcov@v1
+              uses: hrishikesh-kadam/setup-lcov@6c1aa0cc9e1c02f9f58f01ac599f1064ccc83470 # v1
 
             - name: Run Code Coverage
               run: pnpm run test:coverage
 
             - name: Add Artifacts
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: lcov.info
                   path: lcov.info
 
             # This action runs genhtml (which gives an error), but does not support providing arguments to ignore the error
             # - name: Report Code Coverage
-            #   uses: zgosalvez/github-actions-report-lcov@v3
+            #   uses: zgosalvez/github-actions-report-lcov@5aba2ff56b3dd258ec9916d3b5049dc5994db23e # v7.0.9
             #   with:
             #       coverage-files: lcov.info
             #       github-token: ${{ secrets.GITHUB_TOKEN }}
