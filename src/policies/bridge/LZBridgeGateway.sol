@@ -324,10 +324,12 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the emergency or admin role.
+    ///      - The gateway is currently enabled.
     ///      - The value is already in the desired state.
     function setIsReceiveEnabled(
         bool isReceiveEnabled_
     ) external override onlyEmergencyOrAdminRole {
+        if (isEnabled) revert LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
         if (isReceiveEnabled == isReceiveEnabled_)
             revert LZBridgeGateway_ReceiveAlreadyInDesiredState();
         _setIsReceiveEnabled(isReceiveEnabled_);
