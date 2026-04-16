@@ -52,6 +52,9 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Thrown when lzReceive is called while receiving is disabled.
     error LZBridgeGateway_ReceiveNotEnabled();
 
+    /// @notice Thrown when setIsReceiveEnabled is called while the gateway is enabled.
+    error LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
+
     /// @notice Thrown when setIsReceiveEnabled is called with the current value.
     error LZBridgeGateway_ReceiveAlreadyInDesiredState();
 
@@ -239,7 +242,10 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
         bytes calldata extraOptions_
     ) external view returns (bytes memory);
 
-    /// @notice Whether receiving is allowed while the gateway is disabled.
+    /// @notice Whether lzReceive() can process incoming messages.
+    /// @dev Automatically set to true by enable() and false by disable().
+    ///      Can be manually set via setIsReceiveEnabled() to allow receiving
+    ///      while the gateway is otherwise disabled (e.g., during gateway replacements).
     function isReceiveEnabled() external view returns (bool);
 
     /// @notice Returns whether this is the canonical (mainnet) chain.

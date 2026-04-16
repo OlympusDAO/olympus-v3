@@ -38,21 +38,37 @@ contract LZBridgeGatewayTests_SetIsReceiveEnabled is LZBridgeGatewayTestBase {
     }
 
     function test_setIsReceiveEnabled_revertsIfAlreadyInDesiredState() external {
-        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true after setup");
+        // Disable first (setIsReceiveEnabled only works when disabled)
+        vm.prank(admin);
+        gateway.disable(bytes(""));
+        // isReceiveEnabled is false after disable; setting false should revert
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILZBridgeGateway.LZBridgeGateway_ReceiveAlreadyInDesiredState.selector
             )
         );
         vm.prank(admin);
-        gateway.setIsReceiveEnabled(true);
+        gateway.setIsReceiveEnabled(false);
+    }
+
+    function test_setIsReceiveEnabled_revertsIfBridgeEnabled() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_ReceiveControlOnlyWhenDisabled.selector
+            )
+        );
+        vm.prank(admin);
+        gateway.setIsReceiveEnabled(false);
     }
 
     function testFuzz_setIsReceiveEnabled_revertsIfNotAdminOrEmergency(address caller_) external {
         vm.assume(caller_ != admin);
 
+        vm.prank(admin);
+        gateway.disable(bytes(""));
+
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
-        gateway.setIsReceiveEnabled(false);
+        gateway.setIsReceiveEnabled(true);
     }
 }

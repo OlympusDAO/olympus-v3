@@ -99,24 +99,6 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
-    function test_disable_skipsIsReceiveEnabledEventIfAlreadyFalse() external {
-        vm.startPrank(admin);
-        gateway.disable(bytes(""));
-        gateway.enable(bytes(""));
-        // Manually disable receive, then disable gateway
-        gateway.setIsReceiveEnabled(false);
-
-        vm.recordLogs();
-        gateway.disable(bytes(""));
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 eventSig = ILZBridgeGateway.IsReceiveEnabledSet.selector;
-        for (uint256 i = 0; i < logs.length; ++i) {
-            assertTrue(logs[i].topics[0] != eventSig, "Should not emit IsReceiveEnabledSet");
-        }
-        vm.stopPrank();
-    }
-
     function test_disable_revertsIfAlreadyDisabled() external {
         vm.prank(admin);
         gateway.disable(bytes(""));

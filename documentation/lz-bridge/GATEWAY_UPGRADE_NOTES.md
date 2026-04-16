@@ -6,7 +6,6 @@ The `LZBridgeGateway.isReceiveEnabled` flag is provided for use during future ga
 
 - Managed automatically by `enable()` (sets `true`) and `disable()` (sets `false`).
 - Can be set manually via `setIsReceiveEnabled()`, gated to `emergency` / `admin` roles.
-- `lzReceive()` checks `isReceiveEnabled` directly; `burnAndSend()` checks `isEnabled` via `onlyEnabled`.
 
 ### Expected usage
 

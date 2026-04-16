@@ -184,19 +184,17 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         assertEq(ohm.balanceOf(recipient), amount, "Recipient should receive OHM after retry");
     }
 
-    // ========== RECEIVE DISABLED -> RE-ENABLE RECEIVE -> RETRY ========== //
+    // ========== GATEWAY DISABLED -> SET RECEIVE ENABLED -> RETRY ========== //
 
-    /// @notice Admin disables receiving while gateway is enabled.
-    ///         LZBridgeGateway.lzReceive() reverts with ReceiveNotEnabled.
-    ///         Admin re-enables receiving, retry succeeds.
-    function test_lzReceive_receiveDisabledSoReEnableReceiveAndRetry() external {
+    /// @notice Gateway disabled after send. lzReceive() reverts with
+    ///         ReceiveNotEnabled. Admin sets isReceiveEnabled, retry succeeds.
+    function test_lzReceive_gatewayDisabledSoSetReceiveEnabledAndRetry() external {
         // 1. Send from canonical, packet enters mock queue
         bytes memory packetBytes = _sendCanonicalNoDeliver(1000e9);
 
-        // 2. Admin disables receiving while gateway remains enabled
+        // 2. Disable destination gateway (isReceiveEnabled becomes false)
         vm.prank(admin);
-        gateway2.setIsReceiveEnabled(false);
-        assertTrue(gateway2.isEnabled(), "Gateway should still be enabled");
+        gateway2.disable(bytes(""));
         assertFalse(gateway2.isReceiveEnabled(), "Receiving should be disabled");
 
         // 3. Verify packet in endpoint (hash stored)
@@ -207,7 +205,7 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         assertFalse(delivered, "Delivery should fail while receiving is disabled");
         assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM yet");
 
-        // 5. Admin re-enables receiving
+        // 5. Admin enables receiving without re-enabling the gateway
         vm.prank(admin);
         gateway2.setIsReceiveEnabled(true);
 
