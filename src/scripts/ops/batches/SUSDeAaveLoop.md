@@ -5,6 +5,7 @@
 `SUSDeAaveLoop` is a batch script for the Olympus Yield MS that supports:
 
 - `executeLoop`: open/increase a leveraged sUSDe/USDe loop position on Aave.
+- `executeRebalanceWallet`: rebalance collateral split toward 1:1 with wallet-funded actions only.
 - `executeUnwindLoop`: run one max-safe unwind iteration that repays USDT debt and releases collateral while preserving a minimum health factor.
 
 The script builds all swap routes and amounts before adding operations to the batch.
@@ -68,9 +69,19 @@ Opens or extends the loop in a single batch:
 1. Supply sUSDe as collateral.
 2. Borrow USDT.
 3. Swap USDT -> USDe.
-4. Supply USDe as collateral.
-5. Borrow USDT again.
-6. Swap USDT -> sUSDe.
+4. Supply parity-capped USDe to Aave (may be zero).
+5. Sweep 100% of planned leftover USDe from swap #1 into wallet sUSDe via `IERC4626.deposit` (not supplied to Aave in the same run).
+6. Borrow USDT again (sized from the capped USDe supply amount).
+7. Swap USDT -> sUSDe (skipped if borrow #2 is zero).
+
+Loop sizing now enforces 1:1 collateral parity protection:
+
+- `susdeSupplyAmount` is never parity-capped (requested amount is honored, or full wallet if arg is `0`).
+- USDe supply to Aave is capped from post-sUSDe collateral imbalance:
+  - if post-sUSDe is sUSDe-overweight, USDe supply cap = that excess,
+  - if post-sUSDe is USDe-overweight, USDe supply cap = `0`.
+- actual USDe supplied to Aave = `min(conservativeSwap1USDe, usdeSupplyCapTarget)`.
+- post-batch validation reverts if imbalance worsens materially, and also verifies projected vs actual imbalance coherence within drift tolerance.
 
 Optional args (all read from the `executeLoop` function entry in args JSON):
 
@@ -80,6 +91,27 @@ Optional args (all read from the `executeLoop` function entry in args JSON):
 - `minSwap1ValueRatioBps` (default `9990`): minimum value ratio for swap 1.
 - `minSwap2ValueRatioBps` (default `9990`): minimum value ratio for swap 2.
 - `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude (for example `ekubo-v3`).
+
+Loop still assumes a 1:1 target ratio (`targetSusdeToUsdeRatioWad = 1e18`) and only supports that target.
+
+### `executeRebalanceWallet`
+
+Runs one wallet-funded rebalance iteration without withdrawing Aave collateral:
+
+1. Measure current Aave collateral split (sUSDe value vs USDe value).
+2. Compute required shift toward 1:1.
+3. If sUSDe is overweight: use wallet USDe first, then optionally swap wallet sUSDe -> USDe, then supply USDe.
+4. If USDe is overweight: use wallet sUSDe first, then optionally deposit wallet USDe into sUSDe, then supply sUSDe.
+
+Optional args (all read from the `executeRebalanceWallet` function entry in args JSON):
+
+- `targetSusdeToUsdeRatioWad` (default `1000000000000000000`): currently only `1e18` is supported.
+- `ratioToleranceBps` (default `100`): imbalance tolerance in bps of total sUSDe+USDe collateral value.
+- `maxRebalanceValueUsde` (default `0`): max USDe value to shift in one run. `0` means no cap.
+- `slippageBps` (default `5`): max `100`.
+- `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude.
+
+Post-batch validation requires improvement when starting outside tolerance. If a full close is not possible, output explicitly reports partial reduction and the reason.
 
 Backward compatibility aliases for the loop value checks are still accepted:
 

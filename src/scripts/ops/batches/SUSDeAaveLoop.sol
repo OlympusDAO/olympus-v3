@@ -41,7 +41,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     enum CacheMode {
         None,
         ExecuteLoop,
-        ExecuteUnwind
+        ExecuteUnwind,
+        ExecuteRebalance
     }
 
     // Hardcoded protocol addresses (specific to this script)
@@ -62,7 +63,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _initialSusdeBalance;
     uint256 internal _susdeSuppliedAmount;
     uint256 internal _usdeSuppliedAmount;
-    uint256 internal _plannedExtraUsdeSupplyAmount;
+    uint256 internal _plannedUsdeSweepToSusdeAmount;
     uint256 internal _initialTotalCollateralBase;
     uint256 internal _initialTotalDebtBase;
     uint256 internal _initialNetAccountValueBase;
@@ -74,6 +75,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal _unwindMinSwap2ValueRatioBps;
     uint256 internal _unwindMaxSusdeSwapIn;
     uint256 internal _loopActionsBaseStep;
+    bool internal _loopImbalanceBeforeSusdeOverweight;
+    uint256 internal _loopImbalanceBeforeAbsUsde;
+    bool internal _loopImbalancePostSusdeSupplySusdeOverweight;
+    uint256 internal _loopImbalancePostSusdeSupplyAbsUsde;
+    uint256 internal _loopUsdeSupplyCapTarget;
+    bool internal _loopProjectedImbalanceSusdeOverweight;
+    uint256 internal _loopProjectedImbalanceAbsUsde;
+    bool internal _rebalanceImbalanceBeforeSusdeOverweight;
+    uint256 internal _rebalanceImbalanceBeforeAbsUsde;
+    uint256 internal _rebalanceImbalanceToleranceUsde;
+    uint256 internal _rebalanceTargetShiftUsde;
+    uint256 internal _rebalancePlannedShiftUsde;
+    string internal _rebalancePartialReason;
     string internal _kyberExcludedSources;
     BalanceSheetSnapshot internal _initialBalanceSheet;
 
@@ -179,6 +193,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     uint256 internal constant DEFAULT_MIN_SWAP2_VALUE_RATIO_BPS = 9990; // 99.90% (USDT -> sUSDe value)
     uint256 internal constant DEFAULT_MIN_HEALTH_FACTOR = 1.02e18;
     uint256 internal constant DEFAULT_MAX_SUSDE_SWAP_IN = 0;
+    uint256 internal constant DEFAULT_TARGET_SUSDE_TO_USDE_RATIO = 1e18;
+    uint256 internal constant DEFAULT_RATIO_TOLERANCE_BPS = 100; // 1%
+    uint256 internal constant LOOP_IMBALANCE_DRIFT_TOLERANCE_USDE = 1e18; // 1 USDe
     uint256 internal constant MAX_BORROW_PERCENTAGE = 10000; // 100%
     uint256 internal constant MAX_SLIPPAGE_BPS = 100; // 1%
     uint256 internal constant DEBT_VALIDATION_TOLERANCE_BASE = 100 * BASE_CURRENCY_SCALE; // $100
@@ -203,11 +220,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_ERROR_PREFIX = "cache failed";
     string internal constant CACHE_FUNCTION_LOOP = "executeLoop";
     string internal constant CACHE_FUNCTION_UNWIND = "executeUnwindLoop";
+    string internal constant CACHE_FUNCTION_REBALANCE = "executeRebalanceWallet";
     string internal constant CACHE_ERROR_RECOVERY =
         "rerun with --signonly then reuse the same signature, or clear cache files in ./cache";
 
     string internal constant LOOP_CACHE_FILE_PATH = "./cache/SUSDeAaveLoop-loop.toml";
     string internal constant UNWIND_CACHE_FILE_PATH = "./cache/SUSDeAaveLoop-unwind.toml";
+    string internal constant REBALANCE_CACHE_FILE_PATH = "./cache/SUSDeAaveLoop-rebalance.toml";
 
     string internal constant CACHE_KEY_CREATED_AT = "createdAt";
     string internal constant CACHE_KEY_ARGS_FINGERPRINT = "argsFingerprint";
@@ -226,6 +245,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_UNWIND_MAX_SUSDE_SWAP_IN = "maxSusdeSwapIn";
     string internal constant CACHE_KEY_UNWIND_EXCLUDED_SOURCES = "kyberExcludedSources";
     string internal constant CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE = "initialSusdeBalance";
+    string internal constant CACHE_KEY_REBALANCE_SLIPPAGE_BPS = "slippageBps";
+    string internal constant CACHE_KEY_REBALANCE_RATIO_TOLERANCE_BPS = "ratioToleranceBps";
+    string internal constant CACHE_KEY_REBALANCE_MAX_SHIFT_USDE = "maxRebalanceValueUsde";
+    string internal constant CACHE_KEY_REBALANCE_EXCLUDED_SOURCES = "kyberExcludedSources";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_EMODE = "account.currentEMode";
     string internal constant CACHE_KEY_LOOP_ACCOUNT_AVAILABLE_BORROWS =
         "account.availableBorrowsBase";
@@ -251,6 +274,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     string internal constant CACHE_KEY_UNWIND_SWAP1_PREFIX = "swaps.unwind.swap1";
     string internal constant CACHE_KEY_UNWIND_SWAP3_PREFIX = "swaps.unwind.swap3";
     string internal constant CACHE_KEY_UNWIND_SWAP5_PREFIX = "swaps.unwind.swap5";
+    string internal constant CACHE_KEY_REBALANCE_SWAP1_PREFIX = "swaps.rebalance.swap1";
     string internal constant CACHE_KEY_LOOP_4626_SUPPLY_VALUE = "erc4626.loop.susdeSupplyValue";
     string internal constant CACHE_KEY_LOOP_4626_SWAP2_VALUE = "erc4626.loop.swap2Value";
     string internal constant CACHE_KEY_UNWIND_4626_STEP1_DEBT_SHARES =
@@ -281,6 +305,8 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _cacheFilePath = LOOP_CACHE_FILE_PATH;
         } else if (mode_ == CacheMode.ExecuteUnwind) {
             _cacheFilePath = UNWIND_CACHE_FILE_PATH;
+        } else if (mode_ == CacheMode.ExecuteRebalance) {
+            _cacheFilePath = REBALANCE_CACHE_FILE_PATH;
         } else {
             _cacheFilePath = "";
         }
@@ -633,6 +659,26 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         _cacheSetUint(CACHE_KEY_UNWIND_INITIAL_SUSDE_BALANCE, initialSusdeBalance_);
     }
 
+    function _writeRebalanceMetadataCache(
+        uint256 slippageBps_,
+        uint256 ratioToleranceBps_,
+        uint256 maxRebalanceValueUsde_,
+        string memory excludedSources_
+    ) internal {
+        if (_cacheMode != CacheMode.ExecuteRebalance || !_cacheModeWrite) return;
+
+        _cacheSetUint(CACHE_KEY_CREATED_AT, block.timestamp);
+        _cacheSetBytes32(CACHE_KEY_ARGS_FINGERPRINT, _cacheArgsFingerprint);
+        _cacheSetUint(CACHE_KEY_CHAIN_ID, block.chainid);
+        _cacheSetAddress(CACHE_KEY_OWNER, _owner);
+        _cacheSetString(CACHE_KEY_VERSION, CACHE_VERSION);
+        _cacheSetString(CACHE_KEY_FUNCTION, CACHE_FUNCTION_REBALANCE);
+        _cacheSetUint(CACHE_KEY_REBALANCE_SLIPPAGE_BPS, slippageBps_);
+        _cacheSetUint(CACHE_KEY_REBALANCE_RATIO_TOLERANCE_BPS, ratioToleranceBps_);
+        _cacheSetUint(CACHE_KEY_REBALANCE_MAX_SHIFT_USDE, maxRebalanceValueUsde_);
+        _cacheSetString(CACHE_KEY_REBALANCE_EXCLUDED_SOURCES, excludedSources_);
+    }
+
     function _computeLoopArgsFingerprint(
         uint256 effectiveSusdeSupplyAmount_
     ) internal view returns (bytes32) {
@@ -703,6 +749,49 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 maxSusdeSwapIn,
                 excludedSources,
                 _initialSusdeBalance
+            )
+        );
+        /// forge-lint: disable-end(asm-keccak256)
+        return fingerprint;
+    }
+
+    function _computeRebalanceArgsFingerprint() internal view returns (bytes32) {
+        uint256 targetRatio = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "targetSusdeToUsdeRatioWad",
+            DEFAULT_TARGET_SUSDE_TO_USDE_RATIO
+        );
+        uint256 ratioToleranceBps = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "ratioToleranceBps",
+            DEFAULT_RATIO_TOLERANCE_BPS
+        );
+        uint256 maxRebalanceValueUsde = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "maxRebalanceValueUsde",
+            0
+        );
+        uint256 slippageBps = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
+        string memory excludedSources = _readOptionalString(
+            "executeRebalanceWallet",
+            "kyberExcludedSources",
+            ""
+        );
+
+        /// forge-lint: disable-start(asm-keccak256)
+        bytes32 fingerprint = keccak256(
+            abi.encode(
+                targetRatio,
+                ratioToleranceBps,
+                maxRebalanceValueUsde,
+                slippageBps,
+                excludedSources,
+                _susde.balanceOf(_owner),
+                _usde.balanceOf(_owner)
             )
         );
         /// forge-lint: disable-end(asm-keccak256)
@@ -780,8 +869,14 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
         _captureInitialAccountSnapshot();
         _susdeSuppliedAmount = susdeSupplyAmount;
+        (
+            _loopImbalanceBeforeSusdeOverweight,
+            _loopImbalanceBeforeAbsUsde
+        ) = _getAaveCollateralImbalanceSideAndAbs(_owner);
 
-        console2.log("=== Execute Loop Iteration: sUSDe -> USDT -> USDe (+extra USDe to Aave) ===");
+        console2.log(
+            "=== Execute Loop Iteration: sUSDe -> USDT -> USDe (parity-capped) -> USDT -> sUSDe ==="
+        );
         console2.log("Owner:", _owner);
         console2.log("sUSDe supply amount (from wallet):", _toDecimalString(susdeSupplyAmount, 18));
         console2.log("Borrow percentage (bps):", borrowPercentage);
@@ -789,9 +884,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         if (bytes(_kyberExcludedSources).length > 0) {
             console2.log("Kyber excluded sources:", _kyberExcludedSources);
         }
+        console2.log(
+            "[Position] Pre-loop collateral imbalance (abs USDe):",
+            _toDecimalString(_loopImbalanceBeforeAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Pre-loop collateral imbalance side:",
+            _loopImbalanceBeforeSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
 
         uint256 totalExpectedBorrowsAfterSusdeSupply;
         uint256 usdtBorrowAmount1;
+        uint256 susdeSupplyValueUsdeForRatio;
 
         {
             (
@@ -803,13 +907,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             bool shouldSetEMode = (currentEMode != EMODE_CATEGORY);
 
             // Convert sUSDe amount (18dp) to its USDe value using live exchange rate (18dp)
-            uint256 susdeSupplyValueUsde = _susdeToUsdeValueCached(
+            susdeSupplyValueUsdeForRatio = _susdeToUsdeValueCached(
                 CACHE_KEY_LOOP_4626_SUPPLY_VALUE,
                 susdeSupplyAmount
             );
             // Convert USDe value (18dp) to Aave base currency (8dp USD): value * 1e8 / 1e18
             uint256 supplyValueBase = FullMath.mulDiv(
-                susdeSupplyValueUsde,
+                susdeSupplyValueUsdeForRatio,
                 10 ** BASE_CURRENCY_DECIMALS,
                 1e18
             );
@@ -839,7 +943,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             console2.log("[Position] Health factor:", _toDecimalString(healthFactor, 18));
             console2.log(
                 "[Iteration] sUSDe supply value (USDe):",
-                _toDecimalString(susdeSupplyValueUsde, 18)
+                _toDecimalString(susdeSupplyValueUsdeForRatio, 18)
             );
             console2.log(
                 "[Iteration] sUSDe supply value (USD):",
@@ -902,26 +1006,44 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
 
-        uint256 usdeSupplyAmount = _getConservativeUsdeSupplyAmount(
+        uint256 conservativeUsdeSupplyAmount = _getConservativeUsdeSupplyAmount(
             usdeAmountOut,
             usdtBorrowAmount1,
             slippageBps
         );
-        if (usdeSupplyAmount == 0) revert("USDe supply amount is zero");
-        _usdeSuppliedAmount = usdeSupplyAmount;
+        uint256 usdeAmountOutMin = _getPlannedUsdeAmountOutMin(usdeAmountOut, slippageBps);
         console2.log(
             "[Iteration] Conservative USDe supply haircut vs quote (bps):",
-            _ratioBps(usdeSupplyAmount, usdeAmountOut)
+            _ratioBps(conservativeUsdeSupplyAmount, usdeAmountOut)
         );
 
-        _plannedExtraUsdeSupplyAmount = _getPlannedExtraUsdeSupplyAmount(
-            usdeAmountOut,
-            usdeSupplyAmount,
-            slippageBps
+        (
+            _loopImbalancePostSusdeSupplySusdeOverweight,
+            _loopImbalancePostSusdeSupplyAbsUsde
+        ) = _applyCollateralImbalanceDelta(
+            _loopImbalanceBeforeSusdeOverweight,
+            _loopImbalanceBeforeAbsUsde,
+            susdeSupplyValueUsdeForRatio,
+            0
         );
-        console2.log(
-            "[Iteration] Planned extra USDe supply amount:",
-            _toDecimalString(_plannedExtraUsdeSupplyAmount, 18)
+        _loopUsdeSupplyCapTarget = _loopImbalancePostSusdeSupplySusdeOverweight
+            ? _loopImbalancePostSusdeSupplyAbsUsde
+            : 0;
+
+        uint256 usdeSupplyAmount = _min(conservativeUsdeSupplyAmount, _loopUsdeSupplyCapTarget);
+        _usdeSuppliedAmount = usdeSupplyAmount;
+        _plannedUsdeSweepToSusdeAmount = usdeAmountOutMin > usdeSupplyAmount
+            ? usdeAmountOutMin - usdeSupplyAmount
+            : 0;
+        _logLoopProjectedImbalance(
+            _loopImbalanceBeforeSusdeOverweight,
+            _loopImbalanceBeforeAbsUsde,
+            _loopImbalancePostSusdeSupplySusdeOverweight,
+            _loopImbalancePostSusdeSupplyAbsUsde,
+            conservativeUsdeSupplyAmount,
+            _loopUsdeSupplyCapTarget,
+            usdeSupplyAmount,
+            _plannedUsdeSweepToSusdeAmount
         );
 
         uint256 usdtBorrowAmount2;
@@ -942,14 +1064,13 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             usdtBorrowAmount2 =
                 ((totalExpectedBorrowsAfterUsdeSupply * borrowPercentage) / 10000) /
                 1e2;
-            if (usdtBorrowAmount2 == 0) revert("USDT borrow amount 2 is zero");
 
             _logBatchStepHeader(
                 _loopActionsBaseStep + 10,
                 "Estimate Borrow #2 after USDe supply (this iteration)"
             );
             console2.log(
-                "[Iteration] Conservative USDe supply amount:",
+                "[Iteration] Chosen USDe supply amount (parity-capped):",
                 _toDecimalString(usdeSupplyAmount, 18)
             );
             console2.log(
@@ -970,67 +1091,25 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
 
-        (
-            address routerUsdtToSusde,
-            bytes memory swapCalldataUsdtToSusde,
-            uint256 susdeAmountOut
-        ) = _getKyberSwapCalldata(
-                "Swap #2 (USDT -> sUSDe)",
-                address(_usdt),
-                address(_susde),
+        address routerUsdtToSusde;
+        bytes memory swapCalldataUsdtToSusde;
+        if (usdtBorrowAmount2 > 0) {
+            (routerUsdtToSusde, swapCalldataUsdtToSusde) = _planLoopSwap2(
                 usdtBorrowAmount2,
                 slippageBps
             );
-
-        _logBatchStepHeader(
-            _loopActionsBaseStep + 13,
-            "Build swap #2 (USDT -> sUSDe) [this iteration]"
-        );
-        console2.log(
-            "[Iteration] Expected sUSDe out from quote:",
-            _toDecimalString(susdeAmountOut, 18)
-        );
-        {
-            uint256 minSwap2ValueRatioBps = _getLoopMinSwapUsdtSusdeValueRatioBps();
-            if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
-                revert("Swap #2 min value ratio invalid");
-            }
-            uint256 swap2ValueOutUsd = _susdeToUsdeValueCached(
-                CACHE_KEY_LOOP_4626_SWAP2_VALUE,
-                susdeAmountOut
-            );
-            console2.log(
-                "[Iteration] sUSDe exchange rate (USDe per 1 sUSDe):",
-                _toDecimalString(_susdeExchangeRate(), 18)
-            );
-            console2.log(
-                "[Iteration] Swap #2 quoted value out (USDe):",
-                _toDecimalString(swap2ValueOutUsd, 18)
-            );
-
-            _logAndValidateValueRatio(
-                "Swap #2 (USDT -> sUSDe)",
-                swap2ValueOutUsd,
-                _usdtToUsd18(usdtBorrowAmount2),
-                minSwap2ValueRatioBps
-            );
+        } else {
+            _expectedMinSusdeOut = 0;
+            _logBatchStepHeader(_loopActionsBaseStep + 13, "Build swap #2 (USDT -> sUSDe) [skip]");
+            console2.log("[Iteration] Borrow #2 amount is zero; swap #2 skipped");
         }
-        _expectedMinSusdeOut = FullMath.mulDiv(susdeAmountOut, 10000 - slippageBps, 10000);
-        console2.log(
-            "[Iteration] Expected min sUSDe out after slippage buffer:",
-            _toDecimalString(_expectedMinSusdeOut, 18)
-        );
-        console2.log(
-            "[Iteration] Min-out buffer vs quote (bps):",
-            _ratioBps(_expectedMinSusdeOut, susdeAmountOut)
-        );
 
         _addLoopActionsToBatch(
             susdeSupplyAmount,
             usdtBorrowAmount1,
             usdeSupplyAmount,
             usdtBorrowAmount2,
-            _plannedExtraUsdeSupplyAmount,
+            _plannedUsdeSweepToSusdeAmount,
             routerUsdtToUsde,
             swapCalldataUsdtToUsde,
             routerUsdtToSusde,
@@ -1050,6 +1129,466 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             slippageBps,
             _kyberExcludedSources
         );
+    }
+
+    /// @notice Rebalance Aave collateral split toward 1:1 using wallet funds only
+    /// @dev    Does not withdraw collateral from Aave, so health-factor headroom is not required.
+    function executeRebalanceWallet(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFilePath_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    )
+        external
+        setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
+    {
+        _loadTokens();
+        _initCacheMode(CacheMode.ExecuteRebalance);
+        _captureInitialAccountSnapshot();
+
+        uint256 targetRatio = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "targetSusdeToUsdeRatioWad",
+            DEFAULT_TARGET_SUSDE_TO_USDE_RATIO
+        );
+        if (targetRatio != DEFAULT_TARGET_SUSDE_TO_USDE_RATIO) {
+            revert("Only 1:1 target ratio supported");
+        }
+
+        uint256 ratioToleranceBps = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "ratioToleranceBps",
+            DEFAULT_RATIO_TOLERANCE_BPS
+        );
+        if (ratioToleranceBps > 10_000) revert("ratioToleranceBps exceeds max");
+
+        uint256 slippageBps = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "slippageBps",
+            DEFAULT_SLIPPAGE_BPS
+        );
+        if (slippageBps > MAX_SLIPPAGE_BPS) revert("Slippage exceeds max");
+
+        uint256 maxRebalanceValueUsde = _readOptionalUint256(
+            "executeRebalanceWallet",
+            "maxRebalanceValueUsde",
+            0
+        );
+        if (maxRebalanceValueUsde == 0) {
+            maxRebalanceValueUsde = type(uint256).max;
+        }
+
+        _kyberExcludedSources = _readOptionalString(
+            "executeRebalanceWallet",
+            "kyberExcludedSources",
+            ""
+        );
+
+        _cacheArgsFingerprint = _computeRebalanceArgsFingerprint();
+        _validateReplayCacheMetadata(CACHE_FUNCTION_REBALANCE, _cacheArgsFingerprint);
+
+        uint256 susdeCollateralValueUsde;
+        uint256 usdeCollateralValueUsde;
+        (
+            _rebalanceImbalanceBeforeSusdeOverweight,
+            _rebalanceImbalanceBeforeAbsUsde,
+            susdeCollateralValueUsde,
+            usdeCollateralValueUsde
+        ) = _getAaveCollateralImbalanceUsde(_owner);
+
+        uint256 totalCollateralValueUsde = susdeCollateralValueUsde + usdeCollateralValueUsde;
+        _rebalanceImbalanceToleranceUsde = FullMath.mulDiv(
+            totalCollateralValueUsde,
+            ratioToleranceBps,
+            10_000
+        );
+
+        console2.log("=== Execute wallet-funded rebalance to 1:1 collateral split ===");
+        console2.log("Owner:", _owner);
+        console2.log(
+            "[Position] sUSDe collateral value (USDe):",
+            _toDecimalString(susdeCollateralValueUsde, 18)
+        );
+        console2.log(
+            "[Position] USDe collateral value (USDe):",
+            _toDecimalString(usdeCollateralValueUsde, 18)
+        );
+        console2.log(
+            "[Position] Collateral imbalance (abs USDe):",
+            _toDecimalString(_rebalanceImbalanceBeforeAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Collateral imbalance side:",
+            _rebalanceImbalanceBeforeSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        console2.log(
+            "[Position] Collateral tolerance (USDe):",
+            _toDecimalString(_rebalanceImbalanceToleranceUsde, 18)
+        );
+
+        if (_rebalanceImbalanceBeforeAbsUsde <= _rebalanceImbalanceToleranceUsde) {
+            revert("Collateral already within ratio tolerance");
+        }
+
+        _rebalanceTargetShiftUsde = _rebalanceImbalanceBeforeAbsUsde / 2;
+        if (_rebalanceTargetShiftUsde > maxRebalanceValueUsde) {
+            _rebalanceTargetShiftUsde = maxRebalanceValueUsde;
+        }
+        if (_rebalanceTargetShiftUsde == 0) {
+            revert("Rebalance target shift is zero");
+        }
+
+        _rebalancePartialReason = "none";
+        _rebalancePlannedShiftUsde = 0;
+
+        if (_rebalanceImbalanceBeforeSusdeOverweight) {
+            _rebalancePlannedShiftUsde = _addRebalanceActionsForSusdeOverweight(slippageBps);
+        } else {
+            _rebalancePlannedShiftUsde = _addRebalanceActionsForUsdeOverweight();
+        }
+
+        if (_rebalancePlannedShiftUsde < _rebalanceTargetShiftUsde) {
+            _rebalancePartialReason = "wallet inventory/cap limits";
+        }
+
+        _setPostBatchValidateSelector(this._validateExecuteRebalanceWalletPostBatch.selector);
+
+        proposeBatch();
+
+        _writeRebalanceMetadataCache(
+            slippageBps,
+            ratioToleranceBps,
+            maxRebalanceValueUsde,
+            _kyberExcludedSources
+        );
+    }
+
+    function _planLoopSwap2(
+        uint256 usdtBorrowAmount2,
+        uint256 slippageBps
+    ) internal returns (address routerUsdtToSusde, bytes memory swapCalldataUsdtToSusde) {
+        uint256 susdeAmountOut;
+        (routerUsdtToSusde, swapCalldataUsdtToSusde, susdeAmountOut) = _getKyberSwapCalldata(
+            "Swap #2 (USDT -> sUSDe)",
+            address(_usdt),
+            address(_susde),
+            usdtBorrowAmount2,
+            slippageBps
+        );
+
+        _logBatchStepHeader(
+            _loopActionsBaseStep + 13,
+            "Build swap #2 (USDT -> sUSDe) [this iteration]"
+        );
+        console2.log(
+            "[Iteration] Expected sUSDe out from quote:",
+            _toDecimalString(susdeAmountOut, 18)
+        );
+
+        uint256 minSwap2ValueRatioBps = _getLoopMinSwapUsdtSusdeValueRatioBps();
+        if (minSwap2ValueRatioBps == 0 || minSwap2ValueRatioBps > 10000) {
+            revert("Swap #2 min value ratio invalid");
+        }
+
+        uint256 swap2ValueOutUsd = _susdeToUsdeValueCached(
+            CACHE_KEY_LOOP_4626_SWAP2_VALUE,
+            susdeAmountOut
+        );
+        console2.log(
+            "[Iteration] sUSDe exchange rate (USDe per 1 sUSDe):",
+            _toDecimalString(_susdeExchangeRate(), 18)
+        );
+        console2.log(
+            "[Iteration] Swap #2 quoted value out (USDe):",
+            _toDecimalString(swap2ValueOutUsd, 18)
+        );
+
+        _logAndValidateValueRatio(
+            "Swap #2 (USDT -> sUSDe)",
+            swap2ValueOutUsd,
+            _usdtToUsd18(usdtBorrowAmount2),
+            minSwap2ValueRatioBps
+        );
+
+        _expectedMinSusdeOut = FullMath.mulDiv(susdeAmountOut, 10000 - slippageBps, 10000);
+        console2.log(
+            "[Iteration] Expected min sUSDe out after slippage buffer:",
+            _toDecimalString(_expectedMinSusdeOut, 18)
+        );
+        console2.log(
+            "[Iteration] Min-out buffer vs quote (bps):",
+            _ratioBps(_expectedMinSusdeOut, susdeAmountOut)
+        );
+    }
+
+    function _addRebalanceActionsForSusdeOverweight(
+        uint256 slippageBps
+    ) internal returns (uint256 plannedShiftUsde) {
+        uint256 walletUsdeAmount = _usde.balanceOf(_owner);
+        uint256 walletSusdeAmount = _susde.balanceOf(_owner);
+        uint256 directUsdeSupply = _min(walletUsdeAmount, _rebalanceTargetShiftUsde);
+
+        (
+            uint256 swapSusdeAmountIn,
+            uint256 swapUsdeSupplyMin,
+            address routerSusdeToUsde,
+            bytes memory swapCalldataSusdeToUsde
+        ) = _planRebalanceSusdeSwap(directUsdeSupply, walletSusdeAmount, slippageBps);
+
+        uint256 totalUsdeSupplyAmount = directUsdeSupply + swapUsdeSupplyMin;
+        if (totalUsdeSupplyAmount == 0) {
+            revert("No wallet liquidity available for rebalance");
+        }
+
+        if (swapSusdeAmountIn > 0) {
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeApprove(routerSusdeToUsde, 0),
+                "Reset sUSDe approval for rebalance swap"
+            );
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeApprove(routerSusdeToUsde, swapSusdeAmountIn),
+                string.concat(
+                    "Approve sUSDe for rebalance swap amount=",
+                    _toDecimalString(swapSusdeAmountIn, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                routerSusdeToUsde,
+                swapCalldataSusdeToUsde,
+                string.concat(
+                    "Swap sUSDe -> USDe amountIn=",
+                    _toDecimalString(swapSusdeAmountIn, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                address(_susde),
+                _encodeApprove(routerSusdeToUsde, 0),
+                "Zero sUSDe -> rebalance swap router approval"
+            );
+        }
+
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(AAVE_POOL), totalUsdeSupplyAmount),
+            string.concat(
+                "Approve USDe -> Aave rebalance amount=",
+                _toDecimalString(totalUsdeSupplyAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSupply(address(_usde), totalUsdeSupplyAmount, _owner),
+            string.concat(
+                "Supply USDe rebalance amount=",
+                _toDecimalString(totalUsdeSupplyAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSetUserUseReserveAsCollateral(address(_usde), true),
+            "Enable USDe as collateral"
+        );
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(AAVE_POOL), 0),
+            "Zero USDe -> Aave approval"
+        );
+
+        return totalUsdeSupplyAmount;
+    }
+
+    function _planRebalanceSusdeSwap(
+        uint256 directUsdeSupply,
+        uint256 walletSusdeAmount,
+        uint256 slippageBps
+    )
+        internal
+        returns (
+            uint256 swapSusdeAmountIn,
+            uint256 swapUsdeSupplyMin,
+            address routerSusdeToUsde,
+            bytes memory swapCalldataSusdeToUsde
+        )
+    {
+        if (_rebalanceTargetShiftUsde <= directUsdeSupply) {
+            return (0, 0, address(0), bytes(""));
+        }
+
+        uint256 missingUsdeValue = _rebalanceTargetShiftUsde - directUsdeSupply;
+        uint256 susdeExchangeRate = _susdeExchangeRate();
+        uint256 requiredSusdeAmountIn = FullMath.mulDivUp(
+            missingUsdeValue,
+            1e18,
+            susdeExchangeRate
+        );
+        swapSusdeAmountIn = _min(requiredSusdeAmountIn, walletSusdeAmount);
+
+        if (swapSusdeAmountIn == 0) {
+            return (0, 0, address(0), bytes(""));
+        }
+
+        uint256 usdeAmountOut;
+        (routerSusdeToUsde, swapCalldataSusdeToUsde, usdeAmountOut) = _getKyberSwapCalldata(
+            "Rebalance swap (sUSDe -> USDe)",
+            address(_susde),
+            address(_usde),
+            swapSusdeAmountIn,
+            slippageBps
+        );
+
+        swapUsdeSupplyMin = FullMath.mulDiv(usdeAmountOut, 10_000 - slippageBps, 10_000);
+    }
+
+    function _addRebalanceActionsForUsdeOverweight() internal returns (uint256 plannedShiftUsde) {
+        uint256 walletSusdeAmount = _susde.balanceOf(_owner);
+        uint256 walletUsdeAmount = _usde.balanceOf(_owner);
+        uint256 susdeExchangeRate = _susdeExchangeRate();
+
+        uint256 targetSusdeAmount = FullMath.mulDiv(
+            _rebalanceTargetShiftUsde,
+            1e18,
+            susdeExchangeRate
+        );
+        uint256 directSusdeSupply = _min(walletSusdeAmount, targetSusdeAmount);
+
+        uint256 stakeUsdeAmount;
+        uint256 stakeSusdeShares;
+        if (targetSusdeAmount > directSusdeSupply) {
+            uint256 remainingSusdeAmount = targetSusdeAmount - directSusdeSupply;
+            uint256 remainingUsdeValue = _susdeToUsdeValue(remainingSusdeAmount);
+            stakeUsdeAmount = _min(walletUsdeAmount, remainingUsdeValue);
+            if (stakeUsdeAmount > 0) {
+                stakeSusdeShares = _usdeToSusdeSharesCached(
+                    "erc4626.rebalance.usdeToSusde",
+                    stakeUsdeAmount
+                );
+            }
+        }
+
+        uint256 totalSusdeSupplyAmount = directSusdeSupply + stakeSusdeShares;
+        if (totalSusdeSupplyAmount == 0) {
+            revert("No wallet liquidity available for rebalance");
+        }
+
+        if (stakeUsdeAmount > 0) {
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), 0),
+                "Reset USDe approval for sUSDe deposit"
+            );
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), stakeUsdeAmount),
+                string.concat(
+                    "Approve USDe for sUSDe deposit amount=",
+                    _toDecimalString(stakeUsdeAmount, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                address(_susde),
+                abi.encodeWithSelector(IERC4626.deposit.selector, stakeUsdeAmount, _owner),
+                string.concat(
+                    "Deposit USDe into sUSDe amount=",
+                    _toDecimalString(stakeUsdeAmount, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), 0),
+                "Zero USDe -> sUSDe approval"
+            );
+        }
+
+        _addToBatchWithStepLog(
+            address(_susde),
+            _encodeApprove(address(AAVE_POOL), totalSusdeSupplyAmount),
+            string.concat(
+                "Approve sUSDe -> Aave rebalance amount=",
+                _toDecimalString(totalSusdeSupplyAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSupply(address(_susde), totalSusdeSupplyAmount, _owner),
+            string.concat(
+                "Supply sUSDe rebalance amount=",
+                _toDecimalString(totalSusdeSupplyAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(AAVE_POOL),
+            _encodeSetUserUseReserveAsCollateral(address(_susde), true),
+            "Enable sUSDe as collateral"
+        );
+        _addToBatchWithStepLog(
+            address(_susde),
+            _encodeApprove(address(AAVE_POOL), 0),
+            "Zero sUSDe -> Aave approval"
+        );
+
+        return _susdeToUsdeValue(totalSusdeSupplyAmount);
+    }
+
+    function _validateExecuteRebalanceWalletPostBatch() external view {
+        (
+            bool imbalanceAfterSusdeOverweight,
+            uint256 imbalanceAfterAbsUsde,
+            uint256 susdeCollateralValueUsdeAfter,
+            uint256 usdeCollateralValueUsdeAfter
+        ) = _getAaveCollateralImbalanceUsde(_owner);
+
+        console2.log("\n--- Rebalance post-batch summary ---");
+        console2.log(
+            "[Position] Starting collateral imbalance (abs USDe):",
+            _toDecimalString(_rebalanceImbalanceBeforeAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Target value shift (USDe):",
+            _toDecimalString(_rebalanceTargetShiftUsde, 18)
+        );
+        console2.log(
+            "[Position] Planned value shift (USDe):",
+            _toDecimalString(_rebalancePlannedShiftUsde, 18)
+        );
+        console2.log(
+            "[Position] Ending sUSDe collateral value (USDe):",
+            _toDecimalString(susdeCollateralValueUsdeAfter, 18)
+        );
+        console2.log(
+            "[Position] Ending USDe collateral value (USDe):",
+            _toDecimalString(usdeCollateralValueUsdeAfter, 18)
+        );
+        console2.log(
+            "[Position] Ending collateral imbalance (abs USDe):",
+            _toDecimalString(imbalanceAfterAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Ending collateral imbalance side:",
+            imbalanceAfterSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+
+        if (
+            _rebalanceImbalanceBeforeAbsUsde > _rebalanceImbalanceToleranceUsde &&
+            imbalanceAfterAbsUsde >= _rebalanceImbalanceBeforeAbsUsde
+        ) {
+            revert("Rebalance did not improve collateral imbalance");
+        }
+
+        if (imbalanceAfterAbsUsde <= _rebalanceImbalanceToleranceUsde) {
+            console2.log("[Rebalance] Gap fully closed within tolerance");
+        } else {
+            console2.log(
+                "[Rebalance] Gap partially reduced; remaining imbalance (USDe):",
+                _toDecimalString(imbalanceAfterAbsUsde, 18)
+            );
+            console2.log("[Rebalance] Partial reason:", _rebalancePartialReason);
+        }
+
+        _logBalanceSheetValidationReport("Rebalance");
+        console2.log("executeRebalanceWallet post-batch validation passed");
     }
 
     /// @notice Execute one max-safe unwind iteration for the sUSDe/USDe Aave loop position
@@ -1735,7 +2274,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         uint256 usdtBorrowAmount1,
         uint256 usdeSupplyAmount,
         uint256 usdtBorrowAmount2,
-        uint256 extraUsdeSupplyAmount,
+        uint256 usdeSweepToSusdeAmount,
         address routerUsdtToUsde,
         bytes memory swapCalldataUsdtToUsde,
         address routerUsdtToSusde,
@@ -1782,60 +2321,80 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             string.concat("Swap USDT -> USDe amountIn=", _toDecimalString(usdtBorrowAmount1, 6))
         );
 
-        _addToBatchWithStepLog(
-            address(_usde),
-            _encodeApprove(address(AAVE_POOL), usdeSupplyAmount),
-            string.concat("Approve USDe -> Aave amount=", _toDecimalString(usdeSupplyAmount, 18))
-        );
-        _addToBatchWithStepLog(
-            address(AAVE_POOL),
-            _encodeSupply(address(_usde), usdeSupplyAmount, _owner),
-            string.concat("Supply USDe amount=", _toDecimalString(usdeSupplyAmount, 18))
-        );
-        _addToBatchWithStepLog(
-            address(AAVE_POOL),
-            _encodeSetUserUseReserveAsCollateral(address(_usde), true),
-            "Enable USDe as collateral"
-        );
-
-        _addToBatchWithStepLog(
-            address(AAVE_POOL),
-            _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner),
-            string.concat("Borrow USDT amount 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
-        );
-
-        _addToBatchWithStepLog(
-            address(_usdt),
-            _encodeApprove(routerUsdtToSusde, 0),
-            "Reset USDT approval for swap 2 router"
-        );
-        _addToBatchWithStepLog(
-            address(_usdt),
-            _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2),
-            string.concat("Approve USDT for swap 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
-        );
-        _addToBatchWithStepLog(
-            routerUsdtToSusde,
-            swapCalldataUsdtToSusde,
-            string.concat("Swap USDT -> sUSDe amountIn=", _toDecimalString(usdtBorrowAmount2, 6))
-        );
-
-        if (extraUsdeSupplyAmount > 0) {
+        if (usdeSupplyAmount > 0) {
             _addToBatchWithStepLog(
                 address(_usde),
-                _encodeApprove(address(AAVE_POOL), extraUsdeSupplyAmount),
+                _encodeApprove(address(AAVE_POOL), usdeSupplyAmount),
                 string.concat(
-                    "Approve extra USDe -> Aave amount=",
-                    _toDecimalString(extraUsdeSupplyAmount, 18)
+                    "Approve USDe -> Aave amount=",
+                    _toDecimalString(usdeSupplyAmount, 18)
                 )
             );
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
-                _encodeSupply(address(_usde), extraUsdeSupplyAmount, _owner),
+                _encodeSupply(address(_usde), usdeSupplyAmount, _owner),
                 string.concat(
-                    "Supply extra USDe amount=",
-                    _toDecimalString(extraUsdeSupplyAmount, 18)
+                    "Supply USDe amount=",
+                    _toDecimalString(usdeSupplyAmount, 18)
                 )
+            );
+            _addToBatchWithStepLog(
+                address(AAVE_POOL),
+                _encodeSetUserUseReserveAsCollateral(address(_usde), true),
+                "Enable USDe as collateral"
+            );
+        }
+
+        if (usdeSweepToSusdeAmount > 0) {
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), 0),
+                "Reset USDe approval for sUSDe sweep deposit"
+            );
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), usdeSweepToSusdeAmount),
+                string.concat(
+                    "Approve USDe for sUSDe sweep amount=",
+                    _toDecimalString(usdeSweepToSusdeAmount, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                address(_susde),
+                abi.encodeWithSelector(IERC4626.deposit.selector, usdeSweepToSusdeAmount, _owner),
+                string.concat(
+                    "Sweep leftover USDe into sUSDe wallet amount=",
+                    _toDecimalString(usdeSweepToSusdeAmount, 18)
+                )
+            );
+            _addToBatchWithStepLog(
+                address(_usde),
+                _encodeApprove(address(_susde), 0),
+                "Zero USDe -> sUSDe sweep approval"
+            );
+        }
+
+        if (usdtBorrowAmount2 > 0) {
+            _addToBatchWithStepLog(
+                address(AAVE_POOL),
+                _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner),
+                string.concat("Borrow USDT amount 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
+            );
+
+            _addToBatchWithStepLog(
+                address(_usdt),
+                _encodeApprove(routerUsdtToSusde, 0),
+                "Reset USDT approval for swap 2 router"
+            );
+            _addToBatchWithStepLog(
+                address(_usdt),
+                _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2),
+                string.concat("Approve USDT for swap 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
+            );
+            _addToBatchWithStepLog(
+                routerUsdtToSusde,
+                swapCalldataUsdtToSusde,
+                string.concat("Swap USDT -> sUSDe amountIn=", _toDecimalString(usdtBorrowAmount2, 6))
             );
         }
 
@@ -1849,7 +2408,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _encodeApprove(routerUsdtToUsde, 0),
             "Zero USDT -> swap 1 router approval"
         );
-        if (routerUsdtToSusde != routerUsdtToUsde) {
+        if (routerUsdtToSusde != address(0) && routerUsdtToSusde != routerUsdtToUsde) {
             _addToBatchWithStepLog(
                 address(_usdt),
                 _encodeApprove(routerUsdtToSusde, 0),
@@ -1932,10 +2491,57 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
         _logCollateralSuppliedSummary();
         console2.log(
-            "[Iteration] Extra USDe supplied to Aave (batch amount):",
-            _toDecimalString(_plannedExtraUsdeSupplyAmount, 18)
+            "[Iteration] USDe swept into wallet sUSDe (batch min amount):",
+            _toDecimalString(_plannedUsdeSweepToSusdeAmount, 18)
         );
         _logBalanceSheetValidationReport("Wind");
+        (
+            bool imbalanceAfterSusdeOverweight,
+            uint256 imbalanceAfterAbsUsde
+        ) = _getAaveCollateralImbalanceSideAndAbs(_owner);
+        console2.log(
+            "[Position] Collateral imbalance before (abs USDe):",
+            _toDecimalString(_loopImbalanceBeforeAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Collateral imbalance side before:",
+            _loopImbalanceBeforeSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        console2.log(
+            "[Position] Collateral imbalance projected (abs USDe):",
+            _toDecimalString(_loopProjectedImbalanceAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Collateral imbalance side projected:",
+            _loopProjectedImbalanceSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        uint256 projectedVsActualImbalanceAbsUsde = _getCollateralImbalanceDriftAbsUsde(
+            _loopProjectedImbalanceSusdeOverweight,
+            _loopProjectedImbalanceAbsUsde,
+            imbalanceAfterSusdeOverweight,
+            imbalanceAfterAbsUsde
+        );
+        console2.log(
+            "[Position] Projected-vs-actual collateral imbalance drift (abs USDe):",
+            _toDecimalString(projectedVsActualImbalanceAbsUsde, 18)
+        );
+        if (projectedVsActualImbalanceAbsUsde > LOOP_IMBALANCE_DRIFT_TOLERANCE_USDE) {
+            revert("Loop projected/actual collateral imbalance drift too high");
+        }
+        console2.log(
+            "[Position] Collateral imbalance after (abs USDe):",
+            _toDecimalString(imbalanceAfterAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Collateral imbalance side after:",
+            imbalanceAfterSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        if (
+            imbalanceAfterAbsUsde >
+            _loopImbalanceBeforeAbsUsde + LOOP_IMBALANCE_DRIFT_TOLERANCE_USDE
+        ) {
+            revert("Loop increased sUSDe/USDe collateral imbalance");
+        }
         console2.log(
             "[Position] Aave health factor after batch:",
             _toDecimalString(healthFactorAfter, 18)
@@ -2529,22 +3135,144 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         return FullMath.mulDiv(conservativeAmount, DEFAULT_USDE_SUPPLY_PERCENTAGE_BPS, 10000);
     }
 
-    /// @notice Compute extra USDe (after primary supply) to also supply into Aave
-    /// @dev    After swap #1, we may receive more USDe than the conservative primary supply amount.
-    ///         This function computes that conservative extra amount:
-    ///         min(quote output after slippage buffer) - primary supply amount.
-    ///         If primary supply >= quote min, returns 0.
+    /// @notice Compute conservative swap #1 minimum output used for deterministic downstream sizing
+    /// @dev    Returns quote output after slippage buffer, in USDe units (18dp).
     /// @param usdeAmountOut      Quoted USDe output from KyberSwap (18dp)
-    /// @param usdeSupplyAmount   Conservative USDe supply amount from _getConservativeUsdeSupplyAmount (18dp)
     /// @param slippageBps        Slippage tolerance in basis points
-    /// @return Extra USDe amount to supply into Aave (18dp), or 0 if none is expected
-    function _getPlannedExtraUsdeSupplyAmount(
+    /// @return Conservative minimum USDe output from swap #1 (18dp)
+    function _getPlannedUsdeAmountOutMin(
         uint256 usdeAmountOut,
-        uint256 usdeSupplyAmount,
         uint256 slippageBps
     ) internal pure returns (uint256) {
-        uint256 usdeAmountOutMin = FullMath.mulDiv(usdeAmountOut, 10000 - slippageBps, 10000);
-        return usdeAmountOutMin > usdeSupplyAmount ? usdeAmountOutMin - usdeSupplyAmount : 0;
+        return FullMath.mulDiv(usdeAmountOut, 10000 - slippageBps, 10000);
+    }
+
+    function _logLoopProjectedImbalance(
+        bool imbalanceBeforeSusdeOverweight,
+        uint256 imbalanceBeforeAbsUsde,
+        bool imbalancePostSusdeSupplyOverweight,
+        uint256 imbalancePostSusdeSupplyAbsUsde,
+        uint256 conservativeUsdeSupplyAmount,
+        uint256 usdeSupplyCapTarget,
+        uint256 usdeSupplyAmount,
+        uint256 usdeSweepToSusdeAmount
+    ) internal {
+        (
+            _loopProjectedImbalanceSusdeOverweight,
+            _loopProjectedImbalanceAbsUsde
+        ) = _applyCollateralImbalanceDelta(
+            imbalancePostSusdeSupplyOverweight,
+            imbalancePostSusdeSupplyAbsUsde,
+            0,
+            usdeSupplyAmount
+        );
+
+        console2.log(
+            "[Position] Pre-loop collateral imbalance (abs USDe):",
+            _toDecimalString(imbalanceBeforeAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Pre-loop collateral imbalance side:",
+            imbalanceBeforeSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        console2.log(
+            "[Position] Post-sUSDe collateral imbalance (abs USDe):",
+            _toDecimalString(imbalancePostSusdeSupplyAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Post-sUSDe collateral imbalance side:",
+            imbalancePostSusdeSupplyOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+        console2.log(
+            "[Iteration] Conservative USDe from swap #1:",
+            _toDecimalString(conservativeUsdeSupplyAmount, 18)
+        );
+        console2.log(
+            "[Iteration] USDe cap target for Aave supply:",
+            _toDecimalString(usdeSupplyCapTarget, 18)
+        );
+        console2.log(
+            "[Iteration] Chosen USDe supply to Aave:",
+            _toDecimalString(usdeSupplyAmount, 18)
+        );
+        console2.log(
+            "[Iteration] Leftover USDe swept into wallet sUSDe:",
+            _toDecimalString(usdeSweepToSusdeAmount, 18)
+        );
+        console2.log(
+            "[Position] Projected final collateral imbalance (abs USDe):",
+            _toDecimalString(_loopProjectedImbalanceAbsUsde, 18)
+        );
+        console2.log(
+            "[Position] Projected final collateral imbalance side:",
+            _loopProjectedImbalanceSusdeOverweight ? "sUSDe overweight" : "USDe overweight"
+        );
+    }
+
+    function _applyCollateralImbalanceDelta(
+        bool beforeSusdeOverweight,
+        uint256 beforeAbsUsde,
+        uint256 susdeAddedUsde,
+        uint256 usdeAddedUsde
+    ) internal pure returns (bool afterSusdeOverweight, uint256 afterAbsUsde) {
+        if (beforeSusdeOverweight) {
+            uint256 susdeSide = beforeAbsUsde + susdeAddedUsde;
+            if (susdeSide >= usdeAddedUsde) {
+                return (true, susdeSide - usdeAddedUsde);
+            }
+            return (false, usdeAddedUsde - susdeSide);
+        }
+
+        uint256 usdeSide = beforeAbsUsde + usdeAddedUsde;
+        if (susdeAddedUsde >= usdeSide) {
+            return (true, susdeAddedUsde - usdeSide);
+        }
+        return (false, usdeSide - susdeAddedUsde);
+    }
+
+    function _getAaveCollateralValuesUsde(
+        address account
+    ) internal view returns (uint256 susdeCollateralValueUsde, uint256 usdeCollateralValueUsde) {
+        (uint256 usdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_usde),
+            account
+        );
+        (uint256 susdeATokenBalance, , , , , , , , ) = AAVE_DATA_PROVIDER.getUserReserveData(
+            address(_susde),
+            account
+        );
+
+        usdeCollateralValueUsde = usdeATokenBalance;
+        susdeCollateralValueUsde = _susdeToUsdeValue(susdeATokenBalance);
+    }
+
+    function _getAaveCollateralImbalanceUsde(
+        address account
+    )
+        internal
+        view
+        returns (
+            bool susdeOverweight,
+            uint256 absDeltaUsde,
+            uint256 susdeCollateralValueUsde,
+            uint256 usdeCollateralValueUsde
+        )
+    {
+        (susdeCollateralValueUsde, usdeCollateralValueUsde) = _getAaveCollateralValuesUsde(account);
+
+        if (susdeCollateralValueUsde >= usdeCollateralValueUsde) {
+            susdeOverweight = true;
+            absDeltaUsde = susdeCollateralValueUsde - usdeCollateralValueUsde;
+        } else {
+            susdeOverweight = false;
+            absDeltaUsde = usdeCollateralValueUsde - susdeCollateralValueUsde;
+        }
+    }
+
+    function _getAaveCollateralImbalanceSideAndAbs(
+        address account
+    ) internal view returns (bool susdeOverweight, uint256 absDeltaUsde) {
+        (susdeOverweight, absDeltaUsde, , ) = _getAaveCollateralImbalanceUsde(account);
     }
 
     function _ratioBps(uint256 numerator, uint256 denominator) internal pure returns (uint256) {
@@ -2554,6 +3282,19 @@ contract SUSDeAaveLoop is BatchScriptV2 {
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
+    }
+
+    function _getCollateralImbalanceDriftAbsUsde(
+        bool sideABefore,
+        uint256 absBefore,
+        bool sideAAfter,
+        uint256 absAfter
+    ) internal pure returns (uint256) {
+        if (sideABefore == sideAAfter) {
+            return absBefore >= absAfter ? absBefore - absAfter : absAfter - absBefore;
+        }
+
+        return absBefore + absAfter;
     }
 
     function _usdeToBaseValue(uint256 usdeAmount) internal pure returns (uint256) {
@@ -2865,6 +3606,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         }
         if (stepHash == keccak256(bytes("Step 5 swap (sUSDe -> USDT)"))) {
             return CACHE_KEY_UNWIND_SWAP5_PREFIX;
+        }
+        if (stepHash == keccak256(bytes("Rebalance swap (sUSDe -> USDe)"))) {
+            return CACHE_KEY_REBALANCE_SWAP1_PREFIX;
         }
 
         revert("Unknown Kyber cache step");
