@@ -1,6 +1,6 @@
 # LZ Bridge Migration Flow
 
-Step-by-step operational sequence for replacing `CrossChainBridge` (LZ V1) with `LZBridgeGateway` \+ `LZCrossChainBridge` (LZ V2).
+Step-by-step operational sequence for replacing `CrossChainBridge` (LZ V1) with `LZBridgeGateway` + `LZCrossChainBridge` (LZ V2).
 
 Chains: Ethereum, Arbitrum, Optimism, Base, Berachain.
 
@@ -8,7 +8,7 @@ Chains: Ethereum, Arbitrum, Optimism, Base, Berachain.
 
 - All contracts deployed and addresses recorded in env.json (remote gateway addresses are set as immutables in `LZBridgeActivator` at deployment time).
 - Proposal ID set in `LZBridgeSecurityUpgradeProposal.id()` before submission.
-- `initialBridgedSupply` filled in `LZBridgeGatewayBatch` args file before step 5\.
+- `initialBridgedSupply` filled in `LZBridgeGatewayBatch` args file before step 5.
 
 ## Bridge state during migration
 
@@ -19,7 +19,7 @@ Chains: Ethereum, Arbitrum, Optimism, Base, Berachain.
 | During disableOldBridge (step 4\)              | Blocking in progress                   | Still delivers in-flight messages          | Disabled                        | Enabled, but unreachable |
 | After initBridgedSupply (step 5\)              | Blocked                                | Still can deliver, but unreachable         | Disabled                        | Enabled, but unreachable |
 | After setup for non-canonical chains (step 6\) | L2: Deactivated (Kernel), Eth: Blocked | L2: Deactivated (Kernel), Eth: unreachable | Enabled on non-canonical chains | Enabled                  |
-| After Ethereum setup (step 7\)                 | Blocked \+ Deactivated (Kernel)        | Deactivated (Kernel)                       | Enabled everywhere              | Enabled                  |
+| After Ethereum setup (step 7\)                 | Blocked + Deactivated (Kernel)        | Deactivated (Kernel)                       | Enabled everywhere              | Enabled                  |
 
 Key: `bridgeActive=false` blocks `sendOhm()` but not `lzReceive()`/`receiveMessage()`, so in-flight messages continue to be delivered when `bridgeActive==false`.
 
@@ -41,7 +41,7 @@ Execute `LZBridgeSecurityUpgradeProposal`:
 2. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
 3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
 4. Execute `LZBridgeActivator.activate()` which:
-   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Dual-DVN verification: LayerZero Labs \+ Google Cloud for non-Berachain routes, LayerZero Labs \+ Nethermind for Berachain routes.
+   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.
    - Sets peers for all remote chains.
    - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.
    - Enables the LZBridgeGateway policy.
@@ -72,9 +72,10 @@ At this point: users cannot bridge via old bridges (send blocked) and cannot bri
 On each non-canonical chain (Arbitrum, Optimism, Base, Berachain), run in order:
 
 1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway`.
-2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `admin`, and `bridge_facilitator` roles.
+2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
 3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, enable gateway.
-4. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
+4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ — revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
+5. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
 
 After this step, non-canonical bridges are live. Users can bridge to/from non-canonical chains. Ethereum bridge periphery is still disabled — users on Ethereum cannot send yet, but Ethereum can receive from non-canonical chains.
 
