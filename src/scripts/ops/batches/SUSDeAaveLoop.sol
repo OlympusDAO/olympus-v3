@@ -614,7 +614,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             );
         }
 
-        (susdeCollateralValueUsde_, usdeCollateralValueUsde_) = _getAaveCollateralValuesUsde(_owner);
+        (susdeCollateralValueUsde_, usdeCollateralValueUsde_) = _getAaveCollateralValuesUsde(
+            _owner
+        );
         (susdeAboveTarget_, absGapUsde_) = _getCollateralTargetGapFromValues(
             susdeCollateralValueUsde_,
             usdeCollateralValueUsde_,
@@ -1089,8 +1091,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
                 _ratioBps(conservativeUsdeSupplyAmount, usdeAmountOut)
             );
 
-            uint256 susdeCollateralValueUsdePostSusdeSupply =
-                _loopSusdeCollateralValueUsdeBefore +
+            uint256 susdeCollateralValueUsdePostSusdeSupply = _loopSusdeCollateralValueUsdeBefore +
                 susdeSupplyValueUsdeForRatio;
             (
                 _loopImbalancePostSusdeSupplySusdeOverweight,
