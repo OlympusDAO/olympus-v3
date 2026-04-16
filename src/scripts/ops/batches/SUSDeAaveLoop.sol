@@ -61,6 +61,9 @@ contract SUSDeAaveLoop is BatchScriptV2 {
     // Expected post-batch state for validation
     uint256 internal _expectedMinSusdeOut;
     uint256 internal _initialSusdeBalance;
+    uint256 internal _sweepWalletUsdeAmount;
+    uint256 internal _sweepInitialWalletUsdeBalance;
+    uint256 internal _sweepInitialWalletSusdeBalance;
     uint256 internal _susdeSuppliedAmount;
     uint256 internal _usdeSuppliedAmount;
     uint256 internal _plannedUsdeSweepToSusdeAmount;
@@ -1591,6 +1594,117 @@ contract SUSDeAaveLoop is BatchScriptV2 {
         console2.log("executeRebalanceWallet post-batch validation passed");
     }
 
+    /// @notice Sweep wallet USDe into wallet sUSDe via ERC4626 deposit
+    /// @dev    This does not supply to Aave. It only transforms wallet USDe into wallet sUSDe.
+    ///         If usdeSweepAmount is 0 or omitted, full wallet USDe balance is swept.
+    function executeSweepWalletUsdeToSusde(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFilePath_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    )
+        external
+        setUpWithYieldMS(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_)
+    {
+        _loadTokens();
+        _initCacheMode(CacheMode.None);
+        _captureInitialAccountSnapshot();
+
+        _sweepInitialWalletUsdeBalance = _usde.balanceOf(_owner);
+        _sweepInitialWalletSusdeBalance = _susde.balanceOf(_owner);
+        _sweepWalletUsdeAmount = _readOptionalUint256(
+            "executeSweepWalletUsdeToSusde",
+            "usdeSweepAmount",
+            0
+        );
+
+        if (_sweepWalletUsdeAmount == 0) {
+            _sweepWalletUsdeAmount = _sweepInitialWalletUsdeBalance;
+        }
+        if (_sweepWalletUsdeAmount == 0) revert("No wallet USDe to sweep");
+        if (_sweepWalletUsdeAmount > _sweepInitialWalletUsdeBalance) {
+            revert(
+                string.concat(
+                    "USDe wallet balance below requested sweep: ",
+                    _toDecimalString(_sweepInitialWalletUsdeBalance, 18),
+                    " < ",
+                    _toDecimalString(_sweepWalletUsdeAmount, 18)
+                )
+            );
+        }
+
+        console2.log("=== Execute wallet USDe sweep into sUSDe ===");
+        console2.log("Owner:", _owner);
+        console2.log(
+            "[Wallet] Initial USDe balance:",
+            _toDecimalString(_sweepInitialWalletUsdeBalance, 18)
+        );
+        console2.log(
+            "[Wallet] Initial sUSDe balance:",
+            _toDecimalString(_sweepInitialWalletSusdeBalance, 18)
+        );
+        console2.log(
+            "[Sweep] USDe amount to deposit into sUSDe:",
+            _toDecimalString(_sweepWalletUsdeAmount, 18)
+        );
+
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(_susde), 0),
+            "Reset USDe approval for wallet sweep deposit"
+        );
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(_susde), _sweepWalletUsdeAmount),
+            string.concat(
+                "Approve USDe for wallet sweep amount=",
+                _toDecimalString(_sweepWalletUsdeAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(_susde),
+            abi.encodeWithSelector(IERC4626.deposit.selector, _sweepWalletUsdeAmount, _owner),
+            string.concat(
+                "Deposit USDe into wallet sUSDe amount=",
+                _toDecimalString(_sweepWalletUsdeAmount, 18)
+            )
+        );
+        _addToBatchWithStepLog(
+            address(_usde),
+            _encodeApprove(address(_susde), 0),
+            "Zero USDe -> sUSDe sweep approval"
+        );
+
+        _setPostBatchValidateSelector(
+            this._validateExecuteSweepWalletUsdeToSusdePostBatch.selector
+        );
+
+        proposeBatch();
+    }
+
+    function _validateExecuteSweepWalletUsdeToSusdePostBatch() external view {
+        uint256 walletUsdeAfter = _usde.balanceOf(_owner);
+        uint256 walletSusdeAfter = _susde.balanceOf(_owner);
+
+        if (walletUsdeAfter + _sweepWalletUsdeAmount != _sweepInitialWalletUsdeBalance) {
+            revert("Unexpected USDe accounting after sweep");
+        }
+        if (walletSusdeAfter <= _sweepInitialWalletSusdeBalance) {
+            revert("sUSDe wallet balance did not increase after sweep");
+        }
+
+        uint256 susdeReceived = walletSusdeAfter - _sweepInitialWalletSusdeBalance;
+
+        console2.log("\n--- Sweep post-batch summary ---");
+        console2.log("[Sweep] USDe swept:", _toDecimalString(_sweepWalletUsdeAmount, 18));
+        console2.log("[Sweep] sUSDe received:", _toDecimalString(susdeReceived, 18));
+        console2.log("[Wallet] USDe balance after:", _toDecimalString(walletUsdeAfter, 18));
+        console2.log("[Wallet] sUSDe balance after:", _toDecimalString(walletSusdeAfter, 18));
+        _logBalanceSheetValidationReport("Sweep");
+        console2.log("executeSweepWalletUsdeToSusde post-batch validation passed");
+    }
+
     /// @notice Execute one max-safe unwind iteration for the sUSDe/USDe Aave loop position
     /// @dev    Unwind order is repay-first, then collateral release:
     ///         1) swap wallet sUSDe -> USDT -> repay USDT
@@ -2333,10 +2447,7 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
                 _encodeSupply(address(_usde), usdeSupplyAmount, _owner),
-                string.concat(
-                    "Supply USDe amount=",
-                    _toDecimalString(usdeSupplyAmount, 18)
-                )
+                string.concat("Supply USDe amount=", _toDecimalString(usdeSupplyAmount, 18))
             );
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
@@ -2378,7 +2489,10 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(AAVE_POOL),
                 _encodeBorrow(address(_usdt), usdtBorrowAmount2, _owner),
-                string.concat("Borrow USDT amount 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
+                string.concat(
+                    "Borrow USDT amount 2 amount=",
+                    _toDecimalString(usdtBorrowAmount2, 6)
+                )
             );
 
             _addToBatchWithStepLog(
@@ -2389,12 +2503,18 @@ contract SUSDeAaveLoop is BatchScriptV2 {
             _addToBatchWithStepLog(
                 address(_usdt),
                 _encodeApprove(routerUsdtToSusde, usdtBorrowAmount2),
-                string.concat("Approve USDT for swap 2 amount=", _toDecimalString(usdtBorrowAmount2, 6))
+                string.concat(
+                    "Approve USDT for swap 2 amount=",
+                    _toDecimalString(usdtBorrowAmount2, 6)
+                )
             );
             _addToBatchWithStepLog(
                 routerUsdtToSusde,
                 swapCalldataUsdtToSusde,
-                string.concat("Swap USDT -> sUSDe amountIn=", _toDecimalString(usdtBorrowAmount2, 6))
+                string.concat(
+                    "Swap USDT -> sUSDe amountIn=",
+                    _toDecimalString(usdtBorrowAmount2, 6)
+                )
             );
         }
 

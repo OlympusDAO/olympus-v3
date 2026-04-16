@@ -6,6 +6,7 @@
 
 - `executeLoop`: open/increase a leveraged sUSDe/USDe loop position on Aave.
 - `executeRebalanceWallet`: rebalance collateral split toward 1:1 with wallet-funded actions only.
+- `executeSweepWalletUsdeToSusde`: sweep wallet USDe into wallet sUSDe (no Aave supply).
 - `executeUnwindLoop`: run one max-safe unwind iteration that repays USDT debt and releases collateral while preserving a minimum health factor.
 
 The script builds all swap routes and amounts before adding operations to the batch.
@@ -78,8 +79,8 @@ Loop sizing now enforces 1:1 collateral parity protection:
 
 - `susdeSupplyAmount` is never parity-capped (requested amount is honored, or full wallet if arg is `0`).
 - USDe supply to Aave is capped from post-sUSDe collateral imbalance:
-  - if post-sUSDe is sUSDe-overweight, USDe supply cap = that excess,
-  - if post-sUSDe is USDe-overweight, USDe supply cap = `0`.
+    - if post-sUSDe is sUSDe-overweight, USDe supply cap = that excess,
+    - if post-sUSDe is USDe-overweight, USDe supply cap = `0`.
 - actual USDe supplied to Aave = `min(conservativeSwap1USDe, usdeSupplyCapTarget)`.
 - post-batch validation reverts if imbalance worsens materially, and also verifies projected vs actual imbalance coherence within drift tolerance.
 
@@ -112,6 +113,25 @@ Optional args (all read from the `executeRebalanceWallet` function entry in args
 - `kyberExcludedSources` (default empty): comma-separated Kyber source IDs to exclude.
 
 Post-batch validation requires improvement when starting outside tolerance. If a full close is not possible, output explicitly reports partial reduction and the reason.
+
+### `executeSweepWalletUsdeToSusde`
+
+Sweeps wallet USDe into wallet sUSDe in a single batch:
+
+1. Approve USDe to sUSDe vault.
+2. Deposit USDe via `IERC4626.deposit` with recipient = owner wallet.
+3. Zero the USDe approval.
+
+This function does not touch Aave collateral/debt and does not supply swept sUSDe to Aave.
+
+Optional args (all read from the `executeSweepWalletUsdeToSusde` function entry in args JSON):
+
+- `usdeSweepAmount` (default `0`): if `0`, uses full owner USDe wallet balance.
+
+Post-batch validation enforces:
+
+- exact USDe wallet accounting (`walletUsdeAfter + sweptAmount == walletUsdeBefore`),
+- sUSDe wallet balance increased.
 
 Backward compatibility aliases for the loop value checks are still accepted:
 
@@ -158,6 +178,12 @@ Example: `src/scripts/ops/batches/args/SUSDeAaveLoop.json`
                 "slippageBps": "50"
             },
             "name": "executeLoop"
+        },
+        {
+            "args": {
+                "usdeSweepAmount": "0"
+            },
+            "name": "executeSweepWalletUsdeToSusde"
         },
         {
             "args": {
