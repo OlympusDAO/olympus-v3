@@ -549,6 +549,26 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
+    function test_burnAndSend_revertsIfBridgeDisabledAndReceiveEnabled() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+        gateway.setIsReceiveEnabled(true);
+        vm.stopPrank();
+
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 100e9);
+
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        gateway.burnAndSend{value: 1 ether}(
+            NONCANONICAL_EID,
+            recipient,
+            100e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
     function testFuzz_burnAndSend_revertsIfNotBridgeFacilitator(address caller_) external {
         vm.assume(caller_ != facilitator);
 

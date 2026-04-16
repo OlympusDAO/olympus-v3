@@ -49,6 +49,15 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param options The invalid options bytes.
     error LZBridgeGateway_InvalidOptions(bytes options);
 
+    /// @notice Thrown when lzReceive is called while receiving is disabled.
+    error LZBridgeGateway_ReceiveNotEnabled();
+
+    /// @notice Thrown when setIsReceiveEnabled is called while the gateway is enabled.
+    error LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
+
+    /// @notice Thrown when setIsReceiveEnabled is called with the current value.
+    error LZBridgeGateway_ReceiveAlreadyInDesiredState();
+
     // ========= EVENTS ========= //
 
     /// @notice Emitted when OHM is burned and sent to another chain.
@@ -93,6 +102,10 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Emitted when enforced options are set.
     /// @param enforcedOptions The enforced option parameters.
     event EnforcedOptionsSet(EnforcedOptionParam[] enforcedOptions);
+
+    /// @notice Emitted when the isReceiveEnabled flag is changed.
+    /// @param isReceiveEnabled The new value.
+    event IsReceiveEnabledSet(bool isReceiveEnabled);
 
     // ========= CORE FUNCTIONS ========= //
 
@@ -140,6 +153,15 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param eid_ The remote endpoint ID.
     /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
     function setPeer(uint32 eid_, bytes32 peer_) external;
+
+    /// @notice Sets whether the gateway can receive messages.
+    /// @dev Only callable by the emergency or admin role.
+    ///      Managed automatically by enable()/disable(), but can be set manually
+    ///      to allow receiving while the gateway is disabled
+    ///      (e.g. during gateway replacements, to deliver in-flight messages).
+    ///
+    /// @param isReceiveEnabled_ The desired state.
+    function setIsReceiveEnabled(bool isReceiveEnabled_) external;
 
     /// @notice Sets the delegate on the LayerZero endpoint.
     /// @dev Only callable by the bridge_admin or admin role.
@@ -219,6 +241,12 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
         uint16 msgType_,
         bytes calldata extraOptions_
     ) external view returns (bytes memory);
+
+    /// @notice Whether lzReceive() can process incoming messages.
+    /// @dev Automatically set to true by enable() and false by disable().
+    ///      Can be manually set via setIsReceiveEnabled() to allow receiving
+    ///      while the gateway is otherwise disabled (e.g., during gateway replacements).
+    function isReceiveEnabled() external view returns (bool);
 
     /// @notice Returns whether this is the canonical (mainnet) chain.
     // solhint-disable-next-line func-name-mixedcase

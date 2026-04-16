@@ -15,12 +15,10 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
 // Interfaces
-import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -31,7 +29,6 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.

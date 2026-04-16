@@ -137,8 +137,9 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
     // ========== DISABLED BRIDGE -> RE-ENABLE -> RETRY ========== //
 
     /// @notice Destination gateway disabled. LZBridgeGateway.lzReceive() reverts
-    ///         with NotEnabled (onlyEnabled modifier). Endpoint _clearPayload rolls
-    ///         back, payload hash stays in storage. Re-enable and retry succeeds.
+    ///         with ReceiveNotEnabled (isReceiveEnabled is false). Endpoint
+    ///         _clearPayload rolls back, payload hash stays in storage. Re-enable
+    ///         and retry succeeds.
     function test_lzReceive_disabledBridgeSoReEnableAndRetry() external {
         uint256 amount = 5000e9;
 
@@ -181,6 +182,37 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
 
         // 6. Assert message was delivered
         assertEq(ohm.balanceOf(recipient), amount, "Recipient should receive OHM after retry");
+    }
+
+    // ========== GATEWAY DISABLED -> SET RECEIVE ENABLED -> RETRY ========== //
+
+    /// @notice Gateway disabled after send. lzReceive() reverts with
+    ///         ReceiveNotEnabled. Admin sets isReceiveEnabled, retry succeeds.
+    function test_lzReceive_gatewayDisabledSoSetReceiveEnabledAndRetry() external {
+        // 1. Send from canonical, packet enters mock queue
+        bytes memory packetBytes = _sendCanonicalNoDeliver(1000e9);
+
+        // 2. Disable destination gateway (isReceiveEnabled becomes false)
+        vm.prank(admin);
+        gateway2.disable(bytes(""));
+        assertFalse(gateway2.isReceiveEnabled(), "Receiving should be disabled");
+
+        // 3. Verify packet in endpoint (hash stored)
+        _verifyOnly(packetBytes);
+
+        // 4. Delivery fails (isReceiveEnabled == false)
+        bool delivered = _tryDeliverPacket(packetBytes);
+        assertFalse(delivered, "Delivery should fail while receiving is disabled");
+        assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM yet");
+
+        // 5. Admin enables receiving without re-enabling the gateway
+        vm.prank(admin);
+        gateway2.setIsReceiveEnabled(true);
+
+        // 6. Retry delivery succeeds
+        _manualDeliver(packetBytes, 1);
+
+        assertEq(ohm.balanceOf(recipient), 1000e9, "Recipient should receive OHM after retry");
     }
 
     // ========== INSUFFICIENT GAS IN ENFORCED OPTIONS ========== //
