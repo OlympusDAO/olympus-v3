@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Constants
@@ -22,6 +25,35 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
 
         gateway.enable(bytes(""));
         assertTrue(gateway.isEnabled(), "Should be enabled");
+        vm.stopPrank();
+    }
+
+    function test_enable_setsIsReceiveEnabledTrue() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+        assertFalse(gateway.isReceiveEnabled(), "isReceiveEnabled should be false after disable");
+
+        gateway.enable(bytes(""));
+        assertTrue(gateway.isReceiveEnabled(), "enable should set isReceiveEnabled to true");
+        vm.stopPrank();
+    }
+
+    function test_enable_skipsIsReceiveEnabledEventIfAlreadyTrue() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+        gateway.setIsReceiveEnabled(true);
+        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true after manual set");
+
+        // enable() should NOT emit IsReceiveEnabledSet because it is already true
+        vm.recordLogs();
+        gateway.enable(bytes(""));
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 eventSig = ILZBridgeGateway.IsReceiveEnabledSet.selector;
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertTrue(logs[i].topics[0] != eventSig, "Should not emit IsReceiveEnabledSet");
+        }
+        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should remain true after enable");
         vm.stopPrank();
     }
 
@@ -49,6 +81,42 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         assertFalse(gateway.isEnabled(), "Should be disabled");
     }
 
+    function test_disable_setsIsReceiveEnabledFalse() external {
+        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true after setUp");
+
+        vm.startPrank(admin);
+
+        // Enable receive while disabled
+        gateway.disable(bytes(""));
+        gateway.setIsReceiveEnabled(true);
+        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true");
+
+        // Re-enable, then disable again, isReceiveEnabled should be reset
+        gateway.enable(bytes(""));
+        gateway.disable(bytes(""));
+        assertFalse(gateway.isReceiveEnabled(), "disable should reset isReceiveEnabled");
+
+        vm.stopPrank();
+    }
+
+    function test_disable_skipsIsReceiveEnabledEventIfAlreadyFalse() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+        gateway.enable(bytes(""));
+        // Manually disable receive, then disable gateway
+        gateway.setIsReceiveEnabled(false);
+
+        vm.recordLogs();
+        gateway.disable(bytes(""));
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 eventSig = ILZBridgeGateway.IsReceiveEnabledSet.selector;
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertTrue(logs[i].topics[0] != eventSig, "Should not emit IsReceiveEnabledSet");
+        }
+        vm.stopPrank();
+    }
+
     function test_disable_revertsIfAlreadyDisabled() external {
         vm.prank(admin);
         gateway.disable(bytes(""));
@@ -64,21 +132,5 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
         gateway.disable(bytes(""));
-    }
-
-    function test_disable_disablesIsReceiveEnabledIfNeeded() external {
-        vm.startPrank(admin);
-
-        // Enable receive while disabled
-        gateway.disable(bytes(""));
-        gateway.setIsReceiveEnabled(true);
-        assertTrue(gateway.isReceiveEnabled(), "isReceiveEnabled should be true");
-
-        // Re-enable, then disable again — isReceiveEnabled should be reset
-        gateway.enable(bytes(""));
-        gateway.disable(bytes(""));
-        assertFalse(gateway.isReceiveEnabled(), "disable should reset isReceiveEnabled");
-
-        vm.stopPrank();
     }
 }

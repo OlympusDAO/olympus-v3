@@ -49,6 +49,9 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param options The invalid options bytes.
     error LZBridgeGateway_InvalidOptions(bytes options);
 
+    /// @notice Thrown when lzReceive is called while receiving is disabled.
+    error LZBridgeGateway_ReceiveNotEnabled();
+
     /// @notice Thrown when setIsReceiveEnabled is called with the current value.
     error LZBridgeGateway_ReceiveAlreadyInDesiredState();
 
@@ -148,10 +151,11 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
     function setPeer(uint32 eid_, bytes32 peer_) external;
 
-    /// @notice Sets whether the gateway can receive messages while disabled.
+    /// @notice Sets whether the gateway can receive messages.
     /// @dev Only callable by the emergency or admin role.
-    ///      Only takes effect when isEnabled == false. When isEnabled == true,
-    ///      lzReceive() always works regardless of this flag.
+    ///      Managed automatically by enable()/disable(), but can be set manually
+    ///      to allow receiving while the gateway is disabled
+    ///      (e.g. during gateway replacements, to deliver in-flight messages).
     ///
     /// @param isReceiveEnabled_ The desired state.
     function setIsReceiveEnabled(bool isReceiveEnabled_) external;

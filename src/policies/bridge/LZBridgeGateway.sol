@@ -29,7 +29,6 @@ import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, O
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
@@ -180,6 +179,11 @@ contract LZBridgeGateway is
 
     // ========= POLICY ENABLER ========= //
 
+    /// @dev Sets isReceiveEnabled to true when the gateway is enabled.
+    function _enable(bytes calldata) internal override {
+        if (!isReceiveEnabled) _setIsReceiveEnabled(true);
+    }
+
     /// @dev Resets isReceiveEnabled to false when the gateway is disabled.
     function _disable(bytes calldata) internal override {
         if (isReceiveEnabled) _setIsReceiveEnabled(false);
@@ -274,7 +278,7 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILayerZeroReceiver
     /// @dev Reverts if:
-    ///      - The gateway is not enabled.
+    ///      - Receiving is not enabled (isReceiveEnabled is false).
     ///      - The caller is not the LayerZero endpoint.
     ///      - The origin sender is not the configured peer for the source endpoint ID.
     ///      - No peer is configured for the source endpoint ID.
@@ -289,8 +293,7 @@ contract LZBridgeGateway is
         address,
         bytes calldata
     ) external payable override {
-        // When enabled, receive always works. When disabled, only if isReceiveEnabled is set.
-        if (!isEnabled && !isReceiveEnabled) revert IEnabler.NotEnabled();
+        if (!isReceiveEnabled) revert LZBridgeGateway_ReceiveNotEnabled();
         if (msg.sender != LZ_ENDPOINT) revert LZBridgeGateway_OnlyEndpoint();
         if (_getPeerOrRevert(origin_.srcEid) != origin_.sender)
             revert LZBridgeGateway_OnlyPeer(origin_.srcEid, origin_.sender);

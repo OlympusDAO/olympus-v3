@@ -9,6 +9,10 @@ import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 
+// Contracts
+import {Actions, Kernel} from "src/Kernel.sol";
+import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+
 /// @dev Public view function verification.
 contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
     function test_allowInitializePath_validPeer() external view {
@@ -84,8 +88,29 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_isReceiveEnabled_defaultsFalse() external view {
-        assertFalse(gateway.isReceiveEnabled(), "isReceiveEnabled should default to false");
+    function test_isReceiveEnabled_defaultsFalse() external {
+        LZBridgeGateway freshGateway = new LZBridgeGateway(
+            kernel,
+            address(endpointSetup.endpointList[0]),
+            true
+        );
+        assertFalse(freshGateway.isReceiveEnabled(), "isReceiveEnabled should default to false");
+    }
+
+    function test_isReceiveEnabled_returnsTrueAfterBridgeEnabling() external {
+        LZBridgeGateway freshGateway = new LZBridgeGateway(
+            kernel,
+            address(endpointSetup.endpointList[0]),
+            true
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(freshGateway));
+
+        assertFalse(freshGateway.isReceiveEnabled(), "Should be false before enable");
+
+        vm.prank(admin);
+        freshGateway.enable(bytes(""));
+
+        assertTrue(freshGateway.isReceiveEnabled(), "isReceiveEnabled should be true after enable");
     }
 
     function test_getAmountCanBeSent() external {

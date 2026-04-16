@@ -4,8 +4,9 @@
 
 The `LZBridgeGateway.isReceiveEnabled` flag is provided for use during future gateway replacements, so that a disabled old gateway can continue delivering in-flight LZ messages instead of reverting them.
 
-- Has no effect when the gateway is enabled — `lzReceive()` always works in that case.
-- Automatically reset to `false` by `disable()`, so an emergency shutdown blocks all traffic by default.
+- Managed automatically by `enable()` (sets `true`) and `disable()` (sets `false`).
+- Can be set manually via `setIsReceiveEnabled()`, gated to `emergency` / `admin` roles.
+- `lzReceive()` checks `isReceiveEnabled` directly; `burnAndSend()` checks `isEnabled` via `onlyEnabled`.
 
 ### Expected usage
 
