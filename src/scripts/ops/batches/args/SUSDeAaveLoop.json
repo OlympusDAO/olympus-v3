@@ -3,7 +3,7 @@
         {
             "args": {
                 "borrowPercentage": 9995,
-                "kyberExcludedSources": "uniswap-v4-fairflow",
+                "kyberExcludedSources": "ekubo-v3,uniswap-v4-fairflow",
                 "slippageBps": 10,
                 "susdeSupplyAmount": "815977000000000000000000"
             },

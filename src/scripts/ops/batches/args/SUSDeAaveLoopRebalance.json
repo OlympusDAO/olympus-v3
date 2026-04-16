@@ -1,0 +1,14 @@
+{
+    "functions": [
+        {
+            "args": {
+                "kyberExcludedSources": "uniswap-v4-fairflow",
+                "maxRebalanceValueUsde": "300000000000000000000000",
+                "ratioToleranceBps": "100",
+                "slippageBps": "10",
+                "targetSusdeToUsdeRatioWad": "1000000000000000000"
+            },
+            "name": "executeRebalanceWallet"
+        }
+    ]
+}
