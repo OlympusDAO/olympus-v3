@@ -23,13 +23,14 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///         The periphery LZCrossChainBridge is configured via LZCrossChainBridgeL2Batch.
 ///
 ///         On L2 chains the Kernel executor, RolesAdmin admin, and DAO MS may be
-///         different addresses. The batch is split into three entry points so each
+///         different addresses. The batch is split into entry points so each
 ///         can be run by the correct caller:
 ///
 ///         Entry points (run in order):
 ///         1. `activateGateway`    as Kernel executor               deactivates old bridge and activates new gateway
 ///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
 ///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
+///         4. `revokeSetupRoles`   as RolesAdmin admin              (optional) revokes admin role granted in step 2
 contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== ERRORS =========== //
 
@@ -134,7 +135,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             );
         }
 
-        // 2.2. Grant admin role to the DAO MS
+        // 2.2. Grant admin role to the DAO MS (run revokeSetupRoles after migration if granted here)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             addToBatch(
@@ -146,6 +147,9 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                     daoMS
                 )
             );
+            console2.log("  admin role GRANTED to DAO MS, so run revokeSetupRoles after migration");
+        } else {
+            console2.log("  admin role already present on DAO MS, so revokeSetupRoles not needed");
         }
 
         // 2.3. Grant bridge_facilitator role to LZCrossChainBridge
@@ -203,6 +207,51 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
         _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
+
+        proposeBatch();
+    }
+
+    /// @notice Step 4 (optional). Revoke the admin role from the DAO MS.
+    ///         Only run on chains where `grantRoles` (step 2) reported that the admin role
+    ///         was granted. Skip on chains where the DAO MS already had the role.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function revokeSetupRoles(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _requireNonCanonical();
+        _skipHeartbeatValidation = true;
+
+        address rolesAdminAddr = _envAddressNotZero("olympus.policies.RolesAdmin");
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
+
+        console2.log("\n=== [L2] [Step 4] Revoke Setup Roles:", chain, "===");
+
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
+            revert("DAO MS does not have admin role - nothing to revoke");
+        }
+
+        addToBatch(
+            rolesAdminAddr,
+            abi.encodeWithSelector(
+                RolesAdmin.revokeRole.selector,
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                ADMIN_ROLE,
+                daoMS
+            )
+        );
+
+        _setPostBatchValidateSelector(this._validateRevokeSetupRoles.selector);
 
         proposeBatch();
     }
@@ -297,6 +346,23 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
 
         console2.log("configureAndEnable post-batch validation passed");
+    }
+
+    /// @notice Validate revokeSetupRoles state after batch execution.
+    /// @dev Checks that DAO MS no longer has the admin role.
+    function _validateRevokeSetupRoles() external view {
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
+
+        console2.log("\nValidating revokeSetupRoles post-batch state");
+
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
+            revert("DAO MS still has admin role");
+        }
+        console2.log("  DAO MS admin role revoked");
+
+        console2.log("revokeSetupRoles post-batch validation passed");
     }
 
     // =========== LZ CONFIGURATION HELPERS =========== //
