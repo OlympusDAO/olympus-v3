@@ -73,6 +73,12 @@ contract ConvertibleOHMTeller is
     /// @notice Maximum allowed duration from current time to token expiry (~2 years)
     uint48 private constant _MAX_EXPIRY_HORIZON = 730 days;
 
+    /// @notice Length of one UTC day, used for day-boundary rounding
+    uint48 private constant _UTC_DAY = uint48(1 days);
+
+    /// @notice Minimum allowed value for minDuration and minEligibleDelay
+    uint48 private constant _MIN_DURATION_FLOOR = _UTC_DAY;
+
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
 
@@ -118,8 +124,8 @@ contract ConvertibleOHMTeller is
             revert Teller_InvalidParams(1, abi.encodePacked(ohm_));
 
         // Set the minimum duration and eligible delay to 1 day initially
-        _setMinDuration(uint48(1 days));
-        _setMinEligibleDelay(uint48(1 days));
+        _setMinDuration(_MIN_DURATION_FLOOR);
+        _setMinEligibleDelay(_MIN_DURATION_FLOOR);
     }
 
     // ========== POLICY CONFIGURATION ========== //
@@ -201,16 +207,16 @@ contract ConvertibleOHMTeller is
         returns (address)
     {
         if (eligible_ == 0) {
-            // Smallest UTC midnight >= block.timestamp + minEligibleDelay
+            // Ceiling to the earliest UTC midnight >= block.timestamp + minEligibleDelay.
+            // Tokens are day-granular, so eligible should land on a midnight boundary.
             uint48 minTimestamp = uint48(block.timestamp) + minEligibleDelay;
-            eligible_ = _truncateToUTCDay(minTimestamp + 1 days - 1);
+            eligible_ = _truncateToUTCDay(minTimestamp + _UTC_DAY - 1);
         }
 
         // Note: Convertible tokens are only unique to a day, not a specific timestamp
         (eligible_, expiry_) = _truncateBothToUTCDay(eligible_, expiry_);
 
-        // Revert if eligible is in the past, we do this to avoid duplicates tokens with the same parameters otherwise
-        // Truncate block.timestamp to the nearest day for comparison
+        // Revert if eligible does not satisfy the minimum delay from the current time
         if (eligible_ < uint48(block.timestamp) + minEligibleDelay)
             revert Teller_InvalidParams(1, abi.encodePacked(eligible_));
 
@@ -562,7 +568,7 @@ contract ConvertibleOHMTeller is
     ///      Tokens are identified by day, not by exact second, so all timestamps
     ///      within the same UTC day are mapped to the same hash.
     function _truncateToUTCDay(uint48 timestamp_) internal pure returns (uint48) {
-        return uint48(timestamp_ / 1 days) * 1 days;
+        return uint48(timestamp_ / _UTC_DAY) * _UTC_DAY;
     }
 
     /// @dev Convenience wrapper that truncates both eligible and expiry to 00:00:00 UTC.
@@ -597,7 +603,8 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IConvertibleOHMTeller
     function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
-        if (duration_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(duration_));
+        if (duration_ < _MIN_DURATION_FLOOR)
+            revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         _setMinDuration(duration_);
     }
 
@@ -622,7 +629,7 @@ contract ConvertibleOHMTeller is
 
     /// @inheritdoc IConvertibleOHMTeller
     function setMinEligibleDelay(uint48 delay_) external onlyEnabled onlyAdminRole {
-        if (delay_ < uint48(1 days)) revert Teller_InvalidParams(0, abi.encodePacked(delay_));
+        if (delay_ < _MIN_DURATION_FLOOR) revert Teller_InvalidParams(0, abi.encodePacked(delay_));
         _setMinEligibleDelay(delay_);
     }
 
