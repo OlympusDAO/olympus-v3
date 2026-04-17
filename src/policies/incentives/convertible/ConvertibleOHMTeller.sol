@@ -11,7 +11,12 @@ pragma solidity >=0.8.30;
 // - Only the deploying IncentiveDistributor (creator) can mint tokens via create();
 //   token hash includes creator to scope tokens per deployer.
 // - Removed reclaim(), protocol fees, and collateral tracking.
-// - Added mint cap management via MINTR approval; PolicyEnabler lifecycle for enable/disable.
+// - Per-creator mint caps: admin sets the cumulative mint cap per creator,
+//   enforced in create() against `creatorMinted`; the cap cannot be lowered below the
+//   creator's current `creatorMinted` so admin cannot retroactively shrink the budget.
+//   Setting cap == creatorMinted freezes new mints while keeping live tokens exercisable.
+//   MINTR approval is adjusted atomically in create/exercise/sweep.
+// - Active token registry + permissionless sweep of expired tokens; Heart-driven periodic sweep.
 // - Token naming uses decimal notation (e.g., "15.50") with "convOHM-" prefix.
 // - burnFrom deducts allowance (original burn did not).
 // - Solidity >=0.8.30; OZ SafeERC20/ReentrancyGuardTransient replaces solmate equivalents.
@@ -21,11 +26,13 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {Timestamp} from "src/libraries/Timestamp.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ClonesWithImmutableArgs} from "@clones-with-immutable-args-1.1.2/ClonesWithImmutableArgs.sol";
 import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
@@ -39,6 +46,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 contract ConvertibleOHMTeller is
     IConvertibleOHMTeller,
+    IPeriodicTask,
     IVersioned,
     Policy,
     PolicyEnabler,
@@ -48,14 +56,15 @@ contract ConvertibleOHMTeller is
     using SafeERC20 for IERC20;
     using FullMath for uint256;
     using ClonesWithImmutableArgs for address;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // ========== CONSTANTS & IMMUTABLES ========== //
 
-    /// @notice The role for configuration
-    bytes32 public constant ROLE_TELLER_ADMIN = "convertible_admin";
-
     /// @notice The role for incentive distribution (deploying and minting convertible tokens)
     bytes32 public constant ROLE_CONVERTIBLE_DISTRIBUTOR = "convertible_distributor";
+
+    /// @notice The role for the heart contract: allowed to call execute() for periodic sweeping of expired tokens.
+    bytes32 public constant ROLE_HEART = "heart";
 
     /// @notice The OHM token precision
     uint256 private constant _OHM_PRECISION = 1e9;
@@ -63,9 +72,9 @@ contract ConvertibleOHMTeller is
     /// @notice The OHM token decimals
     uint8 private constant _OHM_DECIMALS = 9;
 
-    /// @notice Minimum byte length of enableData_ (one ABI-encoded uint256 mintCap + two dynamic arrays)
-    /// @dev abi.encode(uint256, address[], uint256[]) with empty arrays = 32 + 32 + 32 + 32 + 32 = 160
-    uint256 private constant _MIN_ENABLE_DATA_LENGTH = 160;
+    /// @notice Minimum byte length of enableData_ (abi-encoded `address[] creators, uint256[] caps`).
+    /// @dev abi.encode(address[], uint256[]) with empty arrays = 32 (offset 1) + 32 (offset 2) + 32 (len 1) + 32 (len 2) = 128.
+    uint256 private constant _MIN_ENABLE_DATA_LENGTH = 128;
 
     /// @notice Minimum decimals required for quote tokens (used by _formatPrice)
     uint8 private constant _MIN_QUOTE_TOKEN_DECIMALS = 2;
@@ -78,6 +87,9 @@ contract ConvertibleOHMTeller is
 
     /// @notice Minimum allowed value for minDuration and minEligibleDelay
     uint48 private constant _MIN_DURATION_FLOOR = _UTC_DAY;
+
+    /// @notice Default iteration limit used by Heart-triggered sweeps.
+    uint256 public constant HEART_SWEEP_LIMIT = 50;
 
     /// @notice The reference implementation of `ConvertibleOHMToken`, deployed upon creation for cloning
     address public immutable TOKEN_IMPLEMENTATION;
@@ -103,10 +115,16 @@ contract ConvertibleOHMTeller is
     uint48 public override minEligibleDelay;
 
     /// @inheritdoc IConvertibleOHMTeller
-    mapping(address creator => uint256) public override ohmMinted;
+    mapping(address creator => uint256) public override creatorMintCaps;
 
     /// @inheritdoc IConvertibleOHMTeller
-    mapping(address creator => uint256) public override adminMintLimits;
+    mapping(address creator => uint256) public override creatorOutstanding;
+
+    /// @inheritdoc IConvertibleOHMTeller
+    mapping(address creator => uint256) public override creatorMinted;
+
+    /// @notice Deployed tokens not yet swept (may briefly contain expired tokens until sweeping)
+    EnumerableSet.AddressSet private _activeTokens;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -169,30 +187,40 @@ contract ConvertibleOHMTeller is
         return (1, 0);
     }
 
-    /// @notice Enables the teller with a mint cap and optional per-creator mint limits.
-    /// @param enableData_ ABI-encoded (uint256 mintCap, address[] creators, uint256[] limits)
+    /// @notice Enables the teller with initial per-creator mint caps.
+    /// @param enableData_ ABI-encoded (address[] creators, uint256[] caps). Arrays may be empty.
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length < _MIN_ENABLE_DATA_LENGTH)
             revert Teller_InvalidParams(0, enableData_);
 
-        (uint256 mintCap, address[] memory creators, uint256[] memory limits) = abi.decode(
+        (address[] memory creators, uint256[] memory caps) = abi.decode(
             enableData_,
-            (uint256, address[], uint256[])
+            (address[], uint256[])
         );
 
-        if (creators.length != limits.length)
-            revert Teller_InvalidParams(1, abi.encodePacked(creators.length, limits.length));
+        uint256 len = creators.length;
+        if (len != caps.length) revert Teller_InvalidParams(0, abi.encodePacked(len, caps.length));
 
-        _setMintCap(mintCap);
-
-        for (uint256 i = 0; i < creators.length; ++i) {
-            _setAdminMintLimit(1, creators[i], limits[i]);
+        for (uint256 i = 0; i < len; ++i) {
+            _setCreatorMintCap(creators[i], caps[i]);
         }
     }
 
     // ========== TOKEN DEPLOYMENTS ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller has not been granted the convertible distributor role.
+    ///      - Called re-entrantly.
+    ///      - The eligible timestamp is earlier than the current time plus the minimum eligibility delay
+    ///        (after rounding both to UTC midnight).
+    ///      - The expiry timestamp is farther in the future than the maximum allowed horizon.
+    ///      - The eligible timestamp is after the expiry timestamp.
+    ///      - The gap between eligible and expiry is less than the minimum duration.
+    ///      - The quote token address is zero or has no bytecode.
+    ///      - The quote token has fewer decimals than required for price formatting.
+    ///      - The strike price is zero or has insufficient precision relative to the quote token.
     function deploy(
         address quoteToken_,
         uint48 eligible_,
@@ -243,19 +271,29 @@ contract ConvertibleOHMTeller is
 
         // Revert if strike price is zero or out of bounds
         int8 priceDecimals = _getPriceDecimals(strikePrice_, quoteDecimals);
-        // We check that the strike price is not zero and that the price decimals are not less than
+        // Check that the strike price is not zero and that the price decimals are not less than
         // half the quote decimals to avoid precision loss
         // For 18 decimal tokens, this means relative prices as low as 1e-9 are supported
         if (strikePrice_ == 0 || priceDecimals < -int8(quoteDecimals / 2))
             revert Teller_InvalidParams(3, abi.encodePacked(strikePrice_));
 
-        // Create the token if one doesn't already exist
+        // Resolve the existing token, or deploy a new one if none exists
         return _getOrDeployToken(quoteToken_, msg.sender, eligible_, expiry_, strikePrice_);
     }
 
     // ========== TOKEN MINTING ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller has not been granted the convertible distributor role.
+    ///      - Called re-entrantly.
+    ///      - The recipient is the zero address.
+    ///      - The amount is zero.
+    ///      - The token is not a deployed convertible token.
+    ///      - The token has expired.
+    ///      - The caller is not the token's creator.
+    ///      - Minting this amount would push the creator's cumulative minted above the configured cap.
     function create(
         address token_,
         address to_,
@@ -266,9 +304,19 @@ contract ConvertibleOHMTeller is
         (ConvertibleOHMToken token, , address creator, , uint48 expiry, ) = _requireExistingToken(
             token_
         );
-        if (expiry <= uint48(block.timestamp)) revert Teller_TokenExpired(expiry);
-        // Only the creator (IncentiveDistributor) that deployed this token can mint more
+        _requireTokenNotExpired(expiry);
+        // Only the creator (a distributor) that deployed this token can mint more
         if (msg.sender != creator) revert Teller_NotTokenCreator(msg.sender, creator);
+
+        // Charge the creator's cumulative budget against the configured cap
+        uint256 newMinted = creatorMinted[creator] + amount_;
+        if (newMinted > creatorMintCaps[creator])
+            revert Teller_CapExceeded(creator, newMinted, creatorMintCaps[creator]);
+        creatorMinted[creator] = newMinted;
+
+        // Bump outstanding in lockstep with minted and reserve MINTR approval
+        creatorOutstanding[creator] += amount_;
+        MINTR.increaseMintApproval(address(this), amount_);
 
         token.mintFor(to_, amount_);
         emit ConvertibleTokenMinted(token_, to_, amount_);
@@ -277,6 +325,16 @@ contract ConvertibleOHMTeller is
     // ========== TOKEN EXERCISE ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - Called re-entrantly.
+    ///      - The amount is zero.
+    ///      - The token is not a deployed convertible token.
+    ///      - The current time is before the token's eligible timestamp.
+    ///      - The token has expired.
+    ///      - The caller does not have enough convertible tokens or allowance.
+    ///      - The caller does not have enough quote tokens or allowance.
+    ///      - The quote token applies a transfer fee (the treasury receives less than the calculated amount).
     function exercise(address token_, uint256 amount_) external override onlyEnabled nonReentrant {
         _requireNonzeroAmount(1, amount_);
         (
@@ -289,25 +347,21 @@ contract ConvertibleOHMTeller is
         ) = _requireExistingToken(token_);
         // Validate that the convertible token is eligible to be exercised
         if (uint48(block.timestamp) < eligible) revert Teller_NotEligible(eligible);
-        // Validate that the convertible token is not expired
-        if (uint48(block.timestamp) >= expiry) revert Teller_TokenExpired(expiry);
+        _requireTokenNotExpired(expiry);
+
+        // Release the reserved outstanding and burn convOHM tokens
+        creatorOutstanding[creator] -= amount_;
+        token.burnFrom(msg.sender, amount_);
+
+        // Mint OHM to user (consumes MINTR approval)
+        MINTR.mintOhm(msg.sender, amount_);
 
         // Calculate amount of quote tokens equivalent to amount at price
         uint256 quoteAmount = amount_.mulDivUp(price, _OHM_PRECISION);
 
-        // Burn convertible tokens
-        token.burnFrom(msg.sender, amount_);
-
-        ohmMinted[creator] += amount_;
-        if (ohmMinted[creator] > adminMintLimits[creator])
-            revert Teller_MintLimitExceeded(creator, ohmMinted[creator], adminMintLimits[creator]);
-
-        // Mint OHM to user
-        MINTR.mintOhm(msg.sender, amount_);
-
-        // Transfer quote tokens from user
-        // @audit this does enable potential malicious convertible tokens that can't be exercised
-        // However, we view it as a "buyer beware" situation that can handled on the front-end
+        // Transfer quote tokens from user.
+        // Note: malicious / misconfigured quote tokens could make the convertible token un-exercisable;
+        // this is treated as a "buyer beware" case, handleable on the front-end.
         uint256 balanceBefore = IERC20(quoteToken).balanceOf(address(TRSRY));
         IERC20(quoteToken).safeTransferFrom(msg.sender, address(TRSRY), quoteAmount);
         uint256 balanceAfter = IERC20(quoteToken).balanceOf(address(TRSRY));
@@ -317,23 +371,97 @@ contract ConvertibleOHMTeller is
         emit ConvertibleTokenExercised(address(token), msg.sender, amount_, quoteAmount);
     }
 
+    // ========== TOKEN LIFECYCLE ========== //
+
+    /// @inheritdoc IPeriodicTask
+    /// @dev Performs a bounded sweep of expired tokens; errors are swallowed to keep the
+    ///      Heart's task pipeline healthy.
+    /// @dev Reverts if the caller has not been granted the heart role.
+    function execute() external override onlyRole(ROLE_HEART) {
+        if (!isEnabled) return; // Don't do anything if disabled
+
+        try this.sweepExpiredTokens(HEART_SWEEP_LIMIT) {
+            // Do nothing
+        } catch {
+            // Avoid failing loudly: sweeping is not critical to core protocol invariants,
+            // and a revert here would disrupt other periodic tasks chained from the Heart.
+            emit SweepExpiredTokensFailed();
+        }
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - Called re-entrantly.
+    function sweepExpiredTokens(uint256 maxIterations_) public override onlyEnabled nonReentrant {
+        uint256 totalReclaimed;
+        uint256 iterations;
+        uint256 i = _activeTokens.length();
+        while (iterations < maxIterations_ && i != 0) {
+            unchecked {
+                --i;
+            }
+            address tokenAddr = _activeTokens.at(i);
+            ConvertibleOHMToken token = ConvertibleOHMToken(tokenAddr);
+            if (_isExpired(token.expiry())) {
+                uint256 supply = token.totalSupply();
+                // Decrement creator outstanding by the token supply
+                if (supply != 0) creatorOutstanding[token.creator()] -= supply;
+                _activeTokens.remove(tokenAddr); // Remove token from active set
+                totalReclaimed += supply;
+                emit ActiveTokenSwept(tokenAddr, supply);
+            }
+            unchecked {
+                ++iterations;
+            }
+        }
+        if (totalReclaimed != 0) MINTR.decreaseMintApproval(address(this), totalReclaimed);
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The amount is zero.
+    ///      - The token is not a deployed convertible token.
+    ///      - The token has expired.
     function exerciseCost(
         address token_,
         uint256 amount_
     ) external view override returns (address, uint256) {
         _requireNonzeroAmount(1, amount_);
-        (, address quoteToken, , , , uint256 strikePrice) = _requireExistingToken(token_);
+        (, address quoteToken, , , uint48 expiry, uint256 strikePrice) = _requireExistingToken(
+            token_
+        );
+        _requireTokenNotExpired(expiry);
 
         // Calculate and return the amount of quote tokens required to exercise
         return (quoteToken, amount_.mulDivUp(strikePrice, _OHM_PRECISION));
     }
 
     /// @inheritdoc IConvertibleOHMTeller
-    function remainingMintApproval() external view override returns (uint256 remaining_) {
+    function remainingMintApproval() external view override returns (uint256) {
         return MINTR.mintApproval(address(this));
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function activeTokensLength() external view override returns (uint256) {
+        return _activeTokens.length();
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function activeTokenAt(uint256 index_) external view override returns (address) {
+        return _activeTokens.at(index_);
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function isActiveToken(address token_) external view override returns (bool) {
+        return _activeTokens.contains(token_);
+    }
+
+    /// @inheritdoc IConvertibleOHMTeller
+    function activeTokens() external view override returns (address[] memory) {
+        return _activeTokens.values();
     }
 
     /// @inheritdoc IConvertibleOHMTeller
@@ -362,20 +490,6 @@ contract ConvertibleOHMTeller is
 
     // ========== INTERNAL FUNCTIONS ========== //
 
-    /// @notice Sets the minting cap by adjusting MINTR approval
-    /// @param cap_ The target minting cap (in OHM units)
-    function _setMintCap(uint256 cap_) internal {
-        uint256 currentApproval = MINTR.mintApproval(address(this));
-        unchecked {
-            if (cap_ > currentApproval) {
-                MINTR.increaseMintApproval(address(this), cap_ - currentApproval);
-            } else if (cap_ < currentApproval) {
-                MINTR.decreaseMintApproval(address(this), currentApproval - cap_);
-            }
-        }
-        emit MintCapUpdated(MINTR.mintApproval(address(this)));
-    }
-
     function _getOrDeployToken(
         address quoteToken_,
         address creator_,
@@ -388,9 +502,10 @@ contract ConvertibleOHMTeller is
         address token = tokens[tokenHash];
 
         // If the token doesn't exist, deploy (clone) it
-        if (address(token) == address(0)) {
+        if (token == address(0)) {
             token = _deployToken(quoteToken_, creator_, eligible_, expiry_, strikePrice_);
             tokens[tokenHash] = token;
+            _activeTokens.add(token);
             emit ConvertibleTokenCreated(
                 token,
                 quoteToken_,
@@ -472,6 +587,14 @@ contract ConvertibleOHMTeller is
         if (token_ != address(token)) revert Teller_UnsupportedToken(token_);
 
         return (token, quoteToken, creator, eligible, expiry, strikePrice);
+    }
+
+    function _isExpired(uint48 expiry_) private view returns (bool) {
+        return uint48(block.timestamp) >= expiry_;
+    }
+
+    function _requireTokenNotExpired(uint48 expiry_) private view {
+        if (_isExpired(expiry_)) revert Teller_TokenExpired(expiry_);
     }
 
     /// @notice Derives a name and symbol of the convertible token
@@ -589,37 +712,16 @@ contract ConvertibleOHMTeller is
 
     // ========== ADMIN CONFIG ========== //
 
-    /// @notice Reverts if the caller does not have the admin or convertible_admin role
-    function _onlyAdminOrTellerAdminRole() internal view {
-        if (!_isAdmin(msg.sender) && !ROLES.hasRole(msg.sender, ROLE_TELLER_ADMIN))
-            revert NotAuthorised();
-    }
-
-    modifier onlyAdminOrTellerAdminRole() {
-        _onlyAdminOrTellerAdminRole();
-        _;
-    }
-
     /// @inheritdoc IConvertibleOHMTeller
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller has not been granted the admin role.
+    ///      - The new duration is less than one day.
     function setMinDuration(uint48 duration_) external override onlyEnabled onlyAdminRole {
         // Must be a minimum of 1 day due to rounding of eligible and expiry timestamps
         if (duration_ < _MIN_DURATION_FLOOR)
             revert Teller_InvalidParams(0, abi.encodePacked(duration_));
         _setMinDuration(duration_);
-    }
-
-    /// @inheritdoc IConvertibleOHMTeller
-    function setAdminMintLimit(
-        address creator_,
-        uint256 limit_
-    ) external onlyEnabled onlyAdminRole {
-        _setAdminMintLimit(0, creator_, limit_);
-    }
-
-    function _setAdminMintLimit(uint256 paramIndex_, address creator_, uint256 limit_) private {
-        _requireNonzeroAddress(paramIndex_, creator_);
-        adminMintLimits[creator_] = limit_;
-        emit AdminMintLimitSet(creator_, limit_);
     }
 
     function _setMinDuration(uint48 duration_) private {
@@ -628,7 +730,11 @@ contract ConvertibleOHMTeller is
     }
 
     /// @inheritdoc IConvertibleOHMTeller
-    function setMinEligibleDelay(uint48 delay_) external onlyEnabled onlyAdminRole {
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller has not been granted the admin role.
+    ///      - The new delay is less than one day.
+    function setMinEligibleDelay(uint48 delay_) external override onlyEnabled onlyAdminRole {
         if (delay_ < _MIN_DURATION_FLOOR) revert Teller_InvalidParams(0, abi.encodePacked(delay_));
         _setMinEligibleDelay(delay_);
     }
@@ -639,16 +745,38 @@ contract ConvertibleOHMTeller is
     }
 
     /// @inheritdoc IConvertibleOHMTeller
-    function setMintCap(uint256 cap_) external override onlyEnabled onlyAdminOrTellerAdminRole {
-        _setMintCap(cap_);
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller has not been granted the admin role.
+    ///      - The creator address is zero.
+    ///      - The new cap is below the creator's cumulative minted.
+    function setCreatorMintCap(
+        address creator_,
+        uint256 cap_
+    ) external override onlyEnabled onlyAdminRole {
+        _setCreatorMintCap(creator_, cap_);
+    }
+
+    /// @dev Enforces `cap >= creatorMinted` so the budget already charged is never retroactively shrunk.
+    ///      Set `cap == creatorMinted` to freeze new mints while keeping live tokens exercisable.
+    ///      `creator_` parameter index is fixed at 0 in the error.
+    function _setCreatorMintCap(address creator_, uint256 cap_) private {
+        _requireNonzeroAddress(0, creator_);
+        uint256 minted = creatorMinted[creator_];
+        if (cap_ < minted) revert Teller_CapBelowMinted(creator_, minted, cap_);
+        creatorMintCaps[creator_] = cap_;
+        emit CreatorMintCapSet(creator_, cap_);
     }
 
     // ========== IERC165 ========== //
 
     /// @inheritdoc PolicyEnabler
-    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view virtual override(PolicyEnabler, IPeriodicTask) returns (bool) {
         return
             interfaceId_ == type(IConvertibleOHMTeller).interfaceId ||
+            interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
