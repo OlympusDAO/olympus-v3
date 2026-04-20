@@ -158,18 +158,18 @@ interface IOracleFactory {
     /// @dev    Intended to be called by oracle contracts created by this factory
     function cacheOraclePrices() external;
 
-    /// @notice Caches prices for the provided base/quote pair
+    /// @notice Caches the provided base/quote pair
     /// @dev    Intended to be called by oracle contracts created by this factory
     /// @param  baseToken_ The base token address
     /// @param  quoteToken_ The quote token address
-    function cachePrices(address baseToken_, address quoteToken_) external;
+    function cachePrice(address baseToken_, address quoteToken_) external;
 
-    /// @notice Caches prices for the provided base/quote pair only when stale
+    /// @notice Caches the provided base/quote pair only when stale
     /// @dev    Intended to be called by oracle contracts created by this factory
     /// @param  baseToken_ The base token address
     /// @param  quoteToken_ The quote token address
     /// @param  maxAge_ Maximum accepted cache age in seconds
-    function cachePricesIfNecessary(
+    function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_,
         uint48 maxAge_

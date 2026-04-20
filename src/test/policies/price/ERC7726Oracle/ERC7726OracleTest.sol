@@ -88,8 +88,7 @@ contract ERC7726OracleTest is Test {
         oracle = IERC7726Oracle(oracleAddress);
 
         // Seed initial cached values consumed by clone oracles (Variant.LAST).
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -97,7 +96,7 @@ contract ERC7726OracleTest is Test {
     /// @notice Sets price for a token in the PRICE module
     function _setPRICEPrices(address token_, uint256 price_) internal {
         priceModule.setPrice(token_, price_);
-        priceModule.cachePrice(token_);
+        priceModule.cachePrice(token_, priceModule.unitOfAccount());
     }
 
     /// @notice Enables the oracle

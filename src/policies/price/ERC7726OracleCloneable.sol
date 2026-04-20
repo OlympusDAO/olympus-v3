@@ -76,33 +76,30 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         _checkEnabled();
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
 
-        // Get the cached prices
-        // PRICE will revert if either price is 0, so we don't need to check that here
-        (uint256 basePriceUsd, uint48 baseTimestamp) = PRICE.getPrice(base_, IPRICEv2.Variant.LAST);
-        (uint256 quotePriceUsd, uint48 quoteTimestamp) = PRICE.getPrice(
-            quote_,
-            IPRICEv2.Variant.LAST
-        );
-
-        if (baseTimestamp != quoteTimestamp) {
-            revert ERC7726Oracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
+        (uint256 baseAssetPriceUsd, uint256 quoteAssetPriceUsd, uint48 pairTimestamp, ) = PRICE
+            .getCachedPrice(base_, quote_);
+        uint256 pairPrice = 0;
+        if (baseAssetPriceUsd != 0 && quoteAssetPriceUsd != 0) {
+            pairPrice = FullMath.mulDiv(
+                baseAssetPriceUsd,
+                10 ** PRICE.decimals(),
+                quoteAssetPriceUsd
+            );
         }
+
+        // `getCachedPrice()` is requested in the same base/quote orientation as `getQuote()`.
+        // The returned USD legs are then combined into a direct base/quote price.
 
         // Check for staleness
         uint48 maxAge_ = maxAge();
-        if (_isStaleFromTimestamp(baseTimestamp, maxAge_)) {
-            revert ERC7726Oracle_Stale(baseTimestamp, maxAge_);
+        if (pairPrice == 0 || _isStaleFromTimestamp(pairTimestamp, maxAge_)) {
+            revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
         }
 
-        // basePriceUsd and quotePriceUsd are USD prices in 10^18 scale from PRICE.
-        // baseTokenScale and quoteTokenScale are token unit scales: 10 ** IERC20(token).decimals().
-        uint256 baseTokenScale = 10 ** IERC20(base_).decimals();
-        uint256 quoteTokenScale = 10 ** IERC20(quote_).decimals();
-
-        // Step 1: Convert inAmount from base token units into quote units at USD price ratio.
-        uint256 intermediate = inAmount_.mulDiv(basePriceUsd, quotePriceUsd);
-        // Step 2: Convert between token decimal scales (baseTokenScale -> quoteTokenScale).
-        outAmount_ = intermediate.mulDiv(quoteTokenScale, baseTokenScale);
+        outAmount_ = inAmount_.mulDiv(pairPrice, 10 ** PRICE.decimals()).mulDiv(
+            10 ** IERC20(quote_).decimals(),
+            10 ** IERC20(base_).decimals()
+        );
     }
 
     /// @inheritdoc IPriceOracle
@@ -116,18 +113,14 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         return (outAmount, outAmount);
     }
 
-    /// @notice Caches both base and quote assets through the factory in a single call
-    /// @param  base_ The base asset to cache
-    /// @param  quote_ The quote asset to cache
-    function cachePrices(address base_, address quote_) external override {
-        factory().cachePrices(base_, quote_);
+    /// @inheritdoc IERC7726OraclePriceCache
+    function cachePrice(address base_, address quote_) external override {
+        factory().cachePrice(base_, quote_);
     }
 
-    /// @notice Caches both base and quote assets through the factory only when stale
-    /// @param  base_ The base asset to conditionally cache
-    /// @param  quote_ The quote asset to conditionally cache
-    function cachePricesIfNecessary(address base_, address quote_) external override {
-        factory().cachePricesIfNecessary(base_, quote_, maxAge());
+    /// @inheritdoc IERC7726OraclePriceCache
+    function cachePriceIfNecessary(address base_, address quote_) external override {
+        factory().cachePriceIfNecessary(base_, quote_, maxAge());
     }
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
@@ -140,25 +133,16 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @inheritdoc IERC7726Oracle
     function isStale(address base, address quote) external view override returns (bool) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 baseTimestamp) = PRICE.getPrice(base, IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = PRICE.getPrice(quote, IPRICEv2.Variant.LAST);
-
-        if (baseTimestamp != quoteTimestamp) return true;
-        return _isStaleFromTimestamp(baseTimestamp, maxAge());
+        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(base, quote);
+        return _isStaleFromTimestamp(pairTimestamp, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
-    /// @dev        Reverts if base/quote timestamps are inconsistent.
+    /// @dev        Returns 0 if the pair price has not been cached.
     function timestamp(address base, address quote) external view override returns (uint48) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 baseTimestamp) = PRICE.getPrice(base, IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = PRICE.getPrice(quote, IPRICEv2.Variant.LAST);
-
-        if (baseTimestamp != quoteTimestamp) {
-            revert ERC7726Oracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
-        }
-
-        return baseTimestamp;
+        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(base, quote);
+        return pairTimestamp;
     }
 
     /// @notice Query if a contract implements an interface

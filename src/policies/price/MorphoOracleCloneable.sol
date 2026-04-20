@@ -101,35 +101,25 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
             revert MorphoOracle_NotEnabled();
         }
 
-        // Get PRICE module from factory dynamically
-        // This allows PRICE module upgrades without oracle redeployment
+        // Get PRICE module from factory dynamically.
+        // This allows PRICE module upgrades without oracle redeployment while continuing to
+        // derive the collateral/loan price from the cached direct pair snapshot.
         IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
 
-        // Get the cached prices
-        // PRICE will revert if either price is 0, so we don't need to check that here
-        (uint256 collateralPriceUsd, uint48 collateralTimestamp) = PRICE.getPrice(
-            collateralToken(),
-            IPRICEv2.Variant.LAST
-        );
-        (uint256 loanPriceUsd, uint48 loanTimestamp) = PRICE.getPrice(
-            loanToken(),
-            IPRICEv2.Variant.LAST
-        );
-
-        if (collateralTimestamp != loanTimestamp) {
-            revert MorphoOracle_InconsistentTimestamps(collateralTimestamp, loanTimestamp);
+        (uint256 collateralPriceUsd, uint256 loanPriceUsd, uint48 pairTimestamp, ) = PRICE
+            .getCachedPrice(collateralToken(), loanToken());
+        uint256 pairPrice = 0;
+        if (collateralPriceUsd != 0 && loanPriceUsd != 0) {
+            pairPrice = FullMath.mulDiv(collateralPriceUsd, 10 ** PRICE.decimals(), loanPriceUsd);
         }
 
-        // Check staleness
+        // Check staleness of the direct collateral/loan pair cache.
         uint48 maxAge_ = maxAge();
-        if (_isStaleFromTimestamp(collateralTimestamp, maxAge_)) {
-            revert MorphoOracle_Stale(collateralTimestamp, maxAge_);
+        if (pairPrice == 0 || _isStaleFromTimestamp(pairTimestamp, maxAge_)) {
+            revert MorphoOracle_Stale(pairTimestamp, maxAge_);
         }
 
-        // Adjust to the correct scale
-        // Denominator safety: PRICE.getPrice(...) reverts on zero price (PRICE_PriceZero),
-        // so loanPriceUsd should be non-zero here.
-        return scaleFactor().mulDiv(collateralPriceUsd, loanPriceUsd);
+        return pairPrice.mulDiv(scaleFactor(), 10 ** PRICE.decimals());
     }
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {
@@ -142,41 +132,32 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     /// @inheritdoc IMorphoOracle
     function isStale() external view override returns (bool) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 collateralTimestamp) = PRICE.getPrice(collateralToken(), IPRICEv2.Variant.LAST);
-        (, uint48 loanTimestamp) = PRICE.getPrice(loanToken(), IPRICEv2.Variant.LAST);
+        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(collateralToken(), loanToken());
 
-        return
-            collateralTimestamp != loanTimestamp ||
-            _isStaleFromTimestamp(collateralTimestamp, maxAge());
+        return _isStaleFromTimestamp(pairTimestamp, maxAge());
     }
 
     /// @inheritdoc IMorphoOracle
-    /// @dev        Reverts if collateral/loan timestamps are inconsistent.
     function timestamp() external view override returns (uint48) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 collateralTimestamp) = PRICE.getPrice(collateralToken(), IPRICEv2.Variant.LAST);
-        (, uint48 loanTimestamp) = PRICE.getPrice(loanToken(), IPRICEv2.Variant.LAST);
+        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(collateralToken(), loanToken());
 
-        if (collateralTimestamp != loanTimestamp) {
-            revert MorphoOracle_InconsistentTimestamps(collateralTimestamp, loanTimestamp);
-        }
-
-        return collateralTimestamp;
+        return pairTimestamp;
     }
 
     // ========== CACHE INTERFACE ========== //
 
     /// @inheritdoc IOraclePriceCache
-    /// @dev        Unconditionally asks the factory to cache both configured assets.
+    /// @dev        Unconditionally asks the factory to cache the configured pair.
     ///             The factory validates caller/oracle/factory enabled state.
-    function cachePrices() external override {
-        factory().cachePrices(collateralToken(), loanToken());
+    function cachePrice() external override {
+        factory().cachePrice(collateralToken(), loanToken());
     }
 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
-    function cachePricesIfNecessary() external override {
-        factory().cachePricesIfNecessary(collateralToken(), loanToken(), maxAge());
+    function cachePriceIfNecessary() external override {
+        factory().cachePriceIfNecessary(collateralToken(), loanToken(), maxAge());
     }
 
     // ========== ERC165 ========== //

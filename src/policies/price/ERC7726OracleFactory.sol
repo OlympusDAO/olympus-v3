@@ -254,30 +254,24 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    function cachePrices(address base_, address quote_) external override onlyEnabled nonReentrant {
+    function cachePrice(address base_, address quote_) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
-        PRICE.cachePrice(base_);
-        PRICE.cachePrice(quote_);
+        PRICE.cachePrice(base_, quote_);
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    function cachePricesIfNecessary(
+    function cachePriceIfNecessary(
         address base_,
         address quote_,
         uint48 maxAge_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
-        (, uint48 baseTimestamp) = PRICE.getPrice(base_, IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = PRICE.getPrice(quote_, IPRICEv2.Variant.LAST);
-        bool timestampsDiffer = baseTimestamp != quoteTimestamp;
-        bool baseStale = (baseTimestamp == 0 ||
-            block.timestamp > uint256(baseTimestamp) + uint256(maxAge_));
-        bool quoteStale = (quoteTimestamp == 0 ||
-            block.timestamp > uint256(quoteTimestamp) + uint256(maxAge_));
+        (, uint48 pairTimestamp) = PRICE.getPriceIn(base_, quote_, IPRICEv2.Variant.LAST);
+        bool pairStale = (pairTimestamp == 0 ||
+            block.timestamp > uint256(pairTimestamp) + uint256(maxAge_));
 
-        if (timestampsDiffer || baseStale || quoteStale) {
-            PRICE.cachePrice(base_);
-            PRICE.cachePrice(quote_);
+        if (pairStale) {
+            PRICE.cachePrice(base_, quote_);
         }
     }
 

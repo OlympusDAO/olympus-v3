@@ -378,14 +378,13 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        (, uint48 collateralTimestamp) = priceModule.getPrice(
+        (, uint48 timestamp) = priceModule.getPriceIn(
             address(collateralToken),
+            address(loanToken),
             IPRICEv2.Variant.LAST
         );
-        (, uint48 loanTimestamp) = priceModule.getPrice(address(loanToken), IPRICEv2.Variant.LAST);
 
-        assertGt(collateralTimestamp, 0, "Collateral token price should be cached");
-        assertGt(loanTimestamp, 0, "Loan token price should be cached");
+        assertGt(timestamp, 0, "Token price should be cached");
     }
 
     function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {

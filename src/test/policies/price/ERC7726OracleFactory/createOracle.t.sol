@@ -92,8 +92,7 @@ contract ERC7726OracleFactoryCreateOracleTest is ERC7726OracleFactoryTest {
         address oracle = factory.createOracle(DEFAULT_MAX_AGE, bytes(""));
 
         // Seed cache for both assets for mock PRICE Variant.LAST path.
-        priceModule.cachePrice(address(baseToken));
-        priceModule.cachePrice(address(quoteToken));
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + 1);
         uint256 outAmount = IERC7726Oracle(oracle).getQuote(

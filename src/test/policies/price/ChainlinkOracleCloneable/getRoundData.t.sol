@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
@@ -171,8 +172,7 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , , ) = oracle.latestRoundData();
 
-        // Round ID should have changed (new timestamp)
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should have changed");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round ID");
 
         // Get round data for new round
         (uint80 roundId, int256 answer, , uint256 updatedAt, ) = oracle.getRoundData(newRoundId);
@@ -180,7 +180,7 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         // Verify round data matches
         assertEq(roundId, newRoundId, "Round ID should match");
         assertEq(answer, newAnswer, "Answer should match");
-        assertEq(updatedAt, lastStoredTimestamp, "UpdatedAt should match");
+        assertEq(updatedAt, lastStoredTimestamp, "UpdatedAt should match pair timestamp");
 
         // Price calculation should use original decimals
         // PRICE module returns prices in new decimals (9), but oracle should scale to original (18)
@@ -205,6 +205,16 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
             updatedAt,
             "getTimestamp should return correct timestamp"
         );
+    }
+
+    function test_whenQuoteTokenRemovedFromPRICE_reverts() public givenPricesAreStored {
+        (uint80 latestRoundId, , , , ) = oracle.latestRoundData();
+        priceModule.removeAsset(address(quoteToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(quoteToken))
+        );
+        oracle.getRoundData(latestRoundId);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

@@ -6,7 +6,6 @@ import {Actions} from "src/Kernel.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
@@ -247,8 +246,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Refresh both caches to pull in new live values
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
 
         // New price: 3e18 / 1e18 * 1e36 = 3e36
         uint256 newPrice = oracle.price();
@@ -273,15 +271,14 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Refresh both caches to pull in new live values
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
 
         // New price: 2e18 / 2e18 * 1e36 = 1e36
         uint256 newPrice = oracle.price();
         assertEq(newPrice, 1e36, "Price should reflect new loan price");
     }
 
-    function test_whenCollateralAndLoanTimestampsDiffer_reverts() public {
+    function test_whenOnlyCollateralUsdCacheChanges_returnsCachedPairPrice() public {
         // Move to a new block and change live prices.
         vm.warp(block.timestamp + 1);
         uint256 liveCollateral = 8e18;
@@ -289,17 +286,24 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         _setPRICEPrices(address(collateralToken), liveCollateral);
         _setPRICEPrices(address(loanToken), liveLoan);
 
-        // Refresh only collateral cache so LAST timestamps diverge.
-        priceModule.cachePrice(address(collateralToken));
+        // Refresh only collateral/USD cache. The direct collateral/loan pair cache should be unchanged.
+        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracle.MorphoOracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
-        );
-        oracle.price();
+        assertEq(oracle.price(), 2e36, "Oracle should continue using the cached pair price");
+    }
+
+    function test_whenOnlyLoanUsdCacheChanges_returnsCachedPairPrice() public {
+        // Move to a new block and change live prices.
+        vm.warp(block.timestamp + 1);
+        uint256 liveCollateral = 8e18;
+        uint256 liveLoan = 4e18;
+        _setPRICEPrices(address(collateralToken), liveCollateral);
+        _setPRICEPrices(address(loanToken), liveLoan);
+
+        // Refresh only collateral/USD cache. The direct collateral/loan pair cache should be unchanged.
+        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
+
+        assertEq(oracle.price(), 2e36, "Oracle should continue using the cached pair price");
     }
 
     // when PRICE module is updated in factory
@@ -315,8 +319,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Set different prices in new PRICE module
         newPriceModule.setPrice(address(collateralToken), 4e18);
         newPriceModule.setPrice(address(loanToken), 1e18);
-        newPriceModule.cachePrice(address(collateralToken));
-        newPriceModule.cachePrice(address(loanToken));
+        newPriceModule.cachePrice(address(collateralToken), address(loanToken));
 
         // Update factory dependencies to use new PRICE module
         factory.configureDependencies();

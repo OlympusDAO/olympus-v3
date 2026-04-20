@@ -286,14 +286,13 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.prank(admin);
         factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
 
-        (, uint48 baseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = priceModule.getPrice(
+        (, uint48 timestamp) = priceModule.getPriceIn(
+            address(baseToken),
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
 
-        assertGt(baseTimestamp, 0, "Base token price should be cached");
-        assertGt(quoteTimestamp, 0, "Quote token price should be cached");
+        assertGt(timestamp, 0, "Asset price should be cached");
     }
 
     function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {

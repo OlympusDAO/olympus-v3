@@ -67,7 +67,11 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         priceModule.setPrice(address(zeroBaseToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroBaseToken))
+            abi.encodeWithSelector(
+                IERC7726Oracle.ERC7726Oracle_Stale.selector,
+                uint48(0),
+                DEFAULT_MAX_AGE
+            )
         );
 
         oracle.getQuote(1e18, address(zeroBaseToken), address(loanToken));
@@ -81,13 +85,17 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         priceModule.setPrice(address(zeroQuoteToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroQuoteToken))
+            abi.encodeWithSelector(
+                IERC7726Oracle.ERC7726Oracle_Stale.selector,
+                uint48(0),
+                DEFAULT_MAX_AGE
+            )
         );
 
         oracle.getQuote(1e18, address(collateralToken), address(zeroQuoteToken));
     }
 
-    function test_givenCloneableBaseAndQuoteTimestampsDiffer_reverts() public {
+    function test_givenOnlyBaseUsdCacheChanges_returnsCachedPairQuote() public {
         ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
 
@@ -97,20 +105,17 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         vm.prank(admin);
         address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
 
-        // Seed both caches at timestamp=1, then force only base cache to timestamp=2.
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        // Seed the direct pair cache, then refresh only the base/USD cache.
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
+        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC7726Oracle.ERC7726Oracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
+        uint256 outAmount = IERC7726Oracle(cloneOracle).getQuote(
+            1e18,
+            address(collateralToken),
+            address(loanToken)
         );
-        IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
+        assertEq(outAmount, 2e18, "Quote should remain the cached pair quote");
     }
 
     function test_givenCloneablePricesAreStale_reverts() public {
@@ -123,8 +128,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         vm.prank(admin);
         address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
 
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
         vm.warp(block.timestamp + 1 hours + 1);
 
         vm.expectRevert(
@@ -155,8 +159,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         // Refresh cache and verify quote reflects new ratio.
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
         uint256 quoteAfterRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -183,8 +186,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         // Refresh cache and verify quote reflects new ratio.
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
         uint256 quoteAfterRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -209,6 +211,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e18 USD, quote = 1e18 USD
         _setPRICEPrices(address(baseToken), 2e18);
         _setPRICEPrices(address(quoteToken), 1e18);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e9 (1 base token with 9 decimals)
         uint256 inAmount = 1e9;
@@ -252,6 +255,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e18 USD, quote = 1e18 USD
         _setPRICEPrices(address(baseToken), 2e18);
         _setPRICEPrices(address(quoteToken), 1e18);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;
@@ -299,6 +303,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(baseToken), 2e8);
         _setPRICEPrices(address(quoteToken), 1e8);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e9 (1 base token with 9 decimals)
         uint256 inAmount = 1e9;
@@ -345,6 +350,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(baseToken), 2e8);
         _setPRICEPrices(address(quoteToken), 1e8);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;
@@ -383,6 +389,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(collateralToken), 2e8);
         _setPRICEPrices(address(loanToken), 1e8);
+        priceModule.cachePrice(address(collateralToken), address(loanToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;

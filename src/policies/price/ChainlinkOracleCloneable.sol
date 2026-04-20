@@ -133,35 +133,29 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             revert ChainlinkOracle_NotEnabled();
         }
 
-        // Get PRICE module from factory dynamically
-        // This allows PRICE module upgrades without oracle redeployment
-        IPRICEv2 PRICE = IPRICEv2(factory_.getPriceModule());
+        // Get the cached price for the asset pair
+        (
+            uint256 baseTokenPriceUsd,
+            uint256 quoteTokenPriceUsd,
+            uint48 updatedAt_,
+            uint80 roundId_
+        ) = IPRICEv2(factory_.getPriceModule()).getCachedPrice(baseToken(), quoteToken());
 
-        // Get the cached prices
-        // PRICE will revert if either price is 0, so we don't need to check that here
-        (uint256 basePrice, uint48 baseTimestamp) = PRICE.getPrice(
-            baseToken(),
-            IPRICEv2.Variant.LAST
-        );
-        (uint256 quotePrice, uint48 quoteTimestamp) = PRICE.getPrice(
-            quoteToken(),
-            IPRICEv2.Variant.LAST
-        );
-
-        if (baseTimestamp != quoteTimestamp) {
-            revert ChainlinkOracle_InconsistentTimestamps(baseTimestamp, quoteTimestamp);
+        // Calculate the price of 1 base token in quote tokens
+        uint256 price = 0;
+        if (baseTokenPriceUsd != 0 && quoteTokenPriceUsd != 0) {
+            price = FullMath.mulDiv(baseTokenPriceUsd, 10 ** _priceDecimals(), quoteTokenPriceUsd);
         }
 
-        // Calculate: 1 base token = (basePrice / quotePrice) * 10^PRICE_DECIMALS quote tokens
-        // Result is in PRICE_DECIMALS scale
-        uint256 price = FullMath.mulDiv(basePrice, 10 ** _priceDecimals(), quotePrice);
+        // Handle no cached data or rounding down to zero
+        if (price == 0 || updatedAt_ == 0 || roundId_ == 0) revert ChainlinkOracle_NoDataPresent();
 
-        // Cast timestamp to uint80 for round ID
-        roundId = uint80(baseTimestamp);
+        // Set return data
+        roundId = roundId_;
         /// forge-lint: disable-next-line(unsafe-typecast)
         answer = int256(price);
-        startedAt = baseTimestamp;
-        updatedAt = baseTimestamp;
+        startedAt = updatedAt_;
+        updatedAt = updatedAt_;
         answeredInRound = roundId;
 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
@@ -183,15 +177,11 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return _latestRoundDataInternal();
     }
 
-    function _isStaleFromTimestamps(
-        uint48 baseTimestamp_,
-        uint48 quoteTimestamp_
-    ) internal view returns (bool) {
-        if (baseTimestamp_ == 0 || quoteTimestamp_ == 0) return true;
-        if (baseTimestamp_ != quoteTimestamp_) return true;
-        unchecked {
-            return block.timestamp > uint256(baseTimestamp_) + uint256(maxAge());
-        }
+    function _isStaleFromTimestamp(uint48 timestamp_) internal view returns (bool) {
+        // If there's no timestamp, consider it stale to force caching before use
+        if (timestamp_ == 0) return true;
+
+        return block.timestamp > uint256(timestamp_) + uint256(maxAge());
     }
 
     /// @inheritdoc IChainlinkOracle
@@ -199,9 +189,13 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             consumers to detect stale or inconsistent cached state before reading.
     function isStale() external view override returns (bool) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 baseTimestamp) = PRICE.getPrice(baseToken(), IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = PRICE.getPrice(quoteToken(), IPRICEv2.Variant.LAST);
-        return _isStaleFromTimestamps(baseTimestamp, quoteTimestamp);
+        (, uint48 pairTimestamp) = PRICE.getPriceIn(
+            baseToken(),
+            quoteToken(),
+            IPRICEv2.Variant.LAST
+        );
+
+        return _isStaleFromTimestamp(pairTimestamp);
     }
 
     /// @inheritdoc AggregatorV3Interface
@@ -300,19 +294,19 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     // ========== CACHE INTERFACE ========== //
 
     /// @inheritdoc IOraclePriceCache
-    /// @dev        Unconditionally asks the factory to cache both configured assets.
+    /// @dev        Unconditionally asks the factory to cache the configured pair.
     ///             The factory enforces that:
     ///             - The factory is enabled
     ///             - The caller is a deployed oracle from this factory
     ///             - The oracle is currently enabled
-    function cachePrices() external override {
-        factory().cachePrices(baseToken(), quoteToken());
+    function cachePrice() external override {
+        factory().cachePrice(baseToken(), quoteToken());
     }
 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
-    function cachePricesIfNecessary() external override {
-        factory().cachePricesIfNecessary(baseToken(), quoteToken(), maxAge());
+    function cachePriceIfNecessary() external override {
+        factory().cachePriceIfNecessary(baseToken(), quoteToken(), maxAge());
     }
 
     // ========== ERC165 ========== //

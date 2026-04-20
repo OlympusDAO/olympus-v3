@@ -116,18 +116,18 @@ interface IERC7726OracleFactory {
     /// @return  enabled true if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
 
-    /// @notice  Cache both assets unconditionally for the calling oracle
+    /// @notice  Cache the direct pair unconditionally for the calling oracle
     ///
     /// @param   base_ The base asset to cache
     /// @param   quote_ The quote asset to cache
-    function cachePrices(address base_, address quote_) external;
+    function cachePrice(address base_, address quote_) external;
 
-    /// @notice  Cache both assets only when stale for the provided max age
+    /// @notice  Cache the direct pair only when stale for the provided max age
     ///
     /// @param   base_ The base asset to conditionally cache
     /// @param   quote_ The quote asset to conditionally cache
     /// @param   maxAge_ The maximum accepted cache age in seconds
-    function cachePricesIfNecessary(address base_, address quote_, uint48 maxAge_) external;
+    function cachePriceIfNecessary(address base_, address quote_, uint48 maxAge_) external;
 
     /// @notice  Enables oracle creation
     function enableCreation() external;

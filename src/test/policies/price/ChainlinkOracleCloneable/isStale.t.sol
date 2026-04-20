@@ -2,6 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
@@ -23,14 +24,40 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
         assertEq(oracle.isStale(), true, "Cache older than maxAge should be stale");
     }
 
-    function test_givenInconsistentTimestamps_returnsTrue(
+    function test_givenOnlyBaseUsdCacheChanges_returnsFalse(
         uint48 warpDelta_
     ) public givenPricesAreStored {
-        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE * 30));
-        vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(baseToken));
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
 
-        assertEq(oracle.isStale(), true, "Inconsistent timestamps should be treated as stale");
+        // Refreshing the base-USD price should not affect the freshness of base-quote price
+        vm.warp(block.timestamp + warpDelta);
+        priceModule.cachePrice(address(baseToken), priceModule.unitOfAccount());
+
+        assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
+    }
+
+    function test_givenOnlyQuoteUsdCacheChanges_returnsFalse(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
+
+        // Refreshing the quote-USD price should not affect the freshness of base-quote price
+        vm.warp(block.timestamp + warpDelta);
+        priceModule.cachePrice(address(quoteToken), priceModule.unitOfAccount());
+
+        assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
+    }
+
+    function test_givenBaseAndQuoteCacheChanges_returnsFalse(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
+
+        // Refreshing the base-quote price should not make it stale
+        vm.warp(block.timestamp + warpDelta);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
+
+        assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
     function test_gasSnapshot_isStale() public givenPricesAreStored {
@@ -38,6 +65,15 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
         oracle.isStale();
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_givenBaseTokenRemovedFromPRICE_reverts() public givenPricesAreStored {
+        priceModule.removeAsset(address(baseToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(baseToken))
+        );
+        oracle.isStale();
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

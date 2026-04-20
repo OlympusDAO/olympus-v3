@@ -12,6 +12,7 @@ contract MockPrice is PRICEv2 {
     mapping(address => uint256[]) internal observations;
     mapping(address => uint256) internal lastStoredPrices;
     mapping(address => uint48) internal lastStoredTimestamps;
+    mapping(bytes32 => PairPriceCache) internal pairCaches;
     uint48 internal timestamp;
 
     address[] internal _assets;
@@ -63,12 +64,113 @@ contract MockPrice is PRICEv2 {
         movingAverages[asset] = movingAverage;
     }
 
+    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
+        return asset_ == _UNIT_OF_ACCOUNT;
+    }
+
+    function _unitPrice() internal view returns (uint256) {
+        return 10 ** _decimals;
+    }
+
+    function _pairKey(
+        address asset_,
+        address base_
+    ) internal pure returns (bytes32 key_, bool assetIsToken0_) {
+        if (asset_ < base_) {
+            return (keccak256(abi.encodePacked(asset_, base_)), true);
+        }
+
+        return (keccak256(abi.encodePacked(base_, asset_)), false);
+    }
+
+    function _cachePair(
+        address asset_,
+        address quote_,
+        uint256 assetPriceUsd_,
+        uint256 quotePriceUsd_,
+        uint48 timestamp_
+    ) internal returns (uint80 roundId_) {
+        (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
+        PairPriceCache storage cache = pairCaches[key];
+
+        if (assetIsToken0) {
+            cache.token0PriceUsd = assetPriceUsd_;
+            cache.token1PriceUsd = quotePriceUsd_;
+        } else {
+            cache.token0PriceUsd = quotePriceUsd_;
+            cache.token1PriceUsd = assetPriceUsd_;
+        }
+
+        cache.updatedAt = timestamp_;
+        unchecked {
+            cache.roundId += 1;
+        }
+
+        emit PricePairCached(
+            asset_,
+            quote_,
+            assetPriceUsd_,
+            quotePriceUsd_,
+            timestamp_,
+            cache.roundId
+        );
+
+        if (quote_ == _UNIT_OF_ACCOUNT) {
+            lastStoredPrices[asset_] = assetPriceUsd_;
+            lastStoredTimestamps[asset_] = timestamp_;
+        } else if (asset_ == _UNIT_OF_ACCOUNT) {
+            lastStoredPrices[quote_] = quotePriceUsd_;
+            lastStoredTimestamps[quote_] = timestamp_;
+        }
+
+        return cache.roundId;
+    }
+
+    function _getLastPairQuote(
+        address asset_,
+        address quote_
+    ) internal view returns (uint256 price_, uint48 priceTimestamp_, uint80 roundId_) {
+        (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
+        PairPriceCache memory cache = pairCaches[key];
+        if (cache.roundId == 0) return (0, 0, 0);
+
+        uint256 assetPriceUsd = assetIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
+        uint256 quotePriceUsd = assetIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
+        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0, 0);
+
+        return (
+            (assetPriceUsd * (10 ** _decimals)) / quotePriceUsd,
+            cache.updatedAt,
+            cache.roundId
+        );
+    }
+
+    function _getCurrentPriceOrUnit(address asset_) internal view returns (uint256, uint48) {
+        if (_isUnitOfAccount(asset_)) return (_unitPrice(), uint48(block.timestamp));
+        return (prices[asset_], uint48(block.timestamp));
+    }
+
     /// @notice Test helper to directly set LAST cache payload.
     /// @dev    Used to simulate edge cases such as a zero timestamp with non-zero price.
     function setLastPrice(address asset_, uint256 price_, uint48 timestamp_) public {
         assetApproved[asset_] = true;
         lastStoredPrices[asset_] = price_;
         lastStoredTimestamps[asset_] = timestamp_;
+        _cachePair(asset_, _UNIT_OF_ACCOUNT, price_, _unitPrice(), timestamp_);
+    }
+
+    /// @notice Test helper to directly seed a cached pair snapshot.
+    function setCachedPrice(
+        address asset_,
+        address quote_,
+        uint256 assetPriceUsd_,
+        uint256 quotePriceUsd_,
+        uint48 timestamp_
+    ) public {
+        if (!_isUnitOfAccount(asset_)) assetApproved[asset_] = true;
+        if (!_isUnitOfAccount(quote_)) assetApproved[quote_] = true;
+
+        _cachePair(asset_, quote_, assetPriceUsd_, quotePriceUsd_, timestamp_);
     }
 
     function setObservations(address asset, uint256[] memory observations_) public {
@@ -88,6 +190,11 @@ contract MockPrice is PRICEv2 {
         address asset_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
+        if (_isUnitOfAccount(asset_)) {
+            if (variant_ == Variant.MOVINGAVERAGE) revert PRICE_AssetNotApproved(asset_);
+            return (_unitPrice(), variant_ == Variant.CURRENT ? timestamp : 0);
+        }
+
         // Mimic PRICE's behaviour of reverting if the asset is not approved
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
 
@@ -97,20 +204,16 @@ contract MockPrice is PRICEv2 {
             price = prices[asset_];
             priceTimestamp = timestamp;
         } else if (variant_ == Variant.LAST) {
-            // Return last stored price, or 0 if never stored.
-            // Test helper `setLastPrice` may intentionally set a zero timestamp with non-zero price.
-            if (lastStoredTimestamps[asset_] == 0 && lastStoredPrices[asset_] == 0) {
-                price = 0;
-                priceTimestamp = 0;
-            } else {
-                price = lastStoredPrices[asset_];
-                priceTimestamp = lastStoredTimestamps[asset_];
-            }
+            (price, priceTimestamp, ) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             price = movingAverages[asset_];
             priceTimestamp = timestamp;
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
+        }
+
+        if (variant_ == Variant.LAST && price == 0) {
+            return (0, 0);
         }
 
         // Mimic PRICE's behaviour of reverting
@@ -141,41 +244,24 @@ contract MockPrice is PRICEv2 {
         address base_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
-        // Mimic PRICE's behaviour of reverting if either asset is not approved
-        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
-        if (!assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
+        if (!_isUnitOfAccount(asset_) && !assetApproved[asset_])
+            revert PRICE_AssetNotApproved(asset_);
+        if (!_isUnitOfAccount(base_) && !assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
+
+        if (asset_ == base_) return (_unitPrice(), 0);
 
         uint256 assetPrice;
         uint256 basePrice;
         uint48 priceTimestamp;
         if (variant_ == Variant.CURRENT) {
-            assetPrice = prices[asset_];
-            basePrice = prices[base_];
-            priceTimestamp = timestamp;
+            (assetPrice, priceTimestamp) = _getCurrentPriceOrUnit(asset_);
+            (basePrice, ) = _getCurrentPriceOrUnit(base_);
         } else if (variant_ == Variant.LAST) {
-            // Return last stored prices, or 0 if never stored
-            if (lastStoredTimestamps[asset_] == 0) {
-                assetPrice = 0;
-            } else {
-                assetPrice = lastStoredPrices[asset_];
-            }
-            if (lastStoredTimestamps[base_] == 0) {
-                basePrice = 0;
-            } else {
-                basePrice = lastStoredPrices[base_];
-            }
-            // Use the earlier timestamp if they differ, or 0 if neither has been stored
-            uint48 assetTimestamp = lastStoredTimestamps[asset_];
-            uint48 baseTimestamp = lastStoredTimestamps[base_];
-            if (assetTimestamp == 0 && baseTimestamp == 0) {
-                priceTimestamp = 0;
-            } else if (assetTimestamp == 0) {
-                priceTimestamp = baseTimestamp;
-            } else if (baseTimestamp == 0) {
-                priceTimestamp = assetTimestamp;
-            } else {
-                priceTimestamp = assetTimestamp < baseTimestamp ? assetTimestamp : baseTimestamp;
-            }
+            uint80 roundId;
+            (uint256 price_, uint48 timestamp_, uint80 roundId_) = _getLastPairQuote(asset_, base_);
+            roundId = roundId_;
+            if (roundId == 0) return (0, 0);
+            return (price_, timestamp_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             assetPrice = movingAverages[asset_];
             basePrice = movingAverages[base_];
@@ -195,8 +281,9 @@ contract MockPrice is PRICEv2 {
         _decimals = decimals_;
     }
 
-    // Required by interface, but not implemented
-    function getAssets() external view override returns (address[] memory) {}
+    function getAssets() external view override returns (address[] memory) {
+        return _assets;
+    }
 
     function getAssetData(address asset_) external view override returns (Asset memory) {
         return
@@ -217,20 +304,44 @@ contract MockPrice is PRICEv2 {
             });
     }
 
-    function isAssetApproved(address) external pure override returns (bool) {
-        return true;
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return assetApproved[asset_];
     }
 
-    function cachePrice(address asset_) external override {
-        // Get current price
-        (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
+    function getCachedPrice(
+        address quote_,
+        address base_
+    )
+        external
+        view
+        override
+        returns (uint256 quotePriceUsd_, uint256 basePriceUsd_, uint48 updatedAt_, uint80 roundId_)
+    {
+        if (quote_ == base_) return (_unitPrice(), _unitPrice(), 0, 0);
 
-        // Store the price and timestamp
-        lastStoredPrices[asset_] = price;
-        lastStoredTimestamps[asset_] = uint48(block.timestamp);
+        if (!_isUnitOfAccount(quote_) && !assetApproved[quote_])
+            revert PRICE_AssetNotApproved(quote_);
+        if (!_isUnitOfAccount(base_) && !assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
 
-        // Emit event to match PRICEv2 behavior
-        emit PriceCached(asset_, price, uint48(block.timestamp));
+        (bytes32 key, bool quoteIsToken0) = _pairKey(quote_, base_);
+        PairPriceCache memory cache = pairCaches[key];
+        if (cache.roundId == 0) return (0, 0, 0, 0);
+
+        quotePriceUsd_ = quoteIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
+        basePriceUsd_ = quoteIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
+        updatedAt_ = cache.updatedAt;
+        roundId_ = cache.roundId;
+    }
+
+    function cachePrice(address asset_, address base_) external override {
+        if (!_isUnitOfAccount(asset_)) assetApproved[asset_] = true;
+        if (!_isUnitOfAccount(base_)) assetApproved[base_] = true;
+
+        (uint256 assetPriceUsd, uint48 assetTimestamp) = _getCurrentPriceOrUnit(asset_);
+        (uint256 basePriceUsd, uint48 baseTimestamp) = _getCurrentPriceOrUnit(base_);
+        uint48 cachedAt = assetTimestamp < baseTimestamp ? assetTimestamp : baseTimestamp;
+
+        _cachePair(asset_, base_, assetPriceUsd, basePriceUsd, cachedAt);
     }
 
     function storeObservation(address asset_) external override {
@@ -240,10 +351,10 @@ contract MockPrice is PRICEv2 {
         // Store the price and timestamp
         lastStoredPrices[asset_] = price;
         lastStoredTimestamps[asset_] = uint48(block.timestamp);
+        _cachePair(asset_, _UNIT_OF_ACCOUNT, price, _unitPrice(), uint48(block.timestamp));
 
         // Emit both events to match PRICEv2 behavior
         emit PriceStored(asset_, price, uint48(block.timestamp));
-        emit PriceCached(asset_, price, uint48(block.timestamp));
     }
 
     function addAsset(
@@ -257,7 +368,9 @@ contract MockPrice is PRICEv2 {
         Component[] memory feeds_
     ) external override {}
 
-    function removeAsset(address asset_) external override {}
+    function removeAsset(address asset_) external override {
+        assetApproved[asset_] = false;
+    }
 
     function updateAsset(address asset_, UpdateAssetParams memory params_) external override {}
 
@@ -272,6 +385,8 @@ contract MockPrice is PRICEv2 {
     }
 
     function _getPriceWithMaxAge(address asset_, uint48 maxAge_) internal view returns (uint256) {
+        if (_isUnitOfAccount(asset_)) return _unitPrice();
+
         // Mimic PRICE's behaviour of reverting if the asset is not approved
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
 

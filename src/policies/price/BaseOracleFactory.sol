@@ -328,7 +328,7 @@ abstract contract BaseOracleFactory is
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
-        _cachePricesIfNecessary(
+        _cachePriceIfNecessary(
             _oracleToBaseToken[oracle_],
             _oracleToQuoteToken[oracle_],
             _oracleToMaxAge[oracle_]
@@ -373,25 +373,24 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    function cachePrices(
+    function cachePrice(
         address baseToken_,
         address quoteToken_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
-        PRICE.cachePrice(baseToken_);
-        PRICE.cachePrice(quoteToken_);
+        PRICE.cachePrice(baseToken_, quoteToken_);
     }
 
     /// @inheritdoc IOracleFactory
-    function cachePricesIfNecessary(
+    function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_,
         uint48 maxAge_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
-        _cachePricesIfNecessary(baseToken_, quoteToken_, maxAge_);
+        _cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
     }
 
     /// @notice Caches prices for the configured oracle token pair
@@ -400,27 +399,21 @@ abstract contract BaseOracleFactory is
         address baseToken = _oracleToBaseToken[oracle_];
         address quoteToken = _oracleToQuoteToken[oracle_];
 
-        PRICE.cachePrice(baseToken);
-        PRICE.cachePrice(quoteToken);
+        PRICE.cachePrice(baseToken, quoteToken);
     }
 
-    /// @notice Conditionally caches prices for the token pair based on timestamp mismatch and maxAge staleness
-    function _cachePricesIfNecessary(
+    /// @notice Conditionally caches prices for the token pair based on direct pair staleness
+    function _cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_,
         uint48 maxAge_
     ) internal {
-        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken_, IPRICEv2.Variant.LAST);
-        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken_, IPRICEv2.Variant.LAST);
-        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
-        bool baseTokenStale = (baseTokenTimestamp == 0 ||
-            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge_));
-        bool quoteTokenStale = (quoteTokenTimestamp == 0 ||
-            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge_));
+        (, uint48 pairTimestamp) = PRICE.getPriceIn(baseToken_, quoteToken_, IPRICEv2.Variant.LAST);
+        bool pairStale = (pairTimestamp == 0 ||
+            block.timestamp > uint256(pairTimestamp) + uint256(maxAge_));
 
-        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
-            PRICE.cachePrice(baseToken_);
-            PRICE.cachePrice(quoteToken_);
+        if (pairStale) {
+            PRICE.cachePrice(baseToken_, quoteToken_);
         }
     }
 

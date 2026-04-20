@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {ChainlinkOracleFactoryTest} from "../ChainlinkOracleFactory/ChainlinkOracleFactoryTest.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 /// @notice Parent test contract for ChainlinkOracleCloneable tests
 /// @dev    Provides setup, helper functions, and modifiers for all cloneable oracle test files
@@ -13,6 +14,7 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     IChainlinkOracle public oracle;
 
     uint48 public lastStoredTimestamp;
+    uint80 public lastStoredRoundId;
 
     // ========== SETUP ========== //
 
@@ -31,9 +33,16 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     }
 
     function _storePrices() internal {
-        priceModule.storeObservation(address(baseToken));
-        priceModule.storeObservation(address(quoteToken));
-        lastStoredTimestamp = uint48(block.timestamp);
+        priceModule.cachePrice(address(baseToken), address(quoteToken));
+        (, lastStoredTimestamp) = priceModule.getPriceIn(
+            address(baseToken),
+            address(quoteToken),
+            IPRICEv2.Variant.LAST
+        );
+        (, , , lastStoredRoundId) = priceModule.getCachedPrice(
+            address(baseToken),
+            address(quoteToken)
+        );
     }
 
     function _warp() internal {
