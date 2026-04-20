@@ -179,15 +179,19 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
-    function cachePrice(address asset_) external override onlyEnabled {
-        PRICE.cachePrice(asset_);
+    function cachePrice(address asset_, address quote_) external override onlyEnabled {
+        PRICE.cachePrice(asset_, quote_);
     }
 
     /// @inheritdoc IPriceConfigv2
-    function cachePriceIfNecessary(address asset_, uint48 maxAge_) public override onlyEnabled {
-        (, uint48 cachedTime) = PRICE.getPrice(asset_, IPRICEv2.Variant.LAST);
+    function cachePriceIfNecessary(
+        address asset_,
+        address quote_,
+        uint48 maxAge_
+    ) public override onlyEnabled {
+        (, uint48 cachedTime) = PRICE.getPriceIn(asset_, quote_, IPRICEv2.Variant.LAST);
         if (cachedTime == 0 || block.timestamp > uint256(cachedTime) + uint256(maxAge_)) {
-            PRICE.cachePrice(asset_);
+            PRICE.cachePrice(asset_, quote_);
         }
     }
 

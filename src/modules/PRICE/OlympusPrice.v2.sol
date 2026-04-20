@@ -93,6 +93,109 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return _assetData[asset_].approved;
     }
 
+    /// @notice         Returns true if `asset_` is the reserved unit-of-account asset
+    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
+        return asset_ == _UNIT_OF_ACCOUNT;
+    }
+
+    /// @notice         Returns the unit price scaled to PRICE decimals
+    function _unitPrice() internal view returns (uint256) {
+        return 10 ** _decimals;
+    }
+
+    /// @notice         Reverts unless `asset_` is an approved asset
+    function _validateApprovedAsset(address asset_) internal view {
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+    }
+
+    /// @notice         Reverts unless `asset_` is approved or the reserved unit of account
+    function _validateApprovedAssetOrUnit(address asset_) internal view {
+        if (_isUnitOfAccount(asset_)) return;
+        _validateApprovedAsset(asset_);
+    }
+
+    /// @notice                 Returns the canonical storage key for an asset/quote pair
+    ///
+    /// @param asset_           The asset address
+    /// @param quote_           The quote address
+    /// @return key_            The storage key for the pair's cached price
+    /// @return assetIsToken0_  A boolean indicating whether `asset_` is token0 in the canonical ordering
+    function _pairKey(
+        address asset_,
+        address quote_
+    ) internal pure returns (bytes32 key_, bool assetIsToken0_) {
+        if (asset_ < quote_) {
+            return (keccak256(abi.encodePacked(asset_, quote_)), true);
+        }
+
+        return (keccak256(abi.encodePacked(quote_, asset_)), false);
+    }
+
+    /// @notice                 Returns the cached direct `asset_/quote_` price and metadata
+    /// @dev                    Callers should handle identical operands before reaching this helper.
+    /// @dev                    Uses `getCachedPrice(asset_, quote_)` and derives the direct pair quote
+    ///                         from the oriented USD legs.
+    function _getLastPairQuote(
+        address asset_,
+        address quote_
+    ) internal view returns (uint256 price_, uint48 updatedAt_, uint80 roundId_) {
+        (
+            uint256 assetPriceUsd,
+            uint256 quotePriceUsd,
+            uint48 updatedAt,
+            uint80 roundId
+        ) = getCachedPrice(asset_, quote_);
+        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0, 0);
+
+        return (FullMath.mulDiv(assetPriceUsd, _unitPrice(), quotePriceUsd), updatedAt, roundId);
+    }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` or `_quote_` is not approved nor the reserved unit of account
+    /// @dev        - `asset_` is the same as `quote_`
+    function getCachedPrice(
+        address asset_,
+        address quote_
+    )
+        public
+        view
+        override
+        returns (uint256 assetPriceUsd_, uint256 quotePriceUsd_, uint48 updatedAt_, uint80 roundId_)
+    {
+        if (asset_ == quote_) revert PRICE_ParamsPairInvalid(asset_, quote_);
+
+        _validateApprovedAssetOrUnit(asset_);
+        _validateApprovedAssetOrUnit(quote_);
+
+        // Attempt to fetch a cached value for the asset pair, regardless of the orientation
+        (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
+        PairPriceCache memory cache = _pairCaches[key];
+        if (cache.roundId == 0) return (0, 0, 0, 0);
+
+        // Determine the correct ordering of the return values
+        assetPriceUsd_ = assetIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
+        quotePriceUsd_ = assetIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
+        updatedAt_ = cache.updatedAt;
+        roundId_ = cache.roundId;
+    }
+
+    /// @notice                     Returns the current USD price for an asset, or the unit price for the unit of account
+    ///
+    /// @param  asset_              The asset to get the price for
+    /// @return price_              The current price of the asset in USD (scaled to PRICE decimals)
+    /// @return timestamp_          The current block timestamp
+    /// @return successAllFeeds_    A boolean indicating whether all price feeds used to calculate the price were successful
+    function _getCurrentPriceOrUnit(
+        address asset_
+    ) internal view returns (uint256 price_, uint48 timestamp_, bool successAllFeeds_) {
+        if (_isUnitOfAccount(asset_)) {
+            return (_unitPrice(), uint48(block.timestamp), true);
+        }
+
+        return _getCurrentPrice(asset_, true);
+    }
+
     // ========== ASSET PRICES ========== //
 
     /// @inheritdoc IPRICEv2
@@ -102,19 +205,13 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
     function getPrice(address asset_) external view override returns (uint256) {
-        // Try to use the last price, must be updated on the current timestamp
-        // getPrice checks if asset is approved
-        (uint256 price, uint48 timestamp) = getPrice(asset_, Variant.LAST);
-        if (timestamp == uint48(block.timestamp)) return price;
-
-        // If last price is stale, use the current price
-        (price, , ) = _getCurrentPrice(asset_, true);
-        return price;
+        return _getPriceInStale(asset_, _UNIT_OF_ACCOUNT, 0);
     }
 
     /// @inheritdoc IPRICEv2
     /// @dev        Checks cache first (no observation array check since storeObservation updates cache)
     /// @dev        Fallback order: cache → fresh calculation
+    /// @dev        The reserved unit of account always returns `10 ** decimals()`.
     ///
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
@@ -124,19 +221,15 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint48 currentTime = uint48(block.timestamp);
         if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
 
-        // Try to use the last price, must be updated more recently than maxAge
-        // getPrice checks if asset is approved
-        (uint256 lastPrice, uint48 lastTimestamp) = getPrice(asset_, Variant.LAST);
-        if (lastTimestamp > 0 && lastTimestamp >= currentTime - maxAge_) {
-            return lastPrice;
-        }
-
-        // Calculate fresh price
-        (uint256 price, , ) = _getCurrentPrice(asset_, true);
-        return price;
+        return _getPriceInStale(asset_, _UNIT_OF_ACCOUNT, currentTime - maxAge_);
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        The reserved unit of account returns:
+    /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.CURRENT`
+    /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.LAST`
+    /// @dev        - reverts `PRICE_MovingAverageNotStored(asset_)` for `Variant.MOVINGAVERAGE`
+    /// @dev
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
@@ -145,17 +238,36 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         address asset_,
         Variant variant_
     ) public view override returns (uint256 _price, uint48 _timestamp) {
+        return _getAssetPriceVariant(asset_, variant_);
+    }
+
+    /// @notice                 Returns the requested per-asset price variant and timestamp
+    /// @dev                    `Variant.LAST` reads the cached `asset_/unitOfAccount()` pair snapshot.
+    /// @dev                    `Variant.MOVINGAVERAGE` is always per-asset state and never pair-derived.
+    /// @dev
+    /// @dev                    Will revert if:
+    /// @dev                    - `asset_` is not approved and is not the reserved unit of account
+    /// @dev                    - the moving average is not stored for `asset_`
+    /// @dev                    - `variant_` is invalid
+    function _getAssetPriceVariant(
+        address asset_,
+        Variant variant_
+    ) internal view returns (uint256 _price, uint48 _timestamp) {
+        if (_isUnitOfAccount(asset_)) {
+            if (variant_ == Variant.MOVINGAVERAGE) revert PRICE_MovingAverageNotStored(asset_);
+            return (_unitPrice(), uint48(block.timestamp));
+        }
+
         // Check if asset is approved
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+        _validateApprovedAsset(asset_);
 
         // Route to correct price function based on requested variant
         if (variant_ == Variant.CURRENT) {
             (uint256 price_, uint48 timestamp_, ) = _getCurrentPrice(asset_, true);
             return (price_, timestamp_);
         } else if (variant_ == Variant.LAST) {
-            // Return cached price (populated by addAsset, cachePrice, or storeObservation)
-            PriceCache memory cache = _cachedPrices[asset_];
-            return (cache.price, cache.cachedAt);
+            (uint256 price_, uint48 timestamp_, ) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
+            return (price_, timestamp_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             // Inlined _getMovingAveragePrice logic
             Asset memory asset = _assetData[asset_];
@@ -291,82 +403,133 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
     }
 
-    /// @notice                 Gets price with staleness check, returns single value
-    /// @dev                    Internal helper for getPriceIn functions
+    /// @notice                 Returns a per-asset price using cached data when it is fresh enough
+    /// @dev                    Falls back to `_getCurrentPrice(asset_, true)` when the cached value is too old or missing.
+    ///
     /// @param asset_           Asset to get price for
-    /// @param stalenessTime    Staleness threshold (0=exact match, other=min acceptable timestamp)
+    /// @param stalenessTime_   Staleness threshold (0=current block, other=min acceptable timestamp)
     /// @return price           The asset price
     function _getPriceStale(
         address asset_,
-        uint48 stalenessTime
+        uint48 stalenessTime_
     ) internal view returns (uint256 price) {
+        // The unit of account is always treated as fresh and equal to 1.0 in PRICE decimals.
+        if (_isUnitOfAccount(asset_)) return _unitPrice();
+
         uint48 pTime;
         (price, pTime) = getPrice(asset_, Variant.LAST);
-        if (stalenessTime == 0 ? pTime != uint48(block.timestamp) : pTime < stalenessTime) {
+        if (stalenessTime_ == 0 ? pTime != uint48(block.timestamp) : pTime < stalenessTime_) {
             (price, , ) = _getCurrentPrice(asset_, true);
         }
     }
 
+    /// @notice                 Gets a direct asset/quote price with cache staleness fallback
+    /// @dev                    If `stalenessTime` is 0, the cached pair must have been refreshed in the
+    ///                         current block to be used; otherwise the value must be at least that timestamp.
+    /// @dev                    Falls back to current pricing per leg when a cached leg is stale or missing.
+    function _getPriceInStale(
+        address asset_,
+        address quote_,
+        uint48 stalenessTime_
+    ) internal view returns (uint256 price_) {
+        if (asset_ == quote_) return _unitPrice();
+
+        uint256 assetPrice = _getPriceStale(asset_, stalenessTime_);
+        uint256 quotePrice = _getPriceStale(quote_, stalenessTime_);
+        return FullMath.mulDiv(assetPrice, 10 ** _decimals, quotePrice);
+    }
+
+    /// @notice                 Gets a direct asset/quote price for the requested variant
+    /// @dev                    `Variant.LAST` reads the direct cached pair snapshot.
+    /// @dev                    Other variants derive the pair price from the corresponding per-asset variant.
+    function _getPriceInVariant(
+        address asset_,
+        address quote_,
+        Variant variant_
+    ) internal view returns (uint256 _price, uint48 _timestamp) {
+        if (asset_ == quote_) return (_unitPrice(), uint48(block.timestamp));
+
+        if (variant_ == Variant.LAST) {
+            (uint256 price_, uint48 timestamp_, ) = _getLastPairQuote(asset_, quote_);
+            return (price_, timestamp_);
+        }
+
+        (uint256 assetPrice, uint48 assetTime) = _getAssetPriceVariant(asset_, variant_);
+        (uint256 quotePrice, uint48 quoteTime) = _getAssetPriceVariant(quote_, variant_);
+        return (
+            FullMath.mulDiv(assetPrice, 10 ** _decimals, quotePrice),
+            assetTime < quoteTime ? assetTime : quoteTime
+        );
+    }
+
     /// @inheritdoc IPRICEv2
     /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
-    function getPriceIn(address asset_, address base_) external view override returns (uint256) {
-        uint256 assetPrice = _getPriceStale(asset_, 0);
-        uint256 basePrice = _getPriceStale(base_, 0);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
+    /// @dev        If `quote_` is the unit of account, this is equivalent to `getPrice(asset_)`.
+    function getPriceIn(address asset_, address quote_) external view override returns (uint256) {
+        return _getPriceInStale(asset_, quote_, 0);
     }
 
     /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
-    /// @dev        - `base_` is not approved
+    /// @dev        - `quote_` is not approved
     /// @dev        - No price could be determined
-    /// @dev        - The max age is 0 (as that would return a current value)
     /// @dev        - The max age is >= the block timestamp
+    /// @dev
+    /// @dev        If `quote_` is the unit of account, this is equivalent to `getPrice(asset_, maxAge_)`.
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         uint48 maxAge_
     ) external view override returns (uint256) {
-        if (maxAge_ == 0 || maxAge_ >= block.timestamp) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-        uint48 cutoff = uint48(block.timestamp) - maxAge_;
-        uint256 assetPrice = _getPriceStale(asset_, cutoff);
-        uint256 basePrice = _getPriceStale(base_, cutoff);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
+        if (maxAge_ >= block.timestamp) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
+
+        return _getPriceInStale(asset_, quote_, uint48(block.timestamp) - maxAge_);
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        For `Variant.LAST`, reads the direct cached `asset_/quote_` pair snapshot.
+    /// @dev        For `Variant.CURRENT` and `Variant.MOVINGAVERAGE`, derives the pair price from the
+    ///             corresponding per-asset price variant.
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         Variant variant_
     ) external view override returns (uint256, uint48) {
-        (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
-        (uint256 basePrice, uint48 baseTime) = getPrice(base_, variant_);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return (
-            FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice),
-            assetTime < baseTime ? assetTime : baseTime
-        );
+        return _getPriceInVariant(asset_, quote_, variant_);
     }
 
     /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
     /// @dev        - The caller is not permissioned
-    /// @dev        - The asset is not approved
+    /// @dev        - The asset/quote pair is invalid
+    /// @dev        - One of the operands is neither approved nor the reserved unit of account
     /// @dev        - The price was not able to be determined
+    /// @dev        If either side is the unit of account, only that direct pair cache is refreshed.
+    /// @dev        Otherwise this refreshes three cache entries atomically at the same timestamp:
+    /// @dev        - `asset_/unitOfAccount()`
+    /// @dev        - `quote_/unitOfAccount()`
+    /// @dev        - `asset_/quote_`
     /// @dev        Reentrancy note: `_getCurrentPrice()` resolves feeds/strategy via `staticcall`,
     ///             so callbacks cannot perform state-changing reentry.
-    function cachePrice(address asset_) external override permissioned {
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+    function cachePrice(address asset_, address quote_) external override permissioned {
+        if (asset_ == quote_) revert PRICE_ParamsPairInvalid(asset_, quote_);
 
-        (uint256 price, uint48 timestamp, ) = _getCurrentPrice(asset_, true);
-        if (price == 0) revert PRICE_PriceZero(asset_);
+        _validateApprovedAssetOrUnit(asset_);
+        _validateApprovedAssetOrUnit(quote_);
 
-        _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
+        (uint256 assetPriceUsd, uint48 assetTimestamp, ) = _getCurrentPriceOrUnit(asset_);
+        (uint256 quotePriceUsd, uint48 quoteTimestamp, ) = _getCurrentPriceOrUnit(quote_);
 
-        emit PriceCached(asset_, price, timestamp);
+        uint48 timestamp = assetTimestamp < quoteTimestamp ? assetTimestamp : quoteTimestamp;
+        if (_isUnitOfAccount(asset_) || _isUnitOfAccount(quote_)) {
+            _cachePair(asset_, quote_, assetPriceUsd, quotePriceUsd, timestamp);
+            return;
+        }
+
+        _cachePrice(asset_, assetPriceUsd, timestamp);
+        _cachePrice(quote_, quotePriceUsd, timestamp);
+        _cachePair(asset_, quote_, assetPriceUsd, quotePriceUsd, timestamp);
     }
 
     /// @inheritdoc IPRICEv2
@@ -445,14 +608,57 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         _cachePrice(asset_, cachePrice_, currentTime);
     }
 
-    /// @notice                 Internal helper to update the price cache and emit PriceCached event
+    /// @notice                 Internal helper to update an asset/unit-of-account cache and emit cache events
     ///
     /// @param asset_           Asset to update the cache for
     /// @param price_           Price to cache
     /// @param timestamp_       Timestamp for the cache entry
     function _cachePrice(address asset_, uint256 price_, uint48 timestamp_) internal {
-        _cachedPrices[asset_] = PriceCache({price: price_, cachedAt: timestamp_});
-        emit PriceCached(asset_, price_, timestamp_);
+        _cachePair(asset_, _UNIT_OF_ACCOUNT, price_, _unitPrice(), timestamp_);
+    }
+
+    /// @notice                 Internal helper to update one canonical pair cache entry
+    /// @dev                    The emitted event preserves the requested operand ordering while the
+    ///                         stored cache key remains canonicalized internally.
+    function _cachePair(
+        address asset_,
+        address quote_,
+        uint256 assetPriceUsd_,
+        uint256 quotePriceUsd_,
+        uint48 timestamp_
+    ) internal returns (uint80 roundId_) {
+        (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
+        PairPriceCache storage cache = _pairCaches[key];
+
+        if (assetIsToken0) {
+            cache.token0PriceUsd = assetPriceUsd_;
+            cache.token1PriceUsd = quotePriceUsd_;
+        } else {
+            cache.token0PriceUsd = quotePriceUsd_;
+            cache.token1PriceUsd = assetPriceUsd_;
+        }
+
+        cache.updatedAt = timestamp_;
+        unchecked {
+            cache.roundId += 1;
+        }
+
+        emit PricePairCached(
+            asset_,
+            quote_,
+            assetPriceUsd_,
+            quotePriceUsd_,
+            timestamp_,
+            cache.roundId
+        );
+
+        if (quote_ == _UNIT_OF_ACCOUNT) {
+            emit PriceCached(asset_, assetPriceUsd_, timestamp_);
+        } else if (asset_ == _UNIT_OF_ACCOUNT) {
+            emit PriceCached(quote_, quotePriceUsd_, timestamp_);
+        }
+
+        return cache.roundId;
     }
 
     /// @inheritdoc IPRICEv2
@@ -479,10 +685,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     // ========== ASSET MANAGEMENT ========== //
 
     /// @notice         Validates asset configuration for feeds, strategy, and moving average
-    /// @dev            Reverts if:
+    /// @dev            Will revert if:
     /// @dev            - Moving average is used but not stored
     /// @dev            - Multiple feeds exist but no strategy is configured
     /// @dev            - Only one feed exists but a strategy is configured
+    ///
     /// @param asset_              Asset address for error reporting
     /// @param strategy_           Strategy component configuration
     /// @param feedCount_          Number of price feeds configured
@@ -544,6 +751,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component memory strategy_,
         Component[] memory feeds_
     ) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+
         // Check that asset is a contract
         if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
 
@@ -606,6 +815,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The caller is not permissioned
     /// @dev        Reentrancy note: this function does not make external calls.
     function removeAsset(address asset_) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
@@ -825,6 +1036,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         address asset_,
         UpdateAssetParams memory params_
     ) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+
         // Validate at least one update flag is true
         if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
             revert PRICE_NoUpdatesRequested(asset_);

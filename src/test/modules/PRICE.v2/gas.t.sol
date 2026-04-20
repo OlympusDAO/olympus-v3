@@ -47,7 +47,7 @@ contract PriceV2GasTest is PriceV2BaseTest {
     function test_gasSnapshot_cachePrice() public {
         vm.startPrank(priceWriter);
         vm.startSnapshotGas("OlympusPricev2.cachePrice");
-        price.cachePrice(address(onema));
+        price.cachePrice(address(onema), price.unitOfAccount());
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 

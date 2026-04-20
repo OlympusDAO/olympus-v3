@@ -22,6 +22,23 @@ interface IPRICEv2 {
     /// @param cachedAt_    The timestamp at which the price was cached
     event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
 
+    /// @notice                 A pair price snapshot is cached
+    ///
+    /// @param asset_           The address of the asset in the requested orientation
+    /// @param quote_           The address of the quote asset in the requested orientation
+    /// @param assetPriceUsd_   The cached asset price in the system unit of account
+    /// @param quotePriceUsd_   The cached quote price in the system unit of account
+    /// @param cachedAt_        The timestamp at which the pair was cached
+    /// @param roundId_         The monotonically increasing round ID for this pair
+    event PricePairCached(
+        address indexed asset_,
+        address indexed quote_,
+        uint256 assetPriceUsd_,
+        uint256 quotePriceUsd_,
+        uint48 cachedAt_,
+        uint80 roundId_
+    );
+
     /// @notice             An asset's definition is added
     ///
     /// @param asset_       The address of the asset
@@ -70,6 +87,11 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
+
+    /// @notice         The asset address is reserved for internal PRICE usage
+    ///
+    /// @param asset_   The reserved asset address
+    error PRICE_AssetReserved(address asset_);
 
     /// @notice         A price feed call failed when initially configuring an asset
     ///
@@ -209,6 +231,12 @@ interface IPRICEv2 {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
+    /// @notice         The provided asset/quote pair is invalid
+    ///
+    /// @param asset_   The address of the asset
+    /// @param quote_   The address of the quote asset
+    error PRICE_ParamsPairInvalid(address asset_, address quote_);
+
     /// @notice         Thrown when updateAsset is called with all update flags set to false
     ///
     /// @param asset_   The address of the asset
@@ -255,13 +283,17 @@ interface IPRICEv2 {
         bytes feeds;
     }
 
-    /// @notice         Struct to hold a cached price for an asset
+    /// @notice                 Struct to hold a cached pair price snapshot
     ///
-    /// @param price    The cached price of the asset
-    /// @param cachedAt The timestamp at which the price was cached
-    struct PriceCache {
-        uint256 price;
-        uint48 cachedAt;
+    /// @param token0PriceUsd_  Cached token0 price in the system unit of account
+    /// @param token1PriceUsd_  Cached token1 price in the system unit of account
+    /// @param updatedAt        The timestamp at which the pair was cached
+    /// @param roundId          The monotonically increasing round ID for the pair
+    struct PairPriceCache {
+        uint256 token0PriceUsd;
+        uint256 token1PriceUsd;
+        uint48 updatedAt;
+        uint80 roundId;
     }
 
     /// @notice                         Parameters for updating an asset configuration
@@ -305,6 +337,9 @@ interface IPRICEv2 {
 
     /// @notice     The number of decimals to used in output values
     function decimals() external view returns (uint8);
+
+    /// @notice     The reserved unit-of-account key used for cached single-asset prices
+    function unitOfAccount() external pure returns (address);
 
     // ========== ASSET INFORMATION ========== //
 
@@ -355,46 +390,76 @@ interface IPRICEv2 {
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
 
-    /// @notice         Returns the current price of an asset in terms of the base asset
+    /// @notice         Returns the current price of an asset in terms of the quote asset
     ///
-    /// @param asset_   The address of the asset
-    /// @param base_    The address of the base asset that the price will be calculated in
-    /// @return price   The price of the asset in units of `base_`
-    function getPriceIn(address asset_, address base_) external view returns (uint256 price);
+    /// @param asset_   The address of the asset being priced
+    /// @param quote_   The address of the quote asset that the price will be calculated in
+    /// @return price   The price of the asset in units of `quote_`
+    function getPriceIn(address asset_, address quote_) external view returns (uint256 price);
 
-    /// @notice             Returns the price of the asset in terms of the base asset, no older than the max age
+    /// @notice             Returns the price of the asset in terms of the quote asset, no older than the max age
     ///
-    /// @param asset_       The address of the asset
-    /// @param base_        The address of the base asset that the price will be calculated in
+    /// @param asset_       The address of the asset being priced
+    /// @param quote_       The address of the quote asset that the price will be calculated in
     /// @param maxAge_      The maximum age (seconds) of the price
-    /// @return price       The price of the asset in units of `base_`
+    /// @return price       The price of the asset in units of `quote_`
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         uint48 maxAge_
     ) external view returns (uint256 price);
 
-    /// @notice             Returns the requested variant of the asset price in terms of the base asset
+    /// @notice             Returns the requested variant of the asset price in terms of the quote asset
     ///
-    /// @param asset_       The address of the asset
-    /// @param base_        The address of the base asset that the price will be calculated in
+    /// @param asset_       The address of the asset being priced
+    /// @param quote_       The address of the quote asset that the price will be calculated in
     /// @param variant_     The variant of the price to return
-    /// @return _price      The price of the asset in units of `base_`
+    /// @return _price      The price of the asset in units of `quote_`
     /// @return _timestamp  The timestamp at which the price was calculated
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
 
-    /// @notice         Updates the cached price for an asset
+    /// @notice                 Returns the cached pair snapshot for the requested asset/quote orientation
+    /// @dev                    The first parameter is the asset being priced (`asset_`) and the second is
+    ///                         the quote or denomination asset (`quote_`). The returned USD legs are oriented
+    ///                         to that requested order, not to internal canonical storage order.
+    /// @dev                    Returns zero values if the pair has not been cached.
+    ///
+    /// @param asset_           The address of the asset being priced
+    /// @param quote_           The address of the quote asset
+    /// @return assetPriceUsd_  The cached asset price in the system unit of account
+    /// @return quotePriceUsd_  The cached quote asset price in the system unit of account
+    /// @return updatedAt_      The timestamp at which the pair was cached
+    /// @return roundId_        The cached pair round ID
+    function getCachedPrice(
+        address asset_,
+        address quote_
+    )
+        external
+        view
+        returns (
+            uint256 assetPriceUsd_,
+            uint256 quotePriceUsd_,
+            uint48 updatedAt_,
+            uint80 roundId_
+        );
+
+    /// @notice         Updates the cached price snapshot for an asset/quote pair
     /// @dev            Permissioned at module level, can be exposed permissionlessly via policy
     /// @dev            Does NOT affect moving average observations
-    /// @dev            Works for any approved asset (MA or non-MA)
+    /// @dev            Works for any approved asset pair and the reserved unit of account
+    /// @dev            If neither side is the unit of account, also refreshes the
+    ///                 corresponding asset/unit-of-account cached entries.
+    /// @dev            If either side is the unit of account, only that single asset/unit-of-account
+    ///                 cache entry is refreshed; the unit-of-account/unit-of-account cache is not updated.
     /// @dev            Assumption: Price oracle configuration is robust enough to prevent manipulation
     ///
-    /// @param asset_   The address of the asset
-    function cachePrice(address asset_) external;
+    /// @param asset_   The address of the asset being priced
+    /// @param quote_   The address of the quote asset
+    function cachePrice(address asset_, address quote_) external;
 
     /// @notice             Stores a price observation for moving average calculation
     /// @dev                Permissioned - only authorized callers can store observations

@@ -57,6 +57,8 @@ contract OlympusPricev1_2Test is Test {
     uint256 internal constant RESERVE_A_PRICE = 5e17; // 0.5 USD (18 decimals)
     uint256 internal constant RESERVE_B_PRICE = 125e16; // 1.25 USD (18 decimals)
 
+    address internal constant UNIT_OF_ACCOUNT = address(840);
+
     // Events
     event MinimumTargetPriceChanged(uint256 minimumTargetPrice_);
 
@@ -420,7 +422,7 @@ contract OlympusPricev1_2Test is Test {
         // Cache $11 and then change the live feed to $10; getLastPrice should return cached $11.
         ohmUsdPriceFeed.setLatestAnswer(11e8);
         vm.prank(priceWriterV2);
-        price.cachePrice(address(ohm));
+        price.cachePrice(address(ohm), UNIT_OF_ACCOUNT);
         ohmUsdPriceFeed.setLatestAnswer(10e8);
 
         uint256 lastPrice = price.getLastPrice();
