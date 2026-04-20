@@ -522,6 +522,122 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         teller.deploy(address(usds), pastEligible, expiryTimestamp + 2 days, STRIKE_PRICE);
     }
 
+    function test_deploy_zeroEligibleIsNotImmediatelyExercisable() external {
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            teller.deploy(address(usds), 0, expiryTimestamp, STRIKE_PRICE)
+        );
+
+        assertTrue(
+            token.eligible() > uint48(vm.getBlockTimestamp()),
+            "Token should not be immediately exercisable"
+        );
+        assertTrue(
+            token.eligible() >= uint48(vm.getBlockTimestamp()) + teller.minEligibleDelay(),
+            "Token eligible must satisfy minEligibleDelay"
+        );
+    }
+
+    function test_deploy_revertsIfEligibleWithinMinDelay() external {
+        // Warp off midnight so truncated eligible is strictly less than block.timestamp + delay
+        vm.warp(vm.getBlockTimestamp() + 12 hours);
+        if (vm.getBlockTimestamp() % 1 days == 0) skip(1);
+
+        uint48 tomorrowMidnight = _roundToDay(uint48(vm.getBlockTimestamp()) + 1 days);
+        // tomorrowMidnight < block.timestamp + minEligibleDelay because block.timestamp
+        // is not aligned to midnight, so the gap after truncation is less than 1 day
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                1,
+                abi.encodePacked(tomorrowMidnight)
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(usds), tomorrowMidnight, expiryTimestamp, STRIKE_PRICE);
+    }
+
+    function testFuzz_deploy_zeroEligibleRespectsMinDelay_skipOnCoverage(uint48 delay_) external {
+        delay_ = uint48(bound(delay_, 1 days, 365 days));
+        teller.setMinEligibleDelay(delay_);
+
+        uint48 safeExpiry = _roundToDay(uint48(vm.getBlockTimestamp()) + 730 days);
+
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            teller.deploy(address(usds), 0, safeExpiry, STRIKE_PRICE)
+        );
+
+        // Eligible must be a UTC midnight that satisfies the delay
+        uint48 eligible = token.eligible();
+        assertEq(eligible, _roundToDay(eligible), "Eligible must be a UTC midnight");
+        assertTrue(
+            eligible >= uint48(vm.getBlockTimestamp()) + delay_,
+            "Eligible must satisfy minEligibleDelay"
+        );
+        // Must be the smallest such midnight (ceiling rounds up by at most 1 day)
+        assertTrue(
+            eligible < uint48(vm.getBlockTimestamp()) + delay_ + 1 days,
+            "Eligible should be the earliest valid midnight"
+        );
+    }
+
+    function testFuzz_deploy_explicitEligibleRespectsMinDelay_skipOnCoverage(
+        uint48 delay_
+    ) external {
+        delay_ = uint48(bound(delay_, 1 days, 365 days));
+        teller.setMinEligibleDelay(delay_);
+
+        // Compute the earliest eligible that satisfies the delay
+        uint48 minTimestamp = uint48(vm.getBlockTimestamp()) + delay_;
+        uint48 eligible = _roundToDay(minTimestamp + 1 days - 1);
+        uint48 safeExpiry = eligible + 180 days;
+
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            teller.deploy(address(usds), eligible, safeExpiry, STRIKE_PRICE)
+        );
+
+        assertEq(token.eligible(), eligible, "Eligible should match the provided value");
+    }
+
+    function test_deploy_boundaryEligibleExactlyAtMinDelay() external {
+        // Warp to a midnight so block.timestamp + 1 day is also a midnight
+        vm.warp(_roundToDay(uint48(vm.getBlockTimestamp()) + 1 days));
+
+        uint48 eligible = uint48(vm.getBlockTimestamp()) + uint48(1 days);
+        uint48 expiry = eligible + 180 days;
+
+        // eligible == block.timestamp + minEligibleDelay -> passes
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken token = ConvertibleOHMToken(
+            teller.deploy(address(usds), eligible, expiry, STRIKE_PRICE)
+        );
+        assertEq(token.eligible(), eligible, "Eligible at exact boundary should succeed");
+    }
+
+    function test_deploy_boundaryEligibleOneBelowMinDelay() external {
+        // Warp to a midnight so arithmetic is clean
+        vm.warp(_roundToDay(uint48(vm.getBlockTimestamp()) + 1 days));
+
+        // eligible = block.timestamp + 1 day - 1 second, truncated to block.timestamp
+        // block.timestamp < block.timestamp + minEligibleDelay -> reverts
+        uint48 eligible = uint48(vm.getBlockTimestamp()) + uint48(1 days) - 1;
+        uint48 truncatedEligible = _roundToDay(eligible);
+        uint48 expiry = truncatedEligible + 180 days;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                1,
+                abi.encodePacked(truncatedEligible)
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(usds), eligible, expiry, STRIKE_PRICE);
+    }
+
     function test_deploy_revertsIfExpiryLessThanEligible() external {
         uint48 expiry = eligibleTimestamp - 1 days;
         vm.expectRevert(
@@ -1495,19 +1611,19 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function test_enable_withCreatorLimits() external {
+    function testFuzz_enable_withCreatorLimits_skipOnCoverage(uint256 limit_) external {
         // 1. Preparation: deploy a fresh teller
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: enable with creator limits
+        // 2. Test: enable with a single creator and fuzzed limit
         address[] memory creators = new address[](1);
         creators[0] = incentiveDistributor;
         uint256[] memory limits = new uint256[](1);
-        limits[0] = 500e9;
+        limits[0] = limit_;
 
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, 500e9);
+        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, limit_);
         vm.expectEmit(true, true, false, true);
         emit IEnabler.Enabled();
         newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
@@ -1515,8 +1631,43 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         // Verify
         assertEq(
             newTeller.adminMintLimits(incentiveDistributor),
-            500e9,
-            "Creator limit should be set"
+            limit_,
+            "Creator limit should match fuzzed value"
+        );
+    }
+
+    function test_enable_withTwoCreatorLimits() external {
+        // 1. Preparation: deploy a fresh teller and a second distributor
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+        address distributor2 = makeAddr("distributor2");
+
+        // 2. Test: enable with two creators
+        address[] memory creators = new address[](2);
+        creators[0] = incentiveDistributor;
+        creators[1] = distributor2;
+        uint256[] memory limits = new uint256[](2);
+        limits[0] = 500e9;
+        limits[1] = 1000e9;
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.AdminMintLimitSet(creators[0], limits[0]);
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.AdminMintLimitSet(creators[1], limits[1]);
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Enabled();
+        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
+
+        // Verify both limits
+        assertEq(
+            newTeller.adminMintLimits(creators[0]),
+            limits[0],
+            "First creator limit should be set"
+        );
+        assertEq(
+            newTeller.adminMintLimits(creators[1]),
+            limits[1],
+            "Second creator limit should be set"
         );
     }
 
