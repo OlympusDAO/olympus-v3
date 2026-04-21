@@ -5,8 +5,8 @@ pragma solidity >=0.8.15;
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 contract CachePriceCaller {
     IOracleFactory public factory;
@@ -48,105 +48,66 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         caller.cachePrice();
     }
 
-    function test_whenOracleIsEnabled_cachesDirectPair() public {
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+    function test_whenOracleIsEnabled_cachesDirectPairThroughPriceCache() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
 
-        vm.warp(block.timestamp + 1);
         MorphoOracleCloneable(address(oracle)).cachePrice();
 
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
+        assertEq(cache.cachePriceCallCount(), 1, "Price cache should receive direct cache write");
+        assertEq(
+            cache.lastAsset(),
             address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
+            "Asset should match oracle collateral"
         );
-
-        assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
+        assertEq(cache.lastQuote(), address(loanToken), "Quote should match oracle loan");
     }
 
-    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotRecache() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        cache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.warp(block.timestamp + 1);
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
+        assertEq(
+            cache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
         );
-
-        assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should not be re-cached");
+        assertEq(cache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
-    function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+    function test_whenPricesAreStale_cachePricesIfNecessaryRecaches() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        cache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
+        assertEq(
+            cache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
         );
-
-        assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
+        assertEq(cache.cachePriceCallCount(), 2, "Stale cache should be re-cached");
     }
 
-    function test_whenOnlyCollateralUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair()
-        public
-    {
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+    function test_whenPriceCachePolicyIsDisabled_cachePriceReverts() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        cache.disable("");
 
-        vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
-
-        MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
-
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should remain unchanged");
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        MorphoOracleCloneable(address(oracle)).cachePrice();
     }
 
-    function test_whenOnlyLoanUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+    function _deployConfiguredPriceCache() internal returns (MockPriceCache cache) {
+        cache = new MockPriceCache();
+        cache.setUsdPrice(address(collateralToken), 2e18);
+        cache.setUsdPrice(address(loanToken), 1e18);
+        cache.setPairAllowed(address(collateralToken), address(loanToken), true);
 
-        vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
-
-        MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
-
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should remain unchanged");
+        vm.prank(admin);
+        factory.setPriceCache(address(cache));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

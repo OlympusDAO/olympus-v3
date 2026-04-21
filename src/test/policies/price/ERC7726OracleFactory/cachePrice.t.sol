@@ -5,8 +5,8 @@ pragma solidity >=0.8.15;
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 contract CachePriceCaller {
     IERC7726OracleFactory public cache;
@@ -18,36 +18,27 @@ contract CachePriceCaller {
     function cachePrice(address base_, address quote_) external {
         cache.cachePrice(base_, quote_);
     }
-
-    function cachePriceIfNecessary(address base_, address quote_, uint48 maxAge_) external {
-        cache.cachePriceIfNecessary(base_, quote_, maxAge_);
-    }
 }
 
 contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
-    function test_whenOracleIsEnabled_cachePricesCachesPair()
+    function test_whenOracleIsEnabled_cachePricesCachesPairThroughPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
+        MockPriceCache priceCache = _deployConfiguredPriceCache();
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + 1);
         clone.cachePrice(address(baseToken), address(quoteToken));
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
+        assertEq(
+            priceCache.cachePriceCallCount(),
+            1,
+            "Price cache should receive direct cache write"
         );
-        assertGt(newTimestamp, oldTimestamp, "Pair should be cached");
+        assertEq(priceCache.lastAsset(), address(baseToken), "Asset should match direct pair");
+        assertEq(priceCache.lastQuote(), address(quoteToken), "Quote should match direct pair");
     }
 
     function test_whenOracleIsEnabled_cachePricesIfNecessaryDoesNotCacheWhenFresh()
@@ -55,25 +46,21 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
+        MockPriceCache priceCache = _deployConfiguredPriceCache();
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
-        priceModule.cachePrice(address(baseToken), address(quoteToken));
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + 1);
         clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
+        assertEq(
+            priceCache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
         );
-        assertEq(newTimestamp, oldTimestamp, "Fresh pair cache should not be updated");
+        assertEq(priceCache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
     function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesWhenStale()
@@ -81,106 +68,21 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         givenFactoryIsEnabled
         givenOracleIsCreated
     {
+        MockPriceCache priceCache = _deployConfiguredPriceCache();
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
-        priceModule.cachePrice(address(baseToken), address(quoteToken));
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
+        assertEq(
+            priceCache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
         );
-        assertGt(newTimestamp, oldTimestamp, "Stale pair cache should be updated");
-    }
-
-    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
-        public
-        givenFactoryIsEnabled
-    {
-        address oracle = _createOracle(0);
-        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
-
-        priceModule.cachePrice(address(baseToken), address(quoteToken));
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + 1);
-        clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
-
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-        assertGt(newPairTimestamp, oldPairTimestamp, "maxAge=0 should recache pair timestamp");
-    }
-
-    function test_whenOracleIsEnabled_cachePricesCachesBothAssets()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-    {
-        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
-        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
-
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + 1);
-        clone.cachePrice(address(baseToken), address(quoteToken));
-
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
-    }
-
-    function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesBothWhenStale()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-    {
-        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
-        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
-
-        priceModule.cachePrice(address(baseToken), address(quoteToken));
-        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
-        clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
-
-        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
-            address(baseToken),
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
-        assertGt(
-            newPairTimestamp,
-            oldPairTimestamp,
-            "Pair timestamp should be re-cached when stale"
-        );
+        assertEq(priceCache.cachePriceCallCount(), 2, "Stale pair cache should be updated");
     }
 
     function test_whenOracleIsDisabled_cachePricesReverts()
@@ -224,6 +126,31 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
             )
         );
         caller.cachePrice(address(baseToken), address(quoteToken));
+    }
+
+    function test_whenPriceCachePolicyIsDisabled_cachePriceReverts()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        MockPriceCache priceCache = _deployConfiguredPriceCache();
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
+
+        priceCache.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        clone.cachePrice(address(baseToken), address(quoteToken));
+    }
+
+    function _deployConfiguredPriceCache() internal returns (MockPriceCache priceCache) {
+        priceCache = new MockPriceCache();
+        priceCache.setUsdPrice(address(baseToken), 2e18);
+        priceCache.setUsdPrice(address(quoteToken), 1e18);
+        priceCache.setPairAllowed(address(baseToken), address(quoteToken), true);
+
+        vm.prank(admin);
+        factory.setPriceCache(address(priceCache));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

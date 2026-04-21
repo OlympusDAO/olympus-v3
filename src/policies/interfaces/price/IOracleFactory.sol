@@ -102,6 +102,11 @@ interface IOracleFactory {
     /// @return module The PRICE module address
     function getPriceModule() external view returns (address module);
 
+    /// @notice Gets the configured price cache policy
+    ///
+    /// @return policy The price cache policy address
+    function getPriceCache() external view returns (address policy);
+
     // ========== FUNCTIONS ========== //
 
     /// @notice Creates a new oracle for a base/quote token pair
@@ -160,15 +165,17 @@ interface IOracleFactory {
 
     /// @notice Caches the provided base/quote pair
     /// @dev    Intended to be called by oracle contracts created by this factory
+    ///
     /// @param  baseToken_ The base token address
     /// @param  quoteToken_ The quote token address
     function cachePrice(address baseToken_, address quoteToken_) external;
 
     /// @notice Caches the provided base/quote pair only when stale
     /// @dev    Intended to be called by oracle contracts created by this factory
-    /// @param  baseToken_ The base token address
+    ///
+    /// @param  baseToken_  The base token address
     /// @param  quoteToken_ The quote token address
-    /// @param  maxAge_ Maximum accepted cache age in seconds
+    /// @param  maxAge_     Maximum accepted cache age in seconds
     function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_,
@@ -182,4 +189,9 @@ interface IOracleFactory {
 
     /// @notice Disables oracle creation
     function disableCreation() external;
+
+    /// @notice Sets the configured price cache policy
+    ///
+    /// @param  policy_ The price cache policy address
+    function setPriceCache(address policy_) external;
 }

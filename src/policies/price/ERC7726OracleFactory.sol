@@ -194,6 +194,11 @@ contract ERC7726OracleFactory is
         return address(PRICE);
     }
 
+    /// @inheritdoc IERC7726OracleFactory
+    function getPriceCache() external pure override returns (address policy) {
+        return address(0);
+    }
+
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
@@ -221,6 +226,11 @@ contract ERC7726OracleFactory is
         isCreationEnabled = false;
         emit CreationDisabled();
     }
+
+    /// @inheritdoc IERC7726OracleFactory
+    function setPriceCache(
+        address /* policy_ */
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {}
 
     // ========== ORACLE STATE ========== //
 

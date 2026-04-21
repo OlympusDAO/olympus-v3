@@ -279,6 +279,11 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
+    function getPriceCache() external pure override returns (address) {
+        return address(0);
+    }
+
+    /// @inheritdoc IOracleFactory
     function getOracles() external view override returns (address[] memory) {
         return _oracles;
     }
@@ -312,6 +317,11 @@ abstract contract BaseOracleFactory is
         isCreationEnabled = false;
         emit CreationDisabled();
     }
+
+    /// @inheritdoc IOracleFactory
+    function setPriceCache(
+        address /* policy_ */
+    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {}
 
     // ========== ORACLE STATE ========== //
 

@@ -100,6 +100,11 @@ interface IERC7726OracleFactory {
     /// @return  module The PRICE module address
     function getPriceModule() external view returns (address module);
 
+    /// @notice  Gets the configured price cache policy
+    ///
+    /// @return  policy The price cache policy address
+    function getPriceCache() external view returns (address policy);
+
     /// @notice  Enables a specific oracle
     ///
     /// @param   oracle_ The oracle address to enable
@@ -118,14 +123,14 @@ interface IERC7726OracleFactory {
 
     /// @notice  Cache the direct pair unconditionally for the calling oracle
     ///
-    /// @param   base_ The base asset to cache
+    /// @param   base_  The base asset to cache
     /// @param   quote_ The quote asset to cache
     function cachePrice(address base_, address quote_) external;
 
     /// @notice  Cache the direct pair only when stale for the provided max age
     ///
-    /// @param   base_ The base asset to conditionally cache
-    /// @param   quote_ The quote asset to conditionally cache
+    /// @param   base_   The base asset to conditionally cache
+    /// @param   quote_  The quote asset to conditionally cache
     /// @param   maxAge_ The maximum accepted cache age in seconds
     function cachePriceIfNecessary(address base_, address quote_, uint48 maxAge_) external;
 
@@ -134,4 +139,9 @@ interface IERC7726OracleFactory {
 
     /// @notice  Disables oracle creation
     function disableCreation() external;
+
+    /// @notice  Sets the configured price cache policy
+    ///
+    /// @param   policy_ The price cache policy address
+    function setPriceCache(address policy_) external;
 }
