@@ -73,7 +73,6 @@ abstract contract PriceV2BaseTest is Test {
 
     // Re-declare events from PRICE.v2.sol
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
-    event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
     event AssetAdded(address indexed asset_);
     event AssetRemoved(address indexed asset_);
     event AssetPriceFeedsUpdated(address indexed asset_);

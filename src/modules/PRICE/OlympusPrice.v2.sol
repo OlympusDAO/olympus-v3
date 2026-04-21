@@ -526,7 +526,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Updates the asset's `lastObservationTime` to the current block timestamp
     /// @dev        - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
     /// @dev        - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
-    /// @dev        - Emit a `PriceStored` event and `PriceCached` event
+    /// @dev        - Emit a `PriceStored` event and `PricePairCached` event
     ///
     /// @dev        Will revert if:
     /// @dev        - The asset is not approved

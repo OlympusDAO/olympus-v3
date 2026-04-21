@@ -302,7 +302,7 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         vm.stopPrank();
     }
 
-    // when everything is correct: it updates the price cache, it emits a PriceCached event
+    // when everything is correct: it updates the price cache, it emits a PricePairCached event
 
     function test_whenSuccess() public {
         // Use ALPHA
@@ -314,7 +314,7 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         vm.startPrank(priceWriter);
 
         vm.expectEmit(true, true, true, true);
-        emit PriceCached(address(alpha), expectedPrice, uint48(block.timestamp));
+        emit PricePairCached(address(alpha), _UNIT_OF_ACCOUNT, expectedPrice, 1e18, uint48(block.timestamp));
 
         price.cachePrice(address(alpha), _UNIT_OF_ACCOUNT);
 

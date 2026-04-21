@@ -430,7 +430,7 @@ interface IPRICEv2 {
     /// @dev                Permissioned - only authorized callers can store observations
     /// @dev                Reverts if the asset does not store moving average
     /// @dev                Also updates the cache (single source of truth for "last price")
-    /// @dev                Emits both PriceStored and PriceCached events
+    /// @dev                Emits both PriceStored and PricePairCached events
     ///
     /// @param asset_       The address of the asset
     function storeObservation(address asset_) external;
