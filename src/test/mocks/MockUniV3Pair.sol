@@ -287,7 +287,9 @@ contract MockUniV3Pair is IUniswapV3Pool {
     ) external {}
 
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext_) external {
-        _observationCardinalityNext = observationCardinalityNext_;
+        if (observationCardinalityNext_ > _observationCardinalityNext) {
+            _observationCardinalityNext = observationCardinalityNext_;
+        }
     }
 
     function snapshotCumulativesInside(

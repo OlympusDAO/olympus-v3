@@ -122,6 +122,13 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== CONSTRUCTOR ========== //
 
+    /// @notice                         Initializes the submodule and records the assumed block time for TWAP cardinality checks.
+    /// @dev                            Calls the `Submodule(parent_)` constructor to bind this feed to the parent PRICE module.
+    ///                                 This function will revert if:
+    ///                                 - `averageBlockTimeSeconds_ == 0` (`UniswapV3_AverageBlockTimeInvalid`)
+    ///
+    ///                                 Stores `averageBlockTimeSeconds_` in `AVERAGE_BLOCK_TIME_SECONDS`, which is used by
+    ///                                 `_checkObservationCardinality` to compute minimum required pool cardinality.
     /// @param parent_                   The PRICE module
     /// @param averageBlockTimeSeconds_  The average block time used for cardinality checks
     constructor(Module parent_, uint32 averageBlockTimeSeconds_) Submodule(parent_) {
@@ -348,8 +355,12 @@ contract UniswapV3Price is PriceSubmodule {
         return (quoteToken, quoteTokenDecimals, lookupTokenDecimals);
     }
 
-    /// @notice                             Validates the observation cardinality for a TWAP window
-    /// @dev                                Assumes one observation per ~12 second block
+    /// @notice                             Validates the observation cardinality for a TWAP window.
+    /// @dev                                Uses `AVERAGE_BLOCK_TIME_SECONDS` to derive the minimum cardinality required to
+    ///                                     service the requested lookback window.
+    ///                                     This function will revert if:
+    ///                                     - Pool observation cardinality is below the minimum required cardinality
+    ///                                       (`UniswapV3_ObservationCardinalityInsufficient`)
     ///
     /// @param pool_                        The pool used for the TWAP lookup
     /// @param observationWindowSeconds_    The requested observation window in seconds

@@ -134,7 +134,7 @@ contract UniswapV3PriceTest is Test {
 
     // ========= TESTS ========= //
 
-    function test_constructor_averageBlockTimeSecondsZero_reverts() public {
+    function test_constructor_givenAverageBlockTimeZero_reverts() public {
         Kernel kernel = new Kernel();
         MockPrice mockPriceLocal = new MockPrice(kernel, uint8(18), uint32(8 hours));
 
@@ -445,7 +445,7 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function testRevert_getTokenTWAPOnObservationCardinalityInsufficient() public {
+    function test_getTokenTWAP_givenObservationCardinalityBelowMinimum_reverts() public {
         uint32 observationWindow = 1800;
         uint16 observationCardinality = 149;
         uint16 minimumCardinality = 150;
@@ -464,7 +464,7 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function testFuzz_getTokenTWAP_observationCardinalityRoundsUpOnPartialWindow(
+    function testFuzz_getTokenTWAP_givenObservationWindowRequiresPartialAdditionalObservation_reverts(
         uint32 observationWindow_
     ) public {
         // Bound to keep expected minimum cardinality within uint16.

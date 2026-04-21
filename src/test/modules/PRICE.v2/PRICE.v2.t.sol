@@ -2429,7 +2429,7 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
-    function testRevert_addAsset_uniswapTwapObservationCardinalityInsufficient() public {
+    function test_addAsset_givenUniswapTwapObservationCardinalityInsufficient_reverts() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
             .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 

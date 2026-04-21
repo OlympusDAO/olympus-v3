@@ -53,7 +53,7 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
-    uint32 internal constant UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
+    uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -200,7 +200,7 @@ contract OracleProposalTest is ProposalTest {
         if (submodule == address(0)) {
             console2.log("Deploying UniswapV3Price");
             submodule = address(
-                new UniswapV3Price(Module(priceModule_), UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS)
+                new UniswapV3Price(Module(priceModule_), _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS)
             );
             addresses.addAddress(key, submodule);
         } else {
