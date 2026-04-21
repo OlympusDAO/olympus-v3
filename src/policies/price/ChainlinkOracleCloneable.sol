@@ -11,6 +11,7 @@ import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.s
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 import {String} from "src/libraries/String.sol";
 
@@ -131,7 +132,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         }
 
         // Get the cached direct base/quote price snapshot.
-        (uint256 price, uint48 updatedAt_) = IPRICEv2(factory_.getPriceModule()).getPriceIn(
+        IPRICEv2 priceModule = IPRICEv2(factory_.getPriceModule());
+        (uint256 price, uint48 updatedAt_) = priceModule.getPriceIn(
             baseToken(),
             quoteToken(),
             IPRICEv2.Variant.LAST
@@ -139,6 +141,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
         // Handle no cached data or rounding down to zero.
         if (price == 0 || updatedAt_ == 0) revert ChainlinkOracle_NoDataPresent();
+
+        // Adjust answer to the correct decimal scale
+        // This is in case the PRICE decimals have changed since oracle creation
+        price = FullMath.mulDiv(price, 10 ** _priceDecimals(), 10 ** priceModule.decimals());
 
         // Use timestamp as synthetic round ID.
         roundId = uint80(updatedAt_);
