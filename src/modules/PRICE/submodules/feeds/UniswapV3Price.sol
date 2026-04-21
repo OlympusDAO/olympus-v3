@@ -118,7 +118,7 @@ contract UniswapV3Price is PriceSubmodule {
     // ========== STATE VARIABLES ========== //
 
     /// @notice     Assumed average block time used to estimate required observations for TWAP
-    uint32 public immutable averageBlockTimeSeconds;
+    uint32 public immutable AVERAGE_BLOCK_TIME_SECONDS;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -128,7 +128,7 @@ contract UniswapV3Price is PriceSubmodule {
         if (averageBlockTimeSeconds_ == 0)
             revert UniswapV3_AverageBlockTimeInvalid(averageBlockTimeSeconds_);
 
-        averageBlockTimeSeconds = averageBlockTimeSeconds_;
+        AVERAGE_BLOCK_TIME_SECONDS = averageBlockTimeSeconds_;
     }
 
     // ========== SUBMODULE FUNCTIONS =========== //
@@ -361,8 +361,8 @@ contract UniswapV3Price is PriceSubmodule {
 
         // Round up to avoid accepting windows that require a partial additional observation.
         uint32 minimumCardinality = uint32(
-            (uint256(observationWindowSeconds_) + averageBlockTimeSeconds - 1) /
-                averageBlockTimeSeconds
+            (uint256(observationWindowSeconds_) + AVERAGE_BLOCK_TIME_SECONDS - 1) /
+                AVERAGE_BLOCK_TIME_SECONDS
         );
 
         if (observationCardinality < minimumCardinality)
