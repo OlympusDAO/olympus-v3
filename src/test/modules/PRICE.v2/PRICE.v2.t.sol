@@ -1879,6 +1879,63 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(t2_movingAverage, 7.5e18, "t2: moving average did not match");
     }
 
+    function test_storeObservation_thenCachePrice_doesNotAffectMovingAverage(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Store a new observation first so ONEMA moving-average state is updated.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+        onemaUsdPriceFeed.setLatestAnswer(int256(9e8));
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+
+        IPRICEv2.Asset memory assetAfterStore = price.getAssetData(address(onema));
+        (uint256 movingAverageBefore, uint48 movingAverageTimestampBefore) = price.getPrice(
+            address(onema),
+            IPRICEv2.Variant.MOVINGAVERAGE
+        );
+
+        // Update only the cache and confirm MA storage is unchanged.
+        onemaUsdPriceFeed.setLatestAnswer(int256(123e8));
+        vm.prank(priceWriter);
+        price.cachePrice(address(onema), _UNIT_OF_ACCOUNT);
+
+        IPRICEv2.Asset memory assetAfterCache = price.getAssetData(address(onema));
+        (uint256 movingAverageAfter, uint48 movingAverageTimestampAfter) = price.getPrice(
+            address(onema),
+            IPRICEv2.Variant.MOVINGAVERAGE
+        );
+        (uint256 cachedLastPrice, uint48 cachedTimestamp) = price.getPrice(
+            address(onema),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertEq(movingAverageAfter, movingAverageBefore, "Moving average should remain unchanged");
+        assertEq(
+            movingAverageTimestampAfter,
+            movingAverageTimestampBefore,
+            "Moving average timestamp should remain unchanged"
+        );
+        assertEq(
+            assetAfterCache.cumulativeObs,
+            assetAfterStore.cumulativeObs,
+            "cumulativeObs should remain unchanged"
+        );
+        assertEq(
+            assetAfterCache.lastObservationTime,
+            assetAfterStore.lastObservationTime,
+            "lastObservationTime should remain unchanged"
+        );
+        assertEq(
+            assetAfterCache.nextObsIndex,
+            assetAfterStore.nextObsIndex,
+            "nextObsIndex should remain unchanged"
+        );
+        assertEq(cachedLastPrice, uint256(123e18), "Cache should still update from latest feed");
+        assertEq(cachedTimestamp, uint48(block.timestamp), "Cached timestamp should update");
+    }
+
     function test_storeObservation_twoPriceFeeds_includesMovingAverage() public {
         // Initial observations that return the same value as the Chainlink price feeds
         uint256[] memory observations = new uint256[](2);
