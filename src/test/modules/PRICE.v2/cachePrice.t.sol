@@ -15,8 +15,7 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         address indexed quote_,
         uint256 assetPriceUsd_,
         uint256 quotePriceUsd_,
-        uint48 cachedAt_,
-        uint80 roundId_
+        uint48 cachedAt_
     );
 
     function setUp() public override {
@@ -35,14 +34,11 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         price.cachePrice(asset_, base_);
     }
 
-    function _assertAssetUsdCacheUpdated(
-        address asset_,
-        uint256 expectedPrice_,
-        uint80 roundIdBefore_
-    ) internal view {
-        (, , uint48 pairTimestamp, uint80 roundIdAfter) = price.getCachedPrice(
+    function _assertAssetUsdCacheUpdated(address asset_, uint256 expectedPrice_) internal view {
+        (, uint48 pairTimestamp) = price.getPriceIn(
             asset_,
-            _UNIT_OF_ACCOUNT
+            _UNIT_OF_ACCOUNT,
+            IPRICEv2.Variant.LAST
         );
         (uint256 cachedPrice, uint48 cachedTimestamp) = price.getPrice(
             asset_,
@@ -54,7 +50,6 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             uint48(block.timestamp),
             "Asset/USD pair timestamp should be updated"
         );
-        assertEq(roundIdAfter, roundIdBefore_ + 1, "Asset/USD round should increment");
         assertEq(cachedPrice, expectedPrice_, "Asset/USD cache should be backfilled");
         assertEq(
             cachedTimestamp,
@@ -313,10 +308,6 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         // Use ALPHA
         uint256 newPrice = 60e8; // alphaUsdPriceFeed has 8 decimals
         uint256 expectedPrice = 60e18; // result is in 18 decimals
-        (, , , uint80 alphaUsdRoundIdBefore) = price.getCachedPrice(
-            address(alpha),
-            _UNIT_OF_ACCOUNT
-        );
         /// forge-lint: disable-next-line(unsafe-typecast)
         alphaUsdPriceFeed.setLatestAnswer(int256(newPrice));
 
@@ -331,17 +322,8 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             address(alpha),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 alphaUsdRoundIdAfter) = price.getCachedPrice(
-            address(alpha),
-            _UNIT_OF_ACCOUNT
-        );
         assertEq(cachedPrice, expectedPrice, "cached price mismatch");
         assertEq(cachedAt, uint48(block.timestamp), "cached timestamp mismatch");
-        assertEq(
-            alphaUsdRoundIdAfter,
-            alphaUsdRoundIdBefore + 1,
-            "Asset/USD round should increment"
-        );
         vm.stopPrank();
     }
 
@@ -351,16 +333,9 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             address(reserve),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 roundIdBefore) = price.getCachedPrice(address(ohm), address(reserve));
-        (, , , uint80 ohmUsdRoundIdBefore) = price.getCachedPrice(address(ohm), _UNIT_OF_ACCOUNT);
-        (, , , uint80 reserveUsdRoundIdBefore) = price.getCachedPrice(
-            address(reserve),
-            _UNIT_OF_ACCOUNT
-        );
 
         assertEq(cachedPriceBefore, 0, "Pair should start uncached");
         assertEq(cachedAtBefore, 0, "Pair timestamp should start uncached");
-        assertEq(roundIdBefore, 0, "Pair round ID should start uncached");
 
         (uint256 ohmUsdPrice, ) = price.getPrice(address(ohm), IPRICEv2.Variant.CURRENT);
         (uint256 reserveUsdPrice, ) = price.getPrice(address(reserve), IPRICEv2.Variant.CURRENT);
@@ -374,8 +349,7 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             address(reserve),
             ohmUsdPrice,
             reserveUsdPrice,
-            uint48(block.timestamp),
-            1
+            uint48(block.timestamp)
         );
 
         price.cachePrice(address(ohm), address(reserve));
@@ -385,13 +359,11 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             address(reserve),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 roundIdAfter) = price.getCachedPrice(address(ohm), address(reserve));
 
         assertEq(cachedPriceAfter, expectedPairPrice, "Pair price mismatch");
         assertEq(cachedAtAfter, uint48(block.timestamp), "Pair timestamp mismatch");
-        assertEq(roundIdAfter, 1, "Pair round ID mismatch");
-        _assertAssetUsdCacheUpdated(address(ohm), ohmUsdPrice, ohmUsdRoundIdBefore);
-        _assertAssetUsdCacheUpdated(address(reserve), reserveUsdPrice, reserveUsdRoundIdBefore);
+        _assertAssetUsdCacheUpdated(address(ohm), ohmUsdPrice);
+        _assertAssetUsdCacheUpdated(address(reserve), reserveUsdPrice);
 
         vm.stopPrank();
     }
@@ -401,42 +373,33 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
 
         price.cachePrice(address(ohm), address(reserve));
 
-        (
-            uint256 ohmReserveQuoteUsd,
-            uint256 ohmReserveBaseUsd,
-            uint48 firstTimestamp,
-            uint80 firstRound
-        ) = price.getCachedPrice(address(ohm), address(reserve));
-        (
-            uint256 reserveOhmQuoteUsd,
-            uint256 reserveOhmBaseUsd,
-            uint48 reverseTimestamp,
-            uint80 reverseRound
-        ) = price.getCachedPrice(address(reserve), address(ohm));
+        (uint256 ohmReservePrice, uint48 firstTimestamp) = price.getPriceIn(
+            address(ohm),
+            address(reserve),
+            IPRICEv2.Variant.LAST
+        );
+        (uint256 reserveOhmPrice, uint48 reverseTimestamp) = price.getPriceIn(
+            address(reserve),
+            address(ohm),
+            IPRICEv2.Variant.LAST
+        );
 
         assertEq(firstTimestamp, reverseTimestamp, "Both orientations should share timestamp");
-        assertEq(firstRound, reverseRound, "Both orientations should share round ID");
-        assertEq(
-            ohmReserveQuoteUsd,
-            reserveOhmBaseUsd,
-            "Reversed orientation should reuse the same quote leg"
-        );
-        assertEq(
-            ohmReserveBaseUsd,
-            reserveOhmQuoteUsd,
-            "Reversed orientation should reuse the same base leg"
-        );
+        assertGt(ohmReservePrice, 0, "OHM/Reserve pair should be cached");
+        assertGt(reserveOhmPrice, 0, "Reserve/OHM pair should be cached");
 
         vm.warp(block.timestamp + 1);
         price.cachePrice(address(reserve), address(ohm));
 
-        (, , uint48 updatedTimestamp, uint80 updatedRound) = price.getCachedPrice(
+        (, uint48 updatedTimestamp) = price.getPriceIn(
             address(ohm),
-            address(reserve)
-        );
-        (, , uint48 reversedUpdatedTimestamp, uint80 reversedUpdatedRound) = price.getCachedPrice(
             address(reserve),
-            address(ohm)
+            IPRICEv2.Variant.LAST
+        );
+        (, uint48 reversedUpdatedTimestamp) = price.getPriceIn(
+            address(reserve),
+            address(ohm),
+            IPRICEv2.Variant.LAST
         );
 
         assertEq(
@@ -444,13 +407,11 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
             reversedUpdatedTimestamp,
             "Canonical pair timestamp should match"
         );
-        assertEq(updatedRound, reversedUpdatedRound, "Canonical pair round should match");
         assertEq(
             updatedTimestamp,
             uint48(block.timestamp),
             "Shared pair timestamp should update once"
         );
-        assertEq(updatedRound, firstRound + 1, "Shared pair round should increment once");
 
         vm.stopPrank();
     }

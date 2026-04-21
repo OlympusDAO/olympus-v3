@@ -8,9 +8,10 @@ import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
     function test_givenFreshCache_returnsFalse(uint48 warpDelta_) public {
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 cachedAt, ) = priceModule.getCachedPrice(
+        (, uint48 cachedAt) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 0, DEFAULT_MAX_AGE));
         vm.warp(cachedAt + warpDelta);
@@ -20,9 +21,10 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
 
     function test_givenCacheOlderThanMaxAge_returnsTrue(uint48 warpDelta_) public {
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 cachedAt, ) = priceModule.getCachedPrice(
+        (, uint48 cachedAt) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         uint48 warpDelta = uint48(
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)

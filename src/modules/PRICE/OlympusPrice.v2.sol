@@ -131,38 +131,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return (keccak256(abi.encodePacked(quote_, asset_)), false);
     }
 
-    /// @notice                 Returns the cached direct `asset_/quote_` price and metadata
-    /// @dev                    Callers should handle identical operands before reaching this helper.
-    /// @dev                    Uses `getCachedPrice(asset_, quote_)` and derives the direct pair quote
-    ///                         from the oriented USD legs.
-    function _getLastPairQuote(
+    function _getCachedPrice(
         address asset_,
         address quote_
-    ) internal view returns (uint256 price_, uint48 updatedAt_, uint80 roundId_) {
-        (
-            uint256 assetPriceUsd,
-            uint256 quotePriceUsd,
-            uint48 updatedAt,
-            uint80 roundId
-        ) = getCachedPrice(asset_, quote_);
-        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0, 0);
-
-        return (FullMath.mulDiv(assetPriceUsd, _unitPrice(), quotePriceUsd), updatedAt, roundId);
-    }
-
-    /// @inheritdoc IPRICEv2
-    /// @dev        Will revert if:
-    /// @dev        - `asset_` or `_quote_` is not approved nor the reserved unit of account
-    /// @dev        - `asset_` is the same as `quote_`
-    function getCachedPrice(
-        address asset_,
-        address quote_
-    )
-        public
-        view
-        override
-        returns (uint256 assetPriceUsd_, uint256 quotePriceUsd_, uint48 updatedAt_, uint80 roundId_)
-    {
+    ) internal view returns (uint256 assetPriceUsd_, uint256 quotePriceUsd_, uint48 updatedAt_) {
+        // TODO consider shifting checks upstream
         if (asset_ == quote_) revert PRICE_ParamsPairInvalid(asset_, quote_);
 
         _validateApprovedAssetOrUnit(asset_);
@@ -171,13 +144,29 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         // Attempt to fetch a cached value for the asset pair, regardless of the orientation
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         PairPriceCache memory cache = _pairCaches[key];
-        if (cache.roundId == 0) return (0, 0, 0, 0);
+        if (cache.updatedAt == 0) return (0, 0, 0);
 
         // Determine the correct ordering of the return values
         assetPriceUsd_ = assetIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
         quotePriceUsd_ = assetIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
         updatedAt_ = cache.updatedAt;
-        roundId_ = cache.roundId;
+    }
+
+    /// @notice                 Returns the cached direct `asset_/quote_` price and metadata
+    /// @dev                    Callers should handle identical operands before reaching this helper.
+    /// @dev                    Uses `_getCachedPrice(asset_, quote_)` and derives the direct pair quote
+    ///                         from the oriented USD legs.
+    function _getLastPairQuote(
+        address asset_,
+        address quote_
+    ) internal view returns (uint256 price_, uint48 updatedAt_) {
+        (uint256 assetPriceUsd, uint256 quotePriceUsd, uint48 updatedAt) = _getCachedPrice(
+            asset_,
+            quote_
+        );
+        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0);
+
+        return (FullMath.mulDiv(assetPriceUsd, _unitPrice(), quotePriceUsd), updatedAt);
     }
 
     /// @notice                     Returns the current USD price for an asset, or the unit price for the unit of account
@@ -266,8 +255,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             (uint256 price_, uint48 timestamp_, ) = _getCurrentPrice(asset_, true);
             return (price_, timestamp_);
         } else if (variant_ == Variant.LAST) {
-            (uint256 price_, uint48 timestamp_, ) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
-            return (price_, timestamp_);
+            return _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             // Inlined _getMovingAveragePrice logic
             Asset memory asset = _assetData[asset_];
@@ -450,8 +438,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         if (asset_ == quote_) return (_unitPrice(), uint48(block.timestamp));
 
         if (variant_ == Variant.LAST) {
-            (uint256 price_, uint48 timestamp_, ) = _getLastPairQuote(asset_, quote_);
-            return (price_, timestamp_);
+            return _getLastPairQuote(asset_, quote_);
         }
 
         (uint256 assetPrice, uint48 assetTime) = _getAssetPriceVariant(asset_, variant_);
@@ -626,7 +613,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint256 assetPriceUsd_,
         uint256 quotePriceUsd_,
         uint48 timestamp_
-    ) internal returns (uint80 roundId_) {
+    ) internal returns (uint48 updatedAt) {
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         PairPriceCache storage cache = _pairCaches[key];
 
@@ -639,26 +626,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
 
         cache.updatedAt = timestamp_;
-        unchecked {
-            cache.roundId += 1;
-        }
 
-        emit PricePairCached(
-            asset_,
-            quote_,
-            assetPriceUsd_,
-            quotePriceUsd_,
-            timestamp_,
-            cache.roundId
-        );
+        emit PricePairCached(asset_, quote_, assetPriceUsd_, quotePriceUsd_, timestamp_);
 
-        if (quote_ == _UNIT_OF_ACCOUNT) {
-            emit PriceCached(asset_, assetPriceUsd_, timestamp_);
-        } else if (asset_ == _UNIT_OF_ACCOUNT) {
-            emit PriceCached(quote_, quotePriceUsd_, timestamp_);
-        }
-
-        return cache.roundId;
+        return cache.updatedAt;
     }
 
     /// @inheritdoc IPRICEv2

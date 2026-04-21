@@ -15,13 +15,6 @@ interface IPRICEv2 {
     /// @param timestamp_   The timestamp at which the price was calculated
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
-    /// @notice             An asset's price is cached
-    ///
-    /// @param asset_       The address of the asset
-    /// @param price_       The price of the asset in the system unit of account
-    /// @param cachedAt_    The timestamp at which the price was cached
-    event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
-
     /// @notice                 A pair price snapshot is cached
     ///
     /// @param asset_           The address of the asset in the requested orientation
@@ -29,14 +22,12 @@ interface IPRICEv2 {
     /// @param assetPriceUsd_   The cached asset price in the system unit of account
     /// @param quotePriceUsd_   The cached quote price in the system unit of account
     /// @param cachedAt_        The timestamp at which the pair was cached
-    /// @param roundId_         The monotonically increasing round ID for this pair
     event PricePairCached(
         address indexed asset_,
         address indexed quote_,
         uint256 assetPriceUsd_,
         uint256 quotePriceUsd_,
-        uint48 cachedAt_,
-        uint80 roundId_
+        uint48 cachedAt_
     );
 
     /// @notice             An asset's definition is added
@@ -288,7 +279,6 @@ interface IPRICEv2 {
     /// @param token0PriceUsd_  Cached token0 price in the system unit of account
     /// @param token1PriceUsd_  Cached token1 price in the system unit of account
     /// @param updatedAt        The timestamp at which the pair was cached
-    /// @param roundId          The monotonically increasing round ID for the pair
     struct PairPriceCache {
         uint256 token0PriceUsd;
         uint256 token1PriceUsd;
@@ -421,31 +411,6 @@ interface IPRICEv2 {
         address quote_,
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
-
-    /// @notice                 Returns the cached pair snapshot for the requested asset/quote orientation
-    /// @dev                    The first parameter is the asset being priced (`asset_`) and the second is
-    ///                         the quote or denomination asset (`quote_`). The returned USD legs are oriented
-    ///                         to that requested order, not to internal canonical storage order.
-    /// @dev                    Returns zero values if the pair has not been cached.
-    ///
-    /// @param asset_           The address of the asset being priced
-    /// @param quote_           The address of the quote asset
-    /// @return assetPriceUsd_  The cached asset price in the system unit of account
-    /// @return quotePriceUsd_  The cached quote asset price in the system unit of account
-    /// @return updatedAt_      The timestamp at which the pair was cached
-    /// @return roundId_        The cached pair round ID
-    function getCachedPrice(
-        address asset_,
-        address quote_
-    )
-        external
-        view
-        returns (
-            uint256 assetPriceUsd_,
-            uint256 quotePriceUsd_,
-            uint48 updatedAt_,
-            uint80 roundId_
-        );
 
     /// @notice         Updates the cached price snapshot for an asset/quote pair
     /// @dev            Permissioned at module level, can be exposed permissionlessly via policy

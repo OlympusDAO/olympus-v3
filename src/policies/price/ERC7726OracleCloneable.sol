@@ -76,19 +76,13 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         _checkEnabled();
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
 
-        (uint256 baseAssetPriceUsd, uint256 quoteAssetPriceUsd, uint48 pairTimestamp, ) = PRICE
-            .getCachedPrice(base_, quote_);
-        uint256 pairPrice = 0;
-        if (baseAssetPriceUsd != 0 && quoteAssetPriceUsd != 0) {
-            pairPrice = FullMath.mulDiv(
-                baseAssetPriceUsd,
-                10 ** PRICE.decimals(),
-                quoteAssetPriceUsd
-            );
-        }
+        (uint256 pairPrice, uint48 pairTimestamp) = PRICE.getPriceIn(
+            base_,
+            quote_,
+            IPRICEv2.Variant.LAST
+        );
 
-        // `getCachedPrice()` is requested in the same base/quote orientation as `getQuote()`.
-        // The returned USD legs are then combined into a direct base/quote price.
+        // `getPriceIn(..., Variant.LAST)` is requested in the same base/quote orientation as `getQuote()`.
 
         // Check for staleness
         uint48 maxAge_ = maxAge();
@@ -133,7 +127,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @inheritdoc IERC7726Oracle
     function isStale(address base, address quote) external view override returns (bool) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(base, quote);
+        (, uint48 pairTimestamp) = PRICE.getPriceIn(base, quote, IPRICEv2.Variant.LAST);
         return _isStaleFromTimestamp(pairTimestamp, maxAge());
     }
 
@@ -141,7 +135,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @dev        Returns 0 if the pair price has not been cached.
     function timestamp(address base, address quote) external view override returns (uint48) {
         IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, , uint48 pairTimestamp, ) = PRICE.getCachedPrice(base, quote);
+        (, uint48 pairTimestamp) = PRICE.getPriceIn(base, quote, IPRICEv2.Variant.LAST);
         return pairTimestamp;
     }
 

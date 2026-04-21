@@ -89,7 +89,7 @@ contract MockPrice is PRICEv2 {
         uint256 assetPriceUsd_,
         uint256 quotePriceUsd_,
         uint48 timestamp_
-    ) internal returns (uint80 roundId_) {
+    ) internal returns (uint48 updatedAt) {
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         PairPriceCache storage cache = pairCaches[key];
 
@@ -102,17 +102,13 @@ contract MockPrice is PRICEv2 {
         }
 
         cache.updatedAt = timestamp_;
-        unchecked {
-            cache.roundId += 1;
-        }
 
         emit PricePairCached(
             asset_,
             quote_,
             assetPriceUsd_,
             quotePriceUsd_,
-            timestamp_,
-            cache.roundId
+            timestamp_
         );
 
         if (quote_ == _UNIT_OF_ACCOUNT) {
@@ -123,7 +119,7 @@ contract MockPrice is PRICEv2 {
             lastStoredTimestamps[quote_] = timestamp_;
         }
 
-        return cache.roundId;
+        return cache.updatedAt;
     }
 
     function _getLastPairQuote(
@@ -306,31 +302,6 @@ contract MockPrice is PRICEv2 {
 
     function isAssetApproved(address asset_) external view override returns (bool) {
         return assetApproved[asset_];
-    }
-
-    function getCachedPrice(
-        address quote_,
-        address base_
-    )
-        external
-        view
-        override
-        returns (uint256 quotePriceUsd_, uint256 basePriceUsd_, uint48 updatedAt_, uint80 roundId_)
-    {
-        if (quote_ == base_) return (_unitPrice(), _unitPrice(), 0, 0);
-
-        if (!_isUnitOfAccount(quote_) && !assetApproved[quote_])
-            revert PRICE_AssetNotApproved(quote_);
-        if (!_isUnitOfAccount(base_) && !assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
-
-        (bytes32 key, bool quoteIsToken0) = _pairKey(quote_, base_);
-        PairPriceCache memory cache = pairCaches[key];
-        if (cache.roundId == 0) return (0, 0, 0, 0);
-
-        quotePriceUsd_ = quoteIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
-        basePriceUsd_ = quoteIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
-        updatedAt_ = cache.updatedAt;
-        roundId_ = cache.roundId;
     }
 
     function cachePrice(address asset_, address base_) external override {

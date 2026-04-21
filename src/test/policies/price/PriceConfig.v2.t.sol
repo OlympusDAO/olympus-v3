@@ -1100,21 +1100,22 @@ contract PriceConfigv2Test is Test {
         vm.prank(priceManager);
         priceConfig.cachePrice(address(ohm), address(reserve));
 
-        (, , uint48 oldTimestamp, uint80 oldRoundId) = PRICE.getCachedPrice(
+        (, uint48 oldTimestamp) = PRICE.getPriceIn(
             address(ohm),
-            address(reserve)
+            address(reserve),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 1);
         priceConfig.cachePriceIfNecessary(address(ohm), address(reserve), uint48(2));
 
-        (, , uint48 newTimestamp, uint80 newRoundId) = PRICE.getCachedPrice(
+        (, uint48 newTimestamp) = PRICE.getPriceIn(
             address(ohm),
-            address(reserve)
+            address(reserve),
+            IPRICEv2.Variant.LAST
         );
 
         assertEq(newTimestamp, oldTimestamp, "Fresh pair cache should not be updated");
-        assertEq(newRoundId, oldRoundId, "Fresh pair round should not change");
     }
 
     function test_cachePriceIfNecessary_nonUnitQuote_givenCacheIsStale_caches() public {
@@ -1124,21 +1125,22 @@ contract PriceConfigv2Test is Test {
         vm.prank(priceManager);
         priceConfig.cachePrice(address(ohm), address(reserve));
 
-        (, , uint48 oldTimestamp, uint80 oldRoundId) = PRICE.getCachedPrice(
+        (, uint48 oldTimestamp) = PRICE.getPriceIn(
             address(ohm),
-            address(reserve)
+            address(reserve),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 3);
         priceConfig.cachePriceIfNecessary(address(ohm), address(reserve), uint48(2));
 
-        (, , uint48 newTimestamp, uint80 newRoundId) = PRICE.getCachedPrice(
+        (, uint48 newTimestamp) = PRICE.getPriceIn(
             address(ohm),
-            address(reserve)
+            address(reserve),
+            IPRICEv2.Variant.LAST
         );
 
         assertGt(newTimestamp, oldTimestamp, "Stale pair cache should be updated");
-        assertGt(newRoundId, oldRoundId, "Stale pair round should increase");
     }
 
     function test_supportsInterface() public view {

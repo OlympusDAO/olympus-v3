@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract CachePriceCaller {
@@ -48,65 +49,69 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
     }
 
     function test_whenOracleIsEnabled_cachesDirectPair() public {
-        (, , uint48 oldPairTimestamp, uint80 oldRoundId) = priceModule.getCachedPrice(
+        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 1);
         MorphoOracleCloneable(address(oracle)).cachePrice();
 
-        (, , uint48 newPairTimestamp, uint80 newRoundId) = priceModule.getCachedPrice(
+        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
-        assertGt(newRoundId, oldRoundId, "Pair round ID should increment");
     }
 
     function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
-        (, , uint48 oldPairTimestamp, uint80 oldRoundId) = priceModule.getCachedPrice(
+        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 1);
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, , uint48 newPairTimestamp, uint80 newRoundId) = priceModule.getCachedPrice(
+        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should not be re-cached");
-        assertEq(newRoundId, oldRoundId, "Pair round ID should not change");
     }
 
     function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
-        (, , uint48 oldPairTimestamp, uint80 oldRoundId) = priceModule.getCachedPrice(
+        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, , uint48 newPairTimestamp, uint80 newRoundId) = priceModule.getCachedPrice(
+        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
-        assertGt(newRoundId, oldRoundId, "Pair round ID should increment");
     }
 
     function test_whenOnlyCollateralUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair()
         public
     {
-        (, , uint48 oldPairTimestamp, uint80 oldRoundId) = priceModule.getCachedPrice(
+        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 1);
@@ -114,19 +119,20 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, , uint48 newPairTimestamp, uint80 newRoundId) = priceModule.getCachedPrice(
+        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should remain unchanged");
-        assertEq(newRoundId, oldRoundId, "Pair round ID should remain unchanged");
     }
 
     function test_whenOnlyLoanUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
-        (, , uint48 oldPairTimestamp, uint80 oldRoundId) = priceModule.getCachedPrice(
+        (, uint48 oldPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         vm.warp(block.timestamp + 1);
@@ -134,13 +140,13 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        (, , uint48 newPairTimestamp, uint80 newRoundId) = priceModule.getCachedPrice(
+        (, uint48 newPairTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should remain unchanged");
-        assertEq(newRoundId, oldRoundId, "Pair round ID should remain unchanged");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

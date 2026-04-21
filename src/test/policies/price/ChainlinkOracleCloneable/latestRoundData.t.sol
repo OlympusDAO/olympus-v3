@@ -72,7 +72,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredRoundId, "Round ID should match pair round ID");
+        assertEq(roundId, lastStoredTimestamp, "Round ID should match pair timestamp");
 
         // Verify answer is correct
         /// forge-lint: disable-next-line(unsafe-typecast)
@@ -183,7 +183,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , uint256 updatedAt, ) = oracle.latestRoundData();
 
-        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round ID");
+        assertEq(newRoundId, lastStoredTimestamp, "Round ID should match pair timestamp");
 
         // Price calculation should use original decimals
         // PRICE module returns prices in new decimals (9), but oracle should scale to original (18)
@@ -299,7 +299,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
+        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,
@@ -331,7 +331,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
+        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,

@@ -2354,7 +2354,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Should have a cached result, populated from the given observations
         (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
-        assertEq(price_, 9e18);
+        assertEq(price_, 9e18, "cached price");
     }
 
     function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_multipleObservations()

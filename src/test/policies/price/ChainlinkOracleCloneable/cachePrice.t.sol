@@ -54,10 +54,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 oldRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         vm.warp(block.timestamp + 1);
         ChainlinkOracleCloneable(address(oracle)).cachePrice();
@@ -67,13 +63,8 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 newRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
-        assertGt(newRoundId, oldRoundId, "Pair round ID should increment");
     }
 
     function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
@@ -81,10 +72,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(baseToken),
             address(quoteToken),
             IPRICEv2.Variant.LAST
-        );
-        (, , , uint80 oldRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
         );
 
         vm.warp(block.timestamp + 1);
@@ -95,13 +82,8 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 newRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should not be re-cached");
-        assertEq(newRoundId, oldRoundId, "Pair round ID should not change");
     }
 
     function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
@@ -109,10 +91,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(baseToken),
             address(quoteToken),
             IPRICEv2.Variant.LAST
-        );
-        (, , , uint80 oldRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
         );
 
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
@@ -123,13 +101,8 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 newRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         assertGt(newPairTimestamp, oldPairTimestamp, "Pair timestamp should be re-cached");
-        assertGt(newRoundId, oldRoundId, "Pair round ID should increment");
     }
 
     function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
@@ -145,10 +118,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 oldRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         vm.warp(block.timestamp + 1);
         zeroMaxAgeOracle.cachePriceIfNecessary();
@@ -158,13 +127,8 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 newRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         assertGt(newPairTimestamp, oldPairTimestamp, "maxAge=0 should recache pair timestamp");
-        assertGt(newRoundId, oldRoundId, "maxAge=0 should increment pair round ID");
     }
 
     function test_whenOnlyBaseUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
@@ -172,10 +136,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(baseToken),
             address(quoteToken),
             IPRICEv2.Variant.LAST
-        );
-        (, , , uint80 oldRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
         );
 
         vm.warp(block.timestamp + 1);
@@ -188,13 +148,8 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
             address(quoteToken),
             IPRICEv2.Variant.LAST
         );
-        (, , , uint80 newRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
-        );
 
         assertEq(newPairTimestamp, oldPairTimestamp, "Pair timestamp should remain unchanged");
-        assertEq(newRoundId, oldRoundId, "Pair round ID should remain unchanged");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

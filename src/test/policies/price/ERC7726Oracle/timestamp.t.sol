@@ -20,9 +20,10 @@ contract ERC7726OracleTimestampTest is ERC7726OracleTest {
         address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
 
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         uint48 actualTimestamp = IERC7726Oracle(cloneOracle).timestamp(
@@ -61,9 +62,10 @@ contract ERC7726OracleTimestampTest is ERC7726OracleTest {
         address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
 
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         vm.warp(block.timestamp + 1);
         priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
@@ -86,9 +88,10 @@ contract ERC7726OracleTimestampTest is ERC7726OracleTest {
         address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
 
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         vm.warp(block.timestamp + 1);
         priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());

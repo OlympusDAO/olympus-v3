@@ -14,7 +14,6 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     IChainlinkOracle public oracle;
 
     uint48 public lastStoredTimestamp;
-    uint80 public lastStoredRoundId;
 
     // ========== SETUP ========== //
 
@@ -38,10 +37,6 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
             address(baseToken),
             address(quoteToken),
             IPRICEv2.Variant.LAST
-        );
-        (, , , lastStoredRoundId) = priceModule.getCachedPrice(
-            address(baseToken),
-            address(quoteToken)
         );
     }
 

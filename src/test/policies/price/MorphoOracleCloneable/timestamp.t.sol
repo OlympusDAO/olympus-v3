@@ -8,9 +8,10 @@ import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
     function test_givenConsistentTimestamps_returnsTimestamp() public {
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
 
         uint48 actualTimestamp = oracle.timestamp();
@@ -19,9 +20,10 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
 
     function test_givenOnlyCollateralUsdCacheChanges_returnsCachedPairTimestamp() public {
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         vm.warp(block.timestamp + 1);
         priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
@@ -35,9 +37,10 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
 
     function test_givenOnlyLoanUsdCacheChanges_returnsCachedPairTimestamp() public {
         priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, , uint48 expectedTimestamp, ) = priceModule.getCachedPrice(
+        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
             address(collateralToken),
-            address(loanToken)
+            address(loanToken),
+            IPRICEv2.Variant.LAST
         );
         vm.warp(block.timestamp + 1);
         priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());

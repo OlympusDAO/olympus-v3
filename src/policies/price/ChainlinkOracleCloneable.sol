@@ -11,7 +11,6 @@ import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.s
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
 import {String} from "src/libraries/String.sol";
 
@@ -19,8 +18,6 @@ import {String} from "src/libraries/String.sol";
 /// @author OlympusDAO
 /// @notice Oracle adapter that implements Chainlink's AggregatorV2V3Interface by calling PRICE.getPrice() for base and quote tokens
 contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone {
-    using FullMath for uint256;
-
     uint8 internal constant _VERSION = 1;
 
     // ========== IMMUTABLE ARGS LAYOUT ========== //
@@ -133,25 +130,18 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             revert ChainlinkOracle_NotEnabled();
         }
 
-        // Get the cached price for the asset pair
-        (
-            uint256 baseTokenPriceUsd,
-            uint256 quoteTokenPriceUsd,
-            uint48 updatedAt_,
-            uint80 roundId_
-        ) = IPRICEv2(factory_.getPriceModule()).getCachedPrice(baseToken(), quoteToken());
+        // Get the cached direct base/quote price snapshot.
+        (uint256 price, uint48 updatedAt_) = IPRICEv2(factory_.getPriceModule()).getPriceIn(
+            baseToken(),
+            quoteToken(),
+            IPRICEv2.Variant.LAST
+        );
 
-        // Calculate the price of 1 base token in quote tokens
-        uint256 price = 0;
-        if (baseTokenPriceUsd != 0 && quoteTokenPriceUsd != 0) {
-            price = FullMath.mulDiv(baseTokenPriceUsd, 10 ** _priceDecimals(), quoteTokenPriceUsd);
-        }
+        // Handle no cached data or rounding down to zero.
+        if (price == 0 || updatedAt_ == 0) revert ChainlinkOracle_NoDataPresent();
 
-        // Handle no cached data or rounding down to zero
-        if (price == 0 || updatedAt_ == 0 || roundId_ == 0) revert ChainlinkOracle_NoDataPresent();
-
-        // Set return data
-        roundId = roundId_;
+        // Use timestamp as synthetic round ID.
+        roundId = uint80(updatedAt_);
         /// forge-lint: disable-next-line(unsafe-typecast)
         answer = int256(price);
         startedAt = updatedAt_;
