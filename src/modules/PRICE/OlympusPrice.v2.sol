@@ -980,8 +980,18 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             if (observations_.length > 1)
                 revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
 
-            if (observations_.length == 1 && observations_[0] == 0)
-                revert PRICE_ParamsObservationZero(asset_, 0);
+            if (observations_.length == 1) {
+                if (observations_[0] == 0) revert PRICE_ParamsObservationZero(asset_, 0);
+
+                // If a single observation is provided, a non-zero timestamp must be provided.
+                if (lastObservationTime_ == 0)
+                    revert PRICE_ParamsLastObservationTimeInvalid(
+                        asset_,
+                        lastObservationTime_,
+                        1,
+                        uint48(block.timestamp)
+                    );
+            }
         }
     }
 

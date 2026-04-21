@@ -2333,6 +2333,7 @@ contract PriceV2Test is PriceV2BaseTest {
 
         uint256[] memory observations = new uint256[](1);
         observations[0] = 9e18; // Junk number that should be different to anything from price feeds
+        uint48 observationTimestamp = uint48(block.timestamp) - 1;
 
         // Try and add the asset
         vm.startPrank(priceWriter);
@@ -2346,15 +2347,16 @@ contract PriceV2Test is PriceV2BaseTest {
             false, // bool storeMovingAverage_
             false, // bool useMovingAverage_
             uint32(0), // uint32 movingAverageDuration_
-            uint48(0), // uint48 lastObservationTime_
+            observationTimestamp, // uint48 lastObservationTime_
             observations, // uint256[] memory observations_
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
             feeds //
         );
 
         // Should have a cached result, populated from the given observations
-        (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        (uint256 price_, uint48 timestamp_) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
         assertEq(price_, 9e18, "cached price");
+        assertEq(timestamp_, observationTimestamp, "cached timestamp");
     }
 
     function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_multipleObservations()
@@ -2424,6 +2426,47 @@ contract PriceV2Test is PriceV2BaseTest {
             0
         );
         vm.expectRevert(err);
+
+        // Try and add the asset
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            observations, // uint256[] memory observations_
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_singleObservationZeroTimestamp()
+        public
+    {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 9e18;
+
+        vm.startPrank(priceWriter);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ParamsLastObservationTimeInvalid.selector,
+                address(weth),
+                uint48(0),
+                uint48(1),
+                uint48(block.timestamp)
+            )
+        );
 
         // Try and add the asset
         price.addAsset(
@@ -3046,7 +3089,7 @@ contract PriceV2Test is PriceV2BaseTest {
             false, // bool storeMovingAverage_
             false, // bool useMovingAverage_
             uint32(0), // uint32 movingAverageDuration_
-            uint48(0), // uint48 lastObservationTime_
+            uint48(block.timestamp), // uint48 lastObservationTime_
             observations, // uint256[] memory observations_
             strategyEmpty, // Component memory strategy_
             feeds //

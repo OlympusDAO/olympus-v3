@@ -1933,6 +1933,41 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         price.updateAsset(asset_SingleFeed_NoStrategy_NoMA, params);
     }
 
+    // when the moving average configuration is being updated, when storeMovingAverage is false, when the number of observations is 1, when lastObservationTime is zero: it reverts
+
+    function test_whenUpdatingMovingAverage_whenStoreMovingAverageFalse_whenSingleObservation_whenLastObservationTimeZero_reverts()
+        public
+        givenAsset_SingleFeed_NoStrategy_NoMA
+    {
+        uint256[] memory newObs = new uint256[](1);
+        newObs[0] = 105e18;
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: false,
+            updateStrategy: false,
+            updateMovingAverage: true,
+            feeds: new IPRICEv2.Component[](0),
+            strategy: _emptyStrategy(),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: uint32(0),
+            lastObservationTime: uint48(0),
+            observations: newObs
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ParamsLastObservationTimeInvalid.selector,
+                asset_SingleFeed_NoStrategy_NoMA,
+                uint48(0),
+                uint48(1),
+                uint48(block.timestamp)
+            )
+        );
+        vm.prank(priceWriter);
+        price.updateAsset(asset_SingleFeed_NoStrategy_NoMA, params);
+    }
+
     // when the moving average configuration is being updated, when storeMovingAverage is false, when the number of observations is 1: it stores the observation as the last price, it replaces the moving average configuration, it emits an AssetMovingAverageUpdated event
 
     function test_whenUpdatingMovingAverage_whenStoreMovingAverageFalse_whenSingleObservation()
