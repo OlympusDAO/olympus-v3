@@ -9,9 +9,8 @@ contract MockPrice is PRICEv2 {
     mapping(address => bool) internal assetApproved;
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
+    mapping(address => uint48) internal movingAverageLastUpdated;
     mapping(address => uint256[]) internal observations;
-    mapping(address => uint256) internal lastStoredPrices;
-    mapping(address => uint48) internal lastStoredTimestamps;
     mapping(bytes32 => PairPriceCache) internal pairCaches;
     uint48 internal timestamp;
 
@@ -62,6 +61,7 @@ contract MockPrice is PRICEv2 {
 
     function setMovingAverage(address asset, uint256 movingAverage) public {
         movingAverages[asset] = movingAverage;
+        movingAverageLastUpdated[asset] = uint48(block.timestamp);
     }
 
     function _isUnitOfAccount(address asset_) internal pure returns (bool) {
@@ -103,21 +103,7 @@ contract MockPrice is PRICEv2 {
 
         cache.updatedAt = timestamp_;
 
-        emit PricePairCached(
-            asset_,
-            quote_,
-            assetPriceUsd_,
-            quotePriceUsd_,
-            timestamp_
-        );
-
-        if (quote_ == _UNIT_OF_ACCOUNT) {
-            lastStoredPrices[asset_] = assetPriceUsd_;
-            lastStoredTimestamps[asset_] = timestamp_;
-        } else if (asset_ == _UNIT_OF_ACCOUNT) {
-            lastStoredPrices[quote_] = quotePriceUsd_;
-            lastStoredTimestamps[quote_] = timestamp_;
-        }
+        emit PricePairCached(asset_, quote_, assetPriceUsd_, quotePriceUsd_, timestamp_);
 
         return cache.updatedAt;
     }
@@ -125,34 +111,21 @@ contract MockPrice is PRICEv2 {
     function _getLastPairQuote(
         address asset_,
         address quote_
-    ) internal view returns (uint256 price_, uint48 priceTimestamp_, uint80 roundId_) {
+    ) internal view returns (uint256 price_, uint48 priceTimestamp_) {
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         PairPriceCache memory cache = pairCaches[key];
-        if (cache.roundId == 0) return (0, 0, 0);
+        if (cache.updatedAt == 0) return (0, 0);
 
         uint256 assetPriceUsd = assetIsToken0 ? cache.token0PriceUsd : cache.token1PriceUsd;
         uint256 quotePriceUsd = assetIsToken0 ? cache.token1PriceUsd : cache.token0PriceUsd;
-        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0, 0);
+        if (assetPriceUsd == 0 || quotePriceUsd == 0) return (0, 0);
 
-        return (
-            (assetPriceUsd * (10 ** _decimals)) / quotePriceUsd,
-            cache.updatedAt,
-            cache.roundId
-        );
+        return ((assetPriceUsd * (10 ** _decimals)) / quotePriceUsd, cache.updatedAt);
     }
 
     function _getCurrentPriceOrUnit(address asset_) internal view returns (uint256, uint48) {
         if (_isUnitOfAccount(asset_)) return (_unitPrice(), uint48(block.timestamp));
         return (prices[asset_], uint48(block.timestamp));
-    }
-
-    /// @notice Test helper to directly set LAST cache payload.
-    /// @dev    Used to simulate edge cases such as a zero timestamp with non-zero price.
-    function setLastPrice(address asset_, uint256 price_, uint48 timestamp_) public {
-        assetApproved[asset_] = true;
-        lastStoredPrices[asset_] = price_;
-        lastStoredTimestamps[asset_] = timestamp_;
-        _cachePair(asset_, _UNIT_OF_ACCOUNT, price_, _unitPrice(), timestamp_);
     }
 
     /// @notice Test helper to directly seed a cached pair snapshot.
@@ -200,10 +173,10 @@ contract MockPrice is PRICEv2 {
             price = prices[asset_];
             priceTimestamp = timestamp;
         } else if (variant_ == Variant.LAST) {
-            (price, priceTimestamp, ) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
+            (price, priceTimestamp) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             price = movingAverages[asset_];
-            priceTimestamp = timestamp;
+            priceTimestamp = movingAverageLastUpdated[asset_];
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }
@@ -253,15 +226,13 @@ contract MockPrice is PRICEv2 {
             (assetPrice, priceTimestamp) = _getCurrentPriceOrUnit(asset_);
             (basePrice, ) = _getCurrentPriceOrUnit(base_);
         } else if (variant_ == Variant.LAST) {
-            uint80 roundId;
-            (uint256 price_, uint48 timestamp_, uint80 roundId_) = _getLastPairQuote(asset_, base_);
-            roundId = roundId_;
-            if (roundId == 0) return (0, 0);
+            (uint256 price_, uint48 timestamp_) = _getLastPairQuote(asset_, base_);
+            if (timestamp_ == 0) return (0, 0);
             return (price_, timestamp_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             assetPrice = movingAverages[asset_];
             basePrice = movingAverages[base_];
-            priceTimestamp = timestamp;
+            priceTimestamp = movingAverageLastUpdated[asset_];
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }
@@ -290,8 +261,8 @@ contract MockPrice is PRICEv2 {
                 movingAverageDuration: 30 days,
                 nextObsIndex: 0,
                 numObservations: 90,
-                lastObservationTime: lastStoredTimestamps[asset_] != 0
-                    ? lastStoredTimestamps[asset_]
+                lastObservationTime: movingAverageLastUpdated[asset_] != 0
+                    ? movingAverageLastUpdated[asset_]
                     : uint48(block.timestamp),
                 cumulativeObs: 0,
                 obs: observations[asset_],
@@ -320,8 +291,8 @@ contract MockPrice is PRICEv2 {
         (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
 
         // Store the price and timestamp
-        lastStoredPrices[asset_] = price;
-        lastStoredTimestamps[asset_] = uint48(block.timestamp);
+        movingAverages[asset_] = price;
+        movingAverageLastUpdated[asset_] = uint48(block.timestamp);
         _cachePair(asset_, _UNIT_OF_ACCOUNT, price, _unitPrice(), uint48(block.timestamp));
 
         // Emit both events to match PRICEv2 behavior
@@ -361,11 +332,13 @@ contract MockPrice is PRICEv2 {
         // Mimic PRICE's behaviour of reverting if the asset is not approved
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
 
-        uint48 lastTimestamp = lastStoredTimestamps[asset_];
-        bool useCachedPrice = lastTimestamp != 0 &&
-            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
+        // Get from the cache
+        (uint256 cachedPrice, uint48 cachedTimestamp) = _getLastPairQuote(asset_, _UNIT_OF_ACCOUNT);
 
-        uint256 price = useCachedPrice ? lastStoredPrices[asset_] : prices[asset_];
+        bool useCachedPrice = cachedTimestamp != 0 &&
+            uint256(cachedTimestamp) + uint256(maxAge_) >= block.timestamp;
+
+        uint256 price = useCachedPrice ? cachedPrice : prices[asset_];
         if (price == 0) revert PRICE_PriceZero(asset_);
 
         return price;
