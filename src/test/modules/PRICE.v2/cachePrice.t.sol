@@ -314,7 +314,13 @@ contract PriceV2CachePriceTest is PriceV2BaseTest {
         vm.startPrank(priceWriter);
 
         vm.expectEmit(true, true, true, true);
-        emit PricePairCached(address(alpha), _UNIT_OF_ACCOUNT, expectedPrice, 1e18, uint48(block.timestamp));
+        emit PricePairCached(
+            address(alpha),
+            _UNIT_OF_ACCOUNT,
+            expectedPrice,
+            1e18,
+            uint48(block.timestamp)
+        );
 
         price.cachePrice(address(alpha), _UNIT_OF_ACCOUNT);
 
