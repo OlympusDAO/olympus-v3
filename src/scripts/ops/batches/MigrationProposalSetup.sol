@@ -3,7 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {OwnedERC20} from "src/external/OwnedERC20.sol";
 

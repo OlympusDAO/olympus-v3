@@ -23,7 +23,7 @@ import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActiv
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "forge-std/console2.sol";
 
 /// @notice Installs and activates the complete ConvertibleDeposit system including EmissionManager
 /// @dev    This script handles the complete activation sequence based on ConvertibleDepositAuctioneerTest setup

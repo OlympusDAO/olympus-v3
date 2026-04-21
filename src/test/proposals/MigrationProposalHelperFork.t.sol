@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity ^0.8.0;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";

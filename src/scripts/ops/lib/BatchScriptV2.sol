@@ -3,9 +3,9 @@
 // solhint-disable custom-errors
 pragma solidity >=0.8.15;
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
-import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
+import {console2} from "forge-std/console2.sol";
+import {VmSafe} from "forge-std/Vm.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 
 import {Surl} from "@surl-1.0.0/Surl.sol";
 
@@ -64,6 +64,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    If set, this function will be called after batch simulation to validate state
     bytes4 internal _postBatchValidateSelector;
 
+    /// @notice Whether to skip heartbeat validation during batch simulation
+    /// @dev    Defaults to false (heartbeat validation enabled). Set to true to skip.
+    bool internal _skipHeartbeatValidation;
+
     // TODOs
     // [X] Add Ledger signer support
     // [X] Check for --broadcast flag before proposing batch
@@ -92,6 +96,25 @@ abstract contract BatchScriptV2 is WithEnvironment {
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
         _setUp(chainName, useDaoMS_, false, "", "", "");
+        _;
+    }
+
+    /// @notice Set up with yield multisig as owner
+    /// @dev    Reads from olympus.multisig.yield in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithYieldMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_,
+        bytes memory signature_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+        // useDaoMS_ is ignored - always use yield multisig
+        address owner = _envAddressNotZero("olympus.multisig.yield");
+        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
         _;
     }
 
@@ -196,6 +219,21 @@ abstract contract BatchScriptV2 is WithEnvironment {
         return nonce;
     }
 
+    function _logSafeTxDetails(address to, bytes memory data, uint256 nonce) internal view {
+        bytes32 safeTxHash = _multiSig.getSafeTxHash(
+            to,
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            nonce
+        );
+        console2.log("  Safe tx hash (idempotency key):");
+        console2.logBytes32(safeTxHash);
+        console2.log("  Multisend target:", to);
+        console2.log("  Multisend calldata hash:");
+        console2.logBytes32(keccak256(data));
+    }
+
     function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
         if (_signOnly) {
             revert("BatchScriptV2: Cannot propose batch when signOnly is true");
@@ -216,6 +254,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
             signature: _signature, // Empty signature, will be signed later
             nonce: nonce
         });
+
+        _logSafeTxDetails(to, data, nonce);
 
         // If there is no signature, get the signature
         if (!_hasSignature()) {
@@ -262,6 +302,8 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
             (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
 
+            _logSafeTxDetails(to, data, nonce);
+
             // This will revert if the user is using a Ledger and the derivation path is not provided
             bytes memory signature = _multiSig.sign(
                 to,
@@ -274,6 +316,15 @@ abstract contract BatchScriptV2 is WithEnvironment {
             console2.log("Batch signed. Signature:");
             console2.logBytes(signature);
             return;
+        }
+
+        {
+            uint256 nonce = _getNonce();
+            (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(
+                _batchTargets,
+                _batchData
+            );
+            _logSafeTxDetails(to, data, nonce);
         }
 
         // Check if we're in broadcast mode before proposing
@@ -676,9 +727,18 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _runPostBatchValidation();
 
         // Validate heart beat
-        _validateHeartBeat();
+        if (_skipHeartbeatValidation) {
+            console2.log(
+                "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
+            );
+            console2.log(
+                "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
+            );
+        } else {
+            _validateHeartBeat();
+        }
 
-        // Revert to snapshot - removes BOTH simulation and validation artifacts
+        // Revert to snapshot - removes simulation and validation artifacts
         vm.revertToStateAndDelete(snapshotId);
         console2.log("Restored state from snapshot (simulation + validation artifacts removed)");
     }

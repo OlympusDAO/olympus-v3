@@ -3,7 +3,7 @@
 pragma solidity >=0.8.0;
 
 // =========== TEST CONTRACTS ===========
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 

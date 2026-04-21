@@ -8,7 +8,7 @@
 pragma solidity >=0.8.20;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";

@@ -5,7 +5,7 @@ import {ReceiptTokenManagerTest} from "./ReceiptTokenManagerTest.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
-import {stdError} from "@forge-std-1.9.6/StdError.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 /**
  * @title BurnTest

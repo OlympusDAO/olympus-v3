@@ -2,12 +2,12 @@
 /// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {MockERC6909Wrappable} from "../mocks/MockERC6909Wrappable.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";
 import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
-import {stdError} from "@forge-std-1.9.6/StdError.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC6909, IERC6909Metadata, IERC6909TokenSupply} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
