@@ -92,6 +92,24 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
+    /// @notice                         The pool has insufficient observation cardinality for the TWAP window
+    ///
+    /// @param pool_                    The address of the pool
+    /// @param observationCardinality_  Current observation cardinality on the pool
+    /// @param observationWindow_       Requested TWAP observation window in seconds
+    /// @param minimumCardinality_      Minimum cardinality required for the observation window
+    error UniswapV3_ObservationCardinalityInsufficient(
+        address pool_,
+        uint16 observationCardinality_,
+        uint32 observationWindow_,
+        uint32 minimumCardinality_
+    );
+
+    /// @notice                         The configured average block time is invalid
+    ///
+    /// @param averageBlockTimeSeconds_ The configured average block time in seconds
+    error UniswapV3_AverageBlockTimeInvalid(uint32 averageBlockTimeSeconds_);
+
     /// @notice         Triggered if `pool_` is locked, which indicates re-entrancy
     ///
     /// @param pool_    The address of the affected Uniswap V3 pool
@@ -99,9 +117,19 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice     Assumed average block time used to estimate required observations for TWAP
+    uint32 public immutable averageBlockTimeSeconds;
+
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Module parent_) Submodule(parent_) {}
+    /// @param parent_                   The PRICE module
+    /// @param averageBlockTimeSeconds_  The average block time used for cardinality checks
+    constructor(Module parent_, uint32 averageBlockTimeSeconds_) Submodule(parent_) {
+        if (averageBlockTimeSeconds_ == 0)
+            revert UniswapV3_AverageBlockTimeInvalid(averageBlockTimeSeconds_);
+
+        averageBlockTimeSeconds = averageBlockTimeSeconds_;
+    }
 
     // ========== SUBMODULE FUNCTIONS =========== //
 
@@ -147,6 +175,8 @@ contract UniswapV3Price is PriceSubmodule {
             uint8 quoteTokenDecimals,
             uint8 lookupTokenDecimals
         ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
+
+        _checkObservationCardinality(params.pool, params.observationWindowSeconds);
 
         uint256 baseInQuotePrice = OracleHelper.getTWAPRatio(
             address(params.pool),
@@ -316,6 +346,32 @@ contract UniswapV3Price is PriceSubmodule {
             );
 
         return (quoteToken, quoteTokenDecimals, lookupTokenDecimals);
+    }
+
+    /// @notice                             Validates the observation cardinality for a TWAP window
+    /// @dev                                Assumes one observation per ~12 second block
+    ///
+    /// @param pool_                        The pool used for the TWAP lookup
+    /// @param observationWindowSeconds_    The requested observation window in seconds
+    function _checkObservationCardinality(
+        IUniswapV3Pool pool_,
+        uint32 observationWindowSeconds_
+    ) internal view {
+        (, , , uint16 observationCardinality, , , ) = pool_.slot0();
+
+        // Round up to avoid accepting windows that require a partial additional observation.
+        uint32 minimumCardinality = uint32(
+            (uint256(observationWindowSeconds_) + averageBlockTimeSeconds - 1) /
+                averageBlockTimeSeconds
+        );
+
+        if (observationCardinality < minimumCardinality)
+            revert UniswapV3_ObservationCardinalityInsufficient(
+                address(pool_),
+                observationCardinality,
+                observationWindowSeconds_,
+                minimumCardinality
+            );
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

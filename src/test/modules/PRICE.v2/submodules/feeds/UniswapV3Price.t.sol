@@ -44,6 +44,7 @@ contract UniswapV3PriceTest is Test {
     uint256 internal USDC_PRICE = 10 ** PRICE_DECIMALS;
 
     uint32 internal OBSERVATION_SECONDS = 600;
+    uint32 internal constant AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // Live value taken from https://etherscan.io/address/0x4e0924d3a751be199c426d52fb1f2337fa96f736#readContract
     uint160 internal uniSqrtPrice = 79406181270273404968401;
@@ -68,7 +69,7 @@ contract UniswapV3PriceTest is Test {
             mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
-            uniSubmodule = new UniswapV3Price(mockPrice);
+            uniSubmodule = new UniswapV3Price(mockPrice, AVERAGE_BLOCK_TIME_SECONDS);
         }
 
         // Set up the mock UniV3 pool
@@ -132,6 +133,18 @@ contract UniswapV3PriceTest is Test {
     }
 
     // ========= TESTS ========= //
+
+    function test_constructor_averageBlockTimeSecondsZero_reverts() public {
+        Kernel kernel = new Kernel();
+        MockPrice mockPriceLocal = new MockPrice(kernel, uint8(18), uint32(8 hours));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_AverageBlockTimeInvalid.selector,
+            uint32(0)
+        );
+        vm.expectRevert(err);
+        new UniswapV3Price(mockPriceLocal, uint32(0));
+    }
 
     // ========= PARAMS LENGTH VALIDATION ========= //
 
@@ -425,6 +438,52 @@ contract UniswapV3PriceTest is Test {
             address(mockUniPair),
             observationWindow,
             MIN_OBSERVATION_SECONDS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenTWAPOnObservationCardinalityInsufficient() public {
+        uint32 observationWindow = 1800;
+        uint16 observationCardinality = 149;
+        uint16 minimumCardinality = 150;
+        mockUniPair.setObservationCardinality(observationCardinality, observationCardinality);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ObservationCardinalityInsufficient.selector,
+            address(mockUniPair),
+            observationCardinality,
+            observationWindow,
+            minimumCardinality
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testFuzz_getTokenTWAP_observationCardinalityRoundsUpOnPartialWindow(
+        uint32 observationWindow_
+    ) public {
+        // Bound to keep expected minimum cardinality within uint16.
+        uint32 maxWindow = uint32(type(uint16).max) * 12 - 1;
+        uint32 observationWindow = uint32(
+            bound(observationWindow_, MIN_OBSERVATION_SECONDS + 1, maxWindow)
+        );
+        vm.assume(observationWindow % 12 != 0);
+
+        uint16 observationCardinality = uint16(observationWindow / 12);
+        uint32 minimumCardinality = uint32(observationCardinality) + 1;
+        mockUniPair.setObservationCardinality(observationCardinality, observationCardinality);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ObservationCardinalityInsufficient.selector,
+            address(mockUniPair),
+            observationCardinality,
+            observationWindow,
+            minimumCardinality
         );
         vm.expectRevert(err);
 

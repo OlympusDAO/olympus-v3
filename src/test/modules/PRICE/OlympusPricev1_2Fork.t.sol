@@ -88,6 +88,7 @@ contract OlympusPricev1_2ForkTest is Test {
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint32 internal constant OHM_OBSERVATION_WINDOW = 1800; // 30 minutes
+    uint32 internal constant UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // System contracts
     Kernel public kernel;
@@ -150,7 +151,10 @@ contract OlympusPricev1_2ForkTest is Test {
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
         pythPrice = new PythPriceFeeds(price);
-        UniswapV3Price uniswapV3Price = new UniswapV3Price(price);
+        UniswapV3Price uniswapV3Price = new UniswapV3Price(
+            price,
+            UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS
+        );
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);
 

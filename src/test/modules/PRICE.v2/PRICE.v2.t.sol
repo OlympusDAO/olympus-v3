@@ -2429,6 +2429,63 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
+    function testRevert_addAsset_uniswapTwapObservationCardinalityInsufficient() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price.UniswapV3Params(
+            ohmEthUniV3Pool,
+            TWAP_PERIOD
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"), // SubKeycode target
+            UniswapV3Price.getTokenTWAP.selector, // bytes4 selector
+            abi.encode(ohmFeedThreeParams) // bytes memory params
+        );
+
+        // 24 hours requires at least 7200 observations with a 12-second block assumption.
+        ohmEthUniV3Pool.setObservationCardinality(100, 100);
+
+        vm.startPrank(priceWriter);
+
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_PriceFeedCallFailed.selector,
+            address(ohm)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(ohm), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            IPRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+        vm.stopPrank();
+    }
+
     function testRevert_addAsset_singlePriceFeed_movingAverage_submoduleCallReturnsZero(
         uint256 nonce_
     ) public {

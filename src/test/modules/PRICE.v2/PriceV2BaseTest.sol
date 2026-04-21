@@ -70,6 +70,7 @@ abstract contract PriceV2BaseTest is Test {
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint32 internal constant TWAP_PERIOD = 24 hours;
+    uint32 internal constant UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // Re-declare events from PRICE.v2.sol
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
@@ -213,7 +214,7 @@ abstract contract PriceV2BaseTest is Test {
             chainlinkPrice = new ChainlinkPriceFeeds(price);
             bptPrice = new BalancerPoolTokenPrice(price, IVault(address(balVault)));
             strategy = new SimplePriceFeedStrategy(price);
-            univ3Price = new UniswapV3Price(price);
+            univ3Price = new UniswapV3Price(price, UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS);
         }
 
         {
