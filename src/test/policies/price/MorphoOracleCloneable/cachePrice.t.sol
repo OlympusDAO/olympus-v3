@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
@@ -48,7 +49,7 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         caller.cachePrice();
     }
 
-    function test_whenOracleIsEnabled_cachesDirectPairThroughPriceCache() public {
+    function test_whenOracleIsEnabled_cachesDirectPair() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
 
         MorphoOracleCloneable(address(oracle)).cachePrice();
@@ -62,7 +63,7 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         assertEq(cache.lastQuote(), address(loanToken), "Quote should match oracle loan");
     }
 
-    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotRecache() public {
+    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.cachePrice(address(collateralToken), address(loanToken));
 
@@ -77,7 +78,7 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         assertEq(cache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
-    function test_whenPricesAreStale_cachePricesIfNecessaryRecaches() public {
+    function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.cachePrice(address(collateralToken), address(loanToken));
 
@@ -92,6 +93,74 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         assertEq(cache.cachePriceCallCount(), 2, "Stale cache should be re-cached");
     }
 
+    function test_whenOnlyCollateralUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair()
+        public
+    {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        address unitOfAccount = priceModule.unitOfAccount();
+        cache.setUsdPrice(unitOfAccount, 1e18);
+
+        cache.cachePrice(address(collateralToken), address(loanToken));
+        IPriceCache.CachedPrice memory oldPair = cache.getCachedPrice(
+            address(collateralToken),
+            address(loanToken)
+        );
+
+        vm.warp(block.timestamp + 1);
+        cache.cachePrice(address(collateralToken), unitOfAccount);
+
+        MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
+
+        IPriceCache.CachedPrice memory newPair = cache.getCachedPrice(
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(
+            cache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
+        );
+        assertEq(newPair.roundId, oldPair.roundId, "Pair round should remain unchanged");
+        assertEq(
+            newPair.updatedAt,
+            oldPair.updatedAt,
+            "Direct pair timestamp should remain unchanged"
+        );
+    }
+
+    function test_whenOnlyLoanUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        address unitOfAccount = priceModule.unitOfAccount();
+        cache.setUsdPrice(unitOfAccount, 1e18);
+
+        cache.cachePrice(address(collateralToken), address(loanToken));
+        IPriceCache.CachedPrice memory oldPair = cache.getCachedPrice(
+            address(collateralToken),
+            address(loanToken)
+        );
+
+        vm.warp(block.timestamp + 1);
+        cache.cachePrice(address(loanToken), unitOfAccount);
+
+        MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
+
+        IPriceCache.CachedPrice memory newPair = cache.getCachedPrice(
+            address(collateralToken),
+            address(loanToken)
+        );
+        assertEq(
+            cache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
+        );
+        assertEq(newPair.roundId, oldPair.roundId, "Pair round should remain unchanged");
+        assertEq(
+            newPair.updatedAt,
+            oldPair.updatedAt,
+            "Direct pair timestamp should remain unchanged"
+        );
+    }
+
     function test_whenPriceCachePolicyIsDisabled_cachePriceReverts() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.disable("");
@@ -104,7 +173,6 @@ contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
         cache = new MockPriceCache();
         cache.setUsdPrice(address(collateralToken), 2e18);
         cache.setUsdPrice(address(loanToken), 1e18);
-        cache.setPairAllowed(address(collateralToken), address(loanToken), true);
 
         vm.prank(admin);
         factory.setPriceCache(address(cache));

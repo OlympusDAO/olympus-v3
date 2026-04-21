@@ -21,7 +21,7 @@ contract CachePriceCaller {
 }
 
 contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
-    function test_whenOracleIsEnabled_cachePricesCachesPairThroughPriceCache()
+    function test_whenOracleIsEnabled_cachePricesCachesPair()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -83,6 +83,27 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
             "Price cache should receive conditional cache call"
         );
         assertEq(priceCache.cachePriceCallCount(), 2, "Stale pair cache should be updated");
+    }
+
+    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
+        public
+        givenFactoryIsEnabled
+    {
+        MockPriceCache priceCache = _deployConfiguredPriceCache();
+        address oracle = _createOracle(0);
+        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
+
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+
+        vm.warp(block.timestamp + 1);
+        clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
+
+        assertEq(
+            priceCache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
+        );
+        assertEq(priceCache.cachePriceCallCount(), 2, "maxAge=0 should recache pair timestamp");
     }
 
     function test_whenOracleIsDisabled_cachePricesReverts()
@@ -147,7 +168,6 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         priceCache = new MockPriceCache();
         priceCache.setUsdPrice(address(baseToken), 2e18);
         priceCache.setUsdPrice(address(quoteToken), 1e18);
-        priceCache.setPairAllowed(address(baseToken), address(quoteToken), true);
 
         vm.prank(admin);
         factory.setPriceCache(address(priceCache));

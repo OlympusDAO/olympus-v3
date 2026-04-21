@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleCloneable.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
@@ -48,7 +49,7 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         caller.cachePrice();
     }
 
-    function test_whenOracleIsEnabled_cachesDirectPairThroughPriceCache() public {
+    function test_whenOracleIsEnabled_cachesDirectPair() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
 
         ChainlinkOracleCloneable(address(oracle)).cachePrice();
@@ -58,7 +59,7 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         assertEq(cache.lastQuote(), address(quoteToken), "Quote should match oracle quote");
     }
 
-    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotRecache() public {
+    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.cachePrice(address(baseToken), address(quoteToken));
 
@@ -73,7 +74,7 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         assertEq(cache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
-    function test_whenPricesAreStale_cachePricesIfNecessaryRecaches() public {
+    function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.cachePrice(address(baseToken), address(quoteToken));
 
@@ -88,7 +89,9 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         assertEq(cache.cachePriceCallCount(), 2, "Stale cache should be re-cached");
     }
 
-    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryRecachesNextBlock() public {
+    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
+        public
+    {
         MockPriceCache cache = _deployConfiguredPriceCache();
         address zeroMaxAgeOracleAddress = _createOracle(address(baseToken), address(quoteToken), 0);
         ChainlinkOracleCloneable zeroMaxAgeOracle = ChainlinkOracleCloneable(
@@ -108,6 +111,39 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         assertEq(cache.cachePriceCallCount(), 2, "maxAge=0 should recache pair");
     }
 
+    function test_whenOnlyBaseUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
+        MockPriceCache cache = _deployConfiguredPriceCache();
+        address unitOfAccount = priceModule.unitOfAccount();
+        cache.setUsdPrice(unitOfAccount, 1e18);
+
+        cache.cachePrice(address(baseToken), address(quoteToken));
+        IPriceCache.CachedPrice memory oldPair = cache.getCachedPrice(
+            address(baseToken),
+            address(quoteToken)
+        );
+
+        vm.warp(block.timestamp + 1);
+        cache.cachePrice(address(baseToken), unitOfAccount);
+
+        ChainlinkOracleCloneable(address(oracle)).cachePriceIfNecessary();
+
+        IPriceCache.CachedPrice memory newPair = cache.getCachedPrice(
+            address(baseToken),
+            address(quoteToken)
+        );
+        assertEq(
+            cache.cachePriceIfNecessaryCallCount(),
+            1,
+            "Price cache should receive conditional cache call"
+        );
+        assertEq(newPair.roundId, oldPair.roundId, "Pair round should remain unchanged");
+        assertEq(
+            newPair.updatedAt,
+            oldPair.updatedAt,
+            "Direct pair timestamp should remain unchanged"
+        );
+    }
+
     function test_whenPriceCachePolicyIsDisabled_cachePriceReverts() public {
         MockPriceCache cache = _deployConfiguredPriceCache();
         cache.disable("");
@@ -120,7 +156,6 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
         cache = new MockPriceCache();
         cache.setUsdPrice(address(baseToken), BASE_PRICE);
         cache.setUsdPrice(address(quoteToken), QUOTE_PRICE);
-        cache.setPairAllowed(address(baseToken), address(quoteToken), true);
 
         vm.prank(admin);
         factory.setPriceCache(address(cache));

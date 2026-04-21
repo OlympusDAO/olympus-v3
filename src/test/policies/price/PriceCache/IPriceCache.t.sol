@@ -9,25 +9,62 @@ contract IPriceCacheSemanticsTest is Test {
     MockPriceCache internal cache;
     address internal asset;
     address internal quote;
+    address internal unapproved;
 
     function setUp() public {
         cache = new MockPriceCache();
         asset = makeAddr("asset");
         quote = makeAddr("quote");
+        unapproved = makeAddr("unapproved");
 
         cache.setUsdPrice(asset, 2e18);
         cache.setUsdPrice(quote, 1e18);
     }
 
-    function test_cachePrice_whenPairIsNotExplicitlyAllowed_reverts() public {
+    function test_cachePrice_whenAssetAndQuoteAreSame_reverts() public {
         vm.expectRevert(
-            abi.encodeWithSelector(MockPriceCache.PriceCache_PairNotAllowed.selector, asset, quote)
+            abi.encodeWithSelector(MockPriceCache.PriceCache_InvalidPair.selector, asset, asset)
         );
-        cache.cachePrice(asset, quote);
+        cache.cachePrice(asset, asset);
+    }
+
+    function test_cachePrice_whenAssetIsZeroAddress_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MockPriceCache.PriceCache_InvalidPair.selector,
+                address(0),
+                quote
+            )
+        );
+        cache.cachePrice(address(0), quote);
+    }
+
+    function test_cachePrice_whenQuoteIsZeroAddress_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MockPriceCache.PriceCache_InvalidPair.selector,
+                asset,
+                address(0)
+            )
+        );
+        cache.cachePrice(asset, address(0));
+    }
+
+    function test_cachePrice_whenAssetIsUnapproved_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(MockPriceCache.PriceCache_AssetNotApproved.selector, unapproved)
+        );
+        cache.cachePrice(unapproved, quote);
+    }
+
+    function test_cachePrice_whenQuoteIsUnapproved_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(MockPriceCache.PriceCache_AssetNotApproved.selector, unapproved)
+        );
+        cache.cachePrice(asset, unapproved);
     }
 
     function test_getCachedPrice_returnsSeparateAssetAndQuoteUsdLegs() public {
-        cache.setPairAllowed(asset, quote, true);
         cache.cachePrice(asset, quote);
 
         IPriceCache.CachedPrice memory assetQuote = cache.getCachedPrice(asset, quote);
@@ -40,8 +77,6 @@ contract IPriceCacheSemanticsTest is Test {
     }
 
     function test_cachePrice_roundIdIncrementsPerSuccessfulPairWrite() public {
-        cache.setPairAllowed(asset, quote, true);
-
         cache.cachePrice(asset, quote);
         IPriceCache.CachedPrice memory firstSnapshot = cache.getCachedPrice(asset, quote);
         assertEq(firstSnapshot.roundId, 1, "First successful cache write should set roundId to 1");

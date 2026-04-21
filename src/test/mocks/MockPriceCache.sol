@@ -12,8 +12,8 @@ contract MockPriceCache is IPriceCache, IEnabler {
         uint80 roundId;
     }
 
-    error PriceCache_PairNotAllowed(address asset_, address quote_);
-    error PriceCache_MissingPrice(address asset_);
+    error PriceCache_InvalidPair(address asset_, address quote_);
+    error PriceCache_AssetNotApproved(address asset_);
 
     bool public isEnabled = true;
 
@@ -24,32 +24,23 @@ contract MockPriceCache is IPriceCache, IEnabler {
     uint48 public lastMaxAge;
 
     mapping(address asset => uint256 usdPrice) internal _usdPrices;
-    mapping(bytes32 pairKey => bool allowed) internal _isPairAllowed;
     mapping(bytes32 pairKey => InternalCachedPrice cache) internal _cachedPriceByPair;
 
     function setUsdPrice(address asset_, uint256 usdPrice_) external {
         _usdPrices[asset_] = usdPrice_;
     }
 
-    function setPairAllowed(address asset_, address quote_, bool allowed_) external {
-        (bytes32 key, ) = _pairKey(asset_, quote_);
-        _isPairAllowed[key] = allowed_;
-    }
-
-    function isPairAllowed(address asset_, address quote_) external view returns (bool allowed_) {
-        (bytes32 key, ) = _pairKey(asset_, quote_);
-        return _isPairAllowed[key];
-    }
-
     function cachePrice(address asset_, address quote_) public override {
         if (!isEnabled) revert NotEnabled();
+        if (asset_ == address(0) || quote_ == address(0) || asset_ == quote_) {
+            revert PriceCache_InvalidPair(asset_, quote_);
+        }
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
-        if (!_isPairAllowed[key]) revert PriceCache_PairNotAllowed(asset_, quote_);
 
         uint256 assetPriceUsd = _usdPrices[asset_];
         uint256 quotePriceUsd = _usdPrices[quote_];
-        if (assetPriceUsd == 0) revert PriceCache_MissingPrice(asset_);
-        if (quotePriceUsd == 0) revert PriceCache_MissingPrice(quote_);
+        if (assetPriceUsd == 0) revert PriceCache_AssetNotApproved(asset_);
+        if (quotePriceUsd == 0) revert PriceCache_AssetNotApproved(quote_);
 
         InternalCachedPrice storage cache = _cachedPriceByPair[key];
         if (assetIsToken0) {
