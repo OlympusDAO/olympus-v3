@@ -5,6 +5,9 @@ pragma solidity >=0.8.15;
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+
+contract MockNonPriceCache {}
 
 contract MorphoOracleFactorySetPriceCacheTest is MorphoOracleFactoryTest {
     function test_whenCallerIsAdmin_setsPriceCache() public givenFactoryIsEnabled {
@@ -18,7 +21,9 @@ contract MorphoOracleFactorySetPriceCacheTest is MorphoOracleFactoryTest {
 
     function test_whenPriceCacheAddressIsZero_reverts() public givenFactoryIsEnabled {
         vm.prank(admin);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidPriceCache.selector, address(0))
+        );
         factory.setPriceCache(address(0));
     }
 
@@ -39,6 +44,19 @@ contract MorphoOracleFactorySetPriceCacheTest is MorphoOracleFactoryTest {
         vm.prank(caller_);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         factory.setPriceCache(address(cache));
+    }
+
+    function test_whenPriceCacheDoesNotImplementIPriceCache_reverts() public givenFactoryIsEnabled {
+        MockNonPriceCache nonPriceCache = new MockNonPriceCache();
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidPriceCache.selector,
+                address(nonPriceCache)
+            )
+        );
+        factory.setPriceCache(address(nonPriceCache));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

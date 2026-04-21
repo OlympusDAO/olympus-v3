@@ -7,7 +7,6 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
-import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 contract CachePriceCaller {
     IOracleFactory public factory;
@@ -50,89 +49,87 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
     }
 
     function test_whenOracleIsEnabled_cachesDirectPair() public {
-        MockPriceCache cache = _deployConfiguredPriceCache();
-
         ChainlinkOracleCloneable(address(oracle)).cachePrice();
 
-        assertEq(cache.cachePriceCallCount(), 1, "Price cache should receive direct cache write");
-        assertEq(cache.lastAsset(), address(baseToken), "Asset should match oracle base");
-        assertEq(cache.lastQuote(), address(quoteToken), "Quote should match oracle quote");
+        assertEq(
+            priceCache.cachePriceCallCount(),
+            1,
+            "Price cache should receive direct cache write"
+        );
+        assertEq(priceCache.lastAsset(), address(baseToken), "Asset should match oracle base");
+        assertEq(priceCache.lastQuote(), address(quoteToken), "Quote should match oracle quote");
     }
 
     function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache() public {
-        MockPriceCache cache = _deployConfiguredPriceCache();
-        cache.cachePrice(address(baseToken), address(quoteToken));
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + 1);
         ChainlinkOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
         assertEq(
-            cache.cachePriceIfNecessaryCallCount(),
+            priceCache.cachePriceIfNecessaryCallCount(),
             1,
             "Price cache should receive conditional cache call"
         );
-        assertEq(cache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
+        assertEq(priceCache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
     function test_whenPricesAreStale_cachePricesIfNecessaryCaches() public {
-        MockPriceCache cache = _deployConfiguredPriceCache();
-        cache.cachePrice(address(baseToken), address(quoteToken));
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         ChainlinkOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
         assertEq(
-            cache.cachePriceIfNecessaryCallCount(),
+            priceCache.cachePriceIfNecessaryCallCount(),
             1,
             "Price cache should receive conditional cache call"
         );
-        assertEq(cache.cachePriceCallCount(), 2, "Stale cache should be re-cached");
+        assertEq(priceCache.cachePriceCallCount(), 2, "Stale cache should be re-cached");
     }
 
     function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
         public
     {
-        MockPriceCache cache = _deployConfiguredPriceCache();
         address zeroMaxAgeOracleAddress = _createOracle(address(baseToken), address(quoteToken), 0);
         ChainlinkOracleCloneable zeroMaxAgeOracle = ChainlinkOracleCloneable(
             zeroMaxAgeOracleAddress
         );
 
-        cache.cachePrice(address(baseToken), address(quoteToken));
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         vm.warp(block.timestamp + 1);
         zeroMaxAgeOracle.cachePriceIfNecessary();
 
         assertEq(
-            cache.cachePriceIfNecessaryCallCount(),
+            priceCache.cachePriceIfNecessaryCallCount(),
             1,
             "Price cache should receive conditional cache call"
         );
-        assertEq(cache.cachePriceCallCount(), 2, "maxAge=0 should recache pair");
+        assertEq(priceCache.cachePriceCallCount(), 2, "maxAge=0 should recache pair");
     }
 
     function test_whenOnlyBaseUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
-        MockPriceCache cache = _deployConfiguredPriceCache();
         address unitOfAccount = priceModule.unitOfAccount();
-        cache.setUsdPrice(unitOfAccount, 1e18);
+        priceCache.setUsdPrice(unitOfAccount, 1e18);
 
-        cache.cachePrice(address(baseToken), address(quoteToken));
-        IPriceCache.CachedPrice memory oldPair = cache.getCachedPrice(
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+        IPriceCache.CachedPrice memory oldPair = priceCache.getCachedPrice(
             address(baseToken),
             address(quoteToken)
         );
 
         vm.warp(block.timestamp + 1);
-        cache.cachePrice(address(baseToken), unitOfAccount);
+        priceCache.cachePrice(address(baseToken), unitOfAccount);
 
         ChainlinkOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
-        IPriceCache.CachedPrice memory newPair = cache.getCachedPrice(
+        IPriceCache.CachedPrice memory newPair = priceCache.getCachedPrice(
             address(baseToken),
             address(quoteToken)
         );
         assertEq(
-            cache.cachePriceIfNecessaryCallCount(),
+            priceCache.cachePriceIfNecessaryCallCount(),
             1,
             "Price cache should receive conditional cache call"
         );
@@ -145,20 +142,10 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
     }
 
     function test_whenPriceCachePolicyIsDisabled_cachePriceReverts() public {
-        MockPriceCache cache = _deployConfiguredPriceCache();
-        cache.disable("");
+        priceCache.disable("");
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         ChainlinkOracleCloneable(address(oracle)).cachePrice();
-    }
-
-    function _deployConfiguredPriceCache() internal returns (MockPriceCache cache) {
-        cache = new MockPriceCache();
-        cache.setUsdPrice(address(baseToken), BASE_PRICE);
-        cache.setUsdPrice(address(quoteToken), QUOTE_PRICE);
-
-        vm.prank(admin);
-        factory.setPriceCache(address(cache));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

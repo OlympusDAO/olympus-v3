@@ -10,6 +10,7 @@ import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @notice Parent test contract for ChainlinkOracleFactory tests
@@ -20,6 +21,7 @@ contract ChainlinkOracleFactoryTest is Test {
     Kernel public kernel;
     ChainlinkOracleFactory public factory;
     MockPrice public priceModule;
+    MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
 
@@ -57,8 +59,9 @@ contract ChainlinkOracleFactoryTest is Test {
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
-        // Deploy factory
-        factory = new ChainlinkOracleFactory(kernel);
+        // Deploy cache policy + factory
+        priceCache = new MockPriceCache();
+        factory = new ChainlinkOracleFactory(kernel, address(priceCache));
 
         // Install modules
         kernel.executeAction(Actions.InstallModule, address(priceModule));
@@ -79,6 +82,10 @@ contract ChainlinkOracleFactoryTest is Test {
         // Set prices in PRICE module
         _setPRICEPrices(address(baseToken), BASE_PRICE); // 2 USD
         _setPRICEPrices(address(quoteToken), QUOTE_PRICE); // 1 USD
+
+        // Set prices in cache policy mock
+        priceCache.setUsdPrice(address(baseToken), BASE_PRICE);
+        priceCache.setUsdPrice(address(quoteToken), QUOTE_PRICE);
     }
 
     // ========== HELPER FUNCTIONS ========== //

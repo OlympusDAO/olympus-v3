@@ -10,6 +10,7 @@ import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @notice Parent test contract for MorphoOracleFactory tests
@@ -20,6 +21,7 @@ contract MorphoOracleFactoryTest is Test {
     Kernel public kernel;
     MorphoOracleFactory public factory;
     MockPrice public priceModule;
+    MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
 
@@ -54,8 +56,9 @@ contract MorphoOracleFactoryTest is Test {
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
-        // Deploy factory
-        factory = new MorphoOracleFactory(kernel);
+        // Deploy cache policy + factory
+        priceCache = new MockPriceCache();
+        factory = new MorphoOracleFactory(kernel, address(priceCache));
 
         // Install modules
         kernel.executeAction(Actions.InstallModule, address(priceModule));
@@ -76,6 +79,10 @@ contract MorphoOracleFactoryTest is Test {
         // Set prices in PRICE module
         _setPRICEPrices(address(collateralToken), 2e18); // 2 USD
         _setPRICEPrices(address(loanToken), 1e18); // 1 USD
+
+        // Set prices in cache policy mock
+        priceCache.setUsdPrice(address(collateralToken), 2e18);
+        priceCache.setUsdPrice(address(loanToken), 1e18);
     }
 
     // ========== HELPER FUNCTIONS ========== //

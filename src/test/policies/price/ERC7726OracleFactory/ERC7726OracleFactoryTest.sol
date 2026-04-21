@@ -10,12 +10,14 @@ import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol"
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract ERC7726OracleFactoryTest is Test {
     Kernel public kernel;
     ERC7726OracleFactory public factory;
     MockPrice public priceModule;
+    MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
 
@@ -39,9 +41,10 @@ contract ERC7726OracleFactoryTest is Test {
 
         kernel = new Kernel();
         priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
+        priceCache = new MockPriceCache();
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        factory = new ERC7726OracleFactory(kernel);
+        factory = new ERC7726OracleFactory(kernel, address(priceCache));
 
         kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -58,6 +61,8 @@ contract ERC7726OracleFactoryTest is Test {
 
         priceModule.setPrice(address(baseToken), 2e18);
         priceModule.setPrice(address(quoteToken), 1e18);
+        priceCache.setUsdPrice(address(baseToken), 2e18);
+        priceCache.setUsdPrice(address(quoteToken), 1e18);
     }
 
     function _enableFactory() internal {

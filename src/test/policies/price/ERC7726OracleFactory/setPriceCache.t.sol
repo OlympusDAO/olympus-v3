@@ -5,6 +5,9 @@ pragma solidity >=0.8.15;
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
+
+contract MockNonPriceCache {}
 
 contract ERC7726OracleFactorySetPriceCacheTest is ERC7726OracleFactoryTest {
     function test_whenCallerIsAdmin_setsPriceCache() public givenFactoryIsEnabled {
@@ -18,7 +21,12 @@ contract ERC7726OracleFactorySetPriceCacheTest is ERC7726OracleFactoryTest {
 
     function test_whenPriceCacheAddressIsZero_reverts() public givenFactoryIsEnabled {
         vm.prank(admin);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC7726OracleFactory.ERC7726OracleFactory_InvalidPriceCache.selector,
+                address(0)
+            )
+        );
         factory.setPriceCache(address(0));
     }
 
@@ -39,6 +47,19 @@ contract ERC7726OracleFactorySetPriceCacheTest is ERC7726OracleFactoryTest {
         vm.prank(caller_);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         factory.setPriceCache(address(cache));
+    }
+
+    function test_whenPriceCacheDoesNotImplementIPriceCache_reverts() public givenFactoryIsEnabled {
+        MockNonPriceCache nonPriceCache = new MockNonPriceCache();
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC7726OracleFactory.ERC7726OracleFactory_InvalidPriceCache.selector,
+                address(nonPriceCache)
+            )
+        );
+        factory.setPriceCache(address(nonPriceCache));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
