@@ -2458,8 +2458,13 @@ contract PriceV2Test is PriceV2BaseTest {
             abi.encode(ohmFeedThreeParams) // bytes memory params
         );
 
-        // 24 hours requires at least 7200 observations with a 12-second block assumption.
-        ohmEthUniV3Pool.setObservationCardinality(100, 100);
+        // Keep cardinality one below the minimum required by TWAP_PERIOD so the Uniswap feed call fails.
+        uint16 minimumRequiredCardinality = uint16(
+            (uint256(TWAP_PERIOD) + _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS - 1) /
+                _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS
+        );
+        uint16 insufficientCardinality = minimumRequiredCardinality - 1;
+        ohmEthUniV3Pool.setObservationCardinality(insufficientCardinality, insufficientCardinality);
 
         vm.startPrank(priceWriter);
 

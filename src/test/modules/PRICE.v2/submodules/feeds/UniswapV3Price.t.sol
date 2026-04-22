@@ -468,13 +468,13 @@ contract UniswapV3PriceTest is Test {
         uint32 observationWindow_
     ) public {
         // Bound to keep expected minimum cardinality within uint16.
-        uint32 maxWindow = uint32(type(uint16).max) * 12 - 1;
+        uint32 maxWindow = uint32(type(uint16).max) * AVERAGE_BLOCK_TIME_SECONDS - 1;
         uint32 observationWindow = uint32(
             bound(observationWindow_, MIN_OBSERVATION_SECONDS + 1, maxWindow)
         );
-        vm.assume(observationWindow % 12 != 0);
+        vm.assume(observationWindow % AVERAGE_BLOCK_TIME_SECONDS != 0);
 
-        uint16 observationCardinality = uint16(observationWindow / 12);
+        uint16 observationCardinality = uint16(observationWindow / AVERAGE_BLOCK_TIME_SECONDS);
         uint32 minimumCardinality = uint32(observationCardinality) + 1;
         mockUniPair.setObservationCardinality(observationCardinality, observationCardinality);
 
