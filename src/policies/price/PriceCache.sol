@@ -56,11 +56,10 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
             revert IPriceCache.PriceCache_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
         }
         if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId)) {
-            revert
-                IPriceCache.PriceCache_UnsupportedModuleInterface(
-                    _PRICE_KEYCODE,
-                    type(IPRICEv2).interfaceId
-                );
+            revert IPriceCache.PriceCache_UnsupportedModuleInterface(
+                _PRICE_KEYCODE,
+                type(IPRICEv2).interfaceId
+            );
         }
 
         if (address(PRICE) != address(0) && address(PRICE) != priceModule) {
@@ -74,12 +73,11 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
         (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
         if (rolesMajor != 1) {
-            revert
-                IPriceCache.PriceCache_UnsupportedModuleVersion(
-                    _ROLES_KEYCODE,
-                    rolesMajor,
-                    rolesMinor
-                );
+            revert IPriceCache.PriceCache_UnsupportedModuleVersion(
+                _ROLES_KEYCODE,
+                rolesMajor,
+                rolesMinor
+            );
         }
     }
 
