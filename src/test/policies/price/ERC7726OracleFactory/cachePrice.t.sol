@@ -6,7 +6,6 @@ import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 
 contract CachePriceCaller {

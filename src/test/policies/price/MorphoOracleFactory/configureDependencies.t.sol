@@ -36,6 +36,8 @@ contract MorphoOracleFactoryConfigureDependenciesTest is MorphoOracleFactoryTest
         vm.expectRevert(
             abi.encodeWithSelector(
                 IOracleFactory.OracleFactory_UnsupportedModuleVersion.selector,
+                // casting to `bytes5` is safe: "ROLES" is exactly 5 bytes.
+                // forge-lint: disable-next-line(unsafe-typecast)
                 bytes5("ROLES"),
                 2,
                 0
