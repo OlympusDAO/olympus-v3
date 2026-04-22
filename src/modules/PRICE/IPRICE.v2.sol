@@ -85,11 +85,6 @@ interface IPRICEv2 {
     /// @param lastObservationTime_     The timestamp of the last observation
     error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
 
-    /// @notice         The max age is invalid
-    ///
-    /// @param maxAge_  The max age that was provided
-    error PRICE_ParamsMaxAgeInvalid(uint48 maxAge_);
-
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
     ///
@@ -325,14 +320,6 @@ interface IPRICEv2 {
     /// @return price   The USD price of the asset in the scale of `decimals`
     function getPrice(address asset_) external view returns (uint256 price);
 
-    /// @notice         Returns a price no older than the provided age in the system unit of account
-    /// @dev            Returns a stored observation if it is fresh enough, otherwise returns current price
-    ///
-    /// @param asset_   The address of the asset
-    /// @param maxAge_  The maximum age (seconds) of the price
-    /// @return price   The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
-
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
     /// @dev                - Variant.LAST: last stored observation price
@@ -353,18 +340,6 @@ interface IPRICEv2 {
     /// @param quote_   The address of the quote asset that the price will be calculated in
     /// @return price   The price of the asset in units of `quote_`
     function getPriceIn(address asset_, address quote_) external view returns (uint256 price);
-
-    /// @notice             Returns the price of the asset in terms of the quote asset, no older than the max age
-    ///
-    /// @param asset_       The address of the asset being priced
-    /// @param quote_       The address of the quote asset that the price will be calculated in
-    /// @param maxAge_      The maximum age (seconds) of the price
-    /// @return price       The price of the asset in units of `quote_`
-    function getPriceIn(
-        address asset_,
-        address quote_,
-        uint48 maxAge_
-    ) external view returns (uint256 price);
 
     /// @notice             Returns the requested variant of the asset price in terms of the quote asset
     ///

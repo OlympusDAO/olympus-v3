@@ -147,20 +147,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
-    /// @dev        For assets that store observations, this can return a stored observation
-    /// @dev        when it is fresh enough; otherwise returns a freshly calculated current price.
-    /// @dev        The reserved unit-of-account always returns `10 ** decimals()`.
-    /// @dev        Reverts if:
-    /// @dev        - `maxAge_` is greater than or equal to the block timestamp
-    /// @dev        - `asset_` is not approved (and not the unit of account)
-    /// @dev        - A price cannot be determined for `asset_`
-    function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
-        uint48 currentTime = uint48(block.timestamp);
-        if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-        return _getPriceStale(asset_, currentTime - maxAge_);
-    }
-
-    /// @inheritdoc IPRICEv2
     /// @dev        The reserved unit of account returns:
     /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.CURRENT`
     /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.LAST`
@@ -324,48 +310,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
     }
 
-    /// @notice                 Returns a per-asset price using stored observations when fresh enough
-    /// @dev                    Falls back to `_getCurrentPrice(asset_, true)` when there is no fresh observation.
-    ///
-    /// @param asset_           Asset to get price for
-    /// @param stalenessTime_   Staleness threshold (0=current block, other=min acceptable timestamp)
-    /// @return price           The asset price
-    function _getPriceStale(
-        address asset_,
-        uint48 stalenessTime_
-    ) internal view returns (uint256 price) {
-        // The unit of account is always treated as fresh and equal to 1.0 in PRICE decimals.
-        if (_isUnitOfAccount(asset_)) return _unitPrice();
-        _validateApprovedAsset(asset_);
-
-        Asset memory asset = _assetData[asset_];
-        if (asset.storeMovingAverage) {
-            uint48 pTime;
-            (price, pTime) = _getLastObservationPrice(asset_);
-            if (stalenessTime_ == 0 ? pTime == uint48(block.timestamp) : pTime >= stalenessTime_) {
-                return price;
-            }
-        }
-
-        (price, , ) = _getCurrentPrice(asset_, true);
-    }
-
-    /// @notice                 Gets a direct asset/quote price with stale-observation fallback
-    /// @dev                    If `stalenessTime` is 0, each leg needs a same-block observation to be used.
-    /// @dev                    Otherwise, each leg uses a stored observation only if it is at least `stalenessTime_`.
-    /// @dev                    Legs without a fresh observation fall back to current pricing.
-    function _getPriceInStale(
-        address asset_,
-        address quote_,
-        uint48 stalenessTime_
-    ) internal view returns (uint256 price_) {
-        if (asset_ == quote_) return _unitPrice();
-
-        uint256 assetPrice = _getPriceStale(asset_, stalenessTime_);
-        uint256 quotePrice = _getPriceStale(quote_, stalenessTime_);
-        return (assetPrice * _unitPrice()) / quotePrice;
-    }
-
     /// @inheritdoc IPRICEv2
     /// @dev        Returns the pair price from CURRENT per-asset values.
     /// @dev        If either side is the unit of account, that side resolves to `10 ** decimals()`.
@@ -379,24 +323,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256 assetPrice, ) = getPrice(asset_, Variant.CURRENT);
         (uint256 quotePrice, ) = getPrice(quote_, Variant.CURRENT);
         return (assetPrice * _unitPrice()) / quotePrice;
-    }
-
-    /// @inheritdoc IPRICEv2
-    /// @dev        Will revert if:
-    /// @dev        - `asset_` is not approved
-    /// @dev        - `quote_` is not approved
-    /// @dev        - No price could be determined
-    /// @dev        - The max age is >= the block timestamp
-    /// @dev
-    /// @dev        If `quote_` is the unit of account, this is equivalent to `getPrice(asset_, maxAge_)`.
-    function getPriceIn(
-        address asset_,
-        address quote_,
-        uint48 maxAge_
-    ) external view override returns (uint256) {
-        if (maxAge_ >= block.timestamp) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-
-        return _getPriceInStale(asset_, quote_, uint48(block.timestamp) - maxAge_);
     }
 
     /// @inheritdoc IPRICEv2

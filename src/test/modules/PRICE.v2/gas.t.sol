@@ -56,25 +56,6 @@ contract PriceV2GasTest is PriceV2BaseTest {
         assertGt(gasUsed, 0, "gas snapshot should record gas");
     }
 
-    function test_gasSnapshot_getPriceIn_maxAgeLast() public {
-        vm.startPrank(priceWriter);
-        price.storeObservation(address(onema));
-        price.storeObservation(address(twoma));
-        vm.stopPrank();
-
-        vm.startSnapshotGas("OlympusPricev2.getPriceIn.maxAgeLast");
-        uint256 price_ = price.getPriceIn(address(onema), address(twoma), uint48(60));
-        uint256 gasUsed = vm.stopSnapshotGas();
-        (uint256 onemaLast, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
-        (uint256 twomaLast, ) = price.getPrice(address(twoma), IPRICEv2.Variant.LAST);
-        assertEq(
-            price_,
-            (onemaLast * (10 ** price.decimals())) / twomaLast,
-            "onema/twoma maxAge observation price mismatch"
-        );
-        assertGt(gasUsed, 0, "gas snapshot should record gas");
-    }
-
     function test_gasSnapshot_storeObservation() public {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
