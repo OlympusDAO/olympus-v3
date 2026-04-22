@@ -9,14 +9,12 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 contract ERC7726OracleFactoryTest is Test {
     Kernel public kernel;
     ERC7726OracleFactory public factory;
-    MockPrice public priceModule;
     MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
@@ -29,8 +27,6 @@ contract ERC7726OracleFactoryTest is Test {
     address public oracleManager;
     address public emergency;
 
-    uint8 public constant PRICE_DECIMALS = 18;
-    uint32 public constant OBSERVATION_FREQUENCY = 1 hours;
     uint48 public constant DEFAULT_MAX_AGE = 1 hours;
 
     function setUp() public virtual {
@@ -40,13 +36,11 @@ contract ERC7726OracleFactoryTest is Test {
         emergency = makeAddr("EMERGENCY");
 
         kernel = new Kernel();
-        priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
-        priceCache = new MockPriceCache();
+        priceCache = new MockPriceCache(address(kernel));
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
         factory = new ERC7726OracleFactory(kernel, address(priceCache));
 
-        kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(factory));
@@ -59,8 +53,6 @@ contract ERC7726OracleFactoryTest is Test {
         baseToken = new MockERC20("Base Token", "BASE", 18);
         quoteToken = new MockERC20("Quote Token", "QUOTE", 18);
 
-        priceModule.setPrice(address(baseToken), 2e18);
-        priceModule.setPrice(address(quoteToken), 1e18);
         priceCache.setUsdPrice(address(baseToken), 2e18);
         priceCache.setUsdPrice(address(quoteToken), 1e18);
     }

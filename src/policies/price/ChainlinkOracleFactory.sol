@@ -26,9 +26,11 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new ChainlinkOracleFactory
+    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_ The Kernel address
-    constructor(Kernel kernel_) BaseOracleFactory(kernel_) {
+    /// @param  priceCache_ The price cache policy address
+    constructor(Kernel kernel_, address priceCache_) BaseOracleFactory(kernel_, priceCache_) {
         // Deploy implementation for cloning
         ORACLE_IMPLEMENTATION = new ChainlinkOracleCloneable();
     }
@@ -44,8 +46,7 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
     }
 
     /// @inheritdoc BaseOracleFactory
-    /// @dev    Validates tokens are configured in PRICE module, captures current PRICE decimals,
-    ///         generates oracle name, and encodes immutable args.
+    /// @dev    Generates oracle name and encodes immutable args.
     function _encodeOracleData(
         address baseToken_,
         address quoteToken_,
@@ -58,16 +59,17 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         bytes32 oracleName = bytes32(
             abi.encodePacked(baseSymbol, "/", quoteSymbol, " CL ", uint256(maxAge_).toString(), "s")
         );
+        uint8 priceCacheDecimals = priceCache.decimals();
 
         // Create clone with immutable args
         // Layout:
-        // factory (20 bytes) | base (20 bytes) | quote (20 bytes) | PRICE decimals (1 byte) | maxAge (8 bytes) | name (32 bytes)
+        // factory (20 bytes) | base (20 bytes) | quote (20 bytes) | cache decimals (1 byte) | maxAge (8 bytes) | name (32 bytes)
         return
             abi.encodePacked(
                 address(this), // factory address (20 bytes, ends at 0x14)
                 baseToken_, // base token address (20 bytes, ends at 0x28)
                 quoteToken_, // quote token address (20 bytes, ends at 0x3C)
-                PRICE_DECIMALS, // PRICE decimals at creation (1 byte, at 0x3C)
+                priceCacheDecimals, // cache decimals at creation (1 byte, at 0x3C)
                 uint64(maxAge_), // max age (8 bytes, starts at 0x3D)
                 oracleName // name (32 bytes, starts at 0x45)
             );

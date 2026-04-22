@@ -2,17 +2,14 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
     function test_givenFreshCache_returnsFalse(uint48 warpDelta_) public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, uint48 cachedAt) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 0, DEFAULT_MAX_AGE));
         vm.warp(cachedAt + warpDelta);
 
@@ -20,12 +17,10 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
     }
 
     function test_givenCacheOlderThanMaxAge_returnsTrue(uint48 warpDelta_) public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, uint48 cachedAt) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         uint48 warpDelta = uint48(
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
@@ -35,25 +30,27 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
     }
 
     function test_givenOnlyCollateralUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
     function test_givenOnlyLoanUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
     function test_gasSnapshot_isStale() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.startSnapshotGas("MorphoOracleCloneable.isStale");
         oracle.isStale();
@@ -62,24 +59,21 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
     }
 
     function test_givenCollateralTokenRemovedFromPRICE_reverts() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        priceModule.removeAsset(address(collateralToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.setAssetApproval(address(collateralToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IPRICEv2.PRICE_AssetNotApproved.selector,
-                address(collateralToken)
-            )
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
         );
         oracle.isStale();
     }
 
     function test_givenLoanTokenRemovedFromPRICE_reverts() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        priceModule.removeAsset(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.setAssetApproval(address(loanToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(loanToken))
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
         );
         oracle.isStale();
     }

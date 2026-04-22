@@ -8,10 +8,8 @@ import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol"
 
 contract ERC7726OracleFactoryGetPriceCacheTest is ERC7726OracleFactoryTest {
     function test_whenFactoryIsDeployed_returnsConfiguredPriceCache() public {
-        MockPriceCache cache = new MockPriceCache();
-        ERC7726OracleFactory localFactory = ERC7726OracleFactory(
-            _deployFactoryWithPriceCache(address(cache))
-        );
+        MockPriceCache cache = new MockPriceCache(address(kernel));
+        ERC7726OracleFactory localFactory = new ERC7726OracleFactory(kernel, address(cache));
 
         assertEq(
             localFactory.getPriceCache(),
@@ -21,25 +19,12 @@ contract ERC7726OracleFactoryGetPriceCacheTest is ERC7726OracleFactoryTest {
     }
 
     function test_whenPriceCacheIsUpdated_returnsUpdatedPriceCache() public givenFactoryIsEnabled {
-        MockPriceCache cache = new MockPriceCache();
+        MockPriceCache cache = new MockPriceCache(address(kernel));
 
         vm.prank(admin);
         factory.setPriceCache(address(cache));
 
         assertEq(factory.getPriceCache(), address(cache), "Price cache should be updated");
-    }
-
-    function _deployFactoryWithPriceCache(address priceCache_) internal returns (address factory_) {
-        bytes memory creationCode = abi.encodePacked(
-            type(ERC7726OracleFactory).creationCode,
-            abi.encode(kernel, priceCache_)
-        );
-
-        assembly {
-            factory_ := create(0, add(creationCode, 0x20), mload(creationCode))
-        }
-
-        require(factory_ != address(0), "Factory deployment failed");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

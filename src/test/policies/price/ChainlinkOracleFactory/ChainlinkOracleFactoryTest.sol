@@ -9,7 +9,6 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {ChainlinkOracleFactory} from "src/policies/price/ChainlinkOracleFactory.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -20,7 +19,6 @@ contract ChainlinkOracleFactoryTest is Test {
 
     Kernel public kernel;
     ChainlinkOracleFactory public factory;
-    MockPrice public priceModule;
     MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
@@ -34,8 +32,8 @@ contract ChainlinkOracleFactoryTest is Test {
     address public emergency;
 
     uint8 public constant PRICE_DECIMALS = 18;
-    uint32 public constant OBSERVATION_FREQUENCY = 1 hours;
     uint48 public constant DEFAULT_MAX_AGE = 1 hours;
+    address public constant UNIT_OF_ACCOUNT = address(0x348);
 
     uint256 public constant BASE_PRICE = 2e18;
     uint256 public constant QUOTE_PRICE = 1e18;
@@ -52,19 +50,15 @@ contract ChainlinkOracleFactoryTest is Test {
         // Deploy Kernel
         kernel = new Kernel();
 
-        // Deploy PRICE module
-        priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
-
         // Deploy ROLES module
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Deploy cache policy + factory
-        priceCache = new MockPriceCache();
+        priceCache = new MockPriceCache(address(kernel));
         factory = new ChainlinkOracleFactory(kernel, address(priceCache));
 
         // Install modules
-        kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(factory));
@@ -79,20 +73,16 @@ contract ChainlinkOracleFactoryTest is Test {
         baseToken = new MockERC20("Base Token", "BASE", 18);
         quoteToken = new MockERC20("Quote Token", "QUOTE", 18);
 
-        // Set prices in PRICE module
+        // Set prices in cache policy mock
         _setPRICEPrices(address(baseToken), BASE_PRICE); // 2 USD
         _setPRICEPrices(address(quoteToken), QUOTE_PRICE); // 1 USD
-
-        // Set prices in cache policy mock
-        priceCache.setUsdPrice(address(baseToken), BASE_PRICE);
-        priceCache.setUsdPrice(address(quoteToken), QUOTE_PRICE);
     }
 
     // ========== HELPER FUNCTIONS ========== //
 
-    /// @notice Sets price for a token in the PRICE module
+    /// @notice Sets price for a token in the cache policy mock
     function _setPRICEPrices(address token_, uint256 price_) internal {
-        priceModule.setPrice(token_, price_);
+        priceCache.setUsdPrice(token_, price_);
     }
 
     /// @notice Creates an oracle via the factory

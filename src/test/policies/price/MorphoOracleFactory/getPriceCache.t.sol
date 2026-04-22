@@ -8,10 +8,8 @@ import {MorphoOracleFactory} from "src/policies/price/MorphoOracleFactory.sol";
 
 contract MorphoOracleFactoryGetPriceCacheTest is MorphoOracleFactoryTest {
     function test_whenFactoryIsDeployed_returnsConfiguredPriceCache() public {
-        MockPriceCache cache = new MockPriceCache();
-        MorphoOracleFactory localFactory = MorphoOracleFactory(
-            _deployFactoryWithPriceCache(address(cache))
-        );
+        MockPriceCache cache = new MockPriceCache(address(kernel));
+        MorphoOracleFactory localFactory = new MorphoOracleFactory(kernel, address(cache));
 
         assertEq(
             localFactory.getPriceCache(),
@@ -21,25 +19,12 @@ contract MorphoOracleFactoryGetPriceCacheTest is MorphoOracleFactoryTest {
     }
 
     function test_whenPriceCacheIsUpdated_returnsUpdatedPriceCache() public givenFactoryIsEnabled {
-        MockPriceCache cache = new MockPriceCache();
+        MockPriceCache cache = new MockPriceCache(address(kernel));
 
         vm.prank(admin);
         factory.setPriceCache(address(cache));
 
         assertEq(factory.getPriceCache(), address(cache), "Price cache should be updated");
-    }
-
-    function _deployFactoryWithPriceCache(address priceCache_) internal returns (address factory_) {
-        bytes memory creationCode = abi.encodePacked(
-            type(MorphoOracleFactory).creationCode,
-            abi.encode(kernel, priceCache_)
-        );
-
-        assembly {
-            factory_ := create(0, add(creationCode, 0x20), mload(creationCode))
-        }
-
-        require(factory_ != address(0), "Factory deployment failed");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

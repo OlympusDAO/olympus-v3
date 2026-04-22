@@ -6,7 +6,6 @@ import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     // ========== TESTS ========== //
@@ -98,7 +97,7 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
     //  [X] it enables oracle
     //  [X] it emits OracleEnabled event
 
-    function test_success()
+    function test_whenOracleIsDisabled_enablesOracle()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -163,66 +162,56 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
         factory.enableOracle(oracle);
     }
 
-    function test_whenOracleIsEnabledAndPricesAreFresh_doesNotRecacheConfiguredPrices()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-        givenOracleIsDisabled
-    {
+    function test_whenOracleIsEnabledAndPricesAreFresh_doesNotRecacheConfiguredPrices(
+        uint48 warpDelta_
+    ) public givenFactoryIsEnabled givenOracleIsCreated givenOracleIsDisabled {
         address oracle = factory.getOracle(
             address(collateralToken),
             address(loanToken),
             DEFAULT_MAX_AGE
         );
 
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 oldTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 0, DEFAULT_MAX_AGE));
 
-        vm.warp(block.timestamp + 1);
+        vm.warp(uint256(oldTimestamp) + uint256(warpDelta));
 
         vm.prank(admin);
         factory.enableOracle(oracle);
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 newTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         assertEq(newTimestamp, oldTimestamp, "Timestamp should not be re-cached");
     }
 
-    function test_whenOracleIsEnabledAndPricesAreStale_recachesConfiguredPrices()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-        givenOracleIsDisabled
-    {
+    function test_whenOracleIsEnabledAndPricesAreStale_recachesConfiguredPrices(
+        uint48 warpDelta_
+    ) public givenFactoryIsEnabled givenOracleIsCreated givenOracleIsDisabled {
         address oracle = factory.getOracle(
             address(collateralToken),
             address(loanToken),
             DEFAULT_MAX_AGE
         );
 
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
+        uint48 oldTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
 
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        vm.warp(uint256(oldTimestamp) + uint256(warpDelta));
 
         vm.prank(admin);
         factory.enableOracle(oracle);
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 newTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         assertGt(newTimestamp, oldTimestamp, "Timestamp should be re-cached");
     }
@@ -239,25 +228,20 @@ contract MorphoOracleFactoryEnableOracleTest is MorphoOracleFactoryTest {
             DEFAULT_MAX_AGE
         );
 
-        // Simulate the direct collateral/loan pair cache existing with a zero timestamp.
-        // This covers the BaseOracleFactory `_cachePriceIfNecessary` zero-timestamp branch.
-        priceModule.setCachedPrice(address(collateralToken), address(loanToken), 2e18, 1e18, 0);
+        // Clear existing direct-pair snapshot so timestamp starts at zero.
+        priceCache.clearCachedPrice(address(collateralToken), address(loanToken));
 
-        (, uint48 oldTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 oldTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         assertEq(oldTimestamp, 0, "Timestamp should start at zero");
 
         vm.prank(admin);
         factory.enableOracle(oracle);
 
-        (, uint48 newTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 newTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         assertGt(newTimestamp, 0, "Collateral price should be re-cached");
     }

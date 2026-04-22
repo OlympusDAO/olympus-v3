@@ -2,7 +2,6 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 
 contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
@@ -29,7 +28,8 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
     function test_givenOnlyBaseUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         bool stale = oracle.isStale(address(collateralToken), address(loanToken));
         assertEq(stale, false, "Direct pair freshness should be unchanged");
@@ -38,7 +38,8 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
     function test_givenOnlyQuoteUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         bool stale = oracle.isStale(address(collateralToken), address(loanToken));
         assertEq(stale, false, "Direct pair freshness should be unchanged");
@@ -47,8 +48,10 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
     function test_givenBaseAndQuoteUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
-        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(collateralToken), 3e18);
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         bool stale = oracle.isStale(address(collateralToken), address(loanToken));
         assertEq(stale, false, "Direct pair freshness should be unchanged");
@@ -64,18 +67,14 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
     function test_givenBaseAssetIsNotApproved_reverts() public {
         address unapprovedBase = makeAddr("UNAPPROVED_BASE");
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unapprovedBase)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedBase));
         oracle.isStale(unapprovedBase, address(loanToken));
     }
 
     function test_givenQuoteAssetIsNotApproved_reverts() public {
         address unapprovedQuote = makeAddr("UNAPPROVED_QUOTE");
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unapprovedQuote)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedQuote));
         oracle.isStale(address(collateralToken), unapprovedQuote);
     }
 }

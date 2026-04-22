@@ -107,6 +107,18 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         factory.createOracle(address(collateralToken), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when both tokens are zero addresses
+    //  [X] it reverts with InvalidToken
+
+    function test_whenBothTokensAreZeroAddress_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(0), address(0), DEFAULT_MAX_AGE, bytes(""));
+    }
+
     // when loan token is not a contract
     //  [X] it reverts with InvalidToken
 
@@ -287,7 +299,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     //  [X] it emits OracleEnabled event
     //  [X] it calculates scale factor correctly
 
-    function test_success() public givenFactoryIsEnabled {
+    function test_whenAllConditionsAreMet_createsOracle() public givenFactoryIsEnabled {
         vm.expectEmit(false, false, false, false);
         emit IOracleFactory.OracleCreated(
             address(0), // Will be set to actual oracle address
@@ -378,22 +390,20 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        (, uint48 timestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 timestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         assertGt(timestamp, 0, "Token price should be cached");
     }
 
-    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+    function test_whenCachePriceCalledByNonOracle_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
             abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
         );
 
         vm.prank(admin);
-        factory.cacheOraclePrices();
+        factory.cachePrice(address(collateralToken), address(loanToken));
     }
 
     function test_whenTokenDecimalsAreValid_calculatesScaleFactorWithDifferentDecimals()

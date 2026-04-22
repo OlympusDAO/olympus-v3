@@ -2,7 +2,6 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
@@ -31,7 +30,8 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
 
         // Refreshing the base-USD price should not affect the freshness of base-quote price
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(baseToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(baseToken), 3e18);
+        priceCache.cachePrice(address(baseToken), UNIT_OF_ACCOUNT);
 
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
@@ -43,7 +43,8 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
 
         // Refreshing the quote-USD price should not affect the freshness of base-quote price
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(quoteToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(quoteToken), 2e18);
+        priceCache.cachePrice(address(quoteToken), UNIT_OF_ACCOUNT);
 
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
@@ -55,7 +56,9 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
 
         // Refreshing the base-quote price should not make it stale
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(baseToken), address(quoteToken));
+        _setPRICEPrices(address(baseToken), 3e18);
+        _setPRICEPrices(address(quoteToken), 2e18);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
@@ -68,10 +71,10 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
     }
 
     function test_givenBaseTokenRemovedFromPRICE_reverts() public givenPricesAreStored {
-        priceModule.removeAsset(address(baseToken));
+        priceCache.setAssetApproval(address(baseToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(baseToken))
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(baseToken))
         );
         oracle.isStale();
     }

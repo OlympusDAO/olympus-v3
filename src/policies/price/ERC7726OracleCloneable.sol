@@ -7,7 +7,7 @@ import {IPriceOracle} from "src/policies/interfaces/price/IPriceOracle.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
@@ -18,7 +18,7 @@ import {String} from "src/libraries/String.sol";
 
 /// @title  ERC7726OracleCloneable
 /// @author OlympusDAO
-/// @notice Cloneable ERC7726 oracle that quotes any base/quote pair using the PRICE module
+/// @notice Cloneable ERC7726 oracle that quotes any base/quote pair from cached pair snapshots
 contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clone {
     using FullMath for uint256;
 
@@ -29,16 +29,19 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     // 0x1C: name (32 bytes)
 
     /// @notice The factory address
+    /// @dev    Does not revert.
     function factory() public pure returns (IERC7726OracleFactory) {
         return IERC7726OracleFactory(_getArgAddress(0x00));
     }
 
     /// @notice The maximum allowed age for cached prices
+    /// @dev    Does not revert.
     function maxAge() public pure override returns (uint48) {
         return uint48(_getArgUint64(0x14));
     }
 
     /// @inheritdoc IPriceOracle
+    /// @dev        Does not revert.
     function name() external pure override returns (string memory) {
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x1C))));
     }
@@ -50,13 +53,14 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @inheritdoc IPriceOracle
-    /// @dev        Uses cached LAST prices only.
+    /// @dev        Uses cached pair snapshots only.
     ///
     ///             Reverts if:
     ///             - The oracle is disabled in the factory
-    ///             - Base/quote cached timestamps are inconsistent
+    ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
+    ///             - Either token does not implement `decimals()`
     ///
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
     ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
@@ -74,23 +78,21 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address quote_
     ) internal view returns (uint256 outAmount_) {
         _checkEnabled();
-        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-
-        (uint256 pairPrice, uint48 pairTimestamp) = PRICE.getPriceIn(
-            base_,
-            quote_,
-            IPRICEv2.Variant.LAST
-        );
-
-        // `getPriceIn(..., Variant.LAST)` is requested in the same base/quote orientation as `getQuote()`.
+        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
+            .getCachedPrice(base_, quote_);
+        uint48 pairTimestamp = cachedPrice.updatedAt;
 
         // Check for staleness
         uint48 maxAge_ = maxAge();
-        if (pairPrice == 0 || _isStaleFromTimestamp(pairTimestamp, maxAge_)) {
+        if (
+            cachedPrice.assetPriceUsd == 0 ||
+            cachedPrice.quotePriceUsd == 0 ||
+            _isStaleFromTimestamp(pairTimestamp, maxAge_)
+        ) {
             revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
         }
 
-        outAmount_ = inAmount_.mulDiv(pairPrice, 10 ** PRICE.decimals()).mulDiv(
+        outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, cachedPrice.quotePriceUsd).mulDiv(
             10 ** IERC20(quote_).decimals(),
             10 ** IERC20(base_).decimals()
         );
@@ -98,6 +100,12 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
 
     /// @inheritdoc IPriceOracle
     /// @dev        Returns symmetric bid/ask using the same quote value.
+    ///             Reverts if:
+    ///             - The oracle is disabled in the factory
+    ///             - The base/quote pair is invalid for the configured cache policy
+    ///             - The shared cached timestamp is stale
+    ///             - Base/quote cached prices are zero
+    ///             - Either token does not implement `decimals()`
     function getQuotes(
         uint256 inAmount,
         address base,
@@ -108,11 +116,22 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @inheritdoc IERC7726OraclePriceCache
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - This contract is not a deployed oracle from the factory
+    ///             - This contract is not enabled in the factory
+    ///             - The active price cache rejects the pair
     function cachePrice(address base_, address quote_) external override {
         factory().cachePrice(base_, quote_);
     }
 
     /// @inheritdoc IERC7726OraclePriceCache
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - This contract is not a deployed oracle from the factory
+    ///             - This contract is not enabled in the factory
+    ///             - The active price cache rejects the pair
+    ///             - The active price cache reverts while evaluating staleness or caching
     function cachePriceIfNecessary(address base_, address quote_) external override {
         factory().cachePriceIfNecessary(base_, quote_, maxAge());
     }
@@ -125,21 +144,25 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @inheritdoc IERC7726Oracle
+    /// @dev        Reverts if the active cache policy rejects `(base, quote)`.
     function isStale(address base, address quote) external view override returns (bool) {
-        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 pairTimestamp) = PRICE.getPriceIn(base, quote, IPRICEv2.Variant.LAST);
-        return _isStaleFromTimestamp(pairTimestamp, maxAge());
+        return IPriceCache(factory().getPriceCache()).isStale(base, quote, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
     /// @dev        Returns 0 if the pair price has not been cached.
+    ///             Reverts if the active cache policy rejects `(base, quote)`.
     function timestamp(address base, address quote) external view override returns (uint48) {
-        IPRICEv2 PRICE = IPRICEv2(factory().getPriceModule());
-        (, uint48 pairTimestamp) = PRICE.getPriceIn(base, quote, IPRICEv2.Variant.LAST);
-        return pairTimestamp;
+        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
+            .getCachedPrice(base, quote);
+        return cachedPrice.updatedAt;
     }
 
     /// @notice Query if a contract implements an interface
+    /// @dev    Does not revert.
+    ///
+    /// @param  interfaceId_    The interface identifier, as specified in ERC-165
+    /// @return bool            True if the contract implements `interfaceId_`
     function supportsInterface(bytes4 interfaceId_) public pure returns (bool) {
         return
             interfaceId_ == type(IPriceOracle).interfaceId ||

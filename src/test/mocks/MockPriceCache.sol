@@ -2,9 +2,13 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
-contract MockPriceCache is IPriceCache, IEnabler {
+contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
+    address internal constant _UNIT_OF_ACCOUNT = address(0x348);
+
     struct InternalCachedPrice {
         uint256 token0PriceUsd;
         uint256 token1PriceUsd;
@@ -12,10 +16,10 @@ contract MockPriceCache is IPriceCache, IEnabler {
         uint80 roundId;
     }
 
-    error PriceCache_InvalidPair(address asset_, address quote_);
-    error PriceCache_AssetNotApproved(address asset_);
-
     bool public isEnabled = true;
+    address public kernel;
+    address public priceModule;
+    uint8 public decimals = 18;
 
     uint256 public cachePriceCallCount;
     uint256 public cachePriceIfNecessaryCallCount;
@@ -24,23 +28,42 @@ contract MockPriceCache is IPriceCache, IEnabler {
     uint48 public lastMaxAge;
 
     mapping(address asset => uint256 usdPrice) internal _usdPrices;
+    mapping(address asset => bool approved) internal _approvedAssets;
     mapping(bytes32 pairKey => InternalCachedPrice cache) internal _cachedPriceByPair;
+
+    constructor(address kernel_) {
+        kernel = kernel_;
+    }
 
     function setUsdPrice(address asset_, uint256 usdPrice_) external {
         _usdPrices[asset_] = usdPrice_;
+        _approvedAssets[asset_] = true;
+    }
+
+    function setPriceModule(address priceModule_) external {
+        priceModule = priceModule_;
+    }
+
+    function setPriceDecimals(uint8 decimals_) external {
+        decimals = decimals_;
+    }
+
+    function setAssetApproval(address asset_, bool approved_) external {
+        _approvedAssets[asset_] = approved_;
+    }
+
+    function clearCachedPrice(address asset_, address quote_) external {
+        (bytes32 key, ) = _pairKey(asset_, quote_);
+        delete _cachedPriceByPair[key];
     }
 
     function cachePrice(address asset_, address quote_) public override {
         if (!isEnabled) revert NotEnabled();
-        if (asset_ == address(0) || quote_ == address(0) || asset_ == quote_) {
-            revert PriceCache_InvalidPair(asset_, quote_);
-        }
+        _validatePair(asset_, quote_);
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
 
-        uint256 assetPriceUsd = _usdPrices[asset_];
-        uint256 quotePriceUsd = _usdPrices[quote_];
-        if (assetPriceUsd == 0) revert PriceCache_AssetNotApproved(asset_);
-        if (quotePriceUsd == 0) revert PriceCache_AssetNotApproved(quote_);
+        uint256 assetPriceUsd = _getUsdPriceOrUnit(asset_);
+        uint256 quotePriceUsd = _getUsdPriceOrUnit(quote_);
 
         InternalCachedPrice storage cache = _cachedPriceByPair[key];
         if (assetIsToken0) {
@@ -79,6 +102,8 @@ contract MockPriceCache is IPriceCache, IEnabler {
         address asset_,
         address quote_
     ) public view override returns (CachedPrice memory cachedPrice) {
+        _validatePair(asset_, quote_);
+
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         InternalCachedPrice memory cache = _cachedPriceByPair[key];
 
@@ -125,5 +150,29 @@ contract MockPriceCache is IPriceCache, IEnabler {
         }
 
         return (keccak256(abi.encodePacked(quote_, asset_)), false);
+    }
+
+    function _validatePair(address asset_, address quote_) internal view {
+        if (asset_ == address(0) || quote_ == address(0) || asset_ == quote_) {
+            revert IPriceCache.PriceCache_InvalidPair(asset_, quote_);
+        }
+
+        if (!_isApprovedAssetOrUnit(asset_)) revert IPRICEv2.PRICE_AssetNotApproved(asset_);
+        if (!_isApprovedAssetOrUnit(quote_)) revert IPRICEv2.PRICE_AssetNotApproved(quote_);
+    }
+
+    function _isApprovedAssetOrUnit(address asset_) internal view returns (bool) {
+        return asset_ == _UNIT_OF_ACCOUNT || _approvedAssets[asset_];
+    }
+
+    function _getUsdPriceOrUnit(address asset_) internal view returns (uint256 usdPrice_) {
+        if (asset_ == _UNIT_OF_ACCOUNT) return 1e18;
+        return _usdPrices[asset_];
+    }
+
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IPriceCache).interfaceId ||
+            interfaceId_ == type(IERC165).interfaceId;
     }
 }

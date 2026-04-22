@@ -11,6 +11,8 @@ contract MorphoOracleCloneableTest is MorphoOracleFactoryTest {
     // ========== STATE ========== //
 
     IMorphoOracle public oracle;
+    bytes4 internal constant PRICE_ASSET_NOT_APPROVED_SELECTOR =
+        bytes4(keccak256("PRICE_AssetNotApproved(address)"));
 
     // ========== SETUP ========== //
 

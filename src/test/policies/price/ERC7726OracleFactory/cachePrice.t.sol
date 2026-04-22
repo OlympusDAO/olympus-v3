@@ -41,17 +41,19 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         assertEq(priceCache.lastQuote(), address(quoteToken), "Quote should match direct pair");
     }
 
-    function test_whenOracleIsEnabled_cachePricesIfNecessaryDoesNotCacheWhenFresh()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-    {
+    function test_whenOracleIsEnabled_cachePricesIfNecessaryDoesNotCacheWhenFresh(
+        uint48 warpDelta_
+    ) public givenFactoryIsEnabled givenOracleIsCreated {
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
         priceCache.cachePrice(address(baseToken), address(quoteToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 0, DEFAULT_MAX_AGE));
 
-        vm.warp(block.timestamp + 1);
+        vm.warp(uint256(cachedAt) + uint256(warpDelta));
         clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
 
         assertEq(
@@ -62,17 +64,21 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         assertEq(priceCache.cachePriceCallCount(), 1, "Fresh cache should not be re-cached");
     }
 
-    function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesWhenStale()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-    {
+    function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesWhenStale(
+        uint48 warpDelta_
+    ) public givenFactoryIsEnabled givenOracleIsCreated {
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
         priceCache.cachePrice(address(baseToken), address(quoteToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+        );
 
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        vm.warp(uint256(cachedAt) + uint256(warpDelta));
         clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
 
         assertEq(
@@ -101,11 +107,9 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
         assertEq(snapshot.quotePriceUsd, 1e18, "Quote USD leg should be cached");
     }
 
-    function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesBothWhenStale()
-        public
-        givenFactoryIsEnabled
-        givenOracleIsCreated
-    {
+    function test_whenOracleIsEnabled_cachePricesIfNecessaryCachesBothWhenStale(
+        uint48 warpDelta_
+    ) public givenFactoryIsEnabled givenOracleIsCreated {
         address oracle = factory.getOracle(DEFAULT_MAX_AGE);
         ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
 
@@ -114,8 +118,11 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
             address(baseToken),
             address(quoteToken)
         );
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+        );
 
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        vm.warp(uint256(oldSnapshot.updatedAt) + uint256(warpDelta));
         clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
 
         IPriceCache.CachedPrice memory newSnapshot = priceCache.getCachedPrice(

@@ -2,31 +2,27 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
     function test_givenConsistentTimestamps_returnsTimestamp() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         uint48 actualTimestamp = oracle.timestamp();
         assertEq(actualTimestamp, expectedTimestamp, "Timestamp should match cached timestamp");
     }
 
     function test_givenOnlyCollateralUsdCacheChanges_returnsCachedPairTimestamp() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         assertEq(
             oracle.timestamp(),
@@ -36,14 +32,13 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
     }
 
     function test_givenOnlyLoanUsdCacheChanges_returnsCachedPairTimestamp() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        (, uint48 expectedTimestamp) = priceModule.getPriceIn(
-            address(collateralToken),
-            address(loanToken),
-            IPRICEv2.Variant.LAST
-        );
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(loanToken), priceModule.unitOfAccount());
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         assertEq(
             oracle.timestamp(),
@@ -53,7 +48,7 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
     }
 
     function test_givenConsistentTimestamps_gasSnapshot() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.startSnapshotGas("MorphoOracleCloneable.timestamp");
         oracle.timestamp();
@@ -62,24 +57,21 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
     }
 
     function test_givenLoanTokenRemovedFromPRICE_reverts() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        priceModule.removeAsset(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.setAssetApproval(address(loanToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(loanToken))
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
         );
         oracle.timestamp();
     }
 
     function test_givenCollateralTokenRemovedFromPRICE_reverts() public {
-        priceModule.cachePrice(address(collateralToken), address(loanToken));
-        priceModule.removeAsset(address(collateralToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        priceCache.setAssetApproval(address(collateralToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IPRICEv2.PRICE_AssetNotApproved.selector,
-                address(collateralToken)
-            )
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
         );
         oracle.timestamp();
     }

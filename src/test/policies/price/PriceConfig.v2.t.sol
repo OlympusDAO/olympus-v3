@@ -330,7 +330,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](9);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
@@ -365,10 +365,6 @@ contract PriceConfigv2Test is Test {
         expectedPerms[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
-        });
-        expectedPerms[8] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.cachePrice.selector
         });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
@@ -1053,94 +1049,6 @@ contract PriceConfigv2Test is Test {
         (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
         assertGt(price, 0, "Price should be stored");
         assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
-    }
-
-    function test_cachePriceIfNecessary_maxAge_notEnabled_reverts() public givenDisabled {
-        _expectRevertNotEnabled();
-        priceConfig.cachePriceIfNecessary(address(ohm), _UNIT_OF_ACCOUNT, uint48(1));
-    }
-
-    function test_cachePriceIfNecessary_maxAge_givenCacheIsFresh_doesNotCache() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 1);
-        priceConfig.cachePriceIfNecessary(address(ohm), _UNIT_OF_ACCOUNT, uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertEq(newTimestamp, oldTimestamp, "Fresh cache should not be updated");
-    }
-
-    function test_cachePriceIfNecessary_maxAge_givenCacheIsStale_caches() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 3);
-        priceConfig.cachePriceIfNecessary(address(ohm), _UNIT_OF_ACCOUNT, uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertGt(newTimestamp, oldTimestamp, "Stale cache should be updated");
-    }
-
-    function test_cachePriceIfNecessary_maxAgeZero_cachesWhenTimestampIsFromPriorBlock() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 1);
-        priceConfig.cachePriceIfNecessary(address(ohm), _UNIT_OF_ACCOUNT, uint48(0));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertGt(newTimestamp, oldTimestamp, "maxAge = 0 should cache when timestamp is stale");
-    }
-
-    function test_cachePriceIfNecessary_nonUnitQuote_givenCacheIsFresh_doesNotCache() public {
-        _addBaseAssets();
-        _addReserveAsset();
-
-        vm.prank(priceManager);
-        priceConfig.cachePrice(address(ohm), address(reserve));
-
-        (, uint48 oldTimestamp) = PRICE.getPriceIn(
-            address(ohm),
-            address(reserve),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + 1);
-        priceConfig.cachePriceIfNecessary(address(ohm), address(reserve), uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPriceIn(
-            address(ohm),
-            address(reserve),
-            IPRICEv2.Variant.LAST
-        );
-
-        assertEq(newTimestamp, oldTimestamp, "Fresh pair cache should not be updated");
-    }
-
-    function test_cachePriceIfNecessary_nonUnitQuote_givenCacheIsStale_caches() public {
-        _addBaseAssets();
-        _addReserveAsset();
-
-        vm.prank(priceManager);
-        priceConfig.cachePrice(address(ohm), address(reserve));
-
-        (, uint48 oldTimestamp) = PRICE.getPriceIn(
-            address(ohm),
-            address(reserve),
-            IPRICEv2.Variant.LAST
-        );
-
-        vm.warp(block.timestamp + 3);
-        priceConfig.cachePriceIfNecessary(address(ohm), address(reserve), uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPriceIn(
-            address(ohm),
-            address(reserve),
-            IPRICEv2.Variant.LAST
-        );
-
-        assertGt(newTimestamp, oldTimestamp, "Stale pair cache should be updated");
     }
 
     function test_supportsInterface() public view {

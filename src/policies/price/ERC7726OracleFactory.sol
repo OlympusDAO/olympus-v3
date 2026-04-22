@@ -4,12 +4,12 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
-import {Kernel, Policy, Keycode, toKeycode, Permissions, Module} from "src/Kernel.sol";
+import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -33,11 +33,10 @@ contract ERC7726OracleFactory is
 
     // ========== STATE ========== //
 
-    bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
-    /// @notice The PRICE module
-    IPRICEv2 public PRICE;
+    /// @notice The pair cache policy
+    IPriceCache public priceCache;
 
     /// @notice Reference implementation for cloning
     ERC7726OracleCloneable public immutable ORACLE_IMPLEMENTATION;
@@ -64,35 +63,25 @@ contract ERC7726OracleFactory is
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Kernel kernel_) Policy(kernel_) {
+    /// @notice Constructs a new ERC7726OracleFactory
+    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
+    ///
+    /// @param  kernel_     The Kernel address
+    /// @param  priceCache_ The price cache policy address
+    constructor(Kernel kernel_, address priceCache_) Policy(kernel_) {
         ORACLE_IMPLEMENTATION = new ERC7726OracleCloneable();
         isCreationEnabled = true;
+        _setPriceCache(priceCache_);
     }
 
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
+    /// @dev        Reverts if the configured ROLES module major version is unsupported.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode(_PRICE_KEYCODE);
-        dependencies[1] = toKeycode(_ROLES_KEYCODE);
-
-        address priceModule = getModuleAddress(dependencies[0]);
-
-        (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major < 1 || (major == 1 && minor < 2)) {
-            revert ERC7726OracleFactory_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
-        }
-
-        if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId)) {
-            revert ERC7726OracleFactory_UnsupportedModuleInterface(
-                _PRICE_KEYCODE,
-                type(IPRICEv2).interfaceId
-            );
-        }
-
-        PRICE = IPRICEv2(priceModule);
-        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode(_ROLES_KEYCODE);
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
 
         (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
         if (rolesMajor != 1) {
@@ -105,15 +94,13 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc Policy
+    /// @dev        Does not revert.
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
-        requests = new Permissions[](1);
-        requests[0] = Permissions({
-            keycode: toKeycode(_PRICE_KEYCODE),
-            funcSelector: IPRICEv2.cachePrice.selector
-        });
+        requests = new Permissions[](0);
     }
 
     /// @inheritdoc IVersioned
+    /// @dev        Does not revert.
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
@@ -149,6 +136,12 @@ contract ERC7726OracleFactory is
     // ========== FACTORY FUNCTIONS ========== //
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin or oracle manager
+    ///             - Oracle creation is disabled
+    ///             - An oracle for `maxAge_` already exists
+    ///             - `customParams_` is non-empty and not exactly 32 bytes
     function createOracle(
         uint48 maxAge_,
         bytes calldata customParams_
@@ -180,28 +173,30 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Does not revert.
     function getOracle(uint48 maxAge_) external view override returns (address oracle) {
         oracle = _maxAgeToOracle[maxAge_];
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Does not revert.
     function getOracles() external view override returns (address[] memory oracles) {
         return _oracles;
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    function getPriceModule() external view override returns (address module) {
-        return address(PRICE);
-    }
-
-    /// @inheritdoc IERC7726OracleFactory
-    function getPriceCache() external pure override returns (address policy) {
-        return address(0);
+    /// @dev        Does not revert.
+    function getPriceCache() external view override returns (address policy) {
+        return address(priceCache);
     }
 
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin or oracle manager
+    ///             - Creation is already enabled
     function enableCreation()
         external
         override
@@ -215,6 +210,10 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin, oracle manager, or emergency
+    ///             - Creation is already disabled
     function disableCreation()
         external
         override
@@ -228,13 +227,24 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin
+    ///             - `policy_` is zero, not IPriceCache-compatible, or bound to a different Kernel
     function setPriceCache(
-        address /* policy_ */
-    ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {}
+        address policy_
+    ) external override onlyEnabled onlyAdminRole nonReentrant {
+        _setPriceCache(policy_);
+    }
 
     // ========== ORACLE STATE ========== //
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin or oracle manager
+    ///             - `oracle_` is not a factory-created oracle
+    ///             - `oracle_` is already enabled
     function enableOracle(
         address oracle_
     ) external override onlyEnabled onlyOracleManagerOrAdminRole nonReentrant {
@@ -246,6 +256,11 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin, oracle manager, or emergency
+    ///             - `oracle_` is not a factory-created oracle
+    ///             - `oracle_` is already disabled
     function disableOracle(
         address oracle_
     ) external override onlyEnabled onlyOracleManagerOrAdminOrEmergencyRole nonReentrant {
@@ -259,30 +274,35 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Does not revert.
     function isOracleEnabled(address oracle_) external view override returns (bool enabled) {
         return isEnabled && isOracle[oracle_] && _isOracleEnabled[oracle_];
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not a factory-created oracle
+    ///             - The caller oracle is disabled
+    ///             - Underlying cache write fails
     function cachePrice(address base_, address quote_) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
-        PRICE.cachePrice(base_, quote_);
+        priceCache.cachePrice(base_, quote_);
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not a factory-created oracle
+    ///             - The caller oracle is disabled
+    ///             - Underlying cache evaluation/write fails
     function cachePriceIfNecessary(
         address base_,
         address quote_,
         uint48 maxAge_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
-        (, uint48 pairTimestamp) = PRICE.getPriceIn(base_, quote_, IPRICEv2.Variant.LAST);
-        bool pairStale = (pairTimestamp == 0 ||
-            block.timestamp > uint256(pairTimestamp) + uint256(maxAge_));
-
-        if (pairStale) {
-            PRICE.cachePrice(base_, quote_);
-        }
+        priceCache.cachePriceIfNecessary(base_, quote_, maxAge_);
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -303,8 +323,44 @@ contract ERC7726OracleFactory is
         if (!_isOracleEnabled[caller_]) revert ERC7726OracleFactory_OracleDisabled(caller_);
     }
 
+    function _setPriceCache(address policy_) internal {
+        if (policy_ == address(0) || !_implementsIPriceCache(policy_) || !_hasSameKernel(policy_)) {
+            revert ERC7726OracleFactory_InvalidPriceCache(policy_);
+        }
+        priceCache = IPriceCache(policy_);
+        emit PriceCacheSet(policy_);
+    }
+
+    function _implementsIPriceCache(address policy_) internal view returns (bool) {
+        if (policy_.code.length == 0) return false;
+
+        (bool success, bytes memory returnData) = policy_.staticcall(
+            abi.encodeWithSelector(
+                IERC165.supportsInterface.selector,
+                type(IPriceCache).interfaceId
+            )
+        );
+
+        return success && returnData.length >= 32 && abi.decode(returnData, (bool));
+    }
+
+    function _hasSameKernel(address policy_) internal view returns (bool) {
+        (bool success, bytes memory returnData) = policy_.staticcall(
+            abi.encodeWithSignature("kernel()")
+        );
+        if (!success || returnData.length < 32) return false;
+
+        address cacheKernel = abi.decode(returnData, (address));
+        return cacheKernel == address(kernel);
+    }
+
     // ========== ERC165 ========== //
 
+    /// @notice Query if a contract implements an interface
+    /// @dev    Does not revert.
+    ///
+    /// @param  interfaceId_    The interface identifier, as specified in ERC-165
+    /// @return bool            True if the contract implements `interfaceId_`
     function supportsInterface(bytes4 interfaceId_) public view override returns (bool) {
         return
             interfaceId_ == type(IERC7726OracleFactory).interfaceId ||
