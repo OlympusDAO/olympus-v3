@@ -41,7 +41,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     address internal _pyth;
 
     /// @notice Configuration parameters (loaded from args)
-    uint32 internal _ohmObservationWindow;
+    uint32 internal _ohmWethObservationWindow;
+    uint32 internal _ohmSusdsObservationWindow;
 
     // ========== PRICE VALIDATION CONSTANTS ========== //
 
@@ -87,8 +88,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
         // Load configuration parameters from args file
-        _ohmObservationWindow = uint32(
-            _readBatchArgUint256("configurePriceV1_2", "ohmObservationWindow")
+        _ohmWethObservationWindow = uint32(
+            _readBatchArgUint256("configurePriceV1_2", "ohmWethObservationWindow")
+        );
+        _ohmSusdsObservationWindow = uint32(
+            _readBatchArgUint256("configurePriceV1_2", "ohmSusdsObservationWindow")
         );
 
         console2.log("Kernel:", kernel);
@@ -422,6 +426,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
+        console2.log("OHM/WETH observation window:", _ohmWethObservationWindow);
+        console2.log("OHM/sUSDS observation window:", _ohmSusdsObservationWindow);
         console2.log("OHM initial price:", ohmInitialPrice);
 
         // Validate initial price before seeding moving average observations
@@ -440,7 +446,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmWeth),
-                    observationWindowSeconds: _ohmObservationWindow
+                    observationWindowSeconds: _ohmWethObservationWindow
                 })
             )
         );
@@ -450,7 +456,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmSusds),
-                    observationWindowSeconds: _ohmObservationWindow
+                    observationWindowSeconds: _ohmSusdsObservationWindow
                 })
             )
         );

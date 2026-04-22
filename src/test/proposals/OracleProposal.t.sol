@@ -53,6 +53,8 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
+    // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
+    uint32 internal constant OHM_OBSERVATION_WINDOW_SECONDS = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     function setUp() public virtual {
@@ -456,7 +458,7 @@ contract OracleProposalTest is ProposalTest {
             params: abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: ohmSusdsPool,
-                    observationWindowSeconds: 3600 // 1 hour observation window
+                    observationWindowSeconds: OHM_OBSERVATION_WINDOW_SECONDS
                 })
             )
         });

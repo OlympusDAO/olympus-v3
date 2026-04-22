@@ -87,7 +87,8 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
-    uint32 internal constant OHM_OBSERVATION_WINDOW = 1800; // 30 minutes
+    // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
+    uint32 internal constant OHM_OBSERVATION_WINDOW = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // System contracts
