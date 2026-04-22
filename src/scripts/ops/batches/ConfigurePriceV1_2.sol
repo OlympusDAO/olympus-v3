@@ -24,6 +24,7 @@ import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol"
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -31,6 +32,8 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 /// @dev    Deployment of PRICE module and PriceConfig happens separately
 ///         This script only handles configuration
 contract ConfigurePriceV1_2 is BatchScriptV2 {
+    using SafeCast for uint256;
+
     // ========== STATE ========== //
 
     /// @notice Addresses of assets and Pyth contract (loaded from args or env)
@@ -88,12 +91,15 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
         // Load configuration parameters from args file
-        _ohmWethObservationWindow = uint32(
-            _readBatchArgUint256("configurePriceV1_2", "ohmWethObservationWindow")
-        );
-        _ohmSusdsObservationWindow = uint32(
-            _readBatchArgUint256("configurePriceV1_2", "ohmSusdsObservationWindow")
-        );
+        _ohmWethObservationWindow = _readBatchArgUint256(
+            "configurePriceV1_2",
+            "ohmWethObservationWindow"
+        ).encodeUInt32();
+
+        _ohmSusdsObservationWindow = _readBatchArgUint256(
+            "configurePriceV1_2",
+            "ohmSusdsObservationWindow"
+        ).encodeUInt32();
 
         console2.log("Kernel:", kernel);
         console2.log("PriceConfig:", priceConfig);
