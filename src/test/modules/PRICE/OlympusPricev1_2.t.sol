@@ -411,18 +411,18 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getLastPrice
-    //  given OHM has had the price stored since being added
-    //   [X] it returns the last cached price
+    //  given OHM has a stored observation in current block
+    //   [X] it returns the last stored observation price
     //   [X] it returns price in 18 decimals
-    function test_getLastPrice_givenCachedInCurrentBlock()
+    function test_getLastPrice_givenStoredObservationInCurrentBlock()
         public
-        givenOhmIsConfigured
+        givenOhmIsConfiguredWithMovingAverage
         givenObservationFrequencyHasElapsed
     {
-        // Cache $11 and then change the live feed to $10; getLastPrice should return cached $11.
+        // Store $11 and then change the live feed to $10; getLastPrice should return stored $11.
         ohmUsdPriceFeed.setLatestAnswer(11e8);
         vm.prank(priceWriterV2);
-        price.cachePrice(address(ohm), UNIT_OF_ACCOUNT);
+        price.storeObservation(address(ohm));
         ohmUsdPriceFeed.setLatestAnswer(10e8);
 
         uint256 lastPrice = price.getLastPrice();
@@ -432,11 +432,11 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getLastPrice
-    //  given OHM has not had the price stored since being added
-    //   [X] it returns the previous price
-    function test_getLastPrice_givenCachedInPreviousBlock()
+    //  given OHM uses moving average and no new observation is stored
+    //   [X] it returns the previous stored observation
+    function test_getLastPrice_givenStoredObservationInPreviousBlock()
         public
-        givenOhmIsConfigured
+        givenOhmIsConfiguredWithMovingAverage
         givenObservationFrequencyHasElapsed
         givenOhmPrice(11e8) // $11
     {
@@ -605,21 +605,16 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // lastObservationTime
-    //  given OHM has not had the price stored since being added
-    //   [X] it returns the initial timestamp
-    function test_lastObservationTime_givenOhmHasNoObservations() public givenOhmIsConfigured {
-        // Grab the initial timestamp
-        uint48 initialTimestamp = uint48(block.timestamp);
-
-        // Warp
-        vm.warp(initialTimestamp + OBSERVATION_FREQUENCY);
-
-        uint48 lastObsTime = price.lastObservationTime();
-        assertEq(
-            lastObsTime,
-            initialTimestamp,
-            "Last observation time should be the initial timestamp"
+    //  given OHM has no moving-average observations configured
+    //   [X] it reverts with PRICE_MovingAverageNotStored
+    function test_lastObservationTime_givenOhmHasNoObservations_reverts()
+        public
+        givenOhmIsConfigured
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(ohm))
         );
+        price.lastObservationTime();
     }
 
     // decimals

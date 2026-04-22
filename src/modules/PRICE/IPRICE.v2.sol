@@ -15,21 +15,6 @@ interface IPRICEv2 {
     /// @param timestamp_   The timestamp at which the price was calculated
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
-    /// @notice                 A pair price snapshot is cached
-    ///
-    /// @param asset_           The address of the asset in the requested orientation
-    /// @param quote_           The address of the quote asset in the requested orientation
-    /// @param assetPriceUsd_   The cached asset price in the system unit of account
-    /// @param quotePriceUsd_   The cached quote price in the system unit of account
-    /// @param cachedAt_        The timestamp at which the pair was cached
-    event PricePairCached(
-        address indexed asset_,
-        address indexed quote_,
-        uint256 assetPriceUsd_,
-        uint256 quotePriceUsd_,
-        uint48 cachedAt_
-    );
-
     /// @notice             An asset's definition is added
     ///
     /// @param asset_       The address of the asset
@@ -222,12 +207,6 @@ interface IPRICEv2 {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
-    /// @notice         The provided asset/quote pair is invalid
-    ///
-    /// @param asset_   The address of the asset
-    /// @param quote_   The address of the quote asset
-    error PRICE_ParamsPairInvalid(address asset_, address quote_);
-
     /// @notice         Thrown when updateAsset is called with all update flags set to false
     ///
     /// @param asset_   The address of the asset
@@ -274,18 +253,6 @@ interface IPRICEv2 {
         bytes feeds;
     }
 
-    /// @notice                 Struct to hold a cached pair price snapshot
-    ///
-    /// @param token0PriceUsd_  Cached token0 price in the system unit of account
-    /// @param token1PriceUsd_  Cached token1 price in the system unit of account
-    /// @param updatedAt        The timestamp at which the pair was cached
-    struct PairPriceCache {
-        uint256 token0PriceUsd;
-        uint256 token1PriceUsd;
-        uint48 updatedAt;
-        uint80 roundId;
-    }
-
     /// @notice                         Parameters for updating an asset configuration
     /// @dev                            Only updates components flagged in the struct
     ///
@@ -314,7 +281,7 @@ interface IPRICEv2 {
 
     /// @notice         Variant of price to retrieve
     /// @dev            - CURRENT: The current aggregating feed price, including moving average if configured
-    /// @dev            - LAST: The last cached aggregating feed price, including moving average if configured
+    /// @dev            - LAST: The last stored observation price
     /// @dev            - MOVINGAVERAGE: The raw moving average price of the asset
     enum Variant {
         CURRENT,
@@ -328,7 +295,7 @@ interface IPRICEv2 {
     /// @notice     The number of decimals to used in output values
     function decimals() external view returns (uint8);
 
-    /// @notice     The reserved unit-of-account key used for cached single-asset prices
+    /// @notice     The reserved unit-of-account key
     function unitOfAccount() external pure returns (address);
 
     // ========== ASSET INFORMATION ========== //
@@ -359,7 +326,7 @@ interface IPRICEv2 {
     function getPrice(address asset_) external view returns (uint256 price);
 
     /// @notice         Returns a price no older than the provided age in the system unit of account
-    /// @dev            Checks cache first, falls back to fresh calculation if stale
+    /// @dev            Returns a stored observation if it is fresh enough, otherwise returns current price
     ///
     /// @param asset_   The address of the asset
     /// @param maxAge_  The maximum age (seconds) of the price
@@ -368,7 +335,7 @@ interface IPRICEv2 {
 
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
-    /// @dev                - Variant.LAST: last cached aggregating feed price, including moving average if configured
+    /// @dev                - Variant.LAST: last stored observation price
     /// @dev                - Variant.MOVINGAVERAGE: raw moving average price
     ///
     /// @param asset_       The address of the asset
@@ -412,25 +379,10 @@ interface IPRICEv2 {
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
 
-    /// @notice         Updates the cached price snapshot for an asset/quote pair
-    /// @dev            Permissioned at module level, can be exposed permissionlessly via policy
-    /// @dev            Does NOT affect moving average observations
-    /// @dev            Works for any approved asset pair and the reserved unit of account
-    /// @dev            If neither side is the unit of account, also refreshes the
-    ///                 corresponding asset/unit-of-account cached entries.
-    /// @dev            If either side is the unit of account, only that single asset/unit-of-account
-    ///                 cache entry is refreshed; the unit-of-account/unit-of-account cache is not updated.
-    /// @dev            Assumption: Price oracle configuration is robust enough to prevent manipulation
-    ///
-    /// @param asset_   The address of the asset being priced
-    /// @param quote_   The address of the quote asset
-    function cachePrice(address asset_, address quote_) external;
-
     /// @notice             Stores a price observation for moving average calculation
     /// @dev                Permissioned - only authorized callers can store observations
     /// @dev                Reverts if the asset does not store moving average
-    /// @dev                Also updates the cache (single source of truth for "last price")
-    /// @dev                Emits both PriceStored and PricePairCached events
+    /// @dev                Emits PriceStored
     ///
     /// @param asset_       The address of the asset
     function storeObservation(address asset_) external;

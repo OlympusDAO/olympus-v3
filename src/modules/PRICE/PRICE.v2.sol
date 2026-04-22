@@ -31,9 +31,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
     /// @notice     Maps asset addresses to configuration data
     mapping(address => Asset) internal _assetData;
 
-    /// @notice     Maps canonical pair keys to cached pair price snapshots
-    mapping(bytes32 => PairPriceCache) internal _pairCaches;
-
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IPRICEv2
