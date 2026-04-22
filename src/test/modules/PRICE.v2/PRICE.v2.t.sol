@@ -893,8 +893,8 @@ contract PriceV2Test is PriceV2BaseTest {
     }
 
     function testRevert_getPrice_movingAverage_unitOfAccount() public {
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_MovingAverageNotStored(address)",
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_MovingAverageNotStored.selector,
             _UNIT_OF_ACCOUNT
         );
         vm.expectRevert(err);
