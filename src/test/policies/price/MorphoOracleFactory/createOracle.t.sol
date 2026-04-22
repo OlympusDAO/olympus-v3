@@ -95,6 +95,21 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         factory.createOracle(nonContract, address(loanToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when collateral token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenCollateralTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(UNIT_OF_ACCOUNT, address(loanToken), DEFAULT_MAX_AGE, bytes(""));
+    }
+
     // when loan token is zero address
     //  [X] it reverts with InvalidToken
 
@@ -131,6 +146,21 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
 
         vm.prank(admin);
         factory.createOracle(address(collateralToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when loan token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenLoanTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(collateralToken), UNIT_OF_ACCOUNT, DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when collateral token equals loan token

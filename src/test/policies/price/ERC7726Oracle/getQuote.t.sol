@@ -49,6 +49,46 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         oracle.getQuote(1e18, address(collateralToken), unconfiguredQuote);
     }
 
+    // given the base asset is unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
+
+        vm.expectRevert();
+        oracle.getQuote(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+    }
+
+    // given the quote asset is unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+
+        vm.expectRevert();
+        oracle.getQuote(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+    }
+
+    // given getQuotes is called with base asset as unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenGetQuotesBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
+
+        vm.expectRevert();
+        oracle.getQuotes(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+    }
+
+    // given getQuotes is called with quote asset as unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenGetQuotesQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+
+        vm.expectRevert();
+        oracle.getQuotes(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+    }
+
     function test_givenOracleIsEnabled_gasSnapshot_getQuote() public givenOracleIsEnabled {
         vm.startSnapshotGas("ERC7726OracleCloneable.getQuote");
         oracle.getQuote(1e18, address(collateralToken), address(loanToken));

@@ -78,6 +78,21 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(nonContract, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when base token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenBaseTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(UNIT_OF_ACCOUNT, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+    }
+
     // when quote token is zero address
     //  [X] it reverts with InvalidToken
 
@@ -114,6 +129,21 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
 
         vm.prank(admin);
         factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when quote token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenQuoteTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(baseToken), UNIT_OF_ACCOUNT, DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when base token equals quote token
