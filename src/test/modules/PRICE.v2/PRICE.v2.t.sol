@@ -3194,6 +3194,31 @@ contract PriceV2Test is PriceV2BaseTest {
         }
     }
 
+    function test_removeAsset_clearsStoredObservations(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        IPRICEv2.Asset memory oldAsset = price.getAssetData(address(onema));
+        // Sanity check fixture: ONEMA begins with MA storage and seeded observations.
+        assertEq(oldAsset.storeMovingAverage, true, "precondition: MA should be stored");
+        assertGt(oldAsset.obs.length, 0, "precondition: observations should exist");
+
+        vm.startPrank(priceWriter);
+
+        vm.expectEmit(true, false, false, true);
+        emit AssetRemoved(address(onema));
+
+        price.removeAsset(address(onema));
+
+        IPRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        // Removing the asset should clear all stored moving-average observation state.
+        _assertAssetData(asset, false, false, false, 0, 0, 0, 0, 0, "onema");
+
+        address[] memory assetAddresses = price.getAssets();
+        for (uint256 i; i < assetAddresses.length; i++) {
+            assertFalse(assetAddresses[i] == address(onema));
+        }
+    }
+
     function test_addAsset_useMovingAverageFalse() public {
         uint256[] memory observations = new uint256[](2);
         observations[0] = 5e18;
