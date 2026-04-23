@@ -549,6 +549,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -976,6 +977,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -1044,6 +1046,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedTwomaCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
