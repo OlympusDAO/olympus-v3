@@ -175,8 +175,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         } else if (variant_ == Variant.LAST) {
             return _getLastObservationPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
-            // Inlined _getMovingAveragePrice logic
-            Asset memory asset = _assetData[asset_];
+            // Use storage here to avoid copying the full Asset struct (including the dynamic obs array) to memory.
+            Asset storage asset = _assetData[asset_];
             if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
             return (asset.cumulativeObs / asset.numObservations, asset.lastObservationTime);
         } else {
