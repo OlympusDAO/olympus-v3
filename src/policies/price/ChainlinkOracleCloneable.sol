@@ -11,8 +11,9 @@ import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.s
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
 
 /// @title  ChainlinkOracleCloneable
@@ -155,8 +156,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         uint256 price = FullMath.mulDiv(assetPriceUsd, 10 ** _priceDecimals(), quotePriceUsd);
 
         roundId = cachedPrice.roundId;
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        answer = int256(price);
+        answer = SafeCast.toInt256(price);
         startedAt = updatedAt_;
         updatedAt = updatedAt_;
         answeredInRound = roundId;
