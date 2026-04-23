@@ -50,7 +50,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     // when oracle is enabled
     //  [X] it returns correct round data
     //  [X] it returns correct price calculation
-    //  [X] it returns timestamp as round ID
+    //  [X] it returns cached pair round ID
     //  [X] it returns stored price (not live price)
 
     function test_whenOracleIsEnabled_returnsCorrectRoundData() public givenPricesAreStored warp {
@@ -72,7 +72,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Verify answer is correct
         /// forge-lint: disable-next-line(unsafe-typecast)
@@ -217,7 +217,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , uint256 updatedAt, ) = oracle.latestRoundData();
 
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Price calculation should use original decimals
         // Cache policy returns prices in new decimals (9), but oracle should scale to original (18)
@@ -332,7 +332,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,
@@ -363,7 +363,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,

@@ -118,7 +118,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///
     ///             If callers encounter a revert due to feed state, they should cache prices then retry.
     ///
-    /// @return roundId          The round ID (timestamp of the observation, cast to uint80)
+    /// @return roundId          The cached pair round ID
     /// @return answer           The price of 1 base token in quote tokens, scaled by 10^decimals()
     /// @return startedAt        The timestamp when the round started (same as updatedAt)
     /// @return updatedAt        The timestamp when the round was updated (from the cached pair snapshot)
@@ -154,8 +154,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         // Calculate pair quote in configured decimal scale from cached USD legs.
         uint256 price = FullMath.mulDiv(assetPriceUsd, 10 ** _priceDecimals(), quotePriceUsd);
 
-        // Use timestamp as synthetic round ID.
-        roundId = uint80(updatedAt_);
+        roundId = cachedPrice.roundId;
         /// forge-lint: disable-next-line(unsafe-typecast)
         answer = int256(price);
         startedAt = updatedAt_;
