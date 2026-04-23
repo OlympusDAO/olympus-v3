@@ -1047,6 +1047,32 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(timestamp, uint48(block.timestamp));
     }
 
+    function test_getPriceIn_last_sameAsset_returnsUnitPriceAndLastTimestamp(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        (, uint48 lastTimestamp) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        vm.warp(block.timestamp + 6 hours);
+
+        (uint256 pairPrice, uint48 pairTimestamp) = price.getPriceIn(
+            address(onema),
+            address(onema),
+            IPRICEv2.Variant.LAST
+        );
+
+        assertEq(
+            pairPrice,
+            uint256(10 ** price.decimals()),
+            "Same-asset quote should remain unit price"
+        );
+        assertEq(
+            pairTimestamp,
+            lastTimestamp,
+            "Same-asset LAST quote should return the asset-side LAST timestamp"
+        );
+    }
+
     function testRevert_getPriceIn_current_priceZero(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
@@ -1091,6 +1117,20 @@ contract PriceV2Test is PriceV2BaseTest {
         price.getPriceIn(address(onema), address(twoma), IPRICEv2.Variant.CURRENT);
     }
 
+    function testRevert_getPriceIn_current_sameAsset_unconfiguredAsset() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(onema))
+        );
+        price.getPriceIn(address(onema), address(onema), IPRICEv2.Variant.CURRENT);
+    }
+
+    function testRevert_getPriceIn_last_sameAsset_unconfiguredAsset() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(onema))
+        );
+        price.getPriceIn(address(onema), address(onema), IPRICEv2.Variant.LAST);
+    }
+
     function test_getPriceIn_last(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
@@ -1129,34 +1169,51 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(timestamp, onemaTimestamp < twomaTimestamp ? onemaTimestamp : twomaTimestamp);
     }
 
-    function test_getPriceIn_last_sameAsset_returnsUnitPriceAndCurrentTimestamp(
-        uint256 nonce_
-    ) public {
+    function testRevert_getPriceIn_last_sameAsset_nonMovingAverageAsset(uint256 nonce_) public {
         _addBaseAssets(nonce_);
 
-        (uint256 price_, uint48 timestamp) = price.getPriceIn(
-            address(ohm),
-            address(ohm),
-            IPRICEv2.Variant.LAST
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(weth))
         );
-
-        assertEq(price_, uint256(10 ** price.decimals()));
-        assertEq(timestamp, uint48(block.timestamp));
+        price.getPriceIn(address(weth), address(weth), IPRICEv2.Variant.LAST);
     }
 
-    function test_getPriceIn_movingAverage_sameAsset_returnsUnitPriceAndCurrentTimestamp(
+    function test_getPriceIn_movingAverage_sameAsset_returnsUnitPriceAndLastTimestamp(
         uint256 nonce_
     ) public {
         _addBaseAssets(nonce_);
 
-        (uint256 price_, uint48 timestamp) = price.getPriceIn(
-            address(ohm),
-            address(ohm),
+        (, uint48 movingAverageTimestamp) = price.getPrice(
+            address(onema),
+            IPRICEv2.Variant.MOVINGAVERAGE
+        );
+        vm.warp(block.timestamp + 6 hours);
+
+        (uint256 pairPrice, uint48 pairTimestamp) = price.getPriceIn(
+            address(onema),
+            address(onema),
             IPRICEv2.Variant.MOVINGAVERAGE
         );
 
-        assertEq(price_, uint256(10 ** price.decimals()));
-        assertEq(timestamp, uint48(block.timestamp));
+        // Same-asset MOVINGAVERAGE should still normalize to one unit of account.
+        assertEq(pairPrice, uint256(10 ** price.decimals()), "Pair price should remain unit price");
+        // Timestamp should come from the moving-average observation path, not the current block.
+        assertEq(
+            pairTimestamp,
+            movingAverageTimestamp,
+            "Pair timestamp should match the moving-average observation timestamp"
+        );
+    }
+
+    function testRevert_getPriceIn_movingAverage_sameAsset_nonMovingAverageAsset(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(weth))
+        );
+        price.getPriceIn(address(weth), address(weth), IPRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPriceIn_last_unconfiguredAsset() public {
@@ -1434,6 +1491,24 @@ contract PriceV2Test is PriceV2BaseTest {
         // Reverse positions
         vm.expectRevert(err);
         price.getPriceIn(address(twoma), address(onema));
+    }
+
+    function testRevert_getPriceIn_conv_sameAsset_unconfiguredAsset() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(onema))
+        );
+        price.getPriceIn(address(onema), address(onema));
+    }
+
+    function test_getPriceIn_conv_sameAsset_configuredAsset_returnsUnitPrice(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        uint256 pairPrice = price.getPriceIn(address(weth), address(weth));
+
+        // Same-asset convenience quotes should normalize to one unit of account.
+        assertEq(pairPrice, uint256(10 ** price.decimals()), "Pair price should remain unit price");
     }
 
     function testRevert_getPriceIn_conv_priceZero(uint256 nonce_) public {
@@ -3190,7 +3265,10 @@ contract PriceV2Test is PriceV2BaseTest {
 
         address[] memory assetAddresses = price.getAssets();
         for (uint256 i; i < assetAddresses.length; i++) {
-            assertFalse(assetAddresses[i] == address(weth));
+            assertFalse(
+                assetAddresses[i] == address(weth),
+                "assetAddresses[i] should not equal address(weth) after removeAsset(address(weth))"
+            );
         }
     }
 
@@ -3215,7 +3293,10 @@ contract PriceV2Test is PriceV2BaseTest {
 
         address[] memory assetAddresses = price.getAssets();
         for (uint256 i; i < assetAddresses.length; i++) {
-            assertFalse(assetAddresses[i] == address(onema));
+            assertFalse(
+                assetAddresses[i] == address(onema),
+                "assetAddresses[i] should not equal address(onema) after removeAsset(address(onema))"
+            );
         }
     }
 
