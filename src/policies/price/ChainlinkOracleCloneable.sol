@@ -57,6 +57,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @notice The cache decimal scale captured at creation time
+    /// @dev    This value is intentionally immutable per oracle instance.
     ///
     /// @return uint8 The cache decimal scale stored in immutable args
     function _priceDecimals() internal pure returns (uint8) {
@@ -112,8 +113,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The oracle is not enabled (checked via factory)
     ///             - The factory is disabled (checked via factory.isOracleEnabled())
     ///             - The base/quote pair is invalid for the configured cache policy
-    ///             - Either the base or quote token cached price is zero
-    ///             - The base/quote cached timestamps are inconsistent
+    ///             - Either cached USD leg is zero
+    ///             - No cached pair observation is present (`updatedAt == 0`)
     ///
     ///             If callers encounter a revert due to feed state, they should cache prices then retry.
     ///
@@ -188,7 +189,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc IChainlinkOracle
     /// @dev        Chainlink-style round readers may consume stale rounds. This flag allows
-    ///             consumers to detect stale or inconsistent cached state before reading.
+    ///             consumers to detect stale or missing cached state before reading.
     ///             Reverts if the configured pair is invalid for the active cache policy.
     function isStale() external view override returns (bool) {
         return IPriceCache(factory().getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
@@ -201,8 +202,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The oracle is not enabled (checked via factory)
     ///             - The factory is disabled (checked via factory.isOracleEnabled())
     ///             - The base/quote pair is invalid for the configured cache policy
-    ///             - Either the base or quote token returns a price of zero
-    ///             - The timestamp of the base or quote token is not consistent
+    ///             - Either cached USD leg is zero
+    ///             - No cached pair observation is present (`updatedAt == 0`)
     ///
     /// @param  roundId_         The round ID to query
     /// @return roundId          The round ID
@@ -338,7 +339,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - This contract is not enabled in the factory
     ///             - The configured pair is invalid in the active cache policy
     function cachePriceIfNecessary() external override {
-        factory().cachePriceIfNecessary(baseToken(), quoteToken(), maxAge());
+        factory().cachePriceIfNecessary(baseToken(), quoteToken());
     }
 
     // ========== ERC165 ========== //

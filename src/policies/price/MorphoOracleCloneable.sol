@@ -94,7 +94,6 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             - The factory is disabled (checked via factory.isOracleEnabled())
     ///             - The collateral/loan pair is invalid for the configured cache policy
     ///             - Either the collateral or loan token cached price is zero
-    ///             - The collateral/loan cached timestamps are inconsistent
     ///             - The cached timestamp is stale
     ///
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
@@ -110,13 +109,14 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
             .getCachedPrice(collateralToken(), loanToken());
         uint48 pairTimestamp = cachedPrice.updatedAt;
 
+        // Price validity is checked separately from staleness so callers can distinguish zero-price cache failures.
+        if (cachedPrice.assetPriceUsd == 0 || cachedPrice.quotePriceUsd == 0) {
+            revert MorphoOracle_InvalidPrice();
+        }
+
         // Check staleness of the direct collateral/loan pair cache.
         uint48 maxAge_ = maxAge();
-        if (
-            cachedPrice.assetPriceUsd == 0 ||
-            cachedPrice.quotePriceUsd == 0 ||
-            _isStaleFromTimestamp(pairTimestamp, maxAge_)
-        ) {
+        if (_isStaleFromTimestamp(pairTimestamp, maxAge_)) {
             revert MorphoOracle_Stale(pairTimestamp, maxAge_);
         }
 
@@ -173,7 +173,7 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             - The configured pair is invalid in the active cache policy
     ///             - The active cache policy reverts while evaluating staleness or caching
     function cachePriceIfNecessary() external override {
-        factory().cachePriceIfNecessary(collateralToken(), loanToken(), maxAge());
+        factory().cachePriceIfNecessary(collateralToken(), loanToken());
     }
 
     // ========== ERC165 ========== //

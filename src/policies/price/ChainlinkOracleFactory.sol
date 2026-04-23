@@ -59,6 +59,7 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         bytes32 oracleName = bytes32(
             abi.encodePacked(baseSymbol, "/", quoteSymbol, " CL ", uint256(maxAge_).toString(), "s")
         );
+        // Intentionally snapshot cache decimals at oracle creation so each oracle keeps a fixed scale.
         uint8 priceCacheDecimals = priceCache.decimals();
 
         // Create clone with immutable args

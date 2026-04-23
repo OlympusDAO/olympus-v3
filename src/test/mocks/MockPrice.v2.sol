@@ -7,10 +7,10 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 contract MockPrice is PRICEv2 {
     mapping(address => bool) internal assetApproved;
-    mapping(address => bool) internal storeMovingAverageEnabled;
+    mapping(address => bool) internal _storeMovingAverageEnabled;
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
-    mapping(address => uint48) internal movingAverageLastUpdated;
+    mapping(address => uint48) internal _movingAverageLastUpdated;
     mapping(address => uint256[]) internal observations;
     uint48 internal timestamp;
 
@@ -60,9 +60,9 @@ contract MockPrice is PRICEv2 {
     }
 
     function setMovingAverage(address asset, uint256 movingAverage) public {
-        storeMovingAverageEnabled[asset] = true;
+        _storeMovingAverageEnabled[asset] = true;
         movingAverages[asset] = movingAverage;
-        movingAverageLastUpdated[asset] = timestamp;
+        _movingAverageLastUpdated[asset] = timestamp;
     }
 
     function _isUnitOfAccount(address asset_) internal pure returns (bool) {
@@ -79,26 +79,26 @@ contract MockPrice is PRICEv2 {
     }
 
     function setObservations(address asset, uint256[] memory observations_) public {
-        storeMovingAverageEnabled[asset] = true;
+        _storeMovingAverageEnabled[asset] = true;
         observations[asset] = observations_;
-        movingAverageLastUpdated[asset] = observations_.length == 0 ? uint48(0) : timestamp;
+        _movingAverageLastUpdated[asset] = observations_.length == 0 ? uint48(0) : timestamp;
     }
 
     function _getLastObservationPrice(
         address asset_
     ) internal view returns (uint256 price_, uint48 timestamp_) {
-        if (!storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
+        if (!_storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
 
         uint256[] memory assetObservations = observations[asset_];
         if (assetObservations.length == 0) revert PRICE_MovingAverageNotStored(asset_);
 
-        return (assetObservations[assetObservations.length - 1], movingAverageLastUpdated[asset_]);
+        return (assetObservations[assetObservations.length - 1], _movingAverageLastUpdated[asset_]);
     }
 
     function _getMovingAveragePrice(
         address asset
     ) internal view returns (uint256 price_, uint48 timestamp_) {
-        if (!storeMovingAverageEnabled[asset]) revert PRICE_MovingAverageNotStored(asset);
+        if (!_storeMovingAverageEnabled[asset]) revert PRICE_MovingAverageNotStored(asset);
 
         uint256[] memory assetObservations = observations[asset];
         if (assetObservations.length == 0) revert PRICE_MovingAverageNotStored(asset);
@@ -115,7 +115,7 @@ contract MockPrice is PRICEv2 {
             movingAverage = cumulativeObs / assetObservations.length;
         }
 
-        return (movingAverage, movingAverageLastUpdated[asset]);
+        return (movingAverage, _movingAverageLastUpdated[asset]);
     }
 
     function getPrice(address asset_) external view override returns (uint256) {
@@ -190,12 +190,12 @@ contract MockPrice is PRICEv2 {
         return
             Asset({
                 approved: assetApproved[asset_],
-                storeMovingAverage: storeMovingAverageEnabled[asset_],
+                storeMovingAverage: _storeMovingAverageEnabled[asset_],
                 useMovingAverage: false,
                 movingAverageDuration: 30 days,
                 nextObsIndex: 0,
                 numObservations: uint16(assetObservations.length),
-                lastObservationTime: movingAverageLastUpdated[asset_],
+                lastObservationTime: _movingAverageLastUpdated[asset_],
                 cumulativeObs: 0,
                 obs: assetObservations,
                 strategy: bytes(""),
@@ -209,13 +209,13 @@ contract MockPrice is PRICEv2 {
 
     function storeObservation(address asset_) external override {
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
-        if (!storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
+        if (!_storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
 
         // Get current price
         (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
 
         observations[asset_].push(price);
-        movingAverageLastUpdated[asset_] = timestamp;
+        _movingAverageLastUpdated[asset_] = timestamp;
 
         uint256 cumulativeObs;
         uint256[] memory assetObservations = observations[asset_];
@@ -242,9 +242,9 @@ contract MockPrice is PRICEv2 {
         Component[] memory feeds_
     ) external override {
         assetApproved[asset_] = true;
-        storeMovingAverageEnabled[asset_] = storeMovingAverage_;
+        _storeMovingAverageEnabled[asset_] = storeMovingAverage_;
         observations[asset_] = observations_;
-        movingAverageLastUpdated[asset_] = lastObservationTime_;
+        _movingAverageLastUpdated[asset_] = lastObservationTime_;
 
         uint256 cumulativeObs;
         for (uint256 i; i < observations_.length; ) {
@@ -277,17 +277,29 @@ contract MockPrice is PRICEv2 {
 
     function removeAsset(address asset_) external override {
         assetApproved[asset_] = false;
-        storeMovingAverageEnabled[asset_] = false;
+        _storeMovingAverageEnabled[asset_] = false;
         delete movingAverages[asset_];
-        delete movingAverageLastUpdated[asset_];
+        delete _movingAverageLastUpdated[asset_];
         delete observations[asset_];
+
+        // Keep getAssets()/storeObservations() aligned with asset approval state.
+        for (uint256 i; i < _assets.length; ) {
+            if (_assets[i] == asset_) {
+                _assets[i] = _assets[_assets.length - 1];
+                _assets.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function updateAsset(address asset_, UpdateAssetParams memory params_) external override {
         if (params_.updateMovingAverage) {
-            storeMovingAverageEnabled[asset_] = params_.storeMovingAverage;
+            _storeMovingAverageEnabled[asset_] = params_.storeMovingAverage;
             observations[asset_] = params_.observations;
-            movingAverageLastUpdated[asset_] = params_.lastObservationTime;
+            _movingAverageLastUpdated[asset_] = params_.lastObservationTime;
 
             uint256 cumulativeObs;
             for (uint256 i; i < params_.observations.length; ) {

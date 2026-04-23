@@ -57,8 +57,6 @@ contract OlympusPricev1_2Test is Test {
     uint256 internal constant RESERVE_A_PRICE = 5e17; // 0.5 USD (18 decimals)
     uint256 internal constant RESERVE_B_PRICE = 125e16; // 1.25 USD (18 decimals)
 
-    address internal constant UNIT_OF_ACCOUNT = address(840);
-
     // Events
     event MinimumTargetPriceChanged(uint256 minimumTargetPrice_);
 
