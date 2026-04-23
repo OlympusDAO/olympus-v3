@@ -909,6 +909,56 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         );
     }
 
+    // when the price feed configuration is being updated, when the strategy configuration is not
+    // being updated, given useMovingAverage is true, when the moving average is stale: it still
+    // updates feeds and emits AssetPriceFeedsUpdated
+
+    function test_whenUpdatingPriceFeeds_whenNotUpdatingStrategy_givenUseMovingAverageTrue_whenMovingAverageStale()
+        public
+        givenAsset_SingleFeed_Strategy_WithMA
+    {
+        IPRICEv2.Asset memory oldAssetData = price.getAssetData(asset_SingleFeed_Strategy_WithMA);
+
+        IPRICEv2.Component[] memory newFeeds = new IPRICEv2.Component[](1);
+        newFeeds[0] = _singleFeed(alphaUsdPriceFeed);
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: newFeeds,
+            strategy: _emptyStrategy(),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: uint32(0),
+            lastObservationTime: uint48(0),
+            observations: new uint256[](0)
+        });
+
+        // Make the stored MA stale relative to observation frequency.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_MovingAverageStale.selector,
+                asset_SingleFeed_Strategy_WithMA,
+                oldAssetData.lastObservationTime
+            )
+        );
+        price.getPrice(asset_SingleFeed_Strategy_WithMA, IPRICEv2.Variant.CURRENT);
+
+        vm.expectEmit(true, true, true, true);
+        emit AssetPriceFeedsUpdated(asset_SingleFeed_Strategy_WithMA);
+
+        vm.prank(priceWriter);
+        price.updateAsset(asset_SingleFeed_Strategy_WithMA, params);
+
+        IPRICEv2.Asset memory assetData = price.getAssetData(asset_SingleFeed_Strategy_WithMA);
+        _assertFeedsUpdated(assetData, newFeeds);
+        _assertStrategyUnchanged(oldAssetData, assetData);
+        _assertMovingAverageUnchanged(oldAssetData, assetData);
+    }
+
     // when the asset strategy configuration is being updated, given the strategy submodule is not installed: it reverts
 
     function test_whenUpdatingStrategy_givenSubmoduleNotInstalled_reverts()
