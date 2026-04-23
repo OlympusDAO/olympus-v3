@@ -842,8 +842,8 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Try to call getPrice with the moving average variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_MovingAverageNotStored(address)",
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_MovingAverageNotStored.selector,
             address(weth)
         );
         vm.expectRevert(err);
@@ -1182,10 +1182,23 @@ contract PriceV2Test is PriceV2BaseTest {
     function testRevert_getPriceIn_last_movingAverageNotStored(uint256 nonce_) public {
         _addBaseAssets(nonce_);
 
+        // Asset side without stored MA must fail for LAST quotes.
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(weth))
         );
         price.getPriceIn(address(weth), address(onema), IPRICEv2.Variant.LAST);
+
+        // Quote asset without stored MA must also fail.
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(weth))
+        );
+        price.getPriceIn(address(onema), address(weth), IPRICEv2.Variant.LAST);
+
+        // Another non-MA quote asset should follow the same revert behavior.
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(alpha))
+        );
+        price.getPriceIn(address(onema), address(alpha), IPRICEv2.Variant.LAST);
     }
 
     function test_getPriceIn_last_withoutDirectPairCache_usesStoredObservations(
@@ -1355,16 +1368,31 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Try to call getPriceIn with the moving average variant and expect revert on the first asset
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_MovingAverageNotStored(address)",
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_MovingAverageNotStored.selector,
             address(weth)
         );
+        // Asset side without stored MA must fail for MOVINGAVERAGE quotes.
         vm.expectRevert(err);
         price.getPriceIn(address(weth), address(ohm), IPRICEv2.Variant.MOVINGAVERAGE);
 
         // Try with positions reversed
+        // Quote asset without stored MA must also fail.
         vm.expectRevert(err);
         price.getPriceIn(address(ohm), address(weth), IPRICEv2.Variant.MOVINGAVERAGE);
+
+        // Both assets without stored moving averages should also revert.
+        // Both non-MA assets: fail on the first argument (weth).
+        vm.expectRevert(err);
+        price.getPriceIn(address(weth), address(alpha), IPRICEv2.Variant.MOVINGAVERAGE);
+
+        err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_MovingAverageNotStored.selector,
+            address(alpha)
+        );
+        // Both non-MA assets in reverse order: fail on the first argument (alpha).
+        vm.expectRevert(err);
+        price.getPriceIn(address(alpha), address(weth), IPRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPriceIn_movingAverage_unconfiguredAsset() public {
