@@ -141,7 +141,7 @@ contract OracleProposalTest is ProposalTest {
         }
 
         // 4. Deploy and activate oracle policies so their dependencies are configured
-        // (The OCG proposal will enable() them later to turn on functionality)
+        // (The OCG proposal will enable() PriceCache and oracle factories later)
         _deployPriceCacheIfNeeded(kernelAddr);
         _deployERC7726OracleFactoryIfNeeded(kernelAddr);
         _deployChainlinkOracleFactoryIfNeeded(kernelAddr);
@@ -562,6 +562,10 @@ contract OracleProposalTest is ProposalTest {
         );
 
         // Verify policies enabled
+        assertTrue(
+            IEnabler(addresses.getAddress("olympus-policy-price-cache-1_0")).isEnabled(),
+            "PriceCache not enabled"
+        );
         assertTrue(
             IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0")).isEnabled(),
             "ERC7726OracleFactory not enabled"
