@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneableTest {
@@ -99,6 +100,40 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             AggregatorV2V3Interface(address(oracle)).latestRound(),
             uint256(roundId),
             "latestRound should return correct round ID"
+        );
+    }
+
+    // when base/quote decimals are highly mismatched (0 vs 18)
+    //  [X] it still returns the correctly scaled non-zero answer for a 1:3 ratio
+    function test_whenBaseIsZeroDecimalsAndQuoteIsEighteenDecimals_givenOneToThreeRatio_returnsNonZeroAnswer()
+        public
+    {
+        MockERC20 zeroDecBase = new MockERC20("Zero Dec Base", "ZBASE", 0);
+        MockERC20 eighteenDecQuote = new MockERC20("Eighteen Dec Quote", "EQUOTE", 18);
+
+        _setPRICEPrices(address(zeroDecBase), 1e18);
+        _setPRICEPrices(address(eighteenDecQuote), 3e18);
+
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(zeroDecBase),
+            address(eighteenDecQuote),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // Cache direct pair snapshot consumed by cloneable oracle.
+        priceCache.cachePrice(address(zeroDecBase), address(eighteenDecQuote));
+
+        // Expected answer: (1e18 * 1e18) / 3e18 = 333333333333333333
+        uint256 expectedAnswer = 333333333333333333;
+
+        (, int256 answer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(
+            answer,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            int256(expectedAnswer),
+            "Should return non-zero scaled answer with 0/18 token decimals"
         );
     }
 
