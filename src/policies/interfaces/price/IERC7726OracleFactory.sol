@@ -143,12 +143,11 @@ interface IERC7726OracleFactory {
     /// @param   quote_  The quote asset to cache
     function cachePrice(address base_, address quote_) external;
 
-    /// @notice  Cache the direct pair only when stale for the provided max age
+    /// @notice  Cache the direct pair only when stale for the calling oracle's configured max age
     ///
     /// @param   base_    The base asset to conditionally cache
     /// @param   quote_   The quote asset to conditionally cache
-    /// @param   maxAge_  The maximum accepted cache age in seconds
-    function cachePriceIfNecessary(address base_, address quote_, uint48 maxAge_) external;
+    function cachePriceIfNecessary(address base_, address quote_) external;
 
     /// @notice  Enables oracle creation
     function enableCreation() external;

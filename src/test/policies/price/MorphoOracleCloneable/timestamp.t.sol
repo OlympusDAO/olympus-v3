@@ -61,7 +61,7 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
         priceCache.setAssetApproval(address(loanToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
+            abi.encodeWithSelector(_PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
         );
         oracle.timestamp();
     }
@@ -71,7 +71,7 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
         priceCache.setAssetApproval(address(collateralToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
+            abi.encodeWithSelector(_PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
         );
         oracle.timestamp();
     }

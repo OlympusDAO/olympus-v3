@@ -298,11 +298,11 @@ contract ERC7726OracleFactory is
     ///             - Underlying cache evaluation/write fails
     function cachePriceIfNecessary(
         address base_,
-        address quote_,
-        uint48 maxAge_
+        address quote_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
-        priceCache.cachePriceIfNecessary(base_, quote_, maxAge_);
+        uint48 configuredMaxAge = _oracleToMaxAge[msg.sender];
+        priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
     }
 
     // ========== INTERNAL HELPERS ========== //

@@ -37,16 +37,17 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with MorphoOracle_Stale
 
     function test_whenCollateralTokenCacheIsStale_reverts() public {
-        // Force stale state; cached-only semantics should revert stale before using live prices.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
-        // Set collateral token price to zero
-        _setPRICEPrices(address(collateralToken), 0);
+        // Force stale state; cached-only semantics should revert stale before using live prices.
+        vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
+                cachedAt,
                 DEFAULT_MAX_AGE
             )
         );
@@ -57,19 +58,42 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with MorphoOracle_Stale
 
     function test_whenLoanTokenCacheIsStale_reverts() public {
-        // Force stale state; cached-only semantics should revert stale before using live prices.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
-        // Set loan token price to zero
-        _setPRICEPrices(address(loanToken), 0);
+        // Force stale state; cached-only semantics should revert stale before using live prices.
+        vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
+                cachedAt,
                 DEFAULT_MAX_AGE
             )
         );
+        oracle.price();
+    }
+
+    // when collateral token cached price is zero
+    //  [X] it reverts with MorphoOracle_InvalidPrice
+
+    function test_whenCollateralTokenCachedPriceIsZero_revertsInvalidPrice() public {
+        _setPRICEPrices(address(collateralToken), 0);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+
+        vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
+        oracle.price();
+    }
+
+    // when loan token cached price is zero
+    //  [X] it reverts with MorphoOracle_InvalidPrice
+
+    function test_whenLoanTokenCachedPriceIsZero_revertsInvalidPrice() public {
+        _setPRICEPrices(address(loanToken), 0);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+
+        vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
         oracle.price();
     }
 

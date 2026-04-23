@@ -108,7 +108,7 @@ contract PriceConfigv2Test is Test {
     MockPriceFeed internal ethUsdPriceFeed;
 
     MockERC20 internal ohm;
-    MockERC20 internal reserve;
+    MockERC20 internal _reserve;
 
     Kernel internal kernel;
     PriceConfigv2 internal priceConfig;
@@ -143,7 +143,7 @@ contract PriceConfigv2Test is Test {
 
         // Tokens
         ohm = new MockERC20("Olympus", "OHM", 9);
-        reserve = new MockERC20("Reserve", "RSV", 18);
+        _reserve = new MockERC20("Reserve", "RSV", 18);
 
         // Price Feeds
         ethUsdPriceFeed = new MockPriceFeed();
@@ -283,7 +283,7 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
             toSubKeycode(bytes20(0)),
             bytes4(0),
-            abi.encode(0)
+            bytes("")
         );
 
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
@@ -295,7 +295,7 @@ contract PriceConfigv2Test is Test {
 
         vm.prank(priceManager);
         priceConfig.addAssetPrice(
-            address(reserve),
+            address(_reserve),
             false,
             false,
             uint32(0),
