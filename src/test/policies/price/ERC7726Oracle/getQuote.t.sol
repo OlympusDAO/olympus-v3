@@ -272,6 +272,72 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         assertEq(askOutAmount, expectedOutAmount, "getQuotes ask should match getQuote");
     }
 
+    // given intermediate rounding would truncate to zero before decimal scaling
+    //  [X] it still returns a non-zero quote amount
+    function test_givenZeroDecimalBaseAndOneToThreePriceRatio_returnsNonZeroQuote()
+        public
+        givenOracleIsEnabled
+    {
+        // Base token: 0 decimals, Quote token: 18 decimals
+        MockERC20 baseToken = new MockERC20("Base Token", "BASE", 0);
+        MockERC20 quoteToken = new MockERC20("Quote Token", "QUOTE", 18);
+
+        // Set prices: base = 1e18 USD, quote = 3e18 USD
+        _setPRICEPrices(address(baseToken), 1e18);
+        _setPRICEPrices(address(quoteToken), 3e18);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+
+        // inAmount = 1 (1 base token with 0 decimals)
+        uint256 inAmount = 1;
+
+        // outAmount = (1 * 1e18 * 1e18) / (3e18 * 1) = 1e18 / 3 = 333333333333333333
+        uint256 expectedOutAmount = 333333333333333333;
+
+        uint256 outAmount = oracle.getQuote(inAmount, address(baseToken), address(quoteToken));
+        (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(
+            inAmount,
+            address(baseToken),
+            address(quoteToken)
+        );
+
+        assertEq(outAmount, expectedOutAmount, "getQuote should not lose precision to zero");
+        assertEq(bidOutAmount, expectedOutAmount, "getQuotes bid should match getQuote");
+        assertEq(askOutAmount, expectedOutAmount, "getQuotes ask should match getQuote");
+    }
+
+    // given base decimals are much larger than quote decimals
+    //  [X] it returns the correctly scaled quote amount
+    function test_givenEighteenDecimalBaseAndZeroDecimalQuote_givenThreeToOnePriceRatio_returnsScaledQuote()
+        public
+        givenOracleIsEnabled
+    {
+        // Base token: 18 decimals, Quote token: 0 decimals
+        MockERC20 baseToken = new MockERC20("Base Token", "BASE", 18);
+        MockERC20 quoteToken = new MockERC20("Quote Token", "QUOTE", 0);
+
+        // Set prices: base = 3e18 USD, quote = 1e18 USD
+        _setPRICEPrices(address(baseToken), 3e18);
+        _setPRICEPrices(address(quoteToken), 1e18);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+
+        // inAmount = 1e18 (1 base token with 18 decimals)
+        uint256 inAmount = 1e18;
+
+        // outAmount = (1e18 * 3e18 * 1) / (1e18 * 1e18) = 3 (0 decimals)
+        uint256 expectedOutAmount = 3;
+
+        uint256 outAmount = oracle.getQuote(inAmount, address(baseToken), address(quoteToken));
+        (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(
+            inAmount,
+            address(baseToken),
+            address(quoteToken)
+        );
+
+        assertEq(outAmount, expectedOutAmount, "getQuote should return the scaled quote amount");
+        assertEq(bidOutAmount, expectedOutAmount, "getQuotes bid should match getQuote");
+        assertEq(askOutAmount, expectedOutAmount, "getQuotes ask should match getQuote");
+    }
+
     // given the quote token decimals are smaller than the base token decimals
     //  [X] it returns the correct quantity of quote tokens
     //  [X] it returns in terms of quote token decimals
