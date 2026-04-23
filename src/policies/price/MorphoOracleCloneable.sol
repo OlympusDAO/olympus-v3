@@ -117,7 +117,7 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
             cachedPrice.quotePriceUsd == 0 ||
             _isStaleFromTimestamp(pairTimestamp, maxAge_)
         ) {
-            revert MorphoOracle_Stale(pairTimestamp, maxAge_);
+            revert MorphoOracle_Stale(pairTimestamp, _latestPermissibleTimestamp(maxAge_));
         }
 
         return cachedPrice.assetPriceUsd.mulDiv(scaleFactor(), cachedPrice.quotePriceUsd);
@@ -127,6 +127,13 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
         if (timestamp_ == 0) return true;
         unchecked {
             return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        }
+    }
+
+    function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        if (block.timestamp <= uint256(maxAge_)) return 0;
+        unchecked {
+            return block.timestamp - uint256(maxAge_);
         }
     }
 

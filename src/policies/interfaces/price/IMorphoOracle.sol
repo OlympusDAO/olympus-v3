@@ -14,9 +14,12 @@ interface IMorphoOracle is IOracle {
 
     /// @notice Thrown when the direct pair cache is unset or stale
     ///
-    /// @param  timestamp_  The cached timestamp used for the collateral/loan pair
-    /// @param  maxAge_     The configured maximum cache age
-    error MorphoOracle_Stale(uint48 timestamp_, uint48 maxAge_);
+    /// @param  cachedTimestamp               The cached timestamp used for the collateral/loan pair
+    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
+    error MorphoOracle_Stale(
+        uint256 cachedTimestamp,
+        uint256 latestPermissibleTimestamp
+    );
 
     // ========== FUNCTIONS ========== //
 

@@ -102,12 +102,15 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenBaseAssetPairIsNotCached_revertsWithStale() public givenOracleIsEnabled {
         MockERC20 zeroBaseToken = new MockERC20("Zero Base", "ZBASE", 18);
         _setPRICEPrices(address(zeroBaseToken), 0);
+        uint256 latestPermissibleTimestamp = block.timestamp > DEFAULT_MAX_AGE
+            ? block.timestamp - DEFAULT_MAX_AGE
+            : 0;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IERC7726Oracle.ERC7726Oracle_Stale.selector,
-                uint48(0),
-                DEFAULT_MAX_AGE
+                uint256(0),
+                latestPermissibleTimestamp
             )
         );
 
@@ -120,12 +123,15 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenQuoteAssetPairIsNotCached_revertsWithStale() public givenOracleIsEnabled {
         MockERC20 zeroQuoteToken = new MockERC20("Zero Quote", "ZQUOTE", 18);
         _setPRICEPrices(address(zeroQuoteToken), 0);
+        uint256 latestPermissibleTimestamp = block.timestamp > DEFAULT_MAX_AGE
+            ? block.timestamp - DEFAULT_MAX_AGE
+            : 0;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IERC7726Oracle.ERC7726Oracle_Stale.selector,
-                uint48(0),
-                DEFAULT_MAX_AGE
+                uint256(0),
+                latestPermissibleTimestamp
             )
         );
 
@@ -163,12 +169,13 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenCloneablePricesAreStale_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(address(collateralToken), address(loanToken));
         vm.warp(block.timestamp + 1 hours + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - uint256(1 hours);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IERC7726Oracle.ERC7726Oracle_Stale.selector,
-                uint48(1),
-                uint48(1 hours)
+                uint256(1),
+                latestPermissibleTimestamp
             )
         );
         oracle.getQuote(1e18, address(collateralToken), address(loanToken));

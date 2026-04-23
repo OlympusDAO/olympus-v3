@@ -89,7 +89,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
             cachedPrice.quotePriceUsd == 0 ||
             _isStaleFromTimestamp(pairTimestamp, maxAge_)
         ) {
-            revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
+            revert ERC7726Oracle_Stale(pairTimestamp, _latestPermissibleTimestamp(maxAge_));
         }
 
         outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, cachedPrice.quotePriceUsd).mulDiv(
@@ -140,6 +140,13 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         if (timestamp_ == 0) return true;
         unchecked {
             return block.timestamp > uint256(timestamp_) + uint256(maxAge_);
+        }
+    }
+
+    function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        if (block.timestamp <= uint256(maxAge_)) return 0;
+        unchecked {
+            return block.timestamp - uint256(maxAge_);
         }
     }
 

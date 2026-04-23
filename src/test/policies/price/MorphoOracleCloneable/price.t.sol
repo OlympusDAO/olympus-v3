@@ -39,6 +39,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenCollateralTokenCacheIsStale_reverts() public {
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         // Set collateral token price to zero
         _setPRICEPrices(address(collateralToken), 0);
@@ -46,8 +47,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
-                DEFAULT_MAX_AGE
+                uint256(1),
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -59,6 +60,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenLoanTokenCacheIsStale_reverts() public {
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         // Set loan token price to zero
         _setPRICEPrices(address(loanToken), 0);
@@ -66,8 +68,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
-                DEFAULT_MAX_AGE
+                uint256(1),
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -584,12 +586,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
         vm.warp(cachedAt + warpDelta);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
