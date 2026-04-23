@@ -18,6 +18,10 @@ contract CachePriceCaller {
     function cachePrice(address base_, address quote_) external {
         cache.cachePrice(base_, quote_);
     }
+
+    function cachePriceIfNecessary(address base_, address quote_) external {
+        cache.cachePriceIfNecessary(base_, quote_);
+    }
 }
 
 contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
@@ -194,6 +198,21 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
             )
         );
         caller.cachePrice(address(baseToken), address(quoteToken));
+    }
+
+    function test_whenCallerIsNotFactoryOracle_cachePriceIfNecessaryReverts()
+        public
+        givenFactoryIsEnabled
+    {
+        CachePriceCaller caller = new CachePriceCaller(IERC7726OracleFactory(address(factory)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC7726OracleFactory.ERC7726OracleFactory_InvalidOracle.selector,
+                address(caller)
+            )
+        );
+        caller.cachePriceIfNecessary(address(baseToken), address(quoteToken));
     }
 
     function test_whenPriceCachePolicyIsDisabled_cachePriceReverts()

@@ -7,7 +7,7 @@ import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleClonea
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleCloneableTest {
-    function test_whenPricesAreFresh_cachePricesIfNecessaryDoesNotCache(uint48 warpDelta_) public {
+    function test_whenPricesAreFresh_cachePriceIfNecessaryDoesNotCache(uint48 warpDelta_) public {
         uint256 initialCacheCalls = priceCache.cachePriceCallCount();
         priceCache.cachePrice(address(baseToken), address(quoteToken));
         uint48 cachedAt = priceCache
@@ -30,7 +30,7 @@ contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleClo
         );
     }
 
-    function test_whenPricesAreStale_cachePricesIfNecessaryCaches(uint48 warpDelta_) public {
+    function test_whenPricesAreStale_cachePriceIfNecessaryCaches(uint48 warpDelta_) public {
         uint256 initialCacheCalls = priceCache.cachePriceCallCount();
         priceCache.cachePrice(address(baseToken), address(quoteToken));
         uint48 cachedAt = priceCache
@@ -55,7 +55,7 @@ contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleClo
         );
     }
 
-    function test_whenOracleMaxAgeIsZero_cachePricesIfNecessaryCachesWhenTimestampIsFromPriorBlock()
+    function test_whenOracleMaxAgeIsZero_cachePriceIfNecessaryCachesWhenTimestampIsFromPriorBlock()
         public
     {
         uint256 initialCacheCalls = priceCache.cachePriceCallCount();
@@ -81,7 +81,7 @@ contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleClo
         );
     }
 
-    function test_whenOnlyBaseUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
+    function test_whenOnlyBaseUsdCacheChanges_cachePriceIfNecessaryDoesNotRecachePair() public {
         address unitOfAccount = UNIT_OF_ACCOUNT;
         priceCache.setUsdPrice(unitOfAccount, 1e18);
 

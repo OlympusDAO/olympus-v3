@@ -318,8 +318,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - `quote_` is not approved (and not the unit of account)
     /// @dev        - No price could be determined for either non-unit asset
     function getPriceIn(address asset_, address quote_) external view override returns (uint256) {
-        if (asset_ == quote_) return _unitPrice();
-
         (uint256 assetPrice, ) = getPrice(asset_, Variant.CURRENT);
         (uint256 quotePrice, ) = getPrice(quote_, Variant.CURRENT);
         return (assetPrice * _unitPrice()) / quotePrice;
@@ -339,8 +337,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         address quote_,
         Variant variant_
     ) external view override returns (uint256, uint48) {
-        if (asset_ == quote_) return (_unitPrice(), uint48(block.timestamp));
-
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
         (uint256 quotePrice, uint48 quoteTime) = getPrice(quote_, variant_);
         return (

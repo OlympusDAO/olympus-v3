@@ -19,7 +19,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     bool public isEnabled = true;
     address public kernel;
     address public priceModule;
-    uint8 public decimals = 18;
+    uint8 public override decimals = 18;
 
     uint256 public cachePriceCallCount;
     uint256 public cachePriceIfNecessaryCallCount;
@@ -166,11 +166,11 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     }
 
     function _getUsdPriceOrUnit(address asset_) internal view returns (uint256 usdPrice_) {
-        if (asset_ == _UNIT_OF_ACCOUNT) return 1e18;
+        if (asset_ == _UNIT_OF_ACCOUNT) return 10 ** uint256(decimals);
         return _usdPrices[asset_];
     }
 
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
         return
             interfaceId_ == type(IPriceCache).interfaceId ||
             interfaceId_ == type(IERC165).interfaceId;

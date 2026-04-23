@@ -133,7 +133,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     ///             - The active price cache rejects the pair
     ///             - The active price cache reverts while evaluating staleness or caching
     function cachePriceIfNecessary(address base_, address quote_) external override {
-        factory().cachePriceIfNecessary(base_, quote_, maxAge());
+        factory().cachePriceIfNecessary(base_, quote_);
     }
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {

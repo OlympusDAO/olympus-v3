@@ -58,8 +58,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
     function test_whenOnlyCollateralUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair()
         public
     {
-        address unitOfAccount = UNIT_OF_ACCOUNT;
-        priceCache.setUsdPrice(unitOfAccount, 1e18);
+        priceCache.setUsdPrice(UNIT_OF_ACCOUNT, 1e18);
 
         priceCache.cachePrice(address(collateralToken), address(loanToken));
         IPriceCache.CachedPrice memory oldPair = priceCache.getCachedPrice(
@@ -69,7 +68,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
 
         vm.warp(block.timestamp + 1);
         _setPRICEPrices(address(collateralToken), 3e18);
-        priceCache.cachePrice(address(collateralToken), unitOfAccount);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 
@@ -91,8 +90,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
     }
 
     function test_whenOnlyLoanUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair() public {
-        address unitOfAccount = UNIT_OF_ACCOUNT;
-        priceCache.setUsdPrice(unitOfAccount, 1e18);
+        priceCache.setUsdPrice(UNIT_OF_ACCOUNT, 1e18);
 
         priceCache.cachePrice(address(collateralToken), address(loanToken));
         IPriceCache.CachedPrice memory oldPair = priceCache.getCachedPrice(
@@ -102,7 +100,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
 
         vm.warp(block.timestamp + 1);
         _setPRICEPrices(address(loanToken), 2e18);
-        priceCache.cachePrice(address(loanToken), unitOfAccount);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
 

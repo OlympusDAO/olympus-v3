@@ -55,6 +55,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
         vm.expectRevert();
         oracle.getQuote(1e18, UNIT_OF_ACCOUNT, address(loanToken));
     }
@@ -65,6 +66,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
         vm.expectRevert();
         oracle.getQuote(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
     }
@@ -75,6 +77,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenGetQuotesBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
         vm.expectRevert();
         oracle.getQuotes(1e18, UNIT_OF_ACCOUNT, address(loanToken));
     }
@@ -85,6 +88,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     function test_givenGetQuotesQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
         vm.expectRevert();
         oracle.getQuotes(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
     }

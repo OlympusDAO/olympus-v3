@@ -175,12 +175,7 @@ interface IOracleFactory {
     ///
     /// @param  baseToken_  The base token address
     /// @param  quoteToken_ The quote token address
-    /// @param  maxAge_     Maximum accepted cache age in seconds
-    function cachePriceIfNecessary(
-        address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
-    ) external;
+    function cachePriceIfNecessary(address baseToken_, address quoteToken_) external;
 
     // ========== ADMIN FUNCTIONS ========== //
 
