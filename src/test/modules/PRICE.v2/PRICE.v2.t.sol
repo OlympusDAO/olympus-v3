@@ -959,6 +959,45 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(price_, uint256(2100e18));
     }
 
+    function test_getPrice_conv_whenMovingAverageAssetObservationStoredSameBlock_returnsInclusiveCurrent()
+        public
+    {
+        _addBaseAssets(1);
+
+        // Configure TWOMA feeds so the raw stored observation is deterministic.
+        twomaUsdPriceFeed.setLatestAnswer(int256(30e8));
+        twomaEthPriceFeed.setLatestAnswer(int256(0.02e18)); // second feed => 40e18
+
+        IPRICEv2.Asset memory twomaData = price.getAssetData(address(twoma));
+        uint256 rawObservation = (uint256(30e18) + uint256(40e18)) / 2;
+        uint256 oldestObservation = twomaData.obs[twomaData.nextObsIndex];
+        uint256 updatedMovingAverage = (twomaData.cumulativeObs -
+            oldestObservation +
+            rawObservation) / twomaData.numObservations;
+        uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
+
+        vm.prank(priceWriter);
+        price.storeObservation(address(twoma));
+
+        uint256 currentPrice = price.getPrice(address(twoma));
+        (uint256 lastPrice, ) = price.getPrice(address(twoma), IPRICEv2.Variant.LAST);
+
+        // Convenience getPrice should return inclusive CURRENT (feed prices + moving average).
+        assertEq(
+            currentPrice,
+            expectedCurrent,
+            "getPrice(asset) should return CURRENT, not a stale/non-inclusive fallback"
+        );
+        // LAST should still reflect the raw stored observation value.
+        assertEq(lastPrice, rawObservation, "LAST should return the raw stored observation");
+        // Same-timestamp reads must not fall back to LAST, or CURRENT loses MA inclusivity.
+        assertNotEq(
+            currentPrice,
+            lastPrice,
+            "getPrice(asset) should not return LAST when timestamps match"
+        );
+    }
+
     function testRevert_getPrice_conv_unconfiguredAsset() public {
         // No base assets
 
