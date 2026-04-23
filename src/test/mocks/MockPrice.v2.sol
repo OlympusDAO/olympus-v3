@@ -75,11 +75,6 @@ contract MockPrice is PRICEv2 {
         return 10 ** _decimals;
     }
 
-    function _getCurrentPriceOrUnit(address asset_) internal view returns (uint256, uint48) {
-        if (_isUnitOfAccount(asset_)) return (_unitPrice(), timestamp);
-        return (prices[asset_], timestamp);
-    }
-
     function setObservations(address asset, uint256[] memory observations_) public {
         _storeMovingAverageEnabled[asset] = true;
         observations[asset] = observations_;
