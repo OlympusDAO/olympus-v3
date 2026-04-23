@@ -315,6 +315,8 @@ abstract contract BaseOracleFactory is
     function setPriceCache(
         address policy_
     ) external override onlyEnabled onlyAdminRole nonReentrant {
+        // Intentionally does not check `IEnabler(policy_).isEnabled()`: this setter validates
+        // compatibility/kernel only and allows admin-led cache policy rotations regardless of runtime state.
         _setPriceCache(policy_);
     }
 
@@ -333,11 +335,7 @@ abstract contract BaseOracleFactory is
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
-        _cachePriceIfNecessary(
-            _oracleToBaseToken[oracle_],
-            _oracleToQuoteToken[oracle_],
-            _oracleToMaxAge[oracle_]
-        );
+        _cachePriceIfNecessary(oracle_, _oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_]);
         emit OracleEnabled(oracle_);
     }
 
@@ -395,12 +393,11 @@ abstract contract BaseOracleFactory is
     ///             - Underlying cache evaluation/write fails
     function cachePriceIfNecessary(
         address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
+        address quoteToken_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
-        _cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
+        _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);
     }
 
     /// @notice Caches prices for the configured oracle token pair
@@ -415,10 +412,14 @@ abstract contract BaseOracleFactory is
 
     /// @notice Conditionally caches prices for the token pair based on direct pair staleness
     function _cachePriceIfNecessary(
+        address oracle_,
         address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
+        address quoteToken_
     ) internal {
+        uint48 configuredMaxAge = _oracleToMaxAge[oracle_];
+        // Use the oracle's configured max age from factory storage.
+        // This avoids any drift between caller-provided values and configured oracle policy.
+        uint48 maxAge_ = configuredMaxAge;
         priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
     }
 

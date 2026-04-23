@@ -23,7 +23,7 @@ contract CachePriceCaller {
     }
 }
 
-contract MorphoOracleCloneableCachePricesTest is MorphoOracleCloneableTest {
+contract MorphoOracleCloneableCachePriceTest is MorphoOracleCloneableTest {
     function test_whenOracleIsNotEnabled_reverts() public givenOracleIsDisabled {
         vm.expectRevert(
             abi.encodeWithSelector(

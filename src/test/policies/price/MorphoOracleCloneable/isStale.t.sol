@@ -31,21 +31,43 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
 
     function test_givenOnlyCollateralUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
         priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
         _setPRICEPrices(address(collateralToken), 3e18);
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only collateral/USD is refreshed"
+        );
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
     function test_givenOnlyLoanUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
         priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
         _setPRICEPrices(address(loanToken), 2e18);
         priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only loan/USD is refreshed"
+        );
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
@@ -63,7 +85,7 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
         priceCache.setAssetApproval(address(collateralToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
+            abi.encodeWithSelector(_PRICE_ASSET_NOT_APPROVED_SELECTOR, address(collateralToken))
         );
         oracle.isStale();
     }
@@ -73,7 +95,7 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
         priceCache.setAssetApproval(address(loanToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
+            abi.encodeWithSelector(_PRICE_ASSET_NOT_APPROVED_SELECTOR, address(loanToken))
         );
         oracle.isStale();
     }

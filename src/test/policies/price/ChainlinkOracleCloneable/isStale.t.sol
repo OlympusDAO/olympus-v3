@@ -26,26 +26,48 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
     function test_givenOnlyBaseUsdCacheChanges_returnsFalse(
         uint48 warpDelta_
     ) public givenPricesAreStored {
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
 
         // Refreshing the base-USD price should not affect the freshness of base-quote price
         vm.warp(block.timestamp + warpDelta);
         _setPRICEPrices(address(baseToken), 3e18);
         priceCache.cachePrice(address(baseToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
 
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only base/USD is refreshed"
+        );
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
     function test_givenOnlyQuoteUsdCacheChanges_returnsFalse(
         uint48 warpDelta_
     ) public givenPricesAreStored {
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
 
         // Refreshing the quote-USD price should not affect the freshness of base-quote price
         vm.warp(block.timestamp + warpDelta);
         _setPRICEPrices(address(quoteToken), 2e18);
         priceCache.cachePrice(address(quoteToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
 
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only quote/USD is refreshed"
+        );
         assertEq(oracle.isStale(), false, "Direct pair freshness should be unchanged");
     }
 
