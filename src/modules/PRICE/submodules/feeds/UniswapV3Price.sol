@@ -92,6 +92,20 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
+    /// @notice                 The provided Uniswap V3 factory is invalid
+    /// @param factory_         The configured factory address
+    error UniswapV3_FactoryInvalid(address factory_);
+
+    /// @notice                     The pool factory does not match the configured canonical Uniswap V3 factory
+    /// @param pool_                The address of the pool
+    /// @param poolFactory_         The factory returned by the pool
+    /// @param expectedFactory_     The expected canonical Uniswap V3 factory
+    error UniswapV3_PoolFactoryInvalid(
+        address pool_,
+        address poolFactory_,
+        address expectedFactory_
+    );
+
     /// @notice                         The pool has insufficient observation cardinality for the TWAP window
     ///
     /// @param pool_                    The address of the pool
@@ -119,6 +133,8 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice     Assumed average block time used to estimate required observations for TWAP
     uint32 public immutable AVERAGE_BLOCK_TIME_SECONDS;
+    /// @notice     Canonical Uniswap V3 factory used for pool validation
+    address public immutable UNISWAP_V3_FACTORY;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -126,16 +142,24 @@ contract UniswapV3Price is PriceSubmodule {
     /// @dev                            Calls the `Submodule(parent_)` constructor to bind this feed to the parent PRICE module.
     ///                                 This function will revert if:
     ///                                 - `averageBlockTimeSeconds_ == 0` (`UniswapV3_AverageBlockTimeInvalid`)
+    ///                                 - `uniswapV3Factory_ == address(0)` (`UniswapV3_FactoryInvalid`)
     ///
     ///                                 Stores `averageBlockTimeSeconds_` in `AVERAGE_BLOCK_TIME_SECONDS`, which is used by
     ///                                 `_checkObservationCardinality` to compute minimum required pool cardinality.
     /// @param parent_                   The PRICE module
     /// @param averageBlockTimeSeconds_  The average block time used for cardinality checks
-    constructor(Module parent_, uint32 averageBlockTimeSeconds_) Submodule(parent_) {
+    /// @param uniswapV3Factory_         The canonical Uniswap V3 factory
+    constructor(
+        Module parent_,
+        uint32 averageBlockTimeSeconds_,
+        address uniswapV3Factory_
+    ) Submodule(parent_) {
         if (averageBlockTimeSeconds_ == 0)
             revert UniswapV3_AverageBlockTimeInvalid(averageBlockTimeSeconds_);
+        if (uniswapV3Factory_ == address(0)) revert UniswapV3_FactoryInvalid(uniswapV3Factory_);
 
         AVERAGE_BLOCK_TIME_SECONDS = averageBlockTimeSeconds_;
+        UNISWAP_V3_FACTORY = uniswapV3Factory_;
     }
 
     // ========== SUBMODULE FUNCTIONS =========== //
@@ -281,6 +305,11 @@ contract UniswapV3Price is PriceSubmodule {
         } catch (bytes memory) {
             // Handle a non-UniswapV3 pool
             revert UniswapV3_PoolTypeInvalid(address(pool_));
+        }
+
+        address poolFactory = pool_.factory();
+        if (poolFactory != UNISWAP_V3_FACTORY) {
+            revert UniswapV3_PoolFactoryInvalid(address(pool_), poolFactory, UNISWAP_V3_FACTORY);
         }
 
         address quoteToken;
