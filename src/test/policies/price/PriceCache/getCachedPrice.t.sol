@@ -7,7 +7,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheGetCachedPriceTest is PriceCacheTest {
-    function test_returnsSeparateAssetAndQuoteUsdLegs() public {
+    function test_givenPairIsCached_getCachedPrice_returnsSeparateUsdLegs() public {
         _cachePair();
 
         IPriceCache.CachedPrice memory assetQuote = cache.getCachedPrice(
