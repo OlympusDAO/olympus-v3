@@ -19,10 +19,7 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     ///
     /// @param  cachedTimestamp               The cached timestamp used for the base/quote pair
     /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
-    error ChainlinkOracle_Stale(
-        uint256 cachedTimestamp,
-        uint256 latestPermissibleTimestamp
-    );
+    error ChainlinkOracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     // ========== FUNCTIONS ========== //
 

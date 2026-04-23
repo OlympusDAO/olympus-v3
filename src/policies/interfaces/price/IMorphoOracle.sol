@@ -16,10 +16,7 @@ interface IMorphoOracle is IOracle {
     ///
     /// @param  cachedTimestamp               The cached timestamp used for the collateral/loan pair
     /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
-    error MorphoOracle_Stale(
-        uint256 cachedTimestamp,
-        uint256 latestPermissibleTimestamp
-    );
+    error MorphoOracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     // ========== FUNCTIONS ========== //
 

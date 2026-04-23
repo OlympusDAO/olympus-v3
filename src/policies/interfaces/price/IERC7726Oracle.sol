@@ -13,10 +13,7 @@ interface IERC7726Oracle is IPriceOracle {
     ///
     /// @param  cachedTimestamp               The cached timestamp used for the requested base/quote pair
     /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
-    error ERC7726Oracle_Stale(
-        uint256 cachedTimestamp,
-        uint256 latestPermissibleTimestamp
-    );
+    error ERC7726Oracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     /// @notice Get the maximum allowed age for cached prices.
     ///

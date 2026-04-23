@@ -165,7 +165,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
     }
 
-    function _isStaleFromTimestamp(uint256 timestamp_, uint48 maxAge_) internal view returns (bool) {
+    function _isStaleFromTimestamp(
+        uint256 timestamp_,
+        uint48 maxAge_
+    ) internal view returns (bool) {
         if (timestamp_ == 0) return true;
         unchecked {
             return block.timestamp > timestamp_ + uint256(maxAge_);
