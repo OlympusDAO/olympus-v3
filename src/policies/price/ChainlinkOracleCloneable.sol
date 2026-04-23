@@ -106,7 +106,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     }
 
     /// @dev        This function uses cached pair snapshots only (round-style semantics).
-    ///             It does not fallback to live pricing when caches are stale.
+    ///             It does not fallback to live pricing when caches are stale and does not
+    ///             enforce maxAge().
     ///
     ///             This function will revert if:
     ///             - The oracle is not enabled (checked via factory)
@@ -164,6 +165,39 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
     }
 
+    function _isStaleFromTimestamp(uint256 timestamp_, uint48 maxAge_) internal view returns (bool) {
+        if (timestamp_ == 0) return true;
+        unchecked {
+            return block.timestamp > timestamp_ + uint256(maxAge_);
+        }
+    }
+
+    function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
+        if (block.timestamp <= uint256(maxAge_)) return 0;
+        unchecked {
+            return block.timestamp - uint256(maxAge_);
+        }
+    }
+
+    function _latestRoundDataFreshInternal()
+        internal
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        (roundId, answer, startedAt, updatedAt, answeredInRound) = _latestRoundDataInternal();
+
+        uint48 maxAge_ = maxAge();
+        if (_isStaleFromTimestamp(updatedAt, maxAge_)) {
+            revert ChainlinkOracle_Stale(updatedAt, _latestPermissibleTimestamp(maxAge_));
+        }
+    }
+
     /// @inheritdoc AggregatorV3Interface
     /// @dev        Reverts if:
     ///             - The oracle is not enabled (checked via factory)
@@ -171,6 +205,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The cached pair observation is stale (`updatedAt + maxAge() < block.timestamp`)
     function latestRoundData()
         external
         view
@@ -183,7 +218,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             uint80 answeredInRound
         )
     {
-        return _latestRoundDataInternal();
+        return _latestRoundDataFreshInternal();
     }
 
     /// @inheritdoc IChainlinkOracle
@@ -203,6 +238,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either the base or quote token returns a price of zero
     ///             - The timestamp of the base or quote token is not consistent
+    ///             - Does not revert when the latest cached round is stale
     ///
     /// @param  roundId_         The round ID to query
     /// @return roundId          The round ID
@@ -244,10 +280,11 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The cached pair observation is stale (`updatedAt + maxAge() < block.timestamp`)
     ///
     /// @return int256  The latest price
     function latestAnswer() external view override returns (int256) {
-        (, int256 answer, , , ) = _latestRoundDataInternal();
+        (, int256 answer, , , ) = _latestRoundDataFreshInternal();
         return answer;
     }
 
@@ -258,6 +295,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - Does not revert when the latest cached round is stale
     ///
     /// @return uint256 The latest timestamp
     function latestTimestamp() external view override returns (uint256) {
@@ -272,6 +310,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - Does not revert when the latest cached round is stale
     ///
     /// @return uint256 The latest round ID
     function latestRound() external view override returns (uint256) {
@@ -287,6 +326,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
     ///             - `roundId_` is not the latest round ID
+    ///             - Does not revert when the latest cached round is stale
     ///
     /// @param      roundId_    The round ID to query
     /// @return int256  The answer for the given round ID
@@ -306,6 +346,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
     ///             - `roundId_` is not the latest round ID
+    ///             - Does not revert when the latest cached round is stale
     ///
     /// @param      roundId_    The round ID to query
     /// @return uint256 The timestamp for the given round ID
