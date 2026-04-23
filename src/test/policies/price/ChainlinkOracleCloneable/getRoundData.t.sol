@@ -171,7 +171,7 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , , ) = oracle.latestRoundData();
 
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Get round data for new round
         (uint80 roundId, int256 answer, , uint256 updatedAt, ) = oracle.getRoundData(newRoundId);
