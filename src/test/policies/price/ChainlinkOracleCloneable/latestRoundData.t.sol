@@ -47,6 +47,19 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertEq(answer, 2e18, "Should return cached round");
     }
 
+    // when cached pair price exceeds int256
+    //  [X] it reverts via SafeCast.toInt256 overflow guard
+
+    function test_whenCachedPairPriceExceedsInt256_reverts() public {
+        uint256 overflowPrice = uint256(type(int256).max) + 1;
+        _setPRICEPrices(address(baseToken), overflowPrice);
+        _setPRICEPrices(address(quoteToken), QUOTE_PRICE);
+        _storePrices();
+
+        vm.expectRevert(bytes("SafeCast: value doesn't fit in an int256"));
+        oracle.latestRoundData();
+    }
+
     // when oracle is enabled
     //  [X] it returns correct round data
     //  [X] it returns correct price calculation
