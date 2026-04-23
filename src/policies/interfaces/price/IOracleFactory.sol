@@ -105,6 +105,12 @@ interface IOracleFactory {
     /// @param  policy  Invalid price cache policy address
     error OracleFactory_InvalidPriceCache(address policy);
 
+    /// @notice Thrown when re-enable pair arrays are malformed
+    ///
+    /// @param  baseTokenLength   The number of base tokens
+    /// @param  quoteTokenLength  The number of quote tokens
+    error OracleFactory_InvalidEnableData(uint256 baseTokenLength, uint256 quoteTokenLength);
+
     // ========== STATE FUNCTIONS ========== //
 
     /// @notice Gets the configured price cache policy

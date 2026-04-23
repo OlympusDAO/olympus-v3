@@ -423,6 +423,64 @@ abstract contract BaseOracleFactory is
         priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
     }
 
+    /// @inheritdoc PolicyEnabler
+    /// @dev        Optionally re-caches caller-specified direct pairs before the factory-level
+    ///             `isEnabled` flag flips back to true.
+    ///
+    ///             `enableData_` can be empty for a no-op, or encode:
+    ///             `(address[] baseTokens, address[] quoteTokens)`.
+    function _enable(bytes calldata enableData_) internal virtual override {
+        if (enableData_.length == 0) return;
+
+        (address[] memory baseTokens, address[] memory quoteTokens) = abi.decode(
+            enableData_,
+            (address[], address[])
+        );
+        uint256 pairCount = baseTokens.length;
+        if (pairCount != quoteTokens.length) {
+            revert OracleFactory_InvalidEnableData(pairCount, quoteTokens.length);
+        }
+
+        for (uint256 i; i < pairCount; ) {
+            address baseToken = baseTokens[i];
+            address quoteToken = quoteTokens[i];
+
+            if (!_hasOracleVariant(baseToken, quoteToken)) {
+                revert OracleFactory_InvalidTokenPair(baseToken, quoteToken);
+            }
+
+            priceCache.cachePrice(baseToken, quoteToken);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @notice Returns whether the factory has a deployed oracle for the provided pair.
+    function _hasOracleVariant(
+        address baseToken_,
+        address quoteToken_
+    ) internal view returns (bool) {
+        uint256 oracleCount = _oracles.length;
+
+        for (uint256 i; i < oracleCount; ) {
+            address oracle = _oracles[i];
+            if (
+                _oracleToBaseToken[oracle] == baseToken_ &&
+                _oracleToQuoteToken[oracle] == quoteToken_
+            ) {
+                return true;
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return false;
+    }
+
     function _setPriceCache(address policy_) internal {
         if (policy_ == address(0) || !_implementsIPriceCache(policy_) || !_hasSameKernel(policy_)) {
             revert OracleFactory_InvalidPriceCache(policy_);

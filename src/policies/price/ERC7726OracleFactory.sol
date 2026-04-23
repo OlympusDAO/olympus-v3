@@ -305,6 +305,33 @@ contract ERC7726OracleFactory is
         priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
     }
 
+    /// @inheritdoc PolicyEnabler
+    /// @dev        Optionally re-caches caller-specified pairs before the factory-level
+    ///             `isEnabled` flag flips to true.
+    ///
+    ///             `enableData_` can be empty for a no-op, or encode:
+    ///             `(address[] baseTokens, address[] quoteTokens)`.
+    function _enable(bytes calldata enableData_) internal override {
+        if (enableData_.length == 0) return;
+
+        (address[] memory baseTokens, address[] memory quoteTokens) = abi.decode(
+            enableData_,
+            (address[], address[])
+        );
+        uint256 pairCount = baseTokens.length;
+        if (pairCount != quoteTokens.length) {
+            revert ERC7726OracleFactory_InvalidEnableData(pairCount, quoteTokens.length);
+        }
+
+        for (uint256 i; i < pairCount; ) {
+            priceCache.cachePrice(baseTokens[i], quoteTokens[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     // ========== INTERNAL HELPERS ========== //
 
     function _decodeOracleName(
