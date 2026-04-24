@@ -13,6 +13,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Bophades
+import {Module} from "src/Kernel.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -1756,7 +1757,10 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Try to call storeObservation with non-permissioned address (this contract) and expect revert
-        bytes memory err = abi.encodeWithSignature("Module_PolicyNotPermitted(address)", address(this));
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
         vm.expectRevert(err);
         price.storeObservation(address(onema));
 
@@ -2357,7 +2361,10 @@ contract PriceV2Test is PriceV2BaseTest {
         );
 
         // Try and add the asset
-        bytes memory err = abi.encodeWithSignature("Module_PolicyNotPermitted(address)", address(this));
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
         vm.expectRevert(err);
 
         price.addAsset(
@@ -3397,7 +3404,10 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Try and remove the asset
-        bytes memory err = abi.encodeWithSignature("Module_PolicyNotPermitted(address)", address(this));
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
         vm.expectRevert(err);
 
         price.removeAsset(address(weth));

@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 
 import {PriceV2BaseTest} from "./PriceV2BaseTest.sol";
 
+import {Module} from "src/Kernel.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 contract PriceV2RegisterNonContractAssetTest is PriceV2BaseTest {
