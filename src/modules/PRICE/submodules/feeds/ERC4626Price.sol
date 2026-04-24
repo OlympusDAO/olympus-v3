@@ -87,6 +87,15 @@ contract ERC4626Price is PriceSubmodule {
     /// @dev                    - The underlying asset is not set
     /// @dev                    - The price of the underlying asset cannot be determined using PRICE
     ///
+    /// @dev                    Limitations:
+    /// @dev                    - This adapter trusts the raw ERC4626 `convertToAssets()` share rate. It does not
+    /// @dev                      smooth, bound, or otherwise sanity-check vault accounting changes, so it should
+    /// @dev                      only be configured for vaults whose share conversion is already trusted on oracle
+    /// @dev                      timescales.
+    /// @dev                    - This adapter reports the ERC4626 idealized average-user conversion. It does not
+    /// @dev                      account for withdrawal fees, redemption gates, slippage, or other execution
+    /// @dev                      conditions that may make actual exits worse than `convertToAssets()`.
+    ///
     /// @param asset_           The address of the ERC4626 asset
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @return uint256         The price of `asset_` in USD (in the scale of `outputDecimals_`)
