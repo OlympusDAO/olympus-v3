@@ -20,6 +20,24 @@ import {FullMath} from "libraries/FullMath.sol";
 import {Kernel} from "src/Kernel.sol";
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 
+contract MockERC4626WithDecimals {
+    using FullMath for uint256;
+
+    MockERC20 public immutable asset;
+    uint8 public immutable decimals;
+    uint256 internal immutable _assetsPerShare;
+
+    constructor(MockERC20 asset_, uint8 shareDecimals_, uint256 assetsPerShare_) {
+        asset = asset_;
+        decimals = shareDecimals_;
+        _assetsPerShare = assetsPerShare_;
+    }
+
+    function convertToAssets(uint256 shares_) external view returns (uint256) {
+        return shares_.mulDiv(_assetsPerShare, 10 ** decimals);
+    }
+}
+
 contract ERC4626Test is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for ERC4626Price;
@@ -96,7 +114,7 @@ contract ERC4626Test is Test {
     // [X] getPriceFromUnderlying
     //  [X] output decimals within bounds
     //  [X] output decimals out of bounds
-    //  [X] underlying asset decimals mismatch
+    //  [X] handles underlying asset decimals mismatch
     //  [X] asset decimals within bounds
     //  [X] asset decimals out of bounds
     //  [X] underlying asset not set
@@ -139,23 +157,26 @@ contract ERC4626Test is Test {
         submodule.getPriceFromUnderlying(address(sDai), outputDecimals, "");
     }
 
-    function test_assetDecimalsDifferent_reverts() public {
-        // Mock the asset having a different number of decimals to the underlying
-        vm.mockCall(
-            address(sDai),
-            abi.encodeWithSignature("decimals()"),
-            abi.encode(DAI_DECIMALS + 1)
+    function test_assetDecimalsDifferent_succeeds() public {
+        uint8 underlyingDecimals = 6;
+        uint8 shareDecimals = 18;
+        uint256 assetsPerShare = 1_234_567;
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", underlyingDecimals);
+        MockERC4626WithDecimals sUsdc = new MockERC4626WithDecimals(
+            usdc,
+            shareDecimals,
+            assetsPerShare
         );
+        uint256 underlyingPrice = 2e18;
+        mockAssetPrice(address(usdc), underlyingPrice);
 
-        // Call the function
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ERC4626Price.ERC4626_AssetDecimalsMismatch.selector,
-                DAI_DECIMALS + 1,
-                DAI_DECIMALS
-            )
-        );
-        submodule.getPriceFromUnderlying(address(sDai), PRICE_DECIMALS, "");
+        // shares = 1e18 (18 decimals) = 1 whole share
+        // convertToAssets(1e18) = 1,234,567 (6 decimals) = 1.234567 USDC
+        // underlyingPrice = 2e18 (18 decimals) = $2 per USDC
+        // Expected: 2e18 * 1,234,567 / 1e6 = 2.469134e18
+        uint256 assetPrice = submodule.getPriceFromUnderlying(address(sUsdc), PRICE_DECIMALS, "");
+
+        assertEq(assetPrice, 2_469_134e12, "Asset price should normalize by underlying decimals");
     }
 
     function test_assetDecimals_fuzz(uint8 assetDecimals_) public {
@@ -208,6 +229,26 @@ contract ERC4626Test is Test {
             abi.encodeWithSelector(
                 ERC4626Price.ERC4626_AssetDecimalsOutOfBounds.selector,
                 assetDecimals,
+                MAX_DECIMALS
+            )
+        );
+        submodule.getPriceFromUnderlying(address(newAsset), PRICE_DECIMALS, "");
+    }
+
+    function test_underlyingDecimals_maximum_reverts(uint8 underlyingDecimals_) public {
+        uint8 underlyingDecimals = uint8(bound(underlyingDecimals_, MAX_DECIMALS + 1, 60));
+        MockERC20 newUnderlying = new MockERC20("New Token", "NEW", underlyingDecimals);
+        MockERC4626WithDecimals newAsset = new MockERC4626WithDecimals(
+            newUnderlying,
+            PRICE_DECIMALS,
+            10 ** PRICE_DECIMALS
+        );
+
+        // Call the function
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626Price.ERC4626_UnderlyingDecimalsOutOfBounds.selector,
+                underlyingDecimals,
                 MAX_DECIMALS
             )
         );
