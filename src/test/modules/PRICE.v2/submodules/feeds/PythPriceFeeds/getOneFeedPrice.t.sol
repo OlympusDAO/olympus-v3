@@ -566,6 +566,35 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
         assertEq(priceInt, 100000, "Price should match expected value for expo -21");
     }
 
+    // given expo is -21 and the feed confidence exceeds the converted max confidence
+    //  [X] it reverts with Pyth_FeedConfidenceExcessive
+    function test_expoNegativeTwentyOne_maxConfidenceExceeded_reverts() public {
+        // maxConfidence = 1e16 (18 decimals)
+        // expo = -21
+        // maxConfidenceInPythScale = 1e16 * 1e21 / 1e18 = 1e19, which fits in uint64
+        int64 price = 100000000;
+        int32 expo = -21;
+        uint64 priceConfidence = uint64(1e19 + 1);
+        pyth.setPrice(PRICE_ID_1, price, priceConfidence, expo, block.timestamp);
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_FeedConfidenceExcessive.selector,
+            address(pyth),
+            PRICE_ID_1,
+            priceConfidence,
+            uint64(1e19)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            1e16
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
     // given expo is -22 and the converted max confidence exceeds uint64
     //  [X] it clamps the maximum confidence and correctly converts the price
     function test_expoNegativeTwentyTwo_maxConfidenceClamps() public {
