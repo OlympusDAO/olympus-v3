@@ -52,11 +52,12 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset
     error PRICE_AssetNotApproved(address asset_);
 
-    /// @notice         The asset is not a contract
-    /// @dev            Only contract addresses can be used as assets
+    /// @notice         The asset is invalid for the requested PRICE operation
+    /// @dev            This is used when the asset identifier does not satisfy PRICE's validation
+    ///                 rules for the relevant code path.
     ///
     /// @param asset_   The address of the asset
-    error PRICE_AssetNotContract(address asset_);
+    error PRICE_InvalidAsset(address asset_);
 
     /// @notice         The asset is already approved for use
     /// @dev            If trying to amend the configuration, use one of the update functions
@@ -312,6 +313,12 @@ interface IPRICEv2 {
     /// @return approved    Whether the asset is approved
     function isAssetApproved(address asset_) external view returns (bool approved);
 
+    /// @notice             Indicates whether `asset_` is registered as a non-contract asset
+    ///
+    /// @param asset_       The address of the asset
+    /// @return registered  Whether the asset is registered
+    function isNonContractAsset(address asset_) external view returns (bool registered);
+
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account
@@ -392,6 +399,21 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external;
+
+    /// @notice         Registers a non-contract asset
+    /// @dev            Whitelists a non-contract address so PRICE can manage it as an asset.
+    ///                 Registration does not configure pricing by itself.
+    ///
+    /// @param asset_   The address of the asset to register
+    function registerNonContractAsset(address asset_) external;
+
+    /// @notice         Unregisters a non-contract asset
+    /// @dev            Removes a non-contract address from PRICE asset management.
+    ///                 This cannot be used for the reserved unit of account or for an
+    ///                 asset that still has an active PRICE configuration.
+    ///
+    /// @param asset_   The address of the asset to unregister
+    function unregisterNonContractAsset(address asset_) external;
 
     /// @notice         Updates an asset configuration atomically
     /// @dev            Only updates components flagged in params_

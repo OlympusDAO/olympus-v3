@@ -6,6 +6,8 @@ import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 contract MockPrice is PRICEv2 {
+    address internal constant UNIT_OF_ACCOUNT = address(840);
+
     mapping(address => bool) internal assetApproved;
     mapping(address => bool) internal _storeMovingAverageEnabled;
     mapping(address => uint256) internal prices;
@@ -16,7 +18,7 @@ contract MockPrice is PRICEv2 {
 
     address[] internal _assets;
 
-    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
+    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) PRICEv2(kernel_) {
         timestamp = uint48(block.timestamp);
         _observationFrequency = observationFrequency_;
         _decimals = decimals_;
@@ -65,8 +67,8 @@ contract MockPrice is PRICEv2 {
         _movingAverageLastUpdated[asset] = timestamp;
     }
 
-    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
-        return asset_ == _UNIT_OF_ACCOUNT;
+    function _isUnitOfAccount(address asset_) internal view returns (bool) {
+        return asset_ == UNIT_OF_ACCOUNT;
     }
 
     function _unitPrice() internal view returns (uint256) {
@@ -205,6 +207,18 @@ contract MockPrice is PRICEv2 {
 
     function isAssetApproved(address asset_) external view override returns (bool) {
         return assetApproved[asset_];
+    }
+
+    function registerNonContractAsset(address asset_) external override {
+        _registerNonContractAsset(asset_);
+    }
+
+    function unregisterNonContractAsset(address asset_) external override {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        if (!isNonContractAsset[asset_]) revert PRICE_InvalidAsset(asset_);
+        if (assetApproved[asset_]) revert PRICE_AssetAlreadyApproved(asset_);
+
+        delete isNonContractAsset[asset_];
     }
 
     function storeObservation(address asset_) external override {
