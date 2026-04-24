@@ -9,7 +9,6 @@ import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726Oracl
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
@@ -60,7 +59,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
-    ///             - Either token does not implement `decimals()`
+    ///             - The price cache cannot resolve amount decimals for either asset
     ///
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
     ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
@@ -78,8 +77,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address quote_
     ) internal view returns (uint256 outAmount_) {
         _checkEnabled();
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
-            .getCachedPrice(base_, quote_);
+        IPriceCache priceCache = IPriceCache(factory().getPriceCache());
+        IPriceCache.CachedPrice memory cachedPrice = priceCache.getCachedPrice(base_, quote_);
         uint48 pairTimestamp = cachedPrice.updatedAt;
 
         // Check for staleness
@@ -92,8 +91,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
             revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
         }
 
-        uint256 quoteTokenScale = 10 ** IERC20(quote_).decimals();
-        uint256 baseTokenScale = 10 ** IERC20(base_).decimals();
+        uint256 quoteTokenScale = 10 ** priceCache.assetDecimals(quote_);
+        uint256 baseTokenScale = 10 ** priceCache.assetDecimals(base_);
 
         outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, baseTokenScale).mulDiv(
             quoteTokenScale,
@@ -108,7 +107,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
-    ///             - Either token does not implement `decimals()`
+    ///             - The price cache cannot resolve amount decimals for either asset
     function getQuotes(
         uint256 inAmount,
         address base,

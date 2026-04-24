@@ -67,7 +67,7 @@ contract MockPrice is PRICEv2 {
         _movingAverageLastUpdated[asset] = timestamp;
     }
 
-    function _isUnitOfAccount(address asset_) internal view returns (bool) {
+    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
         return asset_ == UNIT_OF_ACCOUNT;
     }
 

@@ -44,5 +44,52 @@ contract PriceCacheIsStaleTest is PriceCacheTest {
         bool stale = cache.isStale(address(assetToken), address(quoteToken), 365 days);
         assertEq(stale, true, "Module upgrade should invalidate snapshot and report stale");
     }
+
+    function test_whenUnitOfAccountDecimalsChange_returnsTrueForPairsUsingThatAsset() public {
+        address unitOfAccount = _unitOfAccount();
+        _setNonContractAssetDecimals(unitOfAccount, 2);
+        cache.cachePrice(address(assetToken), unitOfAccount);
+
+        _setNonContractAssetDecimals(unitOfAccount, 3);
+
+        bool forward = cache.isStale(address(assetToken), unitOfAccount, 365 days);
+        bool reverse = cache.isStale(unitOfAccount, address(assetToken), 365 days);
+
+        assertEq(forward, true, "Forward orientation should be stale after decimals change");
+        assertEq(reverse, true, "Reverse orientation should be stale after decimals change");
+    }
+
+    function test_whenRegisteredNonContractAssetDecimalsChange_returnsTrueForPairsUsingThatAsset()
+        public
+    {
+        address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
+        _registerNonContractAsset(nonContractAsset);
+        priceModule.setPrice(nonContractAsset, 3e18);
+        _setNonContractAssetDecimals(nonContractAsset, 8);
+        cache.cachePrice(address(assetToken), nonContractAsset);
+
+        _setNonContractAssetDecimals(nonContractAsset, 9);
+
+        bool forward = cache.isStale(address(assetToken), nonContractAsset, 365 days);
+        bool reverse = cache.isStale(nonContractAsset, address(assetToken), 365 days);
+
+        assertEq(forward, true, "Forward orientation should be stale after decimals change");
+        assertEq(reverse, true, "Reverse orientation should be stale after decimals change");
+    }
+
+    function test_whenUnrelatedNonContractAssetDecimalsChange_existingPairRemainsFresh() public {
+        address unitOfAccount = _unitOfAccount();
+        address otherNonContractAsset = makeAddr("OTHER_NON_CONTRACT_ASSET");
+
+        _registerNonContractAsset(otherNonContractAsset);
+        _setNonContractAssetDecimals(unitOfAccount, 2);
+        _setNonContractAssetDecimals(otherNonContractAsset, 8);
+        cache.cachePrice(address(assetToken), unitOfAccount);
+
+        _setNonContractAssetDecimals(otherNonContractAsset, 9);
+
+        bool stale = cache.isStale(address(assetToken), unitOfAccount, 365 days);
+        assertEq(stale, false, "Unrelated decimals change should not invalidate the pair");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

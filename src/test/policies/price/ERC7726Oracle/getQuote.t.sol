@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 // Test
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
@@ -50,47 +51,203 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     }
 
     // given the base asset is unit of account
-    //  [X] it reverts because unit of account is not an ERC20 token
+    //  [X] it returns a quote
 
-    function test_givenBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+    function test_givenBaseAssetIsUnitOfAccount_givenNonContractAssetDecimalsAreSet_returnsQuote()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
-        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
-        vm.expectRevert();
-        oracle.getQuote(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+        // inAmount = 1e2 (2 decimals, 1 unit of account)
+        // basePriceUsd = 1e18
+        // baseScale = 1e2
+        // quoteScale = 1e18
+        // quotePriceUsd = 1e18
+        // outAmount = 1e2 * 1e18 / 1e2 * 1e18 / 1e18 = 1e18
+        uint256 outAmount = oracle.getQuote(1e2, UNIT_OF_ACCOUNT, address(loanToken));
+        assertEq(outAmount, 1e18, "Quote should scale the unit of account using cache decimals");
     }
 
     // given the quote asset is unit of account
-    //  [X] it reverts because unit of account is not an ERC20 token
+    //  [X] it returns a quote
 
-    function test_givenQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+    function test_givenQuoteAssetIsUnitOfAccount_givenNonContractAssetDecimalsAreSet_returnsQuote()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
-        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
-        vm.expectRevert();
-        oracle.getQuote(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+        // inAmount = 1e18
+        // assetPriceUsd = 2e18
+        // baseScale = 1e18
+        // quoteScale = 1e2
+        // quotePriceUsd = 1e18
+        // outAmount = 1e18 * 2e18 / 1e18 * 1e2 / 1e18 = 2e2
+        uint256 outAmount = oracle.getQuote(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+        assertEq(outAmount, 2e2, "Quote should scale the unit of account using cache decimals");
+    }
+
+    // given the base asset is a registered non-contract asset
+    //  given non-contract asset decimals are not set
+    //   [X] it reverts
+    //  given non-contract asset decimals are set
+    //   [X] it returns a quote
+    //   given the asset is no longer approved in PRICE
+    //    [X] it reverts
+
+    function test_givenBaseAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreNotSet_reverts()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+        oracle.getQuote(1e8, registeredNonContractAsset, address(loanToken));
+    }
+
+    function test_givenBaseAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_returnsQuote()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+
+        // inAmount = 1e8
+        // assetPriceUsd = 3e18
+        // baseScale = 1e8
+        // quoteScale = 1e18
+        // quotePriceUsd = 1e18
+        // outAmount = 3e18
+        uint256 outAmount = oracle.getQuote(1e8, registeredNonContractAsset, address(loanToken));
+        assertEq(outAmount, 3e18, "Quote should use cache decimals for registered assets");
+    }
+
+    function test_givenBaseAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_givenAssetIsNoLongerApprovedInPRICE_reverts()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+        priceCache.setAssetApproval(registeredNonContractAsset, false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, registeredNonContractAsset)
+        );
+        oracle.getQuote(1e8, registeredNonContractAsset, address(loanToken));
+    }
+
+    // given the quote asset is a registered non-contract asset
+    //  given non-contract asset decimals are not set
+    //   [X] it reverts
+    //  given non-contract asset decimals are set
+    //   [X] it returns a quote
+    //   given the asset is no longer approved in PRICE
+    //    [X] it reverts
+
+    function test_givenQuoteAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreNotSet_reverts()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+        oracle.getQuote(1e18, address(collateralToken), registeredNonContractAsset);
+    }
+
+    function test_givenQuoteAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_returnsQuote()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 4e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+
+        // inAmount = 1e18
+        // assetPriceUsd = 2e18
+        // baseScale = 1e18
+        // quoteScale = 1e8
+        // quotePriceUsd = 4e18
+        // outAmount = 5e7
+        uint256 outAmount = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            registeredNonContractAsset
+        );
+        assertEq(outAmount, 5e7, "Quote should use cache decimals for registered assets");
+    }
+
+    function test_givenQuoteAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_givenAssetIsNoLongerApprovedInPRICE_reverts()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 4e18);
+        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+        priceCache.setAssetApproval(registeredNonContractAsset, false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, registeredNonContractAsset)
+        );
+        oracle.getQuote(1e18, address(collateralToken), registeredNonContractAsset);
     }
 
     // given getQuotes is called with base asset as unit of account
-    //  [X] it reverts because unit of account is not an ERC20 token
+    //  [X] it returns symmetric quotes
 
-    function test_givenGetQuotesBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+    function test_givenGetQuotesBaseAssetIsUnitOfAccount_givenNonContractAssetDecimalsAreSet_returnsQuotes()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
-        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
-        vm.expectRevert();
-        oracle.getQuotes(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+        (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(
+            1e2,
+            UNIT_OF_ACCOUNT,
+            address(loanToken)
+        );
+        assertEq(bidOutAmount, 1e18, "Bid quote should use cache decimals");
+        assertEq(askOutAmount, 1e18, "Ask quote should use cache decimals");
     }
 
     // given getQuotes is called with quote asset as unit of account
-    //  [X] it reverts because unit of account is not an ERC20 token
+    //  [X] it returns symmetric quotes
 
-    function test_givenGetQuotesQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+    function test_givenGetQuotesQuoteAssetIsUnitOfAccount_givenNonContractAssetDecimalsAreSet_returnsQuotes()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
-        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
-        vm.expectRevert();
-        oracle.getQuotes(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+        (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(
+            1e18,
+            address(collateralToken),
+            UNIT_OF_ACCOUNT
+        );
+        assertEq(bidOutAmount, 2e2, "Bid quote should use cache decimals");
+        assertEq(askOutAmount, 2e2, "Ask quote should use cache decimals");
     }
 
     function test_givenOracleIsEnabled_gasSnapshot_getQuote() public givenOracleIsEnabled {

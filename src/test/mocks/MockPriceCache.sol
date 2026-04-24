@@ -2,6 +2,7 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
@@ -29,10 +30,16 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
 
     mapping(address asset => uint256 usdPrice) internal _usdPrices;
     mapping(address asset => bool approved) internal _approvedAssets;
+    mapping(address asset => IPriceCache.NonContractAssetDecimals decimalsData)
+        internal _nonContractAssetDecimals;
     mapping(bytes32 pairKey => InternalCachedPrice cache) internal _cachedPriceByPair;
 
     constructor(address kernel_) {
         kernel = kernel_;
+        _nonContractAssetDecimals[_UNIT_OF_ACCOUNT] = IPriceCache.NonContractAssetDecimals({
+            registered: true,
+            decimals: 18
+        });
     }
 
     function setUsdPrice(address asset_, uint256 usdPrice_) external {
@@ -48,6 +55,38 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         decimals = decimals_;
     }
 
+    function assetDecimals(address asset_) external view override returns (uint8 decimals_) {
+        return _assetDecimals(asset_);
+    }
+
+    function _assetDecimals(address asset_) internal view returns (uint8 decimals_) {
+        if (asset_.code.length != 0) return IERC20(asset_).decimals();
+
+        IPriceCache.NonContractAssetDecimals memory data = _nonContractAssetDecimals[asset_];
+        if (!data.registered) {
+            if (_approvedAssets[asset_]) {
+                revert IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered(asset_);
+            }
+            revert IPriceCache.PriceCache_NonContractAssetNotRegistered(asset_);
+        }
+
+        return data.decimals;
+    }
+
+    function setNonContractAssetDecimals(address asset_, uint8 decimals_) external {
+        _nonContractAssetDecimals[asset_] = IPriceCache.NonContractAssetDecimals({
+            registered: true,
+            decimals: decimals_
+        });
+    }
+
+    function removeNonContractAssetDecimals(address asset_) external {
+        if (asset_ == _UNIT_OF_ACCOUNT) {
+            revert IPriceCache.PriceCache_InvalidAsset(asset_);
+        }
+        delete _nonContractAssetDecimals[asset_];
+    }
+
     function setAssetApproval(address asset_, bool approved_) external {
         _approvedAssets[asset_] = approved_;
     }
@@ -60,6 +99,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     function cachePrice(address asset_, address quote_) public override {
         if (!isEnabled) revert NotEnabled();
         _validatePair(asset_, quote_);
+        _assetDecimals(asset_);
+        _assetDecimals(quote_);
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
 
         uint256 assetPriceUsd = _getUsdPriceOrUnit(asset_);
@@ -103,6 +144,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         address quote_
     ) public view override returns (CachedPrice memory cachedPrice) {
         _validatePair(asset_, quote_);
+        _assetDecimals(asset_);
+        _assetDecimals(quote_);
 
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         InternalCachedPrice memory cache = _cachedPriceByPair[key];

@@ -7,6 +7,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
@@ -15,6 +16,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 abstract contract PriceCacheTest is Test {
     uint8 internal constant PRICE_DECIMALS = 18;
+    uint8 internal constant UNIT_OF_ACCOUNT_DECIMALS = 18;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
 
     Kernel internal kernel;
@@ -27,16 +29,20 @@ abstract contract PriceCacheTest is Test {
     MockERC20 internal quoteToken;
     address internal unapprovedAsset;
     address internal admin;
+    address internal priceManager;
+
+    bytes32 internal constant PRICE_ADMIN_ROLE = "price_admin";
 
     function setUp() public virtual {
         admin = makeAddr("ADMIN");
+        priceManager = makeAddr("PRICE_MANAGER");
         unapprovedAsset = makeAddr("UNAPPROVED");
 
         kernel = new Kernel();
         priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        cache = new PriceCache(kernel);
+        cache = new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS);
 
         kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -44,6 +50,7 @@ abstract contract PriceCacheTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(cache));
 
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(PRICE_ADMIN_ROLE, priceManager);
 
         vm.prank(admin);
         cache.enable("");
@@ -66,6 +73,20 @@ abstract contract PriceCacheTest is Test {
 
     function _cachedPair() internal view returns (IPriceCache.CachedPrice memory cachedPrice_) {
         return cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
+    function _registerNonContractAsset(address asset_) internal {
+        priceModule.registerNonContractAsset(asset_);
+    }
+
+    function _setNonContractAssetDecimals(address asset_, uint8 decimals_) internal {
+        vm.prank(admin);
+        cache.setNonContractAssetDecimals(asset_, decimals_);
+    }
+
+    function _removeNonContractAssetDecimals(address asset_) internal {
+        vm.prank(admin);
+        cache.removeNonContractAssetDecimals(asset_);
     }
 
     function _upgradePriceModuleAndReconfigure(
