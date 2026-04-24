@@ -114,6 +114,31 @@ contract PythPriceFeedsTest is Test {
         uint256 secondMaxConfidence_
     ) internal pure returns (bytes memory params) {
         return
+            encodeTwoFeedParams(
+                firstPyth_,
+                firstPriceFeedId_,
+                firstUpdateThreshold_,
+                firstMaxConfidence_,
+                secondPyth_,
+                secondPriceFeedId_,
+                secondUpdateThreshold_,
+                secondMaxConfidence_,
+                type(uint256).max
+            );
+    }
+
+    function encodeTwoFeedParams(
+        address firstPyth_,
+        bytes32 firstPriceFeedId_,
+        uint48 firstUpdateThreshold_,
+        uint256 firstMaxConfidence_,
+        address secondPyth_,
+        bytes32 secondPriceFeedId_,
+        uint48 secondUpdateThreshold_,
+        uint256 secondMaxConfidence_,
+        uint256 outputMaxConfidence_
+    ) internal pure returns (bytes memory params) {
+        return
             abi.encode(
                 firstPyth_,
                 firstPriceFeedId_,
@@ -122,7 +147,8 @@ contract PythPriceFeedsTest is Test {
                 secondPyth_,
                 secondPriceFeedId_,
                 secondUpdateThreshold_,
-                secondMaxConfidence_
+                secondMaxConfidence_,
+                outputMaxConfidence_
             );
     }
 }
