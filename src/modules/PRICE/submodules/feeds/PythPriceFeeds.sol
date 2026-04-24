@@ -445,6 +445,8 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @dev                    - Any parameter is invalid
     /// @dev                    - The exponent calculation would result in an overflow
     /// @dev                    - Any of the price feeds' results are invalid
+    /// @dev                    - The denominator confidence interval is greater than or equal to the denominator price
+    /// @dev                    - The derived output confidence interval exceeds `outputMaxConfidence`
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pyth feed parameters of type `TwoFeedParams`
@@ -513,6 +515,7 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @dev                    - Any parameter is invalid
     /// @dev                    - The exponent calculation would result in an overflow
     /// @dev                    - Any of the price feeds' results are invalid
+    /// @dev                    - The derived output confidence interval exceeds `outputMaxConfidence`
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pyth feed parameters of type `TwoFeedParams`
