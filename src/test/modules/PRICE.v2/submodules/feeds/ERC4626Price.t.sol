@@ -179,6 +179,32 @@ contract ERC4626Test is Test {
         assertEq(assetPrice, 2_469_134e12, "Asset price should normalize by underlying decimals");
     }
 
+    function test_shareDecimalsLessThanUnderlying_succeeds() public {
+        uint8 underlyingDecimals = 18;
+        uint8 shareDecimals = 6;
+        uint256 assetsPerShare = 3_500_000_000_000_000_000;
+        MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", underlyingDecimals);
+        MockERC4626WithDecimals sWeth = new MockERC4626WithDecimals(
+            weth,
+            shareDecimals,
+            assetsPerShare
+        );
+        uint256 underlyingPrice = 2_500e18;
+        mockAssetPrice(address(weth), underlyingPrice);
+
+        // shares = 1e6 (6 decimals) = 1 whole share
+        // convertToAssets(1e6) = 3.5e18 (18 decimals) = 3.5 WETH
+        // underlyingPrice = 2,500e18 (18 decimals) = $2,500 per WETH
+        // Expected: 2,500e18 * 3.5e18 / 1e18 = 8,750e18
+        uint256 assetPrice = submodule.getPriceFromUnderlying(address(sWeth), PRICE_DECIMALS, "");
+
+        assertEq(
+            assetPrice,
+            8_750e18,
+            "Asset price should normalize when share decimals are lower"
+        );
+    }
+
     function test_assetDecimals_fuzz(uint8 assetDecimals_) public {
         uint8 assetDecimals = uint8(bound(assetDecimals_, 0, MAX_DECIMALS));
 
