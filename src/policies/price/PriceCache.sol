@@ -23,21 +23,29 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
     bytes32 internal constant _PRICE_ADMIN_ROLE = "price_admin";
+    uint256 internal constant _MAX_SYMBOL_LENGTH = 32;
 
     IPRICEv2 public PRICE;
     uint8 internal immutable _UNIT_OF_ACCOUNT_DECIMALS;
+    bytes32 internal immutable _UNIT_OF_ACCOUNT_SYMBOL;
 
     uint256 internal _cacheEpoch;
-    mapping(address asset => IPriceCache.NonContractAssetDecimals decimalsData)
-        internal _nonContractAssetDecimals;
+    mapping(address asset => IPriceCache.NonContractAssetMetadata metadata)
+        internal _nonContractAssetMetadata;
     mapping(address asset => uint64 epoch) internal _assetEpoch;
     mapping(uint256 epoch => mapping(bytes32 key => IPriceCache.PairSnapshot snapshot))
         internal _pairSnapshot;
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Kernel kernel_, uint8 unitOfAccountDecimals_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        uint8 unitOfAccountDecimals_,
+        string memory unitOfAccountSymbol_
+    ) Policy(kernel_) {
         _UNIT_OF_ACCOUNT_DECIMALS = unitOfAccountDecimals_;
+        _validateSymbol(unitOfAccountSymbol_);
+        _UNIT_OF_ACCOUNT_SYMBOL = _stringToBytes32(unitOfAccountSymbol_);
     }
 
     // ========== POLICY SETUP ========== //
@@ -82,7 +90,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
             );
         }
 
-        _registerUnitOfAccountDecimalsIfMissing();
+        _registerUnitOfAccountMetadataIfMissing();
     }
 
     /// @inheritdoc Policy
@@ -131,23 +139,38 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - `asset_` is a non-contract asset that is not known to PRICE
+    ///             - `asset_` is a non-contract asset without registered symbol metadata
+    function assetSymbol(address asset_) external view override returns (string memory symbol_) {
+        return _assetSymbol(asset_);
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
     ///             - `asset_` is not a valid non-contract asset managed by PRICE
-    function setNonContractAssetDecimals(
+    ///             - `symbol_` is empty or exceeds the configured max length
+    function setNonContractAssetMetadata(
         address asset_,
-        uint8 decimals_
+        uint8 decimals_,
+        string calldata symbol_
     ) external override onlyEnabled onlyPriceOrAdminRole {
         if (!_isConfigurableNonContractAsset(asset_)) {
             revert IPriceCache.PriceCache_InvalidAsset(asset_);
         }
 
-        IPriceCache.NonContractAssetDecimals storage decimalsData = _nonContractAssetDecimals[
-            asset_
-        ];
-        if (!decimalsData.registered || decimalsData.decimals != decimals_) {
-            decimalsData.registered = true;
-            decimalsData.decimals = decimals_;
+        _validateSymbol(symbol_);
+
+        IPriceCache.NonContractAssetMetadata storage metadata = _nonContractAssetMetadata[asset_];
+        if (
+            !metadata.registered ||
+            metadata.decimals != decimals_ ||
+            keccak256(bytes(metadata.symbol)) != keccak256(bytes(symbol_))
+        ) {
+            metadata.registered = true;
+            metadata.decimals = decimals_;
+            metadata.symbol = symbol_;
             _invalidateAsset(asset_);
         }
     }
@@ -157,19 +180,19 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
     ///             - `asset_` is the unit of account
-    ///             - `asset_` does not have registered decimals
-    function removeNonContractAssetDecimals(
+    ///             - `asset_` does not have registered metadata
+    function removeNonContractAssetMetadata(
         address asset_
     ) external override onlyEnabled onlyPriceOrAdminRole {
         if (asset_ == PRICE.unitOfAccount()) {
             revert IPriceCache.PriceCache_InvalidAsset(asset_);
         }
 
-        if (!_nonContractAssetDecimals[asset_].registered) {
+        if (!_nonContractAssetMetadata[asset_].registered) {
             revert IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered(asset_);
         }
 
-        delete _nonContractAssetDecimals[asset_];
+        delete _nonContractAssetMetadata[asset_];
         _invalidateAsset(asset_);
     }
 
@@ -302,7 +325,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         }
     }
 
-    /// @notice Validate that both legs in a pair have a resolvable amount-decimal scale
+    /// @notice Validate that both legs in a pair have resolvable cache metadata
     /// @dev    Reverts if `_assetDecimals(asset_)` or `_assetDecimals(quote_)` reverts.
     ///
     /// @param asset_    Asset in requested orientation
@@ -314,7 +337,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @notice Resolve the amount-decimal scale for an asset identifier
     /// @dev    Contract assets source decimals from `IERC20.decimals()`. Non-contract assets must be
-    ///         known to PRICE and have registered decimals in this cache.
+    ///         known to PRICE and have registered metadata in this cache.
     /// @dev    Reverts if:
     ///         - `asset_` is a non-contract asset that is not registered in PRICE
     ///         - `asset_` is a registered non-contract asset without cache decimals
@@ -331,14 +354,39 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
             revert IPriceCache.PriceCache_NonContractAssetNotRegistered(asset_);
         }
 
-        IPriceCache.NonContractAssetDecimals memory decimalsData = _nonContractAssetDecimals[
-            asset_
-        ];
-        if (!decimalsData.registered) {
+        IPriceCache.NonContractAssetMetadata memory metadata = _nonContractAssetMetadata[asset_];
+        if (!metadata.registered) {
             revert IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered(asset_);
         }
 
-        return decimalsData.decimals;
+        return metadata.decimals;
+    }
+
+    /// @notice Resolve the symbol for an asset identifier
+    /// @dev    Contract assets source symbols from `IERC20.symbol()`. Non-contract assets must be
+    ///         known to PRICE and have registered symbol metadata in this cache.
+    /// @dev    Reverts if:
+    ///         - `asset_` is a non-contract asset that is not registered in PRICE
+    ///         - `asset_` is a registered non-contract asset without cache symbol metadata
+    ///         - `asset_` is a contract whose `symbol()` call reverts
+    ///
+    /// @param asset_      Asset identifier
+    /// @return symbol_    Symbol for `asset_`
+    function _assetSymbol(address asset_) internal view returns (string memory symbol_) {
+        if (asset_.code.length != 0) {
+            return IERC20(asset_).symbol();
+        }
+
+        if (!_isKnownNonContractAsset(asset_)) {
+            revert IPriceCache.PriceCache_NonContractAssetNotRegistered(asset_);
+        }
+
+        IPriceCache.NonContractAssetMetadata memory metadata = _nonContractAssetMetadata[asset_];
+        if (!metadata.registered) {
+            revert IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered(asset_);
+        }
+
+        return metadata.symbol;
     }
 
     /// @notice Return whether a non-contract asset identifier is known to PRICE
@@ -353,8 +401,8 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         return PRICE.isNonContractAsset(asset_);
     }
 
-    /// @notice Return whether an asset can have non-contract decimals configured in the cache
-    /// @dev    This is intended for admin-managed non-contract asset decimal registration paths.
+    /// @notice Return whether an asset can have non-contract metadata configured in the cache
+    /// @dev    This is intended for admin-managed non-contract asset metadata registration paths.
     /// @dev    Reverts if `_isKnownNonContractAsset(asset_)` reverts because PRICE dependencies are not
     ///         configured.
     ///
@@ -364,18 +412,55 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         return asset_.code.length == 0 && _isKnownNonContractAsset(asset_);
     }
 
-    /// @notice Register the unit-of-account decimals in the cache if they have not been set yet
+    /// @notice Register the unit-of-account metadata in the cache if it has not been set yet
     /// @dev    This is used only during dependency configuration to seed the initial unit-of-account
-    ///         decimals without overwriting a later admin update on replayed `configureDependencies()`.
+    ///         metadata without overwriting a later admin update on replayed `configureDependencies()`.
     /// @dev    Reverts if `PRICE.unitOfAccount()` reverts because the PRICE module is not configured.
-    function _registerUnitOfAccountDecimalsIfMissing() internal {
+    function _registerUnitOfAccountMetadataIfMissing() internal {
         address unitOfAccount = PRICE.unitOfAccount();
-        if (_nonContractAssetDecimals[unitOfAccount].registered) return;
+        if (_nonContractAssetMetadata[unitOfAccount].registered) return;
 
-        _nonContractAssetDecimals[unitOfAccount] = IPriceCache.NonContractAssetDecimals({
+        _nonContractAssetMetadata[unitOfAccount] = IPriceCache.NonContractAssetMetadata({
             registered: true,
-            decimals: _UNIT_OF_ACCOUNT_DECIMALS
+            decimals: _UNIT_OF_ACCOUNT_DECIMALS,
+            symbol: _bytes32ToString(_UNIT_OF_ACCOUNT_SYMBOL)
         });
+    }
+
+    /// @notice Validate a non-contract asset symbol before it is stored
+    /// @dev    Reverts if `symbol_` is empty or exceeds `_MAX_SYMBOL_LENGTH`.
+    function _validateSymbol(string memory symbol_) internal pure {
+        uint256 symbolLength = bytes(symbol_).length;
+        if (symbolLength == 0 || symbolLength > _MAX_SYMBOL_LENGTH) {
+            revert IPriceCache.PriceCache_InvalidAssetSymbol();
+        }
+    }
+
+    /// @notice Convert a <=32 byte string into a bytes32 word for immutable storage
+    function _stringToBytes32(string memory value_) internal pure returns (bytes32 result_) {
+        assembly {
+            result_ := mload(add(value_, 32))
+        }
+    }
+
+    /// @notice Convert a zero-padded bytes32 word back into a string
+    function _bytes32ToString(bytes32 value_) internal pure returns (string memory result_) {
+        uint256 length;
+        while (length < 32 && value_[length] != 0) {
+            unchecked {
+                ++length;
+            }
+        }
+
+        bytes memory buffer = new bytes(length);
+        for (uint256 i; i < length; ) {
+            buffer[i] = value_[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        return string(buffer);
     }
 
     /// @notice Invalidate cached pairs involving `asset_` by advancing its epoch

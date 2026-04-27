@@ -3,25 +3,34 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 import {PriceCacheTest} from "./PriceCacheTest.sol";
+
+contract MockStaticMetadataTokenRemove {
+    function symbol() external pure returns (string memory) {
+        return "LATE";
+    }
+
+    function decimals() external pure returns (uint8) {
+        return 6;
+    }
+}
 
 contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
     function test_givenPolicyDisabled_reverts() public {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
         vm.prank(admin);
         cache.disable("");
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        cache.removeNonContractAssetDecimals(nonContractAsset);
+        cache.removeNonContractAssetMetadata(nonContractAsset);
     }
 
     function testFuzz_givenCallerIsNeitherPriceAdminNorAdmin_reverts(address unauthorised) public {
@@ -31,11 +40,11 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
         vm.prank(unauthorised);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
-        cache.removeNonContractAssetDecimals(nonContractAsset);
+        cache.removeNonContractAssetMetadata(nonContractAsset);
     }
 
     function testFuzz_givenCallerIsPriceAdminOrAdmin_givenAssetIsRegisteredNonContractAsset_removesConfiguredScale(
@@ -44,10 +53,10 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
         vm.prank(usePriceAdmin_ ? priceManager : admin);
-        cache.removeNonContractAssetDecimals(nonContractAsset);
+        cache.removeNonContractAssetMetadata(nonContractAsset);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -56,6 +65,14 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
             )
         );
         cache.assetDecimals(nonContractAsset);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered.selector,
+                nonContractAsset
+            )
+        );
+        cache.assetSymbol(nonContractAsset);
     }
 
     function test_givenCallerIsAdmin_givenAssetIsUnitOfAccount_reverts() public {
@@ -65,7 +82,7 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
         vm.expectRevert(
             abi.encodeWithSelector(IPriceCache.PriceCache_InvalidAsset.selector, unitOfAccount)
         );
-        cache.removeNonContractAssetDecimals(unitOfAccount);
+        cache.removeNonContractAssetMetadata(unitOfAccount);
     }
 
     function test_givenCallerIsAdmin_givenAssetDoesNotHaveRegisteredDecimals_reverts() public {
@@ -80,7 +97,7 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
                 nonContractAsset
             )
         );
-        cache.removeNonContractAssetDecimals(nonContractAsset);
+        cache.removeNonContractAssetMetadata(nonContractAsset);
     }
 
     function test_givenCallerIsAdmin_givenAssetIsERC20_reverts() public {
@@ -91,7 +108,7 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
                 address(assetToken)
             )
         );
-        cache.removeNonContractAssetDecimals(address(assetToken));
+        cache.removeNonContractAssetMetadata(address(assetToken));
     }
 
     function test_givenCallerIsAdmin_givenNcaDecimalsAreRegistered_thenErc20IsDeployed_removesConfiguredScale()
@@ -99,18 +116,23 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
-        MockERC20 tokenWithDifferentDecimals = new MockERC20("Later Token", "LATE", 6);
+        MockStaticMetadataTokenRemove tokenWithDifferentDecimals = new MockStaticMetadataTokenRemove();
         vm.etch(nonContractAsset, address(tokenWithDifferentDecimals).code);
 
         vm.prank(admin);
-        cache.removeNonContractAssetDecimals(nonContractAsset);
+        cache.removeNonContractAssetMetadata(nonContractAsset);
 
         assertEq(
             cache.assetDecimals(nonContractAsset),
             6,
             "Contract decimals should still be returned after removing the stale non-contract entry"
+        );
+        assertEq(
+            cache.assetSymbol(nonContractAsset),
+            "LATE",
+            "Contract symbol should still be returned after removing the stale non-contract entry"
         );
     }
 }

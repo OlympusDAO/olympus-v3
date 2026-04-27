@@ -17,7 +17,7 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        cache.setNonContractAssetDecimals(unitOfAccount, 2);
+        cache.setNonContractAssetMetadata(unitOfAccount, 2, "USD2");
     }
 
     function testFuzz_givenCallerIsNeitherPriceAdminNorAdmin_reverts(address unauthorised) public {
@@ -28,36 +28,38 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
 
         vm.prank(unauthorised);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
-        cache.setNonContractAssetDecimals(unitOfAccount, 2);
+        cache.setNonContractAssetMetadata(unitOfAccount, 2, "USD2");
     }
 
-    function test_givenCallerIsPriceAdmin_updatesConfiguredScale() public {
+    function test_givenCallerIsPriceAdmin_updatesConfiguredMetadata() public {
         address unitOfAccount = _unitOfAccount();
 
         vm.prank(priceManager);
-        cache.setNonContractAssetDecimals(unitOfAccount, 2);
+        cache.setNonContractAssetMetadata(unitOfAccount, 2, "USD2");
 
         assertEq(
             cache.assetDecimals(unitOfAccount),
             2,
             "Unit of account decimals should use the updated cache registry value"
         );
+        assertEq(cache.assetSymbol(unitOfAccount), "USD2", "Unit of account symbol should update");
     }
 
-    function test_givenCallerIsAdmin_givenAssetIsUnitOfAccount_updatesConfiguredScale() public {
+    function test_givenCallerIsAdmin_givenAssetIsUnitOfAccount_updatesConfiguredMetadata() public {
         address unitOfAccount = _unitOfAccount();
 
         vm.prank(admin);
-        cache.setNonContractAssetDecimals(unitOfAccount, 2);
+        cache.setNonContractAssetMetadata(unitOfAccount, 2, "USD2");
 
         assertEq(
             cache.assetDecimals(unitOfAccount),
             2,
             "Unit of account decimals should use the updated cache registry value"
         );
+        assertEq(cache.assetSymbol(unitOfAccount), "USD2", "Unit of account symbol should update");
     }
 
-    function test_givenCallerIsAdmin_givenAssetIsRegisteredNonContractAsset_setsConfiguredScale()
+    function test_givenCallerIsAdmin_givenAssetIsRegisteredNonContractAsset_setsConfiguredMetadata()
         public
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
@@ -65,12 +67,17 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
         _registerNonContractAsset(nonContractAsset);
 
         vm.prank(admin);
-        cache.setNonContractAssetDecimals(nonContractAsset, 8);
+        cache.setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
         assertEq(
             cache.assetDecimals(nonContractAsset),
             8,
             "Non-contract asset decimals should use the configured cache registry value"
+        );
+        assertEq(
+            cache.assetSymbol(nonContractAsset),
+            "NCA",
+            "Non-contract asset symbol should use the configured cache value"
         );
     }
 
@@ -87,7 +94,7 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
         vm.expectRevert(
             abi.encodeWithSelector(IPriceCache.PriceCache_InvalidAsset.selector, nonContractAsset)
         );
-        cache.setNonContractAssetDecimals(nonContractAsset, 8);
+        cache.setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
     }
 
     function test_givenCallerIsAdmin_givenAssetIsERC20_reverts() public {
@@ -98,7 +105,25 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
                 address(assetToken)
             )
         );
-        cache.setNonContractAssetDecimals(address(assetToken), 18);
+        cache.setNonContractAssetMetadata(address(assetToken), 18, "AST");
+    }
+
+    function test_givenCallerIsAdmin_givenSymbolIsEmpty_reverts() public {
+        address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
+        _registerNonContractAsset(nonContractAsset);
+
+        vm.prank(admin);
+        vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
+        cache.setNonContractAssetMetadata(nonContractAsset, 8, "");
+    }
+
+    function test_givenCallerIsAdmin_givenSymbolExceedsMaxLength_reverts() public {
+        address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
+        _registerNonContractAsset(nonContractAsset);
+
+        vm.prank(admin);
+        vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
+        cache.setNonContractAssetMetadata(nonContractAsset, 8, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

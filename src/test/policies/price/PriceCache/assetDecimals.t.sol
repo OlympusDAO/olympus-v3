@@ -2,10 +2,18 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
+
+contract MockStaticMetadataTokenDecimals {
+    function symbol() external pure returns (string memory) {
+        return "LATE";
+    }
+
+    function decimals() external pure returns (uint8) {
+        return 6;
+    }
+}
 
 contract PriceCacheAssetDecimalsTest is PriceCacheTest {
     function test_givenAssetIsContract_returnsERC20Decimals() public view {
@@ -45,9 +53,9 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
-        MockERC20 tokenWithDifferentDecimals = new MockERC20("Later Token", "LATE", 6);
+        MockStaticMetadataTokenDecimals tokenWithDifferentDecimals = new MockStaticMetadataTokenDecimals();
         vm.etch(nonContractAsset, address(tokenWithDifferentDecimals).code);
 
         assertEq(

@@ -47,10 +47,10 @@ contract PriceCacheIsStaleTest is PriceCacheTest {
 
     function test_whenUnitOfAccountDecimalsChange_returnsTrueForPairsUsingThatAsset() public {
         address unitOfAccount = _unitOfAccount();
-        _setNonContractAssetDecimals(unitOfAccount, 2);
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
         cache.cachePrice(address(assetToken), unitOfAccount);
 
-        _setNonContractAssetDecimals(unitOfAccount, 3);
+        _setNonContractAssetMetadata(unitOfAccount, 3, "NCA");
 
         bool forward = cache.isStale(address(assetToken), unitOfAccount, 365 days);
         bool reverse = cache.isStale(unitOfAccount, address(assetToken), 365 days);
@@ -65,10 +65,10 @@ contract PriceCacheIsStaleTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
         priceModule.setPrice(nonContractAsset, 3e18);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
         cache.cachePrice(address(assetToken), nonContractAsset);
 
-        _setNonContractAssetDecimals(nonContractAsset, 9);
+        _setNonContractAssetMetadata(nonContractAsset, 9, "NCA");
 
         bool forward = cache.isStale(address(assetToken), nonContractAsset, 365 days);
         bool reverse = cache.isStale(nonContractAsset, address(assetToken), 365 days);
@@ -82,11 +82,11 @@ contract PriceCacheIsStaleTest is PriceCacheTest {
         address otherNonContractAsset = makeAddr("OTHER_NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(otherNonContractAsset);
-        _setNonContractAssetDecimals(unitOfAccount, 2);
-        _setNonContractAssetDecimals(otherNonContractAsset, 8);
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
+        _setNonContractAssetMetadata(otherNonContractAsset, 8, "NCA");
         cache.cachePrice(address(assetToken), unitOfAccount);
 
-        _setNonContractAssetDecimals(otherNonContractAsset, 9);
+        _setNonContractAssetMetadata(otherNonContractAsset, 9, "NCA");
 
         bool stale = cache.isStale(address(assetToken), unitOfAccount, 365 days);
         assertEq(stale, false, "Unrelated decimals change should not invalidate the pair");

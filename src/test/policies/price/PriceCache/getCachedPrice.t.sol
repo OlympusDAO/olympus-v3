@@ -63,7 +63,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
     function test_whenUnitOfAccountDecimalsChange_invalidatesPairsInBothOrientations() public {
         address unitOfAccount = _unitOfAccount();
-        _setNonContractAssetDecimals(unitOfAccount, 2);
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
 
         cache.cachePrice(address(assetToken), unitOfAccount);
 
@@ -73,7 +73,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         );
         assertEq(beforeUpdate.roundId, 1, "Pair should be cached before invalidation");
 
-        _setNonContractAssetDecimals(unitOfAccount, 3);
+        _setNonContractAssetMetadata(unitOfAccount, 3, "NCA");
 
         IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
             address(assetToken),
@@ -101,7 +101,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
         priceModule.setPrice(nonContractAsset, 3e18);
-        _setNonContractAssetDecimals(nonContractAsset, 8);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
         cache.cachePrice(address(assetToken), nonContractAsset);
 
@@ -111,7 +111,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         );
         assertEq(beforeUpdate.roundId, 1, "Pair should be cached before invalidation");
 
-        _setNonContractAssetDecimals(nonContractAsset, 9);
+        _setNonContractAssetMetadata(nonContractAsset, 9, "NCA");
 
         IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
             address(assetToken),
@@ -139,8 +139,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
 
         _registerNonContractAsset(otherNonContractAsset);
         priceModule.setPrice(otherNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(unitOfAccount, 2);
-        _setNonContractAssetDecimals(otherNonContractAsset, 8);
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
+        _setNonContractAssetMetadata(otherNonContractAsset, 8, "NCA");
 
         cache.cachePrice(address(assetToken), unitOfAccount);
 
@@ -149,7 +149,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
             unitOfAccount
         );
 
-        _setNonContractAssetDecimals(otherNonContractAsset, 9);
+        _setNonContractAssetMetadata(otherNonContractAsset, 9, "NCA");
 
         IPriceCache.CachedPrice memory afterUpdate = cache.getCachedPrice(
             address(assetToken),

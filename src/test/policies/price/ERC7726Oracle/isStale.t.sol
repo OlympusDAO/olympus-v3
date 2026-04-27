@@ -184,9 +184,9 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
-        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+        priceCache.removeNonContractAssetMetadata(registeredNonContractAsset);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -201,7 +201,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
 
         bool stale = oracle.isStale(registeredNonContractAsset, address(loanToken));
@@ -212,7 +212,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
@@ -233,9 +233,9 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
-        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+        priceCache.removeNonContractAssetMetadata(registeredNonContractAsset);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -250,7 +250,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
 
         bool stale = oracle.isStale(address(collateralToken), registeredNonContractAsset);
@@ -261,7 +261,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
 
@@ -273,7 +273,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
         priceCache.setAssetApproval(registeredNonContractAsset, false);
 
@@ -287,7 +287,7 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         public
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
         priceCache.setAssetApproval(registeredNonContractAsset, false);
 

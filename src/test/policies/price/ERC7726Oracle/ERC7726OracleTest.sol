@@ -100,8 +100,12 @@ contract ERC7726OracleTest is Test {
         priceCache.setUsdPrice(token_, price_);
     }
 
-    function _setNonContractAssetDecimals(address asset_, uint8 decimals_) internal {
-        priceCache.setNonContractAssetDecimals(asset_, decimals_);
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
+        priceCache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
     }
 
     /// @notice Enables the oracle

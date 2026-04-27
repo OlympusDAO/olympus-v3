@@ -9,6 +9,7 @@ import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
 contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     address internal constant _UNIT_OF_ACCOUNT = address(0x348);
+    string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
     struct InternalCachedPrice {
         uint256 token0PriceUsd;
@@ -30,15 +31,16 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
 
     mapping(address asset => uint256 usdPrice) internal _usdPrices;
     mapping(address asset => bool approved) internal _approvedAssets;
-    mapping(address asset => IPriceCache.NonContractAssetDecimals decimalsData)
-        internal _nonContractAssetDecimals;
+    mapping(address asset => IPriceCache.NonContractAssetMetadata metadata)
+        internal _nonContractAssetMetadata;
     mapping(bytes32 pairKey => InternalCachedPrice cache) internal _cachedPriceByPair;
 
     constructor(address kernel_) {
         kernel = kernel_;
-        _nonContractAssetDecimals[_UNIT_OF_ACCOUNT] = IPriceCache.NonContractAssetDecimals({
+        _nonContractAssetMetadata[_UNIT_OF_ACCOUNT] = IPriceCache.NonContractAssetMetadata({
             registered: true,
-            decimals: 18
+            decimals: 18,
+            symbol: _UNIT_OF_ACCOUNT_SYMBOL
         });
     }
 
@@ -59,32 +61,55 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         return _assetDecimals(asset_);
     }
 
+    function assetSymbol(address asset_) external view override returns (string memory symbol_) {
+        return _assetSymbol(asset_);
+    }
+
     function _assetDecimals(address asset_) internal view returns (uint8 decimals_) {
         if (asset_.code.length != 0) return IERC20(asset_).decimals();
 
-        IPriceCache.NonContractAssetDecimals memory data = _nonContractAssetDecimals[asset_];
-        if (!data.registered) {
+        IPriceCache.NonContractAssetMetadata memory metadata = _nonContractAssetMetadata[asset_];
+        if (!metadata.registered) {
             if (_approvedAssets[asset_]) {
                 revert IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered(asset_);
             }
             revert IPriceCache.PriceCache_NonContractAssetNotRegistered(asset_);
         }
 
-        return data.decimals;
+        return metadata.decimals;
     }
 
-    function setNonContractAssetDecimals(address asset_, uint8 decimals_) external {
-        _nonContractAssetDecimals[asset_] = IPriceCache.NonContractAssetDecimals({
+    function _assetSymbol(address asset_) internal view returns (string memory symbol_) {
+        if (asset_.code.length != 0) return IERC20(asset_).symbol();
+
+        IPriceCache.NonContractAssetMetadata memory metadata = _nonContractAssetMetadata[asset_];
+        if (!metadata.registered) {
+            if (_approvedAssets[asset_]) {
+                revert IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered(asset_);
+            }
+            revert IPriceCache.PriceCache_NonContractAssetNotRegistered(asset_);
+        }
+
+        return metadata.symbol;
+    }
+
+    function setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string calldata symbol_
+    ) external {
+        _nonContractAssetMetadata[asset_] = IPriceCache.NonContractAssetMetadata({
             registered: true,
-            decimals: decimals_
+            decimals: decimals_,
+            symbol: symbol_
         });
     }
 
-    function removeNonContractAssetDecimals(address asset_) external {
+    function removeNonContractAssetMetadata(address asset_) external {
         if (asset_ == _UNIT_OF_ACCOUNT) {
             revert IPriceCache.PriceCache_InvalidAsset(asset_);
         }
-        delete _nonContractAssetDecimals[asset_];
+        delete _nonContractAssetMetadata[asset_];
     }
 
     function setAssetApproval(address asset_, bool approved_) external {

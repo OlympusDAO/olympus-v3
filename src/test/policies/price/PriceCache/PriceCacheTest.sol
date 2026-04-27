@@ -7,7 +7,6 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
@@ -17,6 +16,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 abstract contract PriceCacheTest is Test {
     uint8 internal constant PRICE_DECIMALS = 18;
     uint8 internal constant UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant UNIT_OF_ACCOUNT_SYMBOL = "USD";
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
 
     Kernel internal kernel;
@@ -42,7 +42,7 @@ abstract contract PriceCacheTest is Test {
         priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        cache = new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS);
+        cache = new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS, UNIT_OF_ACCOUNT_SYMBOL);
 
         kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -79,14 +79,18 @@ abstract contract PriceCacheTest is Test {
         priceModule.registerNonContractAsset(asset_);
     }
 
-    function _setNonContractAssetDecimals(address asset_, uint8 decimals_) internal {
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
         vm.prank(admin);
-        cache.setNonContractAssetDecimals(asset_, decimals_);
+        cache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
     }
 
-    function _removeNonContractAssetDecimals(address asset_) internal {
+    function _removeNonContractAssetMetadata(address asset_) internal {
         vm.prank(admin);
-        cache.removeNonContractAssetDecimals(asset_);
+        cache.removeNonContractAssetMetadata(asset_);
     }
 
     function _upgradePriceModuleAndReconfigure(

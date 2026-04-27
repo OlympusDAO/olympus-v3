@@ -57,7 +57,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         public
         givenOracleIsEnabled
     {
-        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
+        priceCache.setNonContractAssetMetadata(UNIT_OF_ACCOUNT, 2, "USD");
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
         // inAmount = 1e2 (2 decimals, 1 unit of account)
@@ -77,7 +77,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         public
         givenOracleIsEnabled
     {
-        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
+        priceCache.setNonContractAssetMetadata(UNIT_OF_ACCOUNT, 2, "USD");
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         // inAmount = 1e18
@@ -103,9 +103,9 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
-        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+        priceCache.removeNonContractAssetMetadata(registeredNonContractAsset);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -121,7 +121,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
 
         // inAmount = 1e8
@@ -139,7 +139,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
         priceCache.setAssetApproval(registeredNonContractAsset, false);
 
@@ -162,9 +162,9 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 3e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
-        priceCache.removeNonContractAssetDecimals(registeredNonContractAsset);
+        priceCache.removeNonContractAssetMetadata(registeredNonContractAsset);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -180,7 +180,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 4e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
 
         // inAmount = 1e18
@@ -202,7 +202,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         _setPRICEPrices(registeredNonContractAsset, 4e18);
-        _setNonContractAssetDecimals(registeredNonContractAsset, 8);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
         priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
         priceCache.setAssetApproval(registeredNonContractAsset, false);
 
@@ -219,7 +219,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         public
         givenOracleIsEnabled
     {
-        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
+        priceCache.setNonContractAssetMetadata(UNIT_OF_ACCOUNT, 2, "USD");
         priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
 
         (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(
@@ -238,7 +238,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         public
         givenOracleIsEnabled
     {
-        priceCache.setNonContractAssetDecimals(UNIT_OF_ACCOUNT, 2);
+        priceCache.setNonContractAssetMetadata(UNIT_OF_ACCOUNT, 2, "USD");
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         (uint256 bidOutAmount, uint256 askOutAmount) = oracle.getQuotes(

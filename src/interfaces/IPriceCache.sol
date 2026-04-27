@@ -34,10 +34,18 @@ interface IPriceCache {
     /// @param asset_   Non-contract asset identifier
     error PriceCache_NonContractAssetDecimalsNotRegistered(address asset_);
 
+    /// @notice Thrown when a non-contract asset has no cache symbol configured
+    ///
+    /// @param asset_   Non-contract asset identifier
+    error PriceCache_NonContractAssetSymbolNotRegistered(address asset_);
+
     /// @notice Thrown when the asset identifier is invalid for the requested cache operation
     ///
     /// @param asset_   Asset identifier
     error PriceCache_InvalidAsset(address asset_);
+
+    /// @notice Thrown when a non-contract asset symbol is invalid
+    error PriceCache_InvalidAssetSymbol();
 
     /// @notice Return the USD decimal scale used by cached pair legs
     ///
@@ -57,13 +65,15 @@ interface IPriceCache {
         uint80 roundId;
     }
 
-    /// @notice Stored decimal metadata for a non-contract asset
+    /// @notice Stored metadata for a non-contract asset
     ///
-    /// @param registered    Whether decimals are configured for the asset
+    /// @param registered    Whether metadata is configured for the asset
     /// @param decimals      Amount decimal scale for the asset
-    struct NonContractAssetDecimals {
+    /// @param symbol        Display symbol for the asset
+    struct NonContractAssetMetadata {
         bool registered;
         uint8 decimals;
+        string symbol;
     }
 
     /// @notice Internal pair snapshot storage in canonical token order
@@ -95,16 +105,27 @@ interface IPriceCache {
     /// @return decimals_   Amount decimal scale for `asset_`
     function assetDecimals(address asset_) external view returns (uint8 decimals_);
 
-    /// @notice Set the amount decimal scale for a registered non-contract asset
+    /// @notice Return the symbol used for naming and display of `asset_`
+    ///
+    /// @param asset_       Asset identifier
+    /// @return symbol_     Symbol for `asset_`
+    function assetSymbol(address asset_) external view returns (string memory symbol_);
+
+    /// @notice Set the metadata for a registered non-contract asset
     ///
     /// @param asset_       Non-contract asset identifier
     /// @param decimals_    Amount decimal scale for `asset_`
-    function setNonContractAssetDecimals(address asset_, uint8 decimals_) external;
+    /// @param symbol_      Display symbol for `asset_`
+    function setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string calldata symbol_
+    ) external;
 
-    /// @notice Remove the configured amount decimal scale for a non-contract asset
+    /// @notice Remove the configured metadata for a non-contract asset
     ///
     /// @param asset_   Non-contract asset identifier
-    function removeNonContractAssetDecimals(address asset_) external;
+    function removeNonContractAssetMetadata(address asset_) external;
 
     /// @notice Cache an explicit pair only when stale for maxAge_
     ///

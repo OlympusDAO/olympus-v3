@@ -7,8 +7,6 @@ import {Kernel} from "src/Kernel.sol";
 import {BaseOracleFactory} from "src/policies/price/BaseOracleFactory.sol";
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
 
-// Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {LibString} from "@solmate-6.2.0/utils/LibString.sol";
 
 /// @title  MorphoOracleFactory
@@ -68,8 +66,8 @@ contract MorphoOracleFactory is BaseOracleFactory {
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Calculate scale factor
-        uint8 collateralDecimals = ERC20(collateralToken_).decimals();
-        uint8 loanDecimals = ERC20(loanToken_).decimals();
+        uint8 collateralDecimals = priceCache.assetDecimals(collateralToken_);
+        uint8 loanDecimals = priceCache.assetDecimals(loanToken_);
 
         // Validate decimals to prevent overflow (max exponent ~77 for uint256)
         // MORPHO_DECIMALS = 36, so we need loanDecimals - collateralDecimals < 41
@@ -87,8 +85,8 @@ contract MorphoOracleFactory is BaseOracleFactory {
         uint256 scaleFactor = 10 ** uint256(exponent);
 
         // Compose name from token symbols and maxAge: "collateral/loan M {maxAge}s"
-        string memory collateralSymbol = ERC20(collateralToken_).symbol();
-        string memory loanSymbol = ERC20(loanToken_).symbol();
+        string memory collateralSymbol = priceCache.assetSymbol(collateralToken_);
+        string memory loanSymbol = priceCache.assetSymbol(loanToken_);
         bytes32 oracleName = bytes32(
             abi.encodePacked(
                 collateralSymbol,
