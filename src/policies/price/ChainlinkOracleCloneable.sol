@@ -81,6 +81,15 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
     }
 
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled) {
+            revert ChainlinkOracle_NotEnabled();
+        }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
+    }
+
     // ========== AGGREGATOR V3 INTERFACE ========== //
 
     /// @inheritdoc AggregatorV3Interface
@@ -136,14 +145,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             uint80 answeredInRound
         )
     {
-        // Check if oracle is enabled via factory
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert ChainlinkOracle_NotEnabled();
-        }
-
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory_.getPriceCache())
-            .getCachedPrice(baseToken(), quoteToken());
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            baseToken(),
+            quoteToken()
+        );
         uint256 assetPriceUsd = cachedPrice.assetPriceUsd;
         uint256 quotePriceUsd = cachedPrice.quotePriceUsd;
         uint48 updatedAt_ = cachedPrice.updatedAt;
@@ -197,12 +202,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert ChainlinkOracle_NotEnabled();
-        }
-
-        return IPriceCache(factory_.getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
+        return _getEnabledPriceCache().isStale(baseToken(), quoteToken(), maxAge());
     }
 
     /// @inheritdoc AggregatorV3Interface

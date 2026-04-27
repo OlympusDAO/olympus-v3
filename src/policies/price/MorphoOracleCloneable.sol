@@ -83,6 +83,15 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x64))));
     }
 
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled) {
+            revert MorphoOracle_NotEnabled();
+        }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
+    }
+
     // ========== MORPHO ORACLE INTERFACE ========== //
 
     /// @inheritdoc IOracle
@@ -100,14 +109,10 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
     ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
     function price() external view override returns (uint256) {
-        // Check if oracle is enabled via factory
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert MorphoOracle_NotEnabled();
-        }
-
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory_.getPriceCache())
-            .getCachedPrice(collateralToken(), loanToken());
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            collateralToken(),
+            loanToken()
+        );
         uint48 pairTimestamp = cachedPrice.updatedAt;
 
         // Price validity is checked separately from staleness so callers can distinguish zero-price cache failures.
@@ -138,13 +143,7 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert MorphoOracle_NotEnabled();
-        }
-
-        return
-            IPriceCache(factory_.getPriceCache()).isStale(collateralToken(), loanToken(), maxAge());
+        return _getEnabledPriceCache().isStale(collateralToken(), loanToken(), maxAge());
     }
 
     /// @inheritdoc IMorphoOracle
@@ -154,13 +153,10 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function timestamp() external view override returns (uint48) {
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert MorphoOracle_NotEnabled();
-        }
-
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory_.getPriceCache())
-            .getCachedPrice(collateralToken(), loanToken());
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            collateralToken(),
+            loanToken()
+        );
         return cachedPrice.updatedAt;
     }
 

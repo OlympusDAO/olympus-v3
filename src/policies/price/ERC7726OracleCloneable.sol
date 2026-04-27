@@ -45,10 +45,13 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x1C))));
     }
 
-    function _checkEnabled() internal view {
-        if (!factory().isOracleEnabled(address(this))) {
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled) {
             revert ERC7726Oracle_NotEnabled();
         }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
     }
 
     /// @inheritdoc IPriceOracle
@@ -77,8 +80,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address base_,
         address quote_
     ) internal view returns (uint256 outAmount_) {
-        _checkEnabled();
-        IPriceCache priceCache = IPriceCache(factory().getPriceCache());
+        IPriceCache priceCache = _getEnabledPriceCache();
         IPriceCache.CachedPrice memory cachedPrice = priceCache.getCachedPrice(base_, quote_);
         uint48 pairTimestamp = cachedPrice.updatedAt;
 
@@ -153,8 +155,7 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     ///             - The cache policy is deactivated in Kernel
     ///             - The active cache policy rejects `(base, quote)`
     function isStale(address base, address quote) external view override returns (bool) {
-        _checkEnabled();
-        return IPriceCache(factory().getPriceCache()).isStale(base, quote, maxAge());
+        return _getEnabledPriceCache().isStale(base, quote, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
@@ -164,9 +165,10 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     ///             - The cache policy is deactivated in Kernel
     ///             - The active cache policy rejects `(base, quote)`
     function timestamp(address base, address quote) external view override returns (uint48) {
-        _checkEnabled();
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
-            .getCachedPrice(base, quote);
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            base,
+            quote
+        );
         return cachedPrice.updatedAt;
     }
 

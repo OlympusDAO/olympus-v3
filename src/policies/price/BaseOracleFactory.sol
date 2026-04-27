@@ -414,6 +414,19 @@ abstract contract BaseOracleFactory is
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
     ///             - The policy is deactivated in Kernel
+    ///             - `oracle_` was not created by this factory
+    function getOracleContext(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled, address policy) {
+        if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
+
+        enabled = isEnabled && _isOracleEnabled[oracle_];
+        policy = address(priceCache);
+    }
+
+    /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled

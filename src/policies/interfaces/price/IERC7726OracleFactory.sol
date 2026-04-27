@@ -146,6 +146,16 @@ interface IERC7726OracleFactory {
     /// @return  enabled   True if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
 
+    /// @notice  Checks if a factory-created oracle is enabled and returns the configured price cache
+    /// @dev     Reverts if:
+    ///          - The policy is deactivated in Kernel
+    ///          - `oracle_` was not created by this factory
+    ///
+    /// @param   oracle_   The oracle address to check
+    /// @return  enabled   True if the oracle is enabled, false otherwise
+    /// @return  policy    The configured price cache policy address
+    function getOracleContext(address oracle_) external view returns (bool enabled, address policy);
+
     /// @notice  Cache the direct pair unconditionally for the calling oracle
     ///
     /// @param   base_   The base asset to cache
