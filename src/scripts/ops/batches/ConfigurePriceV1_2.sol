@@ -45,20 +45,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @notice Configuration parameters (loaded from args)
     uint32 internal _ohmObservationWindow;
 
-    // ========== PRICE VALIDATION CONSTANTS ========== //
-
-    // TODO adjust price bounds at time of deployment
-    /// @notice Price validation bounds (18 decimals)
-    /// @dev    These are sanity bounds to catch misconfigured feeds
-    uint256 internal constant USDS_MIN_PRICE = 0.99e18;
-    uint256 internal constant USDS_MAX_PRICE = 1.01e18;
-    uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
-    uint256 internal constant SUSDS_MAX_PRICE = 1.10e18;
-    uint256 internal constant ETH_MIN_PRICE = 1500e18;
-    uint256 internal constant ETH_MAX_PRICE = 2100e18;
-    uint256 internal constant OHM_MIN_PRICE = 17e18;
-    uint256 internal constant OHM_MAX_PRICE = 22e18;
-
     // ========== CONFIGURATION FUNCTIONS ========== //
 
     /// @notice Configure PRICE v1.2 module with all assets
@@ -140,9 +126,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureSusds(priceConfig);
         _configureWeth(priceConfig);
         _configureOhm(priceConfig);
-
-        // Set post-batch validation selector
-        _setPostBatchValidateSelector(this.validatePricesAreSane.selector);
 
         console2.log("PRICE v1.2 configuration batch prepared");
         proposeBatch();
@@ -283,7 +266,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _usds,
             strategy,
             feeds,
-            _makeFeedExpectations(feeds.length, USDS_MIN_PRICE, USDS_MAX_PRICE)
+            _readFeedExpectations(feeds.length, "usds")
         );
 
         console2.log("USDS asset configured");
@@ -315,7 +298,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _susds,
             strategy,
             feeds,
-            _makeFeedExpectations(feeds.length, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE)
+            _readFeedExpectations(feeds.length, "susds")
         );
 
         console2.log("sUSDS asset configured");
@@ -419,7 +402,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _weth,
             strategy,
             feeds,
-            _makeFeedExpectations(feeds.length, ETH_MIN_PRICE, ETH_MAX_PRICE)
+            _readFeedExpectations(feeds.length, "weth")
         );
 
         console2.log("wETH asset configured");
@@ -437,17 +420,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Read strict mode and observation window from args file
         bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
 
-        // Load initial price from args file (18 decimals, represents USD price)
-        uint256 ohmInitialPrice = _readBatchArgUint256("configurePriceV1_2", "ohmInitialPrice");
-
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
-        console2.log("OHM initial price:", ohmInitialPrice);
-
-        // Validate initial price before seeding moving average observations
-        if (ohmInitialPrice < OHM_MIN_PRICE || ohmInitialPrice > OHM_MAX_PRICE) {
-            revert("OHM initial price out of bounds");
-        }
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
@@ -475,6 +449,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             )
         );
 
+        IPriceConfigv2.PriceFeedExpectation[] memory feedExpectations = _readFeedExpectations(
+            feeds.length,
+            "ohm"
+        );
+        uint256 ohmInitialPrice = feedExpectations[0].expectedPrice;
+        console2.log("OHM initial price:", ohmInitialPrice);
+
         // Create pre-populated observations array (21 observations for 7-day moving average)
         // Observation frequency is 8 hours, so 7 days = 21 observations
         uint256[] memory ohmObservations = new uint256[](21);
@@ -496,7 +477,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             ohmObservations,
             strategy,
             feeds,
-            _makeFeedExpectations(feeds.length, OHM_MIN_PRICE, OHM_MAX_PRICE)
+            feedExpectations
         );
 
         console2.log("OHM asset configured with 7-day moving average");
@@ -571,21 +552,44 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
     }
 
-    function _makeFeedExpectations(
+    /// @notice Read price feed expectations from the batch args file
+    /// @dev    Keys use the format `{assetPrefix}ExpectedPrice` and `{assetPrefix}ExpectedToleranceBps`.
+    /// @param length_ Number of configured feeds for the asset
+    /// @param assetPrefix_ Lowercase asset prefix used in the args file
+    /// @return expectations_ Expected price/tolerance entries for each feed
+    function _readFeedExpectations(
         uint256 length_,
-        uint256 minPrice_,
-        uint256 maxPrice_
-    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
-        uint256 expectedPrice = (minPrice_ + maxPrice_) / 2;
+        string memory assetPrefix_
+    ) internal view returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        uint256 expectedPrice = _readBatchArgUint256(
+            "configurePriceV1_2",
+            string.concat(assetPrefix_, "ExpectedPrice")
+        );
         uint16 toleranceBps = SafeCast.encodeUInt16(
-            (maxPrice_ * 10_000 + expectedPrice - 1) / expectedPrice - 10_000
+            _readBatchArgUint256(
+                "configurePriceV1_2",
+                string.concat(assetPrefix_, "ExpectedToleranceBps")
+            )
         );
 
+        expectations_ = _makeFeedExpectations(length_, expectedPrice, toleranceBps);
+    }
+
+    /// @notice Create a price feed expectation array for feeds that should share a price envelope
+    /// @param length_ Number of configured feeds for the asset
+    /// @param expectedPrice_ Expected feed price in PRICE decimals
+    /// @param toleranceBps_ Allowed deviation from expected price in basis points
+    /// @return expectations_ Expected price/tolerance entries for each feed
+    function _makeFeedExpectations(
+        uint256 length_,
+        uint256 expectedPrice_,
+        uint16 toleranceBps_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
         expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
         for (uint256 i; i < length_; i++) {
             expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
-                expectedPrice: expectedPrice,
-                toleranceBps: toleranceBps
+                expectedPrice: expectedPrice_,
+                toleranceBps: toleranceBps_
             });
         }
     }
@@ -638,65 +642,6 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         bytes memory params_
     ) internal pure returns (IPRICEv2.Component memory feed_) {
         feed_ = IPRICEv2.Component({target: target_, selector: selector_, params: params_});
-    }
-
-    // ========== POST-BATCH VALIDATION ========== //
-
-    /// @notice Validates that configured prices are within reasonable bounds
-    /// @dev    Call this function after the batch has been executed to verify prices
-    function validatePricesAreSane() external view {
-        console2.log("\n=== Validating Asset Prices ===");
-
-        IPRICEv2 price = IPRICEv2(_envAddressNotZero("olympus.modules.OlympusPriceV1"));
-
-        // Load asset addresses from env
-        address usds = _envAddressNotZero("external.tokens.USDS");
-        address susds = _envAddressNotZero("external.tokens.sUSDS");
-        address weth = _envAddressNotZero("external.tokens.WETH");
-        address ohm = _envAddressNotZero("olympus.legacy.OHM");
-
-        // Validate USDS price
-        uint256 usdsPrice = price.getPrice(usds);
-        console2.log("USDS price:", usdsPrice);
-        _assertPriceInRange(usdsPrice, USDS_MIN_PRICE, USDS_MAX_PRICE, "USDS");
-
-        // Validate sUSDS price
-        uint256 susdsPrice = price.getPrice(susds);
-        console2.log("sUSDS price:", susdsPrice);
-        _assertPriceInRange(susdsPrice, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE, "sUSDS");
-
-        // Validate wETH price
-        uint256 wethPrice = price.getPrice(weth);
-        console2.log("wETH price:", wethPrice);
-        _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "wETH");
-
-        // Validate OHM price
-        uint256 ohmPrice = price.getPrice(ohm);
-        console2.log("OHM price:", ohmPrice);
-        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
-
-        console2.log("All prices are within reasonable bounds");
-    }
-
-    /// @notice Asserts that a price is within a reasonable range
-    /// @param price_ The price to validate
-    /// @param minPrice_ Minimum acceptable price
-    /// @param maxPrice_ Maximum acceptable price
-    /// @param assetName_ Name of the asset (for error message)
-    function _assertPriceInRange(
-        uint256 price_,
-        uint256 minPrice_,
-        uint256 maxPrice_,
-        string memory assetName_
-    ) internal pure {
-        console2.log("minPrice:", minPrice_);
-        console2.log("maxPrice:", maxPrice_);
-        if (price_ < minPrice_) {
-            revert(string.concat(assetName_, " price below minimum"));
-        }
-        if (price_ > maxPrice_) {
-            revert(string.concat(assetName_, " price above maximum"));
-        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
