@@ -413,6 +413,7 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -421,7 +422,7 @@ abstract contract BaseOracleFactory is
     function cachePrice(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         priceCache.cachePrice(baseToken_, quoteToken_);
@@ -429,6 +430,7 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -437,7 +439,7 @@ abstract contract BaseOracleFactory is
     function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);

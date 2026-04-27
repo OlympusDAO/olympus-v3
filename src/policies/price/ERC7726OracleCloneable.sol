@@ -149,18 +149,22 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
 
     /// @inheritdoc IERC7726Oracle
     /// @dev        Reverts if:
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
     ///             - The cache policy is deactivated in Kernel
     ///             - The active cache policy rejects `(base, quote)`
     function isStale(address base, address quote) external view override returns (bool) {
+        _checkEnabled();
         return IPriceCache(factory().getPriceCache()).isStale(base, quote, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
     /// @dev        Returns 0 if the pair price has not been cached.
     ///             Reverts if:
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
     ///             - The cache policy is deactivated in Kernel
     ///             - The active cache policy rejects `(base, quote)`
     function timestamp(address base, address quote) external view override returns (uint48) {
+        _checkEnabled();
         IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
             .getCachedPrice(base, quote);
         return cachedPrice.updatedAt;

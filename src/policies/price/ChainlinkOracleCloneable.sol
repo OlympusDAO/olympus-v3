@@ -192,10 +192,17 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Chainlink-style round readers may consume stale rounds. This flag allows
     ///             consumers to detect stale or missing cached state before reading.
     ///             Reverts if:
+    ///             - The oracle is not enabled (checked via factory)
+    ///             - The factory is disabled or deactivated in Kernel (checked via factory.isOracleEnabled())
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
-        return IPriceCache(factory().getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
+        IOracleFactory factory_ = factory();
+        if (!factory_.isOracleEnabled(address(this))) {
+            revert ChainlinkOracle_NotEnabled();
+        }
+
+        return IPriceCache(factory_.getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
     }
 
     /// @inheritdoc AggregatorV3Interface

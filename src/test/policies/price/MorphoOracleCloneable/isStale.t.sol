@@ -3,6 +3,9 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
+import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
@@ -85,6 +88,18 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
         priceCache.setPolicyActive(false);
 
         vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        oracle.isStale();
+    }
+
+    function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
+        vm.expectRevert(IMorphoOracle.MorphoOracle_NotEnabled.selector);
+        oracle.isStale();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.isStale();
     }
 

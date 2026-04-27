@@ -310,17 +310,22 @@ contract ERC7726OracleFactory is
 
     /// @inheritdoc IERC7726OracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
     ///             - Underlying cache write fails
-    function cachePrice(address base_, address quote_) external override onlyEnabled nonReentrant {
+    function cachePrice(
+        address base_,
+        address quote_
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         priceCache.cachePrice(base_, quote_);
     }
 
     /// @inheritdoc IERC7726OracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -328,7 +333,7 @@ contract ERC7726OracleFactory is
     function cachePriceIfNecessary(
         address base_,
         address quote_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         uint48 configuredMaxAge = _oracleToMaxAge[msg.sender];
         priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
