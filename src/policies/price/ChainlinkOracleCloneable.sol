@@ -348,6 +348,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Unconditionally asks the factory to cache the configured pair.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory
@@ -359,6 +360,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory
