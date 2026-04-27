@@ -134,9 +134,12 @@ contract ConfigureOracles is BatchScriptV2 {
         bool isERC7726_
     ) internal view {
         address expectedPrice = address(Kernel(kernel_).getModuleForKeycode(toKeycode("PRICE")));
+        require(expectedPrice != address(0), string.concat(name_, " kernel missing PRICE module"));
+
         address factoryPrice = isERC7726_
             ? IERC7726OracleFactory(factory_).getPriceModule()
             : IOracleFactory(factory_).getPriceModule();
+        require(factoryPrice != address(0), string.concat(name_, " factory missing PRICE module"));
 
         require(factoryPrice == expectedPrice, string.concat(name_, " wrong PRICE module"));
         console2.log(name_, "PRICE module verified");
