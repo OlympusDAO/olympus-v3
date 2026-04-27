@@ -36,6 +36,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
     using stdJson for string;
     using Surl for *;
 
+    /// @dev Static, high expected price used only for snapshot threshold rewrites.
+    ///      With 100% tolerance this avoids live PRICE reads while accepting normal feed prices.
+    uint256 internal constant _SNAPSHOT_PRICE_EXPECTATION = type(uint128).max;
+
     /// @notice Address of the owner
     /// @dev    This could be a Safe Multisig or an EOA
     address internal _owner;
@@ -659,11 +663,10 @@ abstract contract BatchScriptV2 is WithEnvironment {
             // Update the asset if any feeds were modified
             if (needsUpdate) {
                 console2.log("  Updating thresholds for asset:", asset);
+                // Snapshot-only threshold rewrites cannot rely on PRICE.getPrice(), since stale feeds
+                // may be the reason thresholds are being widened.
                 IPriceConfigv2.PriceFeedExpectation[]
-                    memory feedExpectations = _makeWidePriceFeedExpectations(
-                        feeds.length,
-                        priceModule_.getPrice(asset)
-                    );
+                    memory feedExpectations = _makeWidePriceFeedExpectations(feeds.length);
                 IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
                     updateFeeds: true,
                     updateStrategy: false,
@@ -683,14 +686,21 @@ abstract contract BatchScriptV2 is WithEnvironment {
         }
     }
 
+    /// @notice Build permissive feed expectations for snapshot-only threshold rewrites
+    /// @dev    This intentionally avoids live PRICE reads. The heartbeat validation path widens
+    ///         update thresholds inside a snapshot before time-warping, and stale feeds can cause
+    ///         PRICE.getPrice() to revert before the rewrite has a chance to fix those thresholds.
+    ///         The sentinel price with 100% tolerance keeps PriceConfig's feed callability check
+    ///         active without depending on the current aggregate asset price.
+    /// @param length_ Number of feeds being rewritten
+    /// @return expectations_ Wide expected price/tolerance entries for each feed
     function _makeWidePriceFeedExpectations(
-        uint256 length_,
-        uint256 expectedPrice_
+        uint256 length_
     ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
         expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
         for (uint256 i; i < length_; i++) {
             expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
-                expectedPrice: expectedPrice_,
+                expectedPrice: _SNAPSHOT_PRICE_EXPECTATION,
                 toleranceBps: 10_000
             });
         }
