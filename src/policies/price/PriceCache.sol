@@ -217,6 +217,57 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_,
         address quote_
     ) public override onlyPolicyActive onlyEnabled {
+        _cachePrice(asset_, quote_);
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - The policy is disabled
+    ///             - Pair validation fails while evaluating staleness
+    ///             - PRICE cannot serve required data when a recache is needed
+    function cachePriceIfNecessary(
+        address asset_,
+        address quote_,
+        uint48 maxAge_
+    ) external override onlyPolicyActive onlyEnabled {
+        if (_isStale(asset_, quote_, maxAge_)) {
+            _cachePrice(asset_, quote_);
+        }
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - The policy is disabled
+    ///             - The pair is invalid (zero address or identical tokens)
+    ///             - Either non-unit asset in the pair is not approved in PRICE
+    ///             - Pair decimals validation fails
+    /// @dev        Returns a fully zeroed `CachedPrice` when the stored snapshot was invalidated by a
+    ///             later non-contract decimals update or removal for either asset in the pair.
+    function getCachedPrice(
+        address asset_,
+        address quote_
+    ) public view override onlyPolicyActive onlyEnabled returns (CachedPrice memory cachedPrice) {
+        return _getCachedPrice(asset_, quote_);
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - The policy is disabled
+    ///             - Pair validation fails in `getCachedPrice`
+    function isStale(
+        address asset_,
+        address quote_,
+        uint48 maxAge_
+    ) public view override onlyPolicyActive onlyEnabled returns (bool stale) {
+        return _isStale(asset_, quote_, maxAge_);
+    }
+
+    // ========== INTERNAL HELPERS ========== //
+
+    function _cachePrice(address asset_, address quote_) internal {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
@@ -247,35 +298,10 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         snapshot.roundId++;
     }
 
-    /// @inheritdoc IPriceCache
-    /// @dev        Reverts if:
-    ///             - The policy is deactivated in Kernel
-    ///             - The policy is disabled
-    ///             - Pair validation fails while evaluating staleness
-    ///             - PRICE cannot serve required data when a recache is needed
-    function cachePriceIfNecessary(
-        address asset_,
-        address quote_,
-        uint48 maxAge_
-    ) external override onlyPolicyActive onlyEnabled {
-        if (isStale(asset_, quote_, maxAge_)) {
-            cachePrice(asset_, quote_);
-        }
-    }
-
-    /// @inheritdoc IPriceCache
-    /// @dev        Reverts if:
-    ///             - The policy is deactivated in Kernel
-    ///             - The policy is disabled
-    ///             - The pair is invalid (zero address or identical tokens)
-    ///             - Either non-unit asset in the pair is not approved in PRICE
-    ///             - Pair decimals validation fails
-    /// @dev        Returns a fully zeroed `CachedPrice` when the stored snapshot was invalidated by a
-    ///             later non-contract decimals update or removal for either asset in the pair.
-    function getCachedPrice(
+    function _getCachedPrice(
         address asset_,
         address quote_
-    ) public view override onlyPolicyActive onlyEnabled returns (CachedPrice memory cachedPrice) {
+    ) internal view returns (CachedPrice memory cachedPrice) {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
@@ -310,23 +336,16 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         cachedPrice.roundId = snapshot.roundId;
     }
 
-    /// @inheritdoc IPriceCache
-    /// @dev        Reverts if:
-    ///             - The policy is deactivated in Kernel
-    ///             - The policy is disabled
-    ///             - Pair validation fails in `getCachedPrice`
-    function isStale(
+    function _isStale(
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) public view override returns (bool stale) {
-        CachedPrice memory cachedPrice = getCachedPrice(asset_, quote_);
+    ) internal view returns (bool stale) {
+        CachedPrice memory cachedPrice = _getCachedPrice(asset_, quote_);
         return
             cachedPrice.updatedAt == 0 ||
             block.timestamp > uint256(cachedPrice.updatedAt) + uint256(maxAge_);
     }
-
-    // ========== INTERNAL HELPERS ========== //
 
     function _isUnitOfAccount(address asset_) internal view returns (bool) {
         return asset_ == PRICE.unitOfAccount();
