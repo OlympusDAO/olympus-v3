@@ -341,7 +341,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
         bool wethStrictMode = _readBatchArgBool("configurePriceV1_2", "wethStrictMode");
 
-        // Read update threshold from args file
+        // Read update thresholds from args file
         uint48 wethUpdateThreshold = uint48(
             _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
         );
@@ -353,6 +353,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.logBytes32(pythEthUsdId);
         console2.log("Chainlink BTC/USD:", chainlinkBtcUsd);
         console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
+        console2.log("wETH update threshold:", wethUpdateThreshold);
 
         // Create strategy component: getAveragePriceExcludingDeviations
         // When exactly two WETH feeds survive, the strategy benchmarks each price against
@@ -398,16 +399,21 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 })
             )
         );
-        // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD
+        // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD. ETH/BTC has a 24-hour
+        // heartbeat, while BTC/USD uses the standard 1-hour WETH feed threshold.
         feeds[3] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
                 ChainlinkPriceFeeds.TwoFeedParams({
                     firstFeed: AggregatorV2V3Interface(chainlinkEthBtc),
-                    firstUpdateThreshold: wethUpdateThreshold,
+                    firstUpdateThreshold: uint48(
+                        _readBatchArgUint256("configurePriceV1_2", "wethEthBtcUpdateThreshold")
+                    ),
                     secondFeed: AggregatorV2V3Interface(chainlinkBtcUsd),
-                    secondUpdateThreshold: wethUpdateThreshold
+                    secondUpdateThreshold: uint48(
+                        _readBatchArgUint256("configurePriceV1_2", "wethBtcUsdUpdateThreshold")
+                    )
                 })
             )
         );

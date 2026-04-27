@@ -52,7 +52,8 @@ The **update threshold** is the maximum number of seconds that can elapse since 
 | wETH | Chainlink ETH-USD | 3,600 sec (1 hour) |
 | wETH | RedStone ETH-USD | 3,600 sec (1 hour) |
 | wETH | Pyth ETH-USD | 3,600 sec (1 hour) |
-| wETH | Chainlink ETH-BTC × BTC-USD | 3,600 sec (1 hour) |
+| wETH | Chainlink ETH-BTC leg | 86,400 sec (24 hours) |
+| wETH | Chainlink BTC-USD leg | 3,600 sec (1 hour) |
 | OHM | Chainlink OHM-ETH | 86,400 sec (24 hours) |
 | OHM | Chainlink OHM-ETH × ETH-USD | 3,600 sec (1 hour) for ETH-USD |
 

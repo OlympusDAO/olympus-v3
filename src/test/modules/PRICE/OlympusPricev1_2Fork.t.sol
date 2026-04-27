@@ -87,6 +87,8 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant WETH_ETH_BTC_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant WETH_BTC_USD_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant OHM_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint32 internal constant OHM_OBSERVATION_WINDOW = 1800; // 30 minutes
@@ -356,9 +358,9 @@ contract OlympusPricev1_2ForkTest is Test {
         ChainlinkPriceFeeds.TwoFeedParams memory derivedEthUsdParams = ChainlinkPriceFeeds
             .TwoFeedParams({
                 firstFeed: AggregatorV2V3Interface(CHAINLINK_ETH_BTC),
-                firstUpdateThreshold: WETH_UPDATE_THRESHOLD,
+                firstUpdateThreshold: WETH_ETH_BTC_UPDATE_THRESHOLD,
                 secondFeed: AggregatorV2V3Interface(CHAINLINK_BTC_USD),
-                secondUpdateThreshold: WETH_UPDATE_THRESHOLD
+                secondUpdateThreshold: WETH_BTC_USD_UPDATE_THRESHOLD
             });
         feeds[3] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),

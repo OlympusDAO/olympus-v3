@@ -21,7 +21,9 @@
                 "usdsDeviationBps": 100,
                 "usdsStrictMode": true,
                 "usdsUpdateThreshold": 86400,
+                "wethBtcUsdUpdateThreshold": 3600,
                 "wethDeviationBps": 500,
+                "wethEthBtcUpdateThreshold": 86400,
                 "wethStrictMode": true,
                 "wethUpdateThreshold": 3600
             },
