@@ -81,9 +81,18 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
     }
 
+    /// @notice Returns the enabled price cache policy for this oracle.
+    /// @dev    Calls `factory().getOracleContext(address(this))` to read the oracle liveness
+    ///         context and configured cache policy from the factory. Reverts with
+    ///         `ChainlinkOracle_NotEnabled()` if the returned context is disabled or if the
+    ///         factory does not provide a valid price cache address. Reverts from
+    ///         `getOracleContext` bubble up, including when the factory policy is inactive or
+    ///         this oracle was not created by the factory.
+    ///
+    /// @return priceCache_ The configured price cache policy, expected to be a non-zero address.
     function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
         (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
-        if (!enabled) {
+        if (!enabled || priceCacheAddress == address(0)) {
             revert ChainlinkOracle_NotEnabled();
         }
 
