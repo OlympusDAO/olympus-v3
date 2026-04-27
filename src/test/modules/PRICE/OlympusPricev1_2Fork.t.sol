@@ -231,7 +231,7 @@ contract OlympusPricev1_2ForkTest is Test {
         }
 
         // Add OHM asset via PriceConfig with moving average configuration
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(OHM),
             true, // storeMovingAverage
             false, // useMovingAverage
@@ -315,7 +315,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Add WETH asset via PriceConfig
         // Note: Not storing moving average for WETH in production config
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(WETH),
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -383,7 +383,7 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // Add USDS asset via PriceConfig
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(USDS),
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -418,7 +418,7 @@ contract OlympusPricev1_2ForkTest is Test {
         });
 
         // Add sUSDS asset via PriceConfig
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(SUSDS),
             false, // storeMovingAverage
             false, // useMovingAverage

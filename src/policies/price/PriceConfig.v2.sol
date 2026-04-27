@@ -139,7 +139,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
     ///             - PRICE rejects the asset configuration
-    function addAssetPrice(
+    function addAsset(
         address asset_,
         bool storeMovingAverage_,
         bool useMovingAverage_,

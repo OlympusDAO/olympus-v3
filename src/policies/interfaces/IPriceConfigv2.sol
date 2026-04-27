@@ -38,7 +38,7 @@ interface IPriceConfigv2 {
     /// @param  observations_           The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
     /// @param  strategy_               The price resolution strategy to use for this asset
     /// @param  feeds_                  The array of price feeds to use for this asset
-    function addAssetPrice(
+    function addAsset(
         address asset_,
         bool storeMovingAverage_,
         bool useMovingAverage_,

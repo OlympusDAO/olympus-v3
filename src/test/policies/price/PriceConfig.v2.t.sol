@@ -41,7 +41,7 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 // [X] disabled by default
 //
 // PRICEv2 Configuration
-// [X] addAssetPrice
+// [X] addAsset
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.addAsset are correct
@@ -267,7 +267,7 @@ contract PriceConfigv2Test is Test {
         uint256[] memory obs = _makeObservations(ohm, feeds[0], 15);
 
         vm.prank(priceManager);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(ohm),
             true,
             true,
@@ -294,7 +294,7 @@ contract PriceConfigv2Test is Test {
         );
 
         vm.prank(priceManager);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(_reserve),
             false,
             false,
@@ -403,7 +403,7 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICEv2 Configuration ========== */
 
-    function test_addAssetPrice_notEnabled_reverts() public givenDisabled {
+    function test_addAsset_notEnabled_reverts() public givenDisabled {
         // Prepare arguments
         uint256[] memory obs = new uint256[](0);
         IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](0);
@@ -418,7 +418,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(ohm),
             true,
             true,
@@ -430,7 +430,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice_unauthorizedUser_reverts(address user_) public {
+    function test_addAsset_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Setup data to add asset
@@ -468,7 +468,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(user_);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(ohm),
             true,
             true,
@@ -485,7 +485,7 @@ contract PriceConfigv2Test is Test {
 
         // Try to add asset to PRICEv2 with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(ohm),
             true,
             true,
@@ -497,7 +497,7 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_addAssetPrice(uint8 role_) public {
+    function test_addAsset(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -546,7 +546,7 @@ contract PriceConfigv2Test is Test {
 
         // Add asset to PRICEv2 using authorized caller
         vm.prank(caller);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             address(ohm),
             true,
             true,

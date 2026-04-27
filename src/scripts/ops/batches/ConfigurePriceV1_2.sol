@@ -495,7 +495,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         addToBatch(
             priceConfig_,
             abi.encodeWithSelector(
-                PriceConfigv2.addAssetPrice.selector,
+                PriceConfigv2.addAsset.selector,
                 asset_,
                 false, // storeMovingAverage
                 false, // useMovingAverage
@@ -532,7 +532,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         addToBatch(
             priceConfig_,
             abi.encodeWithSelector(
-                PriceConfigv2.addAssetPrice.selector,
+                PriceConfigv2.addAsset.selector,
                 asset_,
                 storeMovingAverage_,
                 useMovingAverage_,

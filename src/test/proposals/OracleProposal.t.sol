@@ -403,7 +403,7 @@ contract OracleProposalTest is ProposalTest {
         // Add USDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             usds_,
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -440,7 +440,7 @@ contract OracleProposalTest is ProposalTest {
         // Add sUSDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             susds_,
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -486,7 +486,7 @@ contract OracleProposalTest is ProposalTest {
         // Add OHM asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             ohm_,
             false, // storeMovingAverage
             false, // useMovingAverage
