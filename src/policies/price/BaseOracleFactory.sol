@@ -42,6 +42,16 @@ abstract contract BaseOracleFactory is
     mapping(address baseToken => mapping(address quoteToken => mapping(uint48 maxAge => address oracle)))
         internal _tokensToOracle;
 
+    /// @notice Mapping from an ordered base/quote pair to the number of deployed oracle variants
+    /// @dev    Updated when oracles are created. Factory-level re-enable uses this count to reject
+    ///         unknown pairs before checking whether any deployed variant is enabled.
+    mapping(bytes32 pairKey => uint256 variantCount) internal _oraclePairVariantCounts;
+
+    /// @notice Mapping from an ordered base/quote pair to the number of enabled oracle variants
+    /// @dev    Updated when oracles are created, enabled, or disabled. Factory-level re-enable
+    ///         recaching uses this count to skip pairs that currently have no enabled oracle.
+    mapping(bytes32 pairKey => uint256 variantCount) internal _enabledOraclePairVariantCounts;
+
     /// @notice Internal array of all deployed oracles
     address[] internal _oracles;
 
@@ -166,6 +176,8 @@ abstract contract BaseOracleFactory is
     // ========== FACTORY FUNCTIONS ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Creates an enabled oracle only after the initial cache write succeeds.
+    ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin or oracle manager
@@ -233,10 +245,15 @@ abstract contract BaseOracleFactory is
         _oracleToBaseToken[oracle] = baseToken_;
         _oracleToQuoteToken[oracle] = quoteToken_;
         _oracleToMaxAge[oracle] = maxAge_;
-        _isOracleEnabled[oracle] = true;
 
         // This will revert if the assets are not approved
         _cacheOraclePrices(oracle);
+
+        bytes32 pairKey = _oraclePairKey(baseToken_, quoteToken_);
+
+        _isOracleEnabled[oracle] = true;
+        ++_oraclePairVariantCounts[pairKey];
+        ++_enabledOraclePairVariantCounts[pairKey];
 
         // Emit events
         // Note: New oracles are enabled by default, so we emit OracleEnabled event
@@ -323,6 +340,8 @@ abstract contract BaseOracleFactory is
     // ========== ORACLE STATE ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Refreshes the oracle pair cache if stale before marking the oracle enabled.
+    ///
     /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
@@ -334,12 +353,19 @@ abstract contract BaseOracleFactory is
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
-        _isOracleEnabled[oracle_] = true;
         _cachePriceIfNecessary(oracle_, _oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_]);
+
+        _isOracleEnabled[oracle_] = true;
+        ++_enabledOraclePairVariantCounts[
+            _oraclePairKey(_oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_])
+        ];
         emit OracleEnabled(oracle_);
     }
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Decrements the enabled variant count for the oracle pair so factory-level
+    ///             re-enable skips the pair when no enabled variants remain.
+    ///
     /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
@@ -352,6 +378,9 @@ abstract contract BaseOracleFactory is
         if (!_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyDisabled(oracle_);
 
         _isOracleEnabled[oracle_] = false;
+        --_enabledOraclePairVariantCounts[
+            _oraclePairKey(_oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_])
+        ];
         emit OracleDisabled(oracle_);
     }
 
@@ -425,10 +454,17 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc PolicyEnabler
     /// @dev        Optionally re-caches caller-specified direct pairs before the factory-level
-    ///             `isEnabled` flag flips back to true.
+    ///             `isEnabled` flag flips back to true. Pairs with deployed variants are recached
+    ///             only when at least one variant is currently enabled; disabled oracles validate
+    ///             and refresh their own pair cache when individually re-enabled.
     ///
     ///             `enableData_` can be empty for a no-op, or encode:
     ///             `(address[] baseTokens, address[] quoteTokens)`.
+    ///
+    ///             Reverts if:
+    ///             - The encoded base and quote token arrays have different lengths
+    ///             - A requested pair has no deployed oracle variant for that exact ordering
+    ///             - The price cache rejects a requested pair that has an enabled oracle variant
     function _enable(bytes calldata enableData_) internal virtual override {
         if (enableData_.length == 0) return;
 
@@ -444,12 +480,15 @@ abstract contract BaseOracleFactory is
         for (uint256 i; i < pairCount; ) {
             address baseToken = baseTokens[i];
             address quoteToken = quoteTokens[i];
+            bytes32 pairKey = _oraclePairKey(baseToken, quoteToken);
 
-            if (!_hasOracleVariant(baseToken, quoteToken)) {
+            if (!_hasOracleVariant(pairKey)) {
                 revert OracleFactory_InvalidTokenPair(baseToken, quoteToken);
             }
 
-            priceCache.cachePrice(baseToken, quoteToken);
+            if (_hasEnabledOracleVariant(pairKey)) {
+                priceCache.cachePrice(baseToken, quoteToken);
+            }
 
             unchecked {
                 ++i;
@@ -458,27 +497,22 @@ abstract contract BaseOracleFactory is
     }
 
     /// @notice Returns whether the factory has a deployed oracle for the provided pair.
-    function _hasOracleVariant(
+    function _hasOracleVariant(bytes32 pairKey_) internal view returns (bool) {
+        return _oraclePairVariantCounts[pairKey_] != 0;
+    }
+
+    /// @notice Returns whether the factory has an enabled oracle for the provided pair.
+    function _hasEnabledOracleVariant(bytes32 pairKey_) internal view returns (bool) {
+        return _enabledOraclePairVariantCounts[pairKey_] != 0;
+    }
+
+    /// @notice Returns the storage key for an ordered oracle base/quote pair.
+    function _oraclePairKey(
         address baseToken_,
         address quoteToken_
-    ) internal view returns (bool) {
-        uint256 oracleCount = _oracles.length;
-
-        for (uint256 i; i < oracleCount; ) {
-            address oracle = _oracles[i];
-            if (
-                _oracleToBaseToken[oracle] == baseToken_ &&
-                _oracleToQuoteToken[oracle] == quoteToken_
-            ) {
-                return true;
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        return false;
+    ) internal pure returns (bytes32) {
+        /// forge-lint: disable-next-line(asm-keccak256)
+        return keccak256(abi.encodePacked(baseToken_, quoteToken_));
     }
 
     function _setPriceCache(address policy_) internal {

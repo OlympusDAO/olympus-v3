@@ -77,5 +77,68 @@ contract ERC7726OracleFactoryEnableTest is ERC7726OracleFactoryTest {
         );
         assertEq(quoteAmount, 2e18, "Oracle should be live immediately after re-enable");
     }
+
+    function test_whenFactoryIsReenabledAndOracleVariantIsDisabled_skipsPairRecache()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+        priceCache.clearCachedPrice(address(baseToken), address(quoteToken));
+
+        vm.prank(admin);
+        factory.disableOracle(oracle);
+
+        vm.prank(admin);
+        factory.disable("");
+
+        address[] memory baseTokens = new address[](1);
+        baseTokens[0] = address(baseToken);
+        address[] memory quoteTokens = new address[](1);
+        quoteTokens[0] = address(quoteToken);
+
+        vm.prank(admin);
+        factory.enable(abi.encode(baseTokens, quoteTokens));
+
+        uint48 newTimestamp = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
+        assertEq(newTimestamp, 0, "Cache timestamp should remain empty");
+    }
+
+    function test_whenFactoryIsReenabledAfterOracleVariantIsReenabled_recachesPair()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+        priceCache.clearCachedPrice(address(baseToken), address(quoteToken));
+
+        vm.prank(admin);
+        factory.disableOracle(oracle);
+
+        vm.prank(admin);
+        factory.enableOracle(oracle);
+
+        vm.prank(admin);
+        factory.disable("");
+
+        address[] memory baseTokens = new address[](1);
+        baseTokens[0] = address(baseToken);
+        address[] memory quoteTokens = new address[](1);
+        quoteTokens[0] = address(quoteToken);
+
+        vm.prank(admin);
+        factory.enable(abi.encode(baseTokens, quoteTokens));
+
+        uint48 newTimestamp = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
+        assertGt(newTimestamp, 0, "Cache timestamp should be refreshed");
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

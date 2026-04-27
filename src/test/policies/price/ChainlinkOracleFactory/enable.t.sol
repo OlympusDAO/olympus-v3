@@ -45,5 +45,39 @@ contract ChainlinkOracleFactoryEnableTest is ChainlinkOracleFactoryTest {
         assertEq(startedAt, updatedAt, "StartedAt should match updatedAt");
         assertEq(answeredInRound, roundId, "AnsweredInRound should equal roundId");
     }
+
+    function test_whenFactoryIsReenabledAndOracleVariantIsDisabled_skipsPairRecache()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE
+        );
+
+        vm.prank(admin);
+        factory.disableOracle(oracle);
+
+        priceCache.clearCachedPrice(address(baseToken), address(quoteToken));
+
+        vm.prank(admin);
+        factory.disable("");
+
+        address[] memory baseTokens = new address[](1);
+        baseTokens[0] = address(baseToken);
+        address[] memory quoteTokens = new address[](1);
+        quoteTokens[0] = address(quoteToken);
+
+        vm.prank(admin);
+        factory.enable(abi.encode(baseTokens, quoteTokens));
+
+        assertEq(
+            priceCache.getCachedPrice(address(baseToken), address(quoteToken)).updatedAt,
+            0,
+            "Disabled oracle variant should not be recached"
+        );
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
