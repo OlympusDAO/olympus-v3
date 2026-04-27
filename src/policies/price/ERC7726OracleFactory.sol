@@ -322,14 +322,19 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc PolicyEnabler
-    /// @dev        Optionally re-caches caller-specified pairs before the factory-level
-    ///             `isEnabled` flag flips to true. Requested pairs are only recached when
-    ///             at least one ERC-7726 oracle variant is enabled; otherwise all requested
-    ///             pairs are skipped because disabled clones cannot request fresh cache writes
-    ///             until they are individually re-enabled.
+    /// @dev        `_enable` optionally re-caches caller-specified pairs from `enableData_` before
+    ///             the factory-level `isEnabled` flag flips to true. `enableData_` can be empty for
+    ///             a no-op. Requested pairs are only recached when at least one ERC-7726 oracle
+    ///             variant is enabled; otherwise all requested pairs are skipped because disabled
+    ///             clones cannot request fresh cache writes until they are individually re-enabled.
     ///
-    ///             `enableData_` can be empty for a no-op, or encode:
+    ///             When `enableData_` is non-empty, it must encode:
     ///             `(address[] baseTokens, address[] quoteTokens)`.
+    ///
+    ///             Reverts if `enableData_` is non-empty and:
+    ///             - `enableData_` cannot be decoded into `(address[] baseTokens, address[] quoteTokens)`
+    ///             - The decoded base and quote token arrays have different lengths
+    ///             - The price cache rejects a requested pair during recaching
     function _enable(bytes calldata enableData_) internal override {
         if (enableData_.length == 0) return;
 

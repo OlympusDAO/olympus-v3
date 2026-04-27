@@ -453,16 +453,18 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc PolicyEnabler
-    /// @dev        Optionally re-caches caller-specified direct pairs before the factory-level
-    ///             `isEnabled` flag flips back to true. Pairs with deployed variants are recached
-    ///             only when at least one variant is currently enabled; disabled oracles validate
-    ///             and refresh their own pair cache when individually re-enabled.
+    /// @dev        `_enable` optionally re-caches caller-specified direct pairs from `enableData_`
+    ///             before the factory-level `isEnabled` flag flips back to true. `enableData_` can
+    ///             be empty for a no-op. Pairs with deployed variants are recached only when at
+    ///             least one variant is currently enabled; disabled oracles validate and refresh
+    ///             their own pair cache when individually re-enabled.
     ///
-    ///             `enableData_` can be empty for a no-op, or encode:
+    ///             When `enableData_` is non-empty, it must encode:
     ///             `(address[] baseTokens, address[] quoteTokens)`.
     ///
-    ///             Reverts if:
-    ///             - The encoded base and quote token arrays have different lengths
+    ///             Reverts if `enableData_` is non-empty and:
+    ///             - `enableData_` cannot be decoded into `(address[] baseTokens, address[] quoteTokens)`
+    ///             - The decoded base and quote token arrays have different lengths
     ///             - A requested pair has no deployed oracle variant for that exact ordering
     ///             - The price cache rejects a requested pair that has an enabled oracle variant
     function _enable(bytes calldata enableData_) internal virtual override {
