@@ -5,6 +5,9 @@ pragma solidity >=0.8.15;
 /// @author OlympusDAO
 /// @notice Interface for caching explicit asset/quote pair snapshots
 interface IPriceCache {
+    /// @notice Thrown when this policy is no longer active in Kernel
+    error PriceCache_PolicyNotActive();
+
     /// @notice Thrown when a required module version is unsupported
     ///
     /// @param  keycode Module keycode

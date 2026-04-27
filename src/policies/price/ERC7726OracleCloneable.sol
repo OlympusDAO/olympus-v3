@@ -55,7 +55,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @dev        Uses cached pair snapshots only.
     ///
     ///             Reverts if:
-    ///             - The oracle is disabled in the factory
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
@@ -103,7 +104,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     /// @inheritdoc IPriceOracle
     /// @dev        Returns symmetric bid/ask using the same quote value.
     ///             Reverts if:
-    ///             - The oracle is disabled in the factory
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
@@ -146,14 +148,18 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @inheritdoc IERC7726Oracle
-    /// @dev        Reverts if the active cache policy rejects `(base, quote)`.
+    /// @dev        Reverts if:
+    ///             - The cache policy is deactivated in Kernel
+    ///             - The active cache policy rejects `(base, quote)`
     function isStale(address base, address quote) external view override returns (bool) {
         return IPriceCache(factory().getPriceCache()).isStale(base, quote, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
     /// @dev        Returns 0 if the pair price has not been cached.
-    ///             Reverts if the active cache policy rejects `(base, quote)`.
+    ///             Reverts if:
+    ///             - The cache policy is deactivated in Kernel
+    ///             - The active cache policy rejects `(base, quote)`
     function timestamp(address base, address quote) external view override returns (uint48) {
         IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
             .getCachedPrice(base, quote);

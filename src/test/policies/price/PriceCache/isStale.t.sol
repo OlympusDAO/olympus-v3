@@ -2,9 +2,19 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheIsStaleTest is PriceCacheTest {
+    function test_whenPolicyDisabled_reverts() public {
+        vm.prank(admin);
+        cache.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        cache.isStale(address(assetToken), address(quoteToken), 1 hours);
+    }
+
     function test_whenNoSnapshotExists_returnsTrue() public view {
         bool stale = cache.isStale(address(assetToken), address(quoteToken), 1 hours);
         assertEq(stale, true, "Missing snapshot should be stale");
@@ -90,6 +100,13 @@ contract PriceCacheIsStaleTest is PriceCacheTest {
 
         bool stale = cache.isStale(address(assetToken), unitOfAccount, 365 days);
         assertEq(stale, false, "Unrelated decimals change should not invalidate the pair");
+    }
+
+    function test_whenPolicyIsDeactivated_reverts() public {
+        _deactivateCachePolicy();
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        cache.isStale(address(assetToken), address(quoteToken), 1 hours);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

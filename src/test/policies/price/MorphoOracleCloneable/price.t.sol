@@ -2,8 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
@@ -21,6 +23,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IMorphoOracle.MorphoOracle_NotEnabled.selector);
 
+        oracle.price();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.price();
     }
 

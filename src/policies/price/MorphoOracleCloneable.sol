@@ -91,7 +91,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///
     ///             This function will revert if:
     ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The factory is disabled or deactivated in Kernel (checked via factory.isOracleEnabled())
+    ///             - The cache policy is deactivated in Kernel
     ///             - The collateral/loan pair is invalid for the configured cache policy
     ///             - Either the collateral or loan token cached price is zero
     ///             - The cached timestamp is stale
@@ -131,7 +132,9 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     }
 
     /// @inheritdoc IMorphoOracle
-    /// @dev        Reverts if the configured pair is invalid for the active cache policy.
+    /// @dev        Reverts if:
+    ///             - The cache policy is deactivated in Kernel
+    ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
         return
             IPriceCache(factory().getPriceCache()).isStale(
@@ -142,7 +145,9 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     }
 
     /// @inheritdoc IMorphoOracle
-    /// @dev        Reverts if the configured pair is invalid for the active cache policy.
+    /// @dev        Reverts if:
+    ///             - The cache policy is deactivated in Kernel
+    ///             - The configured pair is invalid for the active cache policy
     function timestamp() external view override returns (uint48) {
         IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
             .getCachedPrice(collateralToken(), loanToken());

@@ -2,11 +2,20 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheGetCachedPriceTest is PriceCacheTest {
+    function test_whenPolicyDisabled_reverts() public {
+        vm.prank(admin);
+        cache.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
     function test_givenPairIsCached_getCachedPrice_returnsSeparateUsdLegs() public {
         _cachePair();
 
@@ -176,6 +185,13 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
             beforeUpdate.roundId,
             "Round should remain cached for unrelated decimals changes"
         );
+    }
+
+    function test_whenPolicyIsDeactivated_reverts() public {
+        _deactivateCachePolicy();
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

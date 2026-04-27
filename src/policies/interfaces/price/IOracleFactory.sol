@@ -46,6 +46,9 @@ interface IOracleFactory {
     /// @param  token   Invalid token address
     error OracleFactory_InvalidToken(address token);
 
+    /// @notice Thrown when this policy is no longer active in Kernel
+    error OracleFactory_PolicyNotActive();
+
     /// @notice Thrown when module version is not supported
     ///
     /// @param  keycode Keycode of the module

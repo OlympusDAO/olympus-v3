@@ -19,6 +19,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     }
 
     bool public isEnabled = true;
+    bool public policyActive = true;
     address public kernel;
     address public priceModule;
     uint8 public override decimals = 18;
@@ -112,6 +113,10 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         delete _nonContractAssetMetadata[asset_];
     }
 
+    function setPolicyActive(bool policyActive_) external {
+        policyActive = policyActive_;
+    }
+
     function setAssetApproval(address asset_, bool approved_) external {
         _approvedAssets[asset_] = approved_;
     }
@@ -168,6 +173,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         address asset_,
         address quote_
     ) public view override returns (CachedPrice memory cachedPrice) {
+        if (!policyActive) revert IPriceCache.PriceCache_PolicyNotActive();
+
         _validatePair(asset_, quote_);
         _assetDecimals(asset_);
         _assetDecimals(quote_);

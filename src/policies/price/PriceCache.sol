@@ -123,6 +123,16 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     // ========== CACHE FUNCTIONS ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this)) revert IPriceCache.PriceCache_PolicyNotActive();
+    }
+
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if dependencies are not configured and the PRICE module is unset.
     function decimals() external view override returns (uint8 decimals_) {
@@ -198,11 +208,15 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The policy is disabled
     ///             - The pair is invalid (zero address or identical tokens)
     ///             - Either non-unit asset in the pair is not approved in PRICE
     ///             - PRICE cannot return a current USD price for either token
-    function cachePrice(address asset_, address quote_) public override onlyEnabled {
+    function cachePrice(
+        address asset_,
+        address quote_
+    ) public override onlyPolicyActive onlyEnabled {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
@@ -235,6 +249,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The policy is disabled
     ///             - Pair validation fails while evaluating staleness
     ///             - PRICE cannot serve required data when a recache is needed
@@ -242,7 +257,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) external override onlyEnabled {
+    ) external override onlyPolicyActive onlyEnabled {
         if (isStale(asset_, quote_, maxAge_)) {
             cachePrice(asset_, quote_);
         }
@@ -250,6 +265,8 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - The policy is disabled
     ///             - The pair is invalid (zero address or identical tokens)
     ///             - Either non-unit asset in the pair is not approved in PRICE
     ///             - Pair decimals validation fails
@@ -258,7 +275,7 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     function getCachedPrice(
         address asset_,
         address quote_
-    ) public view override returns (CachedPrice memory cachedPrice) {
+    ) public view override onlyPolicyActive onlyEnabled returns (CachedPrice memory cachedPrice) {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
@@ -294,7 +311,10 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     }
 
     /// @inheritdoc IPriceCache
-    /// @dev        Reverts if pair validation fails in `getCachedPrice`.
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - The policy is disabled
+    ///             - Pair validation fails in `getCachedPrice`
     function isStale(
         address asset_,
         address quote_,

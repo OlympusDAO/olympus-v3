@@ -112,6 +112,17 @@ contract ERC7726OracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this))
+            revert IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive();
+    }
+
     function _onlyOracleManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
@@ -290,8 +301,10 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    /// @dev        Does not revert.
-    function isOracleEnabled(address oracle_) external view override returns (bool enabled) {
+    /// @dev        Reverts if the policy is deactivated in Kernel.
+    function isOracleEnabled(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled) {
         return isEnabled && isOracle[oracle_] && _isOracleEnabled[oracle_];
     }
 

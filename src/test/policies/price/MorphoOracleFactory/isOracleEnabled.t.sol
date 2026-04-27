@@ -2,6 +2,8 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 
 contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
@@ -90,6 +92,22 @@ contract MorphoOracleFactoryIsOracleEnabledTest is MorphoOracleFactoryTest {
         );
 
         assertTrue(factory.isOracleEnabled(oracle), "Should return true when oracle is enabled");
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(
+            address(collateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        factory.isOracleEnabled(oracle);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

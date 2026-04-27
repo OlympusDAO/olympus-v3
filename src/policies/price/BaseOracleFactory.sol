@@ -120,6 +120,16 @@ abstract contract BaseOracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this)) revert OracleFactory_PolicyNotActive();
+    }
+
     /// @notice Checks if the caller has the oracle_manager or admin role
     function _onlyOracleManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
@@ -385,12 +395,16 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    /// @dev        Does not revert.
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///
     ///             Determines if a given oracle is enabled, using the following logic:
     ///             - Factory must be enabled
     ///             - Oracle must be created by the factory
     ///             - Oracle must be enabled
-    function isOracleEnabled(address oracle_) external view override returns (bool) {
+    function isOracleEnabled(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool) {
         return
             isEnabled && // Factory enabled
             isOracle[oracle_] && // Oracle exists

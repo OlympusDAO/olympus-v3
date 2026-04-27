@@ -43,6 +43,9 @@ interface IERC7726OracleFactory {
     /// @param   minor      The minor version of the module
     error ERC7726OracleFactory_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
+    /// @notice  Thrown when this policy is no longer active in Kernel
+    error ERC7726OracleFactory_PolicyNotActive();
+
     /// @notice  Thrown when module does not support interface
     ///
     /// @param   keycode        The keycode of the module

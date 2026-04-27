@@ -2,6 +2,7 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
@@ -78,6 +79,13 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
         oracle.isStale();
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenPriceCachePolicyIsDeactivated_reverts() public {
+        priceCache.setPolicyActive(false);
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        oracle.isStale();
     }
 
     function test_givenCollateralTokenRemovedFromPRICE_reverts() public {
