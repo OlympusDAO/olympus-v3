@@ -149,9 +149,14 @@ contract ConfigureOracles is BatchScriptV2 {
     /// @param factory_ Address of the factory/policy to activate
     /// @param name_ Name of the factory for logging
     function _activateFactory(address kernel_, address factory_, string memory name_) internal {
-        console2.log("\nActivating", name_);
         _verifyFactoryKernel(kernel_, factory_, name_);
 
+        if (Kernel(kernel_).isPolicyActive(Policy(factory_))) {
+            console2.log(name_, "already active, skipping activation");
+            return;
+        }
+
+        console2.log("\nActivating", name_);
         addToBatch(
             kernel_,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, factory_)
