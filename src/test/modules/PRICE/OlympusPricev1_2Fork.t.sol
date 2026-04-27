@@ -60,6 +60,7 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CHAINLINK_ETH_USD = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
     address public constant CHAINLINK_BTC_USD = 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c;
     address public constant CHAINLINK_ETH_BTC = 0xAc559F25B1619171CbC396a50854A3240b6A4e99;
+    address public constant CHAINLINK_OHM_ETH = 0x9a72298ae3886221820B1c878d12D872087D3a23;
     address public constant REDSTONE_ETH_USD = 0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4;
     address public constant CHAINLINK_USDS_USD = 0xfF30586cD0F29eD462364C7e81375FC0C71219b1;
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
@@ -87,6 +88,7 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant OHM_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint32 internal constant OHM_OBSERVATION_WINDOW = 1800; // 30 minutes
 
     // System contracts
@@ -205,8 +207,8 @@ contract OlympusPricev1_2ForkTest is Test {
             params: abi.encode(true) // strict mode
         });
 
-        // Create feed components for the two Uniswap pools using getTokenTWAP
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        // Create feed components for the two Uniswap pools using getTokenTWAP, and the Chainlink OHM/ETH feed
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
 
         // Feed 0: Uniswap OHM/WETH
         UniswapV3Price.UniswapV3Params memory ohmWethParams = UniswapV3Price.UniswapV3Params({
@@ -228,6 +230,20 @@ contract OlympusPricev1_2ForkTest is Test {
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenTWAP.selector,
             abi.encode(ohmSusdsParams)
+        );
+
+        // Feed 2: Chainlink OHM/ETH x ETH/USD
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.TwoFeedParams({
+                    firstFeed: AggregatorV2V3Interface(CHAINLINK_OHM_ETH),
+                    firstUpdateThreshold: OHM_UPDATE_THRESHOLD,
+                    secondFeed: AggregatorV2V3Interface(CHAINLINK_ETH_USD),
+                    secondUpdateThreshold: WETH_UPDATE_THRESHOLD
+                })
+            )
         );
 
         _addOhmAssetWithMigratedObservations(ohmStrategy, feeds);
@@ -584,6 +600,25 @@ contract OlympusPricev1_2ForkTest is Test {
         console2.log("OHM price (18 decimals):", ohmPrice);
 
         // Verify price is in expected range
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+    }
+
+    //  [X] resolves the OHM price when one OHM feed path fails
+    function test_getPrice_OHM_singleFeedFailure() public {
+        uint32[] memory observationWindow = new uint32[](2);
+        observationWindow[0] = OHM_OBSERVATION_WINDOW;
+        observationWindow[1] = 0;
+
+        vm.mockCallRevert(
+            UNISWAP_OHM_WETH,
+            abi.encodeWithSelector(bytes4(keccak256("observe(uint32[])")), observationWindow),
+            "OHM/WETH unavailable"
+        );
+
+        uint256 ohmPrice = price.getPrice(OHM);
+
+        vm.clearMockedCalls();
+
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 

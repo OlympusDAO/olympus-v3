@@ -420,65 +420,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     function _configureOhm(address priceConfig_, PRICEv1 oldPrice_) internal {
         console2.log("\n=== Configuring OHM Asset ===");
 
-        // Read Uniswap pool addresses from args file
-        address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
-        address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
-
-        // Read strict mode and observation window from args file
+        // Read strict mode from args file
         bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
-
-        console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
-        console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
+        IPRICEv2.Component[] memory feeds = _getOhmFeeds();
 
-        // Create feed components for the two Uniswap pools using getTokenTWAP
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
-        feeds[0] = _encodeFeed(
-            toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenTWAP.selector,
-            abi.encode(
-                UniswapV3Price.UniswapV3Params({
-                    pool: IUniswapV3Pool(uniswapOhmWeth),
-                    observationWindowSeconds: _ohmObservationWindow
-                })
-            )
-        );
-        feeds[1] = _encodeFeed(
-            toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenTWAP.selector,
-            abi.encode(
-                UniswapV3Price.UniswapV3Params({
-                    pool: IUniswapV3Pool(uniswapOhmSusds),
-                    observationWindowSeconds: _ohmObservationWindow
-                })
-            )
-        );
-
-        uint32 ohmMovingAverageDuration = uint32(oldPrice_.movingAverageDuration());
-        if (ohmMovingAverageDuration != OHM_MOVING_AVERAGE_DURATION) {
-            revert("OHM moving average duration mismatch");
-        }
-
-        uint32 oldNumObservations = oldPrice_.numObservations();
-        uint256 expectedNumObservations = uint256(ohmMovingAverageDuration) /
-            uint256(oldPrice_.observationFrequency());
-
-        if (expectedNumObservations != uint256(oldNumObservations)) {
-            revert("OHM observation count mismatch");
-        }
-
-        // Migrate the live PRICE v1 ring buffer into v1.2. PRICE v2 initializes nextObsIndex
-        // to 0, so rotate the old buffer such that the oldest observation remains index 0.
-        uint256[] memory ohmObservations = new uint256[](oldNumObservations);
-        uint256 oldestObservationIndex = oldPrice_.nextObsIndex();
-        for (uint256 i = 0; i < oldNumObservations; i++) {
-            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
-            ohmObservations[i] = oldPrice_.observations(sourceIndex);
-        }
-
-        uint48 ohmLastObservationTime = oldPrice_.lastObservationTime();
+        (
+            uint32 ohmMovingAverageDuration,
+            uint48 ohmLastObservationTime,
+            uint256[] memory ohmObservations
+        ) = _getMigratedOhmObservations(oldPrice_);
 
         // Add asset via PriceConfig with moving average configuration
         _addAssetWithMA(
@@ -494,6 +447,97 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         console2.log("OHM asset configured with migrated 30-day moving average");
+    }
+
+    function _getOhmFeeds() internal view returns (IPRICEv2.Component[] memory feeds_) {
+        // Read Uniswap pool addresses from args file
+        address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
+        address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
+        address chainlinkOhmEth = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
+        address chainlinkEthUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkEthUsd");
+
+        uint48 ohmUpdateThreshold = uint48(
+            _readBatchArgUint256("configurePriceV1_2", "ohmUpdateThreshold")
+        );
+        uint48 wethUpdateThreshold = uint48(
+            _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
+        );
+
+        console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
+        console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
+        console2.log("Chainlink OHM/ETH:", chainlinkOhmEth);
+        console2.log("Chainlink ETH/USD:", chainlinkEthUsd);
+
+        // Create feed components for the two Uniswap pools and Chainlink OHM/ETH x ETH/USD
+        feeds_ = new IPRICEv2.Component[](3);
+        feeds_[0] = _encodeFeed(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmWeth),
+                    observationWindowSeconds: _ohmObservationWindow
+                })
+            )
+        );
+        feeds_[1] = _encodeFeed(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmSusds),
+                    observationWindowSeconds: _ohmObservationWindow
+                })
+            )
+        );
+        feeds_[2] = _encodeFeed(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.TwoFeedParams({
+                    firstFeed: AggregatorV2V3Interface(chainlinkOhmEth),
+                    firstUpdateThreshold: ohmUpdateThreshold,
+                    secondFeed: AggregatorV2V3Interface(chainlinkEthUsd),
+                    secondUpdateThreshold: wethUpdateThreshold
+                })
+            )
+        );
+    }
+
+    function _getMigratedOhmObservations(
+        PRICEv1 oldPrice_
+    )
+        internal
+        view
+        returns (
+            uint32 ohmMovingAverageDuration_,
+            uint48 ohmLastObservationTime_,
+            uint256[] memory ohmObservations_
+        )
+    {
+        ohmMovingAverageDuration_ = uint32(oldPrice_.movingAverageDuration());
+        if (ohmMovingAverageDuration_ != OHM_MOVING_AVERAGE_DURATION) {
+            revert("OHM moving average duration mismatch");
+        }
+
+        uint32 oldNumObservations = oldPrice_.numObservations();
+        uint256 expectedNumObservations = uint256(ohmMovingAverageDuration_) /
+            uint256(oldPrice_.observationFrequency());
+
+        if (expectedNumObservations != uint256(oldNumObservations)) {
+            revert("OHM observation count mismatch");
+        }
+
+        // Migrate the live PRICE v1 ring buffer into v1.2. PRICE v2 initializes nextObsIndex
+        // to 0, so rotate the old buffer such that the oldest observation remains index 0.
+        ohmObservations_ = new uint256[](oldNumObservations);
+        uint256 oldestObservationIndex = oldPrice_.nextObsIndex();
+        for (uint256 i = 0; i < oldNumObservations; i++) {
+            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
+            ohmObservations_[i] = oldPrice_.observations(sourceIndex);
+        }
+
+        ohmLastObservationTime_ = oldPrice_.lastObservationTime();
     }
 
     /// @notice Add an asset to the PRICE module via PriceConfig
