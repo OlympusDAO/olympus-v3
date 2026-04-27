@@ -82,7 +82,7 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant ETH_MAX_PRICE = 2100e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 22e18;
-    uint256 internal constant WETH_DEVIATION_BPS = 200; // 2% deviation
+    uint256 internal constant WETH_DEVIATION_BPS = 500; // 5% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
     uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;

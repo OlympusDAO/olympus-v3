@@ -21,7 +21,7 @@
                 "usdsDeviationBps": 100,
                 "usdsStrictMode": true,
                 "usdsUpdateThreshold": 86400,
-                "wethDeviationBps": 200,
+                "wethDeviationBps": 500,
                 "wethStrictMode": true,
                 "wethUpdateThreshold": 3600
             },

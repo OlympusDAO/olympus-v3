@@ -355,6 +355,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
 
         // Create strategy component: getAveragePriceExcludingDeviations
+        // When exactly two WETH feeds survive, the strategy benchmarks each price against
+        // their average. A 500 bps deviation allows boundary prices of $1,900 and $2,100
+        // around a $2,000 average, i.e. a 10% spread between the two surviving feeds.
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
             wethDeviationBps,
