@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
+import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
@@ -13,9 +14,10 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 // PRICE contracts
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 
 // PRICE Submodules
@@ -42,6 +44,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
     /// @notice Configuration parameters (loaded from args)
     uint32 internal _ohmObservationWindow;
+    uint256 internal _preUpgradeOhmTargetPrice;
 
     // ========== PRICE VALIDATION CONSTANTS ========== //
 
@@ -56,6 +59,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     uint256 internal constant ETH_MAX_PRICE = 2100e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 22e18;
+    uint32 internal constant OHM_MOVING_AVERAGE_DURATION = 30 days;
 
     // ========== CONFIGURATION FUNCTIONS ========== //
 
@@ -108,6 +112,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             if (major == 1 && minor < 2) revert("PRICE module version is unsupported");
         }
 
+        PRICEv1 oldPrice = PRICEv1(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+        _preUpgradeOhmTargetPrice = oldPrice.getTargetPrice();
+        if (IPRICEv1(priceModule).observationFrequency() != oldPrice.observationFrequency()) {
+            revert("PRICE observation frequency mismatch");
+        }
+
         // Upgrade PRICE v1.2 module in the kernel
         console2.log("Upgrading PRICE module");
         addToBatch(
@@ -137,7 +147,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureUSDS(priceConfig);
         _configureSusds(priceConfig);
         _configureWeth(priceConfig);
-        _configureOhm(priceConfig);
+        _configureOhm(priceConfig, oldPrice);
 
         // Set post-batch validation selector
         _setPostBatchValidateSelector(this.validatePricesAreSane.selector);
@@ -407,7 +417,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
     /// @notice Configure OHM asset
     /// @param priceConfig_ Address of the PriceConfig v2 policy
-    function _configureOhm(address priceConfig_) internal {
+    function _configureOhm(address priceConfig_, PRICEv1 oldPrice_) internal {
         console2.log("\n=== Configuring OHM Asset ===");
 
         // Read Uniswap pool addresses from args file
@@ -417,17 +427,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Read strict mode and observation window from args file
         bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
 
-        // Load initial price from args file (18 decimals, represents USD price)
-        uint256 ohmInitialPrice = _readBatchArgUint256("configurePriceV1_2", "ohmInitialPrice");
-
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
-        console2.log("OHM initial price:", ohmInitialPrice);
-
-        // Validate initial price before seeding moving average observations
-        if (ohmInitialPrice < OHM_MIN_PRICE || ohmInitialPrice > OHM_MAX_PRICE) {
-            revert("OHM initial price out of bounds");
-        }
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
@@ -455,15 +456,29 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             )
         );
 
-        // Create pre-populated observations array (21 observations for 7-day moving average)
-        // Observation frequency is 8 hours, so 7 days = 21 observations
-        uint256[] memory ohmObservations = new uint256[](21);
-        for (uint256 i = 0; i < 21; i++) {
-            ohmObservations[i] = ohmInitialPrice;
+        uint32 ohmMovingAverageDuration = uint32(oldPrice_.movingAverageDuration());
+        if (ohmMovingAverageDuration != OHM_MOVING_AVERAGE_DURATION) {
+            revert("OHM moving average duration mismatch");
         }
 
-        // Set last observation time to current time
-        uint48 ohmLastObservationTime = uint48(block.timestamp);
+        uint32 oldNumObservations = oldPrice_.numObservations();
+        uint256 expectedNumObservations = uint256(ohmMovingAverageDuration) /
+            uint256(oldPrice_.observationFrequency());
+
+        if (expectedNumObservations != uint256(oldNumObservations)) {
+            revert("OHM observation count mismatch");
+        }
+
+        // Migrate the live PRICE v1 ring buffer into v1.2. PRICE v2 initializes nextObsIndex
+        // to 0, so rotate the old buffer such that the oldest observation remains index 0.
+        uint256[] memory ohmObservations = new uint256[](oldNumObservations);
+        uint256 oldestObservationIndex = oldPrice_.nextObsIndex();
+        for (uint256 i = 0; i < oldNumObservations; i++) {
+            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
+            ohmObservations[i] = oldPrice_.observations(sourceIndex);
+        }
+
+        uint48 ohmLastObservationTime = oldPrice_.lastObservationTime();
 
         // Add asset via PriceConfig with moving average configuration
         _addAssetWithMA(
@@ -471,14 +486,14 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _ohm,
             true, // storeMovingAverage
             false, // useMovingAverage
-            604800, // movingAverageDuration (7 days in seconds)
+            ohmMovingAverageDuration,
             ohmLastObservationTime,
             ohmObservations,
             strategy,
             feeds
         );
 
-        console2.log("OHM asset configured with 7-day moving average");
+        console2.log("OHM asset configured with migrated 30-day moving average");
     }
 
     /// @notice Add an asset to the PRICE module via PriceConfig
@@ -629,6 +644,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint256 ohmPrice = price.getPrice(ohm);
         console2.log("OHM price:", ohmPrice);
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+
+        uint256 ohmTargetPrice = IPRICEv1(address(price)).getTargetPrice();
+        console2.log("Pre-upgrade OHM target price:", _preUpgradeOhmTargetPrice);
+        console2.log("Post-upgrade OHM target price:", ohmTargetPrice);
+        if (ohmTargetPrice != _preUpgradeOhmTargetPrice) {
+            revert("OHM target price drift");
+        }
 
         console2.log("All prices are within reasonable bounds");
     }

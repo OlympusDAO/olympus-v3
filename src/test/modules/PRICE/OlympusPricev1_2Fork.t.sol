@@ -140,6 +140,7 @@ contract OlympusPricev1_2ForkTest is Test {
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
         // Get minimum target price from old PRICE module (if available)
         uint256 minimumTargetPrice = oldPrice.minimumTargetPrice();
+        uint256 targetPriceBeforeUpgrade = oldPrice.getTargetPrice();
 
         // Deploy new PRICE v1.2 module
         price = new OlympusPricev1_2(kernel, OHM, observationFrequency, minimumTargetPrice);
@@ -184,6 +185,12 @@ contract OlympusPricev1_2ForkTest is Test {
         _configureWethAsset();
         _configureSusdsAsset();
         _configureOhmAsset();
+
+        assertEq(
+            price.getTargetPrice(),
+            targetPriceBeforeUpgrade,
+            "OHM target price should be preserved after PRICE v1.2 upgrade"
+        );
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -223,11 +230,43 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(ohmSusdsParams)
         );
 
-        // Create pre-populated observations array (21 observations for 7-day moving average)
-        // Observation frequency is 8 hours, so 7 days = 21 observations
-        uint256[] memory observations = new uint256[](21);
-        for (uint256 i = 0; i < 21; i++) {
-            observations[i] = OHM_USD_PRICE;
+        _addOhmAssetWithMigratedObservations(ohmStrategy, feeds);
+
+        vm.stopPrank();
+    }
+
+    function _addOhmAssetWithMigratedObservations(
+        IPRICEv2.Component memory ohmStrategy_,
+        IPRICEv2.Component[] memory feeds_
+    ) internal {
+        uint48 oldObservationFrequency = oldPrice.observationFrequency();
+        assertEq(
+            price.observationFrequency(),
+            oldObservationFrequency,
+            "Observation frequency should match PRICE v1"
+        );
+
+        uint32 oldNumObservations = oldPrice.numObservations();
+        uint32 movingAverageDuration = uint32(oldPrice.movingAverageDuration());
+        assertEq(movingAverageDuration, uint32(30 days), "OHM moving average should be 30 days");
+
+        // Use the live PRICE v1 observation count rather than a hard-coded seed. With an 8-hour
+        // observation frequency and a 30-day moving average, this migrates 90 raw observations.
+        uint256 expectedNumObservations = uint256(movingAverageDuration) /
+            uint256(oldObservationFrequency);
+        assertEq(
+            uint256(oldNumObservations),
+            expectedNumObservations,
+            "Observation count should match moving average duration"
+        );
+
+        // PRICE v1 stores observations in a ring buffer. PRICE v1.2 initializes nextObsIndex to
+        // zero, so rotate the migrated data such that the oldest observation remains at index 0.
+        uint256[] memory observations = new uint256[](oldNumObservations);
+        uint256 oldestObservationIndex = oldPrice.nextObsIndex();
+        for (uint256 i = 0; i < oldNumObservations; i++) {
+            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
+            observations[i] = oldPrice.observations(sourceIndex);
         }
 
         // Add OHM asset via PriceConfig with moving average configuration
@@ -235,14 +274,12 @@ contract OlympusPricev1_2ForkTest is Test {
             address(OHM),
             true, // storeMovingAverage
             false, // useMovingAverage
-            uint32(7 days), // movingAverageDuration
-            uint48(block.timestamp), // lastObservationTime
+            movingAverageDuration,
+            oldPrice.lastObservationTime(),
             observations,
-            ohmStrategy,
-            feeds
+            ohmStrategy_,
+            feeds_
         );
-
-        vm.stopPrank();
     }
 
     function _configureWethAsset() internal {
