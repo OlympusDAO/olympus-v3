@@ -127,6 +127,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     }
 
     function cachePrice(address asset_, address quote_) public override {
+        if (!policyActive) revert IPriceCache.PriceCache_PolicyNotActive();
         if (!isEnabled) revert NotEnabled();
         _validatePair(asset_, quote_);
         _assetDecimals(asset_);
@@ -157,6 +158,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         address quote_,
         uint48 maxAge_
     ) external override {
+        if (!policyActive) revert IPriceCache.PriceCache_PolicyNotActive();
         if (!isEnabled) revert NotEnabled();
 
         cachePriceIfNecessaryCallCount++;

@@ -7,7 +7,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
 
 contract MorphoOracleFactoryGetOracleContextTest is MorphoOracleFactoryTest {
-    function test_whenOracleIsEnabled_returnsEnabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_getOracleContext_returnsEnabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -24,7 +24,7 @@ contract MorphoOracleFactoryGetOracleContextTest is MorphoOracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenFactoryIsDisabled_returnsDisabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_givenFactoryIsDisabled_getOracleContext_returnsDisabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -42,7 +42,10 @@ contract MorphoOracleFactoryGetOracleContextTest is MorphoOracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenOracleDoesNotExist_reverts() public givenFactoryIsEnabled {
+    function test_givenFactoryIsEnabled_getOracleContext_withNonExistentOracle_reverts()
+        public
+        givenFactoryIsEnabled
+    {
         address oracle = makeAddr("NON_EXISTENT_ORACLE");
 
         vm.expectRevert(
@@ -51,7 +54,7 @@ contract MorphoOracleFactoryGetOracleContextTest is MorphoOracleFactoryTest {
         factory.getOracleContext(oracle);
     }
 
-    function test_whenOracleIsDisabled_returnsDisabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_givenOracleIsDisabled_getOracleContext_returnsDisabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -69,7 +72,7 @@ contract MorphoOracleFactoryGetOracleContextTest is MorphoOracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenFactoryPolicyIsDeactivated_reverts()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_whenFactoryPolicyDeactivated_getOracleContext_reverts()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated

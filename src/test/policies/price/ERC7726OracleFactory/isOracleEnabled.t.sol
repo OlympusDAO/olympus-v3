@@ -7,7 +7,7 @@ import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726Oracl
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 
 contract ERC7726OracleFactoryIsOracleEnabledTest is ERC7726OracleFactoryTest {
-    function test_whenOracleIsEnabled_returnsTrue()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_isOracleEnabled_returnsTrue()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -16,7 +16,7 @@ contract ERC7726OracleFactoryIsOracleEnabledTest is ERC7726OracleFactoryTest {
         assertTrue(factory.isOracleEnabled(oracle), "Oracle should be enabled");
     }
 
-    function test_whenFactoryPolicyIsDeactivated_reverts()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_whenFactoryPolicyDeactivated_isOracleEnabled_reverts()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated

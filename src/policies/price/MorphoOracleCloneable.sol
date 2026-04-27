@@ -99,8 +99,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     /// @dev        This function uses cached pair snapshots only.
     ///
     ///             This function will revert if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled or deactivated in Kernel (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
     ///             - The cache policy is deactivated in Kernel
     ///             - The collateral/loan pair is invalid for the configured cache policy
     ///             - Either the collateral or loan token cached price is zero
@@ -138,8 +138,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
 
     /// @inheritdoc IMorphoOracle
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled or deactivated in Kernel (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
@@ -148,8 +148,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
 
     /// @inheritdoc IMorphoOracle
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled or deactivated in Kernel (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
     ///             - The cache policy is deactivated in Kernel
     ///             - The configured pair is invalid for the active cache policy
     function timestamp() external view override returns (uint48) {

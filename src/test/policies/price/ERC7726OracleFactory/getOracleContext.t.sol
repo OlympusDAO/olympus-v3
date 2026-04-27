@@ -7,7 +7,7 @@ import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726Oracl
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
 
 contract ERC7726OracleFactoryGetOracleContextTest is ERC7726OracleFactoryTest {
-    function test_whenOracleIsEnabled_returnsEnabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_getOracleContext_returnsEnabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -20,7 +20,7 @@ contract ERC7726OracleFactoryGetOracleContextTest is ERC7726OracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenFactoryIsDisabled_returnsDisabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_givenFactoryIsDisabled_getOracleContext_returnsDisabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -34,7 +34,10 @@ contract ERC7726OracleFactoryGetOracleContextTest is ERC7726OracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenOracleDoesNotExist_reverts() public givenFactoryIsEnabled {
+    function test_givenFactoryIsEnabled_getOracleContext_withNonExistentOracle_reverts()
+        public
+        givenFactoryIsEnabled
+    {
         address oracle = makeAddr("NON_EXISTENT_ORACLE");
 
         vm.expectRevert(
@@ -46,7 +49,7 @@ contract ERC7726OracleFactoryGetOracleContextTest is ERC7726OracleFactoryTest {
         factory.getOracleContext(oracle);
     }
 
-    function test_whenOracleIsDisabled_returnsDisabledAndPriceCache()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_givenOracleIsDisabled_getOracleContext_returnsDisabledAndPriceCache()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
@@ -60,7 +63,7 @@ contract ERC7726OracleFactoryGetOracleContextTest is ERC7726OracleFactoryTest {
         assertEq(policy, address(priceCache), "Price cache should match configured policy");
     }
 
-    function test_whenFactoryPolicyIsDeactivated_reverts()
+    function test_givenFactoryIsEnabled_givenOracleIsCreated_whenFactoryPolicyDeactivated_getOracleContext_reverts()
         public
         givenFactoryIsEnabled
         givenOracleIsCreated
