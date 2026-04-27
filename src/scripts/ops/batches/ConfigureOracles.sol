@@ -5,7 +5,9 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
-import {Kernel, Actions, Policy} from "src/Kernel.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
+import {Kernel, Actions, Policy, toKeycode} from "src/Kernel.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -73,10 +75,18 @@ contract ConfigureOracles is BatchScriptV2 {
         address morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
         address erc7726Factory = _envAddressNotZero("olympus.policies.ERC7726OracleFactory");
 
-        // Verify policies are activated in Kernel
+        // Verify policies are activated in Kernel and resolved dependencies from the same Kernel
+        _verifyFactoryKernel(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _verifyPolicyActivated(kernel, chainlinkFactory, "ChainlinkOracleFactory");
+        _verifyFactoryPriceModule(kernel, chainlinkFactory, "ChainlinkOracleFactory", false);
+
+        _verifyFactoryKernel(kernel, morphoFactory, "MorphoOracleFactory");
         _verifyPolicyActivated(kernel, morphoFactory, "MorphoOracleFactory");
+        _verifyFactoryPriceModule(kernel, morphoFactory, "MorphoOracleFactory", false);
+
+        _verifyFactoryKernel(kernel, erc7726Factory, "ERC7726OracleFactory");
         _verifyPolicyActivated(kernel, erc7726Factory, "ERC7726OracleFactory");
+        _verifyFactoryPriceModule(kernel, erc7726Factory, "ERC7726OracleFactory", true);
 
         console2.log("\n=== Oracle Configuration Validated ===");
     }
@@ -95,6 +105,43 @@ contract ConfigureOracles is BatchScriptV2 {
         console2.log(name_, "activated");
     }
 
+    /// @notice Verify a factory policy was deployed against the target Kernel
+    /// @param kernel_ Address of the Kernel
+    /// @param factory_ Address of the factory policy
+    /// @param name_ Name of the factory for logging
+    function _verifyFactoryKernel(
+        address kernel_,
+        address factory_,
+        string memory name_
+    ) internal view {
+        require(factory_.code.length != 0, string.concat(name_, " not deployed"));
+        require(
+            address(Policy(factory_).kernel()) == kernel_,
+            string.concat(name_, " wrong kernel")
+        );
+        console2.log(name_, "kernel verified");
+    }
+
+    /// @notice Verify a factory resolved PRICE from the target Kernel after activation
+    /// @param kernel_ Address of the Kernel
+    /// @param factory_ Address of the factory policy
+    /// @param name_ Name of the factory for logging
+    /// @param isERC7726_ Whether the factory uses the ERC7726 factory interface
+    function _verifyFactoryPriceModule(
+        address kernel_,
+        address factory_,
+        string memory name_,
+        bool isERC7726_
+    ) internal view {
+        address expectedPrice = address(Kernel(kernel_).getModuleForKeycode(toKeycode("PRICE")));
+        address factoryPrice = isERC7726_
+            ? IERC7726OracleFactory(factory_).getPriceModule()
+            : IOracleFactory(factory_).getPriceModule();
+
+        require(factoryPrice == expectedPrice, string.concat(name_, " wrong PRICE module"));
+        console2.log(name_, "PRICE module verified");
+    }
+
     // ========== INTERNAL HELPERS ========== //
 
     /// @notice Activate a single oracle factory policy
@@ -103,6 +150,7 @@ contract ConfigureOracles is BatchScriptV2 {
     /// @param name_ Name of the factory for logging
     function _activateFactory(address kernel_, address factory_, string memory name_) internal {
         console2.log("\nActivating", name_);
+        _verifyFactoryKernel(kernel_, factory_, name_);
 
         addToBatch(
             kernel_,
