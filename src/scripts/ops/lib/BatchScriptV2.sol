@@ -25,6 +25,7 @@ import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 
@@ -658,6 +659,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
             // Update the asset if any feeds were modified
             if (needsUpdate) {
                 console2.log("  Updating thresholds for asset:", asset);
+                IPriceConfigv2.PriceFeedExpectation[]
+                    memory feedExpectations = _makeWidePriceFeedExpectations(
+                        feeds.length,
+                        priceModule_.getPrice(asset)
+                    );
                 IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
                     updateFeeds: true,
                     updateStrategy: false,
@@ -672,8 +678,21 @@ abstract contract BatchScriptV2 is WithEnvironment {
                 });
 
                 vm.prank(daoMS);
-                PriceConfigv2(priceConfig_).updateAsset(asset, params);
+                PriceConfigv2(priceConfig_).updateAsset(asset, params, feedExpectations);
             }
+        }
+    }
+
+    function _makeWidePriceFeedExpectations(
+        uint256 length_,
+        uint256 expectedPrice_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
+        for (uint256 i; i < length_; i++) {
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice_,
+                toleranceBps: 10_000
+            });
         }
     }
 

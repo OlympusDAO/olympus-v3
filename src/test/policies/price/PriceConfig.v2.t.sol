@@ -237,6 +237,24 @@ contract PriceConfigv2Test is Test {
         return obs;
     }
 
+    function _makeFeedExpectations(
+        uint256 count_,
+        uint256 expectedPrice_,
+        uint16 toleranceBps_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory) {
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](count_);
+
+        for (uint256 i; i < count_; i++) {
+            expectations[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice_,
+                toleranceBps: toleranceBps_
+            });
+        }
+
+        return expectations;
+    }
+
     function _addBaseAssets() internal {
         // OHM
         IPRICEv2.Component memory strat = IPRICEv2.Component(
@@ -265,6 +283,11 @@ contract PriceConfigv2Test is Test {
         );
 
         uint256[] memory obs = _makeObservations(ohm, feeds[0], 15);
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            feeds.length,
+            10e18,
+            100
+        );
 
         vm.prank(priceManager);
         priceConfig.addAsset(
@@ -275,22 +298,19 @@ contract PriceConfigv2Test is Test {
             uint48(block.timestamp),
             obs,
             strat,
-            feeds
+            feeds,
+            expectations
         );
     }
 
     function _addReserveAsset() internal {
-        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
-            toSubKeycode(bytes20(0)),
-            bytes4(0),
-            bytes("")
-        );
+        IPRICEv2.Component memory strategyComponent = _emptyStrategy();
 
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
-        feeds[0] = IPRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(ChainlinkPriceFeeds.OneFeedParams(reserveUsdPriceFeed, uint48(24 hours)))
+        IPRICEv2.Component[] memory feeds = _reserveFeeds();
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            feeds.length,
+            1e18,
+            100
         );
 
         vm.prank(priceManager);
@@ -302,7 +322,48 @@ contract PriceConfigv2Test is Test {
             uint48(0),
             new uint256[](0),
             strategyComponent,
-            feeds
+            feeds,
+            expectations
+        );
+    }
+
+    function _emptyStrategy() internal pure returns (IPRICEv2.Component memory) {
+        return IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes(""));
+    }
+
+    function _reserveFeeds() internal view returns (IPRICEv2.Component[] memory) {
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ChainlinkPriceFeeds.OneFeedParams(reserveUsdPriceFeed, uint48(24 hours)))
+        );
+
+        return feeds;
+    }
+
+    function _addReserveAssetWithExpectations(
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations_
+    ) internal {
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            bytes("")
+        );
+
+        IPRICEv2.Component[] memory feeds = _reserveFeeds();
+
+        vm.prank(priceManager);
+        priceConfig.addAsset(
+            address(_reserve),
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            strategyComponent,
+            feeds,
+            expectations_
         );
     }
 
@@ -426,7 +487,8 @@ contract PriceConfigv2Test is Test {
             uint48(block.timestamp),
             obs,
             strategyComponent,
-            feedComponents
+            feedComponents,
+            new IPriceConfigv2.PriceFeedExpectation[](0)
         );
     }
 
@@ -461,6 +523,11 @@ contract PriceConfigv2Test is Test {
 
         // Get observation data to initialize moving average with
         uint256[] memory obs = _makeObservations(ohm, feedComponents[0], 15);
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            feedComponents.length,
+            10e18,
+            100
+        );
 
         // Try to add asset to PRICEv2 with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
@@ -476,7 +543,8 @@ contract PriceConfigv2Test is Test {
             uint48(block.timestamp),
             obs,
             strategyComponent,
-            feedComponents
+            feedComponents,
+            expectations
         );
 
         // Confirm asset was not added
@@ -493,7 +561,8 @@ contract PriceConfigv2Test is Test {
             uint48(block.timestamp),
             obs,
             strategyComponent,
-            feedComponents
+            feedComponents,
+            expectations
         );
     }
 
@@ -529,6 +598,11 @@ contract PriceConfigv2Test is Test {
 
         // Get observation data to initialize moving average with
         uint256[] memory obs = _makeObservations(ohm, feedComponents[0], 15);
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            feedComponents.length,
+            10e18,
+            100
+        );
 
         // Confirm asset is not approved yet and data is not set
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
@@ -554,7 +628,8 @@ contract PriceConfigv2Test is Test {
             uint48(block.timestamp),
             obs,
             strategyComponent,
-            feedComponents
+            feedComponents,
+            expectations
         );
 
         // Confirm asset is approved and data is correct
@@ -574,6 +649,71 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.obs.length, uint256(15));
         assertEq(asset.strategy, abi.encode(strategyComponent));
         assertEq(asset.feeds, abi.encode(feedComponents));
+    }
+
+    function test_addAsset_feedExpectationCountInvalid_revertsAndRollsBack() public {
+        IPRICEv2.Component[] memory feeds = _reserveFeeds();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_FeedExpectationCountInvalid.selector,
+                address(_reserve),
+                0,
+                feeds.length
+            )
+        );
+
+        _addReserveAssetWithExpectations(new IPriceConfigv2.PriceFeedExpectation[](0));
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(_reserve));
+        assertEq(asset.approved, false, "Asset should not be approved after failed validation");
+    }
+
+    function test_addAsset_feedExpectationInvalid_revertsAndRollsBack() public {
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: 0,
+            toleranceBps: 100
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_FeedExpectationInvalid.selector,
+                address(_reserve),
+                0
+            )
+        );
+
+        _addReserveAssetWithExpectations(expectations);
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(_reserve));
+        assertEq(asset.approved, false, "Asset should not be approved after failed validation");
+    }
+
+    function test_addAsset_feedPriceOutOfBounds_revertsAndRollsBack() public {
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: 2e18,
+            toleranceBps: 0
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_PriceFeedOutOfBounds.selector,
+                address(_reserve),
+                0,
+                1e18,
+                2e18,
+                2e18
+            )
+        );
+
+        _addReserveAssetWithExpectations(expectations);
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(_reserve));
+        assertEq(asset.approved, false, "Asset should not be approved after failed validation");
     }
 
     function test_removeAssetPrice_notEnabled_reverts() public givenDisabled {
@@ -667,7 +807,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params);
+        priceConfig.updateAsset(address(ohm), params, new IPriceConfigv2.PriceFeedExpectation[](0));
     }
 
     function test_updateAsset_unauthorizedUser_reverts(address user_) public {
@@ -695,13 +835,18 @@ contract PriceConfigv2Test is Test {
             observations: new uint256[](0)
         });
         params.feeds[0] = feeds[0];
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            params.feeds.length,
+            10e18,
+            100
+        );
 
         // Try to update asset with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
 
         vm.prank(user_);
-        priceConfig.updateAsset(address(ohm), params);
+        priceConfig.updateAsset(address(ohm), params, expectations);
 
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
@@ -710,7 +855,7 @@ contract PriceConfigv2Test is Test {
 
         // Try with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params);
+        priceConfig.updateAsset(address(ohm), params, expectations);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -744,10 +889,15 @@ contract PriceConfigv2Test is Test {
             observations: new uint256[](0)
         });
         params.feeds[0] = feeds[0];
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            params.feeds.length,
+            10e18,
+            100
+        );
 
         // Update asset using authorized caller
         vm.prank(caller);
-        priceConfig.updateAsset(address(ohm), params);
+        priceConfig.updateAsset(address(ohm), params, expectations);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -756,6 +906,136 @@ contract PriceConfigv2Test is Test {
         assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
         assertEq(feeds[0].selector, params.feeds[0].selector);
         assertEq(feeds[0].params, params.feeds[0].params);
+    }
+
+    function test_updateAsset_feedExpectationCountInvalid_revertsAndRollsBack() public {
+        _addBaseAssets();
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2, "Initial feed count");
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_FeedExpectationCountInvalid.selector,
+                address(ohm),
+                0,
+                params.feeds.length
+            )
+        );
+
+        vm.prank(priceManager);
+        priceConfig.updateAsset(address(ohm), params, new IPriceConfigv2.PriceFeedExpectation[](0));
+
+        asset = PRICE.getAssetData(address(ohm));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2, "Feed update should roll back");
+    }
+
+    function test_updateAsset_feedPriceOutOfBounds_revertsAndRollsBack() public {
+        _addBaseAssets();
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2, "Initial feed count");
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
+
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: 20e18,
+            toleranceBps: 0
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_PriceFeedOutOfBounds.selector,
+                address(ohm),
+                0,
+                10e18,
+                20e18,
+                20e18
+            )
+        );
+
+        vm.prank(priceManager);
+        priceConfig.updateAsset(address(ohm), params, expectations);
+
+        asset = PRICE.getAssetData(address(ohm));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2, "Feed update should roll back");
+    }
+
+    function test_updateAsset_withoutFeedUpdate_rejectsExpectations() public {
+        _addBaseAssets();
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component memory currentStrategy = abi.decode(
+            asset.strategy,
+            (IPRICEv2.Component)
+        );
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: false,
+            updateStrategy: true,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](0),
+            strategy: currentStrategy,
+            useMovingAverage: asset.useMovingAverage,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            feeds.length,
+            10e18,
+            100
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_FeedExpectationCountInvalid.selector,
+                address(ohm),
+                expectations.length,
+                0
+            )
+        );
+
+        vm.prank(priceManager);
+        priceConfig.updateAsset(address(ohm), params, expectations);
+
+        IPRICEv2.Asset memory updatedAsset = PRICE.getAssetData(address(ohm));
+        assertEq(updatedAsset.strategy, asset.strategy, "Strategy update should roll back");
     }
 
     /* ========== PRICEv2 Submodule Installation/Upgrade ========== */

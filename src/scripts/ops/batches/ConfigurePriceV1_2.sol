@@ -6,11 +6,13 @@ import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -276,7 +278,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Add asset via PriceConfig
-        _addAsset(priceConfig_, _usds, strategy, feeds);
+        _addAsset(
+            priceConfig_,
+            _usds,
+            strategy,
+            feeds,
+            _makeFeedExpectations(feeds.length, USDS_MIN_PRICE, USDS_MAX_PRICE)
+        );
 
         console2.log("USDS asset configured");
     }
@@ -302,7 +310,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         });
 
         // Add asset via PriceConfig
-        _addAsset(priceConfig_, _susds, strategy, feeds);
+        _addAsset(
+            priceConfig_,
+            _susds,
+            strategy,
+            feeds,
+            _makeFeedExpectations(feeds.length, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE)
+        );
 
         console2.log("sUSDS asset configured");
     }
@@ -400,7 +414,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Add asset via PriceConfig
-        _addAsset(priceConfig_, _weth, strategy, feeds);
+        _addAsset(
+            priceConfig_,
+            _weth,
+            strategy,
+            feeds,
+            _makeFeedExpectations(feeds.length, ETH_MIN_PRICE, ETH_MAX_PRICE)
+        );
 
         console2.log("wETH asset configured");
     }
@@ -475,7 +495,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             ohmLastObservationTime,
             ohmObservations,
             strategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, OHM_MIN_PRICE, OHM_MAX_PRICE)
         );
 
         console2.log("OHM asset configured with 7-day moving average");
@@ -490,7 +511,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address priceConfig_,
         address asset_,
         IPRICEv2.Component memory strategy_,
-        IPRICEv2.Component[] memory feeds_
+        IPRICEv2.Component[] memory feeds_,
+        IPriceConfigv2.PriceFeedExpectation[] memory feedExpectations_
     ) internal {
         addToBatch(
             priceConfig_,
@@ -503,7 +525,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 uint48(0), // lastObservationTime
                 new uint256[](0), // observations
                 strategy_,
-                feeds_
+                feeds_,
+                feedExpectations_
             )
         );
     }
@@ -518,6 +541,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     /// @param observations_ Array of pre-populated observations
     /// @param strategy_ Strategy component
     /// @param feeds_ Array of feed components
+    /// @param feedExpectations_ Expected price and tolerance for each feed
     function _addAssetWithMA(
         address priceConfig_,
         address asset_,
@@ -527,7 +551,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint48 lastObservationTime_,
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
-        IPRICEv2.Component[] memory feeds_
+        IPRICEv2.Component[] memory feeds_,
+        IPriceConfigv2.PriceFeedExpectation[] memory feedExpectations_
     ) internal {
         addToBatch(
             priceConfig_,
@@ -540,9 +565,29 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 lastObservationTime_,
                 observations_,
                 strategy_,
-                feeds_
+                feeds_,
+                feedExpectations_
             )
         );
+    }
+
+    function _makeFeedExpectations(
+        uint256 length_,
+        uint256 minPrice_,
+        uint256 maxPrice_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        uint256 expectedPrice = (minPrice_ + maxPrice_) / 2;
+        uint16 toleranceBps = SafeCast.encodeUInt16(
+            (maxPrice_ * 10_000 + expectedPrice - 1) / expectedPrice - 10_000
+        );
+
+        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
+        for (uint256 i; i < length_; i++) {
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice,
+                toleranceBps: toleranceBps
+            });
+        }
     }
 
     // ========== ENCODING HELPERS ========== //

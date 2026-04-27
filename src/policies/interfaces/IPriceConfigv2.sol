@@ -23,6 +23,58 @@ interface IPriceConfigv2 {
     /// @param  minor   The minor version of the module
     error IPriceConfigv2_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
+    /// @notice Thrown when the number of feed expectations does not match the number of feeds
+    ///
+    /// @param  asset_            The address of the asset being configured
+    /// @param  expectationCount_ The number of expectations provided
+    /// @param  feedCount_        The number of feeds expected
+    error IPriceConfigv2_FeedExpectationCountInvalid(
+        address asset_,
+        uint256 expectationCount_,
+        uint256 feedCount_
+    );
+
+    /// @notice Thrown when a feed expectation is invalid
+    ///
+    /// @param  asset_ The address of the asset being configured
+    /// @param  index_ The index of the invalid expectation
+    error IPriceConfigv2_FeedExpectationInvalid(address asset_, uint256 index_);
+
+    /// @notice Thrown when a feed cannot be queried for expectation validation
+    ///
+    /// @param  asset_ The address of the asset being configured
+    /// @param  index_ The index of the feed that failed
+    error IPriceConfigv2_PriceFeedCallFailed(address asset_, uint256 index_);
+
+    /// @notice Thrown when a feed price is outside the configured expectation range
+    ///
+    /// @param  asset_      The address of the asset being configured
+    /// @param  index_      The index of the feed that returned an out-of-bounds price
+    /// @param  price_      The price returned by the feed
+    /// @param  lowerBound_ The minimum accepted price
+    /// @param  upperBound_ The maximum accepted price
+    error IPriceConfigv2_PriceFeedOutOfBounds(
+        address asset_,
+        uint256 index_,
+        uint256 price_,
+        uint256 lowerBound_,
+        uint256 upperBound_
+    );
+
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice                     Expected price and tolerance for a configured feed
+    /// @dev                        Used as a configuration-time plausibility check only. This
+    ///                             does not prove feed identity; a different asset with a similar
+    ///                             price can still pass within tolerance.
+    ///
+    /// @param expectedPrice        Expected feed price in PRICE output decimals
+    /// @param toleranceBps         Allowed deviation from expected price, in basis points
+    struct PriceFeedExpectation {
+        uint256 expectedPrice;
+        uint16 toleranceBps;
+    }
+
     // ========================= //
     // PRICE MANAGEMENT          //
     // ========================= //
@@ -38,6 +90,7 @@ interface IPriceConfigv2 {
     /// @param  observations_           The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
     /// @param  strategy_               The price resolution strategy to use for this asset
     /// @param  feeds_                  The array of price feeds to use for this asset
+    /// @param  feedExpectations_       Expected price and tolerance for each feed, aligned by index with `feeds_`
     function addAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -46,7 +99,8 @@ interface IPriceConfigv2 {
         uint48 lastObservationTime_,
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
-        IPRICEv2.Component[] memory feeds_
+        IPRICEv2.Component[] memory feeds_,
+        PriceFeedExpectation[] memory feedExpectations_
     ) external;
 
     /// @notice Remove an asset from the PRICE module
@@ -59,9 +113,14 @@ interface IPriceConfigv2 {
     /// @dev    Only updates components flagged in params_
     /// @dev    See PRICEv2 for more details on the UpdateAssetParams struct
     ///
-    /// @param  asset_  The address of the asset to update
-    /// @param  params_ Update parameters with flags indicating which components to update
-    function updateAsset(address asset_, IPRICEv2.UpdateAssetParams memory params_) external;
+    /// @param  asset_            The address of the asset to update
+    /// @param  params_           Update parameters with flags indicating which components to update
+    /// @param  feedExpectations_ Expected price and tolerance for each feed when `params_.updateFeeds` is true. Must be empty otherwise.
+    function updateAsset(
+        address asset_,
+        IPRICEv2.UpdateAssetParams memory params_,
+        PriceFeedExpectation[] memory feedExpectations_
+    ) external;
 
     /// @notice Store a price observation for an asset
     /// @dev    Calls PRICE.storeObservation(asset_) to calculate and store current price

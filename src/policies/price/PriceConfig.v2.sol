@@ -8,6 +8,10 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
+// Libraries
+import {Deviation} from "src/libraries/Deviation.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
+
 // Bophades
 import {Kernel, Keycode, toKeycode, Policy, Permissions, Module} from "src/Kernel.sol";
 import {SubKeycode, Submodule} from "src/Submodules.sol";
@@ -18,12 +22,15 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @notice     Policy to configure PRICEv2
 /// @dev        Some functions in this policy are gated to addresses with the "price_admin" or "admin" roles
 contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
+    using FullMath for uint256;
+
     // ========== STATE ========== //
 
     bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
     bytes32 internal constant _PRICE_ADMIN_ROLE = "price_admin";
+    uint16 internal constant _BPS_MAX = 10_000;
 
     // Modules
     PRICEv2 public PRICE;
@@ -132,6 +139,81 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         _;
     }
 
+    /// @notice                         Validates each feed against its configured expected price
+    /// @dev                            This is a configuration-time plausibility check only. It does
+    ///                                 not prove feed identity, since another asset with a similar
+    ///                                 price can still pass within tolerance.
+    ///
+    /// @param asset_                   The address of the asset being configured
+    /// @param feeds_                   The feeds to validate
+    /// @param feedExpectations_        The expected price and tolerance for each feed
+    function _validatePriceFeedExpectations(
+        address asset_,
+        IPRICEv2.Component[] memory feeds_,
+        PriceFeedExpectation[] memory feedExpectations_
+    ) internal view {
+        uint256 len = feeds_.length;
+        if (feedExpectations_.length != len)
+            revert IPriceConfigv2_FeedExpectationCountInvalid(
+                asset_,
+                feedExpectations_.length,
+                len
+            );
+
+        uint8 priceDecimals = PRICE.decimals();
+        for (uint256 i; i < len; ) {
+            PriceFeedExpectation memory expectation = feedExpectations_[i];
+            if (expectation.expectedPrice == 0 || expectation.toleranceBps > _BPS_MAX)
+                revert IPriceConfigv2_FeedExpectationInvalid(asset_, i);
+
+            (bool success, bytes memory data) = address(
+                PRICE.getSubmoduleForKeycode(feeds_[i].target)
+            ).staticcall(
+                    abi.encodeWithSelector(
+                        feeds_[i].selector,
+                        asset_,
+                        priceDecimals,
+                        feeds_[i].params
+                    )
+                );
+
+            if (!success || data.length != 32) revert IPriceConfigv2_PriceFeedCallFailed(asset_, i);
+
+            uint256 price = abi.decode(data, (uint256));
+
+            if (
+                price == 0 ||
+                Deviation.isDeviating(
+                    price,
+                    expectation.expectedPrice,
+                    expectation.toleranceBps,
+                    _BPS_MAX
+                )
+            ) {
+                uint256 lowerBound = expectation.expectedPrice.mulDiv(
+                    _BPS_MAX - expectation.toleranceBps,
+                    _BPS_MAX
+                );
+                uint256 upperBound = expectation.expectedPrice.mulDivUp(
+                    _BPS_MAX + expectation.toleranceBps,
+                    _BPS_MAX
+                );
+
+                revert IPriceConfigv2_PriceFeedOutOfBounds(
+                    asset_,
+                    i,
+                    price,
+                    lowerBound,
+                    upperBound
+                );
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
@@ -147,7 +229,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         uint48 lastObservationTime_,
         uint256[] memory observations_,
         IPRICEv2.Component memory strategy_,
-        IPRICEv2.Component[] memory feeds_
+        IPRICEv2.Component[] memory feeds_,
+        PriceFeedExpectation[] memory feedExpectations_
     ) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.addAsset(
             asset_,
@@ -159,6 +242,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
             strategy_,
             feeds_
         );
+
+        _validatePriceFeedExpectations(asset_, feeds_, feedExpectations_);
     }
 
     /// @inheritdoc IPriceConfigv2
@@ -177,9 +262,21 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     ///             - PRICE rejects the update
     function updateAsset(
         address asset_,
-        IPRICEv2.UpdateAssetParams memory params_
+        IPRICEv2.UpdateAssetParams memory params_,
+        PriceFeedExpectation[] memory feedExpectations_
     ) external override onlyEnabled onlyPriceOrAdminRole {
+        uint256 expectedCount = params_.updateFeeds ? params_.feeds.length : 0;
+        if (feedExpectations_.length != expectedCount)
+            revert IPriceConfigv2_FeedExpectationCountInvalid(
+                asset_,
+                feedExpectations_.length,
+                expectedCount
+            );
+
         PRICE.updateAsset(asset_, params_);
+
+        if (params_.updateFeeds)
+            _validatePriceFeedExpectations(asset_, params_.feeds, feedExpectations_);
     }
 
     /// @inheritdoc IPriceConfigv2

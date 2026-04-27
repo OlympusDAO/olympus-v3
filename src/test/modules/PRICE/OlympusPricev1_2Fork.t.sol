@@ -15,6 +15,7 @@ import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -26,6 +27,7 @@ import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {EmissionManager} from "src/policies/EmissionManager.sol";
 import {YieldRepurchaseFacility} from "src/policies/YieldRepurchaseFacility.sol";
@@ -81,6 +83,7 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant ETH_MAX_PRICE = 2100e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 22e18;
+    uint256 internal constant BPS_MAX = 10_000;
     uint256 internal constant WETH_DEVIATION_BPS = 200; // 2% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
     uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
@@ -115,6 +118,25 @@ contract OlympusPricev1_2ForkTest is Test {
         uint48 vesting,
         uint256 initialPrice
     );
+
+    function _makeFeedExpectations(
+        uint256 length_,
+        uint256 minPrice_,
+        uint256 maxPrice_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        uint256 expectedPrice = (minPrice_ + maxPrice_) / 2;
+        uint16 toleranceBps = SafeCast.encodeUInt16(
+            maxPrice_.mulDivUp(BPS_MAX, expectedPrice) - BPS_MAX
+        );
+
+        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
+        for (uint256 i; i < length_; i++) {
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice,
+                toleranceBps: toleranceBps
+            });
+        }
+    }
 
     function setUp() public {
         vm.createSelectFork("mainnet", FORK_BLOCK);
@@ -239,7 +261,8 @@ contract OlympusPricev1_2ForkTest is Test {
             uint48(block.timestamp), // lastObservationTime
             observations,
             ohmStrategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, OHM_MIN_PRICE, OHM_MAX_PRICE)
         );
 
         vm.stopPrank();
@@ -323,7 +346,8 @@ contract OlympusPricev1_2ForkTest is Test {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             wethStrategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, ETH_MIN_PRICE, ETH_MAX_PRICE)
         );
 
         vm.stopPrank();
@@ -391,7 +415,8 @@ contract OlympusPricev1_2ForkTest is Test {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             usdsStrategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, USDS_MIN_PRICE, USDS_MAX_PRICE)
         );
 
         vm.stopPrank();
@@ -426,7 +451,8 @@ contract OlympusPricev1_2ForkTest is Test {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             susdsStrategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE)
         );
 
         vm.stopPrank();
