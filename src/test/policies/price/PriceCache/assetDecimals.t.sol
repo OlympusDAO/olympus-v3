@@ -48,6 +48,18 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
         cache.assetDecimals(nonContractAsset);
     }
 
+    function test_givenAssetIsUnregisteredNonContractAsset_reverts() public {
+        address unregisteredNonContractAsset = makeAddr("UNREGISTERED_NON_CONTRACT_ASSET");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetNotRegistered.selector,
+                unregisteredNonContractAsset
+            )
+        );
+        cache.assetDecimals(unregisteredNonContractAsset);
+    }
+
     function test_givenAssetIsRegisteredNonContractAsset_givenContractIsLaterDeployedAtTheAddress_returnsContractDecimals()
         public
     {

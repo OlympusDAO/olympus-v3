@@ -31,7 +31,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 contract OlympusPricev1_2Test is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
 
-    address internal constant UNIT_OF_ACCOUNT = address(840);
+    address internal constant UNIT_OF_ACCOUNT = address(840); // 840 = USD (ISO-4217)
 
     // Mock contracts
     MockERC20 internal ohm;
