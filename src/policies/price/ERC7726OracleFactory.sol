@@ -201,7 +201,8 @@ contract ERC7726OracleFactory is
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
-    /// @dev        Adds the oracle to the enabled oracle count used by factory-level re-enable recaching.
+    /// @dev        `enableCreation()` sets `isCreationEnabled` to true. It does not update the
+    ///             enabled-oracle counter or perform recaching logic.
     ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
@@ -220,8 +221,8 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    /// @dev        Decrements the enabled oracle count so factory-level re-enable skips all
-    ///             requested pairs when no enabled ERC-7726 oracle remains.
+    /// @dev        `disableCreation()` sets `isCreationEnabled` to false. It does not update the
+    ///             enabled-oracle counter or perform recaching logic.
     ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
