@@ -131,7 +131,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             This function will revert if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The `IPriceCache.getCachedPrice()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -183,7 +184,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -208,7 +209,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The `IPriceCache.isStale()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
     ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
         return _getEnabledPriceCache().isStale(baseToken(), quoteToken(), maxAge());
@@ -220,7 +222,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             This function will revert if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -262,7 +264,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -277,7 +279,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -292,7 +294,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -307,7 +309,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -327,7 +329,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @dev        Reverts if:
     ///             - The oracle is not enabled in the factory context
     ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
-    ///             - The cache policy is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
