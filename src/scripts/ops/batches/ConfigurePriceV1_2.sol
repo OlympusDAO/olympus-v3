@@ -75,7 +75,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
         // Load configuration parameters from args file
-        _ohmObservationWindow = uint32(
+        _ohmObservationWindow = SafeCast.encodeUInt32(
             _readBatchArgUint256("configurePriceV1_2", "ohmObservationWindow")
         );
 
@@ -195,13 +195,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address chainlinkDaiUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkDaiUsd");
 
         // Read deviation parameters from args file
-        uint16 usdsDeviationBps = uint16(
+        uint16 usdsDeviationBps = SafeCast.encodeUInt16(
             _readBatchArgUint256("configurePriceV1_2", "usdsDeviationBps")
         );
         bool usdsStrictMode = _readBatchArgBool("configurePriceV1_2", "usdsStrictMode");
 
         // Read update threshold from args file
-        uint48 usdsUpdateThreshold = uint48(
+        uint48 usdsUpdateThreshold = SafeCast.encodeUInt48(
             _readBatchArgUint256("configurePriceV1_2", "usdsUpdateThreshold")
         );
 
@@ -323,13 +323,13 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Read deviation parameters from args file
-        uint16 wethDeviationBps = uint16(
+        uint16 wethDeviationBps = SafeCast.encodeUInt16(
             _readBatchArgUint256("configurePriceV1_2", "wethDeviationBps")
         );
         bool wethStrictMode = _readBatchArgBool("configurePriceV1_2", "wethStrictMode");
 
         // Read update threshold from args file
-        uint48 wethUpdateThreshold = uint48(
+        uint48 wethUpdateThreshold = SafeCast.encodeUInt48(
             _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
         );
 
