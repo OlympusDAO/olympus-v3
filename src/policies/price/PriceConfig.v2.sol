@@ -209,10 +209,17 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
             address submodule = abi.decode(action.payload, (address));
             PRICE.upgradeSubmodule(Submodule(submodule));
         } else if (action.action == IPriceConfigv2.TimelockAction.ExecOnSubmodule) {
-            (SubKeycode subKeycode, bytes memory data) = abi.decode(
+            (SubKeycode subKeycode, address queuedSubmodule, bytes memory data) = abi.decode(
                 action.payload,
-                (SubKeycode, bytes)
+                (SubKeycode, address, bytes)
             );
+            address currentSubmodule = address(PRICE.getSubmoduleForKeycode(subKeycode));
+            if (currentSubmodule != queuedSubmodule)
+                revert IPriceConfigv2_SubmoduleImplementationChanged(
+                    subKeycode,
+                    queuedSubmodule,
+                    currentSubmodule
+                );
             PRICE.execOnSubmodule(subKeycode, data);
         } else if (action.action == IPriceConfigv2.TimelockAction.SetTimelockDelay) {
             uint48 delay = abi.decode(action.payload, (uint48));
@@ -384,15 +391,14 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
 
     function _validateUpdateFeedExpectationCount(
         address asset_,
-        IPRICEv2.UpdateAssetParams memory params_,
+        uint256 expectedCount_,
         PriceFeedExpectation[] memory feedExpectations_
     ) internal pure {
-        uint256 expectedCount = params_.updateFeeds ? params_.feeds.length : 0;
-        if (feedExpectations_.length != expectedCount)
+        if (feedExpectations_.length != expectedCount_)
             revert IPriceConfigv2_FeedExpectationCountInvalid(
                 asset_,
                 feedExpectations_.length,
-                expectedCount
+                expectedCount_
             );
     }
 
@@ -401,13 +407,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
     ) internal {
-        uint256 expectedCount = params_.updateFeeds ? params_.feeds.length : 0;
-        if (feedExpectations_.length != expectedCount)
-            revert IPriceConfigv2_FeedExpectationCountInvalid(
-                asset_,
-                feedExpectations_.length,
-                expectedCount
-            );
+        _validateUpdateFeedExpectationCount(
+            asset_,
+            params_.updateFeeds ? params_.feeds.length : 0,
+            feedExpectations_
+        );
 
         PRICE.updateAsset(asset_, params_);
 
@@ -418,13 +422,17 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
-    /// @dev        This is intentionally not timelocked because it is reserved for view/staticcall-only
-    ///             submodule interactions. Mutable submodule configuration must use an explicit
-    ///             timelocked PriceConfigv2 function.
+    /// @dev        This is an immediate, non-timelocked state-changing function for adding newly
+    ///             approved PRICE assets. It validates the PRICE asset configuration, adds the asset
+    ///             entry on PRICE, emits PRICE asset/component events, and then checks the configured
+    ///             feed expectations.
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
-    ///             - PRICE rejects the asset configuration
+    ///             - PRICE rejects the asset configuration, including reserved assets, non-contract
+    ///               assets, duplicate assets, invalid component parameters, or invalid moving
+    ///               average parameters
+    ///             - Any feed expectation is invalid or outside the accepted tolerance
     function addAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -484,7 +492,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        _validateUpdateFeedExpectationCount(asset_, params_, feedExpectations_);
+        _validateUpdateFeedExpectationCount(
+            asset_,
+            params_.updateFeeds ? params_.feeds.length : 0,
+            feedExpectations_
+        );
         PRICE.validateUpdateAsset(asset_, params_);
 
         return
@@ -549,12 +561,13 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         SubKeycode subKeycode_,
         bytes calldata data_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        PRICE.validateExecOnSubmodule(subKeycode_);
+        PRICE.validateExecOnSubmodule(SubKeycode.unwrap(subKeycode_));
+        address submodule = address(PRICE.getSubmoduleForKeycode(subKeycode_));
 
         return
             _queueAction(
                 IPriceConfigv2.TimelockAction.ExecOnSubmodule,
-                abi.encode(subKeycode_, data_)
+                abi.encode(subKeycode_, submodule, data_)
             );
     }
 

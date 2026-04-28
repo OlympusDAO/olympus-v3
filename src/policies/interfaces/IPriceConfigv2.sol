@@ -134,6 +134,17 @@ interface IPriceConfigv2 {
     /// @param expiresAt Timestamp after which the action can no longer be executed
     error IPriceConfigv2_ActionExpired(uint256 actionId, uint48 expiresAt);
 
+    /// @notice Thrown when a queued submodule action targets a submodule implementation that has changed since queueing
+    ///
+    /// @param subKeycode The SubKeycode of the queued submodule action
+    /// @param expected   The submodule implementation installed when the action was queued
+    /// @param actual     The submodule implementation installed when the action was executed
+    error IPriceConfigv2_SubmoduleImplementationChanged(
+        SubKeycode subKeycode,
+        address expected,
+        address actual
+    );
+
     /// @notice Thrown when a proposed timelock delay is outside the accepted range
     ///
     /// @param delay   The proposed delay

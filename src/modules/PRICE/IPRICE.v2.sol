@@ -459,6 +459,6 @@ interface IPRICEv2 {
     /// @notice             Validates parameters for executing a call on a PRICE submodule
     /// @dev                Does not mutate state.
     ///
-    /// @param subKeycode_  The SubKeycode of the submodule to call
-    function validateExecOnSubmodule(SubKeycode subKeycode_) external view;
+    /// @param subKeycode_  The 20-byte SubKeycode of the submodule to call
+    function validateExecOnSubmodule(bytes20 subKeycode_) external view;
 }

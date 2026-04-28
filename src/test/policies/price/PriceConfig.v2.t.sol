@@ -104,6 +104,25 @@ contract MockStrategy is PriceSubmodule {
     }
 }
 
+contract MockStrategyV2 is PriceSubmodule {
+    uint256 public storedValue;
+
+    constructor(Module parent_) Submodule(parent_) {}
+
+    function SUBKEYCODE() public pure override returns (SubKeycode) {
+        return toSubKeycode("PRICE.MOCKSTRATEGY");
+    }
+
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 2;
+        minor = 0;
+    }
+
+    function setStoredValue(uint256 value_) external onlyParent {
+        storedValue = value_;
+    }
+}
+
 contract MockUpgradedSubmodulePrice is PriceSubmodule {
     constructor(Module parent_) Submodule(parent_) {}
 
@@ -2235,6 +2254,8 @@ contract PriceConfigv2Test is Test {
     //  [X] it reverts
     // when the submodule is not installed
     //  [X] it reverts
+    // when the submodule implementation changes before execution
+    //  [X] it reverts
     // [X] it queues the execOnSubmodule action
     // [X] the execOnSubmodule action can be executed after the timelock
 
@@ -2269,7 +2290,7 @@ contract PriceConfigv2Test is Test {
             MockStrategy.setStoredValue.selector,
             uint256(11)
         );
-        bytes memory payload = abi.encode(subKeycode, data);
+        bytes memory payload = abi.encode(subKeycode, address(newStrategy), data);
         (
             uint256 expectedActionId,
             uint48 queuedAt,
@@ -2318,6 +2339,41 @@ contract PriceConfigv2Test is Test {
         _executeQueuedAction(actionId);
 
         assertEq(newStrategy.storedValue(), 11, "Value should update after execution");
+    }
+
+    function test_queueExecOnSubmodule_givenSubmoduleImplementationChangesBeforeExecution_reverts()
+        public
+    {
+        MockStrategy newStrategy = new MockStrategy(PRICE);
+
+        vm.prank(admin);
+        priceConfig.installSubmodule(address(newStrategy));
+        SubKeycode subKeycode = newStrategy.SUBKEYCODE();
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueExecOnSubmodule(
+            subKeycode,
+            abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
+        );
+
+        MockStrategyV2 upgradedStrategy = new MockStrategyV2(PRICE);
+
+        vm.prank(admin);
+        uint256 upgradeActionId = priceConfig.queueUpgradeSubmodule(address(upgradedStrategy));
+        _executeQueuedAction(upgradeActionId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_SubmoduleImplementationChanged.selector,
+                subKeycode,
+                address(newStrategy),
+                address(upgradedStrategy)
+            )
+        );
+        priceConfig.executeQueuedAction(actionId);
+
+        assertEq(newStrategy.storedValue(), 0, "Old submodule value should remain unchanged");
+        assertEq(upgradedStrategy.storedValue(), 0, "New submodule value should remain unchanged");
     }
 
     function test_queueExecOnSubmodule_givenSubmoduleIsNotInstalled_reverts() public {

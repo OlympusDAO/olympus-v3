@@ -660,8 +660,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             revert Module_InvalidSubmoduleUpgrade(subKeycode);
     }
 
-    function _validateExecOnSubmodule(SubKeycode subKeycode_) internal view {
-        _getSubmoduleIfInstalled(subKeycode_);
+    function _validateExecOnSubmodule(bytes20 subKeycode_) internal view {
+        _getSubmoduleIfInstalled(SubKeycode.wrap(subKeycode_));
     }
 
     /// @inheritdoc IPRICEv2
@@ -711,7 +711,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
-    function validateExecOnSubmodule(SubKeycode subKeycode_) external view override {
+    function validateExecOnSubmodule(bytes20 subKeycode_) external view override {
         _validateExecOnSubmodule(subKeycode_);
     }
 
