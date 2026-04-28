@@ -18,6 +18,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
 
     function test_execute_gas_sweep_singleCreator_skipOnCoverage() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
+        assertGt(limit, 0, "HEART_SWEEP_LIMIT must be > 0 for benchmark");
 
         for (uint256 i; i < limit; ++i) {
             uint48 eligible = eligibleTimestamp + uint48(i) * _ONE_DAY;
@@ -42,6 +43,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
 
     function test_execute_gas_sweep_distinctCreators_skipOnCoverage() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
+        assertGt(limit, 0, "HEART_SWEEP_LIMIT must be > 0 for benchmark");
 
         for (uint256 i; i < limit; ++i) {
             address distrib = makeAddr(string.concat("benchmarkDistrib", vm.toString(i)));
