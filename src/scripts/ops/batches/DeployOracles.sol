@@ -5,8 +5,12 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
+import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+
+// Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
@@ -17,6 +21,7 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 ///         - Oracle factories must be deployed and enabled
 ///         - PRICE module must have tokens configured
 ///         - Caller must have oracle_manager role
+///         - minPrice and maxPrice are base/quote pair-price bounds, normalized to 18 decimals
 ///
 ///         Args file format:
 ///         {
@@ -26,12 +31,14 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 ///               "baseToken": "0x...",
 ///               "quoteToken": "0x...",
 ///               "maxAge": "3600",                    // seconds
-///               "minPrice": "1000000000000000000",  // 18 decimals
-///               "maxPrice": "10000000000000000000"  // 18 decimals
+///               "minPrice": "1000000000000000000",  // pair price, 18 decimals
+///               "maxPrice": "10000000000000000000"  // pair price, 18 decimals
 ///             }
 ///           }]
 ///         }
 contract DeployOracles is BatchScriptV2 {
+    using FullMath for uint256;
+
     // ========== STATE ========== //
 
     /// @notice Chainlink oracle factory address
@@ -40,19 +47,16 @@ contract DeployOracles is BatchScriptV2 {
     /// @notice Morpho oracle factory address
     address internal _morphoFactory;
 
-    /// @notice PRICE module address
-    address internal _priceModule;
-
     /// @notice Base token address (loaded from args)
     address internal _baseToken;
 
     /// @notice Quote token address (loaded from args)
     address internal _quoteToken;
 
-    /// @notice Minimum expected price (loaded from args)
+    /// @notice Minimum expected base/quote pair price in 18 decimals (loaded from args)
     uint256 internal _minPrice;
 
-    /// @notice Maximum expected price (loaded from args)
+    /// @notice Maximum expected base/quote pair price in 18 decimals (loaded from args)
     uint256 internal _maxPrice;
 
     /// @notice Oracle max age (seconds) loaded from args
@@ -136,15 +140,15 @@ contract DeployOracles is BatchScriptV2 {
     // ========== POST-BATCH VALIDATION ========== //
 
     /// @notice Validates that the deployed oracle price is within expected bounds
-    /// @dev    Checks that the PRICE module returns a price for the base token
-    ///         that falls within the min/max range specified in the args file
+    /// @dev    Checks that the deployed oracle returns a base/quote pair price
+    ///         that falls within the 18-decimal min/max range specified in the args file
     ///         Also verifies the oracle was deployed and enabled
     function validateOraclePrice() external view {
         console2.log("\n=== Validating Oracle Price ===");
 
         console2.log("Base token:", _baseToken);
         console2.log("Quote token:", _quoteToken);
-        console2.log("Expected price range:", _minPrice, "-", _maxPrice);
+        console2.log("Expected pair price range:", _minPrice, "-", _maxPrice);
 
         // Get the factory being used
         address factory = _isChainlinkFactory ? _chainlinkFactory : _morphoFactory;
@@ -162,9 +166,8 @@ contract DeployOracles is BatchScriptV2 {
         );
         console2.log(factoryName, " oracle enabled");
 
-        // Get price from PRICE module (returns price in USD, 18 decimals)
-        uint256 price = IPRICEv2(_priceModule).getPrice(_baseToken);
-        console2.log("Actual price:", price);
+        uint256 price = _getOraclePairPrice(oracle);
+        console2.log("Actual pair price:", price);
 
         // Validate price is within bounds
         if (price < _minPrice) {
@@ -179,11 +182,49 @@ contract DeployOracles is BatchScriptV2 {
 
     // ========== INTERNAL HELPERS ========== //
 
+    function _getOraclePairPrice(address oracle_) internal view returns (uint256 price_) {
+        if (_isChainlinkFactory) return _getChainlinkOraclePairPrice(oracle_);
+
+        return _getMorphoOraclePairPrice(oracle_);
+    }
+
+    function _getChainlinkOraclePairPrice(address oracle_) internal view returns (uint256 price_) {
+        IChainlinkOracle oracle = IChainlinkOracle(oracle_);
+
+        require(!oracle.isStale(), "Chainlink oracle is stale");
+
+        (, int256 answer, , , ) = oracle.latestRoundData();
+        require(answer > 0, "Chainlink oracle price is not positive");
+
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return _normalizeTo18Decimals(uint256(answer), oracle.decimals());
+    }
+
+    function _getMorphoOraclePairPrice(address oracle_) internal view returns (uint256 price_) {
+        IMorphoOracle oracle = IMorphoOracle(oracle_);
+
+        require(!oracle.isStale(), "Morpho oracle is stale");
+
+        uint256 scaleFactor = oracle.scaleFactor();
+        require(scaleFactor != 0, "Morpho oracle scale factor is zero");
+
+        return oracle.price().mulDiv(1e18, scaleFactor);
+    }
+
+    function _normalizeTo18Decimals(
+        uint256 price_,
+        uint8 decimals_
+    ) internal pure returns (uint256 price18_) {
+        if (decimals_ == 18) return price_;
+        if (decimals_ < 18) return price_ * 10 ** (18 - decimals_);
+
+        return price_ / 10 ** (decimals_ - 18);
+    }
+
     /// @notice Load factory addresses from environment
     function _loadFactoryAddresses() internal {
         _chainlinkFactory = _envAddressNotZero("olympus.policies.ChainlinkOracleFactory");
         _morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
-        _priceModule = _envAddressNotZero("olympus.modules.OlympusPriceV1");
     }
 
     /// @notice Load oracle parameters from args file

@@ -60,6 +60,7 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CHAINLINK_ETH_USD = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
     address public constant CHAINLINK_BTC_USD = 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c;
     address public constant CHAINLINK_ETH_BTC = 0xAc559F25B1619171CbC396a50854A3240b6A4e99;
+    address public constant CHAINLINK_OHM_ETH = 0x9a72298ae3886221820B1c878d12D872087D3a23;
     address public constant REDSTONE_ETH_USD = 0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4;
     address public constant CHAINLINK_USDS_USD = 0xfF30586cD0F29eD462364C7e81375FC0C71219b1;
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
@@ -82,14 +83,18 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant ETH_MAX_PRICE = 2100e18;
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 22e18;
-    uint256 internal constant WETH_DEVIATION_BPS = 200; // 2% deviation
+    uint256 internal constant WETH_DEVIATION_BPS = 500; // 5% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
     uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant WETH_ETH_BTC_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant WETH_BTC_USD_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
+    uint48 internal constant OHM_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
-    uint32 internal constant OHM_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant OHM_WETH_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant OHM_SUSDS_OBSERVATION_WINDOW = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // System contracts
@@ -143,6 +148,7 @@ contract OlympusPricev1_2ForkTest is Test {
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
         // Get minimum target price from old PRICE module (if available)
         uint256 minimumTargetPrice = oldPrice.minimumTargetPrice();
+        uint256 targetPriceBeforeUpgrade = oldPrice.getTargetPrice();
 
         // Deploy new PRICE v1.2 module
         price = new OlympusPricev1_2(kernel, OHM, observationFrequency, minimumTargetPrice);
@@ -191,6 +197,12 @@ contract OlympusPricev1_2ForkTest is Test {
         _configureWethAsset();
         _configureSusdsAsset();
         _configureOhmAsset();
+
+        assertEq(
+            price.getTargetPrice(),
+            targetPriceBeforeUpgrade,
+            "OHM target price should be preserved after PRICE v1.2 upgrade"
+        );
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -205,13 +217,13 @@ contract OlympusPricev1_2ForkTest is Test {
             params: abi.encode(true) // strict mode
         });
 
-        // Create feed components for the two Uniswap pools using getTokenTWAP
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        // Create feed components for the two Uniswap pools using getTokenTWAP, and the Chainlink OHM/ETH feed
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
 
         // Feed 0: Uniswap OHM/WETH
         UniswapV3Price.UniswapV3Params memory ohmWethParams = UniswapV3Price.UniswapV3Params({
             pool: IUniswapV3Pool(UNISWAP_OHM_WETH),
-            observationWindowSeconds: OHM_OBSERVATION_WINDOW
+            observationWindowSeconds: OHM_WETH_OBSERVATION_WINDOW
         });
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
@@ -222,7 +234,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // Feed 1: Uniswap OHM/sUSDS
         UniswapV3Price.UniswapV3Params memory ohmSusdsParams = UniswapV3Price.UniswapV3Params({
             pool: IUniswapV3Pool(UNISWAP_OHM_SUSDS),
-            observationWindowSeconds: OHM_OBSERVATION_WINDOW
+            observationWindowSeconds: OHM_SUSDS_OBSERVATION_WINDOW
         });
         feeds[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
@@ -230,11 +242,57 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(ohmSusdsParams)
         );
 
-        // Create pre-populated observations array (21 observations for 7-day moving average)
-        // Observation frequency is 8 hours, so 7 days = 21 observations
-        uint256[] memory observations = new uint256[](21);
-        for (uint256 i = 0; i < 21; i++) {
-            observations[i] = OHM_USD_PRICE;
+        // Feed 2: Chainlink OHM/ETH x ETH/USD
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.TwoFeedParams({
+                    firstFeed: AggregatorV2V3Interface(CHAINLINK_OHM_ETH),
+                    firstUpdateThreshold: OHM_UPDATE_THRESHOLD,
+                    secondFeed: AggregatorV2V3Interface(CHAINLINK_ETH_USD),
+                    secondUpdateThreshold: WETH_UPDATE_THRESHOLD
+                })
+            )
+        );
+
+        _addOhmAssetWithMigratedObservations(ohmStrategy, feeds);
+
+        vm.stopPrank();
+    }
+
+    function _addOhmAssetWithMigratedObservations(
+        IPRICEv2.Component memory ohmStrategy_,
+        IPRICEv2.Component[] memory feeds_
+    ) internal {
+        uint48 oldObservationFrequency = oldPrice.observationFrequency();
+        assertEq(
+            price.observationFrequency(),
+            oldObservationFrequency,
+            "Observation frequency should match PRICE v1"
+        );
+
+        uint32 oldNumObservations = oldPrice.numObservations();
+        uint32 movingAverageDuration = uint32(oldPrice.movingAverageDuration());
+        assertEq(movingAverageDuration, uint32(30 days), "OHM moving average should be 30 days");
+
+        // Use the live PRICE v1 observation count rather than a hard-coded seed. With an 8-hour
+        // observation frequency and a 30-day moving average, this migrates 90 raw observations.
+        uint256 expectedNumObservations = uint256(movingAverageDuration) /
+            uint256(oldObservationFrequency);
+        assertEq(
+            uint256(oldNumObservations),
+            expectedNumObservations,
+            "Observation count should match moving average duration"
+        );
+
+        // PRICE v1 stores observations in a ring buffer. PRICE v1.2 initializes nextObsIndex to
+        // zero, so rotate the migrated data such that the oldest observation remains at index 0.
+        uint256[] memory observations = new uint256[](oldNumObservations);
+        uint256 oldestObservationIndex = oldPrice.nextObsIndex();
+        for (uint256 i = 0; i < oldNumObservations; i++) {
+            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
+            observations[i] = oldPrice.observations(sourceIndex);
         }
 
         // Add OHM asset via PriceConfig with moving average configuration
@@ -242,14 +300,12 @@ contract OlympusPricev1_2ForkTest is Test {
             address(OHM),
             true, // storeMovingAverage
             false, // useMovingAverage
-            uint32(7 days), // movingAverageDuration
-            uint48(block.timestamp), // lastObservationTime
+            movingAverageDuration,
+            oldPrice.lastObservationTime(),
             observations,
-            ohmStrategy,
-            feeds
+            ohmStrategy_,
+            feeds_
         );
-
-        vm.stopPrank();
     }
 
     function _configureWethAsset() internal {
@@ -310,9 +366,9 @@ contract OlympusPricev1_2ForkTest is Test {
         ChainlinkPriceFeeds.TwoFeedParams memory derivedEthUsdParams = ChainlinkPriceFeeds
             .TwoFeedParams({
                 firstFeed: AggregatorV2V3Interface(CHAINLINK_ETH_BTC),
-                firstUpdateThreshold: WETH_UPDATE_THRESHOLD,
+                firstUpdateThreshold: WETH_ETH_BTC_UPDATE_THRESHOLD,
                 secondFeed: AggregatorV2V3Interface(CHAINLINK_BTC_USD),
-                secondUpdateThreshold: WETH_UPDATE_THRESHOLD
+                secondUpdateThreshold: WETH_BTC_USD_UPDATE_THRESHOLD
             });
         feeds[3] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
@@ -554,6 +610,25 @@ contract OlympusPricev1_2ForkTest is Test {
         console2.log("OHM price (18 decimals):", ohmPrice);
 
         // Verify price is in expected range
+        _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+    }
+
+    //  [X] resolves the OHM price when one OHM feed path fails
+    function test_getPrice_OHM_singleFeedFailure() public {
+        uint32[] memory observationWindow = new uint32[](2);
+        observationWindow[0] = OHM_WETH_OBSERVATION_WINDOW;
+        observationWindow[1] = 0;
+
+        vm.mockCallRevert(
+            UNISWAP_OHM_WETH,
+            abi.encodeWithSelector(bytes4(keccak256("observe(uint32[])")), observationWindow),
+            "OHM/WETH unavailable"
+        );
+
+        uint256 ohmPrice = price.getPrice(OHM);
+
+        vm.clearMockedCalls();
+
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 
