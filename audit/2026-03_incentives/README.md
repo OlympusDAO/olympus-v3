@@ -29,7 +29,7 @@ The lifecycle is:
 1. **Deploy** - When an epoch ends, an off-chain backend calculates token configuration params, the admin then sets the Merkle root and the `IncentiveDistributorConvertible` deploys a new convOHM token via the `ConvertibleOHMTeller`.
 2. **Claim** - Users submit Merkle proofs to the distributor, which mints convOHM to them via the teller.
 3. **Exercise** - Between the eligible date and expiry, convOHM holders can exercise their tokens: they pay `amount * strikePrice / 1e9` in the quote token (e.g. USDS), the convOHM is burned, and fresh OHM is minted to the user via the MINTR module.
-4. **Expiry** - Unexercised tokens expire worthless. There is no reclaim mechanism (unlike the Bond Protocol original, which pre-deposited collateral).
+4. **Expiry** - Unexercised tokens expire worthless. There is no collateral reclaim (unlike the Bond Protocol original, which pre-deposited collateral); under the mint-on-exercise model, expired supply is instead swept via `sweepExpiredTokens()` (or the Heart-driven `execute()`) to release the corresponding MINTR approval and decrement `creatorOutstanding`. `creatorMinted` is monotonic and is preserved across sweeps.
 
 #### Token Naming
 
