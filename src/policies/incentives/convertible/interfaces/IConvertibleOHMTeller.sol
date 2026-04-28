@@ -230,7 +230,7 @@ interface IConvertibleOHMTeller {
     /// @notice Returns the mint cap configured for a given creator.
     /// @param creator The creator address.
     /// @return cap The cumulative mint cap in OHM units.
-    function creatorMintCaps(address creator) external view returns (uint256 cap);
+    function creatorMintCap(address creator) external view returns (uint256 cap);
 
     /// @notice Returns the current outstanding convOHM for a given creator.
     /// @param creator The creator address.

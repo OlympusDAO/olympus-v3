@@ -115,7 +115,7 @@ contract ConvertibleOHMTeller is
     uint48 public override minEligibleDelay;
 
     /// @inheritdoc IConvertibleOHMTeller
-    mapping(address creator => uint256) public override creatorMintCaps;
+    mapping(address creator => uint256) public override creatorMintCap;
 
     /// @inheritdoc IConvertibleOHMTeller
     mapping(address creator => uint256) public override creatorOutstanding;
@@ -310,8 +310,8 @@ contract ConvertibleOHMTeller is
 
         // Charge the creator's cumulative budget against the configured cap
         uint256 newMinted = creatorMinted[creator] + amount_;
-        if (newMinted > creatorMintCaps[creator])
-            revert Teller_CapExceeded(creator, newMinted, creatorMintCaps[creator]);
+        if (newMinted > creatorMintCap[creator])
+            revert Teller_CapExceeded(creator, newMinted, creatorMintCap[creator]);
         creatorMinted[creator] = newMinted;
 
         // Bump outstanding in lockstep with minted and reserve MINTR approval
@@ -764,7 +764,7 @@ contract ConvertibleOHMTeller is
         _requireNonzeroAddress(0, creator_);
         uint256 minted = creatorMinted[creator_];
         if (cap_ < minted) revert Teller_CapBelowMinted(creator_, minted, cap_);
-        creatorMintCaps[creator_] = cap_;
+        creatorMintCap[creator_] = cap_;
         emit CreatorMintCapSet(creator_, cap_);
     }
 
