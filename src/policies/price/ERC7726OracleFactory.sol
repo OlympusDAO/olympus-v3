@@ -47,6 +47,11 @@ contract ERC7726OracleFactory is
     /// @notice Internal array of all deployed oracles
     address[] internal _oracles;
 
+    /// @notice Number of deployed oracles that are currently enabled
+    /// @dev    Updated when oracles are created, enabled, or disabled. Factory-level re-enable
+    ///         recaching skips all requested pairs when this count is zero.
+    uint256 internal _enabledOracleCount;
+
     /// @notice Mapping from maxAge to oracle
     mapping(uint48 maxAge => address oracle) internal _maxAgeToOracle;
 
@@ -107,6 +112,17 @@ contract ERC7726OracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this))
+            revert IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive();
+    }
+
     function _onlyOracleManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
             revert NotAuthorised();
@@ -136,6 +152,8 @@ contract ERC7726OracleFactory is
     // ========== FACTORY FUNCTIONS ========== //
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Creates an enabled oracle and adds it to the factory-level re-enable recache count.
+    ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin or oracle manager
@@ -167,6 +185,7 @@ contract ERC7726OracleFactory is
         _oracleToMaxAge[oracle] = maxAge_;
         isOracle[oracle] = true;
         _isOracleEnabled[oracle] = true;
+        ++_enabledOracleCount;
 
         emit OracleCreated(oracle, maxAge_);
         emit OracleEnabled(oracle);
@@ -193,6 +212,9 @@ contract ERC7726OracleFactory is
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        `enableCreation()` sets `isCreationEnabled` to true. It does not update the
+    ///             enabled-oracle counter or perform recaching logic.
+    ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin or oracle manager
@@ -210,6 +232,9 @@ contract ERC7726OracleFactory is
     }
 
     /// @inheritdoc IERC7726OracleFactory
+    /// @dev        `disableCreation()` sets `isCreationEnabled` to false. It does not update the
+    ///             enabled-oracle counter or perform recaching logic.
+    ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin, oracle manager, or emergency
@@ -252,6 +277,7 @@ contract ERC7726OracleFactory is
         if (_isOracleEnabled[oracle_]) revert ERC7726OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
+        ++_enabledOracleCount;
         emit OracleEnabled(oracle_);
     }
 
@@ -270,28 +296,49 @@ contract ERC7726OracleFactory is
         }
 
         _isOracleEnabled[oracle_] = false;
+        --_enabledOracleCount;
         emit OracleDisabled(oracle_);
     }
 
     /// @inheritdoc IERC7726OracleFactory
-    /// @dev        Does not revert.
-    function isOracleEnabled(address oracle_) external view override returns (bool enabled) {
+    /// @dev        Reverts if the policy is deactivated in Kernel.
+    function isOracleEnabled(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled) {
         return isEnabled && isOracle[oracle_] && _isOracleEnabled[oracle_];
     }
 
     /// @inheritdoc IERC7726OracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - `oracle_` was not created by this factory
+    function getOracleContext(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled, address policy) {
+        if (!isOracle[oracle_]) revert ERC7726OracleFactory_InvalidOracle(oracle_);
+
+        enabled = isEnabled && _isOracleEnabled[oracle_];
+        policy = address(priceCache);
+    }
+
+    /// @inheritdoc IERC7726OracleFactory
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
     ///             - Underlying cache write fails
-    function cachePrice(address base_, address quote_) external override onlyEnabled nonReentrant {
+    function cachePrice(
+        address base_,
+        address quote_
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         priceCache.cachePrice(base_, quote_);
     }
 
     /// @inheritdoc IERC7726OracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -299,10 +346,47 @@ contract ERC7726OracleFactory is
     function cachePriceIfNecessary(
         address base_,
         address quote_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         uint48 configuredMaxAge = _oracleToMaxAge[msg.sender];
         priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
+    }
+
+    /// @inheritdoc PolicyEnabler
+    /// @dev        `_enable` optionally re-caches caller-specified pairs from `enableData_` before
+    ///             the factory-level `isEnabled` flag flips to true. `enableData_` can be empty for
+    ///             a no-op. Requested pairs are only recached when at least one ERC-7726 oracle
+    ///             variant is enabled; otherwise all requested pairs are skipped because disabled
+    ///             clones cannot request fresh cache writes until they are individually re-enabled.
+    ///
+    ///             When `enableData_` is non-empty, it must encode:
+    ///             `(address[] baseTokens, address[] quoteTokens)`.
+    ///
+    ///             Reverts if `enableData_` is non-empty and:
+    ///             - `enableData_` cannot be decoded into `(address[] baseTokens, address[] quoteTokens)`
+    ///             - The decoded base and quote token arrays have different lengths
+    ///             - The price cache rejects a requested pair during recaching
+    function _enable(bytes calldata enableData_) internal override {
+        if (enableData_.length == 0) return;
+
+        (address[] memory baseTokens, address[] memory quoteTokens) = abi.decode(
+            enableData_,
+            (address[], address[])
+        );
+        uint256 pairCount = baseTokens.length;
+        if (pairCount != quoteTokens.length) {
+            revert ERC7726OracleFactory_InvalidEnableData(pairCount, quoteTokens.length);
+        }
+
+        if (!_hasEnabledOracleVariant()) return;
+
+        for (uint256 i; i < pairCount; ) {
+            priceCache.cachePrice(baseTokens[i], quoteTokens[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -321,6 +405,10 @@ contract ERC7726OracleFactory is
     function _validateCachingCaller(address caller_) internal view {
         if (!isOracle[caller_]) revert ERC7726OracleFactory_InvalidOracle(caller_);
         if (!_isOracleEnabled[caller_]) revert ERC7726OracleFactory_OracleDisabled(caller_);
+    }
+
+    function _hasEnabledOracleVariant() internal view returns (bool) {
+        return _enabledOracleCount != 0;
     }
 
     function _setPriceCache(address policy_) internal {

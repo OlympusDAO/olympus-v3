@@ -2,8 +2,11 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneableTest {
@@ -16,6 +19,13 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NotEnabled.selector);
 
+        oracle.latestRoundData();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.latestRoundData();
     }
 
@@ -33,7 +43,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
 
     function test_whenLivePricesAreZeroButCacheExists_returnsCachedPrice() public {
         // The oracle uses cached values and does not fallback to live pricing.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        vm.warp(block.timestamp + 1);
         _setPRICEPrices(address(baseToken), 0);
         _setPRICEPrices(address(quoteToken), 0);
 
@@ -44,6 +54,18 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         // = (2e18 * 1e18) / 1e18
         // = 2e18
         assertEq(answer, 2e18, "Should return cached round");
+    }
+
+    // when cached ratio rounds down to zero
+    //  [X] it reverts with ChainlinkOracle_NoDataPresent
+
+    function test_whenCachedRatioRoundsDownToZero_reverts() public {
+        _setPRICEPrices(address(baseToken), 1);
+        _setPRICEPrices(address(quoteToken), 1e36);
+        _storePrices();
+
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NoDataPresent.selector);
+        oracle.latestRoundData();
     }
 
     // when cached pair price exceeds int256
@@ -112,6 +134,40 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             AggregatorV2V3Interface(address(oracle)).latestRound(),
             uint256(roundId),
             "latestRound should return correct round ID"
+        );
+    }
+
+    // when base/quote decimals are highly mismatched (0 vs 18)
+    //  [X] it still returns the correctly scaled non-zero answer for a 1:3 ratio
+    function test_whenBaseIsZeroDecimalsAndQuoteIsEighteenDecimals_givenOneToThreeRatio_returnsNonZeroAnswer()
+        public
+    {
+        MockERC20 zeroDecBase = new MockERC20("Zero Dec Base", "ZBASE", 0);
+        MockERC20 eighteenDecQuote = new MockERC20("Eighteen Dec Quote", "EQUOTE", 18);
+
+        _setPRICEPrices(address(zeroDecBase), 1e18);
+        _setPRICEPrices(address(eighteenDecQuote), 3e18);
+
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(zeroDecBase),
+            address(eighteenDecQuote),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // Cache direct pair snapshot consumed by cloneable oracle.
+        priceCache.cachePrice(address(zeroDecBase), address(eighteenDecQuote));
+
+        // Expected answer: (1e18 * 1e18) / 3e18 = 333333333333333333
+        uint256 expectedAnswer = 333333333333333333;
+
+        (, int256 answer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(
+            answer,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            int256(expectedAnswer),
+            "Should return non-zero scaled answer with 0/18 token decimals"
         );
     }
 
@@ -266,29 +322,81 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     }
 
     // when cached prices are stale (older than maxAge)
-    //  [X] it returns cached prices (round semantics)
+    //  [X] latestRoundData reverts with stale
+    //  [X] latestAnswer reverts with stale
+    //  [X] latestTimestamp returns cached timestamp
+    //  [X] latestRound returns cached round ID
 
-    function test_whenCachedPricesAreStale_returnsCachedPrices(
+    function test_whenCachedPricesAreStale_latestRoundDataRevertsWithStale(
         uint48 warpDelta_
     ) public givenPricesAreStored {
-        // Fuzz warp to a time strictly beyond maxAge so cache is stale
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale.
         uint48 warpDelta = uint48(
-            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
         );
         vm.warp(lastStoredTimestamp + warpDelta);
 
-        // Change live prices without storing
-        uint256 liveBase = 15e18;
-        uint256 liveQuote = 5e18;
-        _setPRICEPrices(address(baseToken), liveBase);
-        _setPRICEPrices(address(quoteToken), liveQuote);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
-        // Round-style semantics always return cached values.
-        (, int256 answer, , , ) = oracle.latestRoundData();
+        // Revert should include the stale cached round timestamp and latest permissible timestamp.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IChainlinkOracle.ChainlinkOracle_Stale.selector,
+                lastStoredTimestamp,
+                latestPermissibleTimestamp
+            )
+        );
+        oracle.latestRoundData();
+    }
 
-        // Expected cached answer:
-        // (2e18 * 1e18) / 1e18 = 2e18
-        assertEq(answer, 2e18, "Should return cached price even when cache is stale");
+    function test_whenCachedPricesAreStale_latestAnswerRevertsWithStale(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale.
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
+
+        // Revert should include the stale cached round timestamp and latest permissible timestamp.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IChainlinkOracle.ChainlinkOracle_Stale.selector,
+                lastStoredTimestamp,
+                latestPermissibleTimestamp
+            )
+        );
+        AggregatorV2V3Interface(address(oracle)).latestAnswer();
+    }
+
+    function test_whenCachedPricesAreStale_latestTimestampReturnsCachedTimestamp(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestTimestamp = AggregatorV2V3Interface(address(oracle)).latestTimestamp();
+        assertEq(
+            latestTimestamp,
+            lastStoredTimestamp,
+            "latestTimestamp should remain readable while stale"
+        );
+    }
+
+    function test_whenCachedPricesAreStale_latestRoundReturnsCachedRoundId(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestRound = AggregatorV2V3Interface(address(oracle)).latestRound();
+        assertEq(latestRound, lastStoredRoundId, "latestRound should remain readable while stale");
     }
 
     function test_whenOnlyQuoteUsdCacheChanges_returnsCachedPairRound()

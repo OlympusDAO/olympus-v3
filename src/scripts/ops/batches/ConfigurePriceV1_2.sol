@@ -5,6 +5,7 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
+import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
@@ -15,9 +16,10 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 // PRICE contracts
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 
 // PRICE Submodules
@@ -33,6 +35,8 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 /// @dev    Deployment of PRICE module and PriceConfig happens separately
 ///         This script only handles configuration
 contract ConfigurePriceV1_2 is BatchScriptV2 {
+    using SafeCast for uint256;
+
     // ========== STATE ========== //
 
     /// @notice Addresses of assets and Pyth contract (loaded from args or env)
@@ -43,7 +47,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     address internal _pyth;
 
     /// @notice Configuration parameters (loaded from args)
-    uint32 internal _ohmObservationWindow;
+    uint32 internal _ohmWethObservationWindow;
+    uint32 internal _ohmSusdsObservationWindow;
+    uint256 internal _preUpgradeOhmTargetPrice;
 
     // ========== CONFIGURATION FUNCTIONS ========== //
 
@@ -75,9 +81,15 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
         // Load configuration parameters from args file
-        _ohmObservationWindow = SafeCast.encodeUInt32(
-            _readBatchArgUint256("configurePriceV1_2", "ohmObservationWindow")
-        );
+        _ohmWethObservationWindow = _readBatchArgUint256(
+            "configurePriceV1_2",
+            "ohmWethObservationWindow"
+        ).encodeUInt32();
+
+        _ohmSusdsObservationWindow = _readBatchArgUint256(
+            "configurePriceV1_2",
+            "ohmSusdsObservationWindow"
+        ).encodeUInt32();
 
         console2.log("Kernel:", kernel);
         console2.log("PriceConfig:", priceConfig);
@@ -94,6 +106,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             // If major is 1, minor must be at least 2
             if (major < 1) revert("PRICE module version is unsupported");
             if (major == 1 && minor < 2) revert("PRICE module version is unsupported");
+        }
+
+        PRICEv1 oldPrice = PRICEv1(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+        _preUpgradeOhmTargetPrice = oldPrice.getTargetPrice();
+        if (IPRICEv1(priceModule).observationFrequency() != oldPrice.observationFrequency()) {
+            revert("PRICE observation frequency mismatch");
         }
 
         // Upgrade PRICE v1.2 module in the kernel
@@ -125,7 +143,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureUSDS(priceConfig);
         _configureSusds(priceConfig);
         _configureWeth(priceConfig);
-        _configureOhm(priceConfig);
+        _configureOhm(priceConfig, oldPrice);
 
         console2.log("PRICE v1.2 configuration batch prepared");
         proposeBatch();
@@ -340,8 +358,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.logBytes32(pythEthUsdId);
         console2.log("Chainlink BTC/USD:", chainlinkBtcUsd);
         console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
+        console2.log("wETH update threshold:", wethUpdateThreshold);
 
         // Create strategy component: getAveragePriceExcludingDeviations
+        // When exactly two WETH feeds survive, the strategy benchmarks each price against
+        // their average. A 500 bps deviation allows boundary prices of $1,900 and $2,100
+        // around a $2,000 average, i.e. a 10% spread between the two surviving feeds.
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
             wethDeviationBps,
@@ -382,16 +404,21 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 })
             )
         );
-        // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD
+        // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD. ETH/BTC has a 24-hour
+        // heartbeat, while BTC/USD uses the standard 1-hour WETH feed threshold.
         feeds[3] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
                 ChainlinkPriceFeeds.TwoFeedParams({
                     firstFeed: AggregatorV2V3Interface(chainlinkEthBtc),
-                    firstUpdateThreshold: wethUpdateThreshold,
+                    firstUpdateThreshold: SafeCast.encodeUInt48(
+                        _readBatchArgUint256("configurePriceV1_2", "wethEthBtcUpdateThreshold")
+                    ),
                     secondFeed: AggregatorV2V3Interface(chainlinkBtcUsd),
-                    secondUpdateThreshold: wethUpdateThreshold
+                    secondUpdateThreshold: SafeCast.encodeUInt48(
+                        _readBatchArgUint256("configurePriceV1_2", "wethBtcUsdUpdateThreshold")
+                    )
                 })
             )
         );
@@ -410,14 +437,14 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
     /// @notice Configure OHM asset
     /// @param priceConfig_ Address of the PriceConfig v2 policy
-    function _configureOhm(address priceConfig_) internal {
+    function _configureOhm(address priceConfig_, PRICEv1 oldPrice_) internal {
         console2.log("\n=== Configuring OHM Asset ===");
 
         // Read Uniswap pool addresses from args file
         address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
         address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
 
-        // Read strict mode and observation window from args file
+        // Read strict mode from args file
         bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
@@ -425,29 +452,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
 
         // Create strategy component: getAveragePrice with strict mode
         IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
-
-        // Create feed components for the two Uniswap pools using getTokenTWAP
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
-        feeds[0] = _encodeFeed(
-            toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenTWAP.selector,
-            abi.encode(
-                UniswapV3Price.UniswapV3Params({
-                    pool: IUniswapV3Pool(uniswapOhmWeth),
-                    observationWindowSeconds: _ohmObservationWindow
-                })
-            )
-        );
-        feeds[1] = _encodeFeed(
-            toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenTWAP.selector,
-            abi.encode(
-                UniswapV3Price.UniswapV3Params({
-                    pool: IUniswapV3Pool(uniswapOhmSusds),
-                    observationWindowSeconds: _ohmObservationWindow
-                })
-            )
-        );
+        IPRICEv2.Component[] memory feeds = _getOhmFeeds();
 
         IPriceConfigv2.PriceFeedExpectation[] memory feedExpectations = _readFeedExpectations(
             feeds.length,
@@ -456,15 +461,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint256 ohmInitialPrice = feedExpectations[0].expectedPrice;
         console2.log("OHM initial price:", ohmInitialPrice);
 
-        // Create pre-populated observations array (21 observations for 7-day moving average)
-        // Observation frequency is 8 hours, so 7 days = 21 observations
-        uint256[] memory ohmObservations = new uint256[](21);
-        for (uint256 i = 0; i < 21; i++) {
-            ohmObservations[i] = ohmInitialPrice;
-        }
-
         // Set last observation time to current time
-        uint48 ohmLastObservationTime = uint48(block.timestamp);
+        (
+            uint32 ohmMovingAverageDuration,
+            uint48 ohmLastObservationTime,
+            uint256[] memory ohmObservations
+        ) = _getMigratedOhmObservations(oldPrice_);
 
         // Add asset via PriceConfig with moving average configuration
         _addAssetWithMA(
@@ -472,7 +474,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             _ohm,
             true, // storeMovingAverage
             false, // useMovingAverage
-            604800, // movingAverageDuration (7 days in seconds)
+            ohmMovingAverageDuration,
             ohmLastObservationTime,
             ohmObservations,
             strategy,
@@ -480,7 +482,95 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             feedExpectations
         );
 
-        console2.log("OHM asset configured with 7-day moving average");
+        console2.log("OHM asset configured with migrated 30-day moving average");
+    }
+
+    function _getOhmFeeds() internal view returns (IPRICEv2.Component[] memory feeds_) {
+        // Read Uniswap pool addresses from args file
+        address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
+        address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
+        address chainlinkOhmEth = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
+        address chainlinkEthUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkEthUsd");
+
+        uint48 ohmUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "ohmUpdateThreshold")
+        );
+        uint48 wethUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
+        );
+
+        console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
+        console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
+        console2.log("Chainlink OHM/ETH:", chainlinkOhmEth);
+        console2.log("Chainlink ETH/USD:", chainlinkEthUsd);
+
+        // Create feed components for the two Uniswap pools and Chainlink OHM/ETH x ETH/USD
+        feeds_ = new IPRICEv2.Component[](3);
+        feeds_[0] = _encodeFeed(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmWeth),
+                    observationWindowSeconds: _ohmWethObservationWindow
+                })
+            )
+        );
+        feeds_[1] = _encodeFeed(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(
+                UniswapV3Price.UniswapV3Params({
+                    pool: IUniswapV3Pool(uniswapOhmSusds),
+                    observationWindowSeconds: _ohmSusdsObservationWindow
+                })
+            )
+        );
+        feeds_[2] = _encodeFeed(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.TwoFeedParams({
+                    firstFeed: AggregatorV2V3Interface(chainlinkOhmEth),
+                    firstUpdateThreshold: ohmUpdateThreshold,
+                    secondFeed: AggregatorV2V3Interface(chainlinkEthUsd),
+                    secondUpdateThreshold: wethUpdateThreshold
+                })
+            )
+        );
+    }
+
+    function _getMigratedOhmObservations(
+        PRICEv1 oldPrice_
+    )
+        internal
+        view
+        returns (
+            uint32 ohmMovingAverageDuration_,
+            uint48 ohmLastObservationTime_,
+            uint256[] memory ohmObservations_
+        )
+    {
+        ohmMovingAverageDuration_ = uint32(oldPrice_.movingAverageDuration());
+
+        uint32 oldNumObservations = oldPrice_.numObservations();
+        uint256 expectedNumObservations = uint256(ohmMovingAverageDuration_) /
+            uint256(oldPrice_.observationFrequency());
+
+        if (expectedNumObservations != uint256(oldNumObservations)) {
+            revert("OHM observation count mismatch");
+        }
+
+        // Migrate the live PRICE v1 ring buffer into v1.2. PRICE v2 initializes nextObsIndex
+        // to 0, so rotate the old buffer such that the oldest observation remains index 0.
+        ohmObservations_ = new uint256[](oldNumObservations);
+        uint256 oldestObservationIndex = oldPrice_.nextObsIndex();
+        for (uint256 i = 0; i < oldNumObservations; i++) {
+            uint256 sourceIndex = (oldestObservationIndex + i) % oldNumObservations;
+            ohmObservations_[i] = oldPrice_.observations(sourceIndex);
+        }
+
+        ohmLastObservationTime_ = oldPrice_.lastObservationTime();
     }
 
     /// @notice Add an asset to the PRICE module via PriceConfig

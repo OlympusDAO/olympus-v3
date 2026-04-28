@@ -3,7 +3,9 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneableTest {
@@ -53,6 +55,13 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
             initialCacheCalls + 2,
             "Stale cache should be re-cached"
         );
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
     }
 
     function test_whenOnlyCollateralUsdCacheChanges_cachePricesIfNecessaryDoesNotRecachePair()

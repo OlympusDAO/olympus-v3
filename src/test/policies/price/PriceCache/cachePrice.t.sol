@@ -16,6 +16,13 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
         cache.cachePrice(address(assetToken), address(quoteToken));
     }
 
+    function test_whenPolicyIsDeactivated_reverts() public {
+        _deactivateCachePolicy();
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        cache.cachePrice(address(assetToken), address(quoteToken));
+    }
+
     function test_whenAssetAndQuoteAreSame_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(

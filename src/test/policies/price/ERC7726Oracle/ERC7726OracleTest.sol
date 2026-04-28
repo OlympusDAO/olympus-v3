@@ -27,6 +27,7 @@ contract ERC7726OracleTest is Test {
 
     MockERC20 public collateralToken;
     MockERC20 public loanToken;
+    address public registeredNonContractAsset;
 
     address public admin;
     address public manager;
@@ -72,6 +73,7 @@ contract ERC7726OracleTest is Test {
         // Deploy mock tokens
         collateralToken = new MockERC20("Collateral Token", "COL", 18);
         loanToken = new MockERC20("Loan Token", "LOAN", 18);
+        registeredNonContractAsset = makeAddr("REGISTERED_NON_CONTRACT_ASSET");
 
         // Set prices in cache policy mock
         _setPRICEPrices(address(collateralToken), 2e18); // 2 USD
@@ -96,6 +98,14 @@ contract ERC7726OracleTest is Test {
     /// @notice Sets price for a token in the cache policy mock
     function _setPRICEPrices(address token_, uint256 price_) internal {
         priceCache.setUsdPrice(token_, price_);
+    }
+
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
+        priceCache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
     }
 
     /// @notice Enables the oracle

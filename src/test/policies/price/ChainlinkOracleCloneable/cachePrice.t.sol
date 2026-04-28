@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleCloneable.sol";
+import {Actions} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
@@ -36,6 +37,13 @@ contract ChainlinkOracleCloneableCachePriceTest is ChainlinkOracleCloneableTest 
 
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        ChainlinkOracleCloneable(address(oracle)).cachePrice();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         ChainlinkOracleCloneable(address(oracle)).cachePrice();
     }
 

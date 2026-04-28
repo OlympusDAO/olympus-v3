@@ -7,8 +7,6 @@ import {Kernel} from "src/Kernel.sol";
 import {BaseOracleFactory} from "src/policies/price/BaseOracleFactory.sol";
 import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleCloneable.sol";
 
-// Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {LibString} from "@solmate-6.2.0/utils/LibString.sol";
 
 /// @title  ChainlinkOracleFactory
@@ -54,8 +52,8 @@ contract ChainlinkOracleFactory is BaseOracleFactory {
         bytes calldata
     ) internal view override returns (bytes memory) {
         // Compose name from token symbols and maxAge: "base/quote CL {maxAge}s"
-        string memory baseSymbol = ERC20(baseToken_).symbol();
-        string memory quoteSymbol = ERC20(quoteToken_).symbol();
+        string memory baseSymbol = priceCache.assetSymbol(baseToken_);
+        string memory quoteSymbol = priceCache.assetSymbol(quoteToken_);
         bytes32 oracleName = bytes32(
             abi.encodePacked(baseSymbol, "/", quoteSymbol, " CL ", uint256(maxAge_).toString(), "s")
         );

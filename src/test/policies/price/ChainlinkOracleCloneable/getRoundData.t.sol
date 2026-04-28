@@ -128,6 +128,49 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         AggregatorV2V3Interface(address(oracle)).getTimestamp(uint256(roundId_));
     }
 
+    function test_whenCachedPricesAreStale_getFunctionsReturnLatestRoundData()
+        public
+        givenPricesAreStored
+    {
+        vm.warp(lastStoredTimestamp + DEFAULT_MAX_AGE + 1);
+
+        // Change live prices without storing to distinguish live vs cached values.
+        _setPRICEPrices(address(baseToken), 15e18);
+        _setPRICEPrices(address(quoteToken), 5e18);
+
+        uint80 latestRoundId = lastStoredRoundId;
+        assertEq(
+            AggregatorV2V3Interface(address(oracle)).latestRound(),
+            uint256(latestRoundId),
+            "latestRound should expose the cached round ID while stale"
+        );
+
+        (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = oracle.getRoundData(latestRoundId);
+
+        assertEq(roundId, latestRoundId, "Round ID should match stale cached round");
+        assertEq(answer, 2e18, "Answer should remain the stale cached ratio");
+        assertEq(startedAt, lastStoredTimestamp, "StartedAt should remain cached timestamp");
+        assertEq(updatedAt, lastStoredTimestamp, "UpdatedAt should remain cached timestamp");
+        assertEq(answeredInRound, roundId, "AnsweredInRound should equal roundId");
+
+        assertEq(
+            AggregatorV2V3Interface(address(oracle)).getAnswer(uint256(latestRoundId)),
+            answer,
+            "getAnswer should remain readable while stale"
+        );
+        assertEq(
+            AggregatorV2V3Interface(address(oracle)).getTimestamp(uint256(latestRoundId)),
+            updatedAt,
+            "getTimestamp should remain readable while stale"
+        );
+    }
+
     // when cache decimals change
     //  [X] it continues to use original oracle decimals
     //  [X] it returns correct price calculation with original decimals

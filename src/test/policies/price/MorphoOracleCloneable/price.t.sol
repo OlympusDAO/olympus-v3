@@ -2,8 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
@@ -21,6 +23,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IMorphoOracle.MorphoOracle_NotEnabled.selector);
 
+        oracle.price();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.price();
     }
 
@@ -43,12 +52,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -64,12 +74,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -248,6 +259,41 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             actualCollateralTokensPerLoanToken,
             expectedCollateralTokensPerLoanToken,
             "Collateral tokens per loan token should be calculated correctly"
+        );
+    }
+
+    // when collateral has 0 decimals and loan has 18 decimals
+    //  [X] it returns the correctly scaled non-zero price for a 1:3 ratio
+    function test_whenZeroDecimalCollateralAndOneToThreeRatio_returnsNonZeroPrice() public {
+        // Create a new collateral token with 0 decimals.
+        MockERC20 newCollateralToken = new MockERC20("Zero Dec Collateral", "ZCOL", 0);
+
+        // Set prices to collateral=1e18 USD and loan=3e18 USD.
+        _setPRICEPrices(address(newCollateralToken), 1e18);
+        _setPRICEPrices(address(loanToken), 3e18);
+
+        // Create oracle for the new pair.
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(newCollateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // scaleFactor = 1e54 (36 + 18 - 0)
+        // price = (1e18 * 1e54) / 3e18 = 1e54 / 3
+        uint256 expectedPrice = 333333333333333333333333333333333333333333333333333333;
+        uint256 actualPrice = IMorphoOracle(newOracle).price();
+        assertEq(actualPrice, expectedPrice, "Price should preserve non-zero precision");
+
+        // loan tokens per collateral token = 1 * price / 1e36 = 333333333333333333
+        uint256 expectedLoanTokensPerCollateralToken = 333333333333333333;
+        uint256 actualLoanTokensPerCollateralToken = actualPrice / 1e36;
+        assertEq(
+            actualLoanTokensPerCollateralToken,
+            expectedLoanTokensPerCollateralToken,
+            "Loan tokens per collateral token should be correctly scaled"
         );
     }
 
@@ -608,12 +654,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
         vm.warp(cachedAt + warpDelta);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();

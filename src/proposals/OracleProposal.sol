@@ -7,7 +7,7 @@ import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 
 // Olympus Kernel, Modules, and Policies
-import {Kernel} from "src/Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -121,6 +121,10 @@ contract OracleProposal is GovernorBravoProposal {
         );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
+
+        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
+        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
+        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false, priceCache);
 
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
@@ -253,6 +257,10 @@ contract OracleProposal is GovernorBravoProposal {
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
 
+        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
+        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
+        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false, priceCache);
+
         // Verify admin role granted to Timelock
         require(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
 
@@ -303,6 +311,27 @@ contract OracleProposal is GovernorBravoProposal {
             IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
             "OHM/USDS Morpho oracle not enabled"
         );
+    }
+
+    function _verifyFactoryConfiguration(
+        address factory_,
+        string memory name_,
+        bool isERC7726_,
+        address priceCache_
+    ) internal view {
+        require(factory_.code.length != 0, string.concat(name_, " not deployed"));
+        require(
+            address(Policy(factory_).kernel()) == address(_kernel),
+            string.concat(name_, " wrong kernel")
+        );
+        require(_kernel.isPolicyActive(Policy(factory_)), string.concat(name_, " not activated"));
+
+        address expectedSource = priceCache_;
+        address factorySource = isERC7726_
+            ? IERC7726OracleFactory(factory_).getPriceCache()
+            : IOracleFactory(factory_).getPriceCache();
+
+        require(factorySource == expectedSource, string.concat(name_, " wrong price cache"));
     }
 }
 

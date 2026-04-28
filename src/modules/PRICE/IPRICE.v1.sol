@@ -51,9 +51,11 @@ interface IPRICEv1 {
     /// @notice Get the last stored price observation of OHM in the Reserve asset
     function getLastPrice() external view returns (uint256);
 
-    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
+    /// @notice Get the stored moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
+    /// @dev    This accessor may return a stale value.
     function getMovingAverage() external view returns (uint256);
 
     /// @notice Get target price of OHM in the Reserve asset for the RBS system
+    /// @dev    Reverts when the OHM moving average is stale.
     function getTargetPrice() external view returns (uint256);
 }

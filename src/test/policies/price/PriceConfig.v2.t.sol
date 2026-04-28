@@ -755,39 +755,47 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](8);
+        Permissions[] memory expectedPerms = new Permissions[](10);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
         expectedPerms[0] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.addAsset.selector
+            funcSelector: PRICE.registerNonContractAsset.selector
         });
         expectedPerms[1] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.removeAsset.selector
+            funcSelector: PRICE.unregisterNonContractAsset.selector
         });
         expectedPerms[2] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.updateAsset.selector
+            funcSelector: PRICE.addAsset.selector
         });
         expectedPerms[3] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.installSubmodule.selector
+            funcSelector: PRICE.removeAsset.selector
         });
         expectedPerms[4] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.upgradeSubmodule.selector
+            funcSelector: PRICE.updateAsset.selector
         });
         expectedPerms[5] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.execOnSubmodule.selector
+            funcSelector: PRICE.installSubmodule.selector
         });
         expectedPerms[6] = Permissions({
             keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.storeObservation.selector
+            funcSelector: PRICE.upgradeSubmodule.selector
         });
         expectedPerms[7] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.execOnSubmodule.selector
+        });
+        expectedPerms[8] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.storeObservation.selector
+        });
+        expectedPerms[9] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
         });
@@ -827,6 +835,87 @@ contract PriceConfigv2Test is Test {
     }
 
     /* ========== PRICEv2 Configuration ========== */
+
+    function test_registerNonContractAsset_notEnabled_reverts() public givenDisabled {
+        _expectRevertNotEnabled();
+
+        vm.prank(priceManager);
+        priceConfig.registerNonContractAsset(address(123));
+    }
+
+    function test_registerNonContractAsset_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
+
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        priceConfig.registerNonContractAsset(address(123));
+
+        assertEq(PRICE.isNonContractAsset(address(123)), false, "Asset should not be registered");
+
+        vm.prank(priceManager);
+        priceConfig.registerNonContractAsset(address(123));
+
+        assertEq(PRICE.isNonContractAsset(address(123)), true, "Asset should be registered");
+    }
+
+    function test_registerNonContractAsset(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+        address nonContractAsset = address(123);
+
+        vm.prank(caller);
+        priceConfig.registerNonContractAsset(nonContractAsset);
+
+        assertEq(PRICE.isNonContractAsset(nonContractAsset), true, "Asset should be registered");
+    }
+
+    function test_unregisterNonContractAsset_notEnabled_reverts() public givenDisabled {
+        _expectRevertNotEnabled();
+
+        vm.prank(priceManager);
+        priceConfig.unregisterNonContractAsset(address(123));
+    }
+
+    function test_unregisterNonContractAsset_unauthorizedUser_reverts(address user_) public {
+        vm.assume(user_ != admin && user_ != priceManager);
+        address nonContractAsset = address(123);
+
+        vm.prank(priceManager);
+        priceConfig.registerNonContractAsset(nonContractAsset);
+
+        bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        priceConfig.unregisterNonContractAsset(nonContractAsset);
+
+        assertEq(
+            PRICE.isNonContractAsset(nonContractAsset),
+            true,
+            "Asset should remain registered"
+        );
+
+        vm.prank(priceManager);
+        priceConfig.unregisterNonContractAsset(nonContractAsset);
+
+        assertEq(PRICE.isNonContractAsset(nonContractAsset), false, "Asset should be deregistered");
+    }
+
+    function test_unregisterNonContractAsset(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+        address nonContractAsset = address(123);
+
+        vm.prank(priceManager);
+        priceConfig.registerNonContractAsset(nonContractAsset);
+
+        vm.prank(caller);
+        priceConfig.unregisterNonContractAsset(nonContractAsset);
+
+        assertEq(PRICE.isNonContractAsset(nonContractAsset), false, "Asset should be deregistered");
+    }
 
     function test_addAsset_givenDisabled_reverts() public givenDisabled {
         // Prepare arguments
@@ -2508,6 +2597,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.storeObservation(address(ohm));
 
         // Try with priceManager account, expect success
+        vm.warp(block.timestamp + 1);
         vm.prank(priceManager);
         priceConfig.storeObservation(address(ohm));
 
@@ -2525,6 +2615,7 @@ contract PriceConfigv2Test is Test {
         _addBaseAssets();
 
         // Store price using authorized caller
+        vm.warp(block.timestamp + 1);
         vm.prank(caller);
         priceConfig.storeObservation(address(ohm));
 
@@ -2556,6 +2647,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.storeObservations();
 
         // Try with priceManager account, expect success
+        vm.warp(block.timestamp + 1);
         vm.prank(priceManager);
         priceConfig.storeObservations();
 
@@ -2573,6 +2665,7 @@ contract PriceConfigv2Test is Test {
         _addBaseAssets();
 
         // Store observations using authorized caller
+        vm.warp(block.timestamp + 1);
         vm.prank(caller);
         priceConfig.storeObservations();
 

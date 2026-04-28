@@ -124,6 +124,18 @@ interface IPriceConfigv2 {
         PriceFeedExpectation[] memory feedExpectations_
     ) external;
 
+    /// @notice Register a non-contract asset for management by the PRICE module
+    /// @dev    After registration, the address can be used as a non-contract asset identifier in PRICE
+    ///
+    /// @param  asset_  The non-contract asset address to register
+    function registerNonContractAsset(address asset_) external;
+
+    /// @notice Deregister a non-contract asset from management by the PRICE module
+    /// @dev    This reverts if the asset is reserved or still configured on PRICE
+    ///
+    /// @param  asset_  The non-contract asset address to deregister
+    function unregisterNonContractAsset(address asset_) external;
+
     /// @notice Queue removal of an asset from the PRICE module
     /// @dev    After execution, calls to PRICEv2 for the asset's price will revert.
     ///

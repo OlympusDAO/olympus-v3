@@ -13,6 +13,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Bophades
+import {Module} from "src/Kernel.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -74,6 +75,7 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 //      [X] reverts if asset not configured on PRICE module (not approved)
 //      [X] reverts if price is zero
 //      [X] reverts if caller is not permissioned
+//      [X] reverts if called twice in the same block
 //      [X] reverts if observationFrequency has not elapsed since last observation
 //      [X] updates stored observations
 //           [X] single observation stored (no moving average)
@@ -117,8 +119,6 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 // - TWOMA: Two feed + MA using the getAveragePrice strategy
 
 contract PriceV2Test is PriceV2BaseTest {
-    address internal constant _UNIT_OF_ACCOUNT = address(840);
-
     // =========  TESTS ========= //
 
     function test_constructor_observationFrequency_zero_reverts() public {
@@ -130,6 +130,21 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Create a new module
         new OlympusPricev2(kernel, 18, 0);
+    }
+
+    function test_constructor_setsUnitOfAccountAndRegistersIt() public {
+        OlympusPricev2 newPrice = new OlympusPricev2(kernel, 18, OBSERVATION_FREQUENCY);
+
+        assertEq(
+            newPrice.unitOfAccount(),
+            _UNIT_OF_ACCOUNT,
+            "Unit of account should use the reserved constant"
+        );
+        assertEq(
+            newPrice.isNonContractAsset(_UNIT_OF_ACCOUNT),
+            true,
+            "Unit of account should be registered as a non-contract asset"
+        );
     }
 
     // =========  getAssets  ========= //
@@ -549,6 +564,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -976,6 +992,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -1044,6 +1061,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedTwomaCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -1743,8 +1761,8 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Try to call storeObservation with non-permissioned address (this contract) and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);
@@ -1771,6 +1789,28 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Call the function
         // Should not revert
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+    }
+
+    function testRevert_storeObservation_sameBlock(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        // Store first observation
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+
+        // Storing a second observation in the same block should revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ObservationTooEarly.selector,
+                address(onema),
+                uint48(block.timestamp),
+                uint48(block.timestamp + 1)
+            )
+        );
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
     }
@@ -2171,8 +2211,8 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
-    function testRevert_addAsset_notContract() public {
-        address eoa = 0x3040351e0D8EAf89A0F1b958Fa62915d804B2405;
+    function testRevert_addAsset_unregisteredNonContract() public {
+        address nonContract = makeAddr("NON_CONTRACT");
 
         ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
             ethUsdPriceFeed,
@@ -2186,14 +2226,12 @@ contract PriceV2Test is PriceV2BaseTest {
             abi.encode(ethParams) // bytes memory params_
         );
 
-        // Try and add the asset
+        // Try and add the unregistered non-contract asset
         vm.startPrank(priceWriter);
-
-        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotContract(address)", address(eoa));
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_InvalidAsset.selector, nonContract));
 
         price.addAsset(
-            address(eoa), // address asset_
+            nonContract, // address asset_
             false, // bool storeMovingAverage_ // don't track WETH MA
             false, // bool useMovingAverage_
             uint32(0), // uint32 movingAverageDuration_
@@ -2201,6 +2239,135 @@ contract PriceV2Test is PriceV2BaseTest {
             new uint256[](0), // uint256[] memory observations_
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
             feeds //
+        );
+    }
+
+    function test_addAsset_registeredNonContract() public {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+        vm.startPrank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            feeds
+        );
+        vm.stopPrank();
+
+        assertEq(price.isAssetApproved(nonContract), true, "Non-contract asset should be approved");
+    }
+
+    function test_addAsset_registeredNonContract_thenDeployContractAtSameAddress_getPriceStillWorks()
+        public
+    {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory initialFeeds = new IPRICEv2.Component[](1);
+        initialFeeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            initialFeeds
+        );
+
+        assertEq(price.getPrice(nonContract), 2000e18, "Price should use the initial feed");
+
+        MockERC20 replacement = new MockERC20("Replacement", "RPL", 6);
+        vm.etch(nonContract, address(replacement).code);
+
+        assertEq(
+            price.getPrice(nonContract),
+            2000e18,
+            "Price should still work after code is deployed at the address"
+        );
+    }
+
+    function test_removeAsset_registeredNonContract_thenDeployContractAtSameAddress_thenDeregisters()
+        public
+    {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            feeds
+        );
+
+        MockERC20 replacement = new MockERC20("Replacement", "RPL", 6);
+        vm.etch(nonContract, address(replacement).code);
+
+        vm.startPrank(priceWriter);
+        price.removeAsset(nonContract);
+        price.unregisterNonContractAsset(nonContract);
+        vm.stopPrank();
+
+        assertEq(
+            price.isAssetApproved(nonContract),
+            false,
+            "Non-contract asset should be removable after code is deployed at the address"
+        );
+        assertEq(
+            price.isNonContractAsset(nonContract),
+            false,
+            "Non-contract asset should be deregisterable after asset removal"
         );
     }
 
@@ -2220,8 +2387,8 @@ contract PriceV2Test is PriceV2BaseTest {
         );
 
         // Try and add the asset
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);
@@ -2747,6 +2914,68 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
+    function test_addAsset_givenUniswapTwapObservationCardinalityInsufficient_reverts() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price.UniswapV3Params(
+            ohmEthUniV3Pool,
+            TWAP_PERIOD
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"), // SubKeycode target
+            UniswapV3Price.getTokenTWAP.selector, // bytes4 selector
+            abi.encode(ohmFeedThreeParams) // bytes memory params
+        );
+
+        // Keep cardinality one below the minimum required by TWAP_PERIOD so the Uniswap feed call fails.
+        uint16 minimumRequiredCardinality = uint16(
+            (uint256(TWAP_PERIOD) + _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS - 1) /
+                _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS
+        );
+        uint16 insufficientCardinality = minimumRequiredCardinality - 1;
+        ohmEthUniV3Pool.setObservationCardinality(insufficientCardinality, insufficientCardinality);
+
+        vm.startPrank(priceWriter);
+
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_PriceFeedCallFailed.selector,
+            address(ohm)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(ohm), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            IPRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+        vm.stopPrank();
+    }
+
     function testRevert_addAsset_singlePriceFeed_movingAverage_submoduleCallReturnsZero(
         uint256 nonce_
     ) public {
@@ -3263,8 +3492,8 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Try and remove the asset
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);

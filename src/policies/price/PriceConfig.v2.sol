@@ -93,34 +93,42 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](8);
+        requests = new Permissions[](10);
         // PRICE Permissions
-        requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
+        requests[0] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.registerNonContractAsset.selector
+        });
         requests[1] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.unregisterNonContractAsset.selector
+        });
+        requests[2] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
+        requests[3] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.removeAsset.selector
         });
-        requests[2] = Permissions({
+        requests[4] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.updateAsset.selector
         });
-        requests[3] = Permissions({
+        requests[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.installSubmodule.selector
         });
-        requests[4] = Permissions({
+        requests[6] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.upgradeSubmodule.selector
         });
-        requests[5] = Permissions({
+        requests[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
         });
-        requests[6] = Permissions({
+        requests[8] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservation.selector
         });
-        requests[7] = Permissions({
+        requests[9] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
         });
@@ -497,16 +505,36 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
-    /// @dev        This is an immediate, non-timelocked state-changing function for adding newly
-    ///             approved PRICE assets. It validates the PRICE asset configuration, adds the asset
-    ///             entry on PRICE, emits PRICE asset/component events, and then checks the configured
-    ///             feed expectations.
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
-    ///             - PRICE rejects the asset configuration, including reserved assets, non-contract
-    ///               assets, duplicate assets, invalid component parameters, or invalid moving
-    ///               average parameters
+    ///             - `asset_` is the zero address
+    ///             - `asset_` is a contract
+    ///             - `asset_` is reserved or otherwise invalid under PRICE rules
+    ///             - `asset_` is already registered as a non-contract asset
+    ///             - PRICE rejects the registration
+    function registerNonContractAsset(
+        address asset_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.registerNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the deregistration
+    function unregisterNonContractAsset(
+        address asset_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.unregisterNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the asset configuration
     ///             - Any feed expectation is invalid or outside the accepted tolerance
     function addAsset(
         address asset_,
