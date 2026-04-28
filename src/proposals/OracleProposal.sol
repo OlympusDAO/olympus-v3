@@ -7,7 +7,7 @@ import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {GovernorBravoProposal} from "proposal-sim/proposals/OlympusGovernorBravoProposal.sol";
 
 // Olympus Kernel, Modules, and Policies
-import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -72,12 +72,13 @@ contract OracleProposal is GovernorBravoProposal {
                 "\n",
                 "1. **Grant `admin` role to Timelock** (if needed)\n",
                 "2. **Grant `oracle_manager` role to DAO MS and Timelock** (if needed)\n",
-                "3. **Enable ERC7726OracleFactory policy**\n",
-                "4. **Enable ChainlinkOracleFactory policy**\n",
-                "5. **Enable MorphoOracleFactory policy**\n",
-                "6. **Deploy ERC7726 oracle** (via ERC7726OracleFactory)\n",
-                "7. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
-                "8. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
+                "3. **Enable PriceCache policy** (if needed)\n",
+                "4. **Enable ERC7726OracleFactory policy**\n",
+                "5. **Enable ChainlinkOracleFactory policy**\n",
+                "6. **Enable MorphoOracleFactory policy**\n",
+                "7. **Deploy ERC7726 oracle** (via ERC7726OracleFactory)\n",
+                "8. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
+                "9. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
                 "\n",
                 "## Technical Details\n",
                 "\n",
@@ -119,10 +120,11 @@ contract OracleProposal is GovernorBravoProposal {
             "olympus-policy-chainlink-oracle-factory-1_0"
         );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
+        address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
 
-        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true);
-        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false);
-        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false);
+        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
+        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
+        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false, priceCache);
 
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
@@ -164,7 +166,18 @@ contract OracleProposal is GovernorBravoProposal {
             console2.log("Timelock already has the oracle_manager role");
         }
 
-        // STEP 3: Enable oracle policies
+        // STEP 3: Enable PriceCache, if needed
+        if (!IEnabler(priceCache).isEnabled()) {
+            _pushAction(
+                priceCache,
+                abi.encodeWithSelector(IEnabler.enable.selector, ""),
+                "Enable PriceCache"
+            );
+        } else {
+            console2.log("PriceCache already enabled");
+        }
+
+        // STEP 4: Enable oracle policies
         _pushAction(
             erc7726Factory,
             abi.encodeWithSelector(IEnabler.enable.selector, ""),
@@ -183,7 +196,7 @@ contract OracleProposal is GovernorBravoProposal {
             "Enable MorphoOracleFactory"
         );
 
-        // STEP 4: Deploy oracles
+        // STEP 5: Deploy oracles
         _pushAction(
             erc7726Factory,
             abi.encodeWithSelector(
@@ -242,10 +255,11 @@ contract OracleProposal is GovernorBravoProposal {
         );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
+        address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
 
-        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true);
-        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false);
-        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false);
+        _verifyFactoryConfiguration(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
+        _verifyFactoryConfiguration(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
+        _verifyFactoryConfiguration(morphoFactory, "MorphoOracleFactory", false, priceCache);
 
         // Verify admin role granted to Timelock
         require(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
@@ -260,7 +274,8 @@ contract OracleProposal is GovernorBravoProposal {
             "Timelock does not have oracle_manager role"
         );
 
-        // Verify oracle policies are enabled
+        // Verify price cache and oracle policies are enabled
+        require(IEnabler(priceCache).isEnabled(), "PriceCache not enabled");
         require(IEnabler(erc7726Factory).isEnabled(), "ERC7726OracleFactory not enabled");
         require(IEnabler(chainlinkFactory).isEnabled(), "ChainlinkOracleFactory not enabled");
         require(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
@@ -301,7 +316,8 @@ contract OracleProposal is GovernorBravoProposal {
     function _verifyFactoryConfiguration(
         address factory_,
         string memory name_,
-        bool isERC7726_
+        bool isERC7726_,
+        address priceCache_
     ) internal view {
         require(factory_.code.length != 0, string.concat(name_, " not deployed"));
         require(
@@ -310,12 +326,12 @@ contract OracleProposal is GovernorBravoProposal {
         );
         require(_kernel.isPolicyActive(Policy(factory_)), string.concat(name_, " not activated"));
 
-        address expectedPrice = address(_kernel.getModuleForKeycode(toKeycode("PRICE")));
-        address factoryPrice = isERC7726_
-            ? IERC7726OracleFactory(factory_).getPriceModule()
-            : IOracleFactory(factory_).getPriceModule();
+        address expectedSource = priceCache_;
+        address factorySource = isERC7726_
+            ? IERC7726OracleFactory(factory_).getPriceCache()
+            : IOracleFactory(factory_).getPriceCache();
 
-        require(factoryPrice == expectedPrice, string.concat(name_, " wrong PRICE module"));
+        require(factorySource == expectedSource, string.concat(name_, " wrong price cache"));
     }
 }
 

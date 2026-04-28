@@ -66,6 +66,7 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
     address public constant UNISWAP_OHM_WETH = 0x88051B0eea095007D3bEf21aB287Be961f3d8598;
     address public constant UNISWAP_OHM_SUSDS = 0x0858e2B0F9D75f7300B38D64482aC2C8DF06a755;
+    address public constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
     uint256 internal constant OHM_USD_PRICE = 20e18;
     bytes32 internal constant ETH_USD_FEED_ID =
@@ -91,7 +92,10 @@ contract OlympusPricev1_2ForkTest is Test {
     uint48 internal constant WETH_BTC_USD_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant OHM_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
-    uint32 internal constant OHM_OBSERVATION_WINDOW = 1800; // 30 minutes
+    // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
+    uint32 internal constant OHM_WETH_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant OHM_SUSDS_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // System contracts
     Kernel public kernel;
@@ -155,7 +159,11 @@ contract OlympusPricev1_2ForkTest is Test {
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
         pythPrice = new PythPriceFeeds(price);
-        UniswapV3Price uniswapV3Price = new UniswapV3Price(price);
+        UniswapV3Price uniswapV3Price = new UniswapV3Price(
+            price,
+            _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
+            UNISWAP_V3_FACTORY
+        );
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);
 
@@ -215,7 +223,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // Feed 0: Uniswap OHM/WETH
         UniswapV3Price.UniswapV3Params memory ohmWethParams = UniswapV3Price.UniswapV3Params({
             pool: IUniswapV3Pool(UNISWAP_OHM_WETH),
-            observationWindowSeconds: OHM_OBSERVATION_WINDOW
+            observationWindowSeconds: OHM_WETH_OBSERVATION_WINDOW
         });
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
@@ -226,7 +234,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // Feed 1: Uniswap OHM/sUSDS
         UniswapV3Price.UniswapV3Params memory ohmSusdsParams = UniswapV3Price.UniswapV3Params({
             pool: IUniswapV3Pool(UNISWAP_OHM_SUSDS),
-            observationWindowSeconds: OHM_OBSERVATION_WINDOW
+            observationWindowSeconds: OHM_SUSDS_OBSERVATION_WINDOW
         });
         feeds[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
@@ -608,7 +616,7 @@ contract OlympusPricev1_2ForkTest is Test {
     //  [X] resolves the OHM price when one OHM feed path fails
     function test_getPrice_OHM_singleFeedFailure() public {
         uint32[] memory observationWindow = new uint32[](2);
-        observationWindow[0] = OHM_OBSERVATION_WINDOW;
+        observationWindow[0] = OHM_WETH_OBSERVATION_WINDOW;
         observationWindow[1] = 0;
 
         vm.mockCallRevert(

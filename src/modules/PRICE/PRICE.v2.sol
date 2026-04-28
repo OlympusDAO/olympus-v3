@@ -8,13 +8,16 @@ import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Bophades
-import {Keycode, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, Submodule} from "src/Submodules.sol";
 
 /// @notice     Abstract Bophades module for price resolution
 /// @author     Oighty
 abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
     // ========== STATIC VARIABLES ========== //
+
+    // 840 is the ISO 4217 numeric currency code for USD.
+    address internal constant _UNIT_OF_ACCOUNT = address(840);
 
     /// @notice     The frequency of price observations (in seconds)
     uint48 internal _observationFrequency;
@@ -28,8 +31,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
     /// @notice     Maps asset addresses to configuration data
     mapping(address => Asset) internal _assetData;
 
-    /// @notice     Maps asset addresses to cached prices
-    mapping(address => PriceCache) internal _cachedPrices;
+    /// @notice     Tracks registered non-contract assets
+    mapping(address => bool) public isNonContractAsset;
+
+    constructor(Kernel kernel_) Module(kernel_) {
+        isNonContractAsset[_UNIT_OF_ACCOUNT] = true;
+    }
 
     // ========== VIEW FUNCTIONS ========== //
 
@@ -41,6 +48,39 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
     /// @inheritdoc IPRICEv2
     function decimals() external view virtual override returns (uint8) {
         return _decimals;
+    }
+
+    /// @inheritdoc IPRICEv2
+    function unitOfAccount() external pure virtual override returns (address) {
+        return _UNIT_OF_ACCOUNT;
+    }
+
+    /// @notice         Returns true if `asset_` is a valid non-contract asset identifier
+    /// @dev            Does not revert.
+    function _isValidNonContractAsset(address asset_) internal view returns (bool) {
+        return asset_ != address(0) && asset_.code.length == 0;
+    }
+
+    /// @notice         Registers `asset_` as a non-contract asset
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is the zero address
+    /// @dev            - `asset_` is a contract
+    /// @dev            - `asset_` is already registered
+    function _registerNonContractAsset(address asset_) internal {
+        if (!_isValidNonContractAsset(asset_) || isNonContractAsset[asset_]) {
+            revert PRICE_InvalidAsset(asset_);
+        }
+
+        isNonContractAsset[asset_] = true;
+    }
+
+    /// @notice         Reverts unless `asset_` is a contract or a registered non-contract asset
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is a non-contract address that is not registered
+    function _validateAssetIsManageable(address asset_) internal view {
+        if (asset_.code.length == 0 && !isNonContractAsset[asset_]) {
+            revert PRICE_InvalidAsset(asset_);
+        }
     }
 
     // ========== ERC165 FUNCTIONS ========== //

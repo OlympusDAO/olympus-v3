@@ -12,17 +12,14 @@ interface IMorphoOracle is IOracle {
     /// @notice Thrown when the oracle is not enabled
     error MorphoOracle_NotEnabled();
 
-    /// @notice Thrown when collateral/loan timestamps resolve to different sources/times
-    ///
-    /// @param  collateralTimestamp_    The resolved collateral timestamp
-    /// @param  loanTimestamp_          The resolved loan timestamp
-    error MorphoOracle_InconsistentTimestamps(uint48 collateralTimestamp_, uint48 loanTimestamp_);
+    /// @notice Thrown when the cached direct-pair USD legs are invalid
+    error MorphoOracle_InvalidPrice();
 
-    /// @notice Thrown when the cached prices are stale
+    /// @notice Thrown when the direct pair cache timestamp is stale
     ///
-    /// @param  timestamp_  The shared cached timestamp used for collateral and loan prices
-    /// @param  maxAge_     The configured maximum cache age
-    error MorphoOracle_Stale(uint48 timestamp_, uint48 maxAge_);
+    /// @param  cachedTimestamp               The cached timestamp used for the collateral/loan pair
+    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
+    error MorphoOracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     // ========== FUNCTIONS ========== //
 
@@ -53,10 +50,10 @@ interface IMorphoOracle is IOracle {
 
     /// @notice Returns whether the cached feed state is stale.
     ///
-    /// @return isStale_    Returns true if timestamps are inconsistent, unset, or older than maxAge.
+    /// @return isStale_    Returns true if the pair cache is unset or older than maxAge.
     function isStale() external view returns (bool isStale_);
 
-    /// @notice Returns the shared cached timestamp used for quote resolution.
+    /// @notice Returns the cached timestamp for the collateral/loan pair.
     ///
     /// @return timestamp_  Returns the timestamp of the cached prices
     function timestamp() external view returns (uint48 timestamp_);

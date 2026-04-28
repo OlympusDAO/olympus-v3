@@ -509,6 +509,24 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         strategy.getAveragePriceExcludingDeviations(prices, params);
     }
 
+    function test_whenFilteringLeavesOnePrice_strictMode_reverts() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 10000e18;
+        prices[1] = 10400e18;
+        prices[2] = 11000e18;
+        bytes memory params = _encodeDeviationParams(200, true); // 2% deviation, strict mode
+
+        // Sorted prices: [10000e18, 10400e18, 11000e18]
+        // Median benchmark: 10400e18
+        // 10000e18: |10400 - 10000| / 10400 = 3.84% > 2% -> Exclude
+        // 10400e18: 0% -> Include
+        // 11000e18: |11000 - 10400| / 10400 = 5.77% > 2% -> Exclude
+        // Final survivors: [10400e18] (count = 1)
+        // strict mode for average requires >= 2 prices, so this must revert.
+        _expectRevertPriceCount(1, 2);
+        strategy.getAveragePriceExcludingDeviations(prices, params);
+    }
+
     function test_whenFourPrices_zeroDeviating(uint8 seed) public view {
         seed = uint8(bound(seed, 0, 4));
 
@@ -666,6 +684,61 @@ contract SimplePriceFeedStrategyGetAveragePriceExcludingDeviationsTest is
         // Expected: (1075e18 + 1100e18) / 2 = 2175e18 / 2 = 1087.5e18
         uint256 expected = 1087.5e18;
         assertEq(result, expected, "should return average of 2 remaining prices");
+    }
+
+    function test_whenFourPrices_whenExtremeOutlierMasksWeakerOutlier_iteratesUntilStable()
+        public
+        view
+    {
+        uint256[] memory prices = new uint256[](4);
+        prices[0] = 11000e18;
+        prices[1] = 10000e18;
+        prices[2] = 10400e18;
+        prices[3] = 10000e18;
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(200, false)
+        );
+
+        // Sorted prices: [10000e18, 10000e18, 10400e18, 11000e18]
+        // First benchmark median: (10000e18 + 10400e18) / 2 = 10200e18
+        // First pass removes only 11000e18, leaving [10000e18, 10000e18, 10400e18]
+        // Recomputed benchmark median: 10000e18
+        // Second pass removes 10400e18 (4% deviation > 2% threshold)
+        // Final survivors: [10000e18, 10000e18], average = 10000e18
+        assertEq(
+            result,
+            10000e18,
+            "should iterate filtering until benchmark and survivor set are stable"
+        );
+    }
+
+    function test_whenOutliersAreExcluded_strictMode_returnsAverageOfInBandSurvivors() public view {
+        uint256[] memory prices = new uint256[](6);
+        prices[0] = 20000e18;
+        prices[1] = 11000e18;
+        prices[2] = 10100e18;
+        prices[3] = 10000e18;
+        prices[4] = 10000e18;
+        prices[5] = 10000e18;
+
+        uint256 result = strategy.getAveragePriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(200, true)
+        );
+
+        // Sorted prices: [10000e18, 10000e18, 10000e18, 10100e18, 11000e18, 20000e18]
+        // First benchmark median: (10000e18 + 10100e18) / 2 = 10050e18
+        // First pass excludes 11000e18 and 20000e18, survivors:
+        //   [10000e18, 10000e18, 10000e18, 10100e18]
+        // Recomputed benchmark median: (10000e18 + 10000e18) / 2 = 10000e18
+        // All survivors remain in-band at 2%:
+        //   10000e18: 0%
+        //   10100e18: 1%
+        // Final average:
+        //   (10000e18 + 10000e18 + 10000e18 + 10100e18) / 4 = 10025e18
+        assertEq(result, 10025e18, "should return the average of the final in-band survivor set");
     }
 
     // Note: For even count (4 prices), the median is the average of the two middle

@@ -38,6 +38,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc Policy
+    /// @dev        Reverts if:
+    ///             - The configured PRICE module version is unsupported
+    ///             - The configured PRICE module does not implement IPRICEv2
+    ///             - The configured ROLES module major version is unsupported
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode(_ROLES_KEYCODE);
@@ -71,47 +75,53 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc Policy
+    /// @dev        Does not revert.
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
-        requests = new Permissions[](9);
+        requests = new Permissions[](10);
         // PRICE Permissions
-        requests[0] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
+        requests[0] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.registerNonContractAsset.selector
+        });
         requests[1] = Permissions({
+            keycode: PRICE_KEYCODE,
+            funcSelector: PRICE.unregisterNonContractAsset.selector
+        });
+        requests[2] = Permissions({keycode: PRICE_KEYCODE, funcSelector: PRICE.addAsset.selector});
+        requests[3] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.removeAsset.selector
         });
-        requests[2] = Permissions({
+        requests[4] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.updateAsset.selector
         });
-        requests[3] = Permissions({
+        requests[5] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.installSubmodule.selector
         });
-        requests[4] = Permissions({
+        requests[6] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.upgradeSubmodule.selector
         });
-        requests[5] = Permissions({
+        requests[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.execOnSubmodule.selector
         });
-        requests[6] = Permissions({
+        requests[8] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservation.selector
         });
-        requests[7] = Permissions({
+        requests[9] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
-        });
-        requests[8] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.cachePrice.selector
         });
     }
 
     /// @inheritdoc IVersioned
+    /// @dev        Does not revert.
     function VERSION() external pure override returns (uint8, uint8) {
         return (2, 0);
     }
@@ -133,6 +143,36 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - `asset_` is the zero address
+    ///             - `asset_` is a contract
+    ///             - `asset_` is reserved or otherwise invalid under PRICE rules
+    ///             - `asset_` is already registered as a non-contract asset
+    ///             - PRICE rejects the registration
+    function registerNonContractAsset(
+        address asset_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.registerNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the deregistration
+    function unregisterNonContractAsset(
+        address asset_
+    ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.unregisterNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the asset configuration
     function addAssetPrice(
         address asset_,
         bool storeMovingAverage_,
@@ -156,11 +196,19 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the removal
     function removeAssetPrice(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.removeAsset(asset_);
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the update
     function updateAsset(
         address asset_,
         IPRICEv2.UpdateAssetParams memory params_
@@ -169,31 +217,30 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects storing the observation
     function storeObservation(address asset_) external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.storeObservation(asset_);
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects storing observations
     function storeObservations() external override onlyEnabled onlyPriceOrAdminRole {
         PRICE.storeObservations();
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function cachePrice(address asset_) external override onlyEnabled {
-        PRICE.cachePrice(asset_);
-    }
-
-    /// @inheritdoc IPriceConfigv2
-    function cachePriceIfNecessary(address asset_, uint48 maxAge_) public override onlyEnabled {
-        (, uint48 cachedTime) = PRICE.getPrice(asset_, IPRICEv2.Variant.LAST);
-        if (cachedTime == 0 || block.timestamp > uint256(cachedTime) + uint256(maxAge_)) {
-            PRICE.cachePrice(asset_);
-        }
     }
 
     // ========== SUBMODULE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects submodule installation
     function installSubmodule(
         address submodule_
     ) external override onlyEnabled onlyPriceOrAdminRole {
@@ -201,6 +248,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects submodule upgrade
     function upgradeSubmodule(
         address submodule_
     ) external override onlyEnabled onlyPriceOrAdminRole {
@@ -208,6 +259,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     }
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        Reverts if:
+    ///             - The policy is disabled
+    ///             - The caller is neither `price_admin` nor `admin`
+    ///             - PRICE rejects the submodule call
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
@@ -217,6 +272,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
 
     // ========== ERC165 ========== //
 
+    /// @notice Query if a contract implements an interface
+    /// @dev    Does not revert.
+    ///
+    /// @param  interfaceId The interface identifier, as specified in ERC-165
+    /// @return bool        True if the contract implements `interfaceId`
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||

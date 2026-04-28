@@ -15,11 +15,11 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @notice Thrown when requested round data is not available
     error ChainlinkOracle_NoDataPresent();
 
-    /// @notice Thrown when the last timestamp is not consistent
+    /// @notice Thrown when the direct pair cache is older than maxAge
     ///
-    /// @param  baseTimestamp   The timestamp of the base token
-    /// @param  quoteTimestamp  The timestamp of the quote token
-    error ChainlinkOracle_InconsistentTimestamps(uint48 baseTimestamp, uint48 quoteTimestamp);
+    /// @param  cachedTimestamp               The cached timestamp used for the base/quote pair
+    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
+    error ChainlinkOracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     // ========== FUNCTIONS ========== //
 
@@ -43,8 +43,8 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @return name_   The name
     function name() external view returns (string memory name_);
 
-    /// @notice Returns whether the feed should be considered stale for round consumers.
+    /// @notice Returns whether the cached pair round should be considered stale.
     ///
-    /// @return isStale_    true if the feed is stale or has mismatched timestamps
+    /// @return isStale_    true if the direct pair cache is unset or older than `maxAge()`
     function isStale() external view returns (bool isStale_);
 }
