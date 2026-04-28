@@ -88,6 +88,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
 
         // Stay strictly before the earliest expiry so the backward scan visits every
         // tail entry and exits without sweeping or touching MINTR.
+        vm.warp(uint256(expiryTimestamp) - 1);
         vm.prank(heart);
         teller.execute();
         Vm.Gas memory g = vm.lastCallGas();
