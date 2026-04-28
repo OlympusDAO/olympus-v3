@@ -10,7 +10,7 @@ import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol"
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {ADMIN_ROLE, MANAGER_ROLE, ORACLE_MANAGER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @notice Parent test contract for ERC7726Oracle tests
@@ -21,21 +21,23 @@ contract ERC7726OracleTest is Test {
     Kernel public kernel;
     IERC7726Oracle public oracle;
     ERC7726OracleFactory public factory;
-    MockPrice public priceModule;
+    MockPriceCache public priceCache;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
 
     MockERC20 public collateralToken;
     MockERC20 public loanToken;
+    address public registeredNonContractAsset;
 
     address public admin;
     address public manager;
     address public oracleManager;
     address public emergency;
 
-    uint8 public constant PRICE_DECIMALS = 18;
-    uint32 public constant OBSERVATION_FREQUENCY = 1 hours;
     uint48 public constant DEFAULT_MAX_AGE = 1 hours;
+    address public constant UNIT_OF_ACCOUNT = address(0x348);
+    bytes4 internal constant PRICE_ASSET_NOT_APPROVED_SELECTOR =
+        bytes4(keccak256("PRICE_AssetNotApproved(address)"));
 
     // ========== SETUP ========== //
 
@@ -49,18 +51,15 @@ contract ERC7726OracleTest is Test {
         // Deploy Kernel
         kernel = new Kernel();
 
-        // Deploy PRICE module
-        priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
-
         // Deploy ROLES module
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
+        priceCache = new MockPriceCache(address(kernel));
 
         // Deploy oracle factory
-        factory = new ERC7726OracleFactory(kernel);
+        factory = new ERC7726OracleFactory(kernel, address(priceCache));
 
         // Install modules
-        kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(factory));
@@ -74,10 +73,13 @@ contract ERC7726OracleTest is Test {
         // Deploy mock tokens
         collateralToken = new MockERC20("Collateral Token", "COL", 18);
         loanToken = new MockERC20("Loan Token", "LOAN", 18);
+        registeredNonContractAsset = makeAddr("REGISTERED_NON_CONTRACT_ASSET");
 
-        // Set prices in PRICE module
+        // Set prices in cache policy mock
         _setPRICEPrices(address(collateralToken), 2e18); // 2 USD
         _setPRICEPrices(address(loanToken), 1e18); // 1 USD
+
+        vm.warp(1);
 
         // Enable factory and create clone oracle
         vm.prank(admin);
@@ -87,17 +89,23 @@ contract ERC7726OracleTest is Test {
         address oracleAddress = factory.createOracle(DEFAULT_MAX_AGE, bytes(""));
         oracle = IERC7726Oracle(oracleAddress);
 
-        // Seed initial cached values consumed by clone oracles (Variant.LAST).
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        // Seed initial cached values consumed by clone oracles.
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
     }
 
     // ========== HELPER FUNCTIONS ========== //
 
-    /// @notice Sets price for a token in the PRICE module
+    /// @notice Sets price for a token in the cache policy mock
     function _setPRICEPrices(address token_, uint256 price_) internal {
-        priceModule.setPrice(token_, price_);
-        priceModule.cachePrice(token_);
+        priceCache.setUsdPrice(token_, price_);
+    }
+
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
+        priceCache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
     }
 
     /// @notice Enables the oracle

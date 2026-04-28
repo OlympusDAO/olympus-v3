@@ -193,6 +193,24 @@ contract SimplePriceFeedStrategyGetAveragePriceIfDeviationTest is SimplePriceFee
         assertEq(price, 1e18, "should return first price when no deviation");
     }
 
+    function test_whenNoDeviation_returnsFirstConfiguredNonZeroPrice() public view {
+        uint256[] memory prices = new uint256[](4);
+        prices[0] = 0;
+        prices[1] = 1.002e18; // first configured non-zero price
+        prices[2] = 1e18; // lower than first non-zero
+        prices[3] = 1.001e18;
+
+        uint256 price = strategy.getAveragePriceIfDeviation(
+            prices,
+            _encodeDeviationParams(uint16(100), false) // 1% threshold
+        );
+        assertEq(
+            price,
+            1.002e18,
+            "should return first configured non-zero price when no deviation"
+        );
+    }
+
     // ========== FUZZ TESTS ========== //
 
     function test_whenThreePrices_whenDeviating_fuzz(

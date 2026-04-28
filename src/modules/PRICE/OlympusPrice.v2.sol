@@ -7,7 +7,6 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
@@ -38,7 +37,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @param kernel_                  Kernel address
     /// @param decimals_                Decimals that all prices will be returned with
     /// @param observationFrequency_    Frequency at which prices are stored for moving average
-    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
+    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) PRICEv2(kernel_) {
         if (observationFrequency_ == 0)
             revert PRICE_ObservationFrequencyInvalid(observationFrequency_);
 
@@ -67,6 +66,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     // ========== ERC165 FUNCTIONS ========== //
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Does not revert.
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
             interfaceId_ == type(IVersioned).interfaceId || super.supportsInterface(interfaceId_);
@@ -79,86 +80,131 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     // ========== ASSET INFORMATION ========== //
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Does not revert.
     function getAssets() external view override returns (address[] memory) {
         return assets;
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Does not revert.
     function getAssetData(address asset_) external view override returns (Asset memory) {
         return _assetData[asset_];
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Does not revert.
     function isAssetApproved(address asset_) external view override returns (bool) {
         return _assetData[asset_].approved;
+    }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is the zero address
+    /// @dev        - `asset_` is a contract
+    /// @dev        - `asset_` is already registered
+    function registerNonContractAsset(address asset_) external override permissioned {
+        _registerNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is the reserved unit of account
+    /// @dev        - `asset_` is not registered
+    /// @dev        - `asset_` still has an active PRICE configuration
+    function unregisterNonContractAsset(address asset_) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        if (!isNonContractAsset[asset_] || _assetData[asset_].approved) {
+            revert PRICE_InvalidAsset(asset_);
+        }
+
+        delete isNonContractAsset[asset_];
+    }
+
+    /// @notice         Returns true if `asset_` is the reserved unit-of-account asset
+    /// @dev            Does not revert.
+    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
+        return asset_ == _UNIT_OF_ACCOUNT;
+    }
+
+    /// @notice         Returns the unit price scaled to PRICE decimals
+    /// @dev            Does not revert.
+    function _unitPrice() internal view returns (uint256) {
+        return 10 ** _decimals;
+    }
+
+    /// @notice         Reverts unless `asset_` is an approved asset
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is not approved
+    function _validateApprovedAsset(address asset_) internal view {
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+    }
+
+    /// @notice                 Returns the most recent stored observation for an asset
+    /// @dev                    Will revert if:
+    /// @dev                    - `asset_` does not store the moving average (and thus does not have stored observations)
+    ///
+    /// @param  asset_          The asset address
+    /// @return price_          The most recent observation price
+    /// @return timestamp_      The timestamp of the most recent stored observation
+    function _getLastObservationPrice(
+        address asset_
+    ) internal view returns (uint256 price_, uint48 timestamp_) {
+        Asset storage asset = _assetData[asset_];
+        if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
+
+        uint256 nextIdx = asset.nextObsIndex;
+        uint256 lastIdx = nextIdx == 0 ? asset.numObservations - 1 : nextIdx - 1;
+        return (asset.obs[lastIdx], asset.lastObservationTime);
     }
 
     // ========== ASSET PRICES ========== //
 
     /// @inheritdoc IPRICEv2
-    /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
-    ///
+    /// @dev        Returns the CURRENT variant from feeds/strategy (plus MA where configured).
+    /// @dev        The reserved unit-of-account returns `10 ** decimals()`.
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
     function getPrice(address asset_) external view override returns (uint256) {
-        // Try to use the last price, must be updated on the current timestamp
-        // getPrice checks if asset is approved
-        (uint256 price, uint48 timestamp) = getPrice(asset_, Variant.LAST);
-        if (timestamp == uint48(block.timestamp)) return price;
+        if (_isUnitOfAccount(asset_)) return _unitPrice();
 
-        // If last price is stale, use the current price
-        (price, , ) = _getCurrentPrice(asset_, true);
-        return price;
+        _validateApprovedAsset(asset_);
+        (uint256 price_, , ) = _getCurrentPrice(asset_, true);
+        return price_;
     }
 
     /// @inheritdoc IPRICEv2
-    /// @dev        Checks cache first (no observation array check since storeObservation updates cache)
-    /// @dev        Fallback order: cache → fresh calculation
-    ///
-    /// @dev        Will revert if:
-    /// @dev        - `asset_` is not approved
-    /// @dev        - The max age is >= the block timestamp
-    function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
-        // Check that max age is valid
-        uint48 currentTime = uint48(block.timestamp);
-        if (maxAge_ >= currentTime) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-
-        // Try to use the last price, must be updated more recently than maxAge
-        // getPrice checks if asset is approved
-        (uint256 lastPrice, uint48 lastTimestamp) = getPrice(asset_, Variant.LAST);
-        if (lastTimestamp > 0 && lastTimestamp >= currentTime - maxAge_) {
-            return lastPrice;
-        }
-
-        // Calculate fresh price
-        (uint256 price, , ) = _getCurrentPrice(asset_, true);
-        return price;
-    }
-
-    /// @inheritdoc IPRICEv2
+    /// @dev        The reserved unit of account returns:
+    /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.CURRENT`
+    /// @dev        - `(10 ** decimals(), block.timestamp)` for `Variant.LAST`
+    /// @dev        - reverts `PRICE_MovingAverageNotStored(asset_)` for `Variant.MOVINGAVERAGE`
+    /// @dev
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
+    /// @dev        - `variant_ == Variant.CURRENT` and a configured moving average is stale
     /// @dev        - An invalid variant is requested
     function getPrice(
         address asset_,
         Variant variant_
     ) public view override returns (uint256 _price, uint48 _timestamp) {
+        if (_isUnitOfAccount(asset_)) {
+            if (variant_ == Variant.MOVINGAVERAGE) revert PRICE_MovingAverageNotStored(asset_);
+            return (_unitPrice(), uint48(block.timestamp));
+        }
+
         // Check if asset is approved
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+        _validateApprovedAsset(asset_);
 
         // Route to correct price function based on requested variant
         if (variant_ == Variant.CURRENT) {
             (uint256 price_, uint48 timestamp_, ) = _getCurrentPrice(asset_, true);
             return (price_, timestamp_);
         } else if (variant_ == Variant.LAST) {
-            // Return cached price (populated by addAsset, cachePrice, or storeObservation)
-            PriceCache memory cache = _cachedPrices[asset_];
-            return (cache.price, cache.cachedAt);
+            return _getLastObservationPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
-            // Inlined _getMovingAveragePrice logic
-            Asset memory asset = _assetData[asset_];
+            // Use storage here to avoid copying the full Asset struct (including the dynamic obs array) to memory.
+            Asset storage asset = _assetData[asset_];
             if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
             return (asset.cumulativeObs / asset.numObservations, asset.lastObservationTime);
         } else {
@@ -168,7 +214,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @notice             Gets the raw feed prices for an asset
     ///
-    /// @param asset_       The address of the asset
+    /// @param  asset_      The address of the asset
     /// @return uint256[]   Array of raw feed prices
     /// @return bool        Flag indicating if all feeds were successful
     function _getFeedPrices(address asset_) internal view returns (uint256[] memory, bool) {
@@ -210,7 +256,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @notice             Aggregates an array of prices using the configured strategy
     ///
     /// @param asset_       The address of the asset
-    /// @param prices_      The array of prices to aggregate
+    /// @param prices_      Array of prices to aggregate
     /// @return uint256     The aggregated price
     function _aggregate(address asset_, uint256[] memory prices_) internal view returns (uint256) {
         // If there is only one price, ensure it is not zero and return
@@ -227,6 +273,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
         // Ensure call was successful and price is not zero
         if (!success) revert PRICE_StrategyFailed(asset_, data);
+
         uint256 price = abi.decode(data, (uint256));
         if (price == 0) revert PRICE_PriceZero(asset_);
 
@@ -282,8 +329,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256[] memory prices, bool successAllFeeds) = _getFeedPrices(asset_);
 
         if (asset.useMovingAverage && includeMovingAverage_) {
-            if (asset.lastObservationTime + _observationFrequency <= block.timestamp)
-                revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
+            _revertIfMovingAverageStale(asset_, asset.lastObservationTime);
 
             prices = _getInclusivePrices(asset_, prices);
         }
@@ -291,82 +337,51 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
     }
 
-    /// @notice                 Gets price with staleness check, returns single value
-    /// @dev                    Internal helper for getPriceIn functions
-    /// @param asset_           Asset to get price for
-    /// @param stalenessTime    Staleness threshold (0=exact match, other=min acceptable timestamp)
-    /// @return price           The asset price
-    function _getPriceStale(
+    /// @notice                     Reverts if the moving average observation is stale
+    ///
+    /// @param asset_               The asset address used in the revert payload
+    /// @param lastObservationTime_ Last stored moving-average observation timestamp
+    function _revertIfMovingAverageStale(
         address asset_,
-        uint48 stalenessTime
-    ) internal view returns (uint256 price) {
-        uint48 pTime;
-        (price, pTime) = getPrice(asset_, Variant.LAST);
-        if (stalenessTime == 0 ? pTime != uint48(block.timestamp) : pTime < stalenessTime) {
-            (price, , ) = _getCurrentPrice(asset_, true);
-        }
+        uint48 lastObservationTime_
+    ) internal view {
+        if (lastObservationTime_ + _observationFrequency <= block.timestamp)
+            revert PRICE_MovingAverageStale(asset_, lastObservationTime_);
     }
 
     /// @inheritdoc IPRICEv2
-    /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
-    function getPriceIn(address asset_, address base_) external view override returns (uint256) {
-        uint256 assetPrice = _getPriceStale(asset_, 0);
-        uint256 basePrice = _getPriceStale(base_, 0);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
-    }
-
-    /// @inheritdoc IPRICEv2
+    /// @dev        Returns the pair price from CURRENT per-asset values.
+    /// @dev        If either side is the unit of account, that side resolves to `10 ** decimals()`.
     /// @dev        Will revert if:
-    /// @dev        - `asset_` is not approved
-    /// @dev        - `base_` is not approved
-    /// @dev        - No price could be determined
-    /// @dev        - The max age is 0 (as that would return a current value)
-    /// @dev        - The max age is >= the block timestamp
-    function getPriceIn(
-        address asset_,
-        address base_,
-        uint48 maxAge_
-    ) external view override returns (uint256) {
-        if (maxAge_ == 0 || maxAge_ >= block.timestamp) revert PRICE_ParamsMaxAgeInvalid(maxAge_);
-        uint48 cutoff = uint48(block.timestamp) - maxAge_;
-        uint256 assetPrice = _getPriceStale(asset_, cutoff);
-        uint256 basePrice = _getPriceStale(base_, cutoff);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
-        return FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice);
+    /// @dev        - `asset_` is not approved (and not the unit of account)
+    /// @dev        - `quote_` is not approved (and not the unit of account)
+    /// @dev        - No price could be determined for either non-unit asset
+    function getPriceIn(address asset_, address quote_) external view override returns (uint256) {
+        (uint256 assetPrice, ) = getPrice(asset_, Variant.CURRENT);
+        (uint256 quotePrice, ) = getPrice(quote_, Variant.CURRENT);
+        return (assetPrice * _unitPrice()) / quotePrice;
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Derives the pair quote from per-asset variants.
+    /// @dev        Reverts if:
+    /// @dev        - `variant_` is invalid
+    /// @dev        - `asset_` is not approved (and not the unit of account)
+    /// @dev        - `quote_` is not approved (and not the unit of account)
+    /// @dev        - The requested variant is unavailable for either side
+    /// @dev          (for example `Variant.LAST`/`Variant.MOVINGAVERAGE` without stored observations)
+    /// @dev        - A price cannot be determined for either side
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         Variant variant_
     ) external view override returns (uint256, uint48) {
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
-        (uint256 basePrice, uint48 baseTime) = getPrice(base_, variant_);
-        // assetPrice and basePrice use 10 ** _decimals scale (USD); result keeps 10 ** _decimals scale.
+        (uint256 quotePrice, uint48 quoteTime) = getPrice(quote_, variant_);
         return (
-            FullMath.mulDiv(assetPrice, 10 ** _decimals, basePrice),
-            assetTime < baseTime ? assetTime : baseTime
+            (assetPrice * _unitPrice()) / quotePrice,
+            assetTime < quoteTime ? assetTime : quoteTime
         );
-    }
-
-    /// @inheritdoc IPRICEv2
-    /// @dev        Will revert if:
-    /// @dev        - The caller is not permissioned
-    /// @dev        - The asset is not approved
-    /// @dev        - The price was not able to be determined
-    /// @dev        Reentrancy note: `_getCurrentPrice()` resolves feeds/strategy via `staticcall`,
-    ///             so callbacks cannot perform state-changing reentry.
-    function cachePrice(address asset_) external override permissioned {
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
-
-        (uint256 price, uint48 timestamp, ) = _getCurrentPrice(asset_, true);
-        if (price == 0) revert PRICE_PriceZero(asset_);
-
-        _cachedPrices[asset_] = PriceCache({price: price, cachedAt: timestamp});
-
-        emit PriceCached(asset_, price, timestamp);
     }
 
     /// @inheritdoc IPRICEv2
@@ -376,7 +391,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Updates the asset's `lastObservationTime` to the current block timestamp
     /// @dev        - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
     /// @dev        - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
-    /// @dev        - Emit a `PriceStored` event and `PriceCached` event
+    /// @dev        - Emit a `PriceStored` event
     ///
     /// @dev        Will revert if:
     /// @dev        - The asset is not approved
@@ -387,8 +402,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        Reentrancy note: feed/strategy resolution is done via `staticcall`, so callbacks
     /// @dev        cannot perform state-changing reentry.
     ///
-    /// @dev        This function does not enforce a minimum frequency between observations,
-    /// @dev        leaving the onus on the caller to perform validation.
+    /// @dev        This function enforces an implementation-defined earliest allowed timestamp for each
+    /// @dev        asset observation write. The current implementation uses `lastObservationTime + 1`,
+    /// @dev        which prevents same-block double writes.
+    /// @dev        It does not enforce a larger minimum frequency between observations.
+    /// @dev        Calling policies are responsible for cadence/epoch scheduling.
     ///
     /// @param asset_   The address of the asset
     function storeObservation(address asset_) public override permissioned {
@@ -401,6 +419,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev    - The moving average is not stored for the asset
     /// @dev    - Getting the prices fails
     /// @dev    - Aggregating the prices fails
+    /// @dev    - The observation timestamp is before the implementation-defined earliest allowed time
+    /// @dev    - Cadence beyond same-block writes is not enforced in this module
     ///
     /// @param asset_   The address of the asset
     function _storeObservation(address asset_) internal {
@@ -410,19 +430,21 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
         // Check if asset stores moving average
         if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
+        uint48 observationTime = uint48(block.timestamp);
+        uint48 earliestAllowedTime = asset.lastObservationTime;
+        // Earliest allowed is implementation-defined; currently last observation + 1 second.
+        if (earliestAllowedTime < type(uint48).max) earliestAllowedTime += 1;
+        if (observationTime < earliestAllowedTime)
+            revert PRICE_ObservationTooEarly(asset_, observationTime, earliestAllowedTime);
 
-        // Get the current feed prices for the asset
-        (uint256[] memory feedPrices, ) = _getFeedPrices(asset_);
-
-        // Calculate the raw price for the observation (excluding MA)
-        uint256 obsPrice = _aggregate(asset_, feedPrices);
+        // Get the current observation value (excludes MA contribution by design).
+        (uint256 obsPrice, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
 
         // Store the data in the obs index
         uint256 oldestPrice = asset.obs[asset.nextObsIndex];
         asset.obs[asset.nextObsIndex] = obsPrice;
 
         // Update the last observation time and increment the next index
-        uint48 currentTime = uint48(block.timestamp);
         asset.lastObservationTime = currentTime;
         asset.nextObsIndex = (asset.nextObsIndex + 1) % asset.numObservations;
 
@@ -431,28 +453,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
         // Emit PriceStored event (with raw observation price)
         emit PriceStored(asset_, obsPrice, currentTime);
-
-        // Calculate the inclusive price for the cache (including updated MA)
-        // This ensures the cache is consistent with what getPrice(asset_, true) would return
-        uint256 cachePrice_;
-        if (asset.useMovingAverage) {
-            cachePrice_ = _aggregate(asset_, _getInclusivePrices(asset_, feedPrices));
-        } else {
-            cachePrice_ = obsPrice;
-        }
-
-        // Update cache with the inclusive price
-        _cachePrice(asset_, cachePrice_, currentTime);
-    }
-
-    /// @notice                 Internal helper to update the price cache and emit PriceCached event
-    ///
-    /// @param asset_           Asset to update the cache for
-    /// @param price_           Price to cache
-    /// @param timestamp_       Timestamp for the cache entry
-    function _cachePrice(address asset_, uint256 price_, uint48 timestamp_) internal {
-        _cachedPrices[asset_] = PriceCache({price: price_, cachedAt: timestamp_});
-        emit PriceCached(asset_, price_, timestamp_);
     }
 
     /// @inheritdoc IPRICEv2
@@ -460,12 +460,19 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Iterate over all assets
     /// @dev        - Ignores assets that do not store the moving average
     /// @dev        - Store the price for each asset using `storeObservation()`
+    /// @dev
+    /// @dev        Reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - Observation storage fails for any configured moving-average asset
     ///
     /// @dev        Reentrancy note: delegates to `storeObservation()`, which only reaches external
     /// @dev        price providers via `staticcall`.
     ///
-    /// @dev        This function does not enforce a minimum frequency between observations,
-    /// @dev        leaving the onus on the caller to perform validation.
+    /// @dev        This function enforces an implementation-defined earliest allowed timestamp for each
+    /// @dev        asset observation write. The current implementation uses `lastObservationTime + 1`,
+    /// @dev        which prevents same-block double writes.
+    /// @dev        It does not enforce a larger minimum frequency between observations.
+    /// @dev        Calling policies are responsible for cadence/epoch scheduling.
     function storeObservations() public override permissioned {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
@@ -479,10 +486,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     // ========== ASSET MANAGEMENT ========== //
 
     /// @notice         Validates asset configuration for feeds, strategy, and moving average
-    /// @dev            Reverts if:
+    /// @dev            Will revert if:
     /// @dev            - Moving average is used but not stored
     /// @dev            - Multiple feeds exist but no strategy is configured
     /// @dev            - Only one feed exists but a strategy is configured
+    ///
     /// @param asset_              Asset address for error reporting
     /// @param strategy_           Strategy component configuration
     /// @param feedCount_          Number of price feeds configured
@@ -529,6 +537,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is not a contract
     /// @dev        - `asset_` is already approved
+    /// @dev        - `asset_` is the reserved unit-of-account address
     /// @dev        - The moving average is being used, but not stored
     /// @dev        - An empty strategy was specified, but the number of feeds requires a strategy
     /// @dev        - The call to get the current price of any feed fails
@@ -544,8 +553,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component memory strategy_,
         Component[] memory feeds_
     ) external override permissioned {
-        // Check that asset is a contract
-        if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        _validateAssetIsManageable(asset_);
 
         Asset storage asset = _assetData[asset_];
 
@@ -576,21 +585,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             observations_
         );
 
-        // Validate configuration and optionally update cache
-        (uint256 price, uint48 timestamp, bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        // Validate configuration
+        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
         if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
-
-        // If a single initial observation was provided for a non-MA asset, use that as the cached price.
-        // Otherwise, cache the factual inclusive price.
-        uint256 priceToCache = (observations_.length == 1 && !useMovingAverage_)
-            ? observations_[0]
-            : price;
-
-        uint48 timestampToCache = (observations_.length == 1 && !useMovingAverage_)
-            ? lastObservationTime_
-            : timestamp;
-
-        _cachePrice(asset_, priceToCache, timestampToCache);
 
         // Set asset as approved and add to array
         asset.approved = true;
@@ -602,10 +599,13 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @inheritdoc IPRICEv2
     /// @dev        Will revert if:
+    /// @dev        - `asset_` is the reserved unit-of-account address
     /// @dev        - `asset_` is not approved
     /// @dev        - The caller is not permissioned
     /// @dev        Reentrancy note: this function does not make external calls.
     function removeAsset(address asset_) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
@@ -713,11 +713,15 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev                            - Removes existing moving average data
     /// @dev                            - Performs basic checks on the parameters
     /// @dev                            - Sets the moving average data for the asset
-    /// @dev                            - If the moving average is not stored, deletes any existing observation data.
-    /// @dev                            - IMPORTANT: This function does NOT update the price cache. Callers are responsible for updating the cache.
+    /// @dev                            - If `storeMovingAverage_` is false, clears moving-average state
+    /// @dev                            - If `storeMovingAverage_` is false, `observations_` must be empty
+    /// @dev                            - If `storeMovingAverage_` is false, `movingAverageDuration_` and
+    /// @dev                              `lastObservationTime_` must both be zero
     ///
     /// @dev                            Will revert if:
-    /// @dev                            - `lastObservationTime_` is in the future
+    /// @dev                            - `lastObservationTime_` is in the future (when storing MA)
+    /// @dev                            - `lastObservationTime_` is non-zero when not storing MA
+    /// @dev                            - `movingAverageDuration_` is non-zero when not storing MA
     /// @dev                            - Any observation is zero
     /// @dev                            - The number of observations provided is insufficient
     ///
@@ -735,8 +739,31 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ) internal {
         Asset storage asset = _assetData[asset_];
 
-        // Remove existing cached or moving average data, if any
+        // Remove existing moving average data, if any
         if (asset.obs.length > 0) delete asset.obs;
+
+        asset.storeMovingAverage = storeMovingAverage_;
+        asset.cumulativeObs = 0;
+        asset.nextObsIndex = 0;
+
+        if (!storeMovingAverage_) {
+            // If not storing moving average, no observations are permitted.
+            if (observations_.length != 0)
+                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 0);
+
+            // If not storing moving average, duration and timestamp must both be zero.
+            if (movingAverageDuration_ != 0)
+                revert PRICE_ParamsMovingAverageDurationInvalid(asset_, movingAverageDuration_, 0);
+
+            if (lastObservationTime_ != 0)
+                revert PRICE_ParamsLastObservationTimeInvalid(asset_, lastObservationTime_, 0, 0);
+
+            // Clear moving-average fields.
+            asset.movingAverageDuration = 0;
+            asset.numObservations = 0;
+            asset.lastObservationTime = 0;
+            return;
+        }
 
         // Ensure last observation time is not in the future
         if (lastObservationTime_ > block.timestamp)
@@ -747,60 +774,47 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
                 uint48(block.timestamp)
             );
 
-        asset.storeMovingAverage = storeMovingAverage_;
-        asset.cumulativeObs = 0;
-
-        if (storeMovingAverage_) {
-            // If storing a moving average, validate params
-            if (
-                movingAverageDuration_ == 0 ||
-                uint48(movingAverageDuration_) % _observationFrequency != 0
-            )
-                revert PRICE_ParamsMovingAverageDurationInvalid(
-                    asset_,
-                    movingAverageDuration_,
-                    _observationFrequency
-                );
-
-            uint16 numObservations = SafeCast.encodeUInt16(
-                uint48(movingAverageDuration_) / _observationFrequency
+        // If storing a moving average, validate params
+        if (
+            movingAverageDuration_ == 0 ||
+            uint48(movingAverageDuration_) % _observationFrequency != 0
+        )
+            revert PRICE_ParamsMovingAverageDurationInvalid(
+                asset_,
+                movingAverageDuration_,
+                _observationFrequency
             );
-            if (observations_.length != numObservations || numObservations < 2)
-                revert PRICE_ParamsInvalidObservationCount(
-                    asset_,
-                    observations_.length,
-                    numObservations,
-                    numObservations
-                );
 
-            asset.movingAverageDuration = movingAverageDuration_;
-            asset.nextObsIndex = 0;
-            asset.numObservations = numObservations;
-            asset.lastObservationTime = lastObservationTime_;
+        uint16 numObservations = SafeCast.encodeUInt16(
+            uint48(movingAverageDuration_) / _observationFrequency
+        );
+        if (observations_.length != numObservations || numObservations < 2)
+            revert PRICE_ParamsInvalidObservationCount(
+                asset_,
+                observations_.length,
+                numObservations,
+                numObservations
+            );
 
-            for (uint256 i; i < numObservations; ) {
-                // Validate and store each observation
-                if (observations_[i] == 0) revert PRICE_ParamsObservationZero(asset_, i);
+        asset.movingAverageDuration = movingAverageDuration_;
+        asset.numObservations = numObservations;
+        asset.lastObservationTime = lastObservationTime_;
 
-                asset.cumulativeObs += observations_[i];
-                asset.obs.push(observations_[i]);
-                unchecked {
-                    ++i;
-                }
+        for (uint256 i; i < numObservations; ) {
+            // Validate and store each observation
+            if (observations_[i] == 0) revert PRICE_ParamsObservationZero(asset_, i);
+
+            asset.cumulativeObs += observations_[i];
+            asset.obs.push(observations_[i]);
+            unchecked {
+                ++i;
             }
-
-            uint256 lastObsPrice = observations_[numObservations - 1];
-
-            // Emit Price Stored event for new observation
-            emit PriceStored(asset_, lastObsPrice, lastObservationTime_);
-        } else {
-            // If not storing moving average, validate that at most 1 observation is provided
-            if (observations_.length > 1)
-                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
-
-            if (observations_.length == 1 && observations_[0] == 0)
-                revert PRICE_ParamsObservationZero(asset_, 0);
         }
+
+        uint256 lastObsPrice = observations_[numObservations - 1];
+
+        // Emit Price Stored event for new observation
+        emit PriceStored(asset_, lastObsPrice, lastObservationTime_);
     }
 
     /// @inheritdoc IPRICEv2
@@ -816,6 +830,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ///
     /// @dev        Will revert if:
     /// @dev        - All update flags are false (no-op)
+    /// @dev        - `asset_` is the reserved unit-of-account address
     /// @dev        - `asset_` is not approved
     /// @dev        - The final configuration is invalid
     /// @dev        - Any updated submodule is not installed
@@ -824,7 +839,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     function updateAsset(
         address asset_,
         UpdateAssetParams memory params_
-    ) external override permissioned {
+    ) external virtual override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        _validateAssetIsManageable(asset_);
+
         // Validate at least one update flag is true
         if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
             revert PRICE_NoUpdatesRequested(asset_);
@@ -864,7 +882,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
 
         if (params_.updateStrategy) {
-            _updateAssetPriceStrategy(asset_, params_.strategy, params_.useMovingAverage);
+            _updateAssetPriceStrategy(asset_, params_.strategy, finalUseMA);
         }
 
         if (params_.updateMovingAverage) {
@@ -877,25 +895,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             );
         }
 
-        // Validate final configuration atomically and optionally update cache
-        (uint256 price, uint48 timestamp, bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        // Validate final configuration atomically.
+        // Skip MA inclusion so stale heartbeat does not block governance reconfiguration.
+        (, , bool successAllFeeds) = _getCurrentPrice(asset_, false);
         if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
-
-        // If a single initial observation was provided for a non-MA asset, use that as the cached price.
-        // Otherwise, cache the factual inclusive price.
-        uint256 priceToCache = (params_.updateMovingAverage &&
-            params_.observations.length == 1 &&
-            !params_.useMovingAverage)
-            ? params_.observations[0]
-            : price;
-
-        uint48 timestampToCache = (params_.updateMovingAverage &&
-            params_.observations.length == 1 &&
-            !params_.useMovingAverage)
-            ? params_.lastObservationTime
-            : timestamp;
-
-        _cachePrice(asset_, priceToCache, timestampToCache);
 
         // Emit events (based on which updates occurred)
         if (params_.updateFeeds) emit AssetPriceFeedsUpdated(asset_);

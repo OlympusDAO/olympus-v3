@@ -18,9 +18,9 @@ interface IPriceConfigv2 {
 
     /// @notice Thrown when module version is not supported
     ///
-    /// @param  keycode     The keycode of the module
-    /// @param  major       The major version of the module
-    /// @param  minor       The minor version of the module
+    /// @param  keycode The keycode of the module
+    /// @param  major   The major version of the module
+    /// @param  minor   The minor version of the module
     error IPriceConfigv2_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
     // ========================= //
@@ -49,48 +49,41 @@ interface IPriceConfigv2 {
         IPRICEv2.Component[] memory feeds_
     ) external;
 
+    /// @notice Register a non-contract asset for management by the PRICE module
+    /// @dev    After registration, the address can be used as a non-contract asset identifier in PRICE
+    ///
+    /// @param  asset_  The non-contract asset address to register
+    function registerNonContractAsset(address asset_) external;
+
+    /// @notice Deregister a non-contract asset from management by the PRICE module
+    /// @dev    This reverts if the asset is reserved or still configured on PRICE
+    ///
+    /// @param  asset_  The non-contract asset address to deregister
+    function unregisterNonContractAsset(address asset_) external;
+
     /// @notice Remove an asset from the PRICE module
     /// @dev    After removal, calls to PRICEv2 for the asset's price will revert
+    ///
+    /// @param  asset_  The address of the asset to remove
     function removeAssetPrice(address asset_) external;
 
-    /// @notice                     Update an asset configuration atomically
-    /// @dev                        Only updates components flagged in params_
-    /// @dev                        See PRICEv2 for more details on the UpdateAssetParams struct
+    /// @notice Update an asset configuration atomically
+    /// @dev    Only updates components flagged in params_
+    /// @dev    See PRICEv2 for more details on the UpdateAssetParams struct
     ///
-    /// @param  asset_              The address of the asset to update
-    /// @param  params_             Update parameters with flags indicating which components to update
+    /// @param  asset_  The address of the asset to update
+    /// @param  params_ Update parameters with flags indicating which components to update
     function updateAsset(address asset_, IPRICEv2.UpdateAssetParams memory params_) external;
 
-    /// @notice                     Store a price observation for an asset
-    /// @dev                        Calls PRICE.storeObservation(asset_) to calculate and store current price
+    /// @notice Store a price observation for an asset
+    /// @dev    Calls PRICE.storeObservation(asset_) to calculate and store current price
     ///
-    /// @param  asset_              The address of asset
+    /// @param  asset_  The address of asset
     function storeObservation(address asset_) external;
 
-    /// @notice                     Store the current price of all assets that track a moving average
-    /// @dev                        Calls PRICE.storeObservations() to calculate and store observations
+    /// @notice Store the current price of all assets that track a moving average
+    /// @dev    Calls PRICE.storeObservations() to calculate and store observations
     function storeObservations() external;
-
-    // ========================= //
-    // PRICE CACHE MANAGEMENT    //
-    // ========================= //
-
-    /// @notice                     Cache an asset price immediately
-    /// @dev                        This bypasses staleness checks and always requests a refresh.
-    ///                             Use this when the caller explicitly wants a new cached value now.
-    ///
-    /// @param  asset_              The address of the asset to cache
-    function cachePrice(address asset_) external;
-
-    /// @notice                     Cache an asset price only when stale or never cached
-    /// @dev                        This is a policy-level cache helper intended for callers that manage
-    ///                             staleness explicitly. Unlike oracle clone cache helpers, max age is
-    ///                             provided by the caller and not embedded in immutable oracle params.
-    ///
-    /// @param  asset_              The address of the asset to potentially cache
-    /// @param  maxAge_             Maximum accepted cache age in seconds
-    ///                             If `maxAge_` is 0, any cache from a prior block is treated as stale.
-    function cachePriceIfNecessary(address asset_, uint48 maxAge_) external;
 
     // ========================= //
     // SUBMODULE MANAGEMENT      //

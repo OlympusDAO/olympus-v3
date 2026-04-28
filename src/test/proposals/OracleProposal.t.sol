@@ -10,6 +10,7 @@ import {console2} from "forge-std/console2.sol";
 // PRICE imports
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // PRICE Submodules
@@ -56,6 +57,8 @@ contract OracleProposalTest is ProposalTest {
     // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
     uint32 internal constant OHM_OBSERVATION_WINDOW_SECONDS = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
+    uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -143,7 +146,8 @@ contract OracleProposalTest is ProposalTest {
         }
 
         // 4. Deploy and activate oracle policies so their dependencies are configured
-        // (The OCG proposal will enable() them later to turn on functionality)
+        // (The OCG proposal will enable() PriceCache and oracle factories later)
+        _deployPriceCacheIfNeeded(kernelAddr);
         _deployERC7726OracleFactoryIfNeeded(kernelAddr);
         _deployChainlinkOracleFactoryIfNeeded(kernelAddr);
         _deployMorphoOracleFactoryIfNeeded(kernelAddr);
@@ -242,12 +246,39 @@ contract OracleProposalTest is ProposalTest {
 
     // ========== POLICY DEPLOYMENT ========== //
 
+    function _deployPriceCacheIfNeeded(address kernelAddr_) internal {
+        string memory key = "olympus-policy-price-cache-1_0";
+        address policy = _safeGetAddress(key);
+        if (policy == address(0)) {
+            console2.log("Deploying PriceCache");
+            policy = address(
+                new PriceCache(
+                    Kernel(kernelAddr_),
+                    _UNIT_OF_ACCOUNT_DECIMALS,
+                    _UNIT_OF_ACCOUNT_SYMBOL
+                )
+            );
+            addresses.addAddress(key, policy);
+        } else {
+            console2.log("PriceCache already deployed");
+        }
+
+        // Activate PriceCache if deployed but not active
+        if (!Policy(policy).isActive()) {
+            console2.log("Activating PriceCache");
+            Kernel(kernelAddr_).executeAction(Actions.ActivatePolicy, policy);
+        }
+
+        vm.label(policy, key);
+    }
+
     function _deployERC7726OracleFactoryIfNeeded(address kernelAddr_) internal {
         string memory key = "olympus-policy-erc7726-oracle-factory-1_0";
         address policy = _safeGetAddress(key);
+        address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
         if (policy == address(0)) {
             console2.log("Deploying ERC7726OracleFactory");
-            policy = address(new ERC7726OracleFactory(Kernel(kernelAddr_)));
+            policy = address(new ERC7726OracleFactory(Kernel(kernelAddr_), priceCache));
             addresses.addAddress(key, policy);
         } else {
             console2.log("ERC7726OracleFactory already deployed");
@@ -259,9 +290,10 @@ contract OracleProposalTest is ProposalTest {
     function _deployChainlinkOracleFactoryIfNeeded(address kernelAddr_) internal {
         string memory key = "olympus-policy-chainlink-oracle-factory-1_0";
         address policy = _safeGetAddress(key);
+        address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
         if (policy == address(0)) {
             console2.log("Deploying ChainlinkOracleFactory");
-            policy = address(new ChainlinkOracleFactory(Kernel(kernelAddr_)));
+            policy = address(new ChainlinkOracleFactory(Kernel(kernelAddr_), priceCache));
             addresses.addAddress(key, policy);
         } else {
             console2.log("ChainlinkOracleFactory already deployed");
@@ -273,9 +305,10 @@ contract OracleProposalTest is ProposalTest {
     function _deployMorphoOracleFactoryIfNeeded(address kernelAddr_) internal {
         string memory key = "olympus-policy-morpho-oracle-factory-1_0";
         address policy = _safeGetAddress(key);
+        address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
         if (policy == address(0)) {
             console2.log("Deploying MorphoOracleFactory");
-            policy = address(new MorphoOracleFactory(Kernel(kernelAddr_)));
+            policy = address(new MorphoOracleFactory(Kernel(kernelAddr_), priceCache));
             addresses.addAddress(key, policy);
         } else {
             console2.log("MorphoOracleFactory already deployed");
@@ -542,6 +575,10 @@ contract OracleProposalTest is ProposalTest {
         );
 
         // Verify policies enabled
+        assertTrue(
+            IEnabler(addresses.getAddress("olympus-policy-price-cache-1_0")).isEnabled(),
+            "PriceCache not enabled"
+        );
         assertTrue(
             IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0")).isEnabled(),
             "ERC7726OracleFactory not enabled"
