@@ -10,6 +10,7 @@ import {console2} from "forge-std/console2.sol";
 // PRICE imports
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
@@ -39,6 +40,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {ADMIN_ROLE, ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {Deviation} from "src/libraries/Deviation.sol";
 
 /// @notice Test contract for Oracle Proposal: Enable Oracle Policies and Deploy OHM/USDS Oracles
 /// @dev    Simulates the proposal after the PRICE system has been deployed
@@ -49,17 +51,38 @@ contract OracleProposalTest is ProposalTest {
     // TODO: Update to the block after the DAO MS deployment
     uint48 public constant FORK_BLOCK = 24413007 + 1;
 
-    // Price validation bounds (18 decimals)
-    // TODO adjust the price bounds when updating the fork block
-    uint256 internal constant OHM_MIN_PRICE = 17e18;
-    uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
+    uint16 internal constant BPS_MAX = 10_000;
     // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
     uint32 internal constant OHM_OBSERVATION_WINDOW_SECONDS = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
     address internal constant _UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
     string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
+
+    // Asset feed expectation values are fork-block plausibility checks for PriceConfig v2.
+    // They validate that each configured source returns a price near the expected value, but
+    // cannot prove feed identity if a different asset has a similar price.
+    uint256 internal constant USDS_EXPECTED_PRICE = 1e18;
+    uint16 internal constant USDS_EXPECTATION_TOLERANCE_BPS = 500; // 5%
+    uint256 internal constant SUSDS_EXPECTED_PRICE = 1.08e18;
+    uint16 internal constant SUSDS_EXPECTATION_TOLERANCE_BPS = 1_000; // 10%
+    uint256 internal constant OHM_EXPECTED_PRICE = 17.5e18;
+    uint16 internal constant OHM_EXPECTATION_TOLERANCE_BPS = 1_000; // 10%
+
+    function _makeFeedExpectations(
+        uint256 length_,
+        uint256 expectedPrice_,
+        uint16 toleranceBps_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
+        for (uint256 i; i < length_; i++) {
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice_,
+                toleranceBps: toleranceBps_
+            });
+        }
+    }
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -421,7 +444,7 @@ contract OracleProposalTest is ProposalTest {
         // Add USDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             usds_,
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -429,7 +452,8 @@ contract OracleProposalTest is ProposalTest {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             strategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, USDS_EXPECTED_PRICE, USDS_EXPECTATION_TOLERANCE_BPS)
         );
         vm.stopPrank();
 
@@ -458,7 +482,7 @@ contract OracleProposalTest is ProposalTest {
         // Add sUSDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             susds_,
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -466,7 +490,12 @@ contract OracleProposalTest is ProposalTest {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             strategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(
+                feeds.length,
+                SUSDS_EXPECTED_PRICE,
+                SUSDS_EXPECTATION_TOLERANCE_BPS
+            )
         );
         vm.stopPrank();
 
@@ -504,7 +533,7 @@ contract OracleProposalTest is ProposalTest {
         // Add OHM asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAssetPrice(
+        PriceConfigv2(priceConfig_).addAsset(
             ohm_,
             false, // storeMovingAverage
             false, // useMovingAverage
@@ -512,7 +541,8 @@ contract OracleProposalTest is ProposalTest {
             uint48(0), // lastObservationTime
             new uint256[](0), // observations
             strategy,
-            feeds
+            feeds,
+            _makeFeedExpectations(feeds.length, OHM_EXPECTED_PRICE, OHM_EXPECTATION_TOLERANCE_BPS)
         );
         vm.stopPrank();
 
@@ -640,8 +670,15 @@ contract OracleProposalTest is ProposalTest {
         // Quote 1 OHM (9 decimals) in USDS (18 decimals)
         uint256 ohmInUsds = IERC7726Oracle(erc7726Oracle).getQuote(1e9, ohm, usds);
         console2.log("Asset price of OHM:", ohmInUsds);
-        assertGe(ohmInUsds, OHM_MIN_PRICE, "OHM price below minimum");
-        assertLe(ohmInUsds, OHM_MAX_PRICE, "OHM price above maximum");
+        assertFalse(
+            Deviation.isDeviating(
+                ohmInUsds,
+                OHM_EXPECTED_PRICE,
+                OHM_EXPECTATION_TOLERANCE_BPS,
+                BPS_MAX
+            ),
+            "OHM price outside tolerance"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

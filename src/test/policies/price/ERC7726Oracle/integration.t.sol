@@ -13,6 +13,7 @@ import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
@@ -23,6 +24,7 @@ contract ERC7726OracleIntegrationTest is Test {
     uint8 internal constant PRICE_DECIMALS = 18;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint48 internal constant DEFAULT_MAX_AGE = 1 hours;
+    uint16 internal constant PRICE_EXPECTATION_TOLERANCE_BPS = 1;
     address internal constant ETH_SENTINEL = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     Kernel internal kernel;
@@ -154,6 +156,35 @@ contract ERC7726OracleIntegrationTest is Test {
         feed_.setAnsweredInRound(1);
     }
 
+    function _makeFeedExpectations(
+        address asset_,
+        IPRICEv2.Component[] memory feeds_,
+        uint16 toleranceBps_
+    ) internal view returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](feeds_.length);
+
+        uint8 priceDecimals = price.decimals();
+        for (uint256 i; i < feeds_.length; i++) {
+            (bool success, bytes memory data) = address(
+                price.getSubmoduleForKeycode(feeds_[i].target)
+            ).staticcall(
+                    abi.encodeWithSelector(
+                        feeds_[i].selector,
+                        asset_,
+                        priceDecimals,
+                        feeds_[i].params
+                    )
+                );
+            assertTrue(success, "Price feed expectation call should succeed");
+            assertEq(data.length, 32, "Price feed expectation call should return one word");
+
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: abi.decode(data, (uint256)),
+                toleranceBps: toleranceBps_
+            });
+        }
+    }
+
     function _addAssetWithOneFeed(address asset_, MockPriceFeed feed_) internal {
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
         feeds[0] = IPRICEv2.Component(
@@ -162,8 +193,14 @@ contract ERC7726OracleIntegrationTest is Test {
             abi.encode(ChainlinkPriceFeeds.OneFeedParams(feed_, uint48(24 hours)))
         );
 
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            asset_,
+            feeds,
+            PRICE_EXPECTATION_TOLERANCE_BPS
+        );
+
         vm.prank(admin);
-        priceConfig.addAssetPrice(
+        priceConfig.addAsset(
             asset_,
             false,
             false,
@@ -171,7 +208,8 @@ contract ERC7726OracleIntegrationTest is Test {
             0,
             new uint256[](0),
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
-            feeds
+            feeds,
+            expectations
         );
     }
 }
