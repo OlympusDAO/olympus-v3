@@ -84,36 +84,55 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the current price of OHM.
-    ///             Compatibility function for PRICEv1.
+    /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Reverts if:
+    /// @dev        - OHM is not approved in PRICE
+    /// @dev        - A current OHM price cannot be determined
     function getCurrentPrice() external view returns (uint256) {
         return _getOhmPrice(IPRICEv2.Variant.CURRENT);
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the last price of OHM.
-    ///             Compatibility function for PRICEv1.
+    /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Reverts if:
+    /// @dev        - OHM is not approved in PRICE
+    /// @dev        - OHM does not store moving-average observations
     function getLastPrice() external view returns (uint256) {
         return _getOhmPrice(IPRICEv2.Variant.LAST);
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the moving average of OHM.
-    ///             Compatibility function for PRICEv1.
+    /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Returns the raw stored moving average, which may be stale.
+    /// @dev        Reverts if:
+    /// @dev        - OHM is not approved in PRICE
+    /// @dev        - OHM does not store moving-average observations
     function getMovingAverage() external view returns (uint256) {
         return _getOhmPrice(IPRICEv2.Variant.MOVINGAVERAGE);
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the target price of OHM.
-    ///             Compatibility function for PRICEv1.
+    /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Reverts if:
+    /// @dev        - OHM is not approved in PRICE
+    /// @dev        - OHM does not store moving-average observations
+    /// @dev        - OHM moving average is stale relative to `observationFrequency()`
     function getTargetPrice() external view returns (uint256) {
-        (uint256 movingAvg, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
+        (uint256 movingAvg, uint48 lastObsTime) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
+        _revertIfMovingAverageStale(OHM, lastObsTime);
+
         return movingAvg > minimumTargetPrice ? movingAvg : minimumTargetPrice;
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the last observation time for OHM.
-    ///             Compatibility function for PRICEv1.
+    /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Reverts if:
+    /// @dev        - OHM is not approved in PRICE
+    /// @dev        - OHM does not store moving-average observations
     function lastObservationTime() external view override returns (uint48) {
         (, uint48 lastTimestamp) = getPrice(OHM, IPRICEv2.Variant.LAST);
         return lastTimestamp;
@@ -123,56 +142,65 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
 
     /// @inheritdoc IPRICEv1
     /// @dev        Updates the moving average for all assets.
-    ///             Provided as a compatibility function for PRICEv1.
+    /// @dev        Provided as a compatibility function for PRICEv1.
+    /// @dev        Reverts if:
+    /// @dev        - The caller is not permissioned by the Kernel
+    /// @dev        - Any configured moving-average asset fails observation storage
     /// @dev        Reentrancy note: delegates to `storeObservations()`, whose feed/strategy lookups
-    ///             are resolved via `staticcall`.
+    /// @dev        are resolved via `staticcall`.
     function updateMovingAverage() external permissioned {
         // Update all assets that track moving averages
         storeObservations();
     }
 
     /// @inheritdoc IPRICEv1
-    /// @dev        Deprecated. Reverts.
+    /// @dev        Deprecated.
+    /// @dev        Reverts with `PRICE_Deprecated`.
     function initialize(uint256[] memory, uint48) external pure {
         _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Changes the minimum target price for OHM.
-    ///             Provided as a compatibility function for PRICEv1.
-    ///             Reverts if the caller is not permissioned by the Kernel.
+    /// @dev        Provided as a compatibility function for PRICEv1.
+    /// @dev        Reverts if the caller is not permissioned by the Kernel.
+    /// @dev        Reentrancy note: this function does not make external calls.
     ///
     /// @param minimumTargetPrice_ New minimum target OHM price in 18 decimals (`price * 10**18`)
-    /// @dev        Reentrancy note: this function does not make external calls.
     function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external permissioned {
         minimumTargetPrice = minimumTargetPrice_;
         emit MinimumTargetPriceChanged(minimumTargetPrice_);
     }
 
     /// @inheritdoc IPRICEv1
-    /// @dev        Deprecated. Reverts.
+    /// @dev        Deprecated.
+    /// @dev        Reverts with `PRICE_Deprecated`.
     function changeUpdateThresholds(uint48, uint48) external pure {
         _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
-    /// @dev        Deprecated. Reverts.
+    /// @dev        Deprecated.
+    /// @dev        Reverts with `PRICE_Deprecated`.
     function changeMovingAverageDuration(uint48) external pure {
         _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv1
-    /// @dev        Deprecated. Reverts.
+    /// @dev        Deprecated.
+    /// @dev        Reverts with `PRICE_Deprecated`.
     function changeObservationFrequency(uint48) external pure {
         _revertDeprecated();
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Does not revert.
     function decimals() external view virtual override(IPRICEv1, PRICEv2) returns (uint8) {
         return _DECIMALS;
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev        Does not revert.
     function observationFrequency()
         external
         view
@@ -185,6 +213,8 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
 
     // ========== ERC165 FUNCTIONS ========== //
 
+    /// @inheritdoc OlympusPricev2
+    /// @dev        Does not revert.
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return interfaceId_ == type(IPRICEv1).interfaceId || super.supportsInterface(interfaceId_);
     }

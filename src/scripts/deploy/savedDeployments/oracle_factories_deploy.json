@@ -1,6 +1,13 @@
 {
     "sequence": [
         {
+            "name": "PriceCache",
+            "args": {
+                "unitOfAccountDecimals": 18,
+                "unitOfAccountSymbol": "USD"
+            }
+        },
+        {
             "name": "ChainlinkOracleFactory",
             "args": {}
         },

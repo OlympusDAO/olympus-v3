@@ -298,5 +298,10 @@
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-policy-price-config-2_0"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-price-cache-1_0"
     }
 ]

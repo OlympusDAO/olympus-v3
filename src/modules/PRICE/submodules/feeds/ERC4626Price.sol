@@ -42,11 +42,11 @@ contract ERC4626Price is PriceSubmodule {
     /// @param maxDecimals_         The maximum decimals allowed
     error ERC4626_AssetDecimalsOutOfBounds(uint8 assetDecimals_, uint8 maxDecimals_);
 
-    /// @notice                     There is a mismatch between the decimals of the ERC4626 asset and underlying
+    /// @notice                     The value for the ERC4626 underlying decimals is more than the maximum decimals allowed
     ///
-    /// @param assetDecimals_       The asset decimals
-    /// @param underlyingAssetDecimals_  The underlying asset decimals
-    error ERC4626_AssetDecimalsMismatch(uint8 assetDecimals_, uint8 underlyingAssetDecimals_);
+    /// @param underlyingDecimals_  The underlying asset decimals
+    /// @param maxDecimals_         The maximum decimals allowed
+    error ERC4626_UnderlyingDecimalsOutOfBounds(uint8 underlyingDecimals_, uint8 maxDecimals_);
 
     /// @notice                     The underlying asset is not set
     ///
@@ -83,9 +83,18 @@ contract ERC4626Price is PriceSubmodule {
     /// @dev                    This function will revert if:
     /// @dev                    - The output decimals are more than the maximum decimals allowed
     /// @dev                    - The asset decimals are more than the maximum decimals allowed
-    /// @dev                    - The asset and underlying decimals do not match
+    /// @dev                    - The underlying decimals are more than the maximum decimals allowed
     /// @dev                    - The underlying asset is not set
     /// @dev                    - The price of the underlying asset cannot be determined using PRICE
+    ///
+    /// @dev                    Limitations:
+    /// @dev                    - This adapter trusts the raw ERC4626 `convertToAssets()` share rate. It does not
+    /// @dev                      smooth, bound, or otherwise sanity-check vault accounting changes, so it should
+    /// @dev                      only be configured for vaults whose share conversion is already trusted on oracle
+    /// @dev                      timescales.
+    /// @dev                    - This adapter reports the ERC4626 idealized average-user conversion. It does not
+    /// @dev                      account for withdrawal fees, redemption gates, slippage, or other execution
+    /// @dev                      conditions that may make actual exits worse than `convertToAssets()`.
     ///
     /// @param asset_           The address of the ERC4626 asset
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
@@ -111,20 +120,24 @@ contract ERC4626Price is PriceSubmodule {
 
         // Check decimals
         uint256 assetScale;
+        uint256 underlyingScale;
         {
             uint8 assetDecimals = asset.decimals();
             uint8 underlyingDecimals = ERC20(underlying).decimals();
-            // This shouldn't be possible, but we check anyway
-            if (assetDecimals != underlyingDecimals) {
-                revert ERC4626_AssetDecimalsMismatch(assetDecimals, underlyingDecimals);
-            }
 
             // Don't allow an unreasonably large number of decimals that would result in an overflow
             if (assetDecimals > BASE_10_MAX_EXPONENT) {
                 revert ERC4626_AssetDecimalsOutOfBounds(assetDecimals, BASE_10_MAX_EXPONENT);
             }
+            if (underlyingDecimals > BASE_10_MAX_EXPONENT) {
+                revert ERC4626_UnderlyingDecimalsOutOfBounds(
+                    underlyingDecimals,
+                    BASE_10_MAX_EXPONENT
+                );
+            }
 
             assetScale = 10 ** assetDecimals;
+            underlyingScale = 10 ** underlyingDecimals;
         }
 
         // Get the price of the underlying asset
@@ -136,11 +149,16 @@ contract ERC4626Price is PriceSubmodule {
             IPRICEv2.Variant.CURRENT
         );
 
-        // Calculate the price of the asset
+        // Calculate the price of one whole share.
+        // underlyingPrice: output decimals
+        // assetScale: one whole share, in share token decimals
+        // convertToAssets(assetScale): underlying asset amount, in underlying token decimals
+        // underlyingScale: underlying token decimals
+        // Result: output decimals, rounded down by mulDiv.
         // Scale: output decimals
         uint256 assetPrice = (underlyingPrice).mulDiv(
             asset.convertToAssets(assetScale),
-            assetScale
+            underlyingScale
         );
 
         return assetPrice;

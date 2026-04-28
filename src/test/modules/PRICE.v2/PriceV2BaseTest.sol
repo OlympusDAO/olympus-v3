@@ -37,6 +37,8 @@ abstract contract PriceV2BaseTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusPricev2;
 
+    address internal constant _UNIT_OF_ACCOUNT = address(840);
+
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveUsdPriceFeed;
@@ -75,7 +77,6 @@ abstract contract PriceV2BaseTest is Test {
 
     // Re-declare events from PRICE.v2.sol
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
-    event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
     event AssetAdded(address indexed asset_);
     event AssetRemoved(address indexed asset_);
     event AssetPriceFeedsUpdated(address indexed asset_);
@@ -211,7 +212,6 @@ abstract contract PriceV2BaseTest is Test {
             // Deploy mock module writer
             moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
             priceWriter = price.generateGodmodeFixture(type(OlympusPricev2).name);
-
             // Deploy price submodules
             chainlinkPrice = new ChainlinkPriceFeeds(price);
             bptPrice = new BalancerPoolTokenPrice(price, IVault(address(balVault)));
@@ -737,13 +737,20 @@ abstract contract PriceV2BaseTest is Test {
         assertEq(asset.numObservations, numObservations, "numObservations");
     }
 
+    // Helper function to verify there are no stored observations
+    function _assertObservationsEmpty(IPRICEv2.Asset memory asset) internal pure virtual {
+        assertEq(asset.obs.length, 0, "obs array should be empty");
+        assertEq(asset.numObservations, 0, "numObservations");
+        assertEq(asset.lastObservationTime, uint48(0), "lastObservationTime");
+        assertEq(asset.nextObsIndex, 0, "nextObsIndex");
+        assertEq(asset.cumulativeObs, 0, "cumulativeObs");
+    }
+
     // Helper function to verify moving average is not stored (cleared)
     function _assertMovingAverageNotStored(IPRICEv2.Asset memory asset) internal virtual {
         assertEq(asset.storeMovingAverage, false, "storeMovingAverage");
         assertEq(asset.movingAverageDuration, uint32(0), "movingAverageDuration");
-        assertEq(asset.lastObservationTime, uint48(0), "lastObservationTime");
-        assertEq(asset.numObservations, 0, "numObservations");
-        assertEq(asset.nextObsIndex, 0, "nextObsIndex");
+        _assertObservationsEmpty(asset);
     }
 
     // =========  STRATEGY HELPERS ========= //
@@ -810,13 +817,16 @@ abstract contract PriceV2BaseTest is Test {
             );
     }
 
-    // Helper function to verify cached price matches expected value
-    function _assertCachedPrice(
+    // Helper function to verify LAST price matches expected value
+    function _assertLastPrice(
         address asset,
         uint256 expectedPrice,
         string memory message
     ) internal view {
-        (uint256 cachedPrice, ) = price.getPrice(asset, IPRICEv2.Variant.LAST);
-        assertEq(cachedPrice, expectedPrice, message);
+        IPRICEv2.Asset memory assetData = price.getAssetData(asset);
+        assertEq(assetData.storeMovingAverage, true, "LAST requires stored observations");
+
+        (uint256 lastPrice, ) = price.getPrice(asset, IPRICEv2.Variant.LAST);
+        assertEq(lastPrice, expectedPrice, message);
     }
 }

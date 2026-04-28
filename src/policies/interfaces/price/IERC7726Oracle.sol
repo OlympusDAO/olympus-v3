@@ -9,15 +9,9 @@ interface IERC7726Oracle is IPriceOracle {
     /// @notice Thrown when the oracle is not enabled in the factory
     error ERC7726Oracle_NotEnabled();
 
-    /// @notice Thrown when base/quote timestamps resolve to different sources/times
+    /// @notice Thrown when the direct pair cache is unset or stale
     ///
-    /// @param  baseTimestamp_ The resolved base timestamp
-    /// @param  quoteTimestamp_ The resolved quote timestamp
-    error ERC7726Oracle_InconsistentTimestamps(uint48 baseTimestamp_, uint48 quoteTimestamp_);
-
-    /// @notice Thrown when cached base/quote prices are stale
-    ///
-    /// @param  timestamp_ The shared cached timestamp used for quote resolution
+    /// @param  timestamp_ The cached timestamp used for the requested base/quote pair
     /// @param  maxAge_ The configured maximum cache age
     error ERC7726Oracle_Stale(uint48 timestamp_, uint48 maxAge_);
 
@@ -26,14 +20,14 @@ interface IERC7726Oracle is IPriceOracle {
     /// @return maxAge_ The configured maximum cache age in seconds.
     function maxAge() external view returns (uint48 maxAge_);
 
-    /// @notice Returns whether the cached feed state is stale for a given pair.
+    /// @notice Returns whether the direct pair cache is stale for a given pair.
     ///
     /// @param base         The address of the base token
     /// @param quote        The address of the quote token
-    /// @return isStale_    Returns true if timestamps are inconsistent, unset, or older than maxAge.
+    /// @return isStale_    Returns true if the pair cache is unset or older than maxAge.
     function isStale(address base, address quote) external view returns (bool isStale_);
 
-    /// @notice Returns the shared cached timestamp used for a given quote pair.
+    /// @notice Returns the cached timestamp used for a given base/quote pair.
     ///
     /// @param base         The address of the base token
     /// @param quote        The address of the quote token

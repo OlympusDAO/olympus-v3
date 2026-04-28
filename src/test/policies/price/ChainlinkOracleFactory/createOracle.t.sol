@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleFactoryTest} from "./ChainlinkOracleFactoryTest.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -64,18 +65,19 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(address(0), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when base token is not a contract
-    //  [X] it reverts with InvalidToken
+    // when base token is unit of account
+    //  [X] it creates the oracle
 
-    function test_whenBaseTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
+    function test_whenBaseTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            UNIT_OF_ACCOUNT,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
         );
 
-        vm.prank(admin);
-        factory.createOracle(nonContract, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account base");
     }
 
     // when quote token is zero address
@@ -90,18 +92,123 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(address(baseToken), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when quote token is not a contract
+    // when both tokens are zero addresses
     //  [X] it reverts with InvalidToken
 
-    function test_whenQuoteTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
+    function test_whenBothTokensAreZeroAddress_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+        factory.createOracle(address(0), address(0), DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when quote token is unit of account
+    //  [X] it creates the oracle
+
+    function test_whenQuoteTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            UNIT_OF_ACCOUNT,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account quote");
+    }
+
+    // when base token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
+
+    function test_whenBaseTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, BASE_PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            registeredNonContractAsset,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenBaseTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, BASE_PRICE);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            registeredNonContractAsset,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA base");
+    }
+
+    // when quote token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
+
+    function test_whenQuoteTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, QUOTE_PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            address(baseToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenQuoteTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, QUOTE_PRICE);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA quote");
     }
 
     // when base token equals quote token
@@ -286,23 +393,20 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.prank(admin);
         factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
 
-        (, uint48 baseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = priceModule.getPrice(
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 timestamp = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
 
-        assertGt(baseTimestamp, 0, "Base token price should be cached");
-        assertGt(quoteTimestamp, 0, "Quote token price should be cached");
+        assertGt(timestamp, 0, "Asset price should be cached");
     }
 
-    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+    function test_whenCachePriceCalledByNonOracle_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
             abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
         );
 
         vm.prank(admin);
-        factory.cacheOraclePrices();
+        factory.cachePrice(address(baseToken), address(quoteToken));
     }
 
     // when called by manager
@@ -348,6 +452,23 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
             oracle,
             "Oracle should be stored for maxAge=0"
         );
+    }
+
+    function test_whenPriceCacheDecimalsChange_newOracleUsesCacheDecimals()
+        public
+        givenFactoryIsEnabled
+    {
+        priceCache.setPriceDecimals(9);
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertEq(IChainlinkOracle(oracle).decimals(), 9, "Oracle decimals should come from cache");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

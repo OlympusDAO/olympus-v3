@@ -7,15 +7,15 @@ pragma solidity >=0.8.15;
 /// @dev    Use this interface for clone contracts that expose cache helpers for arbitrary
 ///         base/quote pairs while applying their own configured max-age policy internally.
 interface IERC7726OraclePriceCache {
-    /// @notice             Updates cached prices for base and quote assets unconditionally
+    /// @notice             Updates the cached direct pair unconditionally
     ///
     /// @param base_        The base asset address
     /// @param quote_       The quote asset address
-    function cachePrices(address base_, address quote_) external;
+    function cachePrice(address base_, address quote_) external;
 
-    /// @notice                 Updates cached prices only if stale for this oracle or no cache exists
+    /// @notice                 Updates the cached direct pair only if stale or unset
     ///
     /// @param base_            The base asset address
     /// @param quote_           The quote asset address
-    function cachePricesIfNecessary(address base_, address quote_) external;
+    function cachePriceIfNecessary(address base_, address quote_) external;
 }
