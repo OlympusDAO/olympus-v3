@@ -396,11 +396,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         vm.warp(lastStoredTimestamp + warpDelta);
 
         uint256 latestRound = AggregatorV2V3Interface(address(oracle)).latestRound();
-        assertEq(
-            latestRound,
-            lastStoredRoundId,
-            "latestRound should remain readable while stale"
-        );
+        assertEq(latestRound, lastStoredRoundId, "latestRound should remain readable while stale");
     }
 
     function test_whenOnlyQuoteUsdCacheChanges_returnsCachedPairRound()
