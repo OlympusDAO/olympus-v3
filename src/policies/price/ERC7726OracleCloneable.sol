@@ -92,9 +92,12 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
             revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
         }
 
-        outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, cachedPrice.quotePriceUsd).mulDiv(
-            10 ** IERC20(quote_).decimals(),
-            10 ** IERC20(base_).decimals()
+        uint256 quoteTokenScale = 10 ** IERC20(quote_).decimals();
+        uint256 baseTokenScale = 10 ** IERC20(base_).decimals();
+
+        outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, baseTokenScale).mulDiv(
+            quoteTokenScale,
+            cachedPrice.quotePriceUsd
         );
     }
 

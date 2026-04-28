@@ -251,6 +251,41 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         );
     }
 
+    // when collateral has 0 decimals and loan has 18 decimals
+    //  [X] it returns the correctly scaled non-zero price for a 1:3 ratio
+    function test_whenZeroDecimalCollateralAndOneToThreeRatio_returnsNonZeroPrice() public {
+        // Create a new collateral token with 0 decimals.
+        MockERC20 newCollateralToken = new MockERC20("Zero Dec Collateral", "ZCOL", 0);
+
+        // Set prices to collateral=1e18 USD and loan=3e18 USD.
+        _setPRICEPrices(address(newCollateralToken), 1e18);
+        _setPRICEPrices(address(loanToken), 3e18);
+
+        // Create oracle for the new pair.
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(newCollateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // scaleFactor = 1e54 (36 + 18 - 0)
+        // price = (1e18 * 1e54) / 3e18 = 1e54 / 3
+        uint256 expectedPrice = 333333333333333333333333333333333333333333333333333333;
+        uint256 actualPrice = IMorphoOracle(newOracle).price();
+        assertEq(actualPrice, expectedPrice, "Price should preserve non-zero precision");
+
+        // loan tokens per collateral token = 1 * price / 1e36 = 333333333333333333
+        uint256 expectedLoanTokensPerCollateralToken = 333333333333333333;
+        uint256 actualLoanTokensPerCollateralToken = actualPrice / 1e36;
+        assertEq(
+            actualLoanTokensPerCollateralToken,
+            expectedLoanTokensPerCollateralToken,
+            "Loan tokens per collateral token should be correctly scaled"
+        );
+    }
+
     // when collateral live price changes
     //  [X] it keeps returning cached price until cache refresh
     //  [X] it reflects new price after cache refresh
