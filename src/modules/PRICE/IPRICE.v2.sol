@@ -288,8 +288,10 @@ interface IPRICEv2 {
 
     /// @notice         Variant of price to retrieve
     /// @dev            - CURRENT: The current aggregating feed price, including moving average if configured
+    /// @dev                Reverts with `PRICE_MovingAverageStale` when a configured moving average is stale
     /// @dev            - LAST: The last stored observation price
-    /// @dev            - MOVINGAVERAGE: The raw moving average price of the asset
+    /// @dev            - MOVINGAVERAGE: The raw stored moving average price of the asset
+    /// @dev                This accessor does not apply staleness checks
     enum Variant {
         CURRENT,
         LAST,
@@ -340,8 +342,9 @@ interface IPRICEv2 {
 
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
+    /// @dev                    Reverts with `PRICE_MovingAverageStale` when a configured moving average is stale
     /// @dev                - Variant.LAST: last stored observation price
-    /// @dev                - Variant.MOVINGAVERAGE: raw moving average price
+    /// @dev                - Variant.MOVINGAVERAGE: raw stored moving average price (no staleness check)
     ///
     /// @param asset_       The address of the asset
     /// @param variant_     The variant of the price to return

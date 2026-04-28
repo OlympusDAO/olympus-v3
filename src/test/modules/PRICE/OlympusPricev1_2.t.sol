@@ -486,6 +486,32 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getMovingAverage
+    //  given OHM has moving average configured
+    //   given moving average is stale
+    //    [X] it returns the stored moving average
+    function test_getMovingAverage_givenMovingAverageIsStale_returnsStoredValue()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        uint256 movingAverage = price.getMovingAverage();
+        assertEq(
+            movingAverage,
+            OHM_PRICE,
+            "Moving average should return the stored value when stale"
+        );
+        assertEq(
+            price.lastObservationTime(),
+            lastObsTime,
+            "Last observation time should remain unchanged when stale"
+        );
+    }
+
+    // getMovingAverage
     //  given OHM does not have moving average configured
     //   [X] it reverts with PRICE_MovingAverageNotStored
     function test_getMovingAverage_givenOhmDoesNotHaveMovingAverageConfigured_reverts()
@@ -570,6 +596,28 @@ contract OlympusPricev1_2Test is Test {
             MINIMUM_TARGET_PRICE,
             "Target price should return minimum when MA equals minimum"
         );
+    }
+
+    // getTargetPrice
+    //  given moving average is stale
+    //   [X] it reverts with PRICE_MovingAverageStale
+    function test_getTargetPrice_givenMovingAverageIsStale_reverts()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_MovingAverageStale.selector,
+                address(ohm),
+                lastObsTime
+            )
+        );
+        price.getTargetPrice();
     }
 
     // getTargetPrice

@@ -182,6 +182,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        Will revert if:
     /// @dev        - `asset_` is not approved
     /// @dev        - No price could be determined
+    /// @dev        - `variant_ == Variant.CURRENT` and a configured moving average is stale
     /// @dev        - An invalid variant is requested
     function getPrice(
         address asset_,
@@ -328,13 +329,24 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256[] memory prices, bool successAllFeeds) = _getFeedPrices(asset_);
 
         if (asset.useMovingAverage && includeMovingAverage_) {
-            if (asset.lastObservationTime + _observationFrequency <= block.timestamp)
-                revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
+            _revertIfMovingAverageStale(asset_, asset.lastObservationTime);
 
             prices = _getInclusivePrices(asset_, prices);
         }
 
         return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
+    }
+
+    /// @notice                     Reverts if the moving average observation is stale
+    ///
+    /// @param asset_               The asset address used in the revert payload
+    /// @param lastObservationTime_ Last stored moving-average observation timestamp
+    function _revertIfMovingAverageStale(
+        address asset_,
+        uint48 lastObservationTime_
+    ) internal view {
+        if (lastObservationTime_ + _observationFrequency <= block.timestamp)
+            revert PRICE_MovingAverageStale(asset_, lastObservationTime_);
     }
 
     /// @inheritdoc IPRICEv2
