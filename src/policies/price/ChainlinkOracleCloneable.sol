@@ -186,6 +186,12 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return (roundId, answer, startedAt, updatedAt, answeredInRound);
     }
 
+    /// @notice Checks whether a timestamp is stale for the configured freshness window.
+    /// @dev    Returns true when `timestamp_` is zero or when it is older than `maxAge_`.
+    ///
+    /// @param timestamp_ Timestamp to evaluate.
+    /// @param maxAge_    Maximum acceptable age, in seconds.
+    /// @return isStale_  Whether the timestamp is zero or too old.
     function _isStaleFromTimestamp(
         uint256 timestamp_,
         uint48 maxAge_
@@ -196,6 +202,12 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         }
     }
 
+    /// @notice Computes the oldest timestamp that is still acceptable for fresh round data.
+    /// @dev    Returns 0 when `block.timestamp <= maxAge_`; otherwise returns
+    ///         `block.timestamp - uint256(maxAge_)`.
+    ///
+    /// @param maxAge_             Maximum acceptable age, in seconds.
+    /// @return latestPermissible_ Oldest acceptable timestamp, or 0 if no positive lower bound exists.
     function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
         if (block.timestamp <= uint256(maxAge_)) return 0;
         unchecked {
@@ -203,6 +215,15 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         }
     }
 
+    /// @notice Returns latest round data after enforcing `maxAge()` freshness.
+    /// @dev    Reverts with `ChainlinkOracle_Stale(updatedAt, latestPermissibleTimestamp)` when
+    ///         the returned `updatedAt` is stale according to `_isStaleFromTimestamp(updatedAt, maxAge())`.
+    ///
+    /// @return roundId         Latest round identifier.
+    /// @return answer          Latest answer.
+    /// @return startedAt       Timestamp when the latest round started.
+    /// @return updatedAt       Timestamp when the latest round answer was updated.
+    /// @return answeredInRound Round identifier in which the answer was computed.
     function _latestRoundDataFreshInternal()
         internal
         view

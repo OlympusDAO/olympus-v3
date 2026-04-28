@@ -157,6 +157,16 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         }
     }
 
+    /// @notice Computes the oldest timestamp that is still permissible for freshness checks.
+    /// @dev    Returns 0 when `block.timestamp <= maxAge_`; otherwise returns
+    ///         `block.timestamp - uint256(maxAge_)`.
+    /// @dev    Does not revert.
+    /// @dev    A zero return value means every non-zero timestamp is permissible at the current
+    ///         block timestamp. Callers can use this value in stale revert payloads to report the
+    ///         lower freshness bound without implying that timestamp 0 is valid cached data.
+    ///
+    /// @param maxAge_             Maximum acceptable age, in seconds.
+    /// @return latestPermissible_ Oldest acceptable timestamp, or 0 if no positive lower bound exists.
     function _latestPermissibleTimestamp(uint48 maxAge_) internal view returns (uint256) {
         if (block.timestamp <= uint256(maxAge_)) return 0;
         unchecked {
