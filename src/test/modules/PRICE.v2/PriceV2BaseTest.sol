@@ -37,6 +37,8 @@ abstract contract PriceV2BaseTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusPricev2;
 
+    address internal constant _UNIT_OF_ACCOUNT = address(840);
+
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveUsdPriceFeed;
@@ -207,7 +209,6 @@ abstract contract PriceV2BaseTest is Test {
             // Deploy mock module writer
             moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
             priceWriter = price.generateGodmodeFixture(type(OlympusPricev2).name);
-
             // Deploy price submodules
             chainlinkPrice = new ChainlinkPriceFeeds(price);
             bptPrice = new BalancerPoolTokenPrice(price, IVault(address(balVault)));

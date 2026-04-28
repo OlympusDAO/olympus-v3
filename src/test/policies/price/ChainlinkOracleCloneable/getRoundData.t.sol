@@ -138,7 +138,7 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         _setPRICEPrices(address(baseToken), 15e18);
         _setPRICEPrices(address(quoteToken), 5e18);
 
-        uint80 latestRoundId = uint80(lastStoredTimestamp);
+        uint80 latestRoundId = lastStoredRoundId;
         assertEq(
             AggregatorV2V3Interface(address(oracle)).latestRound(),
             uint256(latestRoundId),
@@ -214,7 +214,7 @@ contract ChainlinkOracleCloneableGetRoundDataTest is ChainlinkOracleCloneableTes
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , , ) = oracle.latestRoundData();
 
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Get round data for new round
         (uint80 roundId, int256 answer, , uint256 updatedAt, ) = oracle.getRoundData(newRoundId);

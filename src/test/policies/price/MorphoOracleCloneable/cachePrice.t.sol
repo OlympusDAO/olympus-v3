@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {MorphoOracleCloneable} from "src/policies/price/MorphoOracleCloneable.sol";
+import {Actions} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
@@ -36,6 +37,13 @@ contract MorphoOracleCloneableCachePriceTest is MorphoOracleCloneableTest {
 
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        MorphoOracleCloneable(address(oracle)).cachePrice();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         MorphoOracleCloneable(address(oracle)).cachePrice();
     }
 

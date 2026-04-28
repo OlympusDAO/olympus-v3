@@ -46,6 +46,9 @@ interface IOracleFactory {
     /// @param  token   Invalid token address
     error OracleFactory_InvalidToken(address token);
 
+    /// @notice Thrown when this policy is no longer active in Kernel
+    error OracleFactory_PolicyNotActive();
+
     /// @notice Thrown when module version is not supported
     ///
     /// @param  keycode Keycode of the module
@@ -105,6 +108,12 @@ interface IOracleFactory {
     /// @param  policy  Invalid price cache policy address
     error OracleFactory_InvalidPriceCache(address policy);
 
+    /// @notice Thrown when re-enable pair arrays are malformed
+    ///
+    /// @param  baseTokenLength   The number of base tokens
+    /// @param  quoteTokenLength  The number of quote tokens
+    error OracleFactory_InvalidEnableData(uint256 baseTokenLength, uint256 quoteTokenLength);
+
     // ========== STATE FUNCTIONS ========== //
 
     /// @notice Gets the configured price cache policy
@@ -162,6 +171,16 @@ interface IOracleFactory {
     /// @param  oracle_ The oracle address to check
     /// @return enabled True if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
+
+    /// @notice Checks if a factory-created oracle is enabled and returns the configured price cache
+    /// @dev    Reverts if:
+    ///         - The policy is deactivated in Kernel
+    ///         - `oracle_` was not created by this factory
+    ///
+    /// @param  oracle_ The oracle address to check
+    /// @return enabled True if the oracle is enabled, false otherwise
+    /// @return policy  The configured price cache policy address
+    function getOracleContext(address oracle_) external view returns (bool enabled, address policy);
 
     /// @notice Caches the provided base/quote pair
     /// @dev    Intended to be called by oracle contracts created by this factory

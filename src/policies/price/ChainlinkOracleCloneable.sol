@@ -11,8 +11,9 @@ import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.s
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
 
 /// @title  ChainlinkOracleCloneable
@@ -80,6 +81,24 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
     }
 
+    /// @notice Returns the enabled price cache policy for this oracle.
+    /// @dev    Calls `factory().getOracleContext(address(this))` to read the oracle liveness
+    ///         context and configured cache policy from the factory. Reverts with
+    ///         `ChainlinkOracle_NotEnabled()` if the returned context is disabled or if the
+    ///         factory does not provide a valid price cache address. Reverts from
+    ///         `getOracleContext` bubble up, including when the factory policy is inactive or
+    ///         this oracle was not created by the factory.
+    ///
+    /// @return priceCache_ The configured price cache policy, expected to be a non-zero address.
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled || priceCacheAddress == address(0)) {
+            revert ChainlinkOracle_NotEnabled();
+        }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
+    }
+
     // ========== AGGREGATOR V3 INTERFACE ========== //
 
     /// @inheritdoc AggregatorV3Interface
@@ -111,15 +130,19 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             enforce maxAge().
     ///
     ///             This function will revert if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The `IPriceCache.getCachedPrice()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     ///             If callers encounter a revert due to feed state, they should cache prices then retry.
     ///
-    /// @return roundId          The round ID (timestamp of the observation, cast to uint80)
+    /// @return roundId          The cached pair round ID
     /// @return answer           The price of 1 base token in quote tokens, scaled by 10^decimals()
     /// @return startedAt        The timestamp when the round started (same as updatedAt)
     /// @return updatedAt        The timestamp when the round was updated (from the cached pair snapshot)
@@ -135,14 +158,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             uint80 answeredInRound
         )
     {
-        // Check if oracle is enabled via factory
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert ChainlinkOracle_NotEnabled();
-        }
-
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory_.getPriceCache())
-            .getCachedPrice(baseToken(), quoteToken());
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            baseToken(),
+            quoteToken()
+        );
         uint256 assetPriceUsd = cachedPrice.assetPriceUsd;
         uint256 quotePriceUsd = cachedPrice.quotePriceUsd;
         uint48 updatedAt_ = cachedPrice.updatedAt;
@@ -154,11 +173,12 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
         // Calculate pair quote in configured decimal scale from cached USD legs.
         uint256 price = FullMath.mulDiv(assetPriceUsd, 10 ** _priceDecimals(), quotePriceUsd);
+        if (price == 0) {
+            revert ChainlinkOracle_NoDataPresent();
+        }
 
-        // Use timestamp as synthetic round ID.
-        roundId = uint80(updatedAt_);
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        answer = int256(price);
+        roundId = cachedPrice.roundId;
+        answer = SafeCast.toInt256(price);
         startedAt = updatedAt_;
         updatedAt = updatedAt_;
         answeredInRound = roundId;
@@ -204,12 +224,15 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorV3Interface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
     ///             - The cached pair observation is stale (`updatedAt + maxAge() < block.timestamp`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     function latestRoundData()
         external
         view
@@ -228,21 +251,30 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IChainlinkOracle
     /// @dev        Chainlink-style round readers may consume stale rounds. This flag allows
     ///             consumers to detect stale or missing cached state before reading.
-    ///             Reverts if the configured pair is invalid for the active cache policy.
+    ///             Reverts if:
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The `IPriceCache.isStale()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
+    ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
-        return IPriceCache(factory().getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
+        return _getEnabledPriceCache().isStale(baseToken(), quoteToken(), maxAge());
     }
 
     /// @inheritdoc AggregatorV3Interface
     /// @dev        Only supports the latest round. For any other round ID, reverts with ChainlinkOracle_NoDataPresent().
     ///
     ///             This function will revert if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
-    ///             - Does not revert when the latest cached round is stale
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
+    ///
+    ///             This function does not revert when the latest cached round is stale.
     ///
     /// @param  roundId_         The round ID to query
     /// @return roundId          The round ID
@@ -279,12 +311,15 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
     ///             - The cached pair observation is stale (`updatedAt + maxAge() < block.timestamp`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     /// @return int256  The latest price
     function latestAnswer() external view override returns (int256) {
@@ -294,12 +329,16 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
-    ///             - Does not revert when the latest cached round is stale
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
+    ///
+    ///             This function does not revert when the latest cached round is stale.
     ///
     /// @return uint256 The latest timestamp
     function latestTimestamp() external view override returns (uint256) {
@@ -309,12 +348,16 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
-    ///             - Does not revert when the latest cached round is stale
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
+    ///
+    ///             This function does not revert when the latest cached round is stale.
     ///
     /// @return uint256 The latest round ID
     function latestRound() external view override returns (uint256) {
@@ -324,13 +367,17 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///             - `roundId_` is not the latest round ID
-    ///             - Does not revert when the latest cached round is stale
+    ///
+    ///             This function does not revert when the latest cached round is stale.
     ///
     /// @param      roundId_    The round ID to query
     /// @return int256  The answer for the given round ID
@@ -344,13 +391,17 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///             - `roundId_` is not the latest round ID
-    ///             - Does not revert when the latest cached round is stale
+    ///
+    ///             This function does not revert when the latest cached round is stale.
     ///
     /// @param      roundId_    The round ID to query
     /// @return uint256 The timestamp for the given round ID
@@ -367,6 +418,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Unconditionally asks the factory to cache the configured pair.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory
@@ -378,6 +430,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory

@@ -105,6 +105,7 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @inheritdoc IPRICEv1
     /// @dev        Returns the moving average of OHM.
     /// @dev        Compatibility function for PRICEv1.
+    /// @dev        Returns the raw stored moving average, which may be stale.
     /// @dev        Reverts if:
     /// @dev        - OHM is not approved in PRICE
     /// @dev        - OHM does not store moving-average observations
@@ -118,8 +119,11 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @dev        Reverts if:
     /// @dev        - OHM is not approved in PRICE
     /// @dev        - OHM does not store moving-average observations
+    /// @dev        - OHM moving average is stale relative to `observationFrequency()`
     function getTargetPrice() external view returns (uint256) {
-        (uint256 movingAvg, ) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
+        (uint256 movingAvg, uint48 lastObsTime) = getPrice(OHM, IPRICEv2.Variant.MOVINGAVERAGE);
+        _revertIfMovingAverageStale(OHM, lastObsTime);
+
         return movingAvg > minimumTargetPrice ? movingAvg : minimumTargetPrice;
     }
 

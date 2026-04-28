@@ -25,6 +25,7 @@ contract ChainlinkOracleFactoryTest is Test {
 
     MockERC20 public baseToken;
     MockERC20 public quoteToken;
+    address public registeredNonContractAsset;
 
     address public admin;
     address public manager;
@@ -72,6 +73,7 @@ contract ChainlinkOracleFactoryTest is Test {
         // Deploy mock tokens
         baseToken = new MockERC20("Base Token", "BASE", 18);
         quoteToken = new MockERC20("Quote Token", "QUOTE", 18);
+        registeredNonContractAsset = makeAddr("REGISTERED_NON_CONTRACT_ASSET");
 
         // Set prices in cache policy mock
         _setPRICEPrices(address(baseToken), BASE_PRICE); // 2 USD
@@ -83,6 +85,14 @@ contract ChainlinkOracleFactoryTest is Test {
     /// @notice Sets price for a token in the cache policy mock
     function _setPRICEPrices(address token_, uint256 price_) internal {
         priceCache.setUsdPrice(token_, price_);
+    }
+
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
+        priceCache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
     }
 
     /// @notice Creates an oracle via the factory

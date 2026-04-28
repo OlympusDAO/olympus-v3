@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleFactoryTest} from "./ChainlinkOracleFactoryTest.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -64,33 +65,19 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(address(0), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when base token is not a contract
-    //  [X] it reverts with InvalidToken
-
-    function test_whenBaseTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
-        );
-
-        vm.prank(admin);
-        factory.createOracle(nonContract, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
-    }
-
     // when base token is unit of account
-    //  [X] it reverts with InvalidToken
+    //  [X] it creates the oracle
 
-    function test_whenBaseTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IOracleFactory.OracleFactory_InvalidToken.selector,
-                UNIT_OF_ACCOUNT
-            )
+    function test_whenBaseTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            UNIT_OF_ACCOUNT,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
         );
 
-        vm.prank(admin);
-        factory.createOracle(UNIT_OF_ACCOUNT, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account base");
     }
 
     // when quote token is zero address
@@ -117,33 +104,111 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(address(0), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when quote token is not a contract
-    //  [X] it reverts with InvalidToken
+    // when quote token is unit of account
+    //  [X] it creates the oracle
 
-    function test_whenQuoteTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
+    function test_whenQuoteTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            UNIT_OF_ACCOUNT,
+            DEFAULT_MAX_AGE,
+            bytes("")
         );
 
-        vm.prank(admin);
-        factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account quote");
     }
 
-    // when quote token is unit of account
-    //  [X] it reverts with InvalidToken
+    // when base token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
 
-    function test_whenQuoteTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+    function test_whenBaseTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, BASE_PRICE);
+
         vm.expectRevert(
             abi.encodeWithSelector(
-                IOracleFactory.OracleFactory_InvalidToken.selector,
-                UNIT_OF_ACCOUNT
+                IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered.selector,
+                registeredNonContractAsset
             )
         );
 
         vm.prank(admin);
-        factory.createOracle(address(baseToken), UNIT_OF_ACCOUNT, DEFAULT_MAX_AGE, bytes(""));
+        factory.createOracle(
+            registeredNonContractAsset,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenBaseTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, BASE_PRICE);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            registeredNonContractAsset,
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA base");
+    }
+
+    // when quote token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
+
+    function test_whenQuoteTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, QUOTE_PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetSymbolNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            address(baseToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenQuoteTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, QUOTE_PRICE);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA quote");
     }
 
     // when base token equals quote token
