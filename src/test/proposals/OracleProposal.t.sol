@@ -54,6 +54,9 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
+    // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
+    uint32 internal constant OHM_OBSERVATION_WINDOW_SECONDS = 1500;
+    uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
     uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
     string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
@@ -202,7 +205,9 @@ contract OracleProposalTest is ProposalTest {
         address submodule = _safeGetAddress(key);
         if (submodule == address(0)) {
             console2.log("Deploying UniswapV3Price");
-            submodule = address(new UniswapV3Price(Module(priceModule_)));
+            submodule = address(
+                new UniswapV3Price(Module(priceModule_), _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS)
+            );
             addresses.addAddress(key, submodule);
         } else {
             console2.log("UniswapV3Price already deployed");
@@ -486,7 +491,7 @@ contract OracleProposalTest is ProposalTest {
             params: abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: ohmSusdsPool,
-                    observationWindowSeconds: 3600 // 1 hour observation window
+                    observationWindowSeconds: OHM_OBSERVATION_WINDOW_SECONDS
                 })
             )
         });

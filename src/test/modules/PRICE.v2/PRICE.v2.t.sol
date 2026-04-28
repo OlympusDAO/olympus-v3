@@ -2914,6 +2914,68 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
+    function test_addAsset_givenUniswapTwapObservationCardinalityInsufficient_reverts() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price.UniswapV3Params(
+            ohmEthUniV3Pool,
+            TWAP_PERIOD
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"), // SubKeycode target
+            UniswapV3Price.getTokenTWAP.selector, // bytes4 selector
+            abi.encode(ohmFeedThreeParams) // bytes memory params
+        );
+
+        // Keep cardinality one below the minimum required by TWAP_PERIOD so the Uniswap feed call fails.
+        uint16 minimumRequiredCardinality = uint16(
+            (uint256(TWAP_PERIOD) + _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS - 1) /
+                _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS
+        );
+        uint16 insufficientCardinality = minimumRequiredCardinality - 1;
+        ohmEthUniV3Pool.setObservationCardinality(insufficientCardinality, insufficientCardinality);
+
+        vm.startPrank(priceWriter);
+
+        bytes memory err = abi.encodeWithSelector(
+            IPRICEv2.PRICE_PriceFeedCallFailed.selector,
+            address(ohm)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(ohm), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            IPRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                ISimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+        vm.stopPrank();
+    }
+
     function testRevert_addAsset_singlePriceFeed_movingAverage_submoduleCallReturnsZero(
         uint256 nonce_
     ) public {

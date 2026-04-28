@@ -794,6 +794,10 @@ contract DeployV3 is WithEnvironment {
     }
 
     function deployUniswapV3Price() public returns (address, string memory) {
+        uint32 averageBlockTimeSeconds = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("UniswapV3Price", "averageBlockTimeSeconds")
+        );
+
         // Dependencies
         console2.log("Checking dependencies");
         address priceModule = _getAddressNotZero("olympus.modules.OlympusPriceV1");
@@ -801,10 +805,11 @@ contract DeployV3 is WithEnvironment {
         // Log parameters
         console2.log("UniswapV3Price parameters:");
         console2.log("  priceModule", priceModule);
+        console2.log("  averageBlockTimeSeconds", averageBlockTimeSeconds);
 
         // Deploy
         vm.broadcast();
-        UniswapV3Price price = new UniswapV3Price(Module(priceModule));
+        UniswapV3Price price = new UniswapV3Price(Module(priceModule), averageBlockTimeSeconds);
 
         return (address(price), "olympus.submodules.PRICE");
     }

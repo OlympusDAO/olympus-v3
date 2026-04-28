@@ -30,6 +30,8 @@ contract MockUniV3Pair is IUniswapV3Pool {
     uint160 internal _sqrtPrice;
     uint128 internal _liquidity;
     int56[] internal _tickCumulatives;
+    uint16 internal _observationCardinality = type(uint16).max;
+    uint16 internal _observationCardinalityNext = type(uint16).max;
     uint256 internal _feeGrowthGlobal0X128;
     uint256 internal _feeGrowthGlobal1X128;
 
@@ -66,6 +68,14 @@ contract MockUniV3Pair is IUniswapV3Pool {
 
     function setUnlocked(bool unlocked_) public {
         _unlocked = unlocked_;
+    }
+
+    function setObservationCardinality(
+        uint16 observationCardinality_,
+        uint16 observationCardinalityNext_
+    ) external {
+        _observationCardinality = observationCardinality_;
+        _observationCardinalityNext = observationCardinalityNext_;
     }
 
     function setFeeGrowthGlobal(uint256 fee0_, uint256 fee1_) external {
@@ -112,7 +122,15 @@ contract MockUniV3Pair is IUniswapV3Pool {
             bool unlocked
         )
     {
-        return (_sqrtPrice, _tick, 0, 0, 0, 0, _unlocked);
+        return (
+            _sqrtPrice,
+            _tick,
+            0,
+            _observationCardinality,
+            _observationCardinalityNext,
+            0,
+            _unlocked
+        );
     }
 
     function observe(
@@ -268,7 +286,11 @@ contract MockUniV3Pair is IUniswapV3Pool {
         bytes calldata data_
     ) external {}
 
-    function increaseObservationCardinalityNext(uint16 observationCardinalityNext_) external {}
+    function increaseObservationCardinalityNext(uint16 observationCardinalityNext_) external {
+        if (observationCardinalityNext_ > _observationCardinalityNext) {
+            _observationCardinalityNext = observationCardinalityNext_;
+        }
+    }
 
     function snapshotCumulativesInside(
         int24 tickLower_,
