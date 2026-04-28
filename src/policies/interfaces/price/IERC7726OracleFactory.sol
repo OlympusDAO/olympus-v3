@@ -93,6 +93,12 @@ interface IERC7726OracleFactory {
     /// @param   policy  The invalid price cache policy address
     error ERC7726OracleFactory_InvalidPriceCache(address policy);
 
+    /// @notice  Thrown when re-enable pair arrays are malformed
+    ///
+    /// @param   baseTokenLength   The number of base tokens
+    /// @param   quoteTokenLength  The number of quote tokens
+    error ERC7726OracleFactory_InvalidEnableData(uint256 baseTokenLength, uint256 quoteTokenLength);
+
     // ========== FUNCTIONS ========== //
 
     /// @notice  Creates a new oracle for a specific maxAge
