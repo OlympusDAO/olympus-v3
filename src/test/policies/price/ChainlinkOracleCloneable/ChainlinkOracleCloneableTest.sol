@@ -16,6 +16,7 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
         bytes4(keccak256("PRICE_AssetNotApproved(address)"));
 
     uint48 public lastStoredTimestamp;
+    uint80 public lastStoredRoundId;
 
     // ========== SETUP ========== //
 
@@ -40,6 +41,7 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
             address(quoteToken)
         );
         lastStoredTimestamp = cachedPrice.updatedAt;
+        lastStoredRoundId = cachedPrice.roundId;
     }
 
     function _warp() internal {

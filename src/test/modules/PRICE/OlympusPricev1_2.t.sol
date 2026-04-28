@@ -776,6 +776,7 @@ contract OlympusPricev1_2Test is Test {
     {
         IPRICEv2.Asset memory reserveADataBefore = price.getAssetData(address(reserveA));
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriterV1_2);
         price.updateMovingAverage();
 

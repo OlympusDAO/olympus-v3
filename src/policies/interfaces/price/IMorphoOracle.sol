@@ -15,7 +15,7 @@ interface IMorphoOracle is IOracle {
     /// @notice Thrown when the cached direct-pair USD legs are invalid
     error MorphoOracle_InvalidPrice();
 
-    /// @notice Thrown when the direct pair cache is unset or stale
+    /// @notice Thrown when the direct pair cache timestamp is stale
     ///
     /// @param  timestamp_  The cached timestamp used for the collateral/loan pair
     /// @param  maxAge_     The configured maximum cache age
