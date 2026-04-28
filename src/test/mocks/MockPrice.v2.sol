@@ -7,11 +7,11 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 contract MockPrice is PRICEv2 {
     mapping(address => bool) internal assetApproved;
+    mapping(address => bool) internal _storeMovingAverageEnabled;
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
+    mapping(address => uint48) internal _movingAverageLastUpdated;
     mapping(address => uint256[]) internal observations;
-    mapping(address => uint256) internal lastStoredPrices;
-    mapping(address => uint48) internal lastStoredTimestamps;
     uint48 internal timestamp;
 
     address[] internal _assets;
@@ -60,19 +60,57 @@ contract MockPrice is PRICEv2 {
     }
 
     function setMovingAverage(address asset, uint256 movingAverage) public {
+        _storeMovingAverageEnabled[asset] = true;
         movingAverages[asset] = movingAverage;
+        _movingAverageLastUpdated[asset] = timestamp;
     }
 
-    /// @notice Test helper to directly set LAST cache payload.
-    /// @dev    Used to simulate edge cases such as a zero timestamp with non-zero price.
-    function setLastPrice(address asset_, uint256 price_, uint48 timestamp_) public {
-        assetApproved[asset_] = true;
-        lastStoredPrices[asset_] = price_;
-        lastStoredTimestamps[asset_] = timestamp_;
+    function _isUnitOfAccount(address asset_) internal pure returns (bool) {
+        return asset_ == _UNIT_OF_ACCOUNT;
+    }
+
+    function _unitPrice() internal view returns (uint256) {
+        return 10 ** _decimals;
     }
 
     function setObservations(address asset, uint256[] memory observations_) public {
+        _storeMovingAverageEnabled[asset] = true;
         observations[asset] = observations_;
+        _movingAverageLastUpdated[asset] = observations_.length == 0 ? uint48(0) : timestamp;
+    }
+
+    function _getLastObservationPrice(
+        address asset_
+    ) internal view returns (uint256 price_, uint48 timestamp_) {
+        if (!_storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
+
+        uint256[] memory assetObservations = observations[asset_];
+        if (assetObservations.length == 0) revert PRICE_MovingAverageNotStored(asset_);
+
+        return (assetObservations[assetObservations.length - 1], _movingAverageLastUpdated[asset_]);
+    }
+
+    function _getMovingAveragePrice(
+        address asset
+    ) internal view returns (uint256 price_, uint48 timestamp_) {
+        if (!_storeMovingAverageEnabled[asset]) revert PRICE_MovingAverageNotStored(asset);
+
+        uint256[] memory assetObservations = observations[asset];
+        if (assetObservations.length == 0) revert PRICE_MovingAverageNotStored(asset);
+
+        uint256 movingAverage = movingAverages[asset];
+        if (movingAverage == 0) {
+            uint256 cumulativeObs;
+            for (uint256 i; i < assetObservations.length; ) {
+                cumulativeObs += assetObservations[i];
+                unchecked {
+                    ++i;
+                }
+            }
+            movingAverage = cumulativeObs / assetObservations.length;
+        }
+
+        return (movingAverage, _movingAverageLastUpdated[asset]);
     }
 
     function getPrice(address asset_) external view override returns (uint256) {
@@ -80,14 +118,15 @@ contract MockPrice is PRICEv2 {
         return price;
     }
 
-    function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
-        return _getPriceWithMaxAge(asset_, maxAge_);
-    }
-
     function getPrice(
         address asset_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
+        if (_isUnitOfAccount(asset_)) {
+            if (variant_ == Variant.MOVINGAVERAGE) revert PRICE_MovingAverageNotStored(asset_);
+            return (_unitPrice(), timestamp);
+        }
+
         // Mimic PRICE's behaviour of reverting if the asset is not approved
         if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
 
@@ -97,18 +136,9 @@ contract MockPrice is PRICEv2 {
             price = prices[asset_];
             priceTimestamp = timestamp;
         } else if (variant_ == Variant.LAST) {
-            // Return last stored price, or 0 if never stored.
-            // Test helper `setLastPrice` may intentionally set a zero timestamp with non-zero price.
-            if (lastStoredTimestamps[asset_] == 0 && lastStoredPrices[asset_] == 0) {
-                price = 0;
-                priceTimestamp = 0;
-            } else {
-                price = lastStoredPrices[asset_];
-                priceTimestamp = lastStoredTimestamps[asset_];
-            }
+            (price, priceTimestamp) = _getLastObservationPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
-            price = movingAverages[asset_];
-            priceTimestamp = timestamp;
+            (price, priceTimestamp) = _getMovingAveragePrice(asset_);
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }
@@ -129,121 +159,71 @@ contract MockPrice is PRICEv2 {
     function getPriceIn(
         address asset_,
         address base_,
-        uint48 maxAge_
-    ) external view override returns (uint256) {
-        uint256 assetPrice = _getPriceWithMaxAge(asset_, maxAge_);
-        uint256 basePrice = _getPriceWithMaxAge(base_, maxAge_);
-        return (assetPrice * 10 ** _decimals) / basePrice;
-    }
-
-    function getPriceIn(
-        address asset_,
-        address base_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
-        // Mimic PRICE's behaviour of reverting if either asset is not approved
-        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
-        if (!assetApproved[base_]) revert PRICE_AssetNotApproved(base_);
+        if (asset_ == base_) return (_unitPrice(), timestamp);
 
-        uint256 assetPrice;
-        uint256 basePrice;
-        uint48 priceTimestamp;
-        if (variant_ == Variant.CURRENT) {
-            assetPrice = prices[asset_];
-            basePrice = prices[base_];
-            priceTimestamp = timestamp;
-        } else if (variant_ == Variant.LAST) {
-            // Return last stored prices, or 0 if never stored
-            if (lastStoredTimestamps[asset_] == 0) {
-                assetPrice = 0;
-            } else {
-                assetPrice = lastStoredPrices[asset_];
-            }
-            if (lastStoredTimestamps[base_] == 0) {
-                basePrice = 0;
-            } else {
-                basePrice = lastStoredPrices[base_];
-            }
-            // Use the earlier timestamp if they differ, or 0 if neither has been stored
-            uint48 assetTimestamp = lastStoredTimestamps[asset_];
-            uint48 baseTimestamp = lastStoredTimestamps[base_];
-            if (assetTimestamp == 0 && baseTimestamp == 0) {
-                priceTimestamp = 0;
-            } else if (assetTimestamp == 0) {
-                priceTimestamp = baseTimestamp;
-            } else if (baseTimestamp == 0) {
-                priceTimestamp = assetTimestamp;
-            } else {
-                priceTimestamp = assetTimestamp < baseTimestamp ? assetTimestamp : baseTimestamp;
-            }
-        } else if (variant_ == Variant.MOVINGAVERAGE) {
-            assetPrice = movingAverages[asset_];
-            basePrice = movingAverages[base_];
-            priceTimestamp = timestamp;
-        } else {
-            revert PRICE_ParamsVariantInvalid(variant_);
-        }
+        (uint256 assetPrice, uint48 assetTimestamp) = getPrice(asset_, variant_);
+        (uint256 basePrice, uint48 baseTimestamp) = getPrice(base_, variant_);
 
-        if (assetPrice == 0) revert PRICE_PriceZero(asset_);
-        if (basePrice == 0) revert PRICE_PriceZero(base_);
-
-        // Return asset price / base price
-        return ((assetPrice * 10 ** _decimals) / basePrice, priceTimestamp);
+        return (
+            (assetPrice * 10 ** _decimals) / basePrice,
+            assetTimestamp < baseTimestamp ? assetTimestamp : baseTimestamp
+        );
     }
 
     function setPriceDecimals(uint8 decimals_) public {
         _decimals = decimals_;
     }
 
-    // Required by interface, but not implemented
-    function getAssets() external view override returns (address[] memory) {}
+    function getAssets() external view override returns (address[] memory) {
+        return _assets;
+    }
 
     function getAssetData(address asset_) external view override returns (Asset memory) {
+        uint256[] memory assetObservations = observations[asset_];
         return
             Asset({
-                approved: true,
-                storeMovingAverage: true,
+                approved: assetApproved[asset_],
+                storeMovingAverage: _storeMovingAverageEnabled[asset_],
                 useMovingAverage: false,
                 movingAverageDuration: 30 days,
                 nextObsIndex: 0,
-                numObservations: 90,
-                lastObservationTime: lastStoredTimestamps[asset_] != 0
-                    ? lastStoredTimestamps[asset_]
-                    : uint48(block.timestamp),
+                numObservations: uint16(assetObservations.length),
+                lastObservationTime: _movingAverageLastUpdated[asset_],
                 cumulativeObs: 0,
-                obs: observations[asset_],
+                obs: assetObservations,
                 strategy: bytes(""),
                 feeds: bytes("")
             });
     }
 
-    function isAssetApproved(address) external pure override returns (bool) {
-        return true;
-    }
-
-    function cachePrice(address asset_) external override {
-        // Get current price
-        (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
-
-        // Store the price and timestamp
-        lastStoredPrices[asset_] = price;
-        lastStoredTimestamps[asset_] = uint48(block.timestamp);
-
-        // Emit event to match PRICEv2 behavior
-        emit PriceCached(asset_, price, uint48(block.timestamp));
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return assetApproved[asset_];
     }
 
     function storeObservation(address asset_) external override {
+        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
+        if (!_storeMovingAverageEnabled[asset_]) revert PRICE_MovingAverageNotStored(asset_);
+
         // Get current price
         (uint256 price, ) = getPrice(asset_, Variant.CURRENT);
 
-        // Store the price and timestamp
-        lastStoredPrices[asset_] = price;
-        lastStoredTimestamps[asset_] = uint48(block.timestamp);
+        observations[asset_].push(price);
+        _movingAverageLastUpdated[asset_] = timestamp;
+
+        uint256 cumulativeObs;
+        uint256[] memory assetObservations = observations[asset_];
+        for (uint256 i; i < assetObservations.length; ) {
+            cumulativeObs += assetObservations[i];
+            unchecked {
+                ++i;
+            }
+        }
+        movingAverages[asset_] = cumulativeObs / assetObservations.length;
 
         // Emit both events to match PRICEv2 behavior
-        emit PriceStored(asset_, price, uint48(block.timestamp));
-        emit PriceCached(asset_, price, uint48(block.timestamp));
+        emit PriceStored(asset_, price, timestamp);
     }
 
     function addAsset(
@@ -255,11 +235,79 @@ contract MockPrice is PRICEv2 {
         uint256[] memory observations_,
         Component memory strategy_,
         Component[] memory feeds_
-    ) external override {}
+    ) external override {
+        assetApproved[asset_] = true;
+        _storeMovingAverageEnabled[asset_] = storeMovingAverage_;
+        observations[asset_] = observations_;
+        _movingAverageLastUpdated[asset_] = lastObservationTime_;
 
-    function removeAsset(address asset_) external override {}
+        uint256 cumulativeObs;
+        for (uint256 i; i < observations_.length; ) {
+            cumulativeObs += observations_[i];
+            unchecked {
+                ++i;
+            }
+        }
+        movingAverages[asset_] = observations_.length == 0
+            ? 0
+            : cumulativeObs / observations_.length;
 
-    function updateAsset(address asset_, UpdateAssetParams memory params_) external override {}
+        bool exists;
+        for (uint256 i; i < _assets.length; ) {
+            if (_assets[i] == asset_) {
+                exists = true;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        if (!exists) _assets.push(asset_);
+
+        useMovingAverage_;
+        movingAverageDuration_;
+        strategy_;
+        feeds_;
+    }
+
+    function removeAsset(address asset_) external override {
+        assetApproved[asset_] = false;
+        _storeMovingAverageEnabled[asset_] = false;
+        delete movingAverages[asset_];
+        delete _movingAverageLastUpdated[asset_];
+        delete observations[asset_];
+
+        // Keep getAssets()/storeObservations() aligned with asset approval state.
+        for (uint256 i; i < _assets.length; ) {
+            if (_assets[i] == asset_) {
+                _assets[i] = _assets[_assets.length - 1];
+                _assets.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function updateAsset(address asset_, UpdateAssetParams memory params_) external override {
+        if (params_.updateMovingAverage) {
+            _storeMovingAverageEnabled[asset_] = params_.storeMovingAverage;
+            observations[asset_] = params_.observations;
+            _movingAverageLastUpdated[asset_] = params_.lastObservationTime;
+
+            uint256 cumulativeObs;
+            for (uint256 i; i < params_.observations.length; ) {
+                cumulativeObs += params_.observations[i];
+                unchecked {
+                    ++i;
+                }
+            }
+            movingAverages[asset_] = params_.observations.length == 0
+                ? 0
+                : cumulativeObs / params_.observations.length;
+        }
+    }
 
     function storeObservations() external virtual override {
         // Iterate over all assets
@@ -269,20 +317,6 @@ contract MockPrice is PRICEv2 {
 
             getPrice(asset, Variant.CURRENT);
         }
-    }
-
-    function _getPriceWithMaxAge(address asset_, uint48 maxAge_) internal view returns (uint256) {
-        // Mimic PRICE's behaviour of reverting if the asset is not approved
-        if (!assetApproved[asset_]) revert PRICE_AssetNotApproved(asset_);
-
-        uint48 lastTimestamp = lastStoredTimestamps[asset_];
-        bool useCachedPrice = lastTimestamp != 0 &&
-            uint256(lastTimestamp) + uint256(maxAge_) >= block.timestamp;
-
-        uint256 price = useCachedPrice ? lastStoredPrices[asset_] : prices[asset_];
-        if (price == 0) revert PRICE_PriceZero(asset_);
-
-        return price;
     }
 }
 /// forge-lint: disable-end(mixed-case-function)

@@ -78,6 +78,21 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         factory.createOracle(nonContract, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
+    // when base token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenBaseTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(UNIT_OF_ACCOUNT, address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
+    }
+
     // when quote token is zero address
     //  [X] it reverts with InvalidToken
 
@@ -88,6 +103,18 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
 
         vm.prank(admin);
         factory.createOracle(address(baseToken), address(0), DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when both tokens are zero addresses
+    //  [X] it reverts with InvalidToken
+
+    function test_whenBothTokensAreZeroAddress_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(0), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when quote token is not a contract
@@ -102,6 +129,21 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
 
         vm.prank(admin);
         factory.createOracle(address(baseToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when quote token is unit of account
+    //  [X] it reverts with InvalidToken
+
+    function test_whenQuoteTokenIsUnitOfAccount_reverts() public givenFactoryIsEnabled {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOracleFactory.OracleFactory_InvalidToken.selector,
+                UNIT_OF_ACCOUNT
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(address(baseToken), UNIT_OF_ACCOUNT, DEFAULT_MAX_AGE, bytes(""));
     }
 
     // when base token equals quote token
@@ -286,23 +328,20 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         vm.prank(admin);
         factory.createOracle(address(baseToken), address(quoteToken), DEFAULT_MAX_AGE, bytes(""));
 
-        (, uint48 baseTimestamp) = priceModule.getPrice(address(baseToken), IPRICEv2.Variant.LAST);
-        (, uint48 quoteTimestamp) = priceModule.getPrice(
-            address(quoteToken),
-            IPRICEv2.Variant.LAST
-        );
+        uint48 timestamp = priceCache
+            .getCachedPrice(address(baseToken), address(quoteToken))
+            .updatedAt;
 
-        assertGt(baseTimestamp, 0, "Base token price should be cached");
-        assertGt(quoteTimestamp, 0, "Quote token price should be cached");
+        assertGt(timestamp, 0, "Asset price should be cached");
     }
 
-    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+    function test_whenCachePriceCalledByNonOracle_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
             abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
         );
 
         vm.prank(admin);
-        factory.cacheOraclePrices();
+        factory.cachePrice(address(baseToken), address(quoteToken));
     }
 
     // when called by manager
@@ -348,6 +387,23 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
             oracle,
             "Oracle should be stored for maxAge=0"
         );
+    }
+
+    function test_whenPriceCacheDecimalsChange_newOracleUsesCacheDecimals()
+        public
+        givenFactoryIsEnabled
+    {
+        priceCache.setPriceDecimals(9);
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(baseToken),
+            address(quoteToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        assertEq(IChainlinkOracle(oracle).decimals(), 9, "Oracle decimals should come from cache");
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

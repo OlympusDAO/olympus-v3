@@ -108,6 +108,7 @@ contract PriceConfigv2Test is Test {
     MockPriceFeed internal ethUsdPriceFeed;
 
     MockERC20 internal ohm;
+    MockERC20 internal _reserve;
 
     Kernel internal kernel;
     PriceConfigv2 internal priceConfig;
@@ -124,6 +125,7 @@ contract PriceConfigv2Test is Test {
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint8 internal constant DECIMALS = 18;
+    address internal constant _UNIT_OF_ACCOUNT = address(840);
 
     bytes32 internal constant ROLE_ADMIN = "admin";
     bytes32 internal constant ROLE_PRICE_ADMIN = "price_admin";
@@ -141,6 +143,7 @@ contract PriceConfigv2Test is Test {
 
         // Tokens
         ohm = new MockERC20("Olympus", "OHM", 9);
+        _reserve = new MockERC20("Reserve", "RSV", 18);
 
         // Price Feeds
         ethUsdPriceFeed = new MockPriceFeed();
@@ -163,6 +166,13 @@ contract PriceConfigv2Test is Test {
         ohmEthPriceFeed.setTimestamp(block.timestamp);
         ohmEthPriceFeed.setRoundId(1);
         ohmEthPriceFeed.setAnsweredInRound(1);
+
+        reserveUsdPriceFeed = new MockPriceFeed();
+        reserveUsdPriceFeed.setDecimals(8);
+        reserveUsdPriceFeed.setLatestAnswer(int256(1e8));
+        reserveUsdPriceFeed.setTimestamp(block.timestamp);
+        reserveUsdPriceFeed.setRoundId(1);
+        reserveUsdPriceFeed.setAnsweredInRound(1);
 
         // Deploy system contracts
         kernel = new Kernel();
@@ -269,6 +279,33 @@ contract PriceConfigv2Test is Test {
         );
     }
 
+    function _addReserveAsset() internal {
+        IPRICEv2.Component memory strategyComponent = IPRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            bytes("")
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ChainlinkPriceFeeds.OneFeedParams(reserveUsdPriceFeed, uint48(24 hours)))
+        );
+
+        vm.prank(priceManager);
+        priceConfig.addAssetPrice(
+            address(_reserve),
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            strategyComponent,
+            feeds
+        );
+    }
+
     modifier givenDisabled() {
         vm.prank(admin);
         priceConfig.disable(abi.encode(""));
@@ -293,7 +330,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function test_requestPermissions() public view {
-        Permissions[] memory expectedPerms = new Permissions[](9);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
 
         // PRICE Permissions
@@ -328,10 +365,6 @@ contract PriceConfigv2Test is Test {
         expectedPerms[7] = Permissions({
             keycode: PRICE_KEYCODE,
             funcSelector: PRICE.storeObservations.selector
-        });
-        expectedPerms[8] = Permissions({
-            keycode: PRICE_KEYCODE,
-            funcSelector: PRICE.cachePrice.selector
         });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
@@ -1016,44 +1049,6 @@ contract PriceConfigv2Test is Test {
         (uint256 price, uint48 timestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
         assertGt(price, 0, "Price should be stored");
         assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
-    }
-
-    function test_cachePriceIfNecessary_maxAge_notEnabled_reverts() public givenDisabled {
-        _expectRevertNotEnabled();
-        priceConfig.cachePriceIfNecessary(address(ohm), uint48(1));
-    }
-
-    function test_cachePriceIfNecessary_maxAge_givenCacheIsFresh_doesNotCache() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 1);
-        priceConfig.cachePriceIfNecessary(address(ohm), uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertEq(newTimestamp, oldTimestamp, "Fresh cache should not be updated");
-    }
-
-    function test_cachePriceIfNecessary_maxAge_givenCacheIsStale_caches() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 3);
-        priceConfig.cachePriceIfNecessary(address(ohm), uint48(2));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertGt(newTimestamp, oldTimestamp, "Stale cache should be updated");
-    }
-
-    function test_cachePriceIfNecessary_maxAgeZero_cachesWhenTimestampIsFromPriorBlock() public {
-        _addBaseAssets();
-        (, uint48 oldTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-
-        vm.warp(block.timestamp + 1);
-        priceConfig.cachePriceIfNecessary(address(ohm), uint48(0));
-
-        (, uint48 newTimestamp) = PRICE.getPrice(address(ohm), IPRICEv2.Variant.LAST);
-        assertGt(newTimestamp, oldTimestamp, "maxAge = 0 should cache when timestamp is stale");
     }
 
     function test_supportsInterface() public view {

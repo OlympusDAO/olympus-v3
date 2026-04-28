@@ -4,12 +4,12 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
-import {Kernel, Policy, Keycode, toKeycode, Permissions, Module} from "src/Kernel.sol";
+import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ORACLE_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -33,14 +33,10 @@ abstract contract BaseOracleFactory is
 
     // ========== STATE ========== //
 
-    bytes5 internal constant _PRICE_KEYCODE = "PRICE";
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
-    /// @notice The PRICE module
-    IPRICEv2 public PRICE;
-
-    /// @notice The PRICE module decimals
-    uint8 public PRICE_DECIMALS;
+    /// @notice The pair cache policy
+    IPriceCache public priceCache;
 
     /// @notice Mapping from base token to quote token to maxAge to oracle address
     mapping(address baseToken => mapping(address quoteToken => mapping(uint48 maxAge => address oracle)))
@@ -70,11 +66,15 @@ abstract contract BaseOracleFactory is
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new BaseOracleFactory
+    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_ The Kernel address
-    constructor(Kernel kernel_) Policy(kernel_) {
+    /// @param  priceCache_ The price cache policy address
+    constructor(Kernel kernel_, address priceCache_) Policy(kernel_) {
         // Creation is enabled by default
         isCreationEnabled = true;
+
+        _setPriceCache(priceCache_);
 
         // Disabled by default from PolicyEnabler
     }
@@ -82,32 +82,13 @@ abstract contract BaseOracleFactory is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
+    /// @dev        Reverts if the configured ROLES module major version is unsupported.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode(_PRICE_KEYCODE);
-        dependencies[1] = toKeycode(_ROLES_KEYCODE);
-
-        address priceModule = getModuleAddress(dependencies[0]);
-
-        // Require PRICE v1.2+ (major=1, minor>=2) or v2+ (major>=2)
-        // Cast to Module to access VERSION() function
-        (uint8 major, uint8 minor) = Module(priceModule).VERSION();
-        if (major == 0 || (major == 1 && minor < 2))
-            revert OracleFactory_UnsupportedModuleVersion(_PRICE_KEYCODE, major, minor);
-
-        // Verify the PRICE module supports IPRICEv2 interface
-        if (!IERC165(priceModule).supportsInterface(type(IPRICEv2).interfaceId))
-            revert OracleFactory_UnsupportedModuleInterface(
-                _PRICE_KEYCODE,
-                type(IPRICEv2).interfaceId
-            );
-
-        // Set PRICE module
-        PRICE = IPRICEv2(priceModule);
-        PRICE_DECIMALS = PRICE.decimals();
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode(_ROLES_KEYCODE);
 
         // Set ROLES module (required by PolicyEnabler)
-        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
 
         // Ensure ROLES module is using the expected major version
         (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
@@ -116,15 +97,13 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc Policy
+    /// @dev        Does not revert.
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
-        requests = new Permissions[](1);
-        requests[0] = Permissions({
-            keycode: toKeycode(_PRICE_KEYCODE),
-            funcSelector: IPRICEv2.cachePrice.selector
-        });
+        requests = new Permissions[](0);
     }
 
     /// @inheritdoc IVersioned
+    /// @dev        Does not revert.
     function VERSION() external pure virtual override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
@@ -187,6 +166,14 @@ abstract contract BaseOracleFactory is
     // ========== FACTORY FUNCTIONS ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin or oracle manager
+    ///             - Oracle creation is disabled
+    ///             - An oracle for `(baseToken_, quoteToken_, maxAge_)` already exists
+    ///             - Either token is invalid or both tokens are the same
+    ///             - Service-specific validation in `_encodeOracleData` fails
+    ///             - Initial cache population fails in the configured price cache policy
     function createOracle(
         address baseToken_,
         address quoteToken_,
@@ -225,11 +212,6 @@ abstract contract BaseOracleFactory is
             revert OracleFactory_InvalidTokenPair(baseToken_, quoteToken_);
         }
 
-        // Validate tokens are configured in PRICE module
-        // PRICE.getPrice() will revert if tokens are not approved or price feeds are not functioning
-        PRICE.getPrice(baseToken_);
-        PRICE.getPrice(quoteToken_);
-
         // Get service-specific encoded data (includes validation, calculation, and encoding)
         bytes memory oracleData = _encodeOracleData(
             baseToken_,
@@ -253,6 +235,7 @@ abstract contract BaseOracleFactory is
         _oracleToMaxAge[oracle] = maxAge_;
         _isOracleEnabled[oracle] = true;
 
+        // This will revert if the assets are not approved
         _cacheOraclePrices(oracle);
 
         // Emit events
@@ -265,6 +248,7 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Does not revert.
     function getOracle(
         address baseToken_,
         address quoteToken_,
@@ -274,11 +258,13 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    function getPriceModule() external view override returns (address) {
-        return address(PRICE);
+    /// @dev        Does not revert.
+    function getPriceCache() external view override returns (address) {
+        return address(priceCache);
     }
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Does not revert.
     function getOracles() external view override returns (address[] memory) {
         return _oracles;
     }
@@ -286,6 +272,10 @@ abstract contract BaseOracleFactory is
     // ========== CREATION CONTROL ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin or oracle manager
+    ///             - Creation is already enabled
     function enableCreation()
         external
         override
@@ -300,6 +290,10 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin, oracle manager, or emergency
+    ///             - Creation is already disabled
     function disableCreation()
         external
         override
@@ -313,10 +307,23 @@ abstract contract BaseOracleFactory is
         emit CreationDisabled();
     }
 
+    /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not admin
+    ///             - `policy_` is zero, not IPriceCache-compatible, or bound to a different Kernel
+    function setPriceCache(
+        address policy_
+    ) external override onlyEnabled onlyAdminRole nonReentrant {
+        // Intentionally does not check `IEnabler(policy_).isEnabled()`: this setter validates
+        // compatibility/kernel only and allows admin-led cache policy rotations regardless of runtime state.
+        _setPriceCache(policy_);
+    }
+
     // ========== ORACLE STATE ========== //
 
     /// @inheritdoc IOracleFactory
-    /// @dev        This function reverts if:
+    /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
     ///             - The oracle is not created by the factory
@@ -328,16 +335,12 @@ abstract contract BaseOracleFactory is
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
         _isOracleEnabled[oracle_] = true;
-        _cachePricesIfNecessary(
-            _oracleToBaseToken[oracle_],
-            _oracleToQuoteToken[oracle_],
-            _oracleToMaxAge[oracle_]
-        );
+        _cachePriceIfNecessary(oracle_, _oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_]);
         emit OracleEnabled(oracle_);
     }
 
     /// @inheritdoc IOracleFactory
-    /// @dev        This function reverts if:
+    /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
     ///             - The oracle is not created by the factory
@@ -353,7 +356,8 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    /// @dev        Determines if a given oracle is enabled, using the following logic:
+    /// @dev        Does not revert.
+    ///             Determines if a given oracle is enabled, using the following logic:
     ///             - Factory must be enabled
     ///             - Oracle must be created by the factory
     ///             - Oracle must be enabled
@@ -365,63 +369,89 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    function cacheOraclePrices() external override onlyEnabled nonReentrant {
-        if (!isOracle[msg.sender]) revert OracleFactory_InvalidOracle(msg.sender);
-        if (!_isOracleEnabled[msg.sender]) revert OracleFactory_OracleDisabled(msg.sender);
-
-        _cacheOraclePrices(msg.sender);
-    }
-
-    /// @inheritdoc IOracleFactory
-    function cachePrices(
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not a factory-created oracle
+    ///             - The caller oracle is disabled
+    ///             - `(baseToken_, quoteToken_)` does not match the caller oracle pair
+    ///             - Underlying cache write fails
+    function cachePrice(
         address baseToken_,
         address quoteToken_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
-        PRICE.cachePrice(baseToken_);
-        PRICE.cachePrice(quoteToken_);
+        priceCache.cachePrice(baseToken_, quoteToken_);
     }
 
     /// @inheritdoc IOracleFactory
-    function cachePricesIfNecessary(
+    /// @dev        Reverts if:
+    ///             - The factory is disabled
+    ///             - The caller is not a factory-created oracle
+    ///             - The caller oracle is disabled
+    ///             - `(baseToken_, quoteToken_)` does not match the caller oracle pair
+    ///             - Underlying cache evaluation/write fails
+    function cachePriceIfNecessary(
         address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
+        address quoteToken_
     ) external override onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
-        _cachePricesIfNecessary(baseToken_, quoteToken_, maxAge_);
+        _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);
     }
 
     /// @notice Caches prices for the configured oracle token pair
-    /// @param oracle_ The oracle whose base/quote tokens should be cached
+    ///
+    /// @param  oracle_ The oracle whose base/quote tokens should be cached
     function _cacheOraclePrices(address oracle_) internal {
         address baseToken = _oracleToBaseToken[oracle_];
         address quoteToken = _oracleToQuoteToken[oracle_];
 
-        PRICE.cachePrice(baseToken);
-        PRICE.cachePrice(quoteToken);
+        priceCache.cachePrice(baseToken, quoteToken);
     }
 
-    /// @notice Conditionally caches prices for the token pair based on timestamp mismatch and maxAge staleness
-    function _cachePricesIfNecessary(
+    /// @notice Conditionally caches prices for the token pair based on direct pair staleness
+    function _cachePriceIfNecessary(
+        address oracle_,
         address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
+        address quoteToken_
     ) internal {
-        (, uint48 baseTokenTimestamp) = PRICE.getPrice(baseToken_, IPRICEv2.Variant.LAST);
-        (, uint48 quoteTokenTimestamp) = PRICE.getPrice(quoteToken_, IPRICEv2.Variant.LAST);
-        bool timestampsDiffer = baseTokenTimestamp != quoteTokenTimestamp;
-        bool baseTokenStale = (baseTokenTimestamp == 0 ||
-            block.timestamp > uint256(baseTokenTimestamp) + uint256(maxAge_));
-        bool quoteTokenStale = (quoteTokenTimestamp == 0 ||
-            block.timestamp > uint256(quoteTokenTimestamp) + uint256(maxAge_));
+        uint48 configuredMaxAge = _oracleToMaxAge[oracle_];
+        // Use the oracle's configured max age from factory storage.
+        // This avoids any drift between caller-provided values and configured oracle policy.
+        uint48 maxAge_ = configuredMaxAge;
+        priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
+    }
 
-        if (timestampsDiffer || baseTokenStale || quoteTokenStale) {
-            PRICE.cachePrice(baseToken_);
-            PRICE.cachePrice(quoteToken_);
+    function _setPriceCache(address policy_) internal {
+        if (policy_ == address(0) || !_implementsIPriceCache(policy_) || !_hasSameKernel(policy_)) {
+            revert OracleFactory_InvalidPriceCache(policy_);
         }
+        priceCache = IPriceCache(policy_);
+        emit PriceCacheSet(policy_);
+    }
+
+    function _implementsIPriceCache(address policy_) internal view returns (bool) {
+        if (policy_.code.length == 0) return false;
+
+        (bool success, bytes memory returnData) = policy_.staticcall(
+            abi.encodeWithSelector(
+                IERC165.supportsInterface.selector,
+                type(IPriceCache).interfaceId
+            )
+        );
+
+        return success && returnData.length >= 32 && abi.decode(returnData, (bool));
+    }
+
+    function _hasSameKernel(address policy_) internal view returns (bool) {
+        (bool success, bytes memory returnData) = policy_.staticcall(
+            abi.encodeWithSignature("kernel()")
+        );
+        if (!success || returnData.length < 32) return false;
+
+        address cacheKernel = abi.decode(returnData, (address));
+        return cacheKernel == address(kernel);
     }
 
     function _validateCachingCaller(address caller_) internal view {
@@ -444,8 +474,10 @@ abstract contract BaseOracleFactory is
     // ========== ERC165 ========== //
 
     /// @notice Query if a contract implements an interface
-    /// @param interfaceId_ The interface identifier, as specified in ERC-165
-    /// @return true if the contract implements interfaceId_ and false otherwise
+    /// @dev    Does not revert.
+    ///
+    /// @param  interfaceId_    The interface identifier, as specified in ERC-165
+    /// @return bool            True if the contract implements interfaceId_ and false otherwise
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
             interfaceId_ == type(IOracleFactory).interfaceId ||

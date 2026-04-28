@@ -37,9 +37,11 @@ contract MorphoOracleFactory is BaseOracleFactory {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Constructs a new MorphoOracleFactory
+    /// @dev    Reverts if `priceCache_` is not a valid IPriceCache policy for this Kernel.
     ///
     /// @param  kernel_ The Kernel address
-    constructor(Kernel kernel_) BaseOracleFactory(kernel_) {
+    /// @param  priceCache_ The price cache policy address
+    constructor(Kernel kernel_, address priceCache_) BaseOracleFactory(kernel_, priceCache_) {
         // Deploy implementation for cloning
         ORACLE_IMPLEMENTATION = new MorphoOracleCloneable();
     }

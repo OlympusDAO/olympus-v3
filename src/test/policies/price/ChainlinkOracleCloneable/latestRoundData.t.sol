@@ -32,7 +32,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     //  [X] it still returns cached round data
 
     function test_whenLivePricesAreZeroButCacheExists_returnsCachedPrice() public {
-        // The oracle uses cached LAST values and does not fallback to live pricing.
+        // The oracle uses cached values and does not fallback to live pricing.
         vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
         _setPRICEPrices(address(baseToken), 0);
         _setPRICEPrices(address(quoteToken), 0);
@@ -46,10 +46,35 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertEq(answer, 2e18, "Should return cached round");
     }
 
+    // when cached ratio rounds down to zero
+    //  [X] it reverts with ChainlinkOracle_NoDataPresent
+
+    function test_whenCachedRatioRoundsDownToZero_reverts() public {
+        _setPRICEPrices(address(baseToken), 1);
+        _setPRICEPrices(address(quoteToken), 1e36);
+        _storePrices();
+
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NoDataPresent.selector);
+        oracle.latestRoundData();
+    }
+
+    // when cached pair price exceeds int256
+    //  [X] it reverts via SafeCast.toInt256 overflow guard
+
+    function test_whenCachedPairPriceExceedsInt256_reverts() public {
+        uint256 overflowPrice = uint256(type(int256).max) + 1;
+        _setPRICEPrices(address(baseToken), overflowPrice);
+        _setPRICEPrices(address(quoteToken), QUOTE_PRICE);
+        _storePrices();
+
+        vm.expectRevert(bytes("SafeCast: value doesn't fit in an int256"));
+        oracle.latestRoundData();
+    }
+
     // when oracle is enabled
     //  [X] it returns correct round data
     //  [X] it returns correct price calculation
-    //  [X] it returns timestamp as round ID
+    //  [X] it returns cached pair round ID
     //  [X] it returns stored price (not live price)
 
     function test_whenOracleIsEnabled_returnsCorrectRoundData() public givenPricesAreStored warp {
@@ -71,16 +96,15 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        // Verify round ID is the timestamp
-        assertEq(roundId, uint80(lastStoredTimestamp), "Round ID should be the timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Verify answer is correct
         /// forge-lint: disable-next-line(unsafe-typecast)
         assertEq(answer, int256(expectedPrice), "Answer should be correct price");
 
         // Verify timestamps
-        assertEq(startedAt, lastStoredTimestamp, "StartedAt should be the timestamp");
-        assertEq(updatedAt, lastStoredTimestamp, "UpdatedAt should be the timestamp");
+        assertEq(startedAt, lastStoredTimestamp, "StartedAt should be the pair timestamp");
+        assertEq(updatedAt, lastStoredTimestamp, "UpdatedAt should be the pair timestamp");
 
         // Verify answeredInRound
         assertEq(answeredInRound, roundId, "AnsweredInRound should equal roundId");
@@ -140,23 +164,23 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
     }
 
-    // when PRICE decimals change
-    //  [X] it continues to use original PRICE decimals
+    // when cache decimals change
+    //  [X] it continues to use original oracle decimals
     //  [X] it returns correct price calculation with original decimals
 
-    function test_whenPRICEDecimalsChange_continuesToUseOriginalDecimals() public {
+    function test_whenPriceCacheDecimalsChange_continuesToUseOriginalDecimals() public {
         // Get original decimals
         uint8 originalDecimals = oracle.decimals();
 
         // Verify original decimals
         assertEq(originalDecimals, PRICE_DECIMALS, "Should have original PRICE decimals");
 
-        // Change PRICE module decimals
+        // Change cache decimals
         uint8 newDecimals = 9;
-        priceModule.setPriceDecimals(newDecimals);
+        priceCache.setPriceDecimals(newDecimals);
 
-        // Verify PRICE module decimals changed
-        assertEq(priceModule.decimals(), newDecimals, "PRICE module decimals should have changed");
+        // Verify cache decimals changed
+        assertEq(priceCache.decimals(), newDecimals, "Price cache decimals should have changed");
 
         // Verify oracle still returns original decimals
         assertEq(
@@ -165,8 +189,8 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             "Oracle should still return original decimals"
         );
 
-        // Update prices (with new decimal scale in PRICE module)
-        // Prices in PRICE module are now in new decimal scale
+        // Update prices (with new decimal scale in cache policy)
+        // Prices in cache policy are now in new decimal scale
         _setPRICEPrices(address(baseToken), 2e9); // 2 USD in 9 decimals
         _setPRICEPrices(address(quoteToken), 1e9); // 1 USD in 9 decimals
 
@@ -183,11 +207,10 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , uint256 updatedAt, ) = oracle.latestRoundData();
 
-        // Round ID should have changed (new timestamp)
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should have changed");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Price calculation should use original decimals
-        // PRICE module returns prices in new decimals (9), but oracle should scale to original (18)
+        // Cache policy returns prices in new decimals (9), but oracle should scale to original (18)
         // basePrice = 2e9 (9 decimals), quotePrice = 1e9 (9 decimals)
         // Expected: (2e9 / 1e9) * 10^18 = 2e18 (18 decimals, original scale)
         uint256 expectedPrice = (2e9 * 10 ** originalDecimals) / 1e9;
@@ -272,7 +295,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         _setPRICEPrices(address(baseToken), liveBase);
         _setPRICEPrices(address(quoteToken), liveQuote);
 
-        // Round-style semantics always return cached LAST values.
+        // Round-style semantics always return cached values.
         (, int256 answer, , , ) = oracle.latestRoundData();
 
         // Expected cached answer:
@@ -280,21 +303,85 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertEq(answer, 2e18, "Should return cached price even when cache is stale");
     }
 
-    function test_whenBaseAndQuoteTimestampsDiffer_reverts() public givenPricesAreStored {
-        // Move to a new block and update live prices.
+    function test_whenOnlyQuoteUsdCacheChanges_returnsCachedPairRound()
+        public
+        givenPricesAreStored
+    {
+        // Move to a new block and update live quote price.
         vm.warp(block.timestamp + 1);
-        _setPRICEPrices(address(baseToken), 8e18);
         _setPRICEPrices(address(quoteToken), 4e18);
 
-        // Refresh only base cache so LAST timestamps diverge.
-        priceModule.cachePrice(address(baseToken));
+        // Refresh only the quote/USD cache. The direct base/quote pair cache should be unchanged.
+        priceCache.cachePrice(address(quoteToken), UNIT_OF_ACCOUNT);
+
+        (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = oracle.latestRoundData();
+
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
+        assertEq(answer, 2e18, "Answer should remain the cached pair price");
+        assertEq(
+            startedAt,
+            lastStoredTimestamp,
+            "StartedAt should remain the cached pair timestamp"
+        );
+        assertEq(
+            updatedAt,
+            lastStoredTimestamp,
+            "UpdatedAt should remain the cached pair timestamp"
+        );
+        assertEq(answeredInRound, roundId, "AnsweredInRound should equal roundId");
+    }
+
+    function test_whenOnlyBaseUsdCacheChanges_returnsCachedPairRound() public givenPricesAreStored {
+        // Move to a new block and update live base price.
+        vm.warp(block.timestamp + 1);
+        _setPRICEPrices(address(baseToken), 8e18);
+
+        // Refresh only the base/USD cache. The direct base/quote pair cache should be unchanged.
+        priceCache.cachePrice(address(baseToken), UNIT_OF_ACCOUNT);
+
+        (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = oracle.latestRoundData();
+
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
+        assertEq(answer, 2e18, "Answer should remain the cached pair price");
+        assertEq(
+            startedAt,
+            lastStoredTimestamp,
+            "StartedAt should remain the cached pair timestamp"
+        );
+        assertEq(
+            updatedAt,
+            lastStoredTimestamp,
+            "UpdatedAt should remain the cached pair timestamp"
+        );
+        assertEq(answeredInRound, roundId, "AnsweredInRound should equal roundId");
+    }
+
+    function test_whenQuoteTokenRemovedFromPRICE_reverts() public givenPricesAreStored {
+        priceCache.setAssetApproval(address(quoteToken), false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IChainlinkOracle.ChainlinkOracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(quoteToken))
+        );
+        oracle.latestRoundData();
+    }
+
+    function test_whenBaseTokenRemovedFromPRICE_reverts() public givenPricesAreStored {
+        priceCache.setAssetApproval(address(baseToken), false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, address(baseToken))
         );
         oracle.latestRoundData();
     }

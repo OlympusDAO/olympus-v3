@@ -10,11 +10,15 @@ contract PriceV2GasTest is PriceV2BaseTest {
         _addBaseAssets(0);
     }
 
-    function test_gasSnapshot_getPrice_cached() public {
-        vm.startSnapshotGas("OlympusPricev2.getPrice.cached");
-        uint256 price_ = price.getPrice(address(weth));
+    function test_gasSnapshot_getPrice_last() public {
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+
+        vm.startSnapshotGas("OlympusPricev2.getPrice.last");
+        (uint256 price_, uint48 timestamp_) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
         uint256 gasUsed = vm.stopSnapshotGas();
-        assertEq(price_, 2000e18, "weth cached price mismatch");
+        assertEq(price_, 5e18, "onema LAST price mismatch");
+        assertEq(timestamp_, uint48(block.timestamp), "onema LAST timestamp mismatch");
         assertGt(gasUsed, 0, "gas snapshot should record gas");
     }
 
@@ -28,35 +32,27 @@ contract PriceV2GasTest is PriceV2BaseTest {
         assertGt(gasUsed, 0, "gas snapshot should record gas");
     }
 
-    function test_gasSnapshot_getPriceIn_cached() public {
-        vm.startSnapshotGas("OlympusPricev2.getPriceIn.cached");
-        uint256 price_ = price.getPriceIn(address(weth), address(alpha));
-        uint256 gasUsed = vm.stopSnapshotGas();
-        assertEq(price_, 40e18, "weth/alpha cached price mismatch");
-        assertGt(gasUsed, 0, "gas snapshot should record gas");
-    }
-
-    function test_gasSnapshot_getPriceIn_maxAgeCached() public {
-        vm.startSnapshotGas("OlympusPricev2.getPriceIn.maxAgeCached");
-        uint256 price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
-        uint256 gasUsed = vm.stopSnapshotGas();
-        assertEq(price_, 40e18, "weth/alpha maxAge cached price mismatch");
-        assertGt(gasUsed, 0, "gas snapshot should record gas");
-    }
-
-    function test_gasSnapshot_cachePrice() public {
+    function test_gasSnapshot_getPriceIn_last() public {
         vm.startPrank(priceWriter);
-        vm.startSnapshotGas("OlympusPricev2.cachePrice");
-        price.cachePrice(address(onema));
-        uint256 gasUsed = vm.stopSnapshotGas();
+        price.storeObservation(address(onema));
+        price.storeObservation(address(twoma));
         vm.stopPrank();
 
-        (uint256 cachedPrice, uint48 cachedAt) = price.getPrice(
+        vm.startSnapshotGas("OlympusPricev2.getPriceIn.last");
+        (uint256 price_, uint48 timestamp_) = price.getPriceIn(
             address(onema),
+            address(twoma),
             IPRICEv2.Variant.LAST
         );
-        assertEq(cachedPrice, 5e18, "onema cached price mismatch");
-        assertEq(cachedAt, uint48(block.timestamp), "onema cached timestamp mismatch");
+        uint256 gasUsed = vm.stopSnapshotGas();
+        (uint256 onemaLast, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        (uint256 twomaLast, ) = price.getPrice(address(twoma), IPRICEv2.Variant.LAST);
+        assertEq(
+            price_,
+            (onemaLast * (10 ** price.decimals())) / twomaLast,
+            "onema/twoma LAST price mismatch"
+        );
+        assertEq(timestamp_, uint48(block.timestamp), "onema/twoma LAST timestamp mismatch");
         assertGt(gasUsed, 0, "gas snapshot should record gas");
     }
 
@@ -69,12 +65,9 @@ contract PriceV2GasTest is PriceV2BaseTest {
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
-        (uint256 cachedPrice, uint48 cachedAt) = price.getPrice(
-            address(onema),
-            IPRICEv2.Variant.LAST
-        );
-        assertEq(cachedPrice, 5e18, "onema observation cached price mismatch");
-        assertEq(cachedAt, uint48(block.timestamp), "onema observation cached timestamp mismatch");
+        (uint256 lastPrice, uint48 lastAt) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(lastPrice, 5e18, "onema observation LAST price mismatch");
+        assertEq(lastAt, uint48(block.timestamp), "onema observation LAST timestamp mismatch");
         assertGt(gasUsed, 0, "gas snapshot should record gas");
     }
 }

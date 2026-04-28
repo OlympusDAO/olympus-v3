@@ -15,12 +15,6 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @notice Thrown when requested round data is not available
     error ChainlinkOracle_NoDataPresent();
 
-    /// @notice Thrown when the last timestamp is not consistent
-    ///
-    /// @param  baseTimestamp   The timestamp of the base token
-    /// @param  quoteTimestamp  The timestamp of the quote token
-    error ChainlinkOracle_InconsistentTimestamps(uint48 baseTimestamp, uint48 quoteTimestamp);
-
     // ========== FUNCTIONS ========== //
 
     /// @notice The base token address
@@ -43,8 +37,8 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @return name_   The name
     function name() external view returns (string memory name_);
 
-    /// @notice Returns whether the feed should be considered stale for round consumers.
+    /// @notice Returns whether the cached pair round should be considered stale.
     ///
-    /// @return isStale_    true if the feed is stale or has mismatched timestamps
+    /// @return isStale_    true if the direct pair cache is unset or older than `maxAge()`
     function isStale() external view returns (bool isStale_);
 }

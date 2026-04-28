@@ -26,32 +26,37 @@ interface IOracleFactory {
 
     /// @notice Emitted when an oracle is enabled
     ///
-    /// @param  oracle The address of the enabled oracle
+    /// @param  oracle  The address of the enabled oracle
     event OracleEnabled(address indexed oracle);
 
     /// @notice Emitted when an oracle is disabled
     ///
-    /// @param  oracle The address of the disabled oracle
+    /// @param  oracle  The address of the disabled oracle
     event OracleDisabled(address indexed oracle);
+
+    /// @notice Emitted when the price cache policy is updated
+    ///
+    /// @param  policy  The updated price cache policy address
+    event PriceCacheSet(address indexed policy);
 
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a token address is invalid (zero address or not a contract)
     ///
-    /// @param  token The invalid token address
+    /// @param  token   Invalid token address
     error OracleFactory_InvalidToken(address token);
 
     /// @notice Thrown when module version is not supported
     ///
-    /// @param  keycode     The keycode of the module
-    /// @param  major       The major version of the module
-    /// @param  minor       The minor version of the module
+    /// @param  keycode Keycode of the module
+    /// @param  major   Major version of the module
+    /// @param  minor   Minor version of the module
     error OracleFactory_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
     /// @notice Thrown when module does not support interface
     ///
-    /// @param  keycode     The keycode of the module
-    /// @param  interfaceId The interface identifier, as specified in ERC-165
+    /// @param  keycode     Keycode of the module
+    /// @param  interfaceId Interface identifier, as specified in ERC-165
     error OracleFactory_UnsupportedModuleInterface(bytes5 keycode, bytes4 interfaceId);
 
     /// @notice Thrown when oracle creation is disabled
@@ -59,14 +64,14 @@ interface IOracleFactory {
 
     /// @notice Thrown when trying to create an oracle that already exists
     ///
-    /// @param  baseToken  The base token address
-    /// @param  quoteToken The quote token address
+    /// @param  baseToken   Base token address
+    /// @param  quoteToken  Quote token address
     error OracleFactory_OracleAlreadyExists(address baseToken, address quoteToken);
 
     /// @notice Thrown when a token pair is invalid
     ///
-    /// @param  baseToken  The base token address
-    /// @param  quoteToken The quote token address
+    /// @param  baseToken  Base token address
+    /// @param  quoteToken Quote token address
     error OracleFactory_InvalidTokenPair(address baseToken, address quoteToken);
 
     /// @notice Thrown when creation is already enabled
@@ -77,30 +82,35 @@ interface IOracleFactory {
 
     /// @notice Thrown when an invalid oracle address is provided
     ///
-    /// @param  oracle The invalid oracle address
+    /// @param  oracle  Invalid oracle address
     error OracleFactory_InvalidOracle(address oracle);
 
     /// @notice Thrown when an oracle is already enabled
     ///
-    /// @param  oracle The already enabled oracle address
+    /// @param  oracle  Already enabled oracle address
     error OracleFactory_OracleAlreadyEnabled(address oracle);
 
     /// @notice Thrown when an oracle is already disabled
     ///
-    /// @param  oracle The already disabled oracle address
+    /// @param  oracle  Already disabled oracle address
     error OracleFactory_OracleAlreadyDisabled(address oracle);
 
     /// @notice Thrown when an oracle is disabled and attempts an operation that requires enabled state
     ///
-    /// @param  oracle The disabled oracle address
+    /// @param  oracle  Disabled oracle address
     error OracleFactory_OracleDisabled(address oracle);
+
+    /// @notice Thrown when a price cache policy address is invalid
+    ///
+    /// @param  policy  Invalid price cache policy address
+    error OracleFactory_InvalidPriceCache(address policy);
 
     // ========== STATE FUNCTIONS ========== //
 
-    /// @notice Gets the current PRICE module address
+    /// @notice Gets the configured price cache policy
     ///
-    /// @return module The PRICE module address
-    function getPriceModule() external view returns (address module);
+    /// @return policy  The price cache policy address
+    function getPriceCache() external view returns (address policy);
 
     // ========== FUNCTIONS ========== //
 
@@ -150,30 +160,22 @@ interface IOracleFactory {
     /// @notice Checks if a specific oracle is enabled
     ///
     /// @param  oracle_ The oracle address to check
-    /// @return enabled true if the oracle is enabled, false otherwise
+    /// @return enabled True if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
 
-    /// @notice Caches prices for the calling oracle's configured assets
+    /// @notice Caches the provided base/quote pair
+    /// @dev    Intended to be called by oracle contracts created by this factory
     ///
-    /// @dev    Intended to be called by oracle contracts created by this factory
-    function cacheOraclePrices() external;
-
-    /// @notice Caches prices for the provided base/quote pair
-    /// @dev    Intended to be called by oracle contracts created by this factory
-    /// @param  baseToken_ The base token address
+    /// @param  baseToken_  The base token address
     /// @param  quoteToken_ The quote token address
-    function cachePrices(address baseToken_, address quoteToken_) external;
+    function cachePrice(address baseToken_, address quoteToken_) external;
 
-    /// @notice Caches prices for the provided base/quote pair only when stale
+    /// @notice Caches the provided base/quote pair only when stale
     /// @dev    Intended to be called by oracle contracts created by this factory
-    /// @param  baseToken_ The base token address
+    ///
+    /// @param  baseToken_  The base token address
     /// @param  quoteToken_ The quote token address
-    /// @param  maxAge_ Maximum accepted cache age in seconds
-    function cachePricesIfNecessary(
-        address baseToken_,
-        address quoteToken_,
-        uint48 maxAge_
-    ) external;
+    function cachePriceIfNecessary(address baseToken_, address quoteToken_) external;
 
     // ========== ADMIN FUNCTIONS ========== //
 
@@ -182,4 +184,9 @@ interface IOracleFactory {
 
     /// @notice Disables oracle creation
     function disableCreation() external;
+
+    /// @notice Sets the configured price cache policy
+    ///
+    /// @param  policy_ The price cache policy address
+    function setPriceCache(address policy_) external;
 }

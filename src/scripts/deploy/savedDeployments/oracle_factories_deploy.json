@@ -1,6 +1,10 @@
 {
     "sequence": [
         {
+            "name": "PriceCache",
+            "args": {}
+        },
+        {
             "name": "ChainlinkOracleFactory",
             "args": {}
         },

@@ -2,79 +2,78 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {Actions} from "src/Kernel.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
-import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 
 contract ERC7726OracleTimestampTest is ERC7726OracleTest {
-    function test_givenConsistentTimestamps_returnsTimestamp() public {
-        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
+    function test_givenConsistentTimestamps_returnsTimestamp() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
-        vm.prank(admin);
-        cloneFactory.enable("");
-
-        vm.prank(admin);
-        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
-
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
-        (, uint48 expectedTimestamp) = priceModule.getPrice(
-            address(collateralToken),
-            IPRICEv2.Variant.LAST
-        );
-
-        uint48 actualTimestamp = IERC7726Oracle(cloneOracle).timestamp(
-            address(collateralToken),
-            address(loanToken)
-        );
+        uint48 actualTimestamp = oracle.timestamp(address(collateralToken), address(loanToken));
         assertEq(actualTimestamp, expectedTimestamp, "Timestamp should match cached timestamp");
     }
 
-    function test_givenConsistentTimestamps_gasSnapshot() public {
-        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
-
-        vm.prank(admin);
-        cloneFactory.enable("");
-
-        vm.prank(admin);
-        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
-
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+    function test_givenConsistentTimestamps_gasSnapshot() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.startSnapshotGas("ERC7726OracleCloneable.timestamp");
-        IERC7726Oracle(cloneOracle).timestamp(address(collateralToken), address(loanToken));
+        oracle.timestamp(address(collateralToken), address(loanToken));
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
     }
 
-    function test_givenInconsistentTimestamps_reverts() public {
-        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
-
-        vm.prank(admin);
-        cloneFactory.enable("");
-
-        vm.prank(admin);
-        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
-
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+    function test_givenOnlyBaseUsdCacheChanges_returnsCachedPairTimestamp()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC7726Oracle.ERC7726Oracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
+        assertEq(
+            oracle.timestamp(address(collateralToken), address(loanToken)),
+            expectedTimestamp,
+            "Timestamp should remain the cached pair timestamp"
         );
-        IERC7726Oracle(cloneOracle).timestamp(address(collateralToken), address(loanToken));
+    }
+
+    function test_givenOnlyQuoteUsdCacheChanges_returnsCachedPairTimestamp()
+        public
+        givenOracleIsEnabled
+    {
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 expectedTimestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        vm.warp(block.timestamp + 1);
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
+
+        assertEq(
+            oracle.timestamp(address(collateralToken), address(loanToken)),
+            expectedTimestamp,
+            "Timestamp should remain the cached pair timestamp"
+        );
+    }
+
+    function test_givenBaseAssetIsNotApproved_reverts() public {
+        address unapprovedBase = makeAddr("UNAPPROVED_BASE");
+
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedBase));
+        oracle.timestamp(unapprovedBase, address(loanToken));
+    }
+
+    function test_givenQuoteAssetIsNotApproved_reverts() public {
+        address unapprovedQuote = makeAddr("UNAPPROVED_QUOTE");
+
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedQuote));
+        oracle.timestamp(address(collateralToken), unapprovedQuote);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

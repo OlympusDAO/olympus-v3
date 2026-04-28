@@ -5,9 +5,6 @@ pragma solidity >=0.8.15;
 // Test
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {Actions} from "src/Kernel.sol";
-import {ERC7726OracleFactory} from "src/policies/price/ERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
@@ -32,7 +29,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         address unconfiguredBase = makeAddr("UNCONFIGURED_BASE");
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unconfiguredBase)
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unconfiguredBase)
         );
 
         oracle.getQuote(1e18, unconfiguredBase, address(loanToken));
@@ -46,10 +43,54 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         address unconfiguredQuote = makeAddr("UNCONFIGURED_QUOTE");
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, unconfiguredQuote)
+            abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unconfiguredQuote)
         );
 
         oracle.getQuote(1e18, address(collateralToken), unconfiguredQuote);
+    }
+
+    // given the base asset is unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
+
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
+        vm.expectRevert();
+        oracle.getQuote(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+    }
+
+    // given the quote asset is unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
+        vm.expectRevert();
+        oracle.getQuote(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
+    }
+
+    // given getQuotes is called with base asset as unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenGetQuotesBaseAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(UNIT_OF_ACCOUNT, address(loanToken));
+
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
+        vm.expectRevert();
+        oracle.getQuotes(1e18, UNIT_OF_ACCOUNT, address(loanToken));
+    }
+
+    // given getQuotes is called with quote asset as unit of account
+    //  [X] it reverts because unit of account is not an ERC20 token
+
+    function test_givenGetQuotesQuoteAssetIsUnitOfAccount_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+
+        // Reverts on ERC20.decimals() call since UNIT_OF_ACCOUNT is not a contract.
+        vm.expectRevert();
+        oracle.getQuotes(1e18, address(collateralToken), UNIT_OF_ACCOUNT);
     }
 
     function test_givenOracleIsEnabled_gasSnapshot_getQuote() public givenOracleIsEnabled {
@@ -59,72 +100,72 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
     }
 
-    // given the base asset price is zero
-    //  [X] it reverts
+    // given the base/quote pair has not been cached
+    //  [X] it reverts with stale
 
-    function test_givenBaseAssetPriceIsZero_reverts() public givenOracleIsEnabled {
+    function test_givenBaseAssetPairIsNotCached_revertsWithStale() public givenOracleIsEnabled {
         MockERC20 zeroBaseToken = new MockERC20("Zero Base", "ZBASE", 18);
-        priceModule.setPrice(address(zeroBaseToken), 0);
+        _setPRICEPrices(address(zeroBaseToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroBaseToken))
+            abi.encodeWithSelector(
+                IERC7726Oracle.ERC7726Oracle_Stale.selector,
+                uint48(0),
+                DEFAULT_MAX_AGE
+            )
         );
 
         oracle.getQuote(1e18, address(zeroBaseToken), address(loanToken));
     }
 
-    // given the quote asset price is zero
-    //  [X] it reverts
+    // given the base/quote pair has not been cached
+    //  [X] it reverts with stale
 
-    function test_givenQuoteAssetPriceIsZero_reverts() public givenOracleIsEnabled {
+    function test_givenQuoteAssetPairIsNotCached_revertsWithStale() public givenOracleIsEnabled {
         MockERC20 zeroQuoteToken = new MockERC20("Zero Quote", "ZQUOTE", 18);
-        priceModule.setPrice(address(zeroQuoteToken), 0);
+        _setPRICEPrices(address(zeroQuoteToken), 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(zeroQuoteToken))
+            abi.encodeWithSelector(
+                IERC7726Oracle.ERC7726Oracle_Stale.selector,
+                uint48(0),
+                DEFAULT_MAX_AGE
+            )
         );
 
         oracle.getQuote(1e18, address(collateralToken), address(zeroQuoteToken));
     }
 
-    function test_givenCloneableBaseAndQuoteTimestampsDiffer_reverts() public {
-        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
-
-        vm.prank(admin);
-        cloneFactory.enable("");
-
-        vm.prank(admin);
-        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
-
-        // Seed both caches at timestamp=1, then force only base cache to timestamp=2.
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+    function test_givenOnlyBaseUsdCacheChanges_returnsCachedPairQuote()
+        public
+        givenOracleIsEnabled
+    {
+        // Seed the direct pair cache, then refresh only the base/USD cache.
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC7726Oracle.ERC7726Oracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
-        );
-        IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
+        uint256 outAmount = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        assertEq(outAmount, 2e18, "Quote should remain the cached pair quote");
     }
 
-    function test_givenCloneablePricesAreStale_reverts() public {
-        ERC7726OracleFactory cloneFactory = new ERC7726OracleFactory(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(cloneFactory));
+    function test_givenOnlyAssetUsdCacheChanges_returnsCachedPairQuote()
+        public
+        givenOracleIsEnabled
+    {
+        // Seed the direct pair cache, then refresh only the quote/USD cache.
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        vm.warp(block.timestamp + 1);
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
-        vm.prank(admin);
-        cloneFactory.enable("");
+        uint256 outAmount = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+        assertEq(outAmount, 2e18, "Quote should remain the cached pair quote");
+    }
 
-        vm.prank(admin);
-        address cloneOracle = cloneFactory.createOracle(1 hours, bytes(""));
-
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+    function test_givenCloneablePricesAreStale_reverts() public givenOracleIsEnabled {
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         vm.warp(block.timestamp + 1 hours + 1);
 
         vm.expectRevert(
@@ -134,7 +175,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
                 uint48(1 hours)
             )
         );
-        IERC7726Oracle(cloneOracle).getQuote(1e18, address(collateralToken), address(loanToken));
+        oracle.getQuote(1e18, address(collateralToken), address(loanToken));
     }
 
     function test_givenLiveBasePriceChanges_withoutCacheRefresh_keepsCachedQuote()
@@ -144,8 +185,8 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         uint256 initialQuote = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
         assertEq(initialQuote, 2e18, "Initial quote should use cached 2:1 ratio");
 
-        // Update live price only; cloneable reads LAST so this should not affect quote yet.
-        priceModule.setPrice(address(collateralToken), 3e18);
+        // Update live price only; cloneable reads the cache so this should not affect quote yet.
+        _setPRICEPrices(address(collateralToken), 3e18);
         uint256 quoteBeforeRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -155,8 +196,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         // Refresh cache and verify quote reflects new ratio.
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         uint256 quoteAfterRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -172,8 +212,8 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         uint256 initialQuote = oracle.getQuote(1e18, address(collateralToken), address(loanToken));
         assertEq(initialQuote, 2e18, "Initial quote should use cached 2:1 ratio");
 
-        // Update live quote price only; cloneable reads LAST so this should not affect quote yet.
-        priceModule.setPrice(address(loanToken), 2e18);
+        // Update live quote price only; cloneable reads the cache so this should not affect quote yet.
+        _setPRICEPrices(address(loanToken), 2e18);
         uint256 quoteBeforeRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -183,8 +223,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         // Refresh cache and verify quote reflects new ratio.
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
         uint256 quoteAfterRefresh = oracle.getQuote(
             1e18,
             address(collateralToken),
@@ -209,6 +248,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e18 USD, quote = 1e18 USD
         _setPRICEPrices(address(baseToken), 2e18);
         _setPRICEPrices(address(quoteToken), 1e18);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e9 (1 base token with 9 decimals)
         uint256 inAmount = 1e9;
@@ -252,6 +292,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e18 USD, quote = 1e18 USD
         _setPRICEPrices(address(baseToken), 2e18);
         _setPRICEPrices(address(quoteToken), 1e18);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;
@@ -289,7 +330,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         // Set price decimals to 8
-        priceModule.setPriceDecimals(8);
+        priceCache.setPriceDecimals(8);
 
         // Create tokens with different decimals
         // Base token: 9 decimals, Quote token: 18 decimals
@@ -299,6 +340,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(baseToken), 2e8);
         _setPRICEPrices(address(quoteToken), 1e8);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e9 (1 base token with 9 decimals)
         uint256 inAmount = 1e9;
@@ -335,7 +377,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         givenOracleIsEnabled
     {
         // Set price decimals to 8
-        priceModule.setPriceDecimals(8);
+        priceCache.setPriceDecimals(8);
 
         // Create tokens with different decimals
         // Base token: 18 decimals, Quote token: 9 decimals
@@ -345,6 +387,7 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(baseToken), 2e8);
         _setPRICEPrices(address(quoteToken), 1e8);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;
@@ -377,12 +420,13 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
     function test_givenPriceDecimalsAreNot18_returnsCorrectQuantity() public givenOracleIsEnabled {
         // Set price decimals to 8
-        priceModule.setPriceDecimals(8);
+        priceCache.setPriceDecimals(8);
 
         // Use tokens with same decimals (18)
         // Set prices: base = 2e8 USD, quote = 1e8 USD (8 decimals)
         _setPRICEPrices(address(collateralToken), 2e8);
         _setPRICEPrices(address(loanToken), 1e8);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         // inAmount = 1e18 (1 base token with 18 decimals)
         uint256 inAmount = 1e18;

@@ -15,13 +15,6 @@ interface IPRICEv2 {
     /// @param timestamp_   The timestamp at which the price was calculated
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
-    /// @notice             An asset's price is cached
-    ///
-    /// @param asset_       The address of the asset
-    /// @param price_       The price of the asset in the system unit of account
-    /// @param cachedAt_    The timestamp at which the price was cached
-    event PriceCached(address indexed asset_, uint256 price_, uint48 cachedAt_);
-
     /// @notice             An asset's definition is added
     ///
     /// @param asset_       The address of the asset
@@ -71,6 +64,11 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         The asset address is reserved for internal PRICE usage
+    ///
+    /// @param asset_   The reserved asset address
+    error PRICE_AssetReserved(address asset_);
+
     /// @notice         A price feed call failed when initially configuring an asset
     ///
     /// @param asset_   The address of the asset that triggered the submodule call
@@ -86,11 +84,6 @@ interface IPRICEv2 {
     /// @param asset_                   The address of the asset
     /// @param lastObservationTime_     The timestamp of the last observation
     error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
-
-    /// @notice         The max age is invalid
-    ///
-    /// @param maxAge_  The max age that was provided
-    error PRICE_ParamsMaxAgeInvalid(uint48 maxAge_);
 
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
@@ -255,15 +248,6 @@ interface IPRICEv2 {
         bytes feeds;
     }
 
-    /// @notice         Struct to hold a cached price for an asset
-    ///
-    /// @param price    The cached price of the asset
-    /// @param cachedAt The timestamp at which the price was cached
-    struct PriceCache {
-        uint256 price;
-        uint48 cachedAt;
-    }
-
     /// @notice                         Parameters for updating an asset configuration
     /// @dev                            Only updates components flagged in the struct
     ///
@@ -292,7 +276,7 @@ interface IPRICEv2 {
 
     /// @notice         Variant of price to retrieve
     /// @dev            - CURRENT: The current aggregating feed price, including moving average if configured
-    /// @dev            - LAST: The last cached aggregating feed price, including moving average if configured
+    /// @dev            - LAST: The last stored observation price
     /// @dev            - MOVINGAVERAGE: The raw moving average price of the asset
     enum Variant {
         CURRENT,
@@ -305,6 +289,9 @@ interface IPRICEv2 {
 
     /// @notice     The number of decimals to used in output values
     function decimals() external view returns (uint8);
+
+    /// @notice     The reserved unit-of-account key
+    function unitOfAccount() external pure returns (address);
 
     // ========== ASSET INFORMATION ========== //
 
@@ -333,17 +320,9 @@ interface IPRICEv2 {
     /// @return price   The USD price of the asset in the scale of `decimals`
     function getPrice(address asset_) external view returns (uint256 price);
 
-    /// @notice         Returns a price no older than the provided age in the system unit of account
-    /// @dev            Checks cache first, falls back to fresh calculation if stale
-    ///
-    /// @param asset_   The address of the asset
-    /// @param maxAge_  The maximum age (seconds) of the price
-    /// @return price   The USD price of the asset in the scale of `decimals`
-    function getPrice(address asset_, uint48 maxAge_) external view returns (uint256 price);
-
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
-    /// @dev                - Variant.LAST: last cached aggregating feed price, including moving average if configured
+    /// @dev                - Variant.LAST: last stored observation price
     /// @dev                - Variant.MOVINGAVERAGE: raw moving average price
     ///
     /// @param asset_       The address of the asset
@@ -355,52 +334,30 @@ interface IPRICEv2 {
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
 
-    /// @notice         Returns the current price of an asset in terms of the base asset
+    /// @notice         Returns the current price of an asset in terms of the quote asset
     ///
-    /// @param asset_   The address of the asset
-    /// @param base_    The address of the base asset that the price will be calculated in
-    /// @return price   The price of the asset in units of `base_`
-    function getPriceIn(address asset_, address base_) external view returns (uint256 price);
+    /// @param asset_   The address of the asset being priced
+    /// @param quote_   The address of the quote asset that the price will be calculated in
+    /// @return price   The price of the asset in units of `quote_`
+    function getPriceIn(address asset_, address quote_) external view returns (uint256 price);
 
-    /// @notice             Returns the price of the asset in terms of the base asset, no older than the max age
+    /// @notice             Returns the requested variant of the asset price in terms of the quote asset
     ///
-    /// @param asset_       The address of the asset
-    /// @param base_        The address of the base asset that the price will be calculated in
-    /// @param maxAge_      The maximum age (seconds) of the price
-    /// @return price       The price of the asset in units of `base_`
-    function getPriceIn(
-        address asset_,
-        address base_,
-        uint48 maxAge_
-    ) external view returns (uint256 price);
-
-    /// @notice             Returns the requested variant of the asset price in terms of the base asset
-    ///
-    /// @param asset_       The address of the asset
-    /// @param base_        The address of the base asset that the price will be calculated in
+    /// @param asset_       The address of the asset being priced
+    /// @param quote_       The address of the quote asset that the price will be calculated in
     /// @param variant_     The variant of the price to return
-    /// @return _price      The price of the asset in units of `base_`
+    /// @return _price      The price of the asset in units of `quote_`
     /// @return _timestamp  The timestamp at which the price was calculated
     function getPriceIn(
         address asset_,
-        address base_,
+        address quote_,
         Variant variant_
     ) external view returns (uint256 _price, uint48 _timestamp);
-
-    /// @notice         Updates the cached price for an asset
-    /// @dev            Permissioned at module level, can be exposed permissionlessly via policy
-    /// @dev            Does NOT affect moving average observations
-    /// @dev            Works for any approved asset (MA or non-MA)
-    /// @dev            Assumption: Price oracle configuration is robust enough to prevent manipulation
-    ///
-    /// @param asset_   The address of the asset
-    function cachePrice(address asset_) external;
 
     /// @notice             Stores a price observation for moving average calculation
     /// @dev                Permissioned - only authorized callers can store observations
     /// @dev                Reverts if the asset does not store moving average
-    /// @dev                Also updates the cache (single source of truth for "last price")
-    /// @dev                Emits both PriceStored and PriceCached events
+    /// @dev                Emits PriceStored
     ///
     /// @param asset_       The address of the asset
     function storeObservation(address asset_) external;

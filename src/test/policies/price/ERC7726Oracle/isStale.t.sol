@@ -25,13 +25,69 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         assertEq(stale, true, "Cache older than maxAge should be stale");
     }
 
-    function test_givenInconsistentTimestamps_returnsTrue(uint48 warpDelta_) public {
-        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE * 30));
+    function test_givenOnlyBaseUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        priceModule.cachePrice(address(collateralToken));
+        _setPRICEPrices(address(collateralToken), 3e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only base/USD is refreshed"
+        );
         bool stale = oracle.isStale(address(collateralToken), address(loanToken));
-        assertEq(stale, true, "Inconsistent timestamps should be stale");
+        assertEq(stale, false, "Direct pair freshness should be unchanged");
+    }
+
+    function test_givenOnlyQuoteUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
+        vm.warp(block.timestamp + warpDelta);
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only quote/USD is refreshed"
+        );
+        bool stale = oracle.isStale(address(collateralToken), address(loanToken));
+        assertEq(stale, false, "Direct pair freshness should be unchanged");
+    }
+
+    function test_givenBaseAndQuoteUsdCacheChanges_returnsFalse(uint48 warpDelta_) public {
+        uint48 pairTimestampBefore = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+        uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
+        vm.warp(block.timestamp + warpDelta);
+        _setPRICEPrices(address(collateralToken), 3e18);
+        _setPRICEPrices(address(loanToken), 2e18);
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
+        uint48 pairTimestampAfter = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+
+        assertEq(
+            pairTimestampAfter,
+            pairTimestampBefore,
+            "Direct pair timestamp should not change when only USD legs are refreshed"
+        );
+        bool stale = oracle.isStale(address(collateralToken), address(loanToken));
+        assertEq(stale, false, "Direct pair freshness should be unchanged");
     }
 
     function test_gasSnapshot_isStale() public {
@@ -39,6 +95,20 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         oracle.isStale(address(collateralToken), address(loanToken));
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_givenBaseAssetIsNotApproved_reverts() public {
+        address unapprovedBase = makeAddr("UNAPPROVED_BASE");
+
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedBase));
+        oracle.isStale(unapprovedBase, address(loanToken));
+    }
+
+    function test_givenQuoteAssetIsNotApproved_reverts() public {
+        address unapprovedQuote = makeAddr("UNAPPROVED_QUOTE");
+
+        vm.expectRevert(abi.encodeWithSelector(PRICE_ASSET_NOT_APPROVED_SELECTOR, unapprovedQuote));
+        oracle.isStale(address(collateralToken), unapprovedQuote);
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
