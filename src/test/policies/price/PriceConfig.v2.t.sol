@@ -23,15 +23,18 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Bophades
 import {Actions, fromKeycode, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
-import {fromSubKeycode, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
+import {fromSubKeycode, ModuleWithSubmodules, SubKeycode, Submodule, toSubKeycode} from "src/Submodules.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
 import {PriceSubmodule} from "src/modules/PRICE/PRICE.v2.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {MockInvalidSubmodule} from "src/test/mocks/MockInvalidSubmodule.sol";
+import {MockSubmoduleNoERC165} from "src/test/mocks/MockSubmoduleNoERC165.sol";
 
 // Tests for PriceConfig v1.0.0
 //
@@ -45,11 +48,11 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.addAsset are correct
-// [X] removeAssetPrice
+// [X] queueRemoveAsset
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.removeAsset are correct
-// [X] updateAsset
+// [X] queueUpdateAsset
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.updateAsset are correct
@@ -59,7 +62,7 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.installSubmodule are correct
-// [X] upgradeSubmodule
+// [X] queueUpgradeSubmodule
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
@@ -70,7 +73,16 @@ import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/S
 type Category is bytes32;
 type CategoryGroup is bytes32;
 
+enum QueuedActionCase {
+    RemoveAsset,
+    UpdateAsset,
+    UpgradeSubmodule,
+    TimelockDelay
+}
+
 contract MockStrategy is PriceSubmodule {
+    uint256 public storedValue;
+
     constructor(Module parent_) Submodule(parent_) {}
 
     function SUBKEYCODE() public pure override returns (SubKeycode) {
@@ -84,6 +96,10 @@ contract MockStrategy is PriceSubmodule {
 
     function getOnePrice() external pure returns (uint256) {
         return 1;
+    }
+
+    function setStoredValue(uint256 value_) external onlyParent {
+        storedValue = value_;
     }
 }
 
@@ -130,6 +146,9 @@ contract PriceConfigv2Test is Test {
     bytes32 internal constant ROLE_ADMIN = "admin";
     bytes32 internal constant ROLE_PRICE_ADMIN = "price_admin";
     bytes32 internal constant ROLE_EMERGENCY = "emergency";
+
+    uint48 internal constant TIMELOCK_DELAY = 1 days;
+    uint48 internal constant EXECUTION_WINDOW = 7 days;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -253,6 +272,295 @@ contract PriceConfigv2Test is Test {
         }
 
         return expectations;
+    }
+
+    function _warpPastTimelockDelay() internal {
+        vm.warp(block.timestamp + TIMELOCK_DELAY);
+    }
+
+    function _refreshPriceFeedTimestamps(uint256 timestamp_) internal {
+        ethUsdPriceFeed.setTimestamp(timestamp_);
+        ohmUsdPriceFeed.setTimestamp(timestamp_);
+        ohmEthPriceFeed.setTimestamp(timestamp_);
+        reserveUsdPriceFeed.setTimestamp(timestamp_);
+    }
+
+    function _executeQueuedAction(uint256 actionId_) internal {
+        _warpPastTimelockDelay();
+        priceConfig.executeQueuedAction(actionId_);
+    }
+
+    function _queueAndExecuteUpdateAsset(
+        address asset_,
+        IPRICEv2.UpdateAssetParams memory params_,
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations_
+    ) internal returns (uint256 actionId_) {
+        vm.prank(priceManager);
+        actionId_ = priceConfig.queueUpdateAsset(asset_, params_, expectations_);
+        _executeQueuedAction(actionId_);
+    }
+
+    function _makeFeedOnlyUpdateParams() internal view returns (IPRICEv2.UpdateAssetParams memory) {
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
+
+        return params;
+    }
+
+    function _makeStrategyOnlyUpdateParams()
+        internal
+        view
+        returns (IPRICEv2.UpdateAssetParams memory)
+    {
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component memory strategyComponent = abi.decode(
+            asset.strategy,
+            (IPRICEv2.Component)
+        );
+
+        return
+            IPRICEv2.UpdateAssetParams({
+                updateFeeds: false,
+                updateStrategy: true,
+                updateMovingAverage: false,
+                feeds: new IPRICEv2.Component[](0),
+                strategy: strategyComponent,
+                useMovingAverage: asset.useMovingAverage,
+                storeMovingAverage: false,
+                movingAverageDuration: 0,
+                lastObservationTime: 0,
+                observations: new uint256[](0)
+            });
+    }
+
+    function _queueActionCase(QueuedActionCase actionCase_) internal returns (uint256 actionId_) {
+        if (actionCase_ == QueuedActionCase.RemoveAsset) {
+            _addBaseAssets();
+
+            vm.prank(priceManager);
+            return priceConfig.queueRemoveAsset(address(ohm));
+        }
+
+        if (actionCase_ == QueuedActionCase.UpdateAsset) {
+            _addBaseAssets();
+
+            IPRICEv2.UpdateAssetParams memory params = _makeStrategyOnlyUpdateParams();
+
+            vm.prank(priceManager);
+            return
+                priceConfig.queueUpdateAsset(
+                    address(ohm),
+                    params,
+                    new IPriceConfigv2.PriceFeedExpectation[](0)
+                );
+        }
+
+        if (actionCase_ == QueuedActionCase.UpgradeSubmodule) {
+            MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
+
+            vm.prank(admin);
+            return priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        }
+
+        vm.prank(admin);
+        return priceConfig.queueTimelockDelay(2 days);
+    }
+
+    function _expectQueuedAction(
+        IPriceConfigv2.TimelockAction action_,
+        address proposer_,
+        bytes memory payload_
+    )
+        internal
+        returns (
+            uint256 expectedActionId_,
+            uint48 queuedAt_,
+            uint48 executableAt_,
+            uint48 expiresAt_
+        )
+    {
+        expectedActionId_ = priceConfig.nextActionId();
+        queuedAt_ = uint48(block.timestamp);
+        executableAt_ = queuedAt_ + priceConfig.timelockDelay();
+        expiresAt_ = executableAt_ + EXECUTION_WINDOW;
+
+        vm.expectEmit(true, true, true, true);
+        emit IPriceConfigv2.PriceConfigActionQueued(
+            expectedActionId_,
+            action_,
+            proposer_,
+            keccak256(payload_),
+            executableAt_,
+            expiresAt_
+        );
+    }
+
+    function _assertQueuedAction(
+        uint256 actionId_,
+        uint256 expectedActionId_,
+        IPriceConfigv2.TimelockAction action_,
+        address proposer_,
+        uint48 queuedAt_,
+        uint48 executableAt_,
+        uint48 expiresAt_,
+        bytes memory payload_
+    ) internal view {
+        assertEq(actionId_, expectedActionId_, "Action ID");
+
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId_);
+        assertEq(uint8(action.action), uint8(action_), "Action");
+        assertEq(action.proposer, proposer_, "Proposer");
+        assertEq(action.queuedAt, queuedAt_, "Queued at");
+        assertEq(action.executableAt, executableAt_, "Executable at");
+        assertEq(action.expiresAt, expiresAt_, "Expires at");
+        assertEq(action.executed, false, "Executed");
+        assertEq(action.cancelled, false, "Cancelled");
+        assertEq(action.payload, payload_, "Payload");
+    }
+
+    function _assertExecuteWhenDisabledReverts(QueuedActionCase actionCase_) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+
+        vm.warp(action.executableAt);
+        if (actionCase_ == QueuedActionCase.UpdateAsset) {
+            _refreshPriceFeedTimestamps(action.executableAt);
+        }
+
+        vm.prank(admin);
+        priceConfig.disable(abi.encode(""));
+
+        _expectRevertNotEnabled();
+        priceConfig.executeQueuedAction(actionId);
+    }
+
+    function _assertCancelWhenDisabled(QueuedActionCase actionCase_, address caller_) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+
+        vm.prank(admin);
+        priceConfig.disable(abi.encode(""));
+
+        if (caller_ != emergency) {
+            vm.expectRevert(
+                abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_EMERGENCY)
+            );
+        }
+        vm.prank(caller_);
+        priceConfig.cancelQueuedAction(actionId);
+
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        assertEq(action.cancelled, caller_ == emergency, "Only emergency should cancel action");
+
+        if (caller_ == emergency) {
+            assertEq(action.payload.length, 0, "Payload should be cleared");
+        } else {
+            assertGt(action.payload.length, 0, "Payload should remain");
+        }
+    }
+
+    function _assertExecuteBeforeDelayReverts(
+        QueuedActionCase actionCase_,
+        uint256 warpedTimestamp_
+    ) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint256 targetTimestamp = bound(warpedTimestamp_, action.queuedAt, action.executableAt - 1);
+
+        vm.warp(targetTimestamp);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_ActionNotReady.selector,
+                actionId,
+                action.executableAt
+            )
+        );
+        priceConfig.executeQueuedAction(actionId);
+    }
+
+    function _assertExecuteReadySucceeds(
+        QueuedActionCase actionCase_,
+        uint256 warpedTimestamp_,
+        address executor_
+    ) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint256 targetTimestamp = bound(warpedTimestamp_, action.executableAt, action.expiresAt);
+
+        vm.warp(targetTimestamp);
+        if (actionCase_ == QueuedActionCase.UpdateAsset) {
+            _refreshPriceFeedTimestamps(targetTimestamp);
+        }
+        vm.prank(executor_);
+        priceConfig.executeQueuedAction(actionId);
+
+        action = priceConfig.getQueuedAction(actionId);
+        assertEq(action.executed, true, "Action should be executed");
+        assertEq(action.payload.length, 0, "Payload should be cleared");
+    }
+
+    function _assertExecuteAfterExpiryReverts(
+        QueuedActionCase actionCase_,
+        uint256 warpedTimestamp_
+    ) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint256 targetTimestamp = bound(
+            warpedTimestamp_,
+            uint256(action.expiresAt) + 1,
+            uint256(action.expiresAt) + 365 days
+        );
+
+        vm.warp(targetTimestamp);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_ActionExpired.selector,
+                actionId,
+                action.expiresAt
+            )
+        );
+        priceConfig.executeQueuedAction(actionId);
+    }
+
+    function _assertExecuteAfterCancelReverts(QueuedActionCase actionCase_) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+
+        vm.prank(emergency);
+        priceConfig.cancelQueuedAction(actionId);
+
+        _warpPastTimelockDelay();
+        vm.expectRevert(
+            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionCancelled.selector, actionId)
+        );
+        priceConfig.executeQueuedAction(actionId);
+    }
+
+    function _assertExecuteAfterExecutedReverts(QueuedActionCase actionCase_) internal {
+        uint256 actionId = _queueActionCase(actionCase_);
+
+        _executeQueuedAction(actionId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_ActionAlreadyExecuted.selector,
+                actionId
+            )
+        );
+        priceConfig.executeQueuedAction(actionId);
     }
 
     function _addBaseAssets() internal {
@@ -464,7 +772,7 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICEv2 Configuration ========== */
 
-    function test_addAsset_notEnabled_reverts() public givenDisabled {
+    function test_addAsset_givenDisabled_reverts() public givenDisabled {
         // Prepare arguments
         uint256[] memory obs = new uint256[](0);
         IPRICEv2.Component[] memory feedComponents = new IPRICEv2.Component[](0);
@@ -716,15 +1024,28 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.approved, false, "Asset should not be approved after failed validation");
     }
 
-    function test_removeAssetPrice_notEnabled_reverts() public givenDisabled {
+    /* ========== queueRemoveAsset ========== */
+
+    // given the contract is not enabled
+    //  [X] it reverts
+    // given the caller is not admin nor price admin
+    //  [X] it reverts
+    // when the asset is not approved
+    //  [X] it reverts
+    // when the asset is the unit of account
+    //  [X] it reverts
+    // [X] it queues the removeAsset action
+    // [X] the removeAsset action can be executed after the timelock
+
+    function test_queueRemoveAsset_givenDisabled_reverts() public givenDisabled {
         _expectRevertNotEnabled();
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.removeAssetPrice(address(ohm));
+        priceConfig.queueRemoveAsset(address(ohm));
     }
 
-    function test_removeAssetPrice_unauthorizedUser_reverts(address user_) public {
+    function test_queueRemoveAsset_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -734,28 +1055,50 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Try to remove asset from PRICEv2 with unauthorized account, expect revert
+        // Try to queue asset removal with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
 
         // Call function
         vm.prank(user_);
-        priceConfig.removeAssetPrice(address(ohm));
+        priceConfig.queueRemoveAsset(address(ohm));
 
         // Confirm asset was not removed
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Try to remove asset from PRICEv2 with priceManager account, expect success
+        // Try to queue asset removal with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.removeAssetPrice(address(ohm));
+        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
-        // Confirm asset was removed
+        // Confirm asset is not removed until the timelock is executed
+        asset = PRICE.getAssetData(address(ohm));
+        assertEq(asset.approved, true);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm asset was removed after execution
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
     }
 
-    function test_removeAssetPrice(uint8 role_) public {
+    function test_queueRemoveAsset_whenAssetIsUnapproved_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(ohm))
+        );
+        vm.prank(priceManager);
+        priceConfig.queueRemoveAsset(address(ohm));
+    }
+
+    function test_queueRemoveAsset_whenAssetIsUnitOfAccount_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetReserved.selector, _UNIT_OF_ACCOUNT)
+        );
+        vm.prank(priceManager);
+        priceConfig.queueRemoveAsset(_UNIT_OF_ACCOUNT);
+    }
+
+    function test_queueRemoveAsset(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
 
@@ -766,11 +1109,17 @@ contract PriceConfigv2Test is Test {
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, true);
 
-        // Remove asset from PRICEv2 using authorized caller
+        // Queue asset removal using authorized caller
         vm.prank(caller);
-        priceConfig.removeAssetPrice(address(ohm));
+        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
-        // Confirm asset is not approved and all data deleted
+        // Confirm asset is not removed until the timelock is executed
+        asset = PRICE.getAssetData(address(ohm));
+        assertEq(asset.approved, true);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm asset is not approved and all data deleted after execution
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
         assertEq(asset.storeMovingAverage, false);
@@ -785,9 +1134,50 @@ contract PriceConfigv2Test is Test {
         assertEq(asset.feeds, bytes(""));
     }
 
-    /* ========== updateAsset ========== */
+    function test_queueRemoveAsset_queuesExpectedAction() public {
+        _addBaseAssets();
 
-    function test_updateAsset_notEnabled_reverts() public givenDisabled {
+        bytes memory payload = abi.encode(address(ohm));
+        (
+            uint256 expectedActionId,
+            uint48 queuedAt,
+            uint48 executableAt,
+            uint48 expiresAt
+        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.RemoveAsset, priceManager, payload);
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+
+        _assertQueuedAction(
+            actionId,
+            expectedActionId,
+            IPriceConfigv2.TimelockAction.RemoveAsset,
+            priceManager,
+            queuedAt,
+            executableAt,
+            expiresAt,
+            payload
+        );
+    }
+
+    /* ========== queueUpdateAsset ========== */
+
+    // given the contract is not enabled
+    //  [X] it reverts
+    // given the caller is not admin nor price admin
+    //  [X] it reverts
+    // when no update flags are set
+    //  [X] it reverts
+    // when updateFeeds is true and the price feed expectation count does not match the input feeds
+    //  [X] it reverts and rolls back
+    // when updateFeeds is true and the price feed expectations are not met at execution
+    //  [X] it reverts and rolls back
+    // when updateFeeds is false and price feed expectations are provided
+    //  [X] it reverts and rolls back
+    // [X] it queues the updateAsset action
+    // [X] the updateAsset action can be executed after the timelock
+
+    function test_queueUpdateAsset_givenDisabled_reverts() public givenDisabled {
         // Prepare update params
         IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
             updateFeeds: true,
@@ -807,10 +1197,43 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params, new IPriceConfigv2.PriceFeedExpectation[](0));
+        priceConfig.queueUpdateAsset(
+            address(ohm),
+            params,
+            new IPriceConfigv2.PriceFeedExpectation[](0)
+        );
     }
 
-    function test_updateAsset_unauthorizedUser_reverts(address user_) public {
+    function test_queueUpdateAsset_queuesExpectedAction() public {
+        _addBaseAssets();
+
+        IPRICEv2.UpdateAssetParams memory params = _makeStrategyOnlyUpdateParams();
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](0);
+        bytes memory payload = abi.encode(address(ohm), params, expectations);
+        (
+            uint256 expectedActionId,
+            uint48 queuedAt,
+            uint48 executableAt,
+            uint48 expiresAt
+        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.UpdateAsset, priceManager, payload);
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        _assertQueuedAction(
+            actionId,
+            expectedActionId,
+            IPriceConfigv2.TimelockAction.UpdateAsset,
+            priceManager,
+            queuedAt,
+            executableAt,
+            expiresAt,
+            payload
+        );
+    }
+
+    function test_queueUpdateAsset_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Add base assets to PRICEv2
@@ -841,12 +1264,12 @@ contract PriceConfigv2Test is Test {
             100
         );
 
-        // Try to update asset with unauthorized account, expect revert
+        // Try to queue asset update with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
 
         vm.prank(user_);
-        priceConfig.updateAsset(address(ohm), params, expectations);
+        priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
@@ -855,32 +1278,29 @@ contract PriceConfigv2Test is Test {
 
         // Try with priceManager account, expect success
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params, expectations);
+        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
-        // Confirm feeds were updated
+        // Confirm feeds are not updated until the timelock is executed
+        asset = PRICE.getAssetData(address(ohm));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm feeds were updated after execution
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 1);
     }
 
-    function test_updateAsset(uint8 role_) public {
-        role_ = uint8(bound(role_, 0, 1));
-        address caller = role_ == 0 ? admin : priceManager;
-
-        // Add base assets to PRICEv2
+    function test_queueUpdateAsset_whenNoUpdatesRequested_reverts() public {
         _addBaseAssets();
 
-        // Confirm that ohm currently has two feeds
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
-
-        // Setup params to update feeds
         IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
-            updateFeeds: true,
+            updateFeeds: false,
             updateStrategy: false,
             updateMovingAverage: false,
-            feeds: new IPRICEv2.Component[](1),
+            feeds: new IPRICEv2.Component[](0),
             strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
@@ -888,27 +1308,21 @@ contract PriceConfigv2Test is Test {
             lastObservationTime: 0,
             observations: new uint256[](0)
         });
-        params.feeds[0] = feeds[0];
-        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
-            params.feeds.length,
-            10e18,
-            100
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_NoUpdatesRequested.selector, address(ohm))
         );
-
-        // Update asset using authorized caller
-        vm.prank(caller);
-        priceConfig.updateAsset(address(ohm), params, expectations);
-
-        // Confirm feeds were updated
-        asset = PRICE.getAssetData(address(ohm));
-        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 1);
-        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
-        assertEq(feeds[0].selector, params.feeds[0].selector);
-        assertEq(feeds[0].params, params.feeds[0].params);
+        vm.prank(priceManager);
+        priceConfig.queueUpdateAsset(
+            address(ohm),
+            params,
+            new IPriceConfigv2.PriceFeedExpectation[](0)
+        );
     }
 
-    function test_updateAsset_feedExpectationCountInvalid_revertsAndRollsBack() public {
+    function test_queueUpdateAsset_whenUpdateFeesIsTrue_whenPriceFeedExpectationCountInvalid_revertsAndRollsBack()
+        public
+    {
         _addBaseAssets();
 
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
@@ -939,14 +1353,20 @@ contract PriceConfigv2Test is Test {
         );
 
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params, new IPriceConfigv2.PriceFeedExpectation[](0));
+        priceConfig.queueUpdateAsset(
+            address(ohm),
+            params,
+            new IPriceConfigv2.PriceFeedExpectation[](0)
+        );
 
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2, "Feed update should roll back");
     }
 
-    function test_updateAsset_feedPriceOutOfBounds_revertsAndRollsBack() public {
+    function test_queueUpdateAsset_whenUpdateFeedsIsTrue_feedPriceOutOfBounds_revertsAndRollsBack()
+        public
+    {
         _addBaseAssets();
 
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
@@ -974,6 +1394,10 @@ contract PriceConfigv2Test is Test {
             toleranceBps: 0
         });
 
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        _warpPastTimelockDelay();
         vm.expectRevert(
             abi.encodeWithSelector(
                 IPriceConfigv2.IPriceConfigv2_PriceFeedOutOfBounds.selector,
@@ -984,16 +1408,71 @@ contract PriceConfigv2Test is Test {
                 20e18
             )
         );
-
-        vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params, expectations);
+        priceConfig.executeQueuedAction(actionId);
 
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
         assertEq(feeds.length, 2, "Feed update should roll back");
     }
 
-    function test_updateAsset_withoutFeedUpdate_rejectsExpectations() public {
+    function test_queueUpdateAsset_whenUpdateFeedsIsTrue(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
+        // Add base assets to PRICEv2
+        _addBaseAssets();
+
+        // Confirm that ohm currently has two feeds
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2);
+
+        // Setup params to update feeds
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            params.feeds.length,
+            10e18,
+            100
+        );
+
+        // Queue asset update using authorized caller
+        vm.prank(caller);
+        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        assertEq(action.executed, false, "Queued update action should not be executed");
+
+        // Confirm feeds are not updated until the timelock is executed
+        asset = PRICE.getAssetData(address(ohm));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 2);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm feeds were updated after execution
+        asset = PRICE.getAssetData(address(ohm));
+        feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 1);
+        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
+        assertEq(feeds[0].selector, params.feeds[0].selector);
+        assertEq(feeds[0].params, params.feeds[0].params);
+    }
+
+    function test_queueUpdateAsset_whenUpdateFeedsIsFalse_whenPriceFeedsExpectationsIsNotEmpty_reverts()
+        public
+    {
         _addBaseAssets();
 
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
@@ -1032,15 +1511,425 @@ contract PriceConfigv2Test is Test {
         );
 
         vm.prank(priceManager);
-        priceConfig.updateAsset(address(ohm), params, expectations);
+        priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         IPRICEv2.Asset memory updatedAsset = PRICE.getAssetData(address(ohm));
         assertEq(updatedAsset.strategy, asset.strategy, "Strategy update should roll back");
     }
 
+    /* ========== queueTimelockDelay ========== */
+
+    // given the contract is disabled
+    //  [X] it reverts
+    // given the caller is not admin
+    //  [X] it reverts
+    // when the delay is below the minimum
+    //  [X] it reverts
+    // when the delay is above the maximum
+    //  [X] it reverts
+    // [X] it queues the setTimelockDelay action
+    // [X] the setTimelockDelay action can be executed after the timelock
+
+    function test_queueTimelockDelay_givenDisabled_reverts() public givenDisabled {
+        // Expect revert
+        _expectRevertNotEnabled();
+
+        // Call function
+        vm.prank(admin);
+        priceConfig.queueTimelockDelay(2 days);
+    }
+
+    function test_queueTimelockDelay_queuesExpectedAction() public {
+        uint48 newDelay = 2 days;
+        bytes memory payload = abi.encode(newDelay);
+        (
+            uint256 expectedActionId,
+            uint48 queuedAt,
+            uint48 executableAt,
+            uint48 expiresAt
+        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.SetTimelockDelay, admin, payload);
+
+        vm.prank(admin);
+        uint256 actionId = priceConfig.queueTimelockDelay(newDelay);
+
+        _assertQueuedAction(
+            actionId,
+            expectedActionId,
+            IPriceConfigv2.TimelockAction.SetTimelockDelay,
+            admin,
+            queuedAt,
+            executableAt,
+            expiresAt,
+            payload
+        );
+    }
+
+    function test_queueTimelockDelay_isTimelocked() public {
+        uint48 newDelay = 2 days;
+
+        vm.prank(admin);
+        uint256 actionId = priceConfig.queueTimelockDelay(newDelay);
+
+        assertEq(
+            priceConfig.timelockDelay(),
+            TIMELOCK_DELAY,
+            "Delay should not update immediately"
+        );
+
+        _executeQueuedAction(actionId);
+
+        assertEq(priceConfig.timelockDelay(), newDelay, "Delay should update after execution");
+    }
+
+    function test_queueTimelockDelay_nonAdmin_reverts(address caller_) public {
+        vm.assume(caller_ != admin);
+
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_ADMIN));
+        vm.prank(caller_);
+        priceConfig.queueTimelockDelay(2 days);
+    }
+
+    function test_queueTimelockDelay_belowMinimum_revertsAtQueueTime() public {
+        uint48 invalidDelay = TIMELOCK_DELAY - 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_TimelockDelayInvalid.selector,
+                invalidDelay,
+                priceConfig.MIN_TIMELOCK_DELAY(),
+                priceConfig.MAX_TIMELOCK_DELAY()
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueTimelockDelay(invalidDelay);
+    }
+
+    function test_queueTimelockDelay_aboveMaximum_revertsAtQueueTime() public {
+        uint48 invalidDelay = priceConfig.MAX_TIMELOCK_DELAY() + 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_TimelockDelayInvalid.selector,
+                invalidDelay,
+                priceConfig.MIN_TIMELOCK_DELAY(),
+                priceConfig.MAX_TIMELOCK_DELAY()
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueTimelockDelay(invalidDelay);
+    }
+
+    /* ========== TIMELOCK ========== */
+
+    // given an action has been queued
+    //  given the timelock delay has not been reached
+    //   [X] queueRemoveAsset reverts for any timestamp before executableAt
+    //   [X] queueUpdateAsset reverts for any timestamp before executableAt
+    //   [X] queueUpgradeSubmodule reverts for any timestamp before executableAt
+    //   [X] queueTimelockDelay reverts for any timestamp before executableAt
+
+    function test_executeQueuedAction_beforeDelay_givenQueueRemoveAsset_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteBeforeDelayReverts(QueuedActionCase.RemoveAsset, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_beforeDelay_givenQueueUpdateAsset_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteBeforeDelayReverts(QueuedActionCase.UpdateAsset, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_beforeDelay_givenQueueUpgradeSubmodule_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteBeforeDelayReverts(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_beforeDelay_givenTimelockDelay_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteBeforeDelayReverts(QueuedActionCase.TimelockDelay, warpedTimestamp_);
+    }
+
+    // given an action has been queued
+    //  given the timelock has passed
+    //   given the timelock expiry has not been reached
+    //   [X] any caller can execute queueRemoveAsset
+    //   [X] any caller can execute queueUpdateAsset
+    //   [X] any caller can execute queueUpgradeSubmodule
+    //   [X] any caller can execute queueTimelockDelay
+
+    function test_executeQueuedAction_ready_givenQueueRemoveAsset_succeeds(
+        uint256 warpedTimestamp_,
+        address executor_
+    ) public {
+        _assertExecuteReadySucceeds(QueuedActionCase.RemoveAsset, warpedTimestamp_, executor_);
+    }
+
+    function test_executeQueuedAction_ready_givenQueueUpdateAsset_succeeds(
+        uint256 warpedTimestamp_,
+        address executor_
+    ) public {
+        _assertExecuteReadySucceeds(QueuedActionCase.UpdateAsset, warpedTimestamp_, executor_);
+    }
+
+    function test_executeQueuedAction_ready_givenQueueUpgradeSubmodule_succeeds(
+        uint256 warpedTimestamp_,
+        address executor_
+    ) public {
+        _assertExecuteReadySucceeds(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_, executor_);
+    }
+
+    function test_executeQueuedAction_ready_givenTimelockDelay_succeeds(
+        uint256 warpedTimestamp_,
+        address executor_
+    ) public {
+        _assertExecuteReadySucceeds(QueuedActionCase.TimelockDelay, warpedTimestamp_, executor_);
+    }
+
+    // given an action has been queued
+    //  given the action has expired
+    //   [X] queueRemoveAsset execution reverts for any timestamp after expiresAt
+    //   [X] queueUpdateAsset execution reverts for any timestamp after expiresAt
+    //   [X] queueUpgradeSubmodule execution reverts for any timestamp after expiresAt
+    //   [X] queueTimelockDelay execution reverts for any timestamp after expiresAt
+
+    function test_executeQueuedAction_afterExpiry_givenQueueRemoveAsset_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteAfterExpiryReverts(QueuedActionCase.RemoveAsset, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_afterExpiry_givenQueueUpdateAsset_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteAfterExpiryReverts(QueuedActionCase.UpdateAsset, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_afterExpiry_givenQueueUpgradeSubmodule_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteAfterExpiryReverts(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_);
+    }
+
+    function test_executeQueuedAction_afterExpiry_givenTimelockDelay_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteAfterExpiryReverts(QueuedActionCase.TimelockDelay, warpedTimestamp_);
+    }
+
+    // given an action has been queued
+    //  when the action has been cancelled
+    //   [X] queueRemoveAsset execution reverts
+    //   [X] queueUpdateAsset execution reverts
+    //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueTimelockDelay execution reverts
+
+    function test_executeQueuedAction_cancelled_givenQueueRemoveAsset_reverts() public {
+        _assertExecuteAfterCancelReverts(QueuedActionCase.RemoveAsset);
+    }
+
+    function test_executeQueuedAction_cancelled_givenQueueUpdateAsset_reverts() public {
+        _assertExecuteAfterCancelReverts(QueuedActionCase.UpdateAsset);
+    }
+
+    function test_executeQueuedAction_cancelled_givenQueueUpgradeSubmodule_reverts() public {
+        _assertExecuteAfterCancelReverts(QueuedActionCase.UpgradeSubmodule);
+    }
+
+    function test_executeQueuedAction_cancelled_givenTimelockDelay_reverts() public {
+        _assertExecuteAfterCancelReverts(QueuedActionCase.TimelockDelay);
+    }
+
+    // given an action has been queued
+    //  when the action has already been executed
+    //   [X] queueRemoveAsset execution reverts
+    //   [X] queueUpdateAsset execution reverts
+    //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueTimelockDelay execution reverts
+
+    function test_executeQueuedAction_executed_givenQueueRemoveAsset_reverts() public {
+        _assertExecuteAfterExecutedReverts(QueuedActionCase.RemoveAsset);
+    }
+
+    function test_executeQueuedAction_executed_givenQueueUpdateAsset_reverts() public {
+        _assertExecuteAfterExecutedReverts(QueuedActionCase.UpdateAsset);
+    }
+
+    function test_executeQueuedAction_executed_givenQueueUpgradeSubmodule_reverts() public {
+        _assertExecuteAfterExecutedReverts(QueuedActionCase.UpgradeSubmodule);
+    }
+
+    function test_executeQueuedAction_executed_givenTimelockDelay_reverts() public {
+        _assertExecuteAfterExecutedReverts(QueuedActionCase.TimelockDelay);
+    }
+
+    // given the contract is not enabled
+    //  when the action is ready
+    //   [X] queueRemoveAsset execution reverts
+    //   [X] queueUpdateAsset execution reverts
+    //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueTimelockDelay execution reverts
+
+    function test_executeQueuedAction_whenDisabled_givenQueueRemoveAsset_reverts() public {
+        _assertExecuteWhenDisabledReverts(QueuedActionCase.RemoveAsset);
+    }
+
+    function test_executeQueuedAction_whenDisabled_givenQueueUpdateAsset_reverts() public {
+        _assertExecuteWhenDisabledReverts(QueuedActionCase.UpdateAsset);
+    }
+
+    function test_executeQueuedAction_whenDisabled_givenQueueUpgradeSubmodule_reverts() public {
+        _assertExecuteWhenDisabledReverts(QueuedActionCase.UpgradeSubmodule);
+    }
+
+    function test_executeQueuedAction_whenDisabled_givenTimelockDelay_reverts() public {
+        _assertExecuteWhenDisabledReverts(QueuedActionCase.TimelockDelay);
+    }
+
+    // when the action ID does not exist
+    //  [X] executeQueuedAction reverts
+
+    function test_executeQueuedAction_givenActionIdDoesNotExist_reverts(uint256 actionId_) public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionNotFound.selector, actionId_)
+        );
+        priceConfig.executeQueuedAction(actionId_);
+    }
+
+    // given the contract is not enabled
+    //  [X] only emergency can cancel queueRemoveAsset
+    //  [X] only emergency can cancel queueUpdateAsset
+    //  [X] only emergency can cancel queueUpgradeSubmodule
+    //  [X] only emergency can cancel queueTimelockDelay
+
+    function test_cancelQueuedAction_whenDisabled_givenQueueRemoveAsset_onlyEmergency(
+        address caller_
+    ) public {
+        _assertCancelWhenDisabled(QueuedActionCase.RemoveAsset, caller_);
+    }
+
+    function test_cancelQueuedAction_whenDisabled_givenQueueUpdateAsset_onlyEmergency(
+        address caller_
+    ) public {
+        _assertCancelWhenDisabled(QueuedActionCase.UpdateAsset, caller_);
+    }
+
+    function test_cancelQueuedAction_whenDisabled_givenQueueUpgradeSubmodule_onlyEmergency(
+        address caller_
+    ) public {
+        _assertCancelWhenDisabled(QueuedActionCase.UpgradeSubmodule, caller_);
+    }
+
+    function test_cancelQueuedAction_whenDisabled_givenTimelockDelay_onlyEmergency(
+        address caller_
+    ) public {
+        _assertCancelWhenDisabled(QueuedActionCase.TimelockDelay, caller_);
+    }
+
+    // when execution reverts
+    //  [X] it leaves the action pending
+    //  [X] emergency can cancel the pending action
+
+    function test_executeQueuedAction_givenExecutionFails_canBeCancelled() public {
+        _addBaseAssets();
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: 0,
+            lastObservationTime: 0,
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = feeds[0];
+
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: 20e18,
+            toleranceBps: 0
+        });
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        _warpPastTimelockDelay();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_PriceFeedOutOfBounds.selector,
+                address(ohm),
+                0,
+                10e18,
+                20e18,
+                20e18
+            )
+        );
+        priceConfig.executeQueuedAction(actionId);
+
+        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        assertEq(action.executed, false, "Failed action should remain unexecuted");
+        assertEq(action.cancelled, false, "Failed action should not be cancelled");
+        assertGt(action.payload.length, 0, "Failed action payload should remain");
+
+        vm.prank(emergency);
+        priceConfig.cancelQueuedAction(actionId);
+
+        action = priceConfig.getQueuedAction(actionId);
+        assertEq(action.cancelled, true, "Failed action should be cancellable");
+        assertEq(action.payload.length, 0, "Cancelled action payload should be cleared");
+    }
+
+    // given the contract is enabled
+    //  given the caller is emergency
+    //   [X] cancellation succeeds
+    //  given the caller is not emergency
+    //   [X] cancellation reverts
+    //  when the action is cancelled
+    //   [X] later execution reverts
+
+    function test_cancelQueuedAction_onlyEmergency(address caller_) public {
+        _addBaseAssets();
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+
+        if (caller_ != emergency) {
+            vm.expectRevert(
+                abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ROLE_EMERGENCY)
+            );
+        }
+        vm.prank(caller_);
+        priceConfig.cancelQueuedAction(actionId);
+
+        if (caller_ != emergency) {
+            IPriceConfigv2.QueuedAction memory pendingAction = priceConfig.getQueuedAction(
+                actionId
+            );
+            assertEq(pendingAction.cancelled, false, "Non-emergency should not cancel action");
+
+            vm.prank(emergency);
+            priceConfig.cancelQueuedAction(actionId);
+        }
+
+        _warpPastTimelockDelay();
+        vm.expectRevert(
+            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionCancelled.selector, actionId)
+        );
+        priceConfig.executeQueuedAction(actionId);
+    }
+
     /* ========== PRICEv2 Submodule Installation/Upgrade ========== */
 
-    function test_installSubmodule_notEnabled_reverts() public givenDisabled {
+    function test_installSubmodule_givenDisabled_reverts() public givenDisabled {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -1076,7 +1965,7 @@ contract PriceConfigv2Test is Test {
         vm.prank(admin);
         priceConfig.installSubmodule(address(newStrategy));
 
-        // Confirm submodule was installed
+        // Confirm submodule was installed immediately
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(newStrategy));
     }
@@ -1093,12 +1982,27 @@ contract PriceConfigv2Test is Test {
         vm.prank(admin);
         priceConfig.installSubmodule(address(newStrategy));
 
-        // Confirm submodule was installed
+        // Confirm submodule was installed immediately
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_upgradeSubmodule_notEnabled_reverts() public givenDisabled {
+    // given the contract is not enabled
+    //  [X] it reverts
+    // given the caller is not admin nor price admin
+    //  [X] it reverts
+    // when no installed submodule has the keycode
+    //  [X] it reverts
+    // when replacement has the same address
+    //  [X] it reverts
+    // when replacement does not implement ISubmodule
+    //  [X] it reverts
+    // when replacement does not support ERC165
+    //  [X] it reverts
+    // [X] it queues the upgradeSubmodule action
+    // [X] the upgradeSubmodule action can be executed after the timelock
+
+    function test_queueUpgradeSubmodule_givenDisabled_reverts() public givenDisabled {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -1107,10 +2011,86 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(address(newChainlink));
+        priceConfig.queueUpgradeSubmodule(address(newChainlink));
     }
 
-    function test_upgradeSubmodule_unauthorizedUser_reverts(address user_) public {
+    function test_queueUpgradeSubmodule_queuesExpectedAction() public {
+        MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
+
+        bytes memory payload = abi.encode(address(newChainlink));
+        (
+            uint256 expectedActionId,
+            uint48 queuedAt,
+            uint48 executableAt,
+            uint48 expiresAt
+        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.UpgradeSubmodule, admin, payload);
+
+        vm.prank(admin);
+        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
+
+        _assertQueuedAction(
+            actionId,
+            expectedActionId,
+            IPriceConfigv2.TimelockAction.UpgradeSubmodule,
+            admin,
+            queuedAt,
+            executableAt,
+            expiresAt,
+            payload
+        );
+    }
+
+    function test_queueUpgradeSubmodule_givenNoInstalledSubmoduleForKeycode_reverts() public {
+        MockStrategy newStrategy = new MockStrategy(PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_InvalidSubmoduleUpgrade.selector,
+                newStrategy.SUBKEYCODE()
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueUpgradeSubmodule(address(newStrategy));
+    }
+
+    function test_queueUpgradeSubmodule_givenSameSubmoduleAddress_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_InvalidSubmoduleUpgrade.selector,
+                toSubKeycode("PRICE.CHAINLINK")
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueUpgradeSubmodule(address(chainlinkPrice));
+    }
+
+    function test_queueUpgradeSubmodule_givenInvalidSubmoduleInterface_reverts() public {
+        MockInvalidSubmodule invalidSubmodule = new MockInvalidSubmodule(PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_SubmoduleInterfaceNotImplemented.selector,
+                address(invalidSubmodule)
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueUpgradeSubmodule(address(invalidSubmodule));
+    }
+
+    function test_queueUpgradeSubmodule_givenSubmoduleWithoutERC165_reverts() public {
+        MockSubmoduleNoERC165 noERC165Submodule = new MockSubmoduleNoERC165(PRICE);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_SubmoduleInterfaceNotImplemented.selector,
+                address(noERC165Submodule)
+            )
+        );
+        vm.prank(admin);
+        priceConfig.queueUpgradeSubmodule(address(noERC165Submodule));
+    }
+
+    function test_queueUpgradeSubmodule_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Create mock upgrade for chainlink submodule
@@ -1123,11 +2103,11 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1);
         assertEq(minor, 0);
 
-        // Try to upgrade chainlink submodule with unauthorized account, expect revert
+        // Try to queue chainlink submodule upgrade with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
         vm.expectRevert(err);
         vm.prank(user_);
-        priceConfig.upgradeSubmodule(address(newChainlink));
+        priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -1136,11 +2116,20 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1);
         assertEq(minor, 0);
 
-        // Try to upgrade chainlink submodule with admin account, expect success
+        // Try to queue chainlink submodule upgrade with admin account, expect success
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(address(newChainlink));
+        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
-        // Confirm chainlink submodule was upgraded
+        // Confirm chainlink submodule is not upgraded until the timelock is executed
+        chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
+        assertEq(chainlink, address(chainlinkPrice));
+        (major, minor) = Submodule(chainlink).VERSION();
+        assertEq(major, 1);
+        assertEq(minor, 0);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm chainlink submodule was upgraded after execution
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
         assertEq(chainlink, address(newChainlink));
         (major, minor) = Submodule(chainlink).VERSION();
@@ -1148,7 +2137,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule() public {
+    function test_queueUpgradeSubmodule() public {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -1159,11 +2148,20 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1);
         assertEq(minor, 0);
 
-        // Upgrade chainlink submodule with admin account, expect success
+        // Queue chainlink submodule upgrade with admin account
         vm.prank(admin);
-        priceConfig.upgradeSubmodule(address(newChainlink));
+        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
-        // Confirm chainlink submodule was upgraded
+        // Confirm chainlink submodule is not upgraded until the timelock is executed
+        chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
+        assertEq(chainlink, address(chainlinkPrice));
+        (major, minor) = Submodule(chainlink).VERSION();
+        assertEq(major, 1);
+        assertEq(minor, 0);
+
+        _executeQueuedAction(actionId);
+
+        // Confirm chainlink submodule was upgraded after execution
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
         assertEq(chainlink, address(newChainlink));
         (major, minor) = Submodule(chainlink).VERSION();
@@ -1171,7 +2169,7 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_execOnSubmodule_notEnabled_reverts() public givenDisabled {
+    function test_execOnSubmodule_givenDisabled_reverts() public givenDisabled {
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
@@ -1194,22 +2192,21 @@ contract PriceConfigv2Test is Test {
     function test_execOnSubmodule(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
+        MockStrategy newStrategy = new MockStrategy(PRICE);
 
-        // Perform an action on the submodule
-        uint256[] memory samplePrices = new uint256[](1);
-        samplePrices[0] = 11e18;
+        vm.prank(admin);
+        priceConfig.installSubmodule(address(newStrategy));
+        SubKeycode newStrategyKeycode = newStrategy.SUBKEYCODE();
+
+        assertEq(newStrategy.storedValue(), 0, "Initial stored value");
 
         vm.prank(caller);
         priceConfig.execOnSubmodule(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            abi.encodeWithSelector(
-                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-                samplePrices,
-                bytes("")
-            )
+            newStrategyKeycode,
+            abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
         );
 
-        // No error
+        assertEq(newStrategy.storedValue(), 11, "Value should update immediately");
     }
 
     function test_execOnSubmodule_unauthorizedUser_reverts(address user_) public {
@@ -1235,7 +2232,7 @@ contract PriceConfigv2Test is Test {
 
     /* ========== PRICE STORAGE ========== */
 
-    function test_storePrice_notEnabled_reverts() public givenDisabled {
+    function test_storePrice_givenDisabled_reverts() public givenDisabled {
         _expectRevertNotEnabled();
 
         // Call function
@@ -1283,7 +2280,7 @@ contract PriceConfigv2Test is Test {
         assertEq(timestamp, block.timestamp, "Timestamp should match block timestamp");
     }
 
-    function test_storeObservations_notEnabled_reverts() public givenDisabled {
+    function test_storeObservations_givenDisabled_reverts() public givenDisabled {
         _expectRevertNotEnabled();
 
         // Call function

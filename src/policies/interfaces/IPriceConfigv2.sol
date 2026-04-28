@@ -8,6 +8,52 @@ import {SubKeycode} from "src/Submodules.sol";
 /// @notice     Interface for PriceConfigv2 policy
 /// @dev        Policy to configure PRICEv2
 interface IPriceConfigv2 {
+    // ========== EVENTS ========== //
+
+    /// @notice Emitted when a PRICE configuration action is queued
+    ///
+    /// @param actionId     The queued action ID
+    /// @param action       The type of action queued
+    /// @param proposer     The account that queued the action
+    /// @param payloadHash  Hash of the encoded action payload
+    /// @param executableAt Timestamp at which the action can first be executed
+    /// @param expiresAt    Timestamp after which the action can no longer be executed
+    event PriceConfigActionQueued(
+        uint256 indexed actionId,
+        TimelockAction indexed action,
+        address indexed proposer,
+        bytes32 payloadHash,
+        uint48 executableAt,
+        uint48 expiresAt
+    );
+
+    /// @notice Emitted when a queued PRICE configuration action is executed
+    ///
+    /// @param actionId The queued action ID
+    /// @param action   The type of action executed
+    /// @param executor The account that executed the action
+    event PriceConfigActionExecuted(
+        uint256 indexed actionId,
+        TimelockAction indexed action,
+        address indexed executor
+    );
+
+    /// @notice Emitted when a queued PRICE configuration action is cancelled
+    ///
+    /// @param actionId  The queued action ID
+    /// @param action    The type of action cancelled
+    /// @param canceller The account that cancelled the action
+    event PriceConfigActionCancelled(
+        uint256 indexed actionId,
+        TimelockAction indexed action,
+        address indexed canceller
+    );
+
+    /// @notice Emitted when the configuration timelock delay is changed
+    ///
+    /// @param delay The new timelock delay in seconds
+    event TimelockDelaySet(uint48 delay);
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when module does not support interface
@@ -61,6 +107,40 @@ interface IPriceConfigv2 {
         uint256 upperBound_
     );
 
+    /// @notice Thrown when a queued action does not exist
+    ///
+    /// @param actionId The queued action ID
+    error IPriceConfigv2_ActionNotFound(uint256 actionId);
+
+    /// @notice Thrown when a queued action has already been executed
+    ///
+    /// @param actionId The queued action ID
+    error IPriceConfigv2_ActionAlreadyExecuted(uint256 actionId);
+
+    /// @notice Thrown when a queued action has been cancelled
+    ///
+    /// @param actionId The queued action ID
+    error IPriceConfigv2_ActionCancelled(uint256 actionId);
+
+    /// @notice Thrown when a queued action is executed before its timelock has elapsed
+    ///
+    /// @param actionId     The queued action ID
+    /// @param executableAt Timestamp at which the action can first be executed
+    error IPriceConfigv2_ActionNotReady(uint256 actionId, uint48 executableAt);
+
+    /// @notice Thrown when a queued action is executed after its execution window
+    ///
+    /// @param actionId  The queued action ID
+    /// @param expiresAt Timestamp after which the action can no longer be executed
+    error IPriceConfigv2_ActionExpired(uint256 actionId, uint48 expiresAt);
+
+    /// @notice Thrown when a proposed timelock delay is outside the accepted range
+    ///
+    /// @param delay   The proposed delay
+    /// @param minimum The minimum accepted delay
+    /// @param maximum The maximum accepted delay
+    error IPriceConfigv2_TimelockDelayInvalid(uint48 delay, uint48 minimum, uint48 maximum);
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice                     Expected price and tolerance for a configured feed
@@ -74,6 +154,64 @@ interface IPriceConfigv2 {
         uint256 expectedPrice;
         uint16 toleranceBps;
     }
+
+    /// @notice Queued timelock action type
+    enum TimelockAction {
+        UpdateAsset,
+        RemoveAsset,
+        UpgradeSubmodule,
+        SetTimelockDelay
+    }
+
+    /// @notice Queued PRICE configuration action
+    ///
+    /// @param action       The type of action queued
+    /// @param proposer     The account that queued the action
+    /// @param queuedAt     Timestamp at which the action was queued
+    /// @param executableAt Timestamp at which the action can first be executed
+    /// @param expiresAt    Timestamp after which the action can no longer be executed
+    /// @param executed     Whether the action has been executed
+    /// @param cancelled    Whether the action has been cancelled
+    /// @param payload      Encoded parameters for the action
+    struct QueuedAction {
+        TimelockAction action;
+        address proposer;
+        uint48 queuedAt;
+        uint48 executableAt;
+        uint48 expiresAt;
+        bool executed;
+        bool cancelled;
+        bytes payload;
+    }
+
+    // ========================= //
+    // TIMELOCK MANAGEMENT       //
+    // ========================= //
+
+    /// @notice Execute a queued PRICE configuration action
+    /// @dev    Deliberately permissionless; the timelock and emergency cancellation are the authorization boundaries.
+    ///
+    /// @param  actionId_ The queued action ID
+    function executeQueuedAction(uint256 actionId_) external;
+
+    /// @notice Cancel a queued PRICE configuration action
+    /// @dev    Intended to be callable only by an independent emergency role.
+    ///
+    /// @param  actionId_ The queued action ID
+    function cancelQueuedAction(uint256 actionId_) external;
+
+    /// @notice Queue a timelocked change to the timelock delay
+    /// @dev    The delay update is not applied until the queued action is executed. Intended to be callable only by `admin`.
+    ///
+    /// @param  delay_    The new timelock delay in seconds
+    /// @return actionId_ The queued action ID
+    function queueTimelockDelay(uint48 delay_) external returns (uint256 actionId_);
+
+    /// @notice Get a queued PRICE configuration action
+    ///
+    /// @param  actionId_ The queued action ID
+    /// @return action_   The queued action
+    function getQueuedAction(uint256 actionId_) external view returns (QueuedAction memory action_);
 
     // ========================= //
     // PRICE MANAGEMENT          //
@@ -103,24 +241,26 @@ interface IPriceConfigv2 {
         PriceFeedExpectation[] memory feedExpectations_
     ) external;
 
-    /// @notice Remove an asset from the PRICE module
-    /// @dev    After removal, calls to PRICEv2 for the asset's price will revert
+    /// @notice Queue removal of an asset from the PRICE module
+    /// @dev    After execution, calls to PRICEv2 for the asset's price will revert.
     ///
-    /// @param  asset_  The address of the asset to remove
-    function removeAssetPrice(address asset_) external;
+    /// @param  asset_    The address of the asset to remove
+    /// @return actionId_ The queued action ID
+    function queueRemoveAsset(address asset_) external returns (uint256 actionId_);
 
-    /// @notice Update an asset configuration atomically
-    /// @dev    Only updates components flagged in params_
+    /// @notice Queue an atomic asset configuration update
+    /// @dev    Only updates components flagged in params_ after the queued action is executed.
     /// @dev    See PRICEv2 for more details on the UpdateAssetParams struct
     ///
     /// @param  asset_            The address of the asset to update
     /// @param  params_           Update parameters with flags indicating which components to update
     /// @param  feedExpectations_ Expected price and tolerance for each feed when `params_.updateFeeds` is true. Must be empty otherwise.
-    function updateAsset(
+    /// @return actionId_         The queued action ID
+    function queueUpdateAsset(
         address asset_,
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
-    ) external;
+    ) external returns (uint256 actionId_);
 
     /// @notice Store a price observation for an asset
     /// @dev    Calls PRICE.storeObservation(asset_) to calculate and store current price
@@ -141,11 +281,12 @@ interface IPriceConfigv2 {
     /// @param  submodule_  The address of the submodule to install
     function installSubmodule(address submodule_) external;
 
-    /// @notice Upgrade a submodule on the PRICE module
-    /// @dev    The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing, otherwise use installSubmodule
+    /// @notice Queue an upgrade of a submodule on the PRICE module
+    /// @dev    The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing, otherwise use installSubmodule.
     ///
     /// @param  submodule_  The address of the submodule to upgrade to
-    function upgradeSubmodule(address submodule_) external;
+    /// @return actionId_   The queued action ID
+    function queueUpgradeSubmodule(address submodule_) external returns (uint256 actionId_);
 
     /// @notice Perform an action on a submodule
     /// @dev    This function reverts if:
