@@ -16,7 +16,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
     ///      changes or sweep-loop logic changes.
     uint256 internal constant _GAS_UPPER_BOUND = 500_000;
 
-    function test_execute_gas_sweep_singleCreator_skipOnCoverage() external {
+    function test_execute_gas_sweep_singleCreator() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
         assertGt(limit, 0, "HEART_SWEEP_LIMIT must be > 0 for benchmark");
 
@@ -41,7 +41,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
         assertLt(g.gasTotalUsed, _GAS_UPPER_BOUND, "execute() gas should remain within bound");
     }
 
-    function test_execute_gas_sweep_distinctCreators_skipOnCoverage() external {
+    function test_execute_gas_sweep_distinctCreators() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
         assertGt(limit, 0, "HEART_SWEEP_LIMIT must be > 0 for benchmark");
 
@@ -75,7 +75,7 @@ contract ConvertibleOHMTellerExecuteGasBenchmark is ConvertibleOHMTellerTestBase
         assertLt(g.gasTotalUsed, _GAS_UPPER_BOUND, "execute() gas should remain within bound");
     }
 
-    function test_execute_gas_skipNotExpired_skipOnCoverage() external {
+    function test_execute_gas_skipNotExpired() external {
         uint256 limit = teller.HEART_SWEEP_LIMIT();
 
         for (uint256 i; i < limit; ++i) {
