@@ -844,7 +844,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
 
         if (params_.updateStrategy) {
-            _updateAssetPriceStrategy(asset_, params_.strategy, params_.useMovingAverage);
+            _updateAssetPriceStrategy(asset_, params_.strategy, finalUseMA);
         }
 
         if (params_.updateMovingAverage) {
