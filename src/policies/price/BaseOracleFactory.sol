@@ -42,6 +42,16 @@ abstract contract BaseOracleFactory is
     mapping(address baseToken => mapping(address quoteToken => mapping(uint48 maxAge => address oracle)))
         internal _tokensToOracle;
 
+    /// @notice Mapping from an ordered base/quote pair to the number of deployed oracle variants
+    /// @dev    Updated when oracles are created. Factory-level re-enable uses this count to reject
+    ///         unknown pairs before checking whether any deployed variant is enabled.
+    mapping(bytes32 pairKey => uint256 variantCount) internal _oraclePairVariantCounts;
+
+    /// @notice Mapping from an ordered base/quote pair to the number of enabled oracle variants
+    /// @dev    Updated when oracles are created, enabled, or disabled. Factory-level re-enable
+    ///         recaching uses this count to skip pairs that currently have no enabled oracle.
+    mapping(bytes32 pairKey => uint256 variantCount) internal _enabledOraclePairVariantCounts;
+
     /// @notice Internal array of all deployed oracles
     address[] internal _oracles;
 
@@ -110,6 +120,16 @@ abstract contract BaseOracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this)) revert OracleFactory_PolicyNotActive();
+    }
+
     /// @notice Checks if the caller has the oracle_manager or admin role
     function _onlyOracleManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
@@ -166,12 +186,14 @@ abstract contract BaseOracleFactory is
     // ========== FACTORY FUNCTIONS ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Creates an enabled oracle only after the initial cache write succeeds.
+    ///
     /// @dev        Reverts if:
     ///             - The factory is disabled
     ///             - The caller is not admin or oracle manager
     ///             - Oracle creation is disabled
     ///             - An oracle for `(baseToken_, quoteToken_, maxAge_)` already exists
-    ///             - Either token is invalid or both tokens are the same
+    ///             - Either token is the zero address or both tokens are the same
     ///             - Service-specific validation in `_encodeOracleData` fails
     ///             - Initial cache population fails in the configured price cache policy
     function createOracle(
@@ -198,12 +220,12 @@ abstract contract BaseOracleFactory is
         }
 
         // Validate base token
-        if (baseToken_ == address(0) || baseToken_.code.length == 0) {
+        if (baseToken_ == address(0)) {
             revert OracleFactory_InvalidToken(baseToken_);
         }
 
         // Validate quote token
-        if (quoteToken_ == address(0) || quoteToken_.code.length == 0) {
+        if (quoteToken_ == address(0)) {
             revert OracleFactory_InvalidToken(quoteToken_);
         }
 
@@ -233,10 +255,15 @@ abstract contract BaseOracleFactory is
         _oracleToBaseToken[oracle] = baseToken_;
         _oracleToQuoteToken[oracle] = quoteToken_;
         _oracleToMaxAge[oracle] = maxAge_;
-        _isOracleEnabled[oracle] = true;
 
         // This will revert if the assets are not approved
         _cacheOraclePrices(oracle);
+
+        bytes32 pairKey = _oraclePairKey(baseToken_, quoteToken_);
+
+        _isOracleEnabled[oracle] = true;
+        ++_oraclePairVariantCounts[pairKey];
+        ++_enabledOraclePairVariantCounts[pairKey];
 
         // Emit events
         // Note: New oracles are enabled by default, so we emit OracleEnabled event
@@ -323,6 +350,8 @@ abstract contract BaseOracleFactory is
     // ========== ORACLE STATE ========== //
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Refreshes the oracle pair cache if stale before marking the oracle enabled.
+    ///
     /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
@@ -334,12 +363,19 @@ abstract contract BaseOracleFactory is
         if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
         if (_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyEnabled(oracle_);
 
-        _isOracleEnabled[oracle_] = true;
         _cachePriceIfNecessary(oracle_, _oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_]);
+
+        _isOracleEnabled[oracle_] = true;
+        ++_enabledOraclePairVariantCounts[
+            _oraclePairKey(_oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_])
+        ];
         emit OracleEnabled(oracle_);
     }
 
     /// @inheritdoc IOracleFactory
+    /// @dev        Decrements the enabled variant count for the oracle pair so factory-level
+    ///             re-enable skips the pair when no enabled variants remain.
+    ///
     /// @dev        Reverts if:
     ///             - The caller does not have the required role
     ///             - The contract is disabled
@@ -352,16 +388,23 @@ abstract contract BaseOracleFactory is
         if (!_isOracleEnabled[oracle_]) revert OracleFactory_OracleAlreadyDisabled(oracle_);
 
         _isOracleEnabled[oracle_] = false;
+        --_enabledOraclePairVariantCounts[
+            _oraclePairKey(_oracleToBaseToken[oracle_], _oracleToQuoteToken[oracle_])
+        ];
         emit OracleDisabled(oracle_);
     }
 
     /// @inheritdoc IOracleFactory
-    /// @dev        Does not revert.
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///
     ///             Determines if a given oracle is enabled, using the following logic:
     ///             - Factory must be enabled
     ///             - Oracle must be created by the factory
     ///             - Oracle must be enabled
-    function isOracleEnabled(address oracle_) external view override returns (bool) {
+    function isOracleEnabled(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool) {
         return
             isEnabled && // Factory enabled
             isOracle[oracle_] && // Oracle exists
@@ -370,6 +413,20 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - `oracle_` was not created by this factory
+    function getOracleContext(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled, address policy) {
+        if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
+
+        enabled = isEnabled && _isOracleEnabled[oracle_];
+        policy = address(priceCache);
+    }
+
+    /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -378,7 +435,7 @@ abstract contract BaseOracleFactory is
     function cachePrice(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         priceCache.cachePrice(baseToken_, quoteToken_);
@@ -386,6 +443,7 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -394,7 +452,7 @@ abstract contract BaseOracleFactory is
     function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);
@@ -421,6 +479,71 @@ abstract contract BaseOracleFactory is
         // This avoids any drift between caller-provided values and configured oracle policy.
         uint48 maxAge_ = configuredMaxAge;
         priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
+    }
+
+    /// @inheritdoc PolicyEnabler
+    /// @dev        `_enable` optionally re-caches caller-specified direct pairs from `enableData_`
+    ///             before the factory-level `isEnabled` flag flips back to true. `enableData_` can
+    ///             be empty for a no-op. Pairs with deployed variants are recached only when at
+    ///             least one variant is currently enabled; disabled oracles validate and refresh
+    ///             their own pair cache when individually re-enabled.
+    ///
+    ///             When `enableData_` is non-empty, it must encode:
+    ///             `(address[] baseTokens, address[] quoteTokens)`.
+    ///
+    ///             Reverts if `enableData_` is non-empty and:
+    ///             - `enableData_` cannot be decoded into `(address[] baseTokens, address[] quoteTokens)`
+    ///             - The decoded base and quote token arrays have different lengths
+    ///             - A requested pair has no deployed oracle variant for that exact ordering
+    ///             - The price cache rejects a requested pair that has an enabled oracle variant
+    function _enable(bytes calldata enableData_) internal virtual override {
+        if (enableData_.length == 0) return;
+
+        (address[] memory baseTokens, address[] memory quoteTokens) = abi.decode(
+            enableData_,
+            (address[], address[])
+        );
+        uint256 pairCount = baseTokens.length;
+        if (pairCount != quoteTokens.length) {
+            revert OracleFactory_InvalidEnableData(pairCount, quoteTokens.length);
+        }
+
+        for (uint256 i; i < pairCount; ) {
+            address baseToken = baseTokens[i];
+            address quoteToken = quoteTokens[i];
+            bytes32 pairKey = _oraclePairKey(baseToken, quoteToken);
+
+            if (!_hasOracleVariant(pairKey)) {
+                revert OracleFactory_InvalidTokenPair(baseToken, quoteToken);
+            }
+
+            if (_hasEnabledOracleVariant(pairKey)) {
+                priceCache.cachePrice(baseToken, quoteToken);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @notice Returns whether the factory has a deployed oracle for the provided pair.
+    function _hasOracleVariant(bytes32 pairKey_) internal view returns (bool) {
+        return _oraclePairVariantCounts[pairKey_] != 0;
+    }
+
+    /// @notice Returns whether the factory has an enabled oracle for the provided pair.
+    function _hasEnabledOracleVariant(bytes32 pairKey_) internal view returns (bool) {
+        return _enabledOraclePairVariantCounts[pairKey_] != 0;
+    }
+
+    /// @notice Returns the storage key for an ordered oracle base/quote pair.
+    function _oraclePairKey(
+        address baseToken_,
+        address quoteToken_
+    ) internal pure returns (bytes32) {
+        /// forge-lint: disable-next-line(asm-keccak256)
+        return keccak256(abi.encodePacked(baseToken_, quoteToken_));
     }
 
     function _setPriceCache(address policy_) internal {

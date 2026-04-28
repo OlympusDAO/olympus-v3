@@ -2,8 +2,11 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneableTest {
@@ -16,6 +19,13 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NotEnabled.selector);
 
+        oracle.latestRoundData();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.latestRoundData();
     }
 
@@ -46,10 +56,35 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertEq(answer, 2e18, "Should return cached round");
     }
 
+    // when cached ratio rounds down to zero
+    //  [X] it reverts with ChainlinkOracle_NoDataPresent
+
+    function test_whenCachedRatioRoundsDownToZero_reverts() public {
+        _setPRICEPrices(address(baseToken), 1);
+        _setPRICEPrices(address(quoteToken), 1e36);
+        _storePrices();
+
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NoDataPresent.selector);
+        oracle.latestRoundData();
+    }
+
+    // when cached pair price exceeds int256
+    //  [X] it reverts via SafeCast.toInt256 overflow guard
+
+    function test_whenCachedPairPriceExceedsInt256_reverts() public {
+        uint256 overflowPrice = uint256(type(int256).max) + 1;
+        _setPRICEPrices(address(baseToken), overflowPrice);
+        _setPRICEPrices(address(quoteToken), QUOTE_PRICE);
+        _storePrices();
+
+        vm.expectRevert(bytes("SafeCast: value doesn't fit in an int256"));
+        oracle.latestRoundData();
+    }
+
     // when oracle is enabled
     //  [X] it returns correct round data
     //  [X] it returns correct price calculation
-    //  [X] it returns timestamp as round ID
+    //  [X] it returns cached pair round ID
     //  [X] it returns stored price (not live price)
 
     function test_whenOracleIsEnabled_returnsCorrectRoundData() public givenPricesAreStored warp {
@@ -71,7 +106,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Verify answer is correct
         /// forge-lint: disable-next-line(unsafe-typecast)
@@ -99,6 +134,40 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             AggregatorV2V3Interface(address(oracle)).latestRound(),
             uint256(roundId),
             "latestRound should return correct round ID"
+        );
+    }
+
+    // when base/quote decimals are highly mismatched (0 vs 18)
+    //  [X] it still returns the correctly scaled non-zero answer for a 1:3 ratio
+    function test_whenBaseIsZeroDecimalsAndQuoteIsEighteenDecimals_givenOneToThreeRatio_returnsNonZeroAnswer()
+        public
+    {
+        MockERC20 zeroDecBase = new MockERC20("Zero Dec Base", "ZBASE", 0);
+        MockERC20 eighteenDecQuote = new MockERC20("Eighteen Dec Quote", "EQUOTE", 18);
+
+        _setPRICEPrices(address(zeroDecBase), 1e18);
+        _setPRICEPrices(address(eighteenDecQuote), 3e18);
+
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(zeroDecBase),
+            address(eighteenDecQuote),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // Cache direct pair snapshot consumed by cloneable oracle.
+        priceCache.cachePrice(address(zeroDecBase), address(eighteenDecQuote));
+
+        // Expected answer: (1e18 * 1e18) / 3e18 = 333333333333333333
+        uint256 expectedAnswer = 333333333333333333;
+
+        (, int256 answer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(
+            answer,
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            int256(expectedAnswer),
+            "Should return non-zero scaled answer with 0/18 token decimals"
         );
     }
 
@@ -182,7 +251,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         // Get new round data
         (uint80 newRoundId, int256 newAnswer, , uint256 updatedAt, ) = oracle.latestRoundData();
 
-        assertEq(newRoundId, lastStoredTimestamp, "Round ID should match pair timestamp");
+        assertEq(newRoundId, lastStoredRoundId, "Round ID should match pair round");
 
         // Price calculation should use original decimals
         // Cache policy returns prices in new decimals (9), but oracle should scale to original (18)
@@ -297,7 +366,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,
@@ -328,7 +397,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
             uint80 answeredInRound
         ) = oracle.latestRoundData();
 
-        assertEq(roundId, lastStoredTimestamp, "Round ID should remain the cached pair timestamp");
+        assertEq(roundId, lastStoredRoundId, "Round ID should remain the cached pair round");
         assertEq(answer, 2e18, "Answer should remain the cached pair price");
         assertEq(
             startedAt,

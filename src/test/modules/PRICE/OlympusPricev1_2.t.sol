@@ -31,6 +31,8 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 contract OlympusPricev1_2Test is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
 
+    address internal constant UNIT_OF_ACCOUNT = address(840); // 840 = USD (ISO-4217)
+
     // Mock contracts
     MockERC20 internal ohm;
     MockERC20 internal reserveA;
@@ -378,6 +380,16 @@ contract OlympusPricev1_2Test is Test {
 
         // Verify decimals returns 18
         assertEq(price.decimals(), 18, "Decimals should return 18");
+
+        // Verify unit of account is set correctly
+        assertEq(price.unitOfAccount(), UNIT_OF_ACCOUNT, "Unit of account should be set correctly");
+
+        // Verify unit of account is registered as a non-contract asset
+        assertEq(
+            price.isNonContractAsset(UNIT_OF_ACCOUNT),
+            true,
+            "Unit of account should be registered"
+        );
 
         // Verify event is emitted on deployment
         Kernel testKernel = new Kernel();
@@ -812,6 +824,7 @@ contract OlympusPricev1_2Test is Test {
     {
         IPRICEv2.Asset memory reserveADataBefore = price.getAssetData(address(reserveA));
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriterV1_2);
         price.updateMovingAverage();
 

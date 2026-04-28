@@ -15,6 +15,13 @@ contract PriceCacheCachePriceIfNecessaryTest is PriceCacheTest {
         cache.cachePriceIfNecessary(address(assetToken), address(quoteToken), 1 hours);
     }
 
+    function test_whenPolicyIsDeactivated_reverts() public {
+        _deactivateCachePolicy();
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        cache.cachePriceIfNecessary(address(assetToken), address(quoteToken), 1 hours);
+    }
+
     function test_whenNoSnapshotExists_cachesPair() public {
         cache.cachePriceIfNecessary(address(assetToken), address(quoteToken), 1 hours);
 

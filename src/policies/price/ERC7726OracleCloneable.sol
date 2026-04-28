@@ -9,7 +9,6 @@ import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726Oracl
 import {IERC7726OraclePriceCache} from "src/policies/interfaces/price/IERC7726OraclePriceCache.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 
 // Libraries
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
@@ -46,21 +45,33 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x1C))));
     }
 
-    function _checkEnabled() internal view {
-        if (!factory().isOracleEnabled(address(this))) {
+    /// @notice Returns the enabled price cache policy for this oracle.
+    /// @dev    Calls `factory().getOracleContext(address(this))` to read the enabled state and
+    ///         price cache address for the current contract. Reverts with `ERC7726Oracle_NotEnabled()`
+    ///         when the returned enabled flag is false. Assumes the factory returns a valid
+    ///         `IPriceCache` address.
+    ///
+    /// @return priceCache_ The enabled price cache policy for this oracle.
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled) {
             revert ERC7726Oracle_NotEnabled();
         }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
     }
 
     /// @inheritdoc IPriceOracle
     /// @dev        Uses cached pair snapshots only.
     ///
     ///             Reverts if:
-    ///             - The oracle is disabled in the factory
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The `IPriceCache.getCachedPrice()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
-    ///             - Either token does not implement `decimals()`
+    ///             - The price cache cannot resolve amount decimals for either asset
     ///
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
     ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
@@ -77,9 +88,8 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
         address base_,
         address quote_
     ) internal view returns (uint256 outAmount_) {
-        _checkEnabled();
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
-            .getCachedPrice(base_, quote_);
+        IPriceCache priceCache = _getEnabledPriceCache();
+        IPriceCache.CachedPrice memory cachedPrice = priceCache.getCachedPrice(base_, quote_);
         uint48 pairTimestamp = cachedPrice.updatedAt;
 
         // Check for staleness
@@ -92,20 +102,24 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
             revert ERC7726Oracle_Stale(pairTimestamp, maxAge_);
         }
 
-        outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, cachedPrice.quotePriceUsd).mulDiv(
-            10 ** IERC20(quote_).decimals(),
-            10 ** IERC20(base_).decimals()
+        uint256 quoteTokenScale = 10 ** priceCache.assetDecimals(quote_);
+        uint256 baseTokenScale = 10 ** priceCache.assetDecimals(base_);
+
+        outAmount_ = inAmount_.mulDiv(cachedPrice.assetPriceUsd, baseTokenScale).mulDiv(
+            quoteTokenScale,
+            cachedPrice.quotePriceUsd
         );
     }
 
     /// @inheritdoc IPriceOracle
     /// @dev        Returns symmetric bid/ask using the same quote value.
     ///             Reverts if:
-    ///             - The oracle is disabled in the factory
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - The shared cached timestamp is stale
     ///             - Base/quote cached prices are zero
-    ///             - Either token does not implement `decimals()`
+    ///             - The price cache cannot resolve amount decimals for either asset
     function getQuotes(
         uint256 inAmount,
         address base,
@@ -144,17 +158,26 @@ contract ERC7726OracleCloneable is IERC7726Oracle, IERC7726OraclePriceCache, Clo
     }
 
     /// @inheritdoc IERC7726Oracle
-    /// @dev        Reverts if the active cache policy rejects `(base, quote)`.
+    /// @dev        Reverts if:
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The `IPriceCache.isStale()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
+    ///             - The active cache policy rejects `(base, quote)`
     function isStale(address base, address quote) external view override returns (bool) {
-        return IPriceCache(factory().getPriceCache()).isStale(base, quote, maxAge());
+        return _getEnabledPriceCache().isStale(base, quote, maxAge());
     }
 
     /// @inheritdoc IERC7726Oracle
     /// @dev        Returns 0 if the pair price has not been cached.
-    ///             Reverts if the active cache policy rejects `(base, quote)`.
+    ///             Reverts if:
+    ///             - The oracle is disabled in the factory or the factory is deactivated in Kernel
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
+    ///             - The active cache policy rejects `(base, quote)`
     function timestamp(address base, address quote) external view override returns (uint48) {
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory().getPriceCache())
-            .getCachedPrice(base, quote);
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            base,
+            quote
+        );
         return cachedPrice.updatedAt;
     }
 

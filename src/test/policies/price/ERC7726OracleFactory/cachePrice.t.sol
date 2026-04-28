@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
+import {Actions} from "src/Kernel.sol";
 import {ERC7726OracleCloneable} from "src/policies/price/ERC7726OracleCloneable.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -186,6 +187,34 @@ contract ERC7726OracleFactoryCachePriceTest is ERC7726OracleFactoryTest {
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         clone.cachePrice(address(baseToken), address(quoteToken));
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_cachePriceReverts()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
+
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive.selector);
+        clone.cachePrice(address(baseToken), address(quoteToken));
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_cachePriceIfNecessaryReverts()
+        public
+        givenFactoryIsEnabled
+        givenOracleIsCreated
+    {
+        address oracle = factory.getOracle(DEFAULT_MAX_AGE);
+        ERC7726OracleCloneable clone = ERC7726OracleCloneable(oracle);
+
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive.selector);
+        clone.cachePriceIfNecessary(address(baseToken), address(quoteToken));
     }
 
     function test_whenCallerIsNotFactoryOracle_cachePricesReverts() public givenFactoryIsEnabled {
