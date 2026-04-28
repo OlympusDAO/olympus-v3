@@ -2,6 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
+import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 
 contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
@@ -54,6 +58,25 @@ contract MorphoOracleCloneableTimestampTest is MorphoOracleCloneableTest {
         oracle.timestamp();
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenPriceCachePolicyIsDeactivated_reverts() public {
+        priceCache.setPolicyActive(false);
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        oracle.timestamp();
+    }
+
+    function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
+        vm.expectRevert(IMorphoOracle.MorphoOracle_NotEnabled.selector);
+        oracle.timestamp();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        oracle.timestamp();
     }
 
     function test_givenLoanTokenRemovedFromPRICE_reverts() public {

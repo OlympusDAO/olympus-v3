@@ -67,6 +67,10 @@ abstract contract PriceCacheTest is Test {
         cache.cachePrice(address(assetToken), address(quoteToken));
     }
 
+    function _deactivateCachePolicy() internal {
+        kernel.executeAction(Actions.DeactivatePolicy, address(cache));
+    }
+
     function _unitOfAccount() internal view returns (address) {
         return priceModule.unitOfAccount();
     }

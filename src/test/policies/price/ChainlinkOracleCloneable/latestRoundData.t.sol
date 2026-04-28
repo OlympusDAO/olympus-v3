@@ -2,8 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {Actions} from "src/Kernel.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
@@ -17,6 +19,13 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
         vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NotEnabled.selector);
 
+        oracle.latestRoundData();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
         oracle.latestRoundData();
     }
 

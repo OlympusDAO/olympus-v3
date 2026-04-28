@@ -3,7 +3,9 @@
 pragma solidity >=0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
 import {ChainlinkOracleCloneable} from "src/policies/price/ChainlinkOracleCloneable.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleCloneableTest {
@@ -79,6 +81,13 @@ contract ChainlinkOracleCloneableCachePriceIfNecessaryTest is ChainlinkOracleClo
             initialCacheCalls + 3,
             "maxAge=0 should recache pair"
         );
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        ChainlinkOracleCloneable(address(oracle)).cachePriceIfNecessary();
     }
 
     function test_whenOnlyBaseUsdCacheChanges_cachePriceIfNecessaryDoesNotRecachePair() public {

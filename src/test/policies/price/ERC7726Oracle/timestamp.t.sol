@@ -2,8 +2,11 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
+import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
+import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 
 contract ERC7726OracleTimestampTest is ERC7726OracleTest {
     // given the pair has a consistent cached timestamp
@@ -71,6 +74,28 @@ contract ERC7726OracleTimestampTest is ERC7726OracleTest {
             expectedTimestamp,
             "Timestamp should remain the cached pair timestamp"
         );
+    }
+
+    function test_whenPriceCachePolicyIsDeactivated_reverts() public {
+        priceCache.setPolicyActive(false);
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        oracle.timestamp(address(collateralToken), address(loanToken));
+    }
+
+    function test_whenFactoryIsDisabled_reverts() public {
+        vm.prank(admin);
+        factory.disable("");
+
+        vm.expectRevert(IERC7726Oracle.ERC7726Oracle_NotEnabled.selector);
+        oracle.timestamp(address(collateralToken), address(loanToken));
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive.selector);
+        oracle.timestamp(address(collateralToken), address(loanToken));
     }
 
     // given the base asset is not approved

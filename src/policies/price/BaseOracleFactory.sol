@@ -120,6 +120,16 @@ abstract contract BaseOracleFactory is
 
     // ========== ACCESS CONTROL ========== //
 
+    /// @notice Reverts if this policy is not active in the Kernel.
+    modifier onlyPolicyActive() {
+        _onlyPolicyActive();
+        _;
+    }
+
+    function _onlyPolicyActive() internal view {
+        if (!kernel.isPolicyActive(this)) revert OracleFactory_PolicyNotActive();
+    }
+
     /// @notice Checks if the caller has the oracle_manager or admin role
     function _onlyOracleManagerOrAdminRole() internal view {
         if (!ROLES.hasRole(msg.sender, ORACLE_MANAGER_ROLE) && !_isAdmin(msg.sender)) {
@@ -385,12 +395,16 @@ abstract contract BaseOracleFactory is
     }
 
     /// @inheritdoc IOracleFactory
-    /// @dev        Does not revert.
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///
     ///             Determines if a given oracle is enabled, using the following logic:
     ///             - Factory must be enabled
     ///             - Oracle must be created by the factory
     ///             - Oracle must be enabled
-    function isOracleEnabled(address oracle_) external view override returns (bool) {
+    function isOracleEnabled(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool) {
         return
             isEnabled && // Factory enabled
             isOracle[oracle_] && // Oracle exists
@@ -399,6 +413,20 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
+    ///             - `oracle_` was not created by this factory
+    function getOracleContext(
+        address oracle_
+    ) external view override onlyPolicyActive returns (bool enabled, address policy) {
+        if (!isOracle[oracle_]) revert OracleFactory_InvalidOracle(oracle_);
+
+        enabled = isEnabled && _isOracleEnabled[oracle_];
+        policy = address(priceCache);
+    }
+
+    /// @inheritdoc IOracleFactory
+    /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -407,7 +435,7 @@ abstract contract BaseOracleFactory is
     function cachePrice(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         priceCache.cachePrice(baseToken_, quoteToken_);
@@ -415,6 +443,7 @@ abstract contract BaseOracleFactory is
 
     /// @inheritdoc IOracleFactory
     /// @dev        Reverts if:
+    ///             - The policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - The caller is not a factory-created oracle
     ///             - The caller oracle is disabled
@@ -423,7 +452,7 @@ abstract contract BaseOracleFactory is
     function cachePriceIfNecessary(
         address baseToken_,
         address quoteToken_
-    ) external override onlyEnabled nonReentrant {
+    ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         _validateCachingPair(msg.sender, baseToken_, quoteToken_);
         _cachePriceIfNecessary(msg.sender, baseToken_, quoteToken_);

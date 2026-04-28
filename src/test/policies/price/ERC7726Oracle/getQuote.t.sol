@@ -3,10 +3,12 @@
 pragma solidity >=0.8.15;
 
 // Test
+import {Actions} from "src/Kernel.sol";
 import {ERC7726OracleTest} from "./ERC7726OracleTest.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 
 contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
     // ========== TESTS ========== //
@@ -19,6 +21,13 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
 
         vm.expectRevert(IERC7726Oracle.ERC7726Oracle_NotEnabled.selector);
 
+        oracle.getQuote(1e18, address(collateralToken), address(loanToken));
+    }
+
+    function test_givenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IERC7726OracleFactory.ERC7726OracleFactory_PolicyNotActive.selector);
         oracle.getQuote(1e18, address(collateralToken), address(loanToken));
     }
 

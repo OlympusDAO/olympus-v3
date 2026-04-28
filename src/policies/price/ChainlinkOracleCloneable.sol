@@ -81,6 +81,24 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
         return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x45))));
     }
 
+    /// @notice Returns the enabled price cache policy for this oracle.
+    /// @dev    Calls `factory().getOracleContext(address(this))` to read the oracle liveness
+    ///         context and configured cache policy from the factory. Reverts with
+    ///         `ChainlinkOracle_NotEnabled()` if the returned context is disabled or if the
+    ///         factory does not provide a valid price cache address. Reverts from
+    ///         `getOracleContext` bubble up, including when the factory policy is inactive or
+    ///         this oracle was not created by the factory.
+    ///
+    /// @return priceCache_ The configured price cache policy, expected to be a non-zero address.
+    function _getEnabledPriceCache() internal view returns (IPriceCache priceCache_) {
+        (bool enabled, address priceCacheAddress) = factory().getOracleContext(address(this));
+        if (!enabled || priceCacheAddress == address(0)) {
+            revert ChainlinkOracle_NotEnabled();
+        }
+
+        priceCache_ = IPriceCache(priceCacheAddress);
+    }
+
     // ========== AGGREGATOR V3 INTERFACE ========== //
 
     /// @inheritdoc AggregatorV3Interface
@@ -111,8 +129,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             It does not fallback to live pricing when caches are stale.
     ///
     ///             This function will revert if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The `IPriceCache.getCachedPrice()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -137,14 +157,10 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
             uint80 answeredInRound
         )
     {
-        // Check if oracle is enabled via factory
-        IOracleFactory factory_ = factory();
-        if (!factory_.isOracleEnabled(address(this))) {
-            revert ChainlinkOracle_NotEnabled();
-        }
-
-        IPriceCache.CachedPrice memory cachedPrice = IPriceCache(factory_.getPriceCache())
-            .getCachedPrice(baseToken(), quoteToken());
+        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+            baseToken(),
+            quoteToken()
+        );
         uint256 assetPriceUsd = cachedPrice.assetPriceUsd;
         uint256 quotePriceUsd = cachedPrice.quotePriceUsd;
         uint48 updatedAt_ = cachedPrice.updatedAt;
@@ -171,8 +187,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorV3Interface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -196,17 +213,23 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IChainlinkOracle
     /// @dev        Chainlink-style round readers may consume stale rounds. This flag allows
     ///             consumers to detect stale or missing cached state before reading.
-    ///             Reverts if the configured pair is invalid for the active cache policy.
+    ///             Reverts if:
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The `IPriceCache.isStale()` call reverts because the cache policy is
+    ///               deactivated in Kernel or the cache contract is disabled
+    ///             - The configured pair is invalid for the active cache policy
     function isStale() external view override returns (bool) {
-        return IPriceCache(factory().getPriceCache()).isStale(baseToken(), quoteToken(), maxAge());
+        return _getEnabledPriceCache().isStale(baseToken(), quoteToken(), maxAge());
     }
 
     /// @inheritdoc AggregatorV3Interface
     /// @dev        Only supports the latest round. For any other round ID, reverts with ChainlinkOracle_NoDataPresent().
     ///
     ///             This function will revert if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -248,8 +271,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -264,8 +288,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -280,8 +305,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -296,8 +322,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -317,8 +344,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
     /// @inheritdoc AggregatorInterface
     /// @dev        Reverts if:
-    ///             - The oracle is not enabled (checked via factory)
-    ///             - The factory is disabled (checked via factory.isOracleEnabled())
+    ///             - The oracle is not enabled in the factory context
+    ///             - The factory policy is deactivated in Kernel (checked via factory.getOracleContext())
+    ///             - The cache policy is deactivated in Kernel or the cache contract is disabled
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
@@ -341,6 +369,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Unconditionally asks the factory to cache the configured pair.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory
@@ -352,6 +381,7 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     /// @inheritdoc IOraclePriceCache
     /// @dev        Defers staleness checks to the factory using this oracle's configured maxAge.
     ///             Reverts if:
+    ///             - The factory policy is deactivated in Kernel
     ///             - The factory is disabled
     ///             - This contract is not a deployed oracle from the factory
     ///             - This contract is not enabled in the factory
