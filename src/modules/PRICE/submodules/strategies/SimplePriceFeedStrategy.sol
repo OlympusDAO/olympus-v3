@@ -182,10 +182,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         // 0 prices = no data, always revert
         if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
 
+        // Cache first non-zero price before sorting
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
+
         // 1 price = check flag
         if (nonZeroPricesLen == 1) {
             if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
-            return nonZeroPrices[0]; // flag=false: accept single source
+            return firstNonZeroPrice; // flag=false: accept single source
         }
 
         // ========== 2+ PRICES: CHECK DEVIATION ==========
@@ -203,7 +206,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             return averagePrice;
 
         // No deviation detected, return the first non-zero price
-        return nonZeroPrices[0];
+        return firstNonZeroPrice;
     }
 
     /// @inheritdoc ISimplePriceFeedStrategy
