@@ -8,7 +8,7 @@ This document describes the roles that are used in the Olympus protocol.
 |------|----------|-------------|
 | admin | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods, enable/disable contract |
 | admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
-| admin | ConvertibleOHMTeller | Set min duration, set mint cap, enable/disable contract |
+| admin | ConvertibleOHMTeller | Set min duration, set min eligible delay, set per-creator mint cap, enable/disable contract |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
 | admin | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate, enable/disable contract |
@@ -25,7 +25,6 @@ This document describes the roles that are used in the Olympus protocol.
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
 | cd_emissionmanager | ConvertibleDepositAuctioneer | Calls the setAuctionParameters() function |
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
-| convertible_admin | ConvertibleOHMTeller | Set mint cap |
 | convertible_distributor | ConvertibleOHMTeller | Call deploy() and create() to deploy/mint convertible tokens |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
@@ -48,6 +47,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
+| heart | ConvertibleOHMTeller | Calls the execute() function to sweep expired convOHM tokens |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
