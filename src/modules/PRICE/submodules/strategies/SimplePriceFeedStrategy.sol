@@ -182,10 +182,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
         // 0 prices = no data, always revert
         if (nonZeroPricesLen == 0) revert SimpleStrategy_PriceCountInvalid(0, 2);
 
+        // Cache first non-zero price before sorting
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
+
         // 1 price = check flag
         if (nonZeroPricesLen == 1) {
             if (params.revertOnInsufficientCount) revert SimpleStrategy_PriceCountInvalid(1, 2);
-            return nonZeroPrices[0]; // flag=false: accept single source
+            return firstNonZeroPrice; // flag=false: accept single source
         }
 
         // ========== 2+ PRICES: CHECK DEVIATION ==========
@@ -203,7 +206,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             return averagePrice;
 
         // No deviation detected, return the first non-zero price
-        return nonZeroPrices[0];
+        return firstNonZeroPrice;
     }
 
     /// @inheritdoc ISimplePriceFeedStrategy
@@ -506,15 +509,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
         // ========== 3+ PRICES: USE MEDIAN AS BENCHMARK ==========
         uint256[] memory sortedPrices = nonZeroPrices.sort();
-        uint256 medianPrice = _getMedianPrice(sortedPrices);
-
-        // Filter by deviation from median
-        (uint256[] memory validPrices, uint256 validCount) = _filterByDeviation(
+        uint256[] memory validPrices = _filterByMedianDeviationUntilStable(
             sortedPrices,
-            medianPrice,
             params.deviationBps,
             2
         );
+        uint256 validCount = validPrices.length;
 
         // 1 price = check flag
         if (validCount == 1 && params.revertOnInsufficientCount)
@@ -619,18 +619,15 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
 
         // ========== 3+ PRICES: USE MEDIAN AS BENCHMARK ==========
         // Note: Using median (not average) as benchmark for the deviation check
-        // This is the same approach as getAveragePriceExcludingDeviations
+        // This is the same iterative approach as getAveragePriceExcludingDeviations
         // Using median as benchmark prevents the case where all values deviate from their own average
         uint256[] memory sortedPrices = nonZeroPrices.sort();
-        uint256 medianPrice = _getMedianPrice(sortedPrices);
-
-        // Filter by deviation from median
-        (uint256[] memory validPrices, uint256 validCount) = _filterByDeviation(
+        uint256[] memory validPrices = _filterByMedianDeviationUntilStable(
             sortedPrices,
-            medianPrice,
             params.deviationBps,
             3
         );
+        uint256 validCount = validPrices.length;
 
         // 1 price = check flag (median requires 3+ sources)
         if (validCount == 1 && params.revertOnInsufficientCount)
@@ -672,6 +669,36 @@ contract SimplePriceFeedStrategy is PriceSubmodule, ISimplePriceFeedStrategy {
             revert SimpleStrategy_ParamsInvalid(params_);
 
         return params;
+    }
+
+    /// @notice         Filters prices iteratively using a median benchmark until the set is stable
+    /// @dev            Stops when no additional prices are removed or when fewer than 3 prices remain
+    ///
+    /// @param  prices_            Sorted array of prices to filter
+    /// @param  deviationBps_      The accepted deviation in basis points
+    /// @param  minExpectedCount_  Minimum number of prices required (for error reporting)
+    /// @return validPrices_       Sorted array of prices after iterative filtering
+    function _filterByMedianDeviationUntilStable(
+        uint256[] memory prices_,
+        uint16 deviationBps_,
+        uint256 minExpectedCount_
+    ) internal pure returns (uint256[] memory validPrices_) {
+        validPrices_ = prices_;
+
+        while (validPrices_.length >= 3) {
+            uint256 medianPrice = _getMedianPrice(validPrices_);
+            (uint256[] memory nextValidPrices, uint256 nextValidCount) = _filterByDeviation(
+                validPrices_,
+                medianPrice,
+                deviationBps_,
+                minExpectedCount_
+            );
+
+            // No prices were excluded in this round, so the set is stable
+            if (nextValidCount == validPrices_.length) break;
+
+            validPrices_ = nextValidPrices;
+        }
     }
 
     /// @notice         Filters prices by deviation from a benchmark value

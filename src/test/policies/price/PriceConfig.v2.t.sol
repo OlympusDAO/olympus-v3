@@ -977,6 +977,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.storeObservation(address(ohm));
 
         // Try with priceManager account, expect success
+        vm.warp(block.timestamp + 1);
         vm.prank(priceManager);
         priceConfig.storeObservation(address(ohm));
 
@@ -994,6 +995,7 @@ contract PriceConfigv2Test is Test {
         _addBaseAssets();
 
         // Store price using authorized caller
+        vm.warp(block.timestamp + 1);
         vm.prank(caller);
         priceConfig.storeObservation(address(ohm));
 
@@ -1025,6 +1027,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.storeObservations();
 
         // Try with priceManager account, expect success
+        vm.warp(block.timestamp + 1);
         vm.prank(priceManager);
         priceConfig.storeObservations();
 
@@ -1042,6 +1045,7 @@ contract PriceConfigv2Test is Test {
         _addBaseAssets();
 
         // Store observations using authorized caller
+        vm.warp(block.timestamp + 1);
         vm.prank(caller);
         priceConfig.storeObservations();
 
