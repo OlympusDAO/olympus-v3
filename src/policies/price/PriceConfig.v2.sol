@@ -209,6 +209,12 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         } else if (action.action == IPriceConfigv2.TimelockAction.UpgradeSubmodule) {
             address submodule = abi.decode(action.payload, (address));
             PRICE.upgradeSubmodule(Submodule(submodule));
+        } else if (action.action == IPriceConfigv2.TimelockAction.ExecOnSubmodule) {
+            (SubKeycode subKeycode, bytes memory data) = abi.decode(
+                action.payload,
+                (SubKeycode, bytes)
+            );
+            PRICE.execOnSubmodule(subKeycode, data);
         } else if (action.action == IPriceConfigv2.TimelockAction.SetTimelockDelay) {
             uint48 delay = abi.decode(action.payload, (uint48));
             _validateTimelockDelay(delay);
@@ -340,6 +346,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         Submodule oldSubmodule = PRICE.getSubmoduleForKeycode(subKeycode);
         if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule)
             revert ModuleWithSubmodules.Module_InvalidSubmoduleUpgrade(subKeycode);
+    }
+
+    function _validateExecOnSubmoduleQueueParams(SubKeycode subKeycode_) internal view {
+        if (PRICE.getSubmoduleForKeycode(subKeycode_) == Submodule(address(0)))
+            revert ModuleWithSubmodules.Module_SubmoduleNotInstalled(subKeycode_);
     }
 
     /// @notice                         Validates each feed against its configured expected price
@@ -741,12 +752,18 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
-    ///             - PRICE rejects the submodule call
-    function execOnSubmodule(
+    ///             - The submodule execution queue parameters are invalid
+    function queueExecOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external override onlyEnabled onlyPriceOrAdminRole {
-        PRICE.execOnSubmodule(subKeycode_, data_);
+    ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
+        _validateExecOnSubmoduleQueueParams(subKeycode_);
+
+        return
+            _queueAction(
+                IPriceConfigv2.TimelockAction.ExecOnSubmodule,
+                abi.encode(subKeycode_, data_)
+            );
     }
 
     // ========== ERC165 ========== //

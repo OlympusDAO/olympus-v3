@@ -160,6 +160,7 @@ interface IPriceConfigv2 {
         UpdateAsset,
         RemoveAsset,
         UpgradeSubmodule,
+        ExecOnSubmodule,
         SetTimelockDelay
     }
 
@@ -288,15 +289,18 @@ interface IPriceConfigv2 {
     /// @return actionId_   The queued action ID
     function queueUpgradeSubmodule(address submodule_) external returns (uint256 actionId_);
 
-    /// @notice Perform a view/staticcall-only action on a submodule
-    /// @dev    This function is intentionally not timelocked because it is reserved for read-only
-    ///         submodule interactions. Mutable submodule configuration must be exposed through an
-    ///         explicit PriceConfigv2 function and timelocked if it can affect live price resolution.
+    /// @notice Queue an action on a PRICE submodule
+    /// @dev    The action is not performed until the queued action is executed. This is timelocked
+    ///         because PRICE.execOnSubmodule() can call mutable submodule functions.
     /// @dev    This function reverts if:
-    /// @dev    - PRICE.execOnSubmodule() reverts
+    /// @dev    - The submodule is not installed
     ///
     /// @param  subKeycode_ The SubKeycode of the submodule to call
     /// @param  data_       The calldata to send to the submodule
-    function execOnSubmodule(SubKeycode subKeycode_, bytes calldata data_) external;
+    /// @return actionId_   The queued action ID
+    function queueExecOnSubmodule(
+        SubKeycode subKeycode_,
+        bytes calldata data_
+    ) external returns (uint256 actionId_);
 }
 /// forge-lint: disable-end(mixed-case-function)

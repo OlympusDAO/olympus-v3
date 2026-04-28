@@ -25,6 +25,7 @@ The following actions are queued through `PriceConfigv2` and can only be execute
 - `queueRemoveAsset`: removes an approved asset from PRICE.
 - `queueUpdateAsset`: updates an approved asset's feeds, strategy or moving-average configuration.
 - `queueUpgradeSubmodule`: upgrades an already-installed PRICE submodule.
+- `queueExecOnSubmodule`: performs a call on an installed PRICE submodule.
 - `queueTimelockDelay`: changes the delay used for newly queued actions.
 
 Queued actions store their action type, proposer, queue timestamp, executable timestamp, expiry timestamp and encoded payload. They are executable by any address after the delay has elapsed and before expiry. This keeps execution permissionless while the delay and emergency cancellation are the authorization boundaries. The emergency role can cancel queued actions before execution; this role is expected to be independent from the roles that can queue PRICE changes.
@@ -34,7 +35,6 @@ The following actions are not timelocked:
 - `addAsset`: Adding a new asset will not affect existing price resolution paths, so this does not require a timelock.
 - `installSubmodule`: used to install new submodule keycodes. Installing a submodule does not replace an existing live submodule path; replacement is handled by `queueUpgradeSubmodule`.
 - `storeObservation` and `storeObservations`: operational maintenance for moving-average data.
-- `execOnSubmodule`: reserved for view/staticcall-only submodule interactions. It must not be used as a path for mutable configuration changes. Any future mutable submodule configuration should be exposed through an explicit `PriceConfigv2` function and timelocked if it can affect live price resolution.
 
 ## Assets
 

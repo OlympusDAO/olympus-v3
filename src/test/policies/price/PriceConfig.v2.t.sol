@@ -66,7 +66,7 @@ import {MockSubmoduleNoERC165} from "src/test/mocks/MockSubmoduleNoERC165.sol";
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 //     [X] inputs to IPRICEv2.upgradeSubmodule are correct
-// [X] execOnSubmodule
+// [X] queueExecOnSubmodule
 //     [X] only when contract is enabled
 //     [X] only admin or price_admin role can call
 
@@ -77,6 +77,7 @@ enum QueuedActionCase {
     RemoveAsset,
     UpdateAsset,
     UpgradeSubmodule,
+    ExecOnSubmodule,
     TimelockDelay
 }
 
@@ -374,6 +375,21 @@ contract PriceConfigv2Test is Test {
 
             vm.prank(admin);
             return priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        }
+
+        if (actionCase_ == QueuedActionCase.ExecOnSubmodule) {
+            MockStrategy newStrategy = new MockStrategy(PRICE);
+
+            vm.prank(admin);
+            priceConfig.installSubmodule(address(newStrategy));
+
+            SubKeycode subKeycode = newStrategy.SUBKEYCODE();
+            vm.prank(priceManager);
+            return
+                priceConfig.queueExecOnSubmodule(
+                    subKeycode,
+                    abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
+                );
         }
 
         vm.prank(admin);
@@ -1626,6 +1642,7 @@ contract PriceConfigv2Test is Test {
     //   [X] queueRemoveAsset reverts for any timestamp before executableAt
     //   [X] queueUpdateAsset reverts for any timestamp before executableAt
     //   [X] queueUpgradeSubmodule reverts for any timestamp before executableAt
+    //   [X] queueExecOnSubmodule reverts for any timestamp before executableAt
     //   [X] queueTimelockDelay reverts for any timestamp before executableAt
 
     function test_executeQueuedAction_beforeDelay_givenQueueRemoveAsset_reverts(
@@ -1646,6 +1663,12 @@ contract PriceConfigv2Test is Test {
         _assertExecuteBeforeDelayReverts(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_);
     }
 
+    function test_executeQueuedAction_beforeDelay_givenQueueExecOnSubmodule_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteBeforeDelayReverts(QueuedActionCase.ExecOnSubmodule, warpedTimestamp_);
+    }
+
     function test_executeQueuedAction_beforeDelay_givenTimelockDelay_reverts(
         uint256 warpedTimestamp_
     ) public {
@@ -1658,6 +1681,7 @@ contract PriceConfigv2Test is Test {
     //   [X] any caller can execute queueRemoveAsset
     //   [X] any caller can execute queueUpdateAsset
     //   [X] any caller can execute queueUpgradeSubmodule
+    //   [X] any caller can execute queueExecOnSubmodule
     //   [X] any caller can execute queueTimelockDelay
 
     function test_executeQueuedAction_ready_givenQueueRemoveAsset_succeeds(
@@ -1681,6 +1705,13 @@ contract PriceConfigv2Test is Test {
         _assertExecuteReadySucceeds(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_, executor_);
     }
 
+    function test_executeQueuedAction_ready_givenQueueExecOnSubmodule_succeeds(
+        uint256 warpedTimestamp_,
+        address executor_
+    ) public {
+        _assertExecuteReadySucceeds(QueuedActionCase.ExecOnSubmodule, warpedTimestamp_, executor_);
+    }
+
     function test_executeQueuedAction_ready_givenTimelockDelay_succeeds(
         uint256 warpedTimestamp_,
         address executor_
@@ -1693,6 +1724,7 @@ contract PriceConfigv2Test is Test {
     //   [X] queueRemoveAsset execution reverts for any timestamp after expiresAt
     //   [X] queueUpdateAsset execution reverts for any timestamp after expiresAt
     //   [X] queueUpgradeSubmodule execution reverts for any timestamp after expiresAt
+    //   [X] queueExecOnSubmodule execution reverts for any timestamp after expiresAt
     //   [X] queueTimelockDelay execution reverts for any timestamp after expiresAt
 
     function test_executeQueuedAction_afterExpiry_givenQueueRemoveAsset_reverts(
@@ -1713,6 +1745,12 @@ contract PriceConfigv2Test is Test {
         _assertExecuteAfterExpiryReverts(QueuedActionCase.UpgradeSubmodule, warpedTimestamp_);
     }
 
+    function test_executeQueuedAction_afterExpiry_givenQueueExecOnSubmodule_reverts(
+        uint256 warpedTimestamp_
+    ) public {
+        _assertExecuteAfterExpiryReverts(QueuedActionCase.ExecOnSubmodule, warpedTimestamp_);
+    }
+
     function test_executeQueuedAction_afterExpiry_givenTimelockDelay_reverts(
         uint256 warpedTimestamp_
     ) public {
@@ -1724,6 +1762,7 @@ contract PriceConfigv2Test is Test {
     //   [X] queueRemoveAsset execution reverts
     //   [X] queueUpdateAsset execution reverts
     //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueExecOnSubmodule execution reverts
     //   [X] queueTimelockDelay execution reverts
 
     function test_executeQueuedAction_cancelled_givenQueueRemoveAsset_reverts() public {
@@ -1738,6 +1777,10 @@ contract PriceConfigv2Test is Test {
         _assertExecuteAfterCancelReverts(QueuedActionCase.UpgradeSubmodule);
     }
 
+    function test_executeQueuedAction_cancelled_givenQueueExecOnSubmodule_reverts() public {
+        _assertExecuteAfterCancelReverts(QueuedActionCase.ExecOnSubmodule);
+    }
+
     function test_executeQueuedAction_cancelled_givenTimelockDelay_reverts() public {
         _assertExecuteAfterCancelReverts(QueuedActionCase.TimelockDelay);
     }
@@ -1747,6 +1790,7 @@ contract PriceConfigv2Test is Test {
     //   [X] queueRemoveAsset execution reverts
     //   [X] queueUpdateAsset execution reverts
     //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueExecOnSubmodule execution reverts
     //   [X] queueTimelockDelay execution reverts
 
     function test_executeQueuedAction_executed_givenQueueRemoveAsset_reverts() public {
@@ -1761,6 +1805,10 @@ contract PriceConfigv2Test is Test {
         _assertExecuteAfterExecutedReverts(QueuedActionCase.UpgradeSubmodule);
     }
 
+    function test_executeQueuedAction_executed_givenQueueExecOnSubmodule_reverts() public {
+        _assertExecuteAfterExecutedReverts(QueuedActionCase.ExecOnSubmodule);
+    }
+
     function test_executeQueuedAction_executed_givenTimelockDelay_reverts() public {
         _assertExecuteAfterExecutedReverts(QueuedActionCase.TimelockDelay);
     }
@@ -1770,6 +1818,7 @@ contract PriceConfigv2Test is Test {
     //   [X] queueRemoveAsset execution reverts
     //   [X] queueUpdateAsset execution reverts
     //   [X] queueUpgradeSubmodule execution reverts
+    //   [X] queueExecOnSubmodule execution reverts
     //   [X] queueTimelockDelay execution reverts
 
     function test_executeQueuedAction_whenDisabled_givenQueueRemoveAsset_reverts() public {
@@ -1782,6 +1831,10 @@ contract PriceConfigv2Test is Test {
 
     function test_executeQueuedAction_whenDisabled_givenQueueUpgradeSubmodule_reverts() public {
         _assertExecuteWhenDisabledReverts(QueuedActionCase.UpgradeSubmodule);
+    }
+
+    function test_executeQueuedAction_whenDisabled_givenQueueExecOnSubmodule_reverts() public {
+        _assertExecuteWhenDisabledReverts(QueuedActionCase.ExecOnSubmodule);
     }
 
     function test_executeQueuedAction_whenDisabled_givenTimelockDelay_reverts() public {
@@ -1802,6 +1855,7 @@ contract PriceConfigv2Test is Test {
     //  [X] only emergency can cancel queueRemoveAsset
     //  [X] only emergency can cancel queueUpdateAsset
     //  [X] only emergency can cancel queueUpgradeSubmodule
+    //  [X] only emergency can cancel queueExecOnSubmodule
     //  [X] only emergency can cancel queueTimelockDelay
 
     function test_cancelQueuedAction_whenDisabled_givenQueueRemoveAsset_onlyEmergency(
@@ -1820,6 +1874,12 @@ contract PriceConfigv2Test is Test {
         address caller_
     ) public {
         _assertCancelWhenDisabled(QueuedActionCase.UpgradeSubmodule, caller_);
+    }
+
+    function test_cancelQueuedAction_whenDisabled_givenQueueExecOnSubmodule_onlyEmergency(
+        address caller_
+    ) public {
+        _assertCancelWhenDisabled(QueuedActionCase.ExecOnSubmodule, caller_);
     }
 
     function test_cancelQueuedAction_whenDisabled_givenTimelockDelay_onlyEmergency(
@@ -2169,7 +2229,16 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0);
     }
 
-    function test_execOnSubmodule_givenDisabled_reverts() public givenDisabled {
+    // given the contract is not enabled
+    //  [X] it reverts
+    // given the caller is not admin nor price admin
+    //  [X] it reverts
+    // when the submodule is not installed
+    //  [X] it reverts
+    // [X] it queues the execOnSubmodule action
+    // [X] the execOnSubmodule action can be executed after the timelock
+
+    function test_queueExecOnSubmodule_givenDisabled_reverts() public givenDisabled {
         // Perform an action on the submodule
         uint256[] memory samplePrices = new uint256[](1);
         samplePrices[0] = 11e18;
@@ -2179,7 +2248,7 @@ contract PriceConfigv2Test is Test {
 
         // Call function
         vm.prank(priceManager);
-        priceConfig.execOnSubmodule(
+        priceConfig.queueExecOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
@@ -2189,7 +2258,45 @@ contract PriceConfigv2Test is Test {
         );
     }
 
-    function test_execOnSubmodule(uint8 role_) public {
+    function test_queueExecOnSubmodule_queuesExpectedAction() public {
+        MockStrategy newStrategy = new MockStrategy(PRICE);
+
+        vm.prank(admin);
+        priceConfig.installSubmodule(address(newStrategy));
+        SubKeycode subKeycode = newStrategy.SUBKEYCODE();
+
+        bytes memory data = abi.encodeWithSelector(
+            MockStrategy.setStoredValue.selector,
+            uint256(11)
+        );
+        bytes memory payload = abi.encode(subKeycode, data);
+        (
+            uint256 expectedActionId,
+            uint48 queuedAt,
+            uint48 executableAt,
+            uint48 expiresAt
+        ) = _expectQueuedAction(
+                IPriceConfigv2.TimelockAction.ExecOnSubmodule,
+                priceManager,
+                payload
+            );
+
+        vm.prank(priceManager);
+        uint256 actionId = priceConfig.queueExecOnSubmodule(subKeycode, data);
+
+        _assertQueuedAction(
+            actionId,
+            expectedActionId,
+            IPriceConfigv2.TimelockAction.ExecOnSubmodule,
+            priceManager,
+            queuedAt,
+            executableAt,
+            expiresAt,
+            payload
+        );
+    }
+
+    function test_queueExecOnSubmodule(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
         MockStrategy newStrategy = new MockStrategy(PRICE);
@@ -2201,15 +2308,34 @@ contract PriceConfigv2Test is Test {
         assertEq(newStrategy.storedValue(), 0, "Initial stored value");
 
         vm.prank(caller);
-        priceConfig.execOnSubmodule(
+        uint256 actionId = priceConfig.queueExecOnSubmodule(
             newStrategyKeycode,
             abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
         );
 
-        assertEq(newStrategy.storedValue(), 11, "Value should update immediately");
+        assertEq(newStrategy.storedValue(), 0, "Value should not update before execution");
+
+        _executeQueuedAction(actionId);
+
+        assertEq(newStrategy.storedValue(), 11, "Value should update after execution");
     }
 
-    function test_execOnSubmodule_unauthorizedUser_reverts(address user_) public {
+    function test_queueExecOnSubmodule_givenSubmoduleIsNotInstalled_reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.Module_SubmoduleNotInstalled.selector,
+                toSubKeycode("PRICE.MOCKSTRATEGY")
+            )
+        );
+
+        vm.prank(priceManager);
+        priceConfig.queueExecOnSubmodule(
+            toSubKeycode("PRICE.MOCKSTRATEGY"),
+            abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
+        );
+    }
+
+    function test_queueExecOnSubmodule_unauthorizedUser_reverts(address user_) public {
         vm.assume(user_ != admin && user_ != priceManager);
 
         // Perform an action on the submodule
@@ -2220,7 +2346,7 @@ contract PriceConfigv2Test is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        priceConfig.execOnSubmodule(
+        priceConfig.queueExecOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
