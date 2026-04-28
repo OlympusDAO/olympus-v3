@@ -134,8 +134,8 @@ interface IConvertibleOHMTeller {
     // ========== TOKEN LIFECYCLE ========== //
 
     /// @notice Removes expired tokens from the active set and reclaims MINTR approval.
-    /// @dev Permissionless. Iterates the active token set from the end, removing each token
-    ///      whose expiry has passed. Capped by `maxIterations_` for a bounded gas footprint.
+    /// @dev Permissionless. Inspects up to `maxIterations_` entries of the active token set
+    ///      and removes each one whose expiry has passed.
     /// @param maxIterations_ Maximum number of active-set entries to inspect.
     function sweepExpiredTokens(uint256 maxIterations_) external;
 

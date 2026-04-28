@@ -376,7 +376,15 @@ contract ConvertibleOHMTeller is
     /// @inheritdoc IPeriodicTask
     /// @dev Performs a bounded sweep of expired tokens; errors are swallowed to keep the
     ///      Heart's task pipeline healthy.
-    /// @dev Reverts if the caller has not been granted the heart role.
+    ///
+    ///      Reverts if the caller has not been granted the heart role.
+    ///
+    ///      Scans backward from the tail; new tokens append at the tail. If the active
+    ///      set ever grows past `HEART_SWEEP_LIMIT` and the tail is dominated by un-expired
+    ///      tokens, Heart-driven sweeps may starve old expired entries at the front. This
+    ///      is harmless (cap enforcement uses monotonic `creatorMinted`; exercise is
+    ///      unaffected) and can be cleared at any time by a permissionless call to
+    ///      `sweepExpiredTokens(maxIterations_)` with a larger limit.
     function execute() external override onlyRole(ROLE_HEART) {
         if (!isEnabled) return; // Don't do anything if disabled
 
@@ -393,6 +401,8 @@ contract ConvertibleOHMTeller is
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - Called re-entrantly.
+    ///
+    ///      Scans backward from the tail; new tokens append at the tail.
     function sweepExpiredTokens(uint256 maxIterations_) public override onlyEnabled nonReentrant {
         uint256 totalReclaimed;
         uint256 iterations;
