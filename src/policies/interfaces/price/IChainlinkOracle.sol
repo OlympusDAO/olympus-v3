@@ -15,6 +15,12 @@ interface IChainlinkOracle is AggregatorV2V3Interface {
     /// @notice Thrown when requested round data is not available
     error ChainlinkOracle_NoDataPresent();
 
+    /// @notice Thrown when the direct pair cache is older than maxAge
+    ///
+    /// @param  cachedTimestamp               The cached timestamp used for the base/quote pair
+    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
+    error ChainlinkOracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
+
     // ========== FUNCTIONS ========== //
 
     /// @notice The base token address

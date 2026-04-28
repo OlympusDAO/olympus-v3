@@ -19,6 +19,7 @@ contract ERC7726OracleFactoryEnableTest is ERC7726OracleFactoryTest {
             .getCachedPrice(address(baseToken), address(quoteToken))
             .updatedAt;
         vm.warp(uint256(oldTimestamp) + uint256(DEFAULT_MAX_AGE) + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.prank(admin);
         factory.disable("");
@@ -35,7 +36,7 @@ contract ERC7726OracleFactoryEnableTest is ERC7726OracleFactoryTest {
             abi.encodeWithSelector(
                 IERC7726Oracle.ERC7726Oracle_Stale.selector,
                 oldTimestamp,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         IERC7726Oracle(oracle).getQuote(1e18, address(baseToken), address(quoteToken));
