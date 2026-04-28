@@ -4,6 +4,7 @@ pragma solidity ^0.8.15;
 
 import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
+import {SubKeycode} from "src/Submodules.sol";
 
 contract MockPrice is PRICEv2 {
     mapping(address => bool) internal assetApproved;
@@ -308,6 +309,27 @@ contract MockPrice is PRICEv2 {
                 : cumulativeObs / params_.observations.length;
         }
     }
+
+    function validateAddAsset(
+        address,
+        bool,
+        bool,
+        uint32,
+        uint48,
+        uint256[] memory,
+        Component memory,
+        Component[] memory
+    ) external pure override {}
+
+    function validateRemoveAsset(address) external pure override {}
+
+    function validateUpdateAsset(address, UpdateAssetParams memory) external pure override {}
+
+    function validateInstallSubmodule(address) external pure override {}
+
+    function validateUpgradeSubmodule(address) external pure override {}
+
+    function validateExecOnSubmodule(SubKeycode) external pure override {}
 
     function storeObservations() external virtual override {
         // Iterate over all assets

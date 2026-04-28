@@ -388,10 +388,38 @@ interface IPRICEv2 {
         Component[] memory feeds_
     ) external;
 
+    /// @notice                         Validates parameters for adding a new asset definition
+    /// @dev                            Does not mutate state.
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param storeMovingAverage_      Whether the moving average should be stored periodically
+    /// @param useMovingAverage_        Whether the moving average should be used as an argument to the strategy
+    /// @param movingAverageDuration_   The duration of the moving average in seconds
+    /// @param lastObservationTime_     The timestamp of the last observation
+    /// @param observations_            The observations to be used to initialize the moving average
+    /// @param strategy_                The strategy to be used to aggregate price feeds
+    /// @param feeds_                   The price feeds to be used to calculate the price
+    function validateAddAsset(
+        address asset_,
+        bool storeMovingAverage_,
+        bool useMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_,
+        Component memory strategy_,
+        Component[] memory feeds_
+    ) external view;
+
     /// @notice         Removes an asset definition
     ///
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external;
+
+    /// @notice         Validates parameters for removing an asset definition
+    /// @dev            Does not mutate state.
+    ///
+    /// @param asset_   The address of the asset
+    function validateRemoveAsset(address asset_) external view;
 
     /// @notice         Updates an asset configuration atomically
     /// @dev            Only updates components flagged in params_
@@ -406,4 +434,31 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset to update
     /// @param params_  Update parameters with flags
     function updateAsset(address asset_, UpdateAssetParams memory params_) external;
+
+    /// @notice         Validates parameters for updating an asset configuration
+    /// @dev            Does not mutate state.
+    ///
+    /// @param asset_   The address of the asset to update
+    /// @param params_  Update parameters with flags
+    function validateUpdateAsset(address asset_, UpdateAssetParams memory params_) external view;
+
+    // ========== SUBMODULE MANAGEMENT ========== //
+
+    /// @notice             Validates parameters for installing a PRICE submodule
+    /// @dev                Does not mutate state.
+    ///
+    /// @param submodule_   The address of the submodule to install
+    function validateInstallSubmodule(address submodule_) external view;
+
+    /// @notice             Validates parameters for upgrading a PRICE submodule
+    /// @dev                Does not mutate state.
+    ///
+    /// @param submodule_   The address of the submodule to upgrade to
+    function validateUpgradeSubmodule(address submodule_) external view;
+
+    /// @notice             Validates parameters for executing a call on a PRICE submodule
+    /// @dev                Does not mutate state.
+    ///
+    /// @param subKeycode_  The SubKeycode of the submodule to call
+    function validateExecOnSubmodule(SubKeycode subKeycode_) external view;
 }

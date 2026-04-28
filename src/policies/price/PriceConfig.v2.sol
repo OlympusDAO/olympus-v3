@@ -6,7 +6,6 @@ pragma solidity >=0.8.15;
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
-import {ISubmodule} from "src/interfaces/ISubmodule.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
@@ -14,8 +13,8 @@ import {Deviation} from "src/libraries/Deviation.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Bophades
-import {ensureContract, fromKeycode, Kernel, Keycode, toKeycode, Policy, Permissions, Module} from "src/Kernel.sol";
-import {ensureValidSubKeycode, fromSubKeycode, ModuleWithSubmodules, SubKeycode, Submodule} from "src/Submodules.sol";
+import {Kernel, Keycode, toKeycode, Policy, Permissions, Module} from "src/Kernel.sol";
+import {SubKeycode, Submodule} from "src/Submodules.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
@@ -308,51 +307,6 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
             );
     }
 
-    function _validateRemoveAssetQueueParams(address asset_) internal view {
-        if (asset_ == PRICE.unitOfAccount()) revert IPRICEv2.PRICE_AssetReserved(asset_);
-        if (!PRICE.isAssetApproved(asset_)) revert IPRICEv2.PRICE_AssetNotApproved(asset_);
-    }
-
-    function _validateSubmoduleForQueue(
-        Submodule submodule_
-    ) internal view returns (SubKeycode subKeycode_) {
-        ensureContract(address(submodule_));
-
-        Keycode keycode = PRICE.KEYCODE();
-        if (fromKeycode(submodule_.PARENT()) != fromKeycode(keycode))
-            revert ModuleWithSubmodules.Module_InvalidSubmodule();
-
-        subKeycode_ = submodule_.SUBKEYCODE();
-        ensureValidSubKeycode(subKeycode_, keycode);
-
-        (bool success, bytes memory data) = address(submodule_).staticcall(
-            abi.encodeWithSelector(IERC165.supportsInterface.selector, type(ISubmodule).interfaceId)
-        );
-
-        if (!success || data.length != 32)
-            revert ModuleWithSubmodules.Module_SubmoduleInterfaceNotImplemented(
-                address(submodule_)
-            );
-        if (!abi.decode(data, (bool)))
-            revert ModuleWithSubmodules.Module_SubmoduleInterfaceNotImplemented(
-                address(submodule_)
-            );
-    }
-
-    function _validateUpgradeSubmoduleQueueParams(address submodule_) internal view {
-        Submodule newSubmodule = Submodule(submodule_);
-        SubKeycode subKeycode = _validateSubmoduleForQueue(newSubmodule);
-
-        Submodule oldSubmodule = PRICE.getSubmoduleForKeycode(subKeycode);
-        if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule)
-            revert ModuleWithSubmodules.Module_InvalidSubmoduleUpgrade(subKeycode);
-    }
-
-    function _validateExecOnSubmoduleQueueParams(SubKeycode subKeycode_) internal view {
-        if (PRICE.getSubmoduleForKeycode(subKeycode_) == Submodule(address(0)))
-            revert ModuleWithSubmodules.Module_SubmoduleNotInstalled(subKeycode_);
-    }
-
     /// @notice                         Validates each feed against its configured expected price
     /// @dev                            This is a configuration-time plausibility check only. It does
     ///                                 not prove feed identity, since another asset with a similar
@@ -428,161 +382,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         }
     }
 
-    function _validateAssetConfiguration(
-        address asset_,
-        IPRICEv2.Component memory strategy_,
-        uint256 feedCount_,
-        bool useMovingAverage_,
-        bool storeMovingAverage_
-    ) internal pure {
-        if (useMovingAverage_ && !storeMovingAverage_)
-            revert IPRICEv2.PRICE_ParamsStoreMovingAverageRequired(asset_);
-
-        uint256 numFeeds = feedCount_ + (useMovingAverage_ ? 1 : 0);
-
-        if (numFeeds > 1 && fromSubKeycode(strategy_.target) == bytes20(0))
-            revert IPRICEv2.PRICE_ParamsStrategyInsufficient(
-                asset_,
-                abi.encode(strategy_),
-                feedCount_,
-                useMovingAverage_
-            );
-
-        if (numFeeds == 1 && fromSubKeycode(strategy_.target) != bytes20(0))
-            revert IPRICEv2.PRICE_ParamsStrategyNotSupported(asset_);
-    }
-
-    function _validateMovingAverageParams(
-        address asset_,
-        IPRICEv2.UpdateAssetParams memory params_
-    ) internal view {
-        if (!params_.updateMovingAverage) return;
-
-        if (!params_.storeMovingAverage) {
-            if (params_.observations.length != 0)
-                revert IPRICEv2.PRICE_ParamsInvalidObservationCount(
-                    asset_,
-                    params_.observations.length,
-                    0,
-                    0
-                );
-
-            if (params_.movingAverageDuration != 0)
-                revert IPRICEv2.PRICE_ParamsMovingAverageDurationInvalid(
-                    asset_,
-                    params_.movingAverageDuration,
-                    0
-                );
-
-            if (params_.lastObservationTime != 0)
-                revert IPRICEv2.PRICE_ParamsLastObservationTimeInvalid(
-                    asset_,
-                    params_.lastObservationTime,
-                    0,
-                    0
-                );
-
-            return;
-        }
-
-        uint48 observationFrequency = PRICE.observationFrequency();
-        if (
-            params_.movingAverageDuration == 0 ||
-            uint48(params_.movingAverageDuration) % observationFrequency != 0
-        )
-            revert IPRICEv2.PRICE_ParamsMovingAverageDurationInvalid(
-                asset_,
-                params_.movingAverageDuration,
-                observationFrequency
-            );
-
-        uint256 numObservations = uint48(params_.movingAverageDuration) / observationFrequency;
-        if (params_.observations.length != numObservations || numObservations < 2)
-            revert IPRICEv2.PRICE_ParamsInvalidObservationCount(
-                asset_,
-                params_.observations.length,
-                numObservations,
-                numObservations
-            );
-
-        if (numObservations > type(uint16).max)
-            revert IPRICEv2.PRICE_ParamsInvalidObservationCount(
-                asset_,
-                params_.observations.length,
-                2,
-                type(uint16).max
-            );
-
-        for (uint256 i; i < numObservations; ) {
-            if (params_.observations[i] == 0)
-                revert IPRICEv2.PRICE_ParamsObservationZero(asset_, i);
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _validateUpdateComponentParams(
-        address asset_,
-        IPRICEv2.UpdateAssetParams memory params_
-    ) internal view {
-        if (params_.updateFeeds) {
-            uint256 len = params_.feeds.length;
-            bytes32[] memory hashes = new bytes32[](len);
-
-            for (uint256 i; i < len; ) {
-                if (address(PRICE.getSubmoduleForKeycode(params_.feeds[i].target)) == address(0))
-                    revert IPRICEv2.PRICE_SubmoduleNotInstalled(
-                        asset_,
-                        abi.encode(params_.feeds[i].target)
-                    );
-
-                /// forge-lint: disable-start(asm-keccak256)
-                bytes32 hash = keccak256(
-                    abi.encode(
-                        params_.feeds[i].target,
-                        params_.feeds[i].selector,
-                        params_.feeds[i].params
-                    )
-                );
-                /// forge-lint: disable-end(asm-keccak256)
-
-                for (uint256 j; j < i; ) {
-                    if (hash == hashes[j]) revert IPRICEv2.PRICE_DuplicatePriceFeed(asset_, i);
-                    unchecked {
-                        ++j;
-                    }
-                }
-
-                hashes[i] = hash;
-
-                unchecked {
-                    ++i;
-                }
-            }
-        }
-
-        if (
-            params_.updateStrategy &&
-            fromSubKeycode(params_.strategy.target) != bytes20(0) &&
-            address(PRICE.getSubmoduleForKeycode(params_.strategy.target)) == address(0)
-        ) revert IPRICEv2.PRICE_SubmoduleNotInstalled(asset_, abi.encode(params_.strategy.target));
-    }
-
-    function _validateUpdateAssetQueueParams(
+    function _validateUpdateFeedExpectationCount(
         address asset_,
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
-    ) internal view {
-        if (asset_ == PRICE.unitOfAccount()) revert IPRICEv2.PRICE_AssetReserved(asset_);
-
-        if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
-            revert IPRICEv2.PRICE_NoUpdatesRequested(asset_);
-
-        IPRICEv2.Asset memory asset = PRICE.getAssetData(asset_);
-        if (!asset.approved) revert IPRICEv2.PRICE_AssetNotApproved(asset_);
-
+    ) internal pure {
         uint256 expectedCount = params_.updateFeeds ? params_.feeds.length : 0;
         if (feedExpectations_.length != expectedCount)
             revert IPriceConfigv2_FeedExpectationCountInvalid(
@@ -590,32 +394,6 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
                 feedExpectations_.length,
                 expectedCount
             );
-
-        if (params_.updateFeeds && params_.feeds.length == 0)
-            revert IPRICEv2.PRICE_ParamsPriceFeedInsufficient(asset_, 0, 1);
-
-        IPRICEv2.Component[] memory finalFeeds = params_.updateFeeds
-            ? params_.feeds
-            : abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        IPRICEv2.Component memory finalStrategy = params_.updateStrategy
-            ? params_.strategy
-            : abi.decode(asset.strategy, (IPRICEv2.Component));
-        bool finalUseMA = params_.updateStrategy
-            ? params_.useMovingAverage
-            : asset.useMovingAverage;
-        bool finalStoreMA = params_.updateMovingAverage
-            ? params_.storeMovingAverage
-            : asset.storeMovingAverage;
-
-        _validateAssetConfiguration(
-            asset_,
-            finalStrategy,
-            finalFeeds.length,
-            finalUseMA,
-            finalStoreMA
-        );
-        _validateMovingAverageParams(asset_, params_);
-        _validateUpdateComponentParams(asset_, params_);
     }
 
     function _executeUpdateAsset(
@@ -658,6 +436,17 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         IPRICEv2.Component[] memory feeds_,
         PriceFeedExpectation[] memory feedExpectations_
     ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.validateAddAsset(
+            asset_,
+            storeMovingAverage_,
+            useMovingAverage_,
+            movingAverageDuration_,
+            lastObservationTime_,
+            observations_,
+            strategy_,
+            feeds_
+        );
+
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -680,7 +469,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function queueRemoveAsset(
         address asset_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        _validateRemoveAssetQueueParams(asset_);
+        PRICE.validateRemoveAsset(asset_);
 
         return _queueAction(IPriceConfigv2.TimelockAction.RemoveAsset, abi.encode(asset_));
     }
@@ -695,7 +484,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        _validateUpdateAssetQueueParams(asset_, params_, feedExpectations_);
+        _validateUpdateFeedExpectationCount(asset_, params_, feedExpectations_);
+        PRICE.validateUpdateAsset(asset_, params_);
 
         return
             _queueAction(
@@ -732,6 +522,8 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function installSubmodule(
         address submodule_
     ) external override onlyEnabled onlyPriceOrAdminRole {
+        PRICE.validateInstallSubmodule(submodule_);
+
         PRICE.installSubmodule(Submodule(submodule_));
     }
 
@@ -743,7 +535,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     function queueUpgradeSubmodule(
         address submodule_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        _validateUpgradeSubmoduleQueueParams(submodule_);
+        PRICE.validateUpgradeSubmodule(submodule_);
 
         return _queueAction(IPriceConfigv2.TimelockAction.UpgradeSubmodule, abi.encode(submodule_));
     }
@@ -757,7 +549,7 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
         SubKeycode subKeycode_,
         bytes calldata data_
     ) external override onlyEnabled onlyPriceOrAdminRole returns (uint256 actionId_) {
-        _validateExecOnSubmoduleQueueParams(subKeycode_);
+        PRICE.validateExecOnSubmodule(subKeycode_);
 
         return
             _queueAction(

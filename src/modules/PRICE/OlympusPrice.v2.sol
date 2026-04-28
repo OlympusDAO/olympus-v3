@@ -12,7 +12,7 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 // Bophades
 import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
-import {fromSubKeycode} from "src/Submodules.sol";
+import {fromSubKeycode, SubKeycode, Submodule} from "src/Submodules.sol";
 
 /// @title      OlympusPriceV2
 /// @author     Oighty
@@ -471,6 +471,250 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             revert PRICE_ParamsStrategyNotSupported(asset_);
     }
 
+    function _validateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal view {
+        uint256 len = feeds_.length;
+        if (len == 0) revert PRICE_ParamsPriceFeedInsufficient(asset_, len, 1);
+
+        bytes32[] memory hashes = new bytes32[](len);
+
+        for (uint256 i; i < len; ) {
+            if (!_submoduleIsInstalled(feeds_[i].target))
+                revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
+
+            /// forge-lint: disable-start(asm-keccak256)
+            bytes32 hash = keccak256(
+                abi.encode(feeds_[i].target, feeds_[i].selector, feeds_[i].params)
+            );
+            /// forge-lint: disable-end(asm-keccak256)
+
+            for (uint256 j; j < i; ) {
+                if (hash == hashes[j]) revert PRICE_DuplicatePriceFeed(asset_, i);
+                unchecked {
+                    ++j;
+                }
+            }
+
+            hashes[i] = hash;
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _validateAssetPriceStrategy(address asset_, Component memory strategy_) internal view {
+        if (
+            fromSubKeycode(strategy_.target) != bytes20(0) &&
+            !_submoduleIsInstalled(strategy_.target)
+        ) revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(strategy_.target));
+    }
+
+    function _validateAssetMovingAverage(
+        address asset_,
+        bool storeMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) internal view {
+        if (!storeMovingAverage_) {
+            if (observations_.length != 0)
+                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 0);
+
+            if (movingAverageDuration_ != 0)
+                revert PRICE_ParamsMovingAverageDurationInvalid(asset_, movingAverageDuration_, 0);
+
+            if (lastObservationTime_ != 0)
+                revert PRICE_ParamsLastObservationTimeInvalid(asset_, lastObservationTime_, 0, 0);
+
+            return;
+        }
+
+        if (lastObservationTime_ > block.timestamp)
+            revert PRICE_ParamsLastObservationTimeInvalid(
+                asset_,
+                lastObservationTime_,
+                0,
+                uint48(block.timestamp)
+            );
+
+        if (
+            movingAverageDuration_ == 0 ||
+            uint48(movingAverageDuration_) % _observationFrequency != 0
+        )
+            revert PRICE_ParamsMovingAverageDurationInvalid(
+                asset_,
+                movingAverageDuration_,
+                _observationFrequency
+            );
+
+        uint16 numObservations = SafeCast.encodeUInt16(
+            uint48(movingAverageDuration_) / _observationFrequency
+        );
+        if (observations_.length != numObservations || numObservations < 2)
+            revert PRICE_ParamsInvalidObservationCount(
+                asset_,
+                observations_.length,
+                numObservations,
+                numObservations
+            );
+
+        for (uint256 i; i < numObservations; ) {
+            if (observations_[i] == 0) revert PRICE_ParamsObservationZero(asset_, i);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _validateAddAsset(
+        address asset_,
+        bool storeMovingAverage_,
+        bool useMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_,
+        Component memory strategy_,
+        Component[] memory feeds_
+    ) internal view {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
+        if (_assetData[asset_].approved) revert PRICE_AssetAlreadyApproved(asset_);
+
+        _validateAssetConfiguration(
+            asset_,
+            strategy_,
+            feeds_.length,
+            useMovingAverage_,
+            storeMovingAverage_
+        );
+        _validateAssetPriceStrategy(asset_, strategy_);
+        _validateAssetPriceFeeds(asset_, feeds_);
+        _validateAssetMovingAverage(
+            asset_,
+            storeMovingAverage_,
+            movingAverageDuration_,
+            lastObservationTime_,
+            observations_
+        );
+    }
+
+    function _validateRemoveAsset(address asset_) internal view {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+    }
+
+    function _validateUpdateAsset(address asset_, UpdateAssetParams memory params_) internal view {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+
+        if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
+            revert PRICE_NoUpdatesRequested(asset_);
+
+        Asset storage asset = _assetData[asset_];
+        if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
+
+        Component[] memory finalFeeds = params_.updateFeeds
+            ? params_.feeds
+            : abi.decode(asset.feeds, (Component[]));
+        Component memory finalStrategy = params_.updateStrategy
+            ? params_.strategy
+            : abi.decode(asset.strategy, (Component));
+        bool finalUseMA = params_.updateStrategy
+            ? params_.useMovingAverage
+            : asset.useMovingAverage;
+        bool finalStoreMA = params_.updateMovingAverage
+            ? params_.storeMovingAverage
+            : asset.storeMovingAverage;
+
+        _validateAssetConfiguration(
+            asset_,
+            finalStrategy,
+            finalFeeds.length,
+            finalUseMA,
+            finalStoreMA
+        );
+
+        if (params_.updateFeeds) _validateAssetPriceFeeds(asset_, params_.feeds);
+        if (params_.updateStrategy) _validateAssetPriceStrategy(asset_, params_.strategy);
+        if (params_.updateMovingAverage)
+            _validateAssetMovingAverage(
+                asset_,
+                params_.storeMovingAverage,
+                params_.movingAverageDuration,
+                params_.lastObservationTime,
+                params_.observations
+            );
+    }
+
+    function _validateInstallSubmodule(address submodule_) internal view {
+        SubKeycode subKeycode = _validateSubmodule(Submodule(submodule_));
+        if (address(getSubmoduleForKeycode[subKeycode]) != address(0))
+            revert Module_SubmoduleAlreadyInstalled(subKeycode);
+    }
+
+    function _validateUpgradeSubmodule(address submodule_) internal view {
+        Submodule newSubmodule = Submodule(submodule_);
+        SubKeycode subKeycode = _validateSubmodule(newSubmodule);
+        Submodule oldSubmodule = getSubmoduleForKeycode[subKeycode];
+        if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule)
+            revert Module_InvalidSubmoduleUpgrade(subKeycode);
+    }
+
+    function _validateExecOnSubmodule(SubKeycode subKeycode_) internal view {
+        _getSubmoduleIfInstalled(subKeycode_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateAddAsset(
+        address asset_,
+        bool storeMovingAverage_,
+        bool useMovingAverage_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_,
+        Component memory strategy_,
+        Component[] memory feeds_
+    ) external view override {
+        _validateAddAsset(
+            asset_,
+            storeMovingAverage_,
+            useMovingAverage_,
+            movingAverageDuration_,
+            lastObservationTime_,
+            observations_,
+            strategy_,
+            feeds_
+        );
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateRemoveAsset(address asset_) external view override {
+        _validateRemoveAsset(asset_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateUpdateAsset(
+        address asset_,
+        UpdateAssetParams memory params_
+    ) external view override {
+        _validateUpdateAsset(asset_, params_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateInstallSubmodule(address submodule_) external view override {
+        _validateInstallSubmodule(submodule_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateUpgradeSubmodule(address submodule_) external view override {
+        _validateUpgradeSubmodule(submodule_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    function validateExecOnSubmodule(SubKeycode subKeycode_) external view override {
+        _validateExecOnSubmodule(subKeycode_);
+    }
+
     /// @inheritdoc IPRICEv2
     /// @dev        Implements the following logic:
     /// @dev        - Performs basic checks on the parameters
@@ -500,24 +744,18 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component memory strategy_,
         Component[] memory feeds_
     ) external override permissioned {
-        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
-
-        // Check that asset is a contract
-        if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
+        _validateAddAsset(
+            asset_,
+            storeMovingAverage_,
+            useMovingAverage_,
+            movingAverageDuration_,
+            lastObservationTime_,
+            observations_,
+            strategy_,
+            feeds_
+        );
 
         Asset storage asset = _assetData[asset_];
-
-        // Ensure asset is not already added
-        if (asset.approved) revert PRICE_AssetAlreadyApproved(asset_);
-
-        // Validate asset configuration
-        _validateAssetConfiguration(
-            asset_,
-            strategy_,
-            feeds_.length,
-            useMovingAverage_,
-            storeMovingAverage_
-        );
 
         // Update asset strategy data
         _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
@@ -553,10 +791,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - The caller is not permissioned
     /// @dev        Reentrancy note: this function does not make external calls.
     function removeAsset(address asset_) external override permissioned {
-        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
-
-        // Ensure asset is already added
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+        _validateRemoveAsset(asset_);
 
         // Remove asset from array
         uint256 len = assets.length;
@@ -590,38 +825,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @param asset_   Asset to update the price feeds for
     /// @param feeds_   Array of price feed components
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
-        // Validate feed component submodules are installed and update feed array
-        uint256 len = feeds_.length;
-        if (len == 0) revert PRICE_ParamsPriceFeedInsufficient(asset_, len, 1);
-
-        bytes32[] memory hashes = new bytes32[](len);
-
-        for (uint256 i; i < len; ) {
-            // Check that the submodule is installed
-            if (!_submoduleIsInstalled(feeds_[i].target))
-                revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
-
-            // Confirm that the feed is not a duplicate by checking the hash against hashes of previous feeds in the array
-            /// forge-lint: disable-start(asm-keccak256)
-            bytes32 hash = keccak256(
-                abi.encode(feeds_[i].target, feeds_[i].selector, feeds_[i].params)
-            );
-            /// forge-lint: disable-end(asm-keccak256)
-
-            for (uint256 j; j < i; ) {
-                if (hash == hashes[j]) revert PRICE_DuplicatePriceFeed(asset_, i);
-                unchecked {
-                    ++j;
-                }
-            }
-
-            hashes[i] = hash;
-
-            unchecked {
-                ++i;
-            }
-        }
-
+        _validateAssetPriceFeeds(asset_, feeds_);
         _assetData[asset_].feeds = abi.encode(feeds_);
     }
 
@@ -642,13 +846,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component memory strategy_,
         bool useMovingAverage_
     ) internal {
-        // Validate strategy component submodule is installed (if a strategy is being used)
-        // A strategy is optional if there is only one price feed being used.
-        // The number of feeds is checked in the external functions that call this one.
-        if (
-            fromSubKeycode(strategy_.target) != bytes20(0) &&
-            !_submoduleIsInstalled(strategy_.target)
-        ) revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(strategy_.target));
+        _validateAssetPriceStrategy(asset_, strategy_);
 
         // Update the asset price strategy
         _assetData[asset_].strategy = abi.encode(strategy_);
@@ -686,6 +884,14 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint48 lastObservationTime_,
         uint256[] memory observations_
     ) internal {
+        _validateAssetMovingAverage(
+            asset_,
+            storeMovingAverage_,
+            movingAverageDuration_,
+            lastObservationTime_,
+            observations_
+        );
+
         Asset storage asset = _assetData[asset_];
 
         // Remove existing moving average data, if any
@@ -696,17 +902,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         asset.nextObsIndex = 0;
 
         if (!storeMovingAverage_) {
-            // If not storing moving average, no observations are permitted.
-            if (observations_.length != 0)
-                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 0);
-
-            // If not storing moving average, duration and timestamp must both be zero.
-            if (movingAverageDuration_ != 0)
-                revert PRICE_ParamsMovingAverageDurationInvalid(asset_, movingAverageDuration_, 0);
-
-            if (lastObservationTime_ != 0)
-                revert PRICE_ParamsLastObservationTimeInvalid(asset_, lastObservationTime_, 0, 0);
-
             // Clear moving-average fields.
             asset.movingAverageDuration = 0;
             asset.numObservations = 0;
@@ -714,45 +909,15 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             return;
         }
 
-        // Ensure last observation time is not in the future
-        if (lastObservationTime_ > block.timestamp)
-            revert PRICE_ParamsLastObservationTimeInvalid(
-                asset_,
-                lastObservationTime_,
-                0,
-                uint48(block.timestamp)
-            );
-
-        // If storing a moving average, validate params
-        if (
-            movingAverageDuration_ == 0 ||
-            uint48(movingAverageDuration_) % _observationFrequency != 0
-        )
-            revert PRICE_ParamsMovingAverageDurationInvalid(
-                asset_,
-                movingAverageDuration_,
-                _observationFrequency
-            );
-
         uint16 numObservations = SafeCast.encodeUInt16(
             uint48(movingAverageDuration_) / _observationFrequency
         );
-        if (observations_.length != numObservations || numObservations < 2)
-            revert PRICE_ParamsInvalidObservationCount(
-                asset_,
-                observations_.length,
-                numObservations,
-                numObservations
-            );
 
         asset.movingAverageDuration = movingAverageDuration_;
         asset.numObservations = numObservations;
         asset.lastObservationTime = lastObservationTime_;
 
         for (uint256 i; i < numObservations; ) {
-            // Validate and store each observation
-            if (observations_[i] == 0) revert PRICE_ParamsObservationZero(asset_, i);
-
             asset.cumulativeObs += observations_[i];
             asset.obs.push(observations_[i]);
             unchecked {
@@ -789,40 +954,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         address asset_,
         UpdateAssetParams memory params_
     ) external virtual override permissioned {
-        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
-
-        // Validate at least one update flag is true
-        if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)
-            revert PRICE_NoUpdatesRequested(asset_);
-
-        // Validate asset is approved
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
-
-        // Get current asset state
-        Asset storage asset = _assetData[asset_];
-
-        // Calculate final state (use new values if updating, otherwise keep existing)
-        Component[] memory finalFeeds = params_.updateFeeds
-            ? params_.feeds
-            : abi.decode(asset.feeds, (Component[]));
-        Component memory finalStrategy = params_.updateStrategy
-            ? params_.strategy
-            : abi.decode(asset.strategy, (Component));
-        bool finalUseMA = params_.updateStrategy
-            ? params_.useMovingAverage
-            : asset.useMovingAverage;
-        bool finalStoreMA = params_.updateMovingAverage
-            ? params_.storeMovingAverage
-            : asset.storeMovingAverage;
-
-        // Validate the end state (before any updates)
-        _validateAssetConfiguration(
-            asset_,
-            finalStrategy,
-            finalFeeds.length,
-            finalUseMA,
-            finalStoreMA
-        );
+        _validateUpdateAsset(asset_, params_);
 
         // Call update functions (only after validation passes)
         if (params_.updateFeeds) {
