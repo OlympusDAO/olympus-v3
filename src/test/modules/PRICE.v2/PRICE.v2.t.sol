@@ -74,6 +74,7 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 //      [X] reverts if asset not configured on PRICE module (not approved)
 //      [X] reverts if price is zero
 //      [X] reverts if caller is not permissioned
+//      [X] reverts if called twice in the same block
 //      [X] reverts if observationFrequency has not elapsed since last observation
 //      [X] updates stored observations
 //           [X] single observation stored (no moving average)
@@ -549,6 +550,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -976,6 +978,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -1044,6 +1047,7 @@ contract PriceV2Test is PriceV2BaseTest {
             rawObservation) / twomaData.numObservations;
         uint256 expectedTwomaCurrent = (uint256(30e18) + uint256(40e18) + updatedMovingAverage) / 3;
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(twoma));
 
@@ -1771,6 +1775,28 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Call the function
         // Should not revert
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+    }
+
+    function testRevert_storeObservation_sameBlock(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        // Store first observation
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+
+        // Storing a second observation in the same block should revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_ObservationTooEarly.selector,
+                address(onema),
+                uint48(block.timestamp),
+                uint48(block.timestamp + 1)
+            )
+        );
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
     }

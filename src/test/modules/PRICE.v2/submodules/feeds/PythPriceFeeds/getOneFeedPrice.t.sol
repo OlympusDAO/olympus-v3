@@ -543,6 +543,81 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
         assertEq(priceInt, 1000000, "Price should match expected value for very negative expo");
     }
 
+    // given expo is -21 and the converted max confidence fits in uint64
+    //  [X] it correctly converts the price
+    function test_expoNegativeTwentyOne_maxConfidenceFits() public {
+        // maxConfidence = 1e16 (18 decimals)
+        // expo = -21
+        // maxConfidenceInPythScale = 1e16 * 1e21 / 1e18 = 1e19, which fits in uint64
+        int64 price = 100000000;
+        int32 expo = -21;
+        pyth.setPrice(PRICE_ID_1, price, CONF_1, expo, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            1e16
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+
+        // price = 100000000 (21 decimals)
+        // Expected: 100000000 * 1e18 / 1e21 = 100000
+        assertEq(priceInt, 100000, "Price should match expected value for expo -21");
+    }
+
+    // given expo is -21 and the feed confidence exceeds the converted max confidence
+    //  [X] it reverts with Pyth_FeedConfidenceExcessive
+    function test_expoNegativeTwentyOne_maxConfidenceExceeded_reverts() public {
+        // maxConfidence = 1e16 (18 decimals)
+        // expo = -21
+        // maxConfidenceInPythScale = 1e16 * 1e21 / 1e18 = 1e19, which fits in uint64
+        int64 price = 100000000;
+        int32 expo = -21;
+        uint64 priceConfidence = uint64(1e19 + 1);
+        pyth.setPrice(PRICE_ID_1, price, priceConfidence, expo, block.timestamp);
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_FeedConfidenceExcessive.selector,
+            address(pyth),
+            PRICE_ID_1,
+            priceConfidence,
+            uint64(1e19)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            1e16
+        );
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given expo is -22 and the converted max confidence exceeds uint64
+    //  [X] it clamps the maximum confidence and correctly converts the price
+    function test_expoNegativeTwentyTwo_maxConfidenceClamps() public {
+        // maxConfidence = 1e16 (18 decimals)
+        // expo = -22
+        // maxConfidenceInPythScale = 1e16 * 1e22 / 1e18 = 1e20, which exceeds uint64
+        int64 price = 100000000;
+        int32 expo = -22;
+        pyth.setPrice(PRICE_ID_1, price, type(uint64).max, expo, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            1e16
+        );
+        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+
+        // price = 100000000 (22 decimals)
+        // Expected: 100000000 * 1e18 / 1e22 = 10000
+        assertEq(priceInt, 10000, "Price should match expected value for expo -22");
+    }
+
     // given the confidence interval is at the maximum (boundary case)
     //  [X] it correctly converts the price
     function test_confidenceEqualsMaximum() public {

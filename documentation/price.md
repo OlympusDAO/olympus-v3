@@ -84,8 +84,13 @@ The **max confidence interval** is a Pyth-specific parameter that sets the maxim
 
 1. Pyth returns both a `price` and a `conf` (confidence) value
 2. The contract converts `maxConfidence` from 18-decimal scale to Pyth's native scale (based on the feed's exponent)
-3. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
-4. This prevents using prices with high uncertainty
+3. If the converted value exceeds `uint64`, it is clamped to `type(uint64).max`
+4. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
+5. For Pyth two-feed reads, the contract validates each feed independently, derives a conservative confidence interval for the output product or ratio, and compares it against `outputMaxConfidence`
+6. If the derived output confidence exceeds `outputMaxConfidence`, the feed reverts with `Pyth_DerivedFeedConfidenceExcessive`
+7. For division, if the denominator confidence is greater than or equal to the denominator price, the feed reverts with `Pyth_DerivedFeedConfidenceInvalid`
+
+Pyth two-feed parameters include `firstMaxConfidence`, `secondMaxConfidence`, and `outputMaxConfidence`, all in output decimals. The first two thresholds cap each input feed independently. `outputMaxConfidence` caps the uncertainty of the derived price that callers actually consume.
 
 ### wETH Price Resolution
 

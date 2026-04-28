@@ -11,6 +11,7 @@ contract PriceV2GasTest is PriceV2BaseTest {
     }
 
     function test_gasSnapshot_getPrice_last() public {
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriter);
         price.storeObservation(address(onema));
 
@@ -33,6 +34,7 @@ contract PriceV2GasTest is PriceV2BaseTest {
     }
 
     function test_gasSnapshot_getPriceIn_last() public {
+        vm.warp(block.timestamp + 1);
         vm.startPrank(priceWriter);
         price.storeObservation(address(onema));
         price.storeObservation(address(twoma));

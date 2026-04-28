@@ -7,7 +7,20 @@ on:
 
 jobs:
     run-ci:
+        name: Fork tests - ${{ matrix.shard.name }}
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                shard:
+                    - name: Loan Consolidator
+                      script: test:fork:loan-consolidator
+                    - name: Boosted Liquidity
+                      script: test:fork:boosted-liquidity
+                    - name: Proposal Helpers
+                      script: test:fork:proposal-helpers
+                    - name: Misc
+                      script: test:fork:misc
 
         steps:
             - uses: actions/checkout@v4
@@ -24,6 +37,8 @@ jobs:
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
+              with:
+                  version: 1.5.1
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
@@ -31,7 +46,7 @@ jobs:
             - name: Build
               run: pnpm run build
 
-            - name: Run fork tests
-              run: pnpm run test:fork
+            - name: Run fork tests - ${{ matrix.shard.name }}
+              run: pnpm run ${{ matrix.shard.script }}
               env:
                   ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
