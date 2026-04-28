@@ -16,6 +16,7 @@ import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+import {ITimelockQueue} from "src/policies/interfaces/utils/ITimelockQueue.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -136,6 +137,18 @@ contract MockUpgradedSubmodulePrice is PriceSubmodule {
     }
 }
 
+contract PriceConfigv2Harness is PriceConfigv2 {
+    constructor(Kernel kernel_) PriceConfigv2(kernel_) {}
+
+    function queueRawAction(
+        address target_,
+        bytes4 selector_,
+        bytes memory payload_
+    ) external returns (uint64 actionId_) {
+        return _queueAction(target_, selector_, payload_);
+    }
+}
+
 contract PriceConfigv2Test is Test {
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
@@ -217,7 +230,7 @@ contract PriceConfigv2Test is Test {
         kernel = new Kernel();
         PRICE = new OlympusPricev2(kernel, DECIMALS, OBSERVATION_FREQUENCY);
         ROLES = new OlympusRoles(kernel);
-        priceConfig = new PriceConfigv2(kernel);
+        priceConfig = new PriceConfigv2Harness(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Deploy submodules for PRICE
@@ -305,7 +318,7 @@ contract PriceConfigv2Test is Test {
         reserveUsdPriceFeed.setTimestamp(timestamp_);
     }
 
-    function _executeQueuedAction(uint256 actionId_) internal {
+    function _executeQueuedAction(uint64 actionId_) internal {
         _warpPastTimelockDelay();
         priceConfig.executeQueuedAction(actionId_);
     }
@@ -314,7 +327,7 @@ contract PriceConfigv2Test is Test {
         address asset_,
         IPRICEv2.UpdateAssetParams memory params_,
         IPriceConfigv2.PriceFeedExpectation[] memory expectations_
-    ) internal returns (uint256 actionId_) {
+    ) internal returns (uint64 actionId_) {
         vm.prank(priceManager);
         actionId_ = priceConfig.queueUpdateAsset(asset_, params_, expectations_);
         _executeQueuedAction(actionId_);
@@ -329,7 +342,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -367,7 +380,7 @@ contract PriceConfigv2Test is Test {
             });
     }
 
-    function _queueActionCase(QueuedActionCase actionCase_) internal returns (uint256 actionId_) {
+    function _queueActionCase(QueuedActionCase actionCase_) internal returns (uint64 actionId_) {
         if (actionCase_ == QueuedActionCase.RemoveAsset) {
             _addBaseAssets();
 
@@ -406,7 +419,7 @@ contract PriceConfigv2Test is Test {
             vm.prank(priceManager);
             return
                 priceConfig.queueExecOnSubmodule(
-                    subKeycode,
+                    SubKeycode.unwrap(subKeycode),
                     abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
                 );
         }
@@ -416,13 +429,14 @@ contract PriceConfigv2Test is Test {
     }
 
     function _expectQueuedAction(
-        IPriceConfigv2.TimelockAction action_,
+        address target_,
+        bytes4 selector_,
         address proposer_,
         bytes memory payload_
     )
         internal
         returns (
-            uint256 expectedActionId_,
+            uint64 expectedActionId_,
             uint48 queuedAt_,
             uint48 executableAt_,
             uint48 expiresAt_
@@ -434,9 +448,10 @@ contract PriceConfigv2Test is Test {
         expiresAt_ = executableAt_ + EXECUTION_WINDOW;
 
         vm.expectEmit(true, true, true, true);
-        emit IPriceConfigv2.PriceConfigActionQueued(
+        emit ITimelockQueue.TimelockActionQueued(
             expectedActionId_,
-            action_,
+            target_,
+            selector_,
             proposer_,
             keccak256(payload_),
             executableAt_,
@@ -445,9 +460,10 @@ contract PriceConfigv2Test is Test {
     }
 
     function _assertQueuedAction(
-        uint256 actionId_,
-        uint256 expectedActionId_,
-        IPriceConfigv2.TimelockAction action_,
+        uint64 actionId_,
+        uint64 expectedActionId_,
+        address target_,
+        bytes4 selector_,
         address proposer_,
         uint48 queuedAt_,
         uint48 executableAt_,
@@ -456,8 +472,9 @@ contract PriceConfigv2Test is Test {
     ) internal view {
         assertEq(actionId_, expectedActionId_, "Action ID");
 
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId_);
-        assertEq(uint8(action.action), uint8(action_), "Action");
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId_);
+        assertEq(action.target, target_, "Target");
+        assertEq(action.selector, selector_, "Selector");
         assertEq(action.proposer, proposer_, "Proposer");
         assertEq(action.queuedAt, queuedAt_, "Queued at");
         assertEq(action.executableAt, executableAt_, "Executable at");
@@ -467,9 +484,13 @@ contract PriceConfigv2Test is Test {
         assertEq(action.payload, payload_, "Payload");
     }
 
+    function _priceConfigHarness() internal view returns (PriceConfigv2Harness) {
+        return PriceConfigv2Harness(address(priceConfig));
+    }
+
     function _assertExecuteWhenDisabledReverts(QueuedActionCase actionCase_) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint64 actionId = _queueActionCase(actionCase_);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
 
         vm.warp(action.executableAt);
         if (actionCase_ == QueuedActionCase.UpdateAsset) {
@@ -484,7 +505,7 @@ contract PriceConfigv2Test is Test {
     }
 
     function _assertCancelWhenDisabled(QueuedActionCase actionCase_, address caller_) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
+        uint64 actionId = _queueActionCase(actionCase_);
 
         vm.prank(admin);
         priceConfig.disable(abi.encode(""));
@@ -497,7 +518,7 @@ contract PriceConfigv2Test is Test {
         vm.prank(caller_);
         priceConfig.cancelQueuedAction(actionId);
 
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         assertEq(action.cancelled, caller_ == emergency, "Only emergency should cancel action");
 
         if (caller_ == emergency) {
@@ -511,15 +532,15 @@ contract PriceConfigv2Test is Test {
         QueuedActionCase actionCase_,
         uint256 warpedTimestamp_
     ) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint64 actionId = _queueActionCase(actionCase_);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         uint256 targetTimestamp = bound(warpedTimestamp_, action.queuedAt, action.executableAt - 1);
 
         vm.warp(targetTimestamp);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IPriceConfigv2.IPriceConfigv2_ActionNotReady.selector,
+                ITimelockQueue.ITimelockQueue_ActionNotReady.selector,
                 actionId,
                 action.executableAt
             )
@@ -532,8 +553,8 @@ contract PriceConfigv2Test is Test {
         uint256 warpedTimestamp_,
         address executor_
     ) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint64 actionId = _queueActionCase(actionCase_);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         uint256 targetTimestamp = bound(warpedTimestamp_, action.executableAt, action.expiresAt);
 
         vm.warp(targetTimestamp);
@@ -552,8 +573,8 @@ contract PriceConfigv2Test is Test {
         QueuedActionCase actionCase_,
         uint256 warpedTimestamp_
     ) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        uint64 actionId = _queueActionCase(actionCase_);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         uint256 targetTimestamp = bound(
             warpedTimestamp_,
             uint256(action.expiresAt) + 1,
@@ -563,7 +584,7 @@ contract PriceConfigv2Test is Test {
         vm.warp(targetTimestamp);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IPriceConfigv2.IPriceConfigv2_ActionExpired.selector,
+                ITimelockQueue.ITimelockQueue_ActionExpired.selector,
                 actionId,
                 action.expiresAt
             )
@@ -572,26 +593,26 @@ contract PriceConfigv2Test is Test {
     }
 
     function _assertExecuteAfterCancelReverts(QueuedActionCase actionCase_) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
+        uint64 actionId = _queueActionCase(actionCase_);
 
         vm.prank(emergency);
         priceConfig.cancelQueuedAction(actionId);
 
         _warpPastTimelockDelay();
         vm.expectRevert(
-            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionCancelled.selector, actionId)
+            abi.encodeWithSelector(ITimelockQueue.ITimelockQueue_ActionCancelled.selector, actionId)
         );
         priceConfig.executeQueuedAction(actionId);
     }
 
     function _assertExecuteAfterExecutedReverts(QueuedActionCase actionCase_) internal {
-        uint256 actionId = _queueActionCase(actionCase_);
+        uint64 actionId = _queueActionCase(actionCase_);
 
         _executeQueuedAction(actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IPriceConfigv2.IPriceConfigv2_ActionAlreadyExecuted.selector,
+                ITimelockQueue.ITimelockQueue_ActionAlreadyExecuted.selector,
                 actionId
             )
         );
@@ -1104,7 +1125,7 @@ contract PriceConfigv2Test is Test {
 
         // Try to queue asset removal with priceManager account, expect success
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+        uint64 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
         // Confirm asset is not removed until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
@@ -1133,6 +1154,19 @@ contract PriceConfigv2Test is Test {
         priceConfig.queueRemoveAsset(_UNIT_OF_ACCOUNT);
     }
 
+    function test_queueRemoveAsset_givenRawPayload_revalidatesAsset() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(ohm))
+        );
+
+        vm.prank(priceManager);
+        _priceConfigHarness().queueRawAction(
+            address(PRICE),
+            PRICE.removeAsset.selector,
+            abi.encode(address(ohm))
+        );
+    }
+
     function test_queueRemoveAsset(uint8 role_) public {
         role_ = uint8(bound(role_, 0, 1));
         address caller = role_ == 0 ? admin : priceManager;
@@ -1146,7 +1180,7 @@ contract PriceConfigv2Test is Test {
 
         // Queue asset removal using authorized caller
         vm.prank(caller);
-        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+        uint64 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
         // Confirm asset is not removed until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
@@ -1174,19 +1208,20 @@ contract PriceConfigv2Test is Test {
 
         bytes memory payload = abi.encode(address(ohm));
         (
-            uint256 expectedActionId,
+            uint64 expectedActionId,
             uint48 queuedAt,
             uint48 executableAt,
             uint48 expiresAt
-        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.RemoveAsset, priceManager, payload);
+        ) = _expectQueuedAction(address(PRICE), PRICE.removeAsset.selector, priceManager, payload);
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+        uint64 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
         _assertQueuedAction(
             actionId,
             expectedActionId,
-            IPriceConfigv2.TimelockAction.RemoveAsset,
+            address(PRICE),
+            PRICE.removeAsset.selector,
             priceManager,
             queuedAt,
             executableAt,
@@ -1219,7 +1254,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](0),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1247,19 +1282,20 @@ contract PriceConfigv2Test is Test {
             memory expectations = new IPriceConfigv2.PriceFeedExpectation[](0);
         bytes memory payload = abi.encode(address(ohm), params, expectations);
         (
-            uint256 expectedActionId,
+            uint64 expectedActionId,
             uint48 queuedAt,
             uint48 executableAt,
             uint48 expiresAt
-        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.UpdateAsset, priceManager, payload);
+        ) = _expectQueuedAction(address(PRICE), PRICE.updateAsset.selector, priceManager, payload);
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         _assertQueuedAction(
             actionId,
             expectedActionId,
-            IPriceConfigv2.TimelockAction.UpdateAsset,
+            address(PRICE),
+            PRICE.updateAsset.selector,
             priceManager,
             queuedAt,
             executableAt,
@@ -1285,7 +1321,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1313,7 +1349,7 @@ contract PriceConfigv2Test is Test {
 
         // Try with priceManager account, expect success
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         // Confirm feeds are not updated until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
@@ -1336,7 +1372,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](0),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1369,7 +1405,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1413,7 +1449,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1430,7 +1466,7 @@ contract PriceConfigv2Test is Test {
         });
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         _warpPastTimelockDelay();
         vm.expectRevert(
@@ -1468,7 +1504,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1484,9 +1520,9 @@ contract PriceConfigv2Test is Test {
 
         // Queue asset update using authorized caller
         vm.prank(caller);
-        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         assertEq(action.executed, false, "Queued update action should not be executed");
 
         // Confirm feeds are not updated until the timelock is executed
@@ -1578,19 +1614,25 @@ contract PriceConfigv2Test is Test {
         uint48 newDelay = 2 days;
         bytes memory payload = abi.encode(newDelay);
         (
-            uint256 expectedActionId,
+            uint64 expectedActionId,
             uint48 queuedAt,
             uint48 executableAt,
             uint48 expiresAt
-        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.SetTimelockDelay, admin, payload);
+        ) = _expectQueuedAction(
+                address(priceConfig),
+                priceConfig.queueTimelockDelay.selector,
+                admin,
+                payload
+            );
 
         vm.prank(admin);
-        uint256 actionId = priceConfig.queueTimelockDelay(newDelay);
+        uint64 actionId = priceConfig.queueTimelockDelay(newDelay);
 
         _assertQueuedAction(
             actionId,
             expectedActionId,
-            IPriceConfigv2.TimelockAction.SetTimelockDelay,
+            address(priceConfig),
+            priceConfig.queueTimelockDelay.selector,
             admin,
             queuedAt,
             executableAt,
@@ -1603,7 +1645,7 @@ contract PriceConfigv2Test is Test {
         uint48 newDelay = 2 days;
 
         vm.prank(admin);
-        uint256 actionId = priceConfig.queueTimelockDelay(newDelay);
+        uint64 actionId = priceConfig.queueTimelockDelay(newDelay);
 
         assertEq(
             priceConfig.timelockDelay(),
@@ -1629,7 +1671,7 @@ contract PriceConfigv2Test is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IPriceConfigv2.IPriceConfigv2_TimelockDelayInvalid.selector,
+                ITimelockQueue.ITimelockQueue_TimelockDelayInvalid.selector,
                 invalidDelay,
                 priceConfig.MIN_TIMELOCK_DELAY(),
                 priceConfig.MAX_TIMELOCK_DELAY()
@@ -1644,7 +1686,7 @@ contract PriceConfigv2Test is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IPriceConfigv2.IPriceConfigv2_TimelockDelayInvalid.selector,
+                ITimelockQueue.ITimelockQueue_TimelockDelayInvalid.selector,
                 invalidDelay,
                 priceConfig.MIN_TIMELOCK_DELAY(),
                 priceConfig.MAX_TIMELOCK_DELAY()
@@ -1863,9 +1905,9 @@ contract PriceConfigv2Test is Test {
     // when the action ID does not exist
     //  [X] executeQueuedAction reverts
 
-    function test_executeQueuedAction_givenActionIdDoesNotExist_reverts(uint256 actionId_) public {
+    function test_executeQueuedAction_givenActionIdDoesNotExist_reverts(uint64 actionId_) public {
         vm.expectRevert(
-            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionNotFound.selector, actionId_)
+            abi.encodeWithSelector(ITimelockQueue.ITimelockQueue_ActionNotFound.selector, actionId_)
         );
         priceConfig.executeQueuedAction(actionId_);
     }
@@ -1922,7 +1964,7 @@ contract PriceConfigv2Test is Test {
             updateStrategy: false,
             updateMovingAverage: false,
             feeds: new IPRICEv2.Component[](1),
-            strategy: IPRICEv2.Component(SubKeycode.wrap(bytes20(0)), bytes4(0), bytes("")),
+            strategy: IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), bytes("")),
             useMovingAverage: false,
             storeMovingAverage: false,
             movingAverageDuration: 0,
@@ -1939,7 +1981,7 @@ contract PriceConfigv2Test is Test {
         });
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
 
         _warpPastTimelockDelay();
         vm.expectRevert(
@@ -1954,7 +1996,7 @@ contract PriceConfigv2Test is Test {
         );
         priceConfig.executeQueuedAction(actionId);
 
-        IPriceConfigv2.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId);
         assertEq(action.executed, false, "Failed action should remain unexecuted");
         assertEq(action.cancelled, false, "Failed action should not be cancelled");
         assertGt(action.payload.length, 0, "Failed action payload should remain");
@@ -1979,7 +2021,7 @@ contract PriceConfigv2Test is Test {
         _addBaseAssets();
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueRemoveAsset(address(ohm));
+        uint64 actionId = priceConfig.queueRemoveAsset(address(ohm));
 
         if (caller_ != emergency) {
             vm.expectRevert(
@@ -1990,7 +2032,7 @@ contract PriceConfigv2Test is Test {
         priceConfig.cancelQueuedAction(actionId);
 
         if (caller_ != emergency) {
-            IPriceConfigv2.QueuedAction memory pendingAction = priceConfig.getQueuedAction(
+            ITimelockQueue.QueuedAction memory pendingAction = priceConfig.getQueuedAction(
                 actionId
             );
             assertEq(pendingAction.cancelled, false, "Non-emergency should not cancel action");
@@ -2001,7 +2043,7 @@ contract PriceConfigv2Test is Test {
 
         _warpPastTimelockDelay();
         vm.expectRevert(
-            abi.encodeWithSelector(IPriceConfigv2.IPriceConfigv2_ActionCancelled.selector, actionId)
+            abi.encodeWithSelector(ITimelockQueue.ITimelockQueue_ActionCancelled.selector, actionId)
         );
         priceConfig.executeQueuedAction(actionId);
     }
@@ -2098,19 +2140,20 @@ contract PriceConfigv2Test is Test {
 
         bytes memory payload = abi.encode(address(newChainlink));
         (
-            uint256 expectedActionId,
+            uint64 expectedActionId,
             uint48 queuedAt,
             uint48 executableAt,
             uint48 expiresAt
-        ) = _expectQueuedAction(IPriceConfigv2.TimelockAction.UpgradeSubmodule, admin, payload);
+        ) = _expectQueuedAction(address(PRICE), PRICE.upgradeSubmodule.selector, admin, payload);
 
         vm.prank(admin);
-        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        uint64 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         _assertQueuedAction(
             actionId,
             expectedActionId,
-            IPriceConfigv2.TimelockAction.UpgradeSubmodule,
+            address(PRICE),
+            PRICE.upgradeSubmodule.selector,
             admin,
             queuedAt,
             executableAt,
@@ -2197,7 +2240,7 @@ contract PriceConfigv2Test is Test {
 
         // Try to queue chainlink submodule upgrade with admin account, expect success
         vm.prank(admin);
-        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        uint64 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -2229,7 +2272,7 @@ contract PriceConfigv2Test is Test {
 
         // Queue chainlink submodule upgrade with admin account
         vm.prank(admin);
-        uint256 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        uint64 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -2254,6 +2297,8 @@ contract PriceConfigv2Test is Test {
     //  [X] it reverts
     // when the submodule is not installed
     //  [X] it reverts
+    // when the queued payload implementation does not match the installed submodule
+    //  [X] it reverts
     // when the submodule implementation changes before execution
     //  [X] it reverts
     // [X] it queues the execOnSubmodule action
@@ -2270,7 +2315,7 @@ contract PriceConfigv2Test is Test {
         // Call function
         vm.prank(priceManager);
         priceConfig.queueExecOnSubmodule(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            bytes20("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 samplePrices,
@@ -2292,23 +2337,25 @@ contract PriceConfigv2Test is Test {
         );
         bytes memory payload = abi.encode(subKeycode, address(newStrategy), data);
         (
-            uint256 expectedActionId,
+            uint64 expectedActionId,
             uint48 queuedAt,
             uint48 executableAt,
             uint48 expiresAt
         ) = _expectQueuedAction(
-                IPriceConfigv2.TimelockAction.ExecOnSubmodule,
+                address(PRICE),
+                PRICE.execOnSubmodule.selector,
                 priceManager,
                 payload
             );
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueExecOnSubmodule(subKeycode, data);
+        uint64 actionId = priceConfig.queueExecOnSubmodule(SubKeycode.unwrap(subKeycode), data);
 
         _assertQueuedAction(
             actionId,
             expectedActionId,
-            IPriceConfigv2.TimelockAction.ExecOnSubmodule,
+            address(PRICE),
+            PRICE.execOnSubmodule.selector,
             priceManager,
             queuedAt,
             executableAt,
@@ -2329,8 +2376,8 @@ contract PriceConfigv2Test is Test {
         assertEq(newStrategy.storedValue(), 0, "Initial stored value");
 
         vm.prank(caller);
-        uint256 actionId = priceConfig.queueExecOnSubmodule(
-            newStrategyKeycode,
+        uint64 actionId = priceConfig.queueExecOnSubmodule(
+            SubKeycode.unwrap(newStrategyKeycode),
             abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
         );
 
@@ -2351,21 +2398,21 @@ contract PriceConfigv2Test is Test {
         SubKeycode subKeycode = newStrategy.SUBKEYCODE();
 
         vm.prank(priceManager);
-        uint256 actionId = priceConfig.queueExecOnSubmodule(
-            subKeycode,
+        uint64 actionId = priceConfig.queueExecOnSubmodule(
+            SubKeycode.unwrap(subKeycode),
             abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
         );
 
         MockStrategyV2 upgradedStrategy = new MockStrategyV2(PRICE);
 
         vm.prank(admin);
-        uint256 upgradeActionId = priceConfig.queueUpgradeSubmodule(address(upgradedStrategy));
+        uint64 upgradeActionId = priceConfig.queueUpgradeSubmodule(address(upgradedStrategy));
         _executeQueuedAction(upgradeActionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IPriceConfigv2.IPriceConfigv2_SubmoduleImplementationChanged.selector,
-                subKeycode,
+                SubKeycode.unwrap(subKeycode),
                 address(newStrategy),
                 address(upgradedStrategy)
             )
@@ -2386,8 +2433,33 @@ contract PriceConfigv2Test is Test {
 
         vm.prank(priceManager);
         priceConfig.queueExecOnSubmodule(
-            toSubKeycode("PRICE.MOCKSTRATEGY"),
+            bytes20("PRICE.MOCKSTRATEGY"),
             abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
+        );
+    }
+
+    function test_queueExecOnSubmodule_whenPayloadSubmoduleImplementationMismatch_reverts() public {
+        MockStrategy newStrategy = new MockStrategy(PRICE);
+        bytes memory payload = abi.encode(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            address(newStrategy),
+            abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceConfigv2.IPriceConfigv2_SubmoduleImplementationChanged.selector,
+                bytes20("PRICE.SIMPLESTRATEGY"),
+                address(newStrategy),
+                address(strategy)
+            )
+        );
+
+        vm.prank(priceManager);
+        _priceConfigHarness().queueRawAction(
+            address(PRICE),
+            PRICE.execOnSubmodule.selector,
+            payload
         );
     }
 
@@ -2403,7 +2475,7 @@ contract PriceConfigv2Test is Test {
 
         vm.prank(user_);
         priceConfig.queueExecOnSubmodule(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            bytes20("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 samplePrices,
@@ -2526,6 +2598,11 @@ contract PriceConfigv2Test is Test {
             priceConfig.supportsInterface(type(IEnabler).interfaceId),
             true,
             "IEnabler mismatch"
+        );
+        assertEq(
+            priceConfig.supportsInterface(type(ITimelockQueue).interfaceId),
+            true,
+            "ITimelockQueue mismatch"
         );
         assertEq(
             priceConfig.supportsInterface(type(IVersioned).interfaceId),

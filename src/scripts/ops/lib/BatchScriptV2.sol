@@ -690,17 +690,17 @@ abstract contract BatchScriptV2 is WithEnvironment {
         bytes20 targetBytes = SubKeycode.unwrap(feed_.target);
 
         // Skip UniswapV3 - uses observationWindowSeconds, not updateThreshold
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.UNIV3"))) {
+        if (targetBytes == bytes20("PRICE.UNIV3")) {
             return new bytes(0);
         }
 
         // Handle Chainlink feeds
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.CHAINLINK"))) {
+        if (targetBytes == bytes20("PRICE.CHAINLINK")) {
             return _updateChainlinkThreshold(feed_.params, feed_.selector, minThreshold_);
         }
 
         // Handle Pyth feeds
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.PYTH"))) {
+        if (targetBytes == bytes20("PRICE.PYTH")) {
             return _updatePythThreshold(feed_.params, feed_.selector, minThreshold_);
         }
 
