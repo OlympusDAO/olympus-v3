@@ -288,7 +288,10 @@ interface IPriceConfigv2 {
     /// @return actionId_   The queued action ID
     function queueUpgradeSubmodule(address submodule_) external returns (uint256 actionId_);
 
-    /// @notice Perform an action on a submodule
+    /// @notice Perform a view/staticcall-only action on a submodule
+    /// @dev    This function is intentionally not timelocked because it is reserved for read-only
+    ///         submodule interactions. Mutable submodule configuration must be exposed through an
+    ///         explicit PriceConfigv2 function and timelocked if it can affect live price resolution.
     /// @dev    This function reverts if:
     /// @dev    - PRICE.execOnSubmodule() reverts
     ///

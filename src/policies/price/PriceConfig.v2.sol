@@ -629,6 +629,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     // ========== PRICE MANAGEMENT ========== //
 
     /// @inheritdoc IPriceConfigv2
+    /// @dev        This is intentionally not timelocked because it is reserved for view/staticcall-only
+    ///             submodule interactions. Mutable submodule configuration must use an explicit
+    ///             timelocked PriceConfigv2 function.
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
