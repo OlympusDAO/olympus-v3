@@ -43,7 +43,7 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
 
     function test_whenLivePricesAreZeroButCacheExists_returnsCachedPrice() public {
         // The oracle uses cached values and does not fallback to live pricing.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
+        vm.warp(block.timestamp + 1);
         _setPRICEPrices(address(baseToken), 0);
         _setPRICEPrices(address(quoteToken), 0);
 
@@ -322,29 +322,81 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
     }
 
     // when cached prices are stale (older than maxAge)
-    //  [X] it returns cached prices (round semantics)
+    //  [X] latestRoundData reverts with stale
+    //  [X] latestAnswer reverts with stale
+    //  [X] latestTimestamp returns cached timestamp
+    //  [X] latestRound returns cached round ID
 
-    function test_whenCachedPricesAreStale_returnsCachedPrices(
+    function test_whenCachedPricesAreStale_latestRoundDataRevertsWithStale(
         uint48 warpDelta_
     ) public givenPricesAreStored {
-        // Fuzz warp to a time strictly beyond maxAge so cache is stale
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale.
         uint48 warpDelta = uint48(
-            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
         );
         vm.warp(lastStoredTimestamp + warpDelta);
 
-        // Change live prices without storing
-        uint256 liveBase = 15e18;
-        uint256 liveQuote = 5e18;
-        _setPRICEPrices(address(baseToken), liveBase);
-        _setPRICEPrices(address(quoteToken), liveQuote);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
-        // Round-style semantics always return cached values.
-        (, int256 answer, , , ) = oracle.latestRoundData();
+        // Revert should include the stale cached round timestamp and latest permissible timestamp.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IChainlinkOracle.ChainlinkOracle_Stale.selector,
+                lastStoredTimestamp,
+                latestPermissibleTimestamp
+            )
+        );
+        oracle.latestRoundData();
+    }
 
-        // Expected cached answer:
-        // (2e18 * 1e18) / 1e18 = 2e18
-        assertEq(answer, 2e18, "Should return cached price even when cache is stale");
+    function test_whenCachedPricesAreStale_latestAnswerRevertsWithStale(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        // Fuzz warp to a time strictly beyond maxAge so cache is stale.
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
+
+        // Revert should include the stale cached round timestamp and latest permissible timestamp.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IChainlinkOracle.ChainlinkOracle_Stale.selector,
+                lastStoredTimestamp,
+                latestPermissibleTimestamp
+            )
+        );
+        AggregatorV2V3Interface(address(oracle)).latestAnswer();
+    }
+
+    function test_whenCachedPricesAreStale_latestTimestampReturnsCachedTimestamp(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestTimestamp = AggregatorV2V3Interface(address(oracle)).latestTimestamp();
+        assertEq(
+            latestTimestamp,
+            lastStoredTimestamp,
+            "latestTimestamp should remain readable while stale"
+        );
+    }
+
+    function test_whenCachedPricesAreStale_latestRoundReturnsCachedRoundId(
+        uint48 warpDelta_
+    ) public givenPricesAreStored {
+        uint48 warpDelta = uint48(
+            bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE + 1000)
+        );
+        vm.warp(lastStoredTimestamp + warpDelta);
+
+        uint256 latestRound = AggregatorV2V3Interface(address(oracle)).latestRound();
+        assertEq(latestRound, lastStoredRoundId, "latestRound should remain readable while stale");
     }
 
     function test_whenOnlyQuoteUsdCacheChanges_returnsCachedPairRound()

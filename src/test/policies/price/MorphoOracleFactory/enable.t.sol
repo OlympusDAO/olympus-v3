@@ -23,6 +23,7 @@ contract MorphoOracleFactoryEnableTest is MorphoOracleFactoryTest {
             .getCachedPrice(address(collateralToken), address(loanToken))
             .updatedAt;
         vm.warp(uint256(oldTimestamp) + uint256(DEFAULT_MAX_AGE) + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.prank(admin);
         factory.disable("");
@@ -39,7 +40,7 @@ contract MorphoOracleFactoryEnableTest is MorphoOracleFactoryTest {
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 oldTimestamp,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         IMorphoOracle(oracle).price();

@@ -52,12 +52,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -73,12 +74,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Force stale state; cached-only semantics should revert stale before using live prices.
         vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
@@ -652,12 +654,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
         vm.warp(cachedAt + warpDelta);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();

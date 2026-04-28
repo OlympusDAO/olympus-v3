@@ -5,6 +5,8 @@ pragma solidity >=0.8.15;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
 // Interfaces
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -72,11 +74,20 @@ contract ConfigureOracles is BatchScriptV2 {
         address chainlinkFactory = _envAddressNotZero("olympus.policies.ChainlinkOracleFactory");
         address morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
         address erc7726Factory = _envAddressNotZero("olympus.policies.ERC7726OracleFactory");
+        address priceCache = _envAddressNotZero("olympus.policies.PriceCache");
 
-        // Verify policies are activated in Kernel
+        // Verify policies are activated in Kernel and resolved dependencies from the same Kernel
+        _verifyFactoryKernel(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _verifyPolicyActivated(kernel, chainlinkFactory, "ChainlinkOracleFactory");
+        _verifyFactoryPriceCache(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
+
+        _verifyFactoryKernel(kernel, morphoFactory, "MorphoOracleFactory");
         _verifyPolicyActivated(kernel, morphoFactory, "MorphoOracleFactory");
+        _verifyFactoryPriceCache(morphoFactory, "MorphoOracleFactory", false, priceCache);
+
+        _verifyFactoryKernel(kernel, erc7726Factory, "ERC7726OracleFactory");
         _verifyPolicyActivated(kernel, erc7726Factory, "ERC7726OracleFactory");
+        _verifyFactoryPriceCache(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
 
         console2.log("\n=== Oracle Configuration Validated ===");
     }
@@ -95,6 +106,48 @@ contract ConfigureOracles is BatchScriptV2 {
         console2.log(name_, "activated");
     }
 
+    /// @notice Verify a factory policy was deployed against the target Kernel
+    /// @param kernel_ Address of the Kernel
+    /// @param factory_ Address of the factory policy
+    /// @param name_ Name of the factory for logging
+    function _verifyFactoryKernel(
+        address kernel_,
+        address factory_,
+        string memory name_
+    ) internal view {
+        require(factory_.code.length != 0, string.concat(name_, " not deployed"));
+        require(
+            address(Policy(factory_).kernel()) == kernel_,
+            string.concat(name_, " wrong kernel")
+        );
+        console2.log(name_, "kernel verified");
+    }
+
+    /// @notice Verify a factory is configured with the expected PriceCache policy
+    /// @param factory_ Address of the factory policy
+    /// @param name_ Name of the factory for logging
+    /// @param isERC7726_ Whether the factory uses the ERC7726 factory interface
+    /// @param priceCache_ Expected PriceCache policy address
+    function _verifyFactoryPriceCache(
+        address factory_,
+        string memory name_,
+        bool isERC7726_,
+        address priceCache_
+    ) internal view {
+        require(priceCache_ != address(0), string.concat(name_, " expected PriceCache missing"));
+
+        address factoryPriceCache = isERC7726_
+            ? IERC7726OracleFactory(factory_).getPriceCache()
+            : IOracleFactory(factory_).getPriceCache();
+        require(
+            factoryPriceCache != address(0),
+            string.concat(name_, " factory missing PriceCache")
+        );
+
+        require(factoryPriceCache == priceCache_, string.concat(name_, " wrong PriceCache"));
+        console2.log(name_, "PriceCache verified");
+    }
+
     // ========== INTERNAL HELPERS ========== //
 
     /// @notice Activate a single oracle factory policy
@@ -102,8 +155,14 @@ contract ConfigureOracles is BatchScriptV2 {
     /// @param factory_ Address of the factory/policy to activate
     /// @param name_ Name of the factory for logging
     function _activateFactory(address kernel_, address factory_, string memory name_) internal {
-        console2.log("\nActivating", name_);
+        _verifyFactoryKernel(kernel_, factory_, name_);
 
+        if (Kernel(kernel_).isPolicyActive(Policy(factory_))) {
+            console2.log(name_, "already active, skipping activation");
+            return;
+        }
+
+        console2.log("\nActivating", name_);
         addToBatch(
             kernel_,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, factory_)

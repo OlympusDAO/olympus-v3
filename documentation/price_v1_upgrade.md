@@ -107,7 +107,7 @@ Create an args file with price feed addresses (JSON format with `.functions[].na
 2. Configure USDS (Chainlink USDS-USD + Chainlink DAI-USD + Pyth feeds, deviation-based strategy)
 3. Configure sUSDS (ERC4626 wrapper, uses USDS price)
 4. Configure wETH (Chainlink + RedStone + Pyth feeds, deviation-based strategy)
-5. Configure OHM (2x Uniswap V3 feeds, average strategy, 7-day moving average)
+5. Configure OHM (2x Uniswap V3 feeds + Chainlink OHM-ETH × ETH-USD, average strategy, migrated 30-day moving average)
 
 **Automatic validation:** The batch script simulates a full 24-hour Heart cycle (3 beats) to validate PRICE configuration before proposing the batch.
 
