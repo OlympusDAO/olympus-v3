@@ -22,6 +22,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
 
     address internal _token0;
     address internal _token1;
+    address internal _factory;
 
     bool internal _observeReverts;
     bool internal _unlocked = true;
@@ -56,6 +57,10 @@ contract MockUniV3Pair is IUniswapV3Pool {
 
     function setToken1(address token_) public {
         _token1 = token_;
+    }
+
+    function setFactory(address factory_) public {
+        _factory = factory_;
     }
 
     function setTickCumulatives(int56[] memory observations_) public {
@@ -305,7 +310,9 @@ contract MockUniV3Pair is IUniswapV3Pool {
         )
     {}
 
-    function factory() external view returns (address) {}
+    function factory() external view returns (address) {
+        return _factory;
+    }
 
     function protocolFees() external view returns (uint128 token0_, uint128 token1_) {}
 

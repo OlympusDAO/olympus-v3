@@ -65,6 +65,7 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
     address public constant UNISWAP_OHM_WETH = 0x88051B0eea095007D3bEf21aB287Be961f3d8598;
     address public constant UNISWAP_OHM_SUSDS = 0x0858e2B0F9D75f7300B38D64482aC2C8DF06a755;
+    address public constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
     uint256 internal constant OHM_USD_PRICE = 20e18;
     bytes32 internal constant ETH_USD_FEED_ID =
@@ -154,7 +155,8 @@ contract OlympusPricev1_2ForkTest is Test {
         pythPrice = new PythPriceFeeds(price);
         UniswapV3Price uniswapV3Price = new UniswapV3Price(
             price,
-            _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS
+            _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
+            UNISWAP_V3_FACTORY
         );
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);

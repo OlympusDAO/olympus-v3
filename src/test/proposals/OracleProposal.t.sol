@@ -57,6 +57,7 @@ contract OracleProposalTest is ProposalTest {
     // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
     uint32 internal constant OHM_OBSERVATION_WINDOW_SECONDS = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
+    address internal constant _UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
     uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
     string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
@@ -206,7 +207,11 @@ contract OracleProposalTest is ProposalTest {
         if (submodule == address(0)) {
             console2.log("Deploying UniswapV3Price");
             submodule = address(
-                new UniswapV3Price(Module(priceModule_), _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS)
+                new UniswapV3Price(
+                    Module(priceModule_),
+                    _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
+                    _UNISWAP_V3_FACTORY
+                )
             );
             addresses.addAddress(key, submodule);
         } else {
