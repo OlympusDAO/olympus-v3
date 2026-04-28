@@ -2117,6 +2117,8 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         public
         givenAsset_SingleFeed_NoStrategy_StoreMA
     {
+        vm.warp(block.timestamp + 1);
+
         vm.prank(priceWriter);
         price.storeObservation(asset_SingleFeed_NoStrategy_StoreMA);
 
