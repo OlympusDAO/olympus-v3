@@ -857,8 +857,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             );
         }
 
-        // Validate final configuration atomically
-        (, , bool successAllFeeds) = _getCurrentPrice(asset_, true);
+        // Validate final configuration atomically.
+        // Skip MA inclusion so stale heartbeat does not block governance reconfiguration.
+        (, , bool successAllFeeds) = _getCurrentPrice(asset_, false);
         if (!successAllFeeds) revert PRICE_PriceFeedCallFailed(asset_);
 
         // Emit events (based on which updates occurred)
