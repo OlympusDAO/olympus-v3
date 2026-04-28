@@ -15,6 +15,8 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 abstract contract PriceCacheTest is Test {
     uint8 internal constant PRICE_DECIMALS = 18;
+    uint8 internal constant UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant UNIT_OF_ACCOUNT_SYMBOL = "USD";
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
 
     Kernel internal kernel;
@@ -27,16 +29,20 @@ abstract contract PriceCacheTest is Test {
     MockERC20 internal quoteToken;
     address internal unapprovedAsset;
     address internal admin;
+    address internal priceManager;
+
+    bytes32 internal constant PRICE_ADMIN_ROLE = "price_admin";
 
     function setUp() public virtual {
         admin = makeAddr("ADMIN");
+        priceManager = makeAddr("PRICE_MANAGER");
         unapprovedAsset = makeAddr("UNAPPROVED");
 
         kernel = new Kernel();
         priceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        cache = new PriceCache(kernel);
+        cache = new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS, UNIT_OF_ACCOUNT_SYMBOL);
 
         kernel.executeAction(Actions.InstallModule, address(priceModule));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -44,6 +50,7 @@ abstract contract PriceCacheTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(cache));
 
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(PRICE_ADMIN_ROLE, priceManager);
 
         vm.prank(admin);
         cache.enable("");
@@ -60,12 +67,34 @@ abstract contract PriceCacheTest is Test {
         cache.cachePrice(address(assetToken), address(quoteToken));
     }
 
+    function _deactivateCachePolicy() internal {
+        kernel.executeAction(Actions.DeactivatePolicy, address(cache));
+    }
+
     function _unitOfAccount() internal view returns (address) {
         return priceModule.unitOfAccount();
     }
 
     function _cachedPair() internal view returns (IPriceCache.CachedPrice memory cachedPrice_) {
         return cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
+    function _registerNonContractAsset(address asset_) internal {
+        priceModule.registerNonContractAsset(asset_);
+    }
+
+    function _setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string memory symbol_
+    ) internal {
+        vm.prank(admin);
+        cache.setNonContractAssetMetadata(asset_, decimals_, symbol_);
+    }
+
+    function _removeNonContractAssetMetadata(address asset_) internal {
+        vm.prank(admin);
+        cache.removeNonContractAssetMetadata(asset_);
     }
 
     function _upgradePriceModuleAndReconfigure(

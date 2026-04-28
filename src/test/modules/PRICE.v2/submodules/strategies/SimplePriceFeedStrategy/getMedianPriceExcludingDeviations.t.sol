@@ -366,6 +366,56 @@ contract SimplePriceFeedStrategyGetMedianPriceExcludingDeviationsTest is
         );
     }
 
+    function test_whenFourPrices_whenExtremeOutlierMasksWeakerOutlier_strictMode_reverts() public {
+        uint256[] memory prices = new uint256[](4);
+        prices[0] = 11000e18;
+        prices[1] = 10000e18;
+        prices[2] = 10400e18;
+        prices[3] = 10000e18;
+
+        // Sorted prices: [10000e18, 10000e18, 10400e18, 11000e18]
+        // First benchmark median: (10000e18 + 10400e18) / 2 = 10200e18
+        // First pass excludes 11000e18, survivors:
+        //   [10000e18, 10000e18, 10400e18]
+        // Recomputed benchmark median: 10000e18
+        // Second pass excludes 10400e18 (4% deviation > 2%), survivors:
+        //   [10000e18, 10000e18]
+        // Final survivor count is 2.
+        // Strict mode requires 3+ valid prices for median resolution, so this must revert.
+        _expectRevertPriceCount(2, 3);
+        strategy.getMedianPriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(uint16(200), true)
+        );
+    }
+
+    function test_whenOutliersAreExcluded_strictMode_returnsMedianOfInBandSurvivors() public view {
+        uint256[] memory prices = new uint256[](6);
+        prices[0] = 20000e18;
+        prices[1] = 11000e18;
+        prices[2] = 10100e18;
+        prices[3] = 10000e18;
+        prices[4] = 10000e18;
+        prices[5] = 10000e18;
+
+        uint256 price = strategy.getMedianPriceExcludingDeviations(
+            prices,
+            _encodeDeviationParams(uint16(200), true)
+        );
+
+        // Sorted prices: [10000e18, 10000e18, 10000e18, 10100e18, 11000e18, 20000e18]
+        // First benchmark median: (10000e18 + 10100e18) / 2 = 10050e18
+        // First pass excludes 11000e18 and 20000e18, survivors:
+        //   [10000e18, 10000e18, 10000e18, 10100e18]
+        // Recomputed benchmark median: (10000e18 + 10000e18) / 2 = 10000e18
+        // All survivors remain in-band at 2%:
+        //   10000e18: 0%
+        //   10100e18: 1%
+        // Final median of [10000e18, 10000e18, 10000e18, 10100e18]:
+        //   (10000e18 + 10000e18) / 2 = 10000e18
+        assertEq(price, 10000e18, "should return median of the final in-band survivor set");
+    }
+
     // ========== FUZZ TESTS ========== //
 
     function test_whenThreePrices_noDeviation_fuzz(

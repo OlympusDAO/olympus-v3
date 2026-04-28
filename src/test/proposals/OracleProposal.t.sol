@@ -53,6 +53,8 @@ contract OracleProposalTest is ProposalTest {
 
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
     uint16 internal constant BPS_MAX = 10_000;
+    uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
     // Asset feed expectation values are fork-block plausibility checks for PriceConfig v2.
     // They validate that each configured source returns a price near the expected value, but
@@ -267,7 +269,13 @@ contract OracleProposalTest is ProposalTest {
         address policy = _safeGetAddress(key);
         if (policy == address(0)) {
             console2.log("Deploying PriceCache");
-            policy = address(new PriceCache(Kernel(kernelAddr_)));
+            policy = address(
+                new PriceCache(
+                    Kernel(kernelAddr_),
+                    _UNIT_OF_ACCOUNT_DECIMALS,
+                    _UNIT_OF_ACCOUNT_SYMBOL
+                )
+            );
             addresses.addAddress(key, policy);
         } else {
             console2.log("PriceCache already deployed");

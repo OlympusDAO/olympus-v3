@@ -2,6 +2,10 @@
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 pragma solidity >=0.8.15;
 
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
+import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {ChainlinkOracleCloneableTest} from "./ChainlinkOracleCloneableTest.sol";
 
 contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
@@ -90,6 +94,25 @@ contract ChainlinkOracleCloneableIsStaleTest is ChainlinkOracleCloneableTest {
         oracle.isStale();
         uint256 gasUsed = vm.stopSnapshotGas();
         assertGt(gasUsed, 0, "Gas snapshot should be non-zero");
+    }
+
+    function test_whenPriceCachePolicyIsDeactivated_reverts() public {
+        priceCache.setPolicyActive(false);
+
+        vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        oracle.isStale();
+    }
+
+    function test_whenFactoryIsDisabled_reverts() public givenFactoryIsDisabled {
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NotEnabled.selector);
+        oracle.isStale();
+    }
+
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        oracle.isStale();
     }
 
     function test_givenBaseTokenRemovedFromPRICE_reverts() public givenPricesAreStored {

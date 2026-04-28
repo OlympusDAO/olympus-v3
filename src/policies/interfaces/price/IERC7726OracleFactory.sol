@@ -43,6 +43,9 @@ interface IERC7726OracleFactory {
     /// @param   minor      The minor version of the module
     error ERC7726OracleFactory_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
+    /// @notice  Thrown when this policy is no longer active in Kernel
+    error ERC7726OracleFactory_PolicyNotActive();
+
     /// @notice  Thrown when module does not support interface
     ///
     /// @param   keycode        The keycode of the module
@@ -93,6 +96,12 @@ interface IERC7726OracleFactory {
     /// @param   policy  The invalid price cache policy address
     error ERC7726OracleFactory_InvalidPriceCache(address policy);
 
+    /// @notice  Thrown when re-enable pair arrays are malformed
+    ///
+    /// @param   baseTokenLength   The number of base tokens
+    /// @param   quoteTokenLength  The number of quote tokens
+    error ERC7726OracleFactory_InvalidEnableData(uint256 baseTokenLength, uint256 quoteTokenLength);
+
     // ========== FUNCTIONS ========== //
 
     /// @notice  Creates a new oracle for a specific maxAge
@@ -136,6 +145,16 @@ interface IERC7726OracleFactory {
     /// @param   oracle_   The oracle address to check
     /// @return  enabled   True if the oracle is enabled, false otherwise
     function isOracleEnabled(address oracle_) external view returns (bool enabled);
+
+    /// @notice  Checks if a factory-created oracle is enabled and returns the configured price cache
+    /// @dev     Reverts if:
+    ///          - The policy is deactivated in Kernel
+    ///          - `oracle_` was not created by this factory
+    ///
+    /// @param   oracle_   The oracle address to check
+    /// @return  enabled   True if the oracle is enabled, false otherwise
+    /// @return  policy    The configured price cache policy address
+    function getOracleContext(address oracle_) external view returns (bool enabled, address policy);
 
     /// @notice  Cache the direct pair unconditionally for the calling oracle
     ///

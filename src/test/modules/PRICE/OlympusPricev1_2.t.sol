@@ -31,6 +31,8 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 contract OlympusPricev1_2Test is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
 
+    address internal constant UNIT_OF_ACCOUNT = address(840); // 840 = USD (ISO-4217)
+
     // Mock contracts
     MockERC20 internal ohm;
     MockERC20 internal reserveA;
@@ -379,6 +381,16 @@ contract OlympusPricev1_2Test is Test {
         // Verify decimals returns 18
         assertEq(price.decimals(), 18, "Decimals should return 18");
 
+        // Verify unit of account is set correctly
+        assertEq(price.unitOfAccount(), UNIT_OF_ACCOUNT, "Unit of account should be set correctly");
+
+        // Verify unit of account is registered as a non-contract asset
+        assertEq(
+            price.isNonContractAsset(UNIT_OF_ACCOUNT),
+            true,
+            "Unit of account should be registered"
+        );
+
         // Verify event is emitted on deployment
         Kernel testKernel = new Kernel();
         vm.expectEmit(true, false, false, true);
@@ -474,6 +486,32 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getMovingAverage
+    //  given OHM has moving average configured
+    //   given moving average is stale
+    //    [X] it returns the stored moving average
+    function test_getMovingAverage_givenMovingAverageIsStale_returnsStoredValue()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        uint256 movingAverage = price.getMovingAverage();
+        assertEq(
+            movingAverage,
+            OHM_PRICE,
+            "Moving average should return the stored value when stale"
+        );
+        assertEq(
+            price.lastObservationTime(),
+            lastObsTime,
+            "Last observation time should remain unchanged when stale"
+        );
+    }
+
+    // getMovingAverage
     //  given OHM does not have moving average configured
     //   [X] it reverts with PRICE_MovingAverageNotStored
     function test_getMovingAverage_givenOhmDoesNotHaveMovingAverageConfigured_reverts()
@@ -558,6 +596,28 @@ contract OlympusPricev1_2Test is Test {
             MINIMUM_TARGET_PRICE,
             "Target price should return minimum when MA equals minimum"
         );
+    }
+
+    // getTargetPrice
+    //  given moving average is stale
+    //   [X] it reverts with PRICE_MovingAverageStale
+    function test_getTargetPrice_givenMovingAverageIsStale_reverts()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_MovingAverageStale.selector,
+                address(ohm),
+                lastObsTime
+            )
+        );
+        price.getTargetPrice();
     }
 
     // getTargetPrice
@@ -764,6 +824,7 @@ contract OlympusPricev1_2Test is Test {
     {
         IPRICEv2.Asset memory reserveADataBefore = price.getAssetData(address(reserveA));
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriterV1_2);
         price.updateMovingAverage();
 

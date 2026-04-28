@@ -52,11 +52,12 @@ interface IPRICEv2 {
     /// @param asset_   The address of the asset
     error PRICE_AssetNotApproved(address asset_);
 
-    /// @notice         The asset is not a contract
-    /// @dev            Only contract addresses can be used as assets
+    /// @notice         The asset is invalid for the requested PRICE operation
+    /// @dev            This is used when the asset identifier does not satisfy PRICE's validation
+    ///                 rules for the relevant code path.
     ///
     /// @param asset_   The address of the asset
-    error PRICE_AssetNotContract(address asset_);
+    error PRICE_InvalidAsset(address asset_);
 
     /// @notice         The asset is already approved for use
     /// @dev            If trying to amend the configuration, use one of the update functions
@@ -84,6 +85,17 @@ interface IPRICEv2 {
     /// @param asset_                   The address of the asset
     /// @param lastObservationTime_     The timestamp of the last observation
     error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
+
+    /// @notice                         An observation was attempted before the earliest permitted timestamp
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param observationTime_         The timestamp used by the attempted observation
+    /// @param earliestAllowedTime_     The earliest permissible timestamp for the next observation
+    error PRICE_ObservationTooEarly(
+        address asset_,
+        uint48 observationTime_,
+        uint48 earliestAllowedTime_
+    );
 
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
@@ -276,8 +288,10 @@ interface IPRICEv2 {
 
     /// @notice         Variant of price to retrieve
     /// @dev            - CURRENT: The current aggregating feed price, including moving average if configured
+    /// @dev                Reverts with `PRICE_MovingAverageStale` when a configured moving average is stale
     /// @dev            - LAST: The last stored observation price
-    /// @dev            - MOVINGAVERAGE: The raw moving average price of the asset
+    /// @dev            - MOVINGAVERAGE: The raw stored moving average price of the asset
+    /// @dev                This accessor does not apply staleness checks
     enum Variant {
         CURRENT,
         LAST,
@@ -312,6 +326,12 @@ interface IPRICEv2 {
     /// @return approved    Whether the asset is approved
     function isAssetApproved(address asset_) external view returns (bool approved);
 
+    /// @notice             Indicates whether `asset_` is registered as a non-contract asset
+    ///
+    /// @param asset_       The address of the asset
+    /// @return registered  Whether the asset is registered
+    function isNonContractAsset(address asset_) external view returns (bool registered);
+
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account
@@ -322,8 +342,9 @@ interface IPRICEv2 {
 
     /// @notice             Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
     /// @dev                - Variant.CURRENT: current aggregating feed price, including moving average if configured
+    /// @dev                    Reverts with `PRICE_MovingAverageStale` when a configured moving average is stale
     /// @dev                - Variant.LAST: last stored observation price
-    /// @dev                - Variant.MOVINGAVERAGE: raw moving average price
+    /// @dev                - Variant.MOVINGAVERAGE: raw stored moving average price (no staleness check)
     ///
     /// @param asset_       The address of the asset
     /// @param variant_     The variant of the price to return
@@ -392,6 +413,21 @@ interface IPRICEv2 {
     ///
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external;
+
+    /// @notice         Registers a non-contract asset
+    /// @dev            Whitelists a non-contract address so PRICE can manage it as an asset.
+    ///                 Registration does not configure pricing by itself.
+    ///
+    /// @param asset_   The address of the asset to register
+    function registerNonContractAsset(address asset_) external;
+
+    /// @notice         Unregisters a non-contract asset
+    /// @dev            Removes a non-contract address from PRICE asset management.
+    ///                 This cannot be used for the reserved unit of account or for an
+    ///                 asset that still has an active PRICE configuration.
+    ///
+    /// @param asset_   The address of the asset to unregister
+    function unregisterNonContractAsset(address asset_) external;
 
     /// @notice         Updates an asset configuration atomically
     /// @dev            Only updates components flagged in params_

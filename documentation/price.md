@@ -16,6 +16,23 @@ Re-configure price resolution in the protocol to utilise multiple price feeds wh
     - The Operator, YieldRepurchaseFacility and EmissionManager policies rely on the PRICE v1 module interface in order to determine the price of OHM. The v1.2 module maintains backwards-compatibility with the v1 interface, so that existing policies do not need to be updated.
 - The upgrade will allow assets to be configured with multiple price feeds, and strategies to resolve the price from the multiple price feeds. This will increase resilience in adverse conditions.
 
+## Non-Contract Assets and ERC-7726
+
+The `PriceCache` policy supports non-contract assets in addition to normal ERC-20 addresses. This is relevant for standards such as ERC-7726, which explicitly allows special asset identifiers such as:
+
+- the ERC-7528 ETH sentinel `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
+- ISO-4217 code addresses such as `address(840)` for USD
+
+For contract assets, oracle adapters and factories can read decimals and symbols directly from the token contract. For non-contract assets, that metadata must instead be configured in `PriceCache` via `setNonContractAssetMetadata(asset_, decimals_, symbol_)`.
+
+The required conditions for non-contract asset support are:
+
+1. the asset must be registered in `PRICE` as a non-contract asset, unless it is the configured unit of account
+2. the asset must be configured in `PRICE` with a price source
+3. the asset must have metadata configured in `PriceCache`
+
+This allows `ERC7726OracleCloneable`, `MorphoOracleFactory`, and `ChainlinkOracleFactory` to support non-contract assets without assuming that the asset implements ERC-20 metadata methods such as `decimals()` or `symbol()`.
+
 ## Assets
 
 | Asset | Address | Price Feeds | Strategy | Store MA | Use MA | MA Duration |
@@ -84,8 +101,13 @@ The **max confidence interval** is a Pyth-specific parameter that sets the maxim
 
 1. Pyth returns both a `price` and a `conf` (confidence) value
 2. The contract converts `maxConfidence` from 18-decimal scale to Pyth's native scale (based on the feed's exponent)
-3. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
-4. This prevents using prices with high uncertainty
+3. If the converted value exceeds `uint64`, it is clamped to `type(uint64).max`
+4. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
+5. For Pyth two-feed reads, the contract validates each feed independently, derives a conservative confidence interval for the output product or ratio, and compares it against `outputMaxConfidence`
+6. If the derived output confidence exceeds `outputMaxConfidence`, the feed reverts with `Pyth_DerivedFeedConfidenceExcessive`
+7. For division, if the denominator confidence is greater than or equal to the denominator price, the feed reverts with `Pyth_DerivedFeedConfidenceInvalid`
+
+Pyth two-feed parameters include `firstMaxConfidence`, `secondMaxConfidence`, and `outputMaxConfidence`, all in output decimals. The first two thresholds cap each input feed independently. `outputMaxConfidence` caps the uncertainty of the derived price that callers actually consume.
 
 ### wETH Price Resolution
 
