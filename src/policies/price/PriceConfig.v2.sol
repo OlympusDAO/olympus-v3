@@ -146,6 +146,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, IPriceConfigv2, IVersioned {
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
+    ///             - `asset_` is the zero address
+    ///             - `asset_` is a contract
+    ///             - `asset_` is reserved or otherwise invalid under PRICE rules
+    ///             - `asset_` is already registered as a non-contract asset
     ///             - PRICE rejects the registration
     function registerNonContractAsset(
         address asset_

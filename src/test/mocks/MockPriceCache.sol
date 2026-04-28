@@ -14,6 +14,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     struct InternalCachedPrice {
         uint256 token0PriceUsd;
         uint256 token1PriceUsd;
+        uint64 token0Epoch;
+        uint64 token1Epoch;
         uint48 updatedAt;
         uint80 roundId;
     }
@@ -33,6 +35,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     mapping(address asset => bool approved) internal _approvedAssets;
     mapping(address asset => IPriceCache.NonContractAssetMetadata metadata)
         internal _nonContractAssetMetadata;
+    mapping(address asset => uint64 epoch) internal _assetEpoch;
     mapping(bytes32 pairKey => InternalCachedPrice cache) internal _cachedPriceByPair;
 
     constructor(address kernel_) {
@@ -98,16 +101,29 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         uint8 decimals_,
         string calldata symbol_
     ) external {
-        _nonContractAssetMetadata[asset_] = IPriceCache.NonContractAssetMetadata({
-            registered: true,
-            decimals: decimals_,
-            symbol: symbol_
-        });
+        IPriceCache.NonContractAssetMetadata storage metadata = _nonContractAssetMetadata[asset_];
+        if (
+            !metadata.registered ||
+            metadata.decimals != decimals_ ||
+            keccak256(bytes(metadata.symbol)) != keccak256(bytes(symbol_))
+        ) {
+            metadata.registered = true;
+            metadata.decimals = decimals_;
+            metadata.symbol = symbol_;
+            unchecked {
+                _assetEpoch[asset_]++;
+            }
+        }
     }
 
     function removeNonContractAssetMetadata(address asset_) external {
         if (asset_ == _UNIT_OF_ACCOUNT) {
             revert IPriceCache.PriceCache_InvalidAsset(asset_);
+        }
+        if (_nonContractAssetMetadata[asset_].registered) {
+            unchecked {
+                _assetEpoch[asset_]++;
+            }
         }
         delete _nonContractAssetMetadata[asset_];
     }
@@ -130,14 +146,20 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
 
         uint256 assetPriceUsd = _getUsdPriceOrUnit(asset_);
         uint256 quotePriceUsd = _getUsdPriceOrUnit(quote_);
+        uint64 assetEpoch = _assetEpoch[asset_];
+        uint64 quoteEpoch = _assetEpoch[quote_];
 
         InternalCachedPrice storage cache = _cachedPriceByPair[key];
         if (assetIsToken0) {
             cache.token0PriceUsd = assetPriceUsd;
             cache.token1PriceUsd = quotePriceUsd;
+            cache.token0Epoch = assetEpoch;
+            cache.token1Epoch = quoteEpoch;
         } else {
             cache.token0PriceUsd = quotePriceUsd;
             cache.token1PriceUsd = assetPriceUsd;
+            cache.token0Epoch = quoteEpoch;
+            cache.token1Epoch = assetEpoch;
         }
         cache.updatedAt = uint48(block.timestamp);
         cache.roundId++;
@@ -174,6 +196,21 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
 
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
         InternalCachedPrice memory cache = _cachedPriceByPair[key];
+        bool pairIsInvalidated;
+
+        if (assetIsToken0) {
+            pairIsInvalidated =
+                cache.token0Epoch != _assetEpoch[asset_] ||
+                cache.token1Epoch != _assetEpoch[quote_];
+        } else {
+            pairIsInvalidated =
+                cache.token0Epoch != _assetEpoch[quote_] ||
+                cache.token1Epoch != _assetEpoch[asset_];
+        }
+
+        if (pairIsInvalidated) {
+            return cachedPrice;
+        }
 
         if (assetIsToken0) {
             cachedPrice.assetPriceUsd = cache.token0PriceUsd;

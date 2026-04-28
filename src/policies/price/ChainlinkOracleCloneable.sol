@@ -116,6 +116,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     ///             If callers encounter a revert due to feed state, they should cache prices then retry.
     ///
@@ -154,6 +156,9 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
 
         // Calculate pair quote in configured decimal scale from cached USD legs.
         uint256 price = FullMath.mulDiv(assetPriceUsd, 10 ** _priceDecimals(), quotePriceUsd);
+        if (price == 0) {
+            revert ChainlinkOracle_NoDataPresent();
+        }
 
         roundId = cachedPrice.roundId;
         answer = SafeCast.toInt256(price);
@@ -171,6 +176,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     function latestRoundData()
         external
         view
@@ -203,6 +210,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     /// @param  roundId_         The round ID to query
     /// @return roundId          The round ID
@@ -244,6 +253,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     /// @return int256  The latest price
     function latestAnswer() external view override returns (int256) {
@@ -258,6 +269,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     /// @return uint256 The latest timestamp
     function latestTimestamp() external view override returns (uint256) {
@@ -272,6 +285,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///
     /// @return uint256 The latest round ID
     function latestRound() external view override returns (uint256) {
@@ -286,6 +301,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///             - `roundId_` is not the latest round ID
     ///
     /// @param      roundId_    The round ID to query
@@ -305,6 +322,8 @@ contract ChainlinkOracleCloneable is IChainlinkOracle, IOraclePriceCache, Clone 
     ///             - The base/quote pair is invalid for the configured cache policy
     ///             - Either cached USD leg is zero
     ///             - No cached pair observation is present (`updatedAt == 0`)
+    ///             - The computed pair price rounds down to zero (`price == 0` after `FullMath.mulDiv(...)`)
+    ///             - The computed pair price cannot be cast to int256 (`answer = SafeCast.toInt256(price)`)
     ///             - `roundId_` is not the latest round ID
     ///
     /// @param      roundId_    The round ID to query

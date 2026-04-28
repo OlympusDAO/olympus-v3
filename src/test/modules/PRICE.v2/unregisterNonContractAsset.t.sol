@@ -118,9 +118,8 @@ contract PriceV2UnregisterNonContractAssetTest is PriceV2BaseTest {
             abi.encode(ethParams)
         );
 
-        vm.prank(priceWriter);
-        price.registerNonContractAsset(nonContract);
         vm.startPrank(priceWriter);
+        price.registerNonContractAsset(nonContract);
         price.addAsset(
             nonContract,
             false,

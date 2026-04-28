@@ -27,7 +27,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     function test_revertsOnParamsTooShort() public {
-        bytes memory shortParams = new bytes(255); // 1 byte short of 256
+        bytes memory shortParams = new bytes(287); // 1 byte short of 288
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
             PRICE_ID_1,
@@ -38,7 +38,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
             UPDATE_THRESHOLD,
             MAX_CONFIDENCE
         );
-        for (uint256 i = 0; i < 255; i++) {
+        for (uint256 i = 0; i < 287; i++) {
             shortParams[i] = params[i];
         }
 
@@ -52,7 +52,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
     }
 
     function test_revertsOnParamsTooLong() public {
-        bytes memory longParams = new bytes(512); // Double the expected size
+        bytes memory longParams = new bytes(576); // Double the expected size
         bytes memory params = encodeTwoFeedParams(
             address(pyth),
             PRICE_ID_1,
@@ -63,7 +63,7 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
             UPDATE_THRESHOLD,
             MAX_CONFIDENCE
         );
-        for (uint256 i = 0; i < 256; i++) {
+        for (uint256 i = 0; i < 288; i++) {
             longParams[i] = params[i];
         }
 
@@ -303,6 +303,71 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
             PRICE_ID_3,
             UPDATE_THRESHOLD,
             0
+        );
+        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given the output max confidence is zero
+    //  [X] it reverts with Pyth_ParamsMaxConfidenceInvalid
+    function test_outputMaxConfidenceZero_reverts() public {
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_ParamsMaxConfidenceInvalid.selector,
+            8,
+            0
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            0
+        );
+        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given each leg confidence is below the per-feed maximum
+    //  given the derived division confidence exceeds the output maximum
+    //   [X] it reverts with Pyth_DerivedFeedConfidenceExcessive
+    function test_outputMaxConfidenceExceeded_reverts() public {
+        // numeratorPrice = 1.23456789e18, numeratorConfidence = 0.01e18
+        // denominatorPrice = 500000000, denominatorConfidence = 500000
+        uint256 numeratorPrice = EXPECTED_PRICE_1_18_DEC;
+        uint256 numeratorConfidence = 1e16;
+        uint256 denominatorPrice = 500000000;
+        uint256 denominatorConfidence = 500000;
+        uint256 scale = 10 ** uint256(PRICE_DECIMALS);
+
+        uint256 priceResult = numeratorPrice.mulDiv(scale, denominatorPrice);
+        uint256 upperPrice = (numeratorPrice + numeratorConfidence).mulDivUp(
+            scale,
+            denominatorPrice - denominatorConfidence
+        );
+        uint256 derivedConfidence = upperPrice - priceResult;
+        uint256 outputMaxConfidence = derivedConfidence - 1;
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_DerivedFeedConfidenceExcessive.selector,
+            derivedConfidence,
+            outputMaxConfidence
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            outputMaxConfidence
         );
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }

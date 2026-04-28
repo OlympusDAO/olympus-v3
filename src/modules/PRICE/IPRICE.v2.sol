@@ -86,6 +86,17 @@ interface IPRICEv2 {
     /// @param lastObservationTime_     The timestamp of the last observation
     error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
 
+    /// @notice                         An observation was attempted before the earliest permitted timestamp
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param observationTime_         The timestamp used by the attempted observation
+    /// @param earliestAllowedTime_     The earliest permissible timestamp for the next observation
+    error PRICE_ObservationTooEarly(
+        address asset_,
+        uint48 observationTime_,
+        uint48 earliestAllowedTime_
+    );
+
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
     ///
