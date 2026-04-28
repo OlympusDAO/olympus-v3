@@ -245,6 +245,19 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
         assertEq(stale, true, "Registered non-contract asset pair should be stale");
     }
 
+    function test_givenBaseAssetIsRegisteredNonContractAsset_givenMetadataIsUpdated_returnsTrue()
+        public
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+
+        priceCache.setNonContractAssetMetadata(registeredNonContractAsset, 9, "NCA2");
+
+        bool stale = oracle.isStale(registeredNonContractAsset, address(loanToken));
+        assertEq(stale, true, "Metadata updates should invalidate cached base-asset pairs");
+    }
+
     // given the quote asset is a registered non-contract asset
     //  given non-contract asset decimals are not set
     //   [X] it reverts
@@ -292,6 +305,19 @@ contract ERC7726OracleIsStaleTest is ERC7726OracleTest {
 
         bool stale = oracle.isStale(address(collateralToken), registeredNonContractAsset);
         assertEq(stale, true, "Registered non-contract asset pair should be stale");
+    }
+
+    function test_givenQuoteAssetIsRegisteredNonContractAsset_givenMetadataIsUpdated_returnsTrue()
+        public
+    {
+        _setPRICEPrices(registeredNonContractAsset, 3e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "NCA");
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+
+        priceCache.setNonContractAssetMetadata(registeredNonContractAsset, 9, "NCA2");
+
+        bool stale = oracle.isStale(address(collateralToken), registeredNonContractAsset);
+        assertEq(stale, true, "Metadata updates should invalidate cached quote-asset pairs");
     }
 
     function test_givenBaseAssetIsRegisteredNonContractAsset_givenAssetIsNoLongerApprovedInPRICE_reverts()

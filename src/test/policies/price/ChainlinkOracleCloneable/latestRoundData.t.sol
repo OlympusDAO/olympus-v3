@@ -56,6 +56,18 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         assertEq(answer, 2e18, "Should return cached round");
     }
 
+    // when cached ratio rounds down to zero
+    //  [X] it reverts with ChainlinkOracle_NoDataPresent
+
+    function test_whenCachedRatioRoundsDownToZero_reverts() public {
+        _setPRICEPrices(address(baseToken), 1);
+        _setPRICEPrices(address(quoteToken), 1e36);
+        _storePrices();
+
+        vm.expectRevert(IChainlinkOracle.ChainlinkOracle_NoDataPresent.selector);
+        oracle.latestRoundData();
+    }
+
     // when cached pair price exceeds int256
     //  [X] it reverts via SafeCast.toInt256 overflow guard
 

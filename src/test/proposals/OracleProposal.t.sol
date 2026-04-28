@@ -54,8 +54,8 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
-    uint8 internal constant UNIT_OF_ACCOUNT_DECIMALS = 18;
-    string internal constant UNIT_OF_ACCOUNT_SYMBOL = "USD";
+    uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -249,8 +249,8 @@ contract OracleProposalTest is ProposalTest {
             policy = address(
                 new PriceCache(
                     Kernel(kernelAddr_),
-                    UNIT_OF_ACCOUNT_DECIMALS,
-                    UNIT_OF_ACCOUNT_SYMBOL
+                    _UNIT_OF_ACCOUNT_DECIMALS,
+                    _UNIT_OF_ACCOUNT_SYMBOL
                 )
             );
             addresses.addAddress(key, policy);
