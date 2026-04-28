@@ -247,6 +247,120 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
         price.updateAsset(address(testAsset1), params);
     }
 
+    function test_whenAssetIsUnregisteredNonContract_reverts() public {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: _emptyStrategy(),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: uint32(0),
+            lastObservationTime: uint48(0),
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = _singleFeed(alphaUsdPriceFeed);
+
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_InvalidAsset.selector, nonContract));
+
+        vm.prank(priceWriter);
+        price.updateAsset(nonContract, params);
+    }
+
+    function test_whenAssetIsRegisteredNonContract_updatesFeeds() public {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        IPRICEv2.Component[] memory initialFeeds = new IPRICEv2.Component[](1);
+        initialFeeds[0] = _singleFeed(alphaUsdPriceFeed);
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            _emptyStrategy(),
+            initialFeeds
+        );
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: _emptyStrategy(),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: uint32(0),
+            lastObservationTime: uint48(0),
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = _singleFeed(reserveUsdPriceFeed);
+
+        vm.prank(priceWriter);
+        price.updateAsset(nonContract, params);
+
+        assertEq(price.getPrice(nonContract), 1e18, "Price should reflect the updated feed");
+    }
+
+    function test_whenAssetIsRegisteredNonContract_thenDeployContractAtSameAddress_updatesFeeds()
+        public
+    {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        IPRICEv2.Component[] memory initialFeeds = new IPRICEv2.Component[](1);
+        initialFeeds[0] = _singleFeed(alphaUsdPriceFeed);
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            _emptyStrategy(),
+            initialFeeds
+        );
+
+        MockERC20 replacement = new MockERC20("Replacement", "RPL", 6);
+        vm.etch(nonContract, address(replacement).code);
+
+        IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
+            updateFeeds: true,
+            updateStrategy: false,
+            updateMovingAverage: false,
+            feeds: new IPRICEv2.Component[](1),
+            strategy: _emptyStrategy(),
+            useMovingAverage: false,
+            storeMovingAverage: false,
+            movingAverageDuration: uint32(0),
+            lastObservationTime: uint48(0),
+            observations: new uint256[](0)
+        });
+        params.feeds[0] = _singleFeed(reserveUsdPriceFeed);
+
+        vm.prank(priceWriter);
+        price.updateAsset(nonContract, params);
+
+        assertEq(
+            price.getPrice(nonContract),
+            1e18,
+            "Price should reflect the updated feed after code is deployed at the address"
+        );
+    }
+
     // when the price feed configuration is being updated, when the number of price feeds is 0: it reverts
 
     function test_whenUpdatingPriceFeeds_whenZeroFeeds_reverts()

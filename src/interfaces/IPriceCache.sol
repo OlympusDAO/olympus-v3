@@ -24,6 +24,29 @@ interface IPriceCache {
     /// @param  quote_  Quote in requested orientation
     error PriceCache_InvalidPair(address asset_, address quote_);
 
+    /// @notice Thrown when a non-contract asset is not registered in PRICE
+    ///
+    /// @param asset_   Non-contract asset identifier
+    error PriceCache_NonContractAssetNotRegistered(address asset_);
+
+    /// @notice Thrown when a non-contract asset has no cache decimals configured
+    ///
+    /// @param asset_   Non-contract asset identifier
+    error PriceCache_NonContractAssetDecimalsNotRegistered(address asset_);
+
+    /// @notice Thrown when a non-contract asset has no cache symbol configured
+    ///
+    /// @param asset_   Non-contract asset identifier
+    error PriceCache_NonContractAssetSymbolNotRegistered(address asset_);
+
+    /// @notice Thrown when the asset identifier is invalid for the requested cache operation
+    ///
+    /// @param asset_   Asset identifier
+    error PriceCache_InvalidAsset(address asset_);
+
+    /// @notice Thrown when a non-contract asset symbol is invalid
+    error PriceCache_InvalidAssetSymbol();
+
     /// @notice Return the USD decimal scale used by cached pair legs
     ///
     /// @return decimals_   USD decimal scale for cached assetPriceUsd/quotePriceUsd values
@@ -42,11 +65,67 @@ interface IPriceCache {
         uint80 roundId;
     }
 
+    /// @notice Stored metadata for a non-contract asset
+    ///
+    /// @param registered    Whether metadata is configured for the asset
+    /// @param decimals      Amount decimal scale for the asset
+    /// @param symbol        Display symbol for the asset
+    struct NonContractAssetMetadata {
+        bool registered;
+        uint8 decimals;
+        string symbol;
+    }
+
+    /// @notice Internal pair snapshot storage in canonical token order
+    ///
+    /// @param token0PriceUsd    Cached USD price for the lower-sorted asset
+    /// @param token1PriceUsd    Cached USD price for the higher-sorted asset
+    /// @param updatedAt         Timestamp of snapshot write
+    /// @param roundId           Monotonic pair cache write counter
+    /// @param token0Epoch       Asset invalidation epoch for token0 at cache time
+    /// @param token1Epoch       Asset invalidation epoch for token1 at cache time
+    struct PairSnapshot {
+        uint256 token0PriceUsd;
+        uint256 token1PriceUsd;
+        uint48 updatedAt;
+        uint80 roundId;
+        uint64 token0Epoch;
+        uint64 token1Epoch;
+    }
+
     /// @notice Cache an explicit asset/quote pair snapshot
     ///
     /// @param asset_   Asset in requested orientation
     /// @param quote_   Quote in requested orientation
     function cachePrice(address asset_, address quote_) external;
+
+    /// @notice Return the amount decimal scale used for `asset_` quote conversion
+    ///
+    /// @param asset_       Asset identifier
+    /// @return decimals_   Amount decimal scale for `asset_`
+    function assetDecimals(address asset_) external view returns (uint8 decimals_);
+
+    /// @notice Return the symbol used for naming and display of `asset_`
+    ///
+    /// @param asset_       Asset identifier
+    /// @return symbol_     Symbol for `asset_`
+    function assetSymbol(address asset_) external view returns (string memory symbol_);
+
+    /// @notice Set the metadata for a registered non-contract asset
+    ///
+    /// @param asset_       Non-contract asset identifier
+    /// @param decimals_    Amount decimal scale for `asset_`
+    /// @param symbol_      Display symbol for `asset_`
+    function setNonContractAssetMetadata(
+        address asset_,
+        uint8 decimals_,
+        string calldata symbol_
+    ) external;
+
+    /// @notice Remove the configured metadata for a non-contract asset
+    ///
+    /// @param asset_   Non-contract asset identifier
+    function removeNonContractAssetMetadata(address asset_) external;
 
     /// @notice Cache an explicit pair only when stale for maxAge_
     ///

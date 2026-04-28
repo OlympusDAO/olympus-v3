@@ -37,7 +37,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @param kernel_                  Kernel address
     /// @param decimals_                Decimals that all prices will be returned with
     /// @param observationFrequency_    Frequency at which prices are stored for moving average
-    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
+    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) PRICEv2(kernel_) {
         if (observationFrequency_ == 0)
             revert PRICE_ObservationFrequencyInvalid(observationFrequency_);
 
@@ -97,17 +97,44 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         return _assetData[asset_].approved;
     }
 
+    /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is the zero address
+    /// @dev        - `asset_` is a contract
+    /// @dev        - `asset_` is already registered
+    function registerNonContractAsset(address asset_) external override permissioned {
+        _registerNonContractAsset(asset_);
+    }
+
+    /// @inheritdoc IPRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is the reserved unit of account
+    /// @dev        - `asset_` is not registered
+    /// @dev        - `asset_` still has an active PRICE configuration
+    function unregisterNonContractAsset(address asset_) external override permissioned {
+        if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        if (!isNonContractAsset[asset_] || _assetData[asset_].approved) {
+            revert PRICE_InvalidAsset(asset_);
+        }
+
+        delete isNonContractAsset[asset_];
+    }
+
     /// @notice         Returns true if `asset_` is the reserved unit-of-account asset
+    /// @dev            Does not revert.
     function _isUnitOfAccount(address asset_) internal pure returns (bool) {
         return asset_ == _UNIT_OF_ACCOUNT;
     }
 
     /// @notice         Returns the unit price scaled to PRICE decimals
+    /// @dev            Does not revert.
     function _unitPrice() internal view returns (uint256) {
         return 10 ** _decimals;
     }
 
     /// @notice         Reverts unless `asset_` is an approved asset
+    /// @dev            Will revert if:
+    /// @dev            - `asset_` is not approved
     function _validateApprovedAsset(address asset_) internal view {
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
     }
@@ -515,9 +542,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component[] memory feeds_
     ) external override permissioned {
         if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
-
-        // Check that asset is a contract
-        if (asset_.code.length == 0) revert PRICE_AssetNotContract(asset_);
+        _validateAssetIsManageable(asset_);
 
         Asset storage asset = _assetData[asset_];
 
@@ -804,6 +829,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         UpdateAssetParams memory params_
     ) external virtual override permissioned {
         if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
+        _validateAssetIsManageable(asset_);
 
         // Validate at least one update flag is true
         if (!params_.updateFeeds && !params_.updateStrategy && !params_.updateMovingAverage)

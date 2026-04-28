@@ -13,6 +13,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/ISimplePriceFeedStrategy.sol";
 
 // Bophades
+import {Module} from "src/Kernel.sol";
 import {fromSubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -118,8 +119,6 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 // - TWOMA: Two feed + MA using the getAveragePrice strategy
 
 contract PriceV2Test is PriceV2BaseTest {
-    address internal constant _UNIT_OF_ACCOUNT = address(840);
-
     // =========  TESTS ========= //
 
     function test_constructor_observationFrequency_zero_reverts() public {
@@ -131,6 +130,21 @@ contract PriceV2Test is PriceV2BaseTest {
 
         // Create a new module
         new OlympusPricev2(kernel, 18, 0);
+    }
+
+    function test_constructor_setsUnitOfAccountAndRegistersIt() public {
+        OlympusPricev2 newPrice = new OlympusPricev2(kernel, 18, OBSERVATION_FREQUENCY);
+
+        assertEq(
+            newPrice.unitOfAccount(),
+            _UNIT_OF_ACCOUNT,
+            "Unit of account should use the reserved constant"
+        );
+        assertEq(
+            newPrice.isNonContractAsset(_UNIT_OF_ACCOUNT),
+            true,
+            "Unit of account should be registered as a non-contract asset"
+        );
     }
 
     // =========  getAssets  ========= //
@@ -1747,8 +1761,8 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
 
         // Try to call storeObservation with non-permissioned address (this contract) and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);
@@ -2197,8 +2211,8 @@ contract PriceV2Test is PriceV2BaseTest {
         );
     }
 
-    function testRevert_addAsset_notContract() public {
-        address eoa = 0x3040351e0D8EAf89A0F1b958Fa62915d804B2405;
+    function testRevert_addAsset_unregisteredNonContract() public {
+        address nonContract = makeAddr("NON_CONTRACT");
 
         ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
             ethUsdPriceFeed,
@@ -2212,14 +2226,12 @@ contract PriceV2Test is PriceV2BaseTest {
             abi.encode(ethParams) // bytes memory params_
         );
 
-        // Try and add the asset
+        // Try and add the unregistered non-contract asset
         vm.startPrank(priceWriter);
-
-        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotContract(address)", address(eoa));
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_InvalidAsset.selector, nonContract));
 
         price.addAsset(
-            address(eoa), // address asset_
+            nonContract, // address asset_
             false, // bool storeMovingAverage_ // don't track WETH MA
             false, // bool useMovingAverage_
             uint32(0), // uint32 movingAverageDuration_
@@ -2227,6 +2239,135 @@ contract PriceV2Test is PriceV2BaseTest {
             new uint256[](0), // uint256[] memory observations_
             IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
             feeds //
+        );
+    }
+
+    function test_addAsset_registeredNonContract() public {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+        vm.startPrank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            feeds
+        );
+        vm.stopPrank();
+
+        assertEq(price.isAssetApproved(nonContract), true, "Non-contract asset should be approved");
+    }
+
+    function test_addAsset_registeredNonContract_thenDeployContractAtSameAddress_getPriceStillWorks()
+        public
+    {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory initialFeeds = new IPRICEv2.Component[](1);
+        initialFeeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            initialFeeds
+        );
+
+        assertEq(price.getPrice(nonContract), 2000e18, "Price should use the initial feed");
+
+        MockERC20 replacement = new MockERC20("Replacement", "RPL", 6);
+        vm.etch(nonContract, address(replacement).code);
+
+        assertEq(
+            price.getPrice(nonContract),
+            2000e18,
+            "Price should still work after code is deployed at the address"
+        );
+    }
+
+    function test_removeAsset_registeredNonContract_thenDeployContractAtSameAddress_thenDeregisters()
+        public
+    {
+        address nonContract = makeAddr("NON_CONTRACT");
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ethParams)
+        );
+
+        vm.prank(priceWriter);
+        price.registerNonContractAsset(nonContract);
+
+        vm.prank(priceWriter);
+        price.addAsset(
+            nonContract,
+            false,
+            false,
+            uint32(0),
+            uint48(0),
+            new uint256[](0),
+            IPRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)),
+            feeds
+        );
+
+        MockERC20 replacement = new MockERC20("Replacement", "RPL", 6);
+        vm.etch(nonContract, address(replacement).code);
+
+        vm.startPrank(priceWriter);
+        price.removeAsset(nonContract);
+        price.unregisterNonContractAsset(nonContract);
+        vm.stopPrank();
+
+        assertEq(
+            price.isAssetApproved(nonContract),
+            false,
+            "Non-contract asset should be removable after code is deployed at the address"
+        );
+        assertEq(
+            price.isNonContractAsset(nonContract),
+            false,
+            "Non-contract asset should be deregisterable after asset removal"
         );
     }
 
@@ -2246,8 +2387,8 @@ contract PriceV2Test is PriceV2BaseTest {
         );
 
         // Try and add the asset
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);
@@ -3289,8 +3430,8 @@ contract PriceV2Test is PriceV2BaseTest {
         _addBaseAssets(nonce_);
 
         // Try and remove the asset
-        bytes memory err = abi.encodeWithSignature(
-            "Module_PolicyNotPermitted(address)",
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
         vm.expectRevert(err);

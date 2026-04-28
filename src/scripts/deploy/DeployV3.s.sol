@@ -938,14 +938,27 @@ contract DeployV3 is WithEnvironment {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
+        uint8 unitOfAccountDecimals = SafeCast.encodeUInt8(
+            _readDeploymentArgUint256("PriceCache", "unitOfAccountDecimals")
+        );
+        string memory unitOfAccountSymbol = _readDeploymentArgString(
+            "PriceCache",
+            "unitOfAccountSymbol"
+        );
 
         // Log parameters
         console2.log("PriceCache parameters:");
         console2.log("  kernel", kernel);
+        console2.log("  unitOfAccountDecimals", unitOfAccountDecimals);
+        console2.log("  unitOfAccountSymbol", unitOfAccountSymbol);
 
         // Deploy
         vm.broadcast();
-        PriceCache cache = new PriceCache(Kernel(kernel));
+        PriceCache cache = new PriceCache(
+            Kernel(kernel),
+            unitOfAccountDecimals,
+            unitOfAccountSymbol
+        );
 
         return (address(cache), "olympus.policies");
     }

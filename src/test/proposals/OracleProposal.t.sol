@@ -54,6 +54,8 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_MIN_PRICE = 17e18;
     uint256 internal constant OHM_MAX_PRICE = 18e18;
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
+    uint8 internal constant _UNIT_OF_ACCOUNT_DECIMALS = 18;
+    string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
@@ -244,7 +246,13 @@ contract OracleProposalTest is ProposalTest {
         address policy = _safeGetAddress(key);
         if (policy == address(0)) {
             console2.log("Deploying PriceCache");
-            policy = address(new PriceCache(Kernel(kernelAddr_)));
+            policy = address(
+                new PriceCache(
+                    Kernel(kernelAddr_),
+                    _UNIT_OF_ACCOUNT_DECIMALS,
+                    _UNIT_OF_ACCOUNT_SYMBOL
+                )
+            );
             addresses.addAddress(key, policy);
         } else {
             console2.log("PriceCache already deployed");

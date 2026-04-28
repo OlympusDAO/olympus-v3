@@ -60,5 +60,122 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         );
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
+
+    function test_whenUnitOfAccountDecimalsChange_invalidatesPairsInBothOrientations() public {
+        address unitOfAccount = _unitOfAccount();
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
+
+        cache.cachePrice(address(assetToken), unitOfAccount);
+
+        IPriceCache.CachedPrice memory beforeUpdate = cache.getCachedPrice(
+            address(assetToken),
+            unitOfAccount
+        );
+        assertEq(beforeUpdate.roundId, 1, "Pair should be cached before invalidation");
+
+        _setNonContractAssetMetadata(unitOfAccount, 3, "NCA");
+
+        IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
+            address(assetToken),
+            unitOfAccount
+        );
+        IPriceCache.CachedPrice memory reverse = cache.getCachedPrice(
+            unitOfAccount,
+            address(assetToken)
+        );
+
+        assertEq(forward.assetPriceUsd, 0, "Forward asset leg should be invalidated");
+        assertEq(forward.quotePriceUsd, 0, "Forward quote leg should be invalidated");
+        assertEq(forward.updatedAt, 0, "Forward timestamp should be invalidated");
+        assertEq(forward.roundId, 0, "Forward round should be invalidated");
+
+        assertEq(reverse.assetPriceUsd, 0, "Reverse asset leg should be invalidated");
+        assertEq(reverse.quotePriceUsd, 0, "Reverse quote leg should be invalidated");
+        assertEq(reverse.updatedAt, 0, "Reverse timestamp should be invalidated");
+        assertEq(reverse.roundId, 0, "Reverse round should be invalidated");
+    }
+
+    function test_whenRegisteredNonContractAssetDecimalsChange_invalidatesPairsInBothOrientations()
+        public
+    {
+        address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
+        _registerNonContractAsset(nonContractAsset);
+        priceModule.setPrice(nonContractAsset, 3e18);
+        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+
+        cache.cachePrice(address(assetToken), nonContractAsset);
+
+        IPriceCache.CachedPrice memory beforeUpdate = cache.getCachedPrice(
+            address(assetToken),
+            nonContractAsset
+        );
+        assertEq(beforeUpdate.roundId, 1, "Pair should be cached before invalidation");
+
+        _setNonContractAssetMetadata(nonContractAsset, 9, "NCA");
+
+        IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
+            address(assetToken),
+            nonContractAsset
+        );
+        IPriceCache.CachedPrice memory reverse = cache.getCachedPrice(
+            nonContractAsset,
+            address(assetToken)
+        );
+
+        assertEq(forward.assetPriceUsd, 0, "Forward asset leg should be invalidated");
+        assertEq(forward.quotePriceUsd, 0, "Forward quote leg should be invalidated");
+        assertEq(forward.updatedAt, 0, "Forward timestamp should be invalidated");
+        assertEq(forward.roundId, 0, "Forward round should be invalidated");
+
+        assertEq(reverse.assetPriceUsd, 0, "Reverse asset leg should be invalidated");
+        assertEq(reverse.quotePriceUsd, 0, "Reverse quote leg should be invalidated");
+        assertEq(reverse.updatedAt, 0, "Reverse timestamp should be invalidated");
+        assertEq(reverse.roundId, 0, "Reverse round should be invalidated");
+    }
+
+    function test_whenUnrelatedNonContractAssetDecimalsChange_pairRemainsCached() public {
+        address unitOfAccount = _unitOfAccount();
+        address otherNonContractAsset = makeAddr("OTHER_NON_CONTRACT_ASSET");
+
+        _registerNonContractAsset(otherNonContractAsset);
+        priceModule.setPrice(otherNonContractAsset, 3e18);
+        _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
+        _setNonContractAssetMetadata(otherNonContractAsset, 8, "NCA");
+
+        cache.cachePrice(address(assetToken), unitOfAccount);
+
+        IPriceCache.CachedPrice memory beforeUpdate = cache.getCachedPrice(
+            address(assetToken),
+            unitOfAccount
+        );
+
+        _setNonContractAssetMetadata(otherNonContractAsset, 9, "NCA");
+
+        IPriceCache.CachedPrice memory afterUpdate = cache.getCachedPrice(
+            address(assetToken),
+            unitOfAccount
+        );
+
+        assertEq(
+            afterUpdate.assetPriceUsd,
+            beforeUpdate.assetPriceUsd,
+            "Asset leg should remain cached for unrelated decimals changes"
+        );
+        assertEq(
+            afterUpdate.quotePriceUsd,
+            beforeUpdate.quotePriceUsd,
+            "Quote leg should remain cached for unrelated decimals changes"
+        );
+        assertEq(
+            afterUpdate.updatedAt,
+            beforeUpdate.updatedAt,
+            "Timestamp should remain cached for unrelated decimals changes"
+        );
+        assertEq(
+            afterUpdate.roundId,
+            beforeUpdate.roundId,
+            "Round should remain cached for unrelated decimals changes"
+        );
+    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

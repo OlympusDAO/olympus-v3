@@ -171,7 +171,7 @@ abstract contract BaseOracleFactory is
     ///             - The caller is not admin or oracle manager
     ///             - Oracle creation is disabled
     ///             - An oracle for `(baseToken_, quoteToken_, maxAge_)` already exists
-    ///             - Either token is invalid or both tokens are the same
+    ///             - Either token is the zero address or both tokens are the same
     ///             - Service-specific validation in `_encodeOracleData` fails
     ///             - Initial cache population fails in the configured price cache policy
     function createOracle(
@@ -198,12 +198,12 @@ abstract contract BaseOracleFactory is
         }
 
         // Validate base token
-        if (baseToken_ == address(0) || baseToken_.code.length == 0) {
+        if (baseToken_ == address(0)) {
             revert OracleFactory_InvalidToken(baseToken_);
         }
 
         // Validate quote token
-        if (quoteToken_ == address(0) || quoteToken_.code.length == 0) {
+        if (quoteToken_ == address(0)) {
             revert OracleFactory_InvalidToken(quoteToken_);
         }
 
