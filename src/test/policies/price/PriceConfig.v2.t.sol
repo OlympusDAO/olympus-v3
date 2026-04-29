@@ -1333,6 +1333,10 @@ contract PriceConfigv2Test is Test {
     //  [X] it reverts and rolls back
     // when updateFeeds is false and price feed expectations are provided
     //  [X] it reverts and rolls back
+    // when a referenced feed submodule implementation changes before execution
+    //  [X] it executes against the current compatible implementation
+    // when a referenced strategy submodule implementation changes before execution
+    //  [X] it executes against the current compatible implementation
     // [X] it queues the updateAsset action
     // [X] the updateAsset action can be executed after the timelock
 
@@ -1675,6 +1679,81 @@ contract PriceConfigv2Test is Test {
 
         IPRICEv2.Asset memory updatedAsset = PRICE.getAssetData(address(ohm));
         assertEq(updatedAsset.strategy, asset.strategy, "Strategy update should roll back");
+    }
+
+    function test_queueUpdateAsset_whenFeedSubmoduleImplementationChangesBeforeExecution_succeeds()
+        public
+    {
+        _addBaseAssets();
+
+        IPRICEv2.UpdateAssetParams memory params = _makeFeedOnlyUpdateParams();
+        IPriceConfigv2.PriceFeedExpectation[] memory expectations = _makeFeedExpectations(
+            params.feeds.length,
+            10e18,
+            100
+        );
+
+        vm.prank(priceManager);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        ChainlinkPriceFeeds newChainlink = new ChainlinkPriceFeeds(PRICE);
+        vm.prank(admin);
+        uint64 upgradeActionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
+        _executeQueuedAction(upgradeActionId);
+
+        assertEq(
+            address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK"))),
+            address(newChainlink),
+            "Chainlink submodule should be upgraded before update execution"
+        );
+
+        priceConfig.executeQueuedAction(actionId);
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, params.feeds.length, "Feed count");
+        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
+        assertEq(feeds[0].selector, params.feeds[0].selector);
+        assertEq(feeds[0].params, params.feeds[0].params);
+    }
+
+    function test_queueUpdateAsset_whenStrategySubmoduleImplementationChangesBeforeExecution_succeeds()
+        public
+    {
+        _addBaseAssets();
+
+        IPRICEv2.UpdateAssetParams memory params = _makeStrategyOnlyUpdateParams();
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](0);
+
+        vm.prank(priceManager);
+        uint64 actionId = priceConfig.queueUpdateAsset(address(ohm), params, expectations);
+
+        SimplePriceFeedStrategy newStrategy = new SimplePriceFeedStrategy(PRICE);
+        vm.prank(admin);
+        uint64 upgradeActionId = priceConfig.queueUpgradeSubmodule(address(newStrategy));
+        _executeQueuedAction(upgradeActionId);
+
+        assertEq(
+            address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.SIMPLESTRATEGY"))),
+            address(newStrategy),
+            "Strategy submodule should be upgraded before update execution"
+        );
+
+        priceConfig.executeQueuedAction(actionId);
+
+        IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
+        IPRICEv2.Component memory strategyComponent = abi.decode(
+            asset.strategy,
+            (IPRICEv2.Component)
+        );
+        assertEq(
+            fromSubKeycode(strategyComponent.target),
+            fromSubKeycode(params.strategy.target),
+            "Strategy target"
+        );
+        assertEq(strategyComponent.selector, params.strategy.selector, "Strategy selector");
+        assertEq(strategyComponent.params, params.strategy.params, "Strategy params");
     }
 
     /* ========== queueTimelockDelay ========== */
