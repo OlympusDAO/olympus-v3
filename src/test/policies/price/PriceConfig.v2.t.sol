@@ -2404,6 +2404,8 @@ contract PriceConfigv2Test is Test {
         // Call function
         vm.prank(priceManager);
         priceConfig.queueExecOnSubmodule(
+            // casting to bytes20 is safe because the fixed test keycode fits in 20 bytes
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes20("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
@@ -2522,6 +2524,8 @@ contract PriceConfigv2Test is Test {
 
         vm.prank(priceManager);
         priceConfig.queueExecOnSubmodule(
+            // casting to bytes20 is safe because the fixed test keycode fits in 20 bytes
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes20("PRICE.MOCKSTRATEGY"),
             abi.encodeWithSelector(MockStrategy.setStoredValue.selector, uint256(11))
         );
@@ -2538,6 +2542,8 @@ contract PriceConfigv2Test is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IPriceConfigv2.IPriceConfigv2_SubmoduleImplementationChanged.selector,
+                // casting to bytes20 is safe because the fixed test keycode fits in 20 bytes
+                // forge-lint: disable-next-line(unsafe-typecast)
                 bytes20("PRICE.SIMPLESTRATEGY"),
                 address(newStrategy),
                 address(strategy)
@@ -2564,6 +2570,8 @@ contract PriceConfigv2Test is Test {
 
         vm.prank(user_);
         priceConfig.queueExecOnSubmodule(
+            // casting to bytes20 is safe because the fixed test keycode fits in 20 bytes
+            // forge-lint: disable-next-line(unsafe-typecast)
             bytes20("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
