@@ -67,12 +67,12 @@ This allows `ERC7726OracleCloneable`, `MorphoOracleFactory`, and `ChainlinkOracl
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
-- The price of ETH will be determined as the average of the price feeds from 4 different sources.
+- The price of wETH will be determined as the average of the price feeds from 4 different sources.
     - After any zero value or deviating values (> 5% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
     - If exactly two WETH feeds remain, the strategy uses their average as the deviation benchmark. With a 5% threshold, a $1,900 and $2,100 pair is exactly at the boundary around a $2,000 average, allowing a 10% spread between the two surviving feeds.
-- The price of OHM will be determined by three separate paths: USDS, wETH and the Chainlink OHM-ETH × ETH-USD derived feed. Strict mode remains enabled, so OHM requires two valid prices and can tolerate one failed OHM path.
+- The price of OHM will be determined by three separate paths: OHM/sUSDS (via USDS through `ERC4626.getPriceFromUnderlying(sUSDS)`), wETH and the Chainlink OHM-ETH × ETH-USD derived feed. Strict mode remains enabled, so OHM requires two valid prices and can tolerate one failed OHM path.
 - OHM's 30-day moving average state is migrated from the live PRICE v1 module during the upgrade. The moving average is stored for backwards-compatible target-price reads and is not used as an input to OHM spot price resolution.
 
 ### Price Feed Configuration Parameters
@@ -252,7 +252,7 @@ sequenceDiagram
         Note over WETH: Filter: Exclude zero and values deviating >5% from median<br/>Average: Sum of valid values / count
         WETH-->>OHM_WETH_Pool: wETH price
         OHM_WETH_Pool-->>OHM: OHM/wETH price
-    and OHM/sUSDS Path
+    and OHM/sUSDS (via USDS) Path
         OHM->>OHM_SUSDS_Pool: getPrice(OHM/sUSDS)
         OHM_SUSDS_Pool->>SUSDS: getPrice(sUSDS)
 

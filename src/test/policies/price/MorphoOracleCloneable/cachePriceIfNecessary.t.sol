@@ -76,7 +76,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
         );
 
         vm.warp(block.timestamp + 1);
-        _setPRICEPrices(address(collateralToken), 3e18);
+        _setCachePrice(address(collateralToken), 3e18);
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();
@@ -108,7 +108,7 @@ contract MorphoOracleCloneableCachePriceIfNecessaryTest is MorphoOracleCloneable
         );
 
         vm.warp(block.timestamp + 1);
-        _setPRICEPrices(address(loanToken), 2e18);
+        _setCachePrice(address(loanToken), 2e18);
         priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
         MorphoOracleCloneable(address(oracle)).cachePriceIfNecessary();

@@ -8,6 +8,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // Libraries
+import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
@@ -134,7 +135,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @notice         Returns the unit price scaled to PRICE decimals
     /// @dev            Does not revert.
-    function _unitPrice() internal view returns (uint256) {
+    function _unitPrice() internal view virtual returns (uint256) {
         return 10 ** _decimals;
     }
 
@@ -365,7 +366,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     function getPriceIn(address asset_, address quote_) external view override returns (uint256) {
         (uint256 assetPrice, ) = getPrice(asset_, Variant.CURRENT);
         (uint256 quotePrice, ) = getPrice(quote_, Variant.CURRENT);
-        return (assetPrice * _unitPrice()) / quotePrice;
+        return FullMath.mulDiv(assetPrice, _unitPrice(), quotePrice);
     }
 
     /// @inheritdoc IPRICEv2
@@ -385,7 +386,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
         (uint256 quotePrice, uint48 quoteTime) = getPrice(quote_, variant_);
         return (
-            (assetPrice * _unitPrice()) / quotePrice,
+            FullMath.mulDiv(assetPrice, _unitPrice(), quotePrice),
             assetTime < quoteTime ? assetTime : quoteTime
         );
     }

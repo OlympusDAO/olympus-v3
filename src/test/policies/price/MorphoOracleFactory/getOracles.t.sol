@@ -50,8 +50,8 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
         // Create second oracle with different tokens
         MockERC20 collateralToken2 = new MockERC20("Collateral Token 2", "COL2", 18);
         MockERC20 loanToken2 = new MockERC20("Loan Token 2", "LOAN2", 18);
-        _setPRICEPrices(address(collateralToken2), 3e18);
-        _setPRICEPrices(address(loanToken2), 1e18);
+        _setCachePrice(address(collateralToken2), 3e18);
+        _setCachePrice(address(loanToken2), 1e18);
 
         address oracle2 = _createOracle(
             address(collateralToken2),
@@ -62,8 +62,8 @@ contract MorphoOracleFactoryGetOraclesTest is MorphoOracleFactoryTest {
         // Create third oracle
         MockERC20 collateralToken3 = new MockERC20("Collateral Token 3", "COL3", 18);
         MockERC20 loanToken3 = new MockERC20("Loan Token 3", "LOAN3", 18);
-        _setPRICEPrices(address(collateralToken3), 4e18);
-        _setPRICEPrices(address(loanToken3), 1e18);
+        _setCachePrice(address(collateralToken3), 4e18);
+        _setCachePrice(address(loanToken3), 1e18);
 
         address oracle3 = _createOracle(
             address(collateralToken3),

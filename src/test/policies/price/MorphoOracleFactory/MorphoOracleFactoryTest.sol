@@ -72,17 +72,24 @@ contract MorphoOracleFactoryTest is Test {
         registeredNonContractAsset = makeAddr("REGISTERED_NON_CONTRACT_ASSET");
 
         // Set prices in cache policy mock
-        _setPRICEPrices(address(collateralToken), 2e18); // 2 USD
-        _setPRICEPrices(address(loanToken), 1e18); // 1 USD
+        _setCachePrice(address(collateralToken), 2e18); // 2 USD
+        _setCachePrice(address(loanToken), 1e18); // 1 USD
     }
 
     // ========== HELPER FUNCTIONS ========== //
 
     /// @notice Sets price for a token in the cache policy mock
-    function _setPRICEPrices(address token_, uint256 price_) internal {
+    function _setCachePrice(address token_, uint256 price_) internal {
         priceCache.setUsdPrice(token_, price_);
     }
 
+    /// @notice Sets metadata for a non-contract asset in the cache policy mock
+    /// @dev    Calls `priceCache.setNonContractAssetMetadata()` to register metadata. Reverts if
+    ///         the cache policy mock rejects the metadata update.
+    ///
+    /// @param asset_     The non-contract asset address
+    /// @param decimals_  The asset decimals
+    /// @param symbol_    The asset symbol
     function _setNonContractAssetMetadata(
         address asset_,
         uint8 decimals_,

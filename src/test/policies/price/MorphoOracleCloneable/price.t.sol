@@ -90,7 +90,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with MorphoOracle_InvalidPrice
 
     function test_whenCollateralTokenCachedPriceIsZero_revertsInvalidPrice() public {
-        _setPRICEPrices(address(collateralToken), 0);
+        _setCachePrice(address(collateralToken), 0);
         priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
@@ -101,7 +101,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     //  [X] it reverts with MorphoOracle_InvalidPrice
 
     function test_whenLoanTokenCachedPriceIsZero_revertsInvalidPrice() public {
-        _setPRICEPrices(address(loanToken), 0);
+        _setCachePrice(address(loanToken), 0);
         priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
@@ -162,7 +162,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newCollateralToken = new MockERC20("New Collateral Token", "NEWCOL", 9);
 
         // Set collateral token price to 2e18
-        _setPRICEPrices(address(newCollateralToken), 2e18);
+        _setCachePrice(address(newCollateralToken), 2e18);
 
         // Create the oracle with the new collateral token
         vm.prank(admin);
@@ -216,7 +216,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newLoanToken = new MockERC20("New Loan Token", "NEWLOAN", 9);
 
         // Set loan token price to 1e18
-        _setPRICEPrices(address(newLoanToken), 1e18);
+        _setCachePrice(address(newLoanToken), 1e18);
 
         // Create the oracle with the new loan token
         vm.prank(admin);
@@ -269,8 +269,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newCollateralToken = new MockERC20("Zero Dec Collateral", "ZCOL", 0);
 
         // Set prices to collateral=1e18 USD and loan=3e18 USD.
-        _setPRICEPrices(address(newCollateralToken), 1e18);
-        _setPRICEPrices(address(loanToken), 3e18);
+        _setCachePrice(address(newCollateralToken), 1e18);
+        _setCachePrice(address(loanToken), 3e18);
 
         // Create oracle for the new pair.
         vm.prank(admin);
@@ -307,7 +307,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
         // Change live collateral price only (do not cache yet)
-        _setPRICEPrices(address(collateralToken), 3e18);
+        _setCachePrice(address(collateralToken), 3e18);
 
         // Cached-only semantics: value should remain unchanged before cache refresh
         uint256 staleCachedPrice = oracle.price();
@@ -332,7 +332,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
         // Change live loan price only (do not cache yet)
-        _setPRICEPrices(address(loanToken), 2e18);
+        _setCachePrice(address(loanToken), 2e18);
 
         // Cached-only semantics: value should remain unchanged before cache refresh
         uint256 staleCachedPrice = oracle.price();
@@ -350,7 +350,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenOnlyCollateralUsdCacheChanges_returnsCachedPairPrice() public {
         // Move to a new block and change only live collateral/USD price.
         vm.warp(block.timestamp + 1);
-        _setPRICEPrices(address(collateralToken), 8e18);
+        _setCachePrice(address(collateralToken), 8e18);
 
         // Refresh only collateral/USD cache. The direct collateral/loan pair cache should be unchanged.
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
@@ -361,7 +361,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     function test_whenOnlyLoanUsdCacheChanges_returnsCachedPairPrice() public {
         // Move to a new block and change only live loan/USD price.
         vm.warp(block.timestamp + 1);
-        _setPRICEPrices(address(loanToken), 4e18);
+        _setCachePrice(address(loanToken), 4e18);
 
         // Refresh only loan/USD cache. The direct collateral/loan pair cache should be unchanged.
         priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
@@ -405,8 +405,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(collateralToken), 2e9);
-        _setPRICEPrices(address(loanToken), 1e9);
+        _setCachePrice(address(collateralToken), 2e9);
+        _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
         // The scaleFactor is immutable and based on token decimals (36 + 18 - 18 = 36)
@@ -454,7 +454,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newCollateralToken = new MockERC20("New Collateral Token", "NEWCOL", 9);
 
         // Set collateral token price to 2e18
-        _setPRICEPrices(address(newCollateralToken), 2e18);
+        _setCachePrice(address(newCollateralToken), 2e18);
 
         // Create the oracle with the new collateral token
         vm.prank(admin);
@@ -480,8 +480,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(newCollateralToken), 2e9);
-        _setPRICEPrices(address(loanToken), 1e9);
+        _setCachePrice(address(newCollateralToken), 2e9);
+        _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
         // The scaleFactor is immutable and based on token decimals (36 + 18 - 9 = 45)
@@ -529,7 +529,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newLoanToken = new MockERC20("New Loan Token", "NEWLOAN", 9);
 
         // Set loan token price to 1e18
-        _setPRICEPrices(address(newLoanToken), 1e18);
+        _setCachePrice(address(newLoanToken), 1e18);
 
         // Create the oracle with the new loan token
         vm.prank(admin);
@@ -555,8 +555,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(collateralToken), 2e9);
-        _setPRICEPrices(address(newLoanToken), 1e9);
+        _setCachePrice(address(collateralToken), 2e9);
+        _setCachePrice(address(newLoanToken), 1e9);
 
         // Oracle should still return correct price
         // The scaleFactor is immutable and based on token decimals (36 + 9 - 18 = 27)
@@ -604,8 +604,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             .updatedAt;
 
         // Change live prices without storing
-        _setPRICEPrices(address(collateralToken), 3e18);
-        _setPRICEPrices(address(loanToken), 1e18);
+        _setCachePrice(address(collateralToken), 3e18);
+        _setCachePrice(address(loanToken), 1e18);
 
         // Fuzz warp to a time strictly within maxAge so cache remains fresh
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE - 1));
@@ -626,8 +626,8 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             .updatedAt;
 
         // Change live prices without storing so cache-vs-live behavior is observable
-        _setPRICEPrices(address(collateralToken), 3e18);
-        _setPRICEPrices(address(loanToken), 1e18);
+        _setCachePrice(address(collateralToken), 3e18);
+        _setCachePrice(address(loanToken), 1e18);
 
         // Border case: cached age is exactly maxAge and should still be treated as fresh
         vm.warp(cachedAt + DEFAULT_MAX_AGE);

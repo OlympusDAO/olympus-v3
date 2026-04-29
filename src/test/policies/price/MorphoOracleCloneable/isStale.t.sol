@@ -40,7 +40,7 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
             .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        _setPRICEPrices(address(collateralToken), 3e18);
+        _setCachePrice(address(collateralToken), 3e18);
         priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
         uint48 pairTimestampAfter = priceCache
             .getCachedPrice(address(collateralToken), address(loanToken))
@@ -61,7 +61,7 @@ contract MorphoOracleCloneableIsStaleTest is MorphoOracleCloneableTest {
             .updatedAt;
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE));
         vm.warp(block.timestamp + warpDelta);
-        _setPRICEPrices(address(loanToken), 2e18);
+        _setCachePrice(address(loanToken), 2e18);
         priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
         uint48 pairTimestampAfter = priceCache
             .getCachedPrice(address(collateralToken), address(loanToken))

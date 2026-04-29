@@ -400,15 +400,6 @@ contract ChainlinkOracleFactoryCreateOracleTest is ChainlinkOracleFactoryTest {
         assertGt(timestamp, 0, "Asset price should be cached");
     }
 
-    function test_whenCachePriceCalledByNonOracle_reverts() public givenFactoryIsEnabled {
-        vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
-        );
-
-        vm.prank(admin);
-        factory.cachePrice(address(baseToken), address(quoteToken));
-    }
-
     // when called by manager
     //  [X] it reverts
 

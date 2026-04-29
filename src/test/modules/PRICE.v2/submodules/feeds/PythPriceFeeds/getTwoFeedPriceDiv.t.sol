@@ -372,6 +372,34 @@ contract PythPriceFeedsGetTwoFeedPriceDivTest is PythPriceFeedsTest {
         pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
+    // given the denominator confidence is greater than or equal to the denominator price
+    //  [X] it reverts with Pyth_DerivedFeedConfidenceInvalid
+    function test_denominatorConfidenceGreaterThanOrEqualToPrice_reverts() public {
+        int64 denominatorPrice = PRICE_3;
+        uint64 denominatorConfidence = uint64(denominatorPrice);
+        pyth.setPrice(PRICE_ID_3, denominatorPrice, denominatorConfidence, EXPO_3, block.timestamp);
+
+        bytes memory err = abi.encodeWithSelector(
+            PythPriceFeeds.Pyth_DerivedFeedConfidenceInvalid.selector,
+            uint256(uint64(denominatorPrice)),
+            uint256(denominatorConfidence)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE,
+            type(uint256).max
+        );
+        pythSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
     // given the first feed has invalid price (<= 0)
     //  [X] it reverts with Pyth_FeedPriceInvalid
     function test_firstFeedPriceInvalid_reverts(int64 price_) public {

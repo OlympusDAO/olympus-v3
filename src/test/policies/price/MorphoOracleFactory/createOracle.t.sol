@@ -94,7 +94,8 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account collateral");
+        _assertOracleConfigured(oracle, UNIT_OF_ACCOUNT, address(loanToken), DEFAULT_MAX_AGE, 1e36);
+        assertEq(IMorphoOracle(oracle).price(), 1e36, "Oracle price should use unit collateral");
     }
 
     // when loan token is zero address
@@ -133,7 +134,14 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        assertNotEq(oracle, address(0), "Oracle should be created for unit-of-account loan");
+        _assertOracleConfigured(
+            oracle,
+            address(collateralToken),
+            UNIT_OF_ACCOUNT,
+            DEFAULT_MAX_AGE,
+            1e36
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e36, "Oracle price should use unit loan");
     }
 
     // when collateral token is a registered non-contract asset
@@ -146,7 +154,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         public
         givenFactoryIsEnabled
     {
-        _setPRICEPrices(registeredNonContractAsset, 2e18);
+        _setCachePrice(registeredNonContractAsset, 2e18);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -168,7 +176,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         public
         givenFactoryIsEnabled
     {
-        _setPRICEPrices(registeredNonContractAsset, 2e18);
+        _setCachePrice(registeredNonContractAsset, 2e18);
         _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
 
         vm.prank(admin);
@@ -179,7 +187,14 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA collateral");
+        _assertOracleConfigured(
+            oracle,
+            registeredNonContractAsset,
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            1e46
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e46, "Oracle price should use NCA collateral");
     }
 
     // when loan token is a registered non-contract asset
@@ -192,7 +207,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         public
         givenFactoryIsEnabled
     {
-        _setPRICEPrices(registeredNonContractAsset, 1e18);
+        _setCachePrice(registeredNonContractAsset, 1e18);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -214,7 +229,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         public
         givenFactoryIsEnabled
     {
-        _setPRICEPrices(registeredNonContractAsset, 1e18);
+        _setCachePrice(registeredNonContractAsset, 1e18);
         _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
 
         vm.prank(admin);
@@ -225,7 +240,14 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        assertNotEq(oracle, address(0), "Oracle should be created for registered NCA loan");
+        _assertOracleConfigured(
+            oracle,
+            address(collateralToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            1e26
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e26, "Oracle price should use NCA loan");
     }
 
     // when collateral token equals loan token
@@ -364,8 +386,8 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         MockERC20 highDecimalsToken = new MockERC20("High Decimals", "HIGH", 42);
         MockERC20 lowDecimalsToken = new MockERC20("Low Decimals", "LOW", 0);
 
-        _setPRICEPrices(address(highDecimalsToken), 1e18);
-        _setPRICEPrices(address(lowDecimalsToken), 1e18);
+        _setCachePrice(address(highDecimalsToken), 1e18);
+        _setCachePrice(address(lowDecimalsToken), 1e18);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -509,8 +531,8 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         MockERC20 col6 = new MockERC20("Collateral 6", "COL6", 6);
         MockERC20 loan18 = new MockERC20("Loan 18", "LOAN18", 18);
 
-        _setPRICEPrices(address(col6), 2e18);
-        _setPRICEPrices(address(loan18), 1e18);
+        _setCachePrice(address(col6), 2e18);
+        _setCachePrice(address(loan18), 1e18);
 
         vm.prank(admin);
         address oracle = factory.createOracle(
@@ -572,6 +594,22 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             oracle,
             "Oracle should be stored for maxAge=0"
         );
+    }
+
+    function _assertOracleConfigured(
+        address oracle_,
+        address collateralToken_,
+        address loanToken_,
+        uint48 maxAge_,
+        uint256 scaleFactor_
+    ) internal view {
+        IMorphoOracle oracle = IMorphoOracle(oracle_);
+
+        assertNotEq(oracle_, address(0), "Oracle should be created");
+        assertEq(oracle.collateralToken(), collateralToken_, "Collateral token should match");
+        assertEq(oracle.loanToken(), loanToken_, "Loan token should match");
+        assertEq(oracle.maxAge(), maxAge_, "Max age should match");
+        assertEq(oracle.scaleFactor(), scaleFactor_, "Scale factor should match");
     }
 
     // when the caller has the manager role

@@ -77,6 +77,12 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         (price_, ) = getPrice(_OHM, variant_);
     }
 
+    /// @inheritdoc OlympusPricev2
+    /// @dev        PRICEv1 compatibility always uses 18 decimals, so the unit price is constant.
+    function _unitPrice() internal pure override returns (uint256) {
+        return 1e18;
+    }
+
     // ========== PRICEv1 VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IPRICEv1

@@ -12,7 +12,9 @@ interface IERC7726Oracle is IPriceOracle {
     /// @notice Thrown when the direct pair cache is unset or stale
     ///
     /// @param  cachedTimestamp               The cached timestamp used for the requested base/quote pair
-    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`)
+    /// @param  latestPermissibleTimestamp    The oldest permissible timestamp (`block.timestamp - maxAge()`),
+    ///                                       floored to 0 when `block.timestamp <= maxAge()`. A zero value is
+    ///                                       valid and means there is no lower timestamp bound yet.
     error ERC7726Oracle_Stale(uint256 cachedTimestamp, uint256 latestPermissibleTimestamp);
 
     /// @notice Get the maximum allowed age for cached prices.
@@ -31,6 +33,6 @@ interface IERC7726Oracle is IPriceOracle {
     ///
     /// @param base         The address of the base token
     /// @param quote        The address of the quote token
-    /// @return timestamp_  The shared cached UNIX timestamp (`uint48`) for this base/quote pair used to judge staleness.
+    /// @return timestamp_  The cached UNIX timestamp (`uint48`) for this base/quote pair used to judge staleness.
     function timestamp(address base, address quote) external view returns (uint48 timestamp_);
 }
