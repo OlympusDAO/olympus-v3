@@ -55,25 +55,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
         return _UNIT_OF_ACCOUNT;
     }
 
-    /// @notice         Returns true if `asset_` is a valid non-contract asset identifier
-    /// @dev            Does not revert.
-    function _isValidNonContractAsset(address asset_) internal view returns (bool) {
-        return asset_ != address(0) && asset_.code.length == 0;
-    }
-
-    /// @notice         Registers `asset_` as a non-contract asset
-    /// @dev            Will revert if:
-    /// @dev            - `asset_` is the zero address
-    /// @dev            - `asset_` is a contract
-    /// @dev            - `asset_` is already registered
-    function _registerNonContractAsset(address asset_) internal {
-        if (!_isValidNonContractAsset(asset_) || isNonContractAsset[asset_]) {
-            revert PRICE_InvalidAsset(asset_);
-        }
-
-        isNonContractAsset[asset_] = true;
-    }
-
     /// @notice         Reverts unless `asset_` is a contract or a registered non-contract asset
     /// @dev            Will revert if:
     /// @dev            - `asset_` is a non-contract address that is not registered
@@ -85,7 +66,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules, IPRICEv2, IERC165 {
 
     // ========== ERC165 FUNCTIONS ========== //
 
-    function supportsInterface(bytes4 interfaceId_) public view virtual returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public pure virtual returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId || interfaceId_ == type(IPRICEv2).interfaceId;
     }

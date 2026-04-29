@@ -3,6 +3,7 @@
 pragma solidity >=0.8.15;
 
 // Interfaces
+import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
@@ -68,9 +69,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @inheritdoc PRICEv2
     /// @dev        Does not revert.
-    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public pure virtual override returns (bool) {
         return
-            interfaceId_ == type(IVersioned).interfaceId || super.supportsInterface(interfaceId_);
+            interfaceId_ == type(IVersioned).interfaceId ||
+            interfaceId_ == type(IPRICEv2).interfaceId ||
+            interfaceId_ == type(IERC165).interfaceId;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -103,7 +106,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - `asset_` is a contract
     /// @dev        - `asset_` is already registered
     function registerNonContractAsset(address asset_) external override permissioned {
-        _registerNonContractAsset(asset_);
+        if (asset_ == address(0) || asset_.code.length != 0 || isNonContractAsset[asset_])
+            revert PRICE_InvalidAsset(asset_);
+
+        isNonContractAsset[asset_] = true;
     }
 
     /// @inheritdoc IPRICEv2
@@ -670,9 +676,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component[] memory finalFeeds = params_.updateFeeds
             ? params_.feeds
             : abi.decode(asset.feeds, (Component[]));
-        Component memory finalStrategy = params_.updateStrategy
-            ? params_.strategy
-            : abi.decode(asset.strategy, (Component));
         bool finalUseMA = params_.updateStrategy
             ? params_.useMovingAverage
             : asset.useMovingAverage;
@@ -682,7 +685,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
         _validateAssetConfiguration(
             asset_,
-            finalStrategy,
+            params_.updateStrategy ? params_.strategy : abi.decode(asset.strategy, (Component)),
             finalFeeds.length,
             finalUseMA,
             finalStoreMA
@@ -698,24 +701,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
                 params_.lastObservationTime,
                 params_.observations
             );
-    }
-
-    function _validateInstallSubmodule(address submodule_) internal view {
-        SubKeycode subKeycode = _validateSubmodule(Submodule(submodule_));
-        if (address(getSubmoduleForKeycode[subKeycode]) != address(0))
-            revert Module_SubmoduleAlreadyInstalled(subKeycode);
-    }
-
-    function _validateUpgradeSubmodule(address submodule_) internal view {
-        Submodule newSubmodule = Submodule(submodule_);
-        SubKeycode subKeycode = _validateSubmodule(newSubmodule);
-        Submodule oldSubmodule = getSubmoduleForKeycode[subKeycode];
-        if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule)
-            revert Module_InvalidSubmoduleUpgrade(subKeycode);
-    }
-
-    function _validateExecOnSubmodule(bytes20 subKeycode_) internal view {
-        _getSubmoduleIfInstalled(SubKeycode.wrap(subKeycode_));
     }
 
     /// @inheritdoc IPRICEv2
@@ -756,17 +741,23 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @inheritdoc IPRICEv2
     function validateInstallSubmodule(address submodule_) external view override {
-        _validateInstallSubmodule(submodule_);
+        SubKeycode subKeycode = _validateSubmodule(Submodule(submodule_));
+        if (address(getSubmoduleForKeycode[subKeycode]) != address(0))
+            revert Module_SubmoduleAlreadyInstalled(subKeycode);
     }
 
     /// @inheritdoc IPRICEv2
     function validateUpgradeSubmodule(address submodule_) external view override {
-        _validateUpgradeSubmodule(submodule_);
+        Submodule newSubmodule = Submodule(submodule_);
+        SubKeycode subKeycode = _validateSubmodule(newSubmodule);
+        Submodule oldSubmodule = getSubmoduleForKeycode[subKeycode];
+        if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule)
+            revert Module_InvalidSubmoduleUpgrade(subKeycode);
     }
 
     /// @inheritdoc IPRICEv2
     function validateExecOnSubmodule(bytes20 subKeycode_) external view override {
-        _validateExecOnSubmodule(subKeycode_);
+        _getSubmoduleIfInstalled(SubKeycode.wrap(subKeycode_));
     }
 
     /// @inheritdoc IPRICEv2
@@ -869,28 +860,20 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @notice         Updates the price feeds for the asset
     /// @dev            Implements the following logic:
-    /// @dev            - Performs basic checks on the parameters
     /// @dev            - Sets the price feeds for the asset
-    ///
-    /// @dev            Will revert if:
-    /// @dev            - The number of feeds is zero
-    /// @dev            - Any feed has a submodule that is not installed
+    /// @dev            Assumes the caller has already validated `feeds_`.
     ///
     /// @param asset_   Asset to update the price feeds for
     /// @param feeds_   Array of price feed components
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
-        _validateAssetPriceFeeds(asset_, feeds_);
         _assetData[asset_].feeds = abi.encode(feeds_);
     }
 
     /// @notice                     Updates the price strategy for the asset
     /// @dev                        Implements the following logic:
-    /// @dev                        - Performs basic checks on the parameters
     /// @dev                        - Sets the price strategy for the asset
     /// @dev                        - Sets the `useMovingAverage` flag for the asset
-    ///
-    /// @dev                        Will revert if:
-    /// @dev                        - The submodule used by the strategy is not installed
+    /// @dev                        Assumes the caller has already validated `strategy_`.
     ///
     /// @param asset_               Asset to update the price strategy for
     /// @param strategy_            Price strategy component
@@ -900,8 +883,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component memory strategy_,
         bool useMovingAverage_
     ) internal {
-        _validateAssetPriceStrategy(asset_, strategy_);
-
         // Update the asset price strategy
         _assetData[asset_].strategy = abi.encode(strategy_);
 
@@ -912,19 +893,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @notice                         Updates the moving average data for the asset
     /// @dev                            Implements the following logic:
     /// @dev                            - Removes existing moving average data
-    /// @dev                            - Performs basic checks on the parameters
     /// @dev                            - Sets the moving average data for the asset
     /// @dev                            - If `storeMovingAverage_` is false, clears moving-average state
-    /// @dev                            - If `storeMovingAverage_` is false, `observations_` must be empty
-    /// @dev                            - If `storeMovingAverage_` is false, `movingAverageDuration_` and
-    /// @dev                              `lastObservationTime_` must both be zero
-    ///
-    /// @dev                            Will revert if:
-    /// @dev                            - `lastObservationTime_` is in the future (when storing MA)
-    /// @dev                            - `lastObservationTime_` is non-zero when not storing MA
-    /// @dev                            - `movingAverageDuration_` is non-zero when not storing MA
-    /// @dev                            - Any observation is zero
-    /// @dev                            - The number of observations provided is insufficient
+    /// @dev                            Assumes the caller has already validated moving-average
+    ///                                 duration, timestamps, and observations.
     ///
     /// @param asset_                   Asset to update the moving average data for
     /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
@@ -938,14 +910,6 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         uint48 lastObservationTime_,
         uint256[] memory observations_
     ) internal {
-        _validateAssetMovingAverage(
-            asset_,
-            storeMovingAverage_,
-            movingAverageDuration_,
-            lastObservationTime_,
-            observations_
-        );
-
         Asset storage asset = _assetData[asset_];
 
         // Remove existing moving average data, if any

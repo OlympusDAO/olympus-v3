@@ -205,7 +205,10 @@ contract MockPrice is PRICEv2 {
     }
 
     function registerNonContractAsset(address asset_) external override {
-        _registerNonContractAsset(asset_);
+        if (asset_ == address(0) || asset_.code.length != 0 || isNonContractAsset[asset_])
+            revert PRICE_InvalidAsset(asset_);
+
+        isNonContractAsset[asset_] = true;
     }
 
     function unregisterNonContractAsset(address asset_) external override {
