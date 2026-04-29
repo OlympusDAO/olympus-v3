@@ -67,6 +67,12 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
         _registerNonContractAsset(nonContractAsset);
         _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
 
+        assertEq(
+            cache.assetDecimals(nonContractAsset),
+            8,
+            "Registered metadata decimals should be returned before code exists"
+        );
+
         MockStaticMetadataTokenDecimals tokenWithDifferentDecimals = new MockStaticMetadataTokenDecimals();
         vm.etch(nonContractAsset, address(tokenWithDifferentDecimals).code);
 
