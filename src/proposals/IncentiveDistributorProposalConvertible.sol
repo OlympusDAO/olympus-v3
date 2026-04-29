@@ -16,6 +16,7 @@ import {console2} from "forge-std/console2.sol";
 import {Kernel} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IncentiveDistributorConvertible} from "src/policies/incentives/IncentiveDistributorConvertible.sol";
 import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
@@ -36,8 +37,6 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
     bytes32 internal constant _ROLE_CONVERTIBLE_DISTRIBUTOR = bytes32("convertible_distributor");
     /// forge-lint: disable-next-line(unsafe-typecast)
     bytes32 internal constant _ROLE_INCENTIVE_MANAGER = bytes32("incentive_manager");
-    /// forge-lint: disable-next-line(unsafe-typecast)
-    bytes32 internal constant _ROLE_ADMIN = bytes32("admin");
 
     /// @notice Expected periodic task count on the Heart after this proposal is executed.
     ///         The teller is appended at the end, so the count is the existing pre-proposal
@@ -112,10 +111,10 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         address heart = addresses.getAddress("olympus-policy-heart-1_7");
 
         // 1. Grant the admin role to the OCG timelock, if not already granted
-        if (!roles.hasRole(timelock, _ROLE_ADMIN)) {
+        if (!roles.hasRole(timelock, ADMIN_ROLE)) {
             _pushAction(
                 rolesAdmin,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _ROLE_ADMIN, timelock),
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, ADMIN_ROLE, timelock),
                 "Grant admin role to OCG Timelock"
             );
         } else {
@@ -193,7 +192,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         address heart = addresses.getAddress("olympus-policy-heart-1_7");
 
         // Validate the OCG Timelock has the admin role
-        require(roles.hasRole(timelock, _ROLE_ADMIN), "OCG Timelock does not have the admin role");
+        require(roles.hasRole(timelock, ADMIN_ROLE), "OCG Timelock does not have the admin role");
 
         // Validate IncentiveDistributorConvertible has the convertible_distributor role
         require(
