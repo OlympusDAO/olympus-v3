@@ -77,12 +77,6 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         // Grant permission to this test contract to call saveRole
         _grantModulePermission(toKeycode("ROLES"), ROLESv1.saveRole.selector);
 
-        // Approve the teller to mint OHM (infinite approval)
-        mintr.increaseMintApproval(address(teller), type(uint256).max);
-
-        // Setup roles for teller
-        roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
-
         // Setup admin role (needed to enable teller and distributor)
         roles.saveRole(ADMIN_ROLE, address(this));
 
@@ -97,13 +91,13 @@ contract IncentiveDistributorConvertibleTestBase is Test {
         // Grant the incentive distributor role to the distributor policy
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), address(distributor));
 
-        // Enable the teller policy with infinite minting cap and distributor limits
+        // Enable the teller policy with the distributor at an effectively unlimited cap
         {
             address[] memory creators = new address[](1);
             creators[0] = address(distributor);
-            uint256[] memory limits = new uint256[](1);
-            limits[0] = type(uint256).max;
-            teller.enable(abi.encode(type(uint256).max, creators, limits));
+            uint256[] memory caps = new uint256[](1);
+            caps[0] = type(uint128).max;
+            teller.enable(abi.encode(creators, caps));
         }
 
         // Setup roles for distributor
@@ -337,7 +331,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         assertFalse(address(token) == address(0), "Token should be deployed");
     }
 
-    function test_endEpoch_multipleEpochsSequential_skipOnCoverage() external {
+    function test_endEpoch_multipleEpochsSequential() external {
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 1 days;
         uint40 epoch3EndDate = epoch2EndDate + 1 days;
@@ -413,7 +407,7 @@ contract IncentiveDistributorConvertibleEndEpochTests is IncentiveDistributorCon
         assertTrue(address(token2) != address(token3), "Token2 should differ from token3");
     }
 
-    function test_endEpoch_differentTokensPerEpoch_skipOnCoverage() external {
+    function test_endEpoch_differentTokensPerEpoch() external {
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 1 days;
         // Warp past epoch2EndDate so both epochs can be ended
@@ -884,7 +878,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         );
     }
 
-    function test_claim_withMerkleProof_skipOnCoverage() external {
+    function test_claim_withMerkleProof() external {
         uint256 user0Amount = 100e9;
         uint256 user1Amount = 200e9;
 
@@ -932,7 +926,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         assertEq(token.balanceOf(user1), user1Amount, "User1 should have tokens");
     }
 
-    function test_claim_differentTokensPerEpoch_skipOnCoverage() external {
+    function test_claim_differentTokensPerEpoch() external {
         // 1. Preparation: set up epochs with different token parameters
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 1 days;
@@ -984,7 +978,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         assertEq(token2.balanceOf(user0), amount2, "User0 should have token2");
     }
 
-    function testFuzz_claim_variousAmounts_skipOnCoverage(uint256 amount) external {
+    function testFuzz_claim_variousAmounts(uint256 amount) external {
         amount = bound(amount, 1, 1_000_000_000e9);
 
         // Setup epoch with fuzzed amount
@@ -1021,10 +1015,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         assertTrue(distributor.hasClaimed(user0, epochEndDate), "User0 should be marked claimed");
     }
 
-    function testFuzz_claim_multipleEpochs_skipOnCoverage(
-        uint256 amount1,
-        uint256 amount2
-    ) external {
+    function testFuzz_claim_multipleEpochs(uint256 amount1, uint256 amount2) external {
         amount1 = bound(amount1, 1, 1_000_000_000e9);
         amount2 = bound(amount2, 1, 1_000_000_000e9);
 
@@ -1188,7 +1179,7 @@ contract IncentiveDistributorConvertibleClaimTests is IncentiveDistributorConver
         vm.stopPrank();
     }
 
-    function test_claim_revertsIfAlreadyClaimedInBatch_skipOnCoverage() external {
+    function test_claim_revertsIfAlreadyClaimedInBatch() external {
         // 1. Preparation: setup three epochs
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 7 days;
@@ -1577,7 +1568,7 @@ contract IncentiveDistributorConvertiblePreviewClaimTests is
 contract IncentiveDistributorConvertibleIntegrationTests is
     IncentiveDistributorConvertibleTestBase
 {
-    function test_claimAndExercise_skipOnCoverage() external {
+    function test_claimAndExercise() external {
         uint256 amount = 100e9;
         uint40 epochEndDate = _firstEpochEndDate();
 
@@ -1621,7 +1612,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         assertEq(token.balanceOf(user0), 0, "Convertible tokens should be burned");
     }
 
-    function test_multipleEpochsClaimAndExercise_skipOnCoverage() external {
+    function test_multipleEpochsClaimAndExercise() external {
         uint256 amount1 = 100e9;
         uint256 amount2 = 200e9;
 
@@ -1691,7 +1682,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         assertEq(token1.balanceOf(user0), 0, "All convertible tokens should be burned");
     }
 
-    function test_twoUsersClaimSameEpoch_skipOnCoverage() external {
+    function test_twoUsersClaimSameEpoch() external {
         uint256 user0Amount = 100e9;
         uint256 user1Amount = 200e9;
         uint40 epochEndDate = _firstEpochEndDate();
@@ -1757,7 +1748,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         assertTrue(distributor.hasClaimed(user1, epochEndDate), "User1 should be marked claimed");
     }
 
-    function test_multipleUsersClaimAndExercise_skipOnCoverage() external {
+    function test_multipleUsersClaimAndExercise() external {
         // 1. Preparation: set up epoch with two users
         uint40 epochEndDate = _firstEpochEndDate();
         uint256 user0Amount = 100e9;
@@ -1825,7 +1816,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         assertEq(ohm.balanceOf(user1), user1Amount, "User1 should have OHM");
     }
 
-    function test_claimAcrossMultipleEpochsThenExercise_skipOnCoverage() external {
+    function test_claimAcrossMultipleEpochsThenExercise() external {
         // Set up multiple epochs
         uint40 epoch1EndDate = _firstEpochEndDate();
         uint40 epoch2EndDate = epoch1EndDate + 7 days; // Weekly epochs
@@ -1893,7 +1884,7 @@ contract IncentiveDistributorConvertibleIntegrationTests is
         assertEq(ohm.balanceOf(user0), totalTokens, "User0 should receive all OHM");
     }
 
-    function test_claimAndPartiallyExercise_skipOnCoverage() external {
+    function test_claimAndPartiallyExercise() external {
         // Set up epoch and claim tokens
         uint40 epochEndDate = _firstEpochEndDate();
         uint256 claimAmount = 100e9;

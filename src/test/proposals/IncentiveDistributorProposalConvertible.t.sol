@@ -5,6 +5,7 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IIncentiveDistributorConvertible} from "src/policies/interfaces/incentives/IIncentiveDistributorConvertible.sol";
+import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.sol";
 
 // Libraries
 import {console2} from "forge-std/console2.sol";
@@ -23,7 +24,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     /// @dev Block after contracts are deployed and installed in the Kernel.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 23831097;
+    uint256 public constant BLOCK = 24978836;
 
     // ========== DEPLOYMENT TOGGLES ==========
 
@@ -45,7 +46,6 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
     // ========== ADDRESSES ==========
 
     address public distributorMS;
-    address public daoMS;
 
     // ========== TEST PARAMETERS ==========
 
@@ -74,7 +74,6 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         ohm = IERC20(addresses.getAddress("olympus-legacy-ohm"));
         usds = IERC20(addresses.getAddress("external-tokens-usds"));
         roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        daoMS = addresses.getAddress("olympus-multisig-dao");
         distributorMS = addresses.getAddress("olympus-multisig-incentive-distributor");
 
         // ========== CONDITIONAL POLICY DEPLOYMENT ==========
@@ -226,6 +225,12 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         );
 
         // Verify roles are correctly assigned
+        address timelock = addresses.getAddress("olympus-timelock");
+        assertTrue(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(timelock, bytes32("admin")),
+            "OCG Timelock should have admin role"
+        );
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(distributor), bytes32("convertible_distributor")),
@@ -233,22 +238,41 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         );
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, bytes32("convertible_admin")),
-            "DAO MS should have convertible_admin role"
-        );
-        assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(distributorMS, bytes32("incentive_manager")),
             "Distributor MS should have incentive_manager role"
+        );
+
+        // Verify the teller is registered as a periodic task on the Heart
+        IPeriodicTaskManager heart = IPeriodicTaskManager(
+            addresses.getAddress("olympus-policy-heart-1_7")
+        );
+        assertTrue(
+            heart.hasPeriodicTask(address(teller)),
+            "ConvertibleOHMTeller should be registered as a Heart periodic task"
         );
 
         // Verify policies are enabled
         assertTrue(teller.isEnabled(), "ConvertibleOHMTeller should be enabled");
         assertTrue(distributor.isEnabled(), "IncentiveDistributorConvertible should be enabled");
 
-        // TODO: specify the specific minting cap value when it becomes known
-        // Verify mint cap was set to INITIAL_MINT_CAP (1000 OHM = 1000e9)
-        assertEq(teller.remainingMintApproval(), 1000e9, "Mint cap should be 1000 OHM");
+        // TODO: specify the specific cap value when it becomes known
+        // Verify creator mint cap was set to 1000 OHM and no mints have happened yet.
+        assertEq(
+            teller.remainingMintApproval(),
+            0,
+            "MINTR approval should be 0 at enable (no mints yet)"
+        );
+        assertEq(
+            teller.creatorMintCap(address(distributor)),
+            1000e9,
+            "Distributor creator cap should be 1000 OHM"
+        );
+        assertEq(teller.creatorMinted(address(distributor)), 0, "creatorMinted should start at 0");
+        assertEq(
+            teller.creatorOutstanding(address(distributor)),
+            0,
+            "creatorOutstanding should start at 0"
+        );
 
         // Cross-references: distributor -> teller
         assertEq(
@@ -305,9 +329,9 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         proposalWrapper.validate(addresses, address(this));
     }
 
-    /// @notice Verifies that _validate still passes after a user claims convOHM tokens
-    /// @dev claim() mints convOHM via teller.create() which does not consume MINTR
-    ///      mint approval. _validate's remainingMintApproval check should still pass.
+    /// @notice Verifies that _validate still passes after a user claims convOHM tokens.
+    /// @dev claim() mints convOHM via teller.create(), which raises remainingMintApproval and
+    ///      bumps creatorMinted/creatorOutstanding.
     function test_validate_passesAfterClaim() public {
         uint40 epochEndDate = _firstEpochEndDate();
         uint256 claimAmount = 100e9;
@@ -335,6 +359,23 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
 
         vm.prank(user0);
         distributor.claim(epochEndDates, amounts, proofs);
+
+        // Verify post-claim teller state
+        assertEq(
+            teller.remainingMintApproval(),
+            claimAmount,
+            "MINTR approval should equal the claimed amount post-claim"
+        );
+        assertEq(
+            teller.creatorOutstanding(address(distributor)),
+            claimAmount,
+            "creatorOutstanding should equal the claimed amount post-claim"
+        );
+        assertEq(
+            teller.creatorMinted(address(distributor)),
+            claimAmount,
+            "creatorMinted should equal the claimed amount post-claim"
+        );
 
         proposalWrapper.validate(addresses, address(this));
     }
@@ -396,6 +437,9 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         assertEq(convToken.strike(), STRIKE_PRICE, "Strike price should match");
         assertEq(convToken.eligible(), eligibleTimestamp, "Eligible timestamp should match");
         assertEq(convToken.expiry(), expiryTimestamp, "Expiry timestamp should match");
+
+        // Deployed token should be tracked in the teller's active set
+        assertTrue(teller.isActiveToken(token), "Deployed token should be in teller active set");
     }
 
     /// @notice Validates that a user can claim convOHM for an epoch
@@ -445,6 +489,16 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         assertEq(mintedAmounts[0], claimAmount, "Minted amount should match");
         assertEq(token.balanceOf(user0), claimAmount, "User should hold convOHM tokens");
         assertTrue(distributor.hasClaimed(user0, epochEndDate), "User should be marked as claimed");
+        assertEq(
+            teller.creatorMinted(address(distributor)),
+            claimAmount,
+            "creatorMinted should track the claimed amount"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            claimAmount,
+            "MINTR approval should equal the claimed amount"
+        );
     }
 
     /// @notice Validates the full lifecycle: endEpoch -> claim convOHM -> exercise to OHM
@@ -527,6 +581,18 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
             mintApprovalBefore - teller.remainingMintApproval(),
             claimAmount,
             "Mint approval should decrease by exercised amount"
+        );
+
+        // 9. Verify creator state: outstanding back to 0, minted preserved
+        assertEq(
+            teller.creatorOutstanding(address(distributor)),
+            0,
+            "creatorOutstanding should be 0 after exercise"
+        );
+        assertEq(
+            teller.creatorMinted(address(distributor)),
+            claimAmount,
+            "creatorMinted should remain at the claimed amount"
         );
     }
 }

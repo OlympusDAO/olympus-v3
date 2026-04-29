@@ -29,7 +29,7 @@ The lifecycle is:
 1. **Deploy** - When an epoch ends, an off-chain backend calculates token configuration params, the admin then sets the Merkle root and the `IncentiveDistributorConvertible` deploys a new convOHM token via the `ConvertibleOHMTeller`.
 2. **Claim** - Users submit Merkle proofs to the distributor, which mints convOHM to them via the teller.
 3. **Exercise** - Between the eligible date and expiry, convOHM holders can exercise their tokens: they pay `amount * strikePrice / 1e9` in the quote token (e.g. USDS), the convOHM is burned, and fresh OHM is minted to the user via the MINTR module.
-4. **Expiry** - Unexercised tokens expire worthless. There is no reclaim mechanism (unlike the Bond Protocol original, which pre-deposited collateral).
+4. **Expiry** - Unexercised tokens expire worthless. There is no collateral reclaim (unlike the Bond Protocol original, which pre-deposited collateral); under the mint-on-exercise model, expired supply is instead swept via `sweepExpiredTokens()` (or the Heart-driven `execute()`) to release the corresponding MINTR approval and decrement `creatorOutstanding`. `creatorMinted` is monotonic and is preserved across sweeps.
 
 #### Token Naming
 
@@ -51,7 +51,8 @@ Key changes from the Bond Protocol originals:
 | Mint-on-exercise model | OHM is minted via MINTR on exercise instead of pre-deposited collateral |
 | Creator isolation | Token hash includes `creator` (deploying distributor) to prevent cross-distributor collisions |
 | Removed features | `reclaim()`, protocol fees (`claimFees()`), collateral tracking |
-| Mint cap management | Added MINTR approval management to control total OHM minting |
+| Per-creator cumulative mint cap | Each creator has a cap on the cumulative convOHM ever minted (`creatorMinted`); MINTR approval is adjusted atomically on `create` / `exercise` / sweep. The cap cannot be lowered below `creatorMinted`. |
+| Active token registry + sweep | An `EnumerableSet` tracks deployed tokens; permissionless `sweepExpiredTokens()` and a Heart-driven `execute()` periodic task release MINTR approval for expired tokens. |
 | Reentrancy guard | Upgraded from `ReentrancyGuard` to `ReentrancyGuardTransient` (gas optimized) |
 
 The existing `CloneERC20` (in `src/external/clones/`, previously audited for convertible deposits) now inherits from a new `Clone` wrapper (`src/external/clones/Clone.sol`) that extends the `@clones-with-immutable-args` dependency with a `_getArgUint48` reader. EIP-2612 permit support is provided by `CloneERC20Permit` (`src/external/clones/CloneERC20Permit.sol`), a new extension of `CloneERC20` with permit logic adopted from Bond Protocol's [CloneERC20.sol](https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/lib/clones/CloneERC20.sol) (previously [audited](https://github.com/Bond-Protocol/option-contracts/tree/master/audit)). `ConvertibleOHMToken` inherits from `CloneERC20Permit`.
@@ -179,8 +180,8 @@ flowchart TD
 |---|---|---|
 | `incentive_manager` | Off-chain backend / multisig | Call `endEpoch()` on distributors |
 | `convertible_distributor` | `IncentiveDistributorConvertible` | Call `deploy()` and `create()` on `ConvertibleOHMTeller` |
-| `convertible_admin` | Multisig / governance | Call `setMintCap()` on `ConvertibleOHMTeller` |
-| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setMintCap()`, `setMinDuration()` on `ConvertibleOHMTeller` |
+| `heart` | `OlympusHeart` | Call `execute()` on `ConvertibleOHMTeller` to sweep expired tokens |
+| Admin role (PolicyEnabler) | Multisig / governance | Enable/disable distributors and teller, `setCreatorMintCap()`, `setMinDuration()`, `setMinEligibleDelay()` on `ConvertibleOHMTeller` |
 | Emergency role (PolicyEnabler) | Emergency multisig | Disable distributors and teller |
 
 ### Module Dependencies
@@ -280,27 +281,54 @@ flowchart TD
     end
 ```
 
-### Mint Cap Management
+### Per-Creator Mint Cap Management
 
-The `ConvertibleOHMTeller` manages its own MINTR approval to enforce a protocol-wide cap on OHM minting through convOHM exercise.
+The `ConvertibleOHMTeller` enforces a per-creator cumulative cap on the convOHM that each
+distributor can ever mint. The cap is set via `enable()` (initial caps) and `setCreatorMintCap()`. MINTR approval is reserved on `create()` and released on `exercise()` / sweep.
 
 ```mermaid
 sequenceDiagram
-    participant Admin as admin / convertible_admin
+    participant Admin as admin
+    participant Teller as ConvertibleOHMTeller
+
+    Admin->>Teller: setCreatorMintCap(creator, newCap)
+    Note over Teller: revert if newCap < creatorMinted[creator]
+    Teller->>Teller: creatorMintCap[creator] = newCap
+    Teller->>Teller: emit CreatorMintCapSet(creator, newCap)
+```
+
+```mermaid
+sequenceDiagram
+    participant Distributor as IncentiveDistributorConvertible
     participant Teller as ConvertibleOHMTeller
     participant MINTR
 
-    Admin->>Teller: setMintCap(newCap)
-    Teller->>MINTR: mintApproval(address(this))
-    Note over Teller: currentApproval = existing approval
+    Distributor->>Teller: create(token, user, amount)
+    Note over Teller: revert if creatorMinted + amount > creatorMintCap
+    Teller->>Teller: creatorMinted[creator] += amount
+    Teller->>Teller: creatorOutstanding[creator] += amount
+    Teller->>MINTR: increaseMintApproval(self, amount)
+```
 
-    alt newCap > currentApproval
-        Teller->>MINTR: increaseMintApproval(address(this), newCap - currentApproval)
-    else newCap < currentApproval
-        Teller->>MINTR: decreaseMintApproval(address(this), currentApproval - newCap)
+### Sweeping Expired Tokens
+
+Expired convOHM tokens are removed from the active registry by a permissionless
+`sweepExpiredTokens(maxIterations)` call, or by the Heart's periodic `execute()` task.
+`execute()` wraps the sweep in `try/catch` and emits `SweepExpiredTokensFailed` if the inner
+call reverts, so the rest of the Heart's task pipeline is never disrupted.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Heart / anyone
+    participant Teller as ConvertibleOHMTeller
+    participant MINTR
+
+    Caller->>Teller: execute() / sweepExpiredTokens(N)
+    loop For up to maxIterations expired tokens
+        Teller->>Teller: supply = token.totalSupply()
+        Teller->>Teller: creatorOutstanding[creator] -= supply
+        Teller->>Teller: _activeTokens.remove(token)
+        Teller->>Teller: emit ActiveTokenSwept(token, supply)
     end
-
-    Teller->>MINTR: mintApproval(address(this))
-    Note over Teller: newApproval = actual approval stored in MINTR after change
-    Teller->>Teller: emit MintCapUpdated(newApproval)
+    Teller->>MINTR: decreaseMintApproval(self, totalReclaimed)
 ```

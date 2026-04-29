@@ -4,14 +4,19 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {IConvertibleOHMTeller} from "src/policies/incentives/convertible/interfaces/IConvertibleOHMTeller.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC20 as IERC20OZ} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 
 // Libraries
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {Test, stdError} from "forge-std/Test.sol";
 
 // Contracts
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ConvertibleOHMTeller} from "src/policies/incentives/convertible/ConvertibleOHMTeller.sol";
 import {ConvertibleOHMToken} from "src/policies/incentives/convertible/ConvertibleOHMToken.sol";
 import {Kernel, Actions, toKeycode, Keycode, Policy} from "src/Kernel.sol";
@@ -38,11 +43,14 @@ contract ConvertibleOHMTellerTestBase is Test {
     ConvertibleOHMTeller teller;
 
     // Constants
-    uint256 internal constant _DEFAULT_MINT_CAP = 1000e9;
+    uint256 internal constant _DEFAULT_MINT_CAP = 1000e9; // TODO: update this value when it becomes known
+    uint256 internal constant _UNLIMITED_CREATOR_CAP = type(uint128).max;
 
     // Test accounts
     address incentiveDistributor = makeAddr("incentiveDistributor"); // False contract
     address admin = makeAddr("admin");
+    address heart = makeAddr("heart");
+    address emergency = makeAddr("emergency");
     address user0 = makeAddr("user0");
     address user1 = makeAddr("user1");
 
@@ -73,15 +81,18 @@ contract ConvertibleOHMTellerTestBase is Test {
 
         // Grant the permission to this test contract to call saveRole
         _grantModulePermission(toKeycode("ROLES"), ROLESv1.saveRole.selector);
-        // Setup roles
-        roles.saveRole(teller.ROLE_TELLER_ADMIN(), admin);
-        roles.saveRole(ADMIN_ROLE, address(this));
 
-        // Grant the incentive distributor role (required for the functions deploy and create)
+        // Setup roles
+        roles.saveRole(ADMIN_ROLE, address(this));
+        // Emergency role used by disable() (onlyEmergencyOrAdminRole)
+        roles.saveRole(EMERGENCY_ROLE, emergency);
+        // Heart role for periodic-task execute() tests
+        roles.saveRole(teller.ROLE_HEART(), heart);
+        // Distributor role required for deploy and create
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor);
 
-        // Enable the teller policy with infinite minting cap and default creator limits
-        teller.enable(_enableData(type(uint256).max));
+        // Enable the teller policy with a single creator at an effectively unlimited cap
+        teller.enable(_enableData(_UNLIMITED_CREATOR_CAP));
 
         // Fund users with USDS for exercise tests
         usds.mint(user0, 1_000_000e18);
@@ -95,18 +106,66 @@ contract ConvertibleOHMTellerTestBase is Test {
         expiryTimestamp = _roundToDay(startTimestamp + 180 days);
     }
 
-    /// @dev Encodes enableData with a mint cap and the default incentiveDistributor limit
-    function _enableData(uint256 mintCap_) internal view returns (bytes memory) {
+    /// @dev Encodes enableData with a single creator (incentiveDistributor) at the given cap.
+    function _enableData(uint256 cap_) internal view returns (bytes memory) {
         address[] memory creators = new address[](1);
         creators[0] = incentiveDistributor;
-        uint256[] memory limits = new uint256[](1);
-        limits[0] = type(uint256).max;
-        return abi.encode(mintCap_, creators, limits);
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = cap_;
+        return abi.encode(creators, caps);
     }
 
-    /// @dev Encodes enableData with a mint cap and no creator limits
-    function _enableDataNoLimits(uint256 mintCap_) internal pure returns (bytes memory) {
-        return abi.encode(mintCap_, new address[](0), new uint256[](0));
+    /// @dev Encodes enableData with the supplied creator and cap arrays.
+    function _enableDataMulti(
+        address[] memory creators_,
+        uint256[] memory caps_
+    ) internal pure returns (bytes memory) {
+        return abi.encode(creators_, caps_);
+    }
+
+    /// @dev Encodes enableData with empty arrays (smallest valid payload).
+    function _enableDataEmpty() internal pure returns (bytes memory) {
+        return abi.encode(new address[](0), new uint256[](0));
+    }
+
+    /// @dev Wraps a single creator address in a memory array for invariant assertions.
+    function _singletonCreators(address creator_) internal pure returns (address[] memory out) {
+        out = new address[](1);
+        out[0] = creator_;
+    }
+
+    /// @dev Asserts `MINTR.mintApproval(teller) == sum(creatorOutstanding[c])` across creators.
+    function _assertMintApprovalInvariant(address[] memory creators_) internal view {
+        uint256 sum;
+        for (uint256 i; i < creators_.length; ++i) {
+            sum += teller.creatorOutstanding(creators_[i]);
+        }
+        assertEq(
+            mintr.mintApproval(address(teller)),
+            sum,
+            "MINTR approval should equal sum of creator outstanding"
+        );
+    }
+
+    /// @dev Warps `block.timestamp` to the token's eligible timestamp.
+    ///      Reverts if the target is earlier than the current `block.timestamp`.
+    function _warpToEligible(ConvertibleOHMToken token_) internal {
+        uint256 target = uint256(token_.eligible());
+        require(target >= vm.getBlockTimestamp(), "warp target before current block.timestamp");
+        vm.warp(target);
+    }
+
+    /// @dev Warps `block.timestamp` past the token's expiry.
+    ///      Reverts if the target is earlier than the current `block.timestamp`.
+    function _warpPastExpiry(ConvertibleOHMToken token_) internal {
+        uint256 target = uint256(token_.expiry()) + 1;
+        require(target >= vm.getBlockTimestamp(), "warp target before current block.timestamp");
+        vm.warp(target);
+    }
+
+    /// @dev Expects a ROLES_RequireRole revert with the given role.
+    function _expectRoleRevert(bytes32 role_) internal {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, role_));
     }
 
     function _grantModulePermission(Keycode keycode, bytes4 selector) internal {
@@ -130,6 +189,26 @@ contract ConvertibleOHMTellerTestBase is Test {
         token = ConvertibleOHMToken(
             teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE)
         );
+    }
+
+    /// @dev Deploys a convertible token by `incentiveDistributor` with custom timestamps.
+    function _deployConvertibleTokenAt(
+        uint48 eligible_,
+        uint48 expiry_
+    ) internal returns (ConvertibleOHMToken token) {
+        vm.prank(incentiveDistributor);
+        token = ConvertibleOHMToken(teller.deploy(address(usds), eligible_, expiry_, STRIKE_PRICE));
+    }
+
+    /// @dev Deploys a convertible token by an arbitrary distributor with custom timestamps.
+    function _deployConvertibleTokenForDistributor(
+        address distributor_,
+        uint48 eligible_,
+        uint48 expiry_,
+        uint256 strikePrice_
+    ) internal returns (ConvertibleOHMToken token) {
+        vm.prank(distributor_);
+        token = ConvertibleOHMToken(teller.deploy(address(usds), eligible_, expiry_, strikePrice_));
     }
 
     // Deploys a malicious convertible token for testing
@@ -343,7 +422,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function test_deploy_createsUniqueTokensForDifferentParams_skipOnCoverage() external {
+    function test_deploy_createsUniqueTokensForDifferentParams() external {
         // Deploy convertible tokens with different params
         ConvertibleOHMToken token1 = _deployConvertibleToken();
         vm.startPrank(incentiveDistributor);
@@ -371,7 +450,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function test_deploy_createsUniqueTokensForDifferentQuoteTokens_skipOnCoverage() external {
+    function test_deploy_createsUniqueTokensForDifferentQuoteTokens() external {
         // 1. Preparation: deploy another quote token
         MockERC20 usdc = new MockERC20("USDC", "USDC", 6);
 
@@ -392,7 +471,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         assertEq(token2.quote(), address(usdc), "The Token2's quote token should be USDC");
     }
 
-    function test_deploy_createsUniqueTokensForDifferentCreators_skipOnCoverage() external {
+    function test_deploy_createsUniqueTokensForDifferentCreators() external {
         // 1. Preparation: create second incentive distributor
         address incentiveDistributor2 = makeAddr("incentiveDistributor2");
         roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), incentiveDistributor2);
@@ -439,7 +518,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         assertTrue(hash1 != hash2, "Hashes should be different for different creators");
     }
 
-    function testFuzz_deploy_existingTokenReturnedForSameRoundedTimestamps_skipOnCoverage(
+    function testFuzz_deploy_existingTokenReturnedForSameRoundedTimestamps(
         uint48 eligibleDiff_,
         uint48 expiryDiff_
     ) external {
@@ -558,7 +637,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         teller.deploy(address(usds), tomorrowMidnight, expiryTimestamp, STRIKE_PRICE);
     }
 
-    function testFuzz_deploy_zeroEligibleRespectsMinDelay_skipOnCoverage(uint48 delay_) external {
+    function testFuzz_deploy_zeroEligibleRespectsMinDelay(uint48 delay_) external {
         delay_ = uint48(bound(delay_, 1 days, 365 days));
         teller.setMinEligibleDelay(delay_);
 
@@ -583,9 +662,7 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function testFuzz_deploy_explicitEligibleRespectsMinDelay_skipOnCoverage(
-        uint48 delay_
-    ) external {
+    function testFuzz_deploy_explicitEligibleRespectsMinDelay(uint48 delay_) external {
         delay_ = uint48(bound(delay_, 1 days, 365 days));
         teller.setMinEligibleDelay(delay_);
 
@@ -730,14 +807,15 @@ contract ConvertibleOHMTellerDeploymentTests is ConvertibleOHMTellerTestBase {
         teller.deploy(address(highDecToken), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
-    function test_deploy_revertsIfNotIncentiveDistributor() external {
+    function testFuzz_deploy_revertsIfNotIncentiveDistributor(address addr_) external {
+        vm.assume(addr_ != incentiveDistributor);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ROLESv1.ROLES_RequireRole.selector,
                 teller.ROLE_CONVERTIBLE_DISTRIBUTOR()
             )
         );
-        vm.prank(user0);
+        vm.prank(addr_);
         teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE);
     }
 
@@ -772,9 +850,25 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
             mintAmount,
             "The total supply should equal the minted amount"
         );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            mintAmount,
+            "creatorMinted should track cumulative mints"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            mintAmount,
+            "creatorOutstanding should track live supply"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            mintAmount,
+            "MINTR approval should match outstanding"
+        );
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
     }
 
-    function test_create_mintsToTwoUsers_skipOnCoverage() external {
+    function test_create_mintsToTwoUsers() external {
         // 1. Preparation: deploy a token
         ConvertibleOHMToken token = _deployConvertibleToken();
 
@@ -794,6 +888,78 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
             token.totalSupply(),
             mintAmount1 + mintAmount2,
             "The total supply should be the sum of mints"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            mintAmount1 + mintAmount2,
+            "creatorMinted should track cumulative mints across users"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            mintAmount1 + mintAmount2,
+            "creatorOutstanding should track live supply across users"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            mintAmount1 + mintAmount2,
+            "MINTR approval should equal sum of mints"
+        );
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+    }
+
+    function test_create_succeedsAtCapBoundary() external {
+        // 1. Preparation: deploy a token and lower the cap to 100e9
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        teller.setCreatorMintCap(incentiveDistributor, 100e9);
+
+        // 2. Test: minting exactly the cap should succeed
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            100e9,
+            "creatorMinted should reach the cap exactly"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            100e9,
+            "creatorOutstanding should equal the minted amount"
+        );
+    }
+
+    function test_create_creatorMintedMonotonic() external {
+        // 1. Preparation: deploy a token
+        ConvertibleOHMToken token = _deployConvertibleToken();
+
+        // Step 1: mint 60e9
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 60e9);
+
+        // Step 2: user0 exercises 60e9
+        vm.warp(eligibleTimestamp);
+        uint256 cost = _exerciseCost(token, 60e9);
+        vm.startPrank(user0);
+        token.approve(address(teller), 60e9);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), 60e9);
+        vm.stopPrank();
+
+        // Step 3: mint 40e9 more
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user1, 40e9);
+
+        // creatorMinted is monotonic and tracks cumulative mints, not net
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            100e9,
+            "creatorMinted should track cumulative mints across exercises"
+        );
+        // creatorOutstanding only reflects live convOHM
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            40e9,
+            "creatorOutstanding should reflect live (un-exercised) supply"
         );
     }
 
@@ -906,7 +1072,9 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         teller.create(address(token), user0, 0);
     }
 
-    function test_create_revertsIfNotIncentiveDistributor() external {
+    function testFuzz_create_revertsIfNotIncentiveDistributor(address addr_) external {
+        vm.assume(addr_ != incentiveDistributor);
+
         // 1. Preparation: deploy a token
         ConvertibleOHMToken token = _deployConvertibleToken();
 
@@ -917,7 +1085,7 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
                 teller.ROLE_CONVERTIBLE_DISTRIBUTOR()
             )
         );
-        vm.prank(user0);
+        vm.prank(addr_);
         teller.create(address(token), user0, 100e9);
     }
 
@@ -950,6 +1118,24 @@ contract ConvertibleOHMTellerMintTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(incentiveDistributor);
         teller.create(address(token), user0, 100e9);
+    }
+
+    function test_create_revertsIfCapExceeded() external {
+        // 1. Preparation: deploy a token and lower the cap below the intended mint
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        teller.setCreatorMintCap(incentiveDistributor, 100e9);
+
+        // 2. Test: cap == 100e9, attempt to mint 100e9 + 1 should revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_CapExceeded.selector,
+                incentiveDistributor,
+                100e9 + 1,
+                100e9
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9 + 1);
     }
 }
 
@@ -1019,6 +1205,16 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
             approvalBefore - user0InitialBal,
             "The minting approval should decrease by the exercised amount"
         );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after full exercise"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            user0InitialBal,
+            "creatorMinted should remain monotonic post-exercise"
+        );
     }
 
     function test_exercise_partially() external {
@@ -1042,6 +1238,16 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
             "User0 should have remaining convertible tokens"
         );
         assertEq(ohm.balanceOf(user0), exerciseAmount, "User0 should receive partial OHM");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            user0InitialBal - exerciseAmount,
+            "creatorOutstanding should reflect remaining supply"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            user0InitialBal,
+            "creatorMinted should remain unchanged on partial exercise"
+        );
     }
 
     function test_exercise_nearExpiry() external {
@@ -1061,7 +1267,7 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         assertEq(ohm.balanceOf(user0), user0InitialBal, "User0 should receive OHM");
     }
 
-    function test_exercise_byTwoUsers_skipOnCoverage() external {
+    function test_exercise_byTwoUsers() external {
         // 1. Preparation: mint convertible tokens to User1, warp to the eligible time
         uint256 user1InitialBal = 200e9;
         vm.prank(incentiveDistributor);
@@ -1089,9 +1295,19 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         assertEq(ohm.balanceOf(user0), user0InitialBal, "User0 should receive OHM");
         assertEq(ohm.balanceOf(user1), user1InitialBal, "User1 should receive OHM");
         assertEq(token.totalSupply(), 0, "All the convertible tokens should be burned");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after both exercises"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            user0InitialBal + user1InitialBal,
+            "creatorMinted should equal sum of mints"
+        );
     }
 
-    function test_exercise_afterTransfer_skipOnCoverage() external {
+    function test_exercise_afterTransfer() external {
         // 1. Preparation: User0 transfers convertible tokens to User1, warp to the eligible time
         uint256 user1Amount = user0InitialBal;
         vm.prank(user0);
@@ -1111,6 +1327,11 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
         // Verify
         assertEq(ohm.balanceOf(user1), user1Amount, "User1 should receive OHM");
         assertEq(token.balanceOf(user1), 0, "The User1's convertible tokens should be burned");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after exercise (transfer does not affect creator state)"
+        );
     }
 
     function test_exercise_revertsIfTokenDoesNotExist() external {
@@ -1198,13 +1419,16 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
     }
 
     function test_exercise_revertsIfInsufficientMintApproval() external {
-        // 1. Preparation: reduce the minting cap to less than the exercise amount
-        uint256 limitedCap = 50e9; // Only allow 50 OHM to be minted
-        teller.setMintCap(limitedCap);
+        // 1. Preparation: drain the teller's MINTR approval below the live convOHM supply.
+        // Under the new accounting model, approval is kept in lockstep with outstanding,
+        // so we must cause divergence by reducing approval directly via MINTR.
+        _grantModulePermission(toKeycode("MINTR"), MINTRv1.decreaseMintApproval.selector);
+        mintr.decreaseMintApproval(address(teller), 50e9);
+
         // Warp to the eligible time
         vm.warp(eligibleTimestamp);
 
-        // 2. Test: try to exercise more than the minting cap allows
+        // 2. Test: try to exercise more than the remaining approval allows
         uint256 exerciseCost = _exerciseCost(token, user0InitialBal);
         vm.startPrank(user0);
         token.approve(address(teller), user0InitialBal);
@@ -1286,6 +1510,444 @@ contract ConvertibleOHMTellerExerciseTests is ConvertibleOHMTellerTestBase {
     }
 }
 
+contract ConvertibleOHMTellerSweepTests is ConvertibleOHMTellerTestBase {
+    function test_sweep_noopWhenNoTokens() external {
+        // No tokens deployed: sweep should be a no-op and emit nothing.
+        uint256 approvalBefore = teller.remainingMintApproval();
+        teller.sweepExpiredTokens(10);
+        assertEq(teller.activeTokensLength(), 0, "Active tokens length should remain 0");
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalBefore,
+            "MINTR approval should not change"
+        );
+    }
+
+    function test_sweep_noopWhenNoneExpired() external {
+        // Deploy and mint, but do not warp.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        uint256 approvalBefore = teller.remainingMintApproval();
+        teller.sweepExpiredTokens(10);
+
+        assertEq(teller.activeTokensLength(), 1, "Active tokens length should remain 1");
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalBefore,
+            "MINTR approval should not change"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            100e9,
+            "creatorOutstanding should be unchanged"
+        );
+    }
+
+    function test_sweep_singleExpiredToken() external {
+        // Mint, warp past expiry, sweep.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        _warpPastExpiry(token);
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token), 100e9);
+        teller.sweepExpiredTokens(10);
+
+        assertEq(teller.activeTokensLength(), 0, "Active tokens length should be 0 after sweep");
+        assertFalse(teller.isActiveToken(address(token)), "Swept token should no longer be active");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after sweep"
+        );
+        assertEq(teller.remainingMintApproval(), 0, "MINTR approval should be 0 after sweep");
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            100e9,
+            "creatorMinted should be preserved (monotonic)"
+        );
+    }
+
+    function test_sweep_partialExerciseThenExpire() external {
+        // Mint 100e9, exercise 40e9, warp past expiry, sweep.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+
+        vm.warp(eligibleTimestamp);
+        uint256 cost = _exerciseCost(token, 40e9);
+        vm.startPrank(user0);
+        token.approve(address(teller), 40e9);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), 40e9);
+        vm.stopPrank();
+
+        _warpPastExpiry(token);
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token), 60e9);
+        teller.sweepExpiredTokens(10);
+
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after sweep"
+        );
+        assertEq(teller.remainingMintApproval(), 0, "MINTR approval should be 0 after sweep");
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            100e9,
+            "creatorMinted should remain at 100e9 (monotonic)"
+        );
+    }
+
+    function test_sweep_multipleCreatorsBatch() external {
+        // 1. Preparation: register a second distributor and deploy a token from each
+        address distributor2 = makeAddr("distributor2");
+        roles.saveRole(teller.ROLE_CONVERTIBLE_DISTRIBUTOR(), distributor2);
+        teller.setCreatorMintCap(distributor2, _UNLIMITED_CREATOR_CAP);
+
+        ConvertibleOHMToken token1 = _deployConvertibleToken();
+        ConvertibleOHMToken token2 = _deployConvertibleTokenForDistributor(
+            distributor2,
+            eligibleTimestamp + 1 days,
+            expiryTimestamp + 1 days,
+            STRIKE_PRICE
+        );
+
+        // Mint from both distributors
+        vm.prank(incentiveDistributor);
+        teller.create(address(token1), user0, 100e9);
+        vm.prank(distributor2);
+        teller.create(address(token2), user0, 200e9);
+
+        // Warp past the latest expiry so both tokens are expired
+        _warpPastExpiry(token2);
+
+        // 2. Test: sweep should fire one event per token
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token2), 200e9);
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token1), 100e9);
+        teller.sweepExpiredTokens(10);
+
+        assertEq(teller.activeTokensLength(), 0, "All active tokens should be removed");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "Distributor1 outstanding should be 0"
+        );
+        assertEq(
+            teller.creatorOutstanding(distributor2),
+            0,
+            "Distributor2 outstanding should be 0"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            0,
+            "MINTR approval should be 0 after batched sweep"
+        );
+
+        address[] memory creators = new address[](2);
+        creators[0] = incentiveDistributor;
+        creators[1] = distributor2;
+        _assertMintApprovalInvariant(creators);
+    }
+
+    function test_sweep_zeroMaxIterations() external {
+        // Even with an expired token, maxIterations==0 must be a strict no-op.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        _warpPastExpiry(token);
+
+        uint256 approvalBefore = teller.remainingMintApproval();
+        teller.sweepExpiredTokens(0);
+
+        assertEq(teller.activeTokensLength(), 1, "Active tokens should remain unchanged");
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalBefore,
+            "MINTR approval should not change"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            100e9,
+            "creatorOutstanding should not change"
+        );
+    }
+
+    function test_sweep_partialMaxIterations() external {
+        // Three expired tokens. With maxIterations=1 the backward scan removes the last entry.
+        ConvertibleOHMToken token1 = _deployConvertibleTokenAt(eligibleTimestamp, expiryTimestamp);
+        vm.prank(incentiveDistributor);
+        teller.create(address(token1), user0, 10e9);
+
+        ConvertibleOHMToken token2 = _deployConvertibleTokenAt(
+            eligibleTimestamp + 1 days,
+            expiryTimestamp + 1 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token2), user0, 20e9);
+
+        ConvertibleOHMToken token3 = _deployConvertibleTokenAt(
+            eligibleTimestamp + 2 days,
+            expiryTimestamp + 2 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token3), user0, 30e9);
+
+        _warpPastExpiry(token3);
+
+        // Sweep with one iteration removes the last-inserted token (token3, supply 30e9).
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token3), 30e9);
+        teller.sweepExpiredTokens(1);
+
+        assertEq(teller.activeTokensLength(), 2, "Two tokens should remain");
+        assertFalse(teller.isActiveToken(address(token3)), "token3 should have been swept");
+        assertTrue(teller.isActiveToken(address(token1)), "token1 should remain");
+        assertTrue(teller.isActiveToken(address(token2)), "token2 should remain");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            30e9,
+            "Outstanding should drop by token3 supply"
+        );
+    }
+
+    function test_sweep_consecutiveCallsRemoveOneEach() external {
+        // Three expired tokens. Two consecutive sweep(1) calls should each remove one token,
+        // proving sweep can drain the active set in chunks across multiple invocations.
+        ConvertibleOHMToken token1 = _deployConvertibleTokenAt(eligibleTimestamp, expiryTimestamp);
+        vm.prank(incentiveDistributor);
+        teller.create(address(token1), user0, 10e9);
+
+        ConvertibleOHMToken token2 = _deployConvertibleTokenAt(
+            eligibleTimestamp + 1 days,
+            expiryTimestamp + 1 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token2), user0, 20e9);
+
+        ConvertibleOHMToken token3 = _deployConvertibleTokenAt(
+            eligibleTimestamp + 2 days,
+            expiryTimestamp + 2 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token3), user0, 30e9);
+
+        _warpPastExpiry(token3);
+
+        // First call: backward scan removes the last-inserted token (token3).
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token3), 30e9);
+        teller.sweepExpiredTokens(1);
+
+        assertEq(teller.activeTokensLength(), 2, "Two tokens should remain after first sweep");
+        assertFalse(teller.isActiveToken(address(token3)), "token3 should be swept");
+        assertTrue(teller.isActiveToken(address(token1)), "token1 should remain");
+        assertTrue(teller.isActiveToken(address(token2)), "token2 should remain");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            30e9,
+            "Outstanding after first sweep should be token1 + token2 supply (10e9 + 20e9)"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            30e9,
+            "MINTR approval should track outstanding after first sweep"
+        );
+
+        // Second call: backward scan now removes the next last-inserted token (token2).
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token2), 20e9);
+        teller.sweepExpiredTokens(1);
+
+        assertEq(teller.activeTokensLength(), 1, "One token should remain after second sweep");
+        assertFalse(teller.isActiveToken(address(token2)), "token2 should be swept");
+        assertTrue(teller.isActiveToken(address(token1)), "token1 should remain");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            10e9,
+            "Outstanding after second sweep should be token1 supply (10e9)"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            10e9,
+            "MINTR approval should track outstanding after second sweep"
+        );
+    }
+
+    function test_sweep_backwardIterationOrder() external {
+        // Three tokens A, B, C. Only B is expired. Sweep removes B, leaves [A, C].
+        // We mint very small amounts so the totals are easy to verify.
+        ConvertibleOHMToken tokenA = _deployConvertibleTokenAt(
+            eligibleTimestamp,
+            expiryTimestamp + 30 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(tokenA), user0, 10e9);
+
+        ConvertibleOHMToken tokenB = _deployConvertibleTokenAt(eligibleTimestamp, expiryTimestamp);
+        vm.prank(incentiveDistributor);
+        teller.create(address(tokenB), user0, 20e9);
+
+        ConvertibleOHMToken tokenC = _deployConvertibleTokenAt(
+            eligibleTimestamp + 1 days,
+            expiryTimestamp + 60 days
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(tokenC), user0, 30e9);
+
+        // Warp so that only tokenB is expired (between B's expiry and A/C's expiries).
+        vm.warp(uint256(tokenB.expiry()) + 1);
+
+        teller.sweepExpiredTokens(10);
+
+        // After swap-and-pop, the slot of B is filled by C and the array shrinks.
+        // The plan asserts presence of A and C, not order.
+        assertEq(teller.activeTokensLength(), 2, "Two tokens should remain");
+        assertTrue(teller.isActiveToken(address(tokenA)), "tokenA should remain");
+        assertTrue(teller.isActiveToken(address(tokenC)), "tokenC should remain");
+        assertFalse(teller.isActiveToken(address(tokenB)), "tokenB should be swept");
+    }
+
+    function test_sweep_idempotence() external {
+        // Sweeping twice should leave state unchanged after the first call.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        _warpPastExpiry(token);
+
+        teller.sweepExpiredTokens(10);
+        assertEq(teller.activeTokensLength(), 0, "Active set should be empty after first sweep");
+
+        // Second call should be a no-op.
+        uint256 approvalAfterFirst = teller.remainingMintApproval();
+        teller.sweepExpiredTokens(10);
+        assertEq(
+            teller.activeTokensLength(),
+            0,
+            "Active set should remain empty after second sweep"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalAfterFirst,
+            "MINTR approval should not change on second sweep"
+        );
+    }
+
+    function test_sweep_revertsIfPolicyDisabled() external {
+        teller.disable("");
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        teller.sweepExpiredTokens(10);
+    }
+}
+
+contract ConvertibleOHMTellerExecuteTests is ConvertibleOHMTellerTestBase {
+    function test_execute_noopWhenDisabled() external {
+        // Deploy a token while enabled, then disable.
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        _warpPastExpiry(token);
+        teller.disable("");
+
+        // Heart calling execute() while disabled returns early with no state change.
+        uint256 lengthBefore = teller.activeTokensLength();
+        uint256 approvalBefore = teller.remainingMintApproval();
+        vm.prank(heart);
+        teller.execute();
+        assertEq(
+            teller.activeTokensLength(),
+            lengthBefore,
+            "Active tokens length should not change while disabled"
+        );
+        assertEq(
+            teller.remainingMintApproval(),
+            approvalBefore,
+            "MINTR approval should not change while disabled"
+        );
+    }
+
+    function test_execute_sweepsExpiredTokensFromHeart() external {
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        _warpPastExpiry(token);
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.ActiveTokenSwept(address(token), 100e9);
+        vm.prank(heart);
+        teller.execute();
+
+        assertEq(teller.activeTokensLength(), 0, "Active tokens should be empty after heart sweep");
+        assertEq(teller.remainingMintApproval(), 0, "MINTR approval should be 0 after heart sweep");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after heart sweep"
+        );
+    }
+
+    // Note: SweepExpiredTokensFailed cannot be triggered through the current callable surface:
+    //   - MINTR.decreaseMintApproval floors at zero rather than underflowing.
+    //   - creatorOutstanding stays in lockstep with token supply across create / exercise.
+    //   - The active set is populated only by clones of the immutable TOKEN_IMPLEMENTATION,
+    //     so token.expiry() / totalSupply() / creator() are simple immutable-arg or storage
+    //     reads that never revert, and there is no way to inject a malicious token.
+    //   - The sweep makes no callbacks into untrusted code, so re-entrancy cannot be used to
+    //     drive an inner revert either.
+    // The try/catch and event are retained as a defensive guard against future logic changes
+    // that could introduce a revert in the sweep path.
+
+    function test_execute_respectsHeartSweepLimit() external {
+        // Deploy 51 expired tokens and verify execute() sweeps HEART_SWEEP_LIMIT==50 each call.
+        uint256 totalTokens = teller.HEART_SWEEP_LIMIT() + 1;
+        for (uint256 i = 0; i < totalTokens; ++i) {
+            uint48 eligible = eligibleTimestamp + uint48(i) * uint48(1 days);
+            uint48 expiry = expiryTimestamp + uint48(i) * uint48(1 days);
+            ConvertibleOHMToken token = _deployConvertibleTokenAt(eligible, expiry);
+            vm.prank(incentiveDistributor);
+            teller.create(address(token), user0, 1e9);
+        }
+        assertEq(
+            teller.activeTokensLength(),
+            totalTokens,
+            "All tokens should be in the active set"
+        );
+
+        // Warp past the last expiry so all tokens are expired.
+        uint48 lastExpiry = expiryTimestamp + uint48(totalTokens - 1) * uint48(1 days);
+        vm.warp(uint256(lastExpiry) + 1);
+
+        // First execute() sweeps exactly HEART_SWEEP_LIMIT tokens.
+        vm.prank(heart);
+        teller.execute();
+        assertEq(
+            teller.activeTokensLength(),
+            1,
+            "Exactly one token should remain after first execute"
+        );
+
+        // Second execute() clears the remaining token.
+        vm.prank(heart);
+        teller.execute();
+        assertEq(teller.activeTokensLength(), 0, "All tokens should be swept after second execute");
+    }
+
+    function testFuzz_execute_revertsIfNotHeart(address addr_) external {
+        vm.assume(addr_ != heart);
+        _expectRoleRevert(teller.ROLE_HEART());
+        vm.prank(addr_);
+        teller.execute();
+    }
+}
+
 contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
     function test_setMinDuration_updatesMinDuration() external {
         uint48 newDuration = 7 days;
@@ -1295,7 +1957,7 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         assertEq(teller.minDuration(), newDuration, "The minimum duration should be updated");
     }
 
-    function testFuzz_setMinDuration_skipOnCoverage(uint48 duration_) external {
+    function testFuzz_setMinDuration(uint48 duration_) external {
         duration_ = uint48(bound(duration_, 1 days, type(uint48).max));
 
         // vm.prank(address(this));
@@ -1315,9 +1977,10 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         teller.setMinDuration(uint48(1 days - 1));
     }
 
-    function test_setMinDuration_revertsIfNotAdmin() external {
+    function testFuzz_setMinDuration_revertsIfNotAdmin(address addr_) external {
+        vm.assume(addr_ != address(this));
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user0);
+        vm.prank(addr_);
         teller.setMinDuration(7 days);
     }
 
@@ -1329,46 +1992,6 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         vm.expectRevert(IEnabler.NotEnabled.selector);
         // vm.prank(address(this));
         teller.setMinDuration(7 days);
-    }
-
-    // ========== setAdminMintLimit ========== //
-
-    function test_setAdminMintLimit_setsLimit() external {
-        teller.setAdminMintLimit(incentiveDistributor, 500e9);
-        assertEq(
-            teller.adminMintLimits(incentiveDistributor),
-            500e9,
-            "Admin mint limit should be set"
-        );
-    }
-
-    function test_setAdminMintLimit_emitsEvent() external {
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, 500e9);
-        teller.setAdminMintLimit(incentiveDistributor, 500e9);
-    }
-
-    function test_setAdminMintLimit_revertsIfZeroAddress() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IConvertibleOHMTeller.Teller_InvalidParams.selector,
-                0,
-                abi.encodePacked(address(0))
-            )
-        );
-        teller.setAdminMintLimit(address(0), 500e9);
-    }
-
-    function test_setAdminMintLimit_revertsIfNotAdmin() external {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user0);
-        teller.setAdminMintLimit(incentiveDistributor, 500e9);
-    }
-
-    function test_setAdminMintLimit_revertsIfPolicyDisabled() external {
-        teller.disable("");
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        teller.setAdminMintLimit(incentiveDistributor, 500e9);
     }
 
     // ========== setMinEligibleDelay ========== //
@@ -1395,9 +2018,10 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         teller.setMinEligibleDelay(12 hours);
     }
 
-    function test_setMinEligibleDelay_revertsIfNotAdmin() external {
+    function testFuzz_setMinEligibleDelay_revertsIfNotAdmin(address addr_) external {
+        vm.assume(addr_ != address(this));
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user0);
+        vm.prank(addr_);
         teller.setMinEligibleDelay(2 days);
     }
 
@@ -1407,296 +2031,230 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         teller.setMinEligibleDelay(2 days);
     }
 
-    // ========== exercise: mint limit ========== //
+    // ========== setCreatorMintCap ========== //
 
-    function test_exercise_revertsIfMintLimitExceeded() external {
-        // 1. Preparation: set a low mint limit for the creator
-        teller.setAdminMintLimit(incentiveDistributor, 50e9);
+    function test_setCreatorMintCap_setsCapAndEmits() external {
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.CreatorMintCapSet(incentiveDistributor, 500e9);
+        teller.setCreatorMintCap(incentiveDistributor, 500e9);
+        assertEq(
+            teller.creatorMintCap(incentiveDistributor),
+            500e9,
+            "Creator mint cap should be updated"
+        );
+    }
 
-        // Deploy and mint
+    function testFuzz_setCreatorMintCap(uint256 cap_) external {
+        cap_ = bound(cap_, 0, type(uint128).max);
+        teller.setCreatorMintCap(incentiveDistributor, cap_);
+        assertEq(
+            teller.creatorMintCap(incentiveDistributor),
+            cap_,
+            "Creator mint cap should match fuzzed value"
+        );
+    }
+
+    function test_setCreatorMintCap_freezesNewMintsAtCurrentMinted() external {
+        // Mint 100e9 then set the cap exactly at minted
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        teller.setCreatorMintCap(incentiveDistributor, 100e9);
+
+        // Any further mint must revert (cap exceeded by 1)
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_CapExceeded.selector,
+                incentiveDistributor,
+                100e9 + 1,
+                100e9
+            )
+        );
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 1);
+    }
+
+    function test_setCreatorMintCap_raisingCapUnfreezes() external {
+        // Freeze first by minting and lowering cap
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 100e9);
+        teller.setCreatorMintCap(incentiveDistributor, 100e9);
+
+        // Raise cap and verify a new mint succeeds
+        teller.setCreatorMintCap(incentiveDistributor, 200e9);
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, 50e9);
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            150e9,
+            "creatorMinted should grow by the new mint amount"
+        );
+    }
+
+    function test_setCreatorMintCap_revertsIfBelowMinted() external {
+        // Mint 100e9 so creatorMinted == 100e9
         ConvertibleOHMToken token = _deployConvertibleToken();
         vm.prank(incentiveDistributor);
         teller.create(address(token), user0, 100e9);
 
-        // Warp to eligible
-        vm.warp(eligibleTimestamp);
-
-        // Approve
-        uint256 cost = _exerciseCost(token, 100e9);
-        vm.startPrank(user0);
-        token.approve(address(teller), 100e9);
-        usds.approve(address(teller), cost);
-
-        // 2. Test: exercise above the limit
+        // Attempting cap=50e9 below the current minted should revert
         vm.expectRevert(
             abi.encodeWithSelector(
-                IConvertibleOHMTeller.Teller_MintLimitExceeded.selector,
+                IConvertibleOHMTeller.Teller_CapBelowMinted.selector,
                 incentiveDistributor,
                 100e9,
                 50e9
             )
         );
-        teller.exercise(address(token), 100e9);
-        vm.stopPrank();
+        teller.setCreatorMintCap(incentiveDistributor, 50e9);
     }
 
-    function test_exercise_succeedsWithinMintLimit() external {
-        // 1. Preparation: set exact limit
-        teller.setAdminMintLimit(incentiveDistributor, 100e9);
-
-        ConvertibleOHMToken token = _deployConvertibleToken();
-        vm.prank(incentiveDistributor);
-        teller.create(address(token), user0, 100e9);
-
-        vm.warp(eligibleTimestamp);
-        uint256 cost = _exerciseCost(token, 100e9);
-        vm.startPrank(user0);
-        token.approve(address(teller), 100e9);
-        usds.approve(address(teller), cost);
-        teller.exercise(address(token), 100e9);
-        vm.stopPrank();
-
-        // Verify: ohmMinted tracks the amount
-        assertEq(teller.ohmMinted(incentiveDistributor), 100e9, "OHM minted should be tracked");
-    }
-
-    // ========== setMintCap ========== //
-
-    function test_setMintCap_increasesMintApproval() external {
-        // 1. Preparation: reduce the minting cap to 0 first
-        teller.setMintCap(0);
-        assertEq(teller.remainingMintApproval(), 0, "The initial approval should be 0");
-
-        // 2. Test: increase the minting cap
-        uint256 mintCap = _DEFAULT_MINT_CAP;
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(mintCap);
-        teller.setMintCap(mintCap);
-
-        // Verify
-        assertEq(
-            teller.remainingMintApproval(),
-            mintCap,
-            "The approval should match the minting cap"
+    function test_setCreatorMintCap_revertsIfZeroAddress() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(address(0))
+            )
         );
+        teller.setCreatorMintCap(address(0), 500e9);
     }
 
-    function test_setMintCap_decreasesMintApproval() external {
-        // 1. Preparation: set an initial minting cap
-        uint256 initialCap = _DEFAULT_MINT_CAP;
-        teller.setMintCap(initialCap);
-        assertEq(teller.remainingMintApproval(), initialCap, "The initial cap should be set");
-
-        // 2. Test: decrease the minting cap
-        uint256 newCap = 500e9;
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(newCap);
-        teller.setMintCap(newCap);
-
-        // Verify
-        assertEq(teller.remainingMintApproval(), newCap, "The approval should be decreased");
+    function testFuzz_setCreatorMintCap_revertsIfNotAdmin(address addr_) external {
+        vm.assume(addr_ != address(this));
+        _expectRoleRevert(ADMIN_ROLE);
+        vm.prank(addr_);
+        teller.setCreatorMintCap(incentiveDistributor, 500e9);
     }
 
-    function test_setMintCap_notChangeWhenSameValue() external {
-        // 1. Preparation: set an initial minting cap
-        uint256 cap = _DEFAULT_MINT_CAP;
-        teller.setMintCap(cap);
-
-        // 2. Test: set the same minting cap again (should emit the event, but not change the approval)
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(cap);
-        teller.setMintCap(cap);
-
-        // Verify
-        assertEq(teller.remainingMintApproval(), cap, "The approval should remain unchanged");
-    }
-
-    function test_setMintCap_emitsActualPostApproval() external {
-        // 1. Preparation: set an initial cap and exercise some tokens to reduce the approval
-        uint256 initialCap = _DEFAULT_MINT_CAP;
-        teller.setMintCap(initialCap);
-
-        // Deploy a convertible token and mint some to user0
-        ConvertibleOHMToken token = _deployConvertibleToken();
-        uint256 mintAmount = 100e9;
-        vm.prank(incentiveDistributor);
-        teller.create(address(token), user0, mintAmount);
-
-        // Exercise tokens to consume some mint approval (mintOhm reduces mintApproval)
-        vm.warp(eligibleTimestamp);
-        uint256 cost = _exerciseCost(token, mintAmount);
-        vm.startPrank(user0);
-        token.approve(address(teller), mintAmount);
-        usds.approve(address(teller), cost);
-        teller.exercise(address(token), mintAmount);
-        vm.stopPrank();
-
-        // Now the MINTR approval is reduced by `mintAmount`
-        // currentApproval = initialCap - mintAmount = 900e9
-        uint256 approvalAfterExercise = teller.remainingMintApproval();
-        assertEq(approvalAfterExercise, initialCap - mintAmount, "Approval should be reduced");
-
-        // 2. Test: set a new cap and verify the event emits the actual post-approval from MINTR
-        uint256 newCap = 2000e9;
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(newCap);
-        teller.setMintCap(newCap);
-
-        // Verify the actual approval matches
-        assertEq(teller.remainingMintApproval(), newCap, "Post-approval should match new cap");
-    }
-
-    function test_setMintCap_revertsIfNotAdminOrTellerAdmin() external {
-        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        vm.prank(user0);
-        teller.setMintCap(_DEFAULT_MINT_CAP);
-    }
-
-    function test_setMintCap_succeeds_givenTellerAdminRole() external {
-        // `admin` has ROLE_TELLER_ADMIN (setUp line 67), but NOT ADMIN_ROLE
-        uint256 mintCap = 500e9;
-        vm.prank(admin);
-        teller.setMintCap(mintCap);
-
-        // Verify
-        assertEq(
-            teller.remainingMintApproval(),
-            mintCap,
-            "The teller admin should be able to set the mint cap"
-        );
-    }
-
-    function test_setMintCap_succeeds_givenAdminRole() external {
-        // `address(this)` has ADMIN_ROLE (setUp line 68), but NOT ROLE_TELLER_ADMIN
-        uint256 mintCap = 750e9;
-        teller.setMintCap(mintCap);
-
-        // Verify
-        assertEq(
-            teller.remainingMintApproval(),
-            mintCap,
-            "The admin should be able to set the mint cap"
-        );
-    }
-
-    function test_setMintCap_revertsIfPolicyDisabled() external {
-        // 1. Preparation: disable the policy
+    function test_setCreatorMintCap_revertsIfPolicyDisabled() external {
         teller.disable("");
-
-        // 2. Test
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        teller.setMintCap(_DEFAULT_MINT_CAP);
+        teller.setCreatorMintCap(incentiveDistributor, 500e9);
     }
 
-    function test_enable_withInitialMintCap() external {
-        // 1. Preparation: deploy a fresh teller (not enabled yet)
-        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
-        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
-        // Verify the initial approval is 0
-        assertEq(newTeller.remainingMintApproval(), 0, "The initial approval should be 0");
+    // ========== enable ========== //
 
-        // 2. Test: enable with the initial minting cap and creator limits
-        uint256 initialCap = _DEFAULT_MINT_CAP;
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.MintCapUpdated(initialCap);
-        vm.expectEmit(true, true, false, true);
-        emit IEnabler.Enabled();
-        newTeller.enable(_enableDataNoLimits(initialCap));
-
-        // Verify
-        assertEq(
-            newTeller.remainingMintApproval(),
-            initialCap,
-            "The approval should match the initial cap"
-        );
-    }
-
-    function testFuzz_enable_withCreatorLimits_skipOnCoverage(uint256 limit_) external {
-        // 1. Preparation: deploy a fresh teller
+    function test_enable_emptyArraysAccepted() external {
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: enable with a single creator and fuzzed limit
-        address[] memory creators = new address[](1);
-        creators[0] = incentiveDistributor;
-        uint256[] memory limits = new uint256[](1);
-        limits[0] = limit_;
-
-        vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.AdminMintLimitSet(incentiveDistributor, limit_);
         vm.expectEmit(true, true, false, true);
         emit IEnabler.Enabled();
-        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
+        newTeller.enable(_enableDataEmpty());
 
-        // Verify
+        assertTrue(newTeller.isEnabled(), "New teller should be enabled");
         assertEq(
-            newTeller.adminMintLimits(incentiveDistributor),
-            limit_,
-            "Creator limit should match fuzzed value"
+            newTeller.creatorMintCap(incentiveDistributor),
+            0,
+            "No creator caps should have been set"
         );
+        assertEq(newTeller.remainingMintApproval(), 0, "MINTR approval should be 0 at enable time");
     }
 
-    function test_enable_withTwoCreatorLimits() external {
-        // 1. Preparation: deploy a fresh teller and a second distributor
+    function test_enable_singleCreatorSetsCapAndEmits() external {
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        vm.expectEmit(true, true, false, true);
+        emit IConvertibleOHMTeller.CreatorMintCapSet(incentiveDistributor, _DEFAULT_MINT_CAP);
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Enabled();
+        newTeller.enable(_enableData(_DEFAULT_MINT_CAP));
+
+        assertEq(
+            newTeller.creatorMintCap(incentiveDistributor),
+            _DEFAULT_MINT_CAP,
+            "Creator cap should be stored"
+        );
+        assertEq(newTeller.remainingMintApproval(), 0, "MINTR approval should be 0 at enable time");
+    }
+
+    function test_enable_twoCreatorsSetsBothCaps() external {
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
         address distributor2 = makeAddr("distributor2");
 
-        // 2. Test: enable with two creators
         address[] memory creators = new address[](2);
         creators[0] = incentiveDistributor;
         creators[1] = distributor2;
-        uint256[] memory limits = new uint256[](2);
-        limits[0] = 500e9;
-        limits[1] = 1000e9;
+        uint256[] memory caps = new uint256[](2);
+        caps[0] = 500e9;
+        caps[1] = 1000e9;
 
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.AdminMintLimitSet(creators[0], limits[0]);
+        emit IConvertibleOHMTeller.CreatorMintCapSet(creators[0], caps[0]);
         vm.expectEmit(true, true, false, true);
-        emit IConvertibleOHMTeller.AdminMintLimitSet(creators[1], limits[1]);
+        emit IConvertibleOHMTeller.CreatorMintCapSet(creators[1], caps[1]);
         vm.expectEmit(true, true, false, true);
         emit IEnabler.Enabled();
-        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
+        newTeller.enable(_enableDataMulti(creators, caps));
 
-        // Verify both limits
         assertEq(
-            newTeller.adminMintLimits(creators[0]),
-            limits[0],
-            "First creator limit should be set"
+            newTeller.creatorMintCap(creators[0]),
+            caps[0],
+            "First creator cap should be stored"
         );
         assertEq(
-            newTeller.adminMintLimits(creators[1]),
-            limits[1],
-            "Second creator limit should be set"
+            newTeller.creatorMintCap(creators[1]),
+            caps[1],
+            "Second creator cap should be stored"
         );
     }
 
-    function test_enable_revertsIfCreatorLimitArrayMismatch() external {
-        // 1. Preparation: deploy a fresh teller
+    function testFuzz_enable_singleCreatorCap(uint256 cap_) external {
+        cap_ = bound(cap_, 0, type(uint128).max);
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: mismatched arrays
-        address[] memory creators = new address[](1);
+        newTeller.enable(_enableData(cap_));
+        assertEq(
+            newTeller.creatorMintCap(incentiveDistributor),
+            cap_,
+            "Creator cap should match fuzzed value"
+        );
+    }
+
+    function test_enable_revertsIfArrayLengthMismatch() external {
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
+        address[] memory creators = new address[](2);
         creators[0] = incentiveDistributor;
-        uint256[] memory limits = new uint256[](0); // mismatch
+        creators[1] = makeAddr("distributor2");
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = 500e9;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConvertibleOHMTeller.Teller_InvalidParams.selector,
-                1,
-                abi.encodePacked(creators.length, limits.length)
+                0,
+                abi.encodePacked(creators.length, caps.length)
             )
         );
-        newTeller.enable(abi.encode(_DEFAULT_MINT_CAP, creators, limits));
+        newTeller.enable(_enableDataMulti(creators, caps));
     }
 
-    function test_enable_revertsIfNoMintCap() external {
-        // 1. Preparation: deploy a fresh teller
+    function test_enable_revertsIfDataTooShort() external {
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: enable without an initial minting cap (empty data) should revert
+        bytes memory shortData = abi.encodePacked(uint256(0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                shortData
+            )
+        );
+        newTeller.enable(shortData);
+    }
+
+    function test_enable_revertsIfEmptyBytes() external {
+        ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
+        kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
+
         bytes memory emptyData = "";
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1705,49 +2263,70 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
                 emptyData
             )
         );
-        newTeller.enable("");
+        newTeller.enable(emptyData);
     }
 
-    function test_enable_revertsIfInvalidDataLength() external {
-        // 1. Preparation: deploy a fresh teller
+    function test_enable_revertsIfZeroCreatorAddress() external {
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test: enable with incorrect data length should revert
-        bytes memory badData = abi.encodePacked(uint128(_DEFAULT_MINT_CAP));
+        address[] memory creators = new address[](1);
+        creators[0] = address(0);
+        uint256[] memory caps = new uint256[](1);
+        caps[0] = 100e9;
+
         vm.expectRevert(
-            abi.encodeWithSelector(IConvertibleOHMTeller.Teller_InvalidParams.selector, 0, badData)
+            abi.encodeWithSelector(
+                IConvertibleOHMTeller.Teller_InvalidParams.selector,
+                0,
+                abi.encodePacked(address(0))
+            )
         );
-        newTeller.enable(badData);
+        newTeller.enable(_enableDataMulti(creators, caps));
     }
 
     function test_enable_revertsIfAlreadyEnabled() external {
         vm.expectRevert(IEnabler.NotDisabled.selector);
-        teller.enable(_enableDataNoLimits(_DEFAULT_MINT_CAP));
+        teller.enable(_enableDataEmpty());
     }
 
-    function test_enable_revertsIfNotAdmin() external {
-        // 1. Preparation: deploy a fresh teller
+    function testFuzz_enable_revertsIfNotAdmin(address addr_) external {
+        vm.assume(addr_ != address(this));
+
         ConvertibleOHMTeller newTeller = new ConvertibleOHMTeller(address(kernel), address(ohm));
         kernel.executeAction(Actions.ActivatePolicy, address(newTeller));
 
-        // 2. Test
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(user0);
-        newTeller.enable(_enableDataNoLimits(_DEFAULT_MINT_CAP));
+        _expectRoleRevert(ADMIN_ROLE);
+        vm.prank(addr_);
+        newTeller.enable(_enableDataEmpty());
     }
 
-    function test_disable_disablesPolicy() external {
+    function test_disable_adminCanDisable() external {
         // The teller is enabled in the setUp
         assertTrue(teller.isEnabled(), "The teller should be enabled");
 
         // Test
         vm.expectEmit(true, true, false, true);
         emit IEnabler.Disabled();
+        // vm.prank(address(this)); // admin
         teller.disable("");
 
         // Verify
         assertFalse(teller.isEnabled(), "The teller should be disabled");
+    }
+
+    function test_disable_emergencyCanDisable() external {
+        assertTrue(teller.isEnabled(), "The teller should be enabled");
+
+        vm.expectEmit(true, true, false, true);
+        emit IEnabler.Disabled();
+        vm.prank(emergency);
+        teller.disable("");
+
+        assertFalse(
+            teller.isEnabled(),
+            "The teller should be disabled by the emergency role holder"
+        );
     }
 
     function test_disable_revertsIfAlreadyDisabled() external {
@@ -1759,14 +2338,45 @@ contract ConvertibleOHMTellerAdminTests is ConvertibleOHMTellerTestBase {
         teller.disable("");
     }
 
-    function test_disable_revertsIfNotAdmin() external {
+    function testFuzz_disable_revertsIfNotAdminOrEmergency(address addr_) external {
+        vm.assume(addr_ != address(this)); // admin
+        vm.assume(addr_ != emergency);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        vm.prank(user0);
+        vm.prank(addr_);
         teller.disable("");
     }
 }
 
 contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
+    function test_supportsInterface_validatesAllInterfaces() external view {
+        ERC165Helper.validateSupportsInterface(address(teller));
+
+        assertTrue(teller.supportsInterface(type(IERC165).interfaceId), "Should support IERC165");
+        assertTrue(
+            teller.supportsInterface(type(IConvertibleOHMTeller).interfaceId),
+            "Should support IConvertibleOHMTeller"
+        );
+        assertTrue(
+            teller.supportsInterface(type(IPeriodicTask).interfaceId),
+            "Should support IPeriodicTask"
+        );
+        assertTrue(
+            teller.supportsInterface(type(IVersioned).interfaceId),
+            "Should support IVersioned"
+        );
+        assertTrue(teller.supportsInterface(type(IEnabler).interfaceId), "Should support IEnabler");
+        assertFalse(
+            teller.supportsInterface(type(IERC20OZ).interfaceId),
+            "Should not support IERC20"
+        );
+    }
+
+    function test_VERSION_returnsExpectedTuple() external view {
+        (uint8 major, uint8 minor) = teller.VERSION();
+        assertEq(major, 1, "Major version should be 1");
+        assertEq(minor, 0, "Minor version should be 0");
+    }
+
     function test_exerciseCost_returnsCorrectValues() external {
         // 1. Preparation: deploy a token
         ConvertibleOHMToken token = _deployConvertibleToken();
@@ -1780,7 +2390,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         assertEq(cost, _calcExpectedCost(amount), "Cost should match expected");
     }
 
-    function testFuzz_exerciseCost_skipOnCoverage(uint256 amount_) external {
+    function testFuzz_exerciseCost(uint256 amount_) external {
         // Avoid overflow: amount * STRIKE_PRICE should not overflow
         amount_ = bound(amount_, 1, type(uint256).max / STRIKE_PRICE);
 
@@ -1881,7 +2491,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         assertEq(address(token), address(expectedToken), "Should return the deployed token");
     }
 
-    function testFuzz_getToken_roundedTimestamps_skipOnCoverage(
+    function testFuzz_getToken_roundedTimestamps(
         uint48 eligibleDiff_,
         uint48 expiryDiff_
     ) external {
@@ -1938,7 +2548,7 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function testFuzz_getTokenHash_roundedTimestamps_skipOnCoverage(
+    function testFuzz_getTokenHash_roundedTimestamps(
         uint48 eligibleDiff_,
         uint48 expiryDiff_
     ) external view {
@@ -1958,18 +2568,139 @@ contract ConvertibleOHMTellerViewerTests is ConvertibleOHMTellerTestBase {
         );
     }
 
-    function test_remainingMintApproval_returnsCorrectValue() external {
-        // 1. Preparation: set a specific minting cap
-        uint256 mintCap = _DEFAULT_MINT_CAP;
-        teller.setMintCap(mintCap);
+    function test_activeTokens_initiallyEmpty() external view {
+        assertEq(teller.activeTokens().length, 0, "activeTokens() should be empty initially");
+    }
 
-        // 2. Test
-        assertEq(teller.remainingMintApproval(), mintCap, "Should return a correct value");
+    function test_activeTokens_afterSingleDeploy() external {
+        ConvertibleOHMToken token = _deployConvertibleToken();
+
+        address[] memory all = teller.activeTokens();
+        assertEq(all.length, 1, "activeTokens() should have one entry");
+        assertEq(all[0], address(token), "activeTokens()[0] should be the deployed token");
+    }
+
+    function test_activeTokens_afterTwoDeploys() external {
+        ConvertibleOHMToken tokenA = _deployConvertibleToken();
+        // Deploy a second token with a different strike price to get a distinct address
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken tokenB = ConvertibleOHMToken(
+            teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2)
+        );
+
+        address[] memory all = teller.activeTokens();
+        assertEq(all.length, 2, "activeTokens() should have two entries");
+        assertEq(all[0], address(tokenA), "First entry should be tokenA");
+        assertEq(all[1], address(tokenB), "Second entry should be tokenB");
+    }
+
+    function test_activeTokenAt_returnsTokenAtIndex() external {
+        ConvertibleOHMToken tokenA = _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        ConvertibleOHMToken tokenB = ConvertibleOHMToken(
+            teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2)
+        );
+
+        assertEq(teller.activeTokenAt(0), address(tokenA), "activeTokenAt(0) should be tokenA");
+        assertEq(teller.activeTokenAt(1), address(tokenB), "activeTokenAt(1) should be tokenB");
+    }
+
+    function test_activeTokenAt_revertsWhenLengthZero() external {
+        // No tokens deployed: any index access should revert with EVM panic 0x32.
+        vm.expectRevert(stdError.indexOOBError);
+        teller.activeTokenAt(0);
+    }
+
+    function test_activeTokenAt_revertsWhenIndexOutOfBounds() external {
+        // Deploy two tokens so length == 2; valid indices are 0 and 1.
+        _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2);
+
+        // Accessing index == length should revert with EVM panic 0x32.
+        vm.expectRevert(stdError.indexOOBError);
+        teller.activeTokenAt(2);
+    }
+
+    function test_activeTokensLength_initiallyZero() external view {
+        assertEq(teller.activeTokensLength(), 0, "activeTokensLength() should be 0 initially");
+    }
+
+    function test_activeTokensLength_afterSingleDeploy() external {
+        _deployConvertibleToken();
+        assertEq(teller.activeTokensLength(), 1, "activeTokensLength() should be 1");
+    }
+
+    function test_activeTokensLength_afterTwoDeploys() external {
+        _deployConvertibleToken();
+        vm.prank(incentiveDistributor);
+        teller.deploy(address(usds), eligibleTimestamp, expiryTimestamp, STRIKE_PRICE * 2);
+        assertEq(teller.activeTokensLength(), 2, "activeTokensLength() should be 2");
+    }
+
+    function test_isActiveToken_trueAfterDeploy() external {
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        assertTrue(
+            teller.isActiveToken(address(token)),
+            "isActiveToken should be true for the deployed token"
+        );
+    }
+
+    function test_isActiveToken_falseForZeroAddress() external view {
+        assertFalse(
+            teller.isActiveToken(address(0)),
+            "isActiveToken should be false for the zero address"
+        );
+    }
+
+    function testFuzz_isActiveToken_falseForUnknownAddress(address addr_) external {
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        vm.assume(addr_ != address(token));
+
+        assertFalse(
+            teller.isActiveToken(addr_),
+            "isActiveToken should be false for any address that is not the deployed token"
+        );
+    }
+
+    function test_remainingMintApproval_tracksOutstanding() external {
+        // Initially approval is 0 (no convOHM minted)
+        assertEq(teller.remainingMintApproval(), 0, "Initial approval should be 0");
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        // Mint convOHM and verify approval increases by the same amount
+        ConvertibleOHMToken token = _deployConvertibleToken();
+        uint256 mintAmount = 100e9;
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, mintAmount);
+        assertEq(
+            teller.remainingMintApproval(),
+            mintAmount,
+            "Approval should equal outstanding after mint"
+        );
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        // Exercise part of the convOHM and verify approval decreases by the exercised amount
+        vm.warp(eligibleTimestamp);
+        uint256 exerciseAmount = 40e9;
+        uint256 cost = _exerciseCost(token, exerciseAmount);
+        vm.startPrank(user0);
+        token.approve(address(teller), exerciseAmount);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), exerciseAmount);
+        vm.stopPrank();
+
+        assertEq(
+            teller.remainingMintApproval(),
+            mintAmount - exerciseAmount,
+            "Approval should decrease by the exercised amount"
+        );
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
     }
 }
 
 contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
-    function test_deployAndCreateAndExercise_skipOnCoverage() external {
+    function test_integration_deployAndCreateAndExercise() external {
         // Deploy the convertible token
         ConvertibleOHMToken token = _deployConvertibleToken();
         assertFalse(
@@ -2005,9 +2736,21 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
             "User0 should transfer USDS"
         );
         assertEq(token.balanceOf(user0), 0, "All the convertible tokens should be burned");
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after full exercise"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            mintAmount,
+            "creatorMinted should remain at the cumulative mint"
+        );
+        assertEq(teller.remainingMintApproval(), 0, "MINTR approval should be 0 after exercise");
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
     }
 
-    function test_multipleDeploysAndExercises_skipOnCoverage() external {
+    function test_integration_multipleDeploysAndExercises() external {
         // Deploy two different tokens
         ConvertibleOHMToken token1 = _deployConvertibleToken();
         vm.startPrank(incentiveDistributor);
@@ -2042,6 +2785,92 @@ contract ConvertibleOHMTellerIntegrationTests is ConvertibleOHMTellerTestBase {
             ohm.balanceOf(user0),
             amount1 + amount2,
             "User0 should receive the total OHM amount"
+        );
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after both exercises"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            amount1 + amount2,
+            "creatorMinted should equal sum of mints"
+        );
+        assertEq(teller.remainingMintApproval(), 0, "MINTR approval should be 0 after exercises");
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+    }
+}
+
+contract ConvertibleOHMTellerInvariantTests is ConvertibleOHMTellerTestBase {
+    function test_invariant_mintApprovalEqualsSumOfOutstandings() external {
+        // Walk through the lifecycle, asserting the mint-approval invariant after each step
+        ConvertibleOHMToken token = _deployConvertibleToken();
+
+        // Step 1: enable -> approval == 0
+        assertEq(
+            teller.remainingMintApproval(),
+            0,
+            "MINTR approval should be 0 after enable (no mints)"
+        );
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+        assertLe(
+            teller.creatorOutstanding(incentiveDistributor),
+            teller.creatorMinted(incentiveDistributor),
+            "creatorOutstanding <= creatorMinted"
+        );
+        assertLe(
+            teller.creatorMinted(incentiveDistributor),
+            teller.creatorMintCap(incentiveDistributor),
+            "creatorMinted <= creatorMintCap"
+        );
+
+        // Step 2: mint to user0
+        uint256 mintUser0 = 100e9;
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user0, mintUser0);
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        // Step 3: mint to user1
+        uint256 mintUser1 = 50e9;
+        vm.prank(incentiveDistributor);
+        teller.create(address(token), user1, mintUser1);
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        // Step 4: user0 partially exercises
+        vm.warp(eligibleTimestamp);
+        uint256 exerciseAmount = 40e9;
+        uint256 cost = _exerciseCost(token, exerciseAmount);
+        vm.startPrank(user0);
+        token.approve(address(teller), exerciseAmount);
+        usds.approve(address(teller), cost);
+        teller.exercise(address(token), exerciseAmount);
+        vm.stopPrank();
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        // Step 5: warp past expiry and sweep
+        _warpPastExpiry(token);
+        teller.sweepExpiredTokens(10);
+        _assertMintApprovalInvariant(_singletonCreators(incentiveDistributor));
+
+        assertEq(
+            teller.creatorOutstanding(incentiveDistributor),
+            0,
+            "creatorOutstanding should be 0 after sweep"
+        );
+        assertEq(
+            teller.creatorMinted(incentiveDistributor),
+            mintUser0 + mintUser1,
+            "creatorMinted should remain the cumulative total"
+        );
+        assertLe(
+            teller.creatorOutstanding(incentiveDistributor),
+            teller.creatorMinted(incentiveDistributor),
+            "creatorOutstanding <= creatorMinted"
+        );
+        assertLe(
+            teller.creatorMinted(incentiveDistributor),
+            teller.creatorMintCap(incentiveDistributor),
+            "creatorMinted <= creatorMintCap"
         );
     }
 }
