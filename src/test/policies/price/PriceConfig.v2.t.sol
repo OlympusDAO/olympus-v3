@@ -749,9 +749,9 @@ contract PriceConfigv2Test is Test {
         expectedDeps[1] = toKeycode("PRICE");
 
         Keycode[] memory deps = priceConfig.configureDependencies();
-        assertEq(deps.length, expectedDeps.length);
-        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
-        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(deps.length, expectedDeps.length, "dependency count");
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]), "ROLES dependency");
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]), "PRICE dependency");
     }
 
     function test_requestPermissions() public view {
@@ -801,10 +801,14 @@ contract PriceConfigv2Test is Test {
         });
 
         Permissions[] memory perms = priceConfig.requestPermissions();
-        assertEq(perms.length, expectedPerms.length);
+        assertEq(perms.length, expectedPerms.length, "permission count");
         for (uint256 i = 0; i < perms.length; i++) {
-            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
-            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+            assertEq(
+                fromKeycode(perms[i].keycode),
+                fromKeycode(expectedPerms[i].keycode),
+                "permission keycode"
+            );
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector, "permission selector");
         }
     }
 
@@ -1002,7 +1006,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset was not added
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, false);
+        assertEq(asset.approved, false, "asset should not be approved");
 
         // Try to add asset to PRICEv2 with priceManager account, expect success
         vm.prank(priceManager);
@@ -1059,17 +1063,17 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset is not approved yet and data is not set
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, false);
-        assertEq(asset.storeMovingAverage, false);
-        assertEq(asset.useMovingAverage, false);
-        assertEq(asset.movingAverageDuration, uint32(0));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(0));
-        assertEq(asset.lastObservationTime, uint48(0));
-        assertEq(asset.cumulativeObs, uint256(0));
-        assertEq(asset.obs.length, uint256(0));
-        assertEq(asset.strategy, bytes(""));
-        assertEq(asset.feeds, bytes(""));
+        assertEq(asset.approved, false, "initial approved");
+        assertEq(asset.storeMovingAverage, false, "initial store moving average");
+        assertEq(asset.useMovingAverage, false, "initial use moving average");
+        assertEq(asset.movingAverageDuration, uint32(0), "initial moving average duration");
+        assertEq(asset.nextObsIndex, uint16(0), "initial next observation index");
+        assertEq(asset.numObservations, uint16(0), "initial observation count");
+        assertEq(asset.lastObservationTime, uint48(0), "initial last observation time");
+        assertEq(asset.cumulativeObs, uint256(0), "initial cumulative observations");
+        assertEq(asset.obs.length, uint256(0), "initial observations length");
+        assertEq(asset.strategy, bytes(""), "initial strategy");
+        assertEq(asset.feeds, bytes(""), "initial feeds");
 
         // Add asset to PRICEv2 using authorized caller
         vm.prank(caller);
@@ -1087,21 +1091,25 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset is approved and data is correct
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
-        assertEq(asset.storeMovingAverage, true);
-        assertEq(asset.useMovingAverage, true);
-        assertEq(asset.movingAverageDuration, uint32(5 days));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(15));
-        assertEq(asset.lastObservationTime, uint48(block.timestamp));
+        assertEq(asset.approved, true, "approved after add");
+        assertEq(asset.storeMovingAverage, true, "store moving average after add");
+        assertEq(asset.useMovingAverage, true, "use moving average after add");
+        assertEq(asset.movingAverageDuration, uint32(5 days), "moving average duration after add");
+        assertEq(asset.nextObsIndex, uint16(0), "next observation index after add");
+        assertEq(asset.numObservations, uint16(15), "observation count after add");
+        assertEq(
+            asset.lastObservationTime,
+            uint48(block.timestamp),
+            "last observation time after add"
+        );
         uint256 cumObs;
         for (uint256 i = 0; i < obs.length; i++) {
             cumObs += obs[i];
         }
-        assertEq(asset.cumulativeObs, cumObs);
-        assertEq(asset.obs.length, uint256(15));
-        assertEq(asset.strategy, abi.encode(strategyComponent));
-        assertEq(asset.feeds, abi.encode(feedComponents));
+        assertEq(asset.cumulativeObs, cumObs, "cumulative observations after add");
+        assertEq(asset.obs.length, uint256(15), "observations length after add");
+        assertEq(asset.strategy, abi.encode(strategyComponent), "strategy after add");
+        assertEq(asset.feeds, abi.encode(feedComponents), "feeds after add");
     }
 
     function test_addAsset_feedExpectationCountInvalid_revertsAndRollsBack() public {
@@ -1198,7 +1206,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm that ohm asset is approved
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
+        assertEq(asset.approved, true, "initial asset approved");
 
         // Try to queue asset removal with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
@@ -1210,7 +1218,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset was not removed
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
+        assertEq(asset.approved, true, "asset approved after failed queue");
 
         // Try to queue asset removal with priceManager account, expect success
         vm.prank(priceManager);
@@ -1218,13 +1226,13 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset is not removed until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
+        assertEq(asset.approved, true, "asset approved before execution");
 
         _executeQueuedAction(actionId);
 
         // Confirm asset was removed after execution
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, false);
+        assertEq(asset.approved, false, "asset not approved after execution");
     }
 
     function test_queueRemoveAsset_whenAssetIsUnapproved_reverts() public {
@@ -1265,7 +1273,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm that ohm asset is approved
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
+        assertEq(asset.approved, true, "initial asset approved");
 
         // Queue asset removal using authorized caller
         vm.prank(caller);
@@ -1273,23 +1281,23 @@ contract PriceConfigv2Test is Test {
 
         // Confirm asset is not removed until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, true);
+        assertEq(asset.approved, true, "asset approved before execution");
 
         _executeQueuedAction(actionId);
 
         // Confirm asset is not approved and all data deleted after execution
         asset = PRICE.getAssetData(address(ohm));
-        assertEq(asset.approved, false);
-        assertEq(asset.storeMovingAverage, false);
-        assertEq(asset.useMovingAverage, false);
-        assertEq(asset.movingAverageDuration, uint32(0));
-        assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(0));
-        assertEq(asset.lastObservationTime, uint48(0));
-        assertEq(asset.cumulativeObs, uint256(0));
-        assertEq(asset.obs.length, uint256(0));
-        assertEq(asset.strategy, bytes(""));
-        assertEq(asset.feeds, bytes(""));
+        assertEq(asset.approved, false, "approved after remove");
+        assertEq(asset.storeMovingAverage, false, "store moving average after remove");
+        assertEq(asset.useMovingAverage, false, "use moving average after remove");
+        assertEq(asset.movingAverageDuration, uint32(0), "moving average duration after remove");
+        assertEq(asset.nextObsIndex, uint16(0), "next observation index after remove");
+        assertEq(asset.numObservations, uint16(0), "observation count after remove");
+        assertEq(asset.lastObservationTime, uint48(0), "last observation time after remove");
+        assertEq(asset.cumulativeObs, uint256(0), "cumulative observations after remove");
+        assertEq(asset.obs.length, uint256(0), "observations length after remove");
+        assertEq(asset.strategy, bytes(""), "strategy after remove");
+        assertEq(asset.feeds, bytes(""), "feeds after remove");
     }
 
     function test_queueRemoveAsset_queuesExpectedAction() public {
@@ -1438,7 +1446,7 @@ contract PriceConfigv2Test is Test {
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
+        assertEq(feeds.length, 2, "feeds length after failed queue");
 
         // Try with priceManager account, expect success
         vm.prank(priceManager);
@@ -1454,7 +1462,7 @@ contract PriceConfigv2Test is Test {
         // Confirm feeds were updated after execution
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 1);
+        assertEq(feeds.length, 1, "feeds length after execution");
     }
 
     function test_queueUpdateAsset_whenNoUpdatesRequested_reverts() public {
@@ -1589,7 +1597,7 @@ contract PriceConfigv2Test is Test {
         // Confirm that ohm currently has two feeds
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
+        assertEq(feeds.length, 2, "initial feeds length");
 
         // Setup params to update feeds
         IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
@@ -1621,7 +1629,7 @@ contract PriceConfigv2Test is Test {
         // Confirm feeds are not updated until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
+        assertEq(feeds.length, 2, "feeds length before execution");
 
         _executeQueuedAction(actionId);
 
@@ -2246,7 +2254,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm submodule is not installed on PRICE
         address submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
-        assertEq(submodule, address(0));
+        assertEq(submodule, address(0), "initial submodule address");
 
         // Try to install submodule with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
@@ -2256,7 +2264,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
-        assertEq(submodule, address(0));
+        assertEq(submodule, address(0), "submodule address after failed install");
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
@@ -2264,7 +2272,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm submodule was installed immediately
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
-        assertEq(submodule, address(newStrategy));
+        assertEq(submodule, address(newStrategy), "submodule address after install");
     }
 
     function test_installSubmodule() public {
@@ -2273,7 +2281,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm submodule is not installed on PRICE
         address submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
-        assertEq(submodule, address(0));
+        assertEq(submodule, address(0), "initial submodule address");
 
         // Install new submodule with admin account
         vm.prank(admin);
@@ -2281,7 +2289,7 @@ contract PriceConfigv2Test is Test {
 
         // Confirm submodule was installed immediately
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
-        assertEq(submodule, address(newStrategy));
+        assertEq(submodule, address(newStrategy), "submodule address after install");
     }
 
     // given the contract is not enabled
@@ -2396,10 +2404,10 @@ contract PriceConfigv2Test is Test {
 
         // Confirm chainlink submodule is installed on PRICE and the version is 1.0
         address chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(chainlinkPrice));
+        assertEq(chainlink, address(chainlinkPrice), "initial chainlink submodule");
         (uint8 major, uint8 minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
+        assertEq(major, 1, "initial chainlink major version");
+        assertEq(minor, 0, "initial chainlink minor version");
 
         // Try to queue chainlink submodule upgrade with unauthorized account, expect revert
         bytes memory err = abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector);
@@ -2409,10 +2417,10 @@ contract PriceConfigv2Test is Test {
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(chainlinkPrice));
+        assertEq(chainlink, address(chainlinkPrice), "chainlink submodule after failed queue");
         (major, minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
+        assertEq(major, 1, "chainlink major version after failed queue");
+        assertEq(minor, 0, "chainlink minor version after failed queue");
 
         // Try to queue chainlink submodule upgrade with admin account, expect success
         vm.prank(admin);
@@ -2420,19 +2428,19 @@ contract PriceConfigv2Test is Test {
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(chainlinkPrice));
+        assertEq(chainlink, address(chainlinkPrice), "chainlink submodule before execution");
         (major, minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
+        assertEq(major, 1, "chainlink major version before execution");
+        assertEq(minor, 0, "chainlink minor version before execution");
 
         _executeQueuedAction(actionId);
 
         // Confirm chainlink submodule was upgraded after execution
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(newChainlink));
+        assertEq(chainlink, address(newChainlink), "chainlink submodule after execution");
         (major, minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 2);
-        assertEq(minor, 0);
+        assertEq(major, 2, "chainlink major version after execution");
+        assertEq(minor, 0, "chainlink minor version after execution");
     }
 
     function test_queueUpgradeSubmodule() public {
@@ -2441,10 +2449,10 @@ contract PriceConfigv2Test is Test {
 
         // Confirm chainlink submodule is installed on PRICE and the version is 1.0
         address chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(chainlinkPrice));
+        assertEq(chainlink, address(chainlinkPrice), "initial chainlink submodule");
         (uint8 major, uint8 minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
+        assertEq(major, 1, "initial chainlink major version");
+        assertEq(minor, 0, "initial chainlink minor version");
 
         // Queue chainlink submodule upgrade with admin account
         vm.prank(admin);
@@ -2452,19 +2460,19 @@ contract PriceConfigv2Test is Test {
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(chainlinkPrice));
+        assertEq(chainlink, address(chainlinkPrice), "chainlink submodule before execution");
         (major, minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
+        assertEq(major, 1, "chainlink major version before execution");
+        assertEq(minor, 0, "chainlink minor version before execution");
 
         _executeQueuedAction(actionId);
 
         // Confirm chainlink submodule was upgraded after execution
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
-        assertEq(chainlink, address(newChainlink));
+        assertEq(chainlink, address(newChainlink), "chainlink submodule after execution");
         (major, minor) = Submodule(chainlink).VERSION();
-        assertEq(major, 2);
-        assertEq(minor, 0);
+        assertEq(major, 2, "chainlink major version after execution");
+        assertEq(minor, 0, "chainlink minor version after execution");
     }
 
     // given the contract is not enabled
