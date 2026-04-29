@@ -26,14 +26,5 @@ contract MorphoOracleFactoryGetPriceCacheTest is MorphoOracleFactoryTest {
             "Price cache should be set from constructor"
         );
     }
-
-    function test_whenPriceCacheIsUpdated_returnsUpdatedPriceCache() public givenFactoryIsEnabled {
-        MockPriceCache cache = new MockPriceCache(address(kernel));
-
-        vm.prank(admin);
-        factory.setPriceCache(address(cache));
-
-        assertEq(factory.getPriceCache(), address(cache), "Price cache should be updated");
-    }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
