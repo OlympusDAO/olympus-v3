@@ -75,9 +75,10 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
         (price_, ) = getPrice(OHM, variant_);
     }
 
-    /// @notice                 Shared revert helper for deprecated PRICEv1 methods
-    function _revertDeprecated() internal pure {
-        revert PRICE_Deprecated();
+    /// @inheritdoc OlympusPricev2
+    /// @dev        PRICEv1 compatibility always uses 18 decimals, so the unit price is constant.
+    function _unitPrice() internal pure override returns (uint256) {
+        return 1e18;
     }
 
     // ========== PRICEv1 VIEW FUNCTIONS ========== //
@@ -157,7 +158,7 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @dev        Deprecated.
     /// @dev        Reverts with `PRICE_Deprecated`.
     function initialize(uint256[] memory, uint48) external pure {
-        _revertDeprecated();
+        revert PRICE_Deprecated();
     }
 
     /// @inheritdoc IPRICEv1
@@ -176,26 +177,26 @@ contract OlympusPricev1_2 is OlympusPricev2, IPRICEv1 {
     /// @dev        Deprecated.
     /// @dev        Reverts with `PRICE_Deprecated`.
     function changeUpdateThresholds(uint48, uint48) external pure {
-        _revertDeprecated();
+        revert PRICE_Deprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated.
     /// @dev        Reverts with `PRICE_Deprecated`.
     function changeMovingAverageDuration(uint48) external pure {
-        _revertDeprecated();
+        revert PRICE_Deprecated();
     }
 
     /// @inheritdoc IPRICEv1
     /// @dev        Deprecated.
     /// @dev        Reverts with `PRICE_Deprecated`.
     function changeObservationFrequency(uint48) external pure {
-        _revertDeprecated();
+        revert PRICE_Deprecated();
     }
 
     /// @inheritdoc IPRICEv2
     /// @dev        Does not revert.
-    function decimals() external view virtual override(IPRICEv1, PRICEv2) returns (uint8) {
+    function decimals() external pure virtual override(IPRICEv1, PRICEv2) returns (uint8) {
         return _DECIMALS;
     }
 

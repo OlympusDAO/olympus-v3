@@ -129,7 +129,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @notice         Returns the unit price scaled to PRICE decimals
     /// @dev            Does not revert.
-    function _unitPrice() internal view returns (uint256) {
+    function _unitPrice() internal view virtual returns (uint256) {
         return 10 ** _decimals;
     }
 
