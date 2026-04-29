@@ -1406,7 +1406,7 @@ contract PriceConfigv2Test is Test {
         // Confirm that ohm currently has two feeds
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
+        assertEq(feeds.length, 2, "initial feeds length");
 
         // Setup params to update feeds
         IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
@@ -1447,7 +1447,7 @@ contract PriceConfigv2Test is Test {
         // Confirm feeds are not updated until the timelock is executed
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 2);
+        assertEq(feeds.length, 2, "feeds length before execution");
 
         _executeQueuedAction(actionId);
 
@@ -1628,10 +1628,14 @@ contract PriceConfigv2Test is Test {
         // Confirm feeds were updated after execution
         asset = PRICE.getAssetData(address(ohm));
         feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, 1);
-        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
-        assertEq(feeds[0].selector, params.feeds[0].selector);
-        assertEq(feeds[0].params, params.feeds[0].params);
+        assertEq(feeds.length, 1, "feeds length after execution");
+        assertEq(
+            fromSubKeycode(feeds[0].target),
+            fromSubKeycode(params.feeds[0].target),
+            "feed target mismatch"
+        );
+        assertEq(feeds[0].selector, params.feeds[0].selector, "feed selector mismatch");
+        assertEq(feeds[0].params, params.feeds[0].params, "feed params mismatch");
     }
 
     function test_queueUpdateAsset_whenUpdateFeedsIsFalse_whenPriceFeedsExpectationsIsNotEmpty_reverts()
@@ -1711,10 +1715,14 @@ contract PriceConfigv2Test is Test {
 
         IPRICEv2.Asset memory asset = PRICE.getAssetData(address(ohm));
         IPRICEv2.Component[] memory feeds = abi.decode(asset.feeds, (IPRICEv2.Component[]));
-        assertEq(feeds.length, params.feeds.length, "Feed count");
-        assertEq(fromSubKeycode(feeds[0].target), fromSubKeycode(params.feeds[0].target));
-        assertEq(feeds[0].selector, params.feeds[0].selector);
-        assertEq(feeds[0].params, params.feeds[0].params);
+        assertEq(feeds.length, params.feeds.length, "feeds length after execution");
+        assertEq(
+            fromSubKeycode(feeds[0].target),
+            fromSubKeycode(params.feeds[0].target),
+            "feed target mismatch"
+        );
+        assertEq(feeds[0].selector, params.feeds[0].selector, "feed selector mismatch");
+        assertEq(feeds[0].params, params.feeds[0].params, "feed params mismatch");
     }
 
     function test_queueUpdateAsset_whenStrategySubmoduleImplementationChangesBeforeExecution_succeeds()
