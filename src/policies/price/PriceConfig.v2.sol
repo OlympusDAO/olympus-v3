@@ -243,11 +243,13 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
 
         if (target_ == address(this)) {
             if (selector_ == this.queueTimelockDelay.selector) {
+                // Timelock delay changes affect future queue semantics, so only admin can propose.
                 if (!_isAdmin(caller_)) revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
                 _validateTimelockDelayPayload(target_, selector_, payload_);
                 return;
             }
         } else if (target_ == address(PRICE)) {
+            // Queue authorization happens here because execution is intentionally permissionless.
             if (!(ROLES.hasRole(caller_, _PRICE_ADMIN_ROLE) || _isAdmin(caller_)))
                 revert NotAuthorised();
 
@@ -273,6 +275,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     /// @dev        Called by `executeQueuedAction` after the standard timelock state checks pass
     ///             and before `_executeAction` runs. Execution is deliberately permissionless; this
     ///             hook only enforces enabled status and rejects unknown action targets/selectors.
+    /// @dev        Authorization is not repeated here because the proposer was checked by
+    ///             `_validateQueue`. Requiring an execution role would let an unavailable or
+    ///             compromised executor block already-approved timelocked changes.
     /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The queued target/selector pair is not supported
@@ -303,6 +308,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     /// @dev        Called by `cancelQueuedAction` after the standard cancellable-state checks pass.
     ///             Cancellation is intentionally allowed while the policy is disabled so the
     ///             emergency role can clear malicious or stale queued actions.
+    /// @dev        The emergency role is separate from the roles that can queue actions. This gives
+    ///             emergency operators a narrow veto path without granting them PRICE configuration
+    ///             authority or timelock-delay authority.
     /// @dev        Reverts if:
     ///             - The caller does not have the emergency role
     function _validateCancellation(
@@ -329,6 +337,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     }
 
     /// @notice Validate a queued removeAsset payload before it is stored.
+    /// @dev    Called from `_validateQueue` after the caller has been authorized to queue PRICE
+    ///         mutations. Uses PRICE's view validator so queue-time checks match PRICE mutation-time
+    ///         invariants.
     /// @dev    Reverts if the payload cannot be decoded as an address or PRICE rejects removing
     ///         the decoded asset.
     function _validateRemoveAssetPayload(address, bytes4, bytes memory payload_) internal view {
@@ -337,6 +348,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     }
 
     /// @notice Validate a queued updateAsset payload before it is stored.
+    /// @dev    Called from `_validateQueue` after the caller has been authorized to queue PRICE
+    ///         mutations. Keeps feed expectation count validation in this policy because feed
+    ///         expectations are a PriceConfig safety check, then uses PRICE's view validator for
+    ///         PRICE-owned invariants.
     /// @dev    Reverts if the payload cannot be decoded as updateAsset parameters, has an invalid
     ///         feed expectation count, or PRICE rejects the decoded update parameters.
     function _validateUpdateAssetPayload(address, bytes4, bytes memory payload_) internal view {
@@ -357,6 +372,9 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     }
 
     /// @notice Validate a queued upgradeSubmodule payload before it is stored.
+    /// @dev    Called from `_validateQueue` after the caller has been authorized to queue PRICE
+    ///         mutations. Uses PRICE's view validator so queue-time checks match PRICE submodule
+    ///         upgrade invariants.
     /// @dev    Reverts if the payload cannot be decoded as an address or PRICE rejects upgrading
     ///         to the decoded submodule.
     function _validateUpgradeSubmodulePayload(
@@ -369,6 +387,10 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     }
 
     /// @notice Validate a queued execOnSubmodule payload before it is stored.
+    /// @dev    Called from `_validateQueue` after the caller has been authorized to queue PRICE
+    ///         mutations. Binds the queued call to the current submodule implementation so a later
+    ///         submodule upgrade cannot silently redirect already-reviewed calldata to different
+    ///         code.
     /// @dev    Reverts if the payload cannot be decoded as execOnSubmodule parameters, PRICE
     ///         rejects the decoded subkeycode, or the decoded submodule implementation does not
     ///         match the currently installed submodule.
@@ -388,8 +410,11 @@ contract PriceConfigv2 is Policy, PolicyEnabler, TimelockQueue, IPriceConfigv2, 
     }
 
     /// @notice Validate a queued timelock delay payload before it is stored.
-    /// @dev    Called by `_validateQueue` for local timelock delay updates. Reverts if the payload
-    ///         cannot be decoded as a `uint48`, or the decoded delay is outside the accepted range.
+    /// @dev    Called by `_validateQueue` for local timelock delay updates after the caller has
+    ///         been authorized as admin. Delay updates affect all future queued actions, so invalid
+    ///         delays are rejected before the action is stored.
+    /// @dev    Reverts if the payload cannot be decoded as a `uint48`, or the decoded delay is
+    ///         outside the accepted range.
     ///
     /// @param payload_  The encoded queued action payload.
     function _validateTimelockDelayPayload(address, bytes4, bytes memory payload_) internal pure {

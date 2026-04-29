@@ -530,6 +530,20 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             revert PRICE_ParamsStrategyNotSupported(asset_);
     }
 
+    /// @notice         Validates the price feed components for an asset configuration
+    /// @dev            Checks that at least one feed is supplied, each feed target is installed,
+    ///                 and no exact feed component is duplicated.
+    /// @dev            Assumes feed components are immutable configuration data. This helper does
+    ///                 not call feed selectors or validate returned prices; callers that mutate
+    ///                 configuration must validate price resolution after storing the candidate
+    ///                 configuration.
+    /// @dev            Will revert if:
+    ///                 - No feeds are supplied
+    ///                 - Any feed target submodule is not installed
+    ///                 - Any feed component is duplicated
+    ///
+    /// @param asset_   Asset address for error reporting
+    /// @param feeds_   Candidate price feed components
     function _validateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal view {
         uint256 len = feeds_.length;
         if (len == 0) revert PRICE_ParamsPriceFeedInsufficient(asset_, len, 1);
@@ -561,6 +575,17 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
     }
 
+    /// @notice             Validates the price strategy component for an asset configuration
+    /// @dev                Treats a zero target as "no strategy" and otherwise checks that the
+    ///                     strategy target submodule is installed.
+    /// @dev                Assumes selector and params compatibility is proven when the configured
+    ///                     strategy is used to resolve a price. This helper only validates the
+    ///                     PRICE-owned invariant that configured strategy targets are installed.
+    /// @dev                Will revert if:
+    ///                     - A non-zero strategy target submodule is not installed
+    ///
+    /// @param asset_       Asset address for error reporting
+    /// @param strategy_    Candidate price strategy component
     function _validateAssetPriceStrategy(address asset_, Component memory strategy_) internal view {
         if (
             fromSubKeycode(strategy_.target) != bytes20(0) &&
@@ -568,6 +593,29 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         ) revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(strategy_.target));
     }
 
+    /// @notice                             Validates moving-average storage parameters
+    /// @dev                                Checks that disabled moving-average storage has no
+    ///                                     residual moving-average parameters, and that enabled
+    ///                                     storage has a valid duration, observation count,
+    ///                                     timestamp, and non-zero observations.
+    /// @dev                                Assumes `_observationFrequency` was validated by the
+    ///                                     constructor and is non-zero. Observations are assumed to
+    ///                                     be PRICE-scaled prices; this helper only rejects zero
+    ///                                     observations and does not validate economic plausibility.
+    /// @dev                                Will revert if:
+    ///                                     - Moving-average storage is disabled but observations,
+    ///                                       duration, or last observation time are non-zero
+    ///                                     - Last observation time is in the future
+    ///                                     - Duration is zero or not divisible by observation frequency
+    ///                                     - Observation count does not match duration/frequency
+    ///                                     - Fewer than two observations are supplied
+    ///                                     - Any observation is zero
+    ///
+    /// @param asset_                       Asset address for error reporting
+    /// @param storeMovingAverage_          Whether moving-average storage is enabled
+    /// @param movingAverageDuration_       Candidate moving-average duration in seconds
+    /// @param lastObservationTime_         Candidate last observation timestamp
+    /// @param observations_                Candidate moving-average observations
     function _validateAssetMovingAverage(
         address asset_,
         bool storeMovingAverage_,
@@ -626,6 +674,29 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         }
     }
 
+    /// @notice                             Validates parameters for adding a new asset
+    /// @dev                                Performs the reusable queue-time and mutation-time
+    ///                                     validation for `addAsset()` and `validateAddAsset()`.
+    /// @dev                                Assumes the caller will validate live price resolution
+    ///                                     after writing the candidate configuration. This helper
+    ///                                     validates structural PRICE invariants only; it does not
+    ///                                     call feeds or strategies.
+    /// @dev                                Will revert if:
+    ///                                     - The asset is the reserved unit-of-account address
+    ///                                     - The asset is neither a contract nor a registered
+    ///                                       non-contract asset
+    ///                                     - The asset is already approved
+    ///                                     - Feed/strategy/moving-average configuration is invalid
+    ///                                     - Any configured submodule target is not installed
+    ///
+    /// @param asset_                       Candidate asset address
+    /// @param storeMovingAverage_          Whether moving-average storage is enabled
+    /// @param useMovingAverage_            Whether the moving average is included in strategy input
+    /// @param movingAverageDuration_       Candidate moving-average duration in seconds
+    /// @param lastObservationTime_         Candidate last observation timestamp
+    /// @param observations_                Candidate moving-average observations
+    /// @param strategy_                    Candidate price strategy component
+    /// @param feeds_                       Candidate price feed components
     function _validateAddAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -658,11 +729,45 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         );
     }
 
+    /// @notice         Validates parameters for removing an asset
+    /// @dev            Performs the reusable queue-time and mutation-time validation for
+    ///                 `removeAsset()` and `validateRemoveAsset()`.
+    /// @dev            Assumes removal deletes the complete asset configuration before the asset
+    ///                 can be reused. This helper does not inspect feed, strategy, or observation
+    ///                 data because approval status is the PRICE source of truth for an active
+    ///                 asset configuration.
+    /// @dev            Will revert if:
+    ///                 - The asset is the reserved unit-of-account address
+    ///                 - The asset is not approved
+    ///
+    /// @param asset_   Candidate asset address
     function _validateRemoveAsset(address asset_) internal view {
         if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
     }
 
+    /// @notice         Validates parameters for updating an existing asset
+    /// @dev            Performs the reusable queue-time and mutation-time validation for
+    ///                 `updateAsset()` and `validateUpdateAsset()`.
+    /// @dev            Builds the final configuration from the current stored asset data plus
+    ///                 flagged updates, then validates that final configuration atomically.
+    /// @dev            Assumes unflagged stored components were validated when they were added or
+    ///                 previously updated. This helper validates installed submodules only for
+    ///                 components supplied in `params_`; stored components are trusted as current
+    ///                 PRICE state.
+    /// @dev            Assumes the caller will validate live price resolution after writing the
+    ///                 candidate configuration. This helper validates structural PRICE invariants
+    ///                 only; it does not call feeds or strategies.
+    /// @dev            Will revert if:
+    ///                 - The asset is the reserved unit-of-account address
+    ///                 - The asset is neither a contract nor a registered non-contract asset
+    ///                 - No update flags are set
+    ///                 - The asset is not approved
+    ///                 - The final feed/strategy/moving-average configuration is invalid
+    ///                 - Any newly supplied submodule target is not installed
+    ///
+    /// @param asset_   Asset address to update
+    /// @param params_  Candidate update parameters
     function _validateUpdateAsset(address asset_, UpdateAssetParams memory params_) internal view {
         if (_isUnitOfAccount(asset_)) revert PRICE_AssetReserved(asset_);
         _validateAssetIsManageable(asset_);
