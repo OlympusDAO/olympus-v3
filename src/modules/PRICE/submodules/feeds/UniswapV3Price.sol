@@ -307,9 +307,16 @@ contract UniswapV3Price is PriceSubmodule {
             revert UniswapV3_PoolTypeInvalid(address(pool_));
         }
 
-        address poolFactory = pool_.factory();
-        if (poolFactory != UNISWAP_V3_FACTORY) {
-            revert UniswapV3_PoolFactoryInvalid(address(pool_), poolFactory, UNISWAP_V3_FACTORY);
+        try pool_.factory() returns (address poolFactory) {
+            if (poolFactory != UNISWAP_V3_FACTORY) {
+                revert UniswapV3_PoolFactoryInvalid(
+                    address(pool_),
+                    poolFactory,
+                    UNISWAP_V3_FACTORY
+                );
+            }
+        } catch (bytes memory) {
+            revert UniswapV3_PoolTypeInvalid(address(pool_));
         }
 
         address quoteToken;

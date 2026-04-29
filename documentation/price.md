@@ -47,7 +47,7 @@ This allows `ERC7726OracleCloneable`, `MorphoOracleFactory`, and `ChainlinkOracl
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
-- The price of ETH will be determined as the average of the price feeds from 4 different sources.
+- The price of wETH will be determined as the average of the price feeds from 4 different sources.
     - After any zero value or deviating values (> 5% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.

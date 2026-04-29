@@ -83,6 +83,13 @@ contract MorphoOracleFactoryTest is Test {
         priceCache.setUsdPrice(token_, price_);
     }
 
+    /// @notice Sets metadata for a non-contract asset in the cache policy mock
+    /// @dev    Calls `priceCache.setNonContractAssetMetadata()` to register metadata. Reverts if
+    ///         the cache policy mock rejects the metadata update.
+    ///
+    /// @param asset_     The non-contract asset address
+    /// @param decimals_  The asset decimals
+    /// @param symbol_    The asset symbol
     function _setNonContractAssetMetadata(
         address asset_,
         uint8 decimals_,
