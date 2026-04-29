@@ -319,7 +319,8 @@ contract PriceConfigv2Test is Test {
     }
 
     function _executeQueuedAction(uint64 actionId_) internal {
-        _warpPastTimelockDelay();
+        ITimelockQueue.QueuedAction memory action = priceConfig.getQueuedAction(actionId_);
+        vm.warp(action.executableAt);
         priceConfig.executeQueuedAction(actionId_);
     }
 
@@ -2396,8 +2397,13 @@ contract PriceConfigv2Test is Test {
         priceConfig.queueUpgradeSubmodule(address(noERC165Submodule));
     }
 
-    function test_queueUpgradeSubmodule_unauthorizedUser_reverts(address user_) public {
+    function test_queueUpgradeSubmodule_unauthorizedUser_reverts(
+        address user_,
+        uint8 role_
+    ) public {
         vm.assume(user_ != admin && user_ != priceManager);
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
 
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
@@ -2422,8 +2428,8 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1, "chainlink major version after failed queue");
         assertEq(minor, 0, "chainlink minor version after failed queue");
 
-        // Try to queue chainlink submodule upgrade with admin account, expect success
-        vm.prank(admin);
+        // Try to queue chainlink submodule upgrade with authorized account, expect success
+        vm.prank(caller);
         uint64 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
@@ -2443,7 +2449,10 @@ contract PriceConfigv2Test is Test {
         assertEq(minor, 0, "chainlink minor version after execution");
     }
 
-    function test_queueUpgradeSubmodule() public {
+    function test_queueUpgradeSubmodule(uint8 role_) public {
+        role_ = uint8(bound(role_, 0, 1));
+        address caller = role_ == 0 ? admin : priceManager;
+
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -2454,8 +2463,8 @@ contract PriceConfigv2Test is Test {
         assertEq(major, 1, "initial chainlink major version");
         assertEq(minor, 0, "initial chainlink minor version");
 
-        // Queue chainlink submodule upgrade with admin account
-        vm.prank(admin);
+        // Queue chainlink submodule upgrade with authorized account
+        vm.prank(caller);
         uint64 actionId = priceConfig.queueUpgradeSubmodule(address(newChainlink));
 
         // Confirm chainlink submodule is not upgraded until the timelock is executed
