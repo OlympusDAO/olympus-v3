@@ -97,7 +97,7 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 //      [X] asset added to assets array
 //      [X] asset added with no strategy, moving average disabled, single feed
 //      [X] asset added with strategy, moving average enabled, single feed
-//      [X] asset added with strategy, moving average enabled, mutiple feeds
+//      [X] asset added with strategy, moving average enabled, multiple feeds
 //      [X] reverts if moving average contains any zero observations
 //      [X] if not storing moving average and no cached value provided, dynamically calculates cache and stores so no zero cache values are stored
 // [X] removeAsset
@@ -3236,10 +3236,81 @@ contract PriceV2Test is PriceV2BaseTest {
         assertEq(asset.feeds, abi.encode(feeds), "feeds");
     }
 
-    function test_addAsset_withMedianStrategy_twoFeeds_movingAverage(uint256 nonce_) public {
-        // Test that 2 feeds + moving average + getMedian works correctly
-        // getMedian requires 3 inputs: 2 feeds + 1 moving average
-        // This verifies that the validation in addAsset() includes the moving average
+    function test_addAsset_withAverageStrategy_twoFeeds_movingAverage(uint256 nonce_) public {
+        // Test that 2 feeds + moving average works when the strategy supports both:
+        // - CURRENT with 2 feeds + 1 moving average
+        // - storeObservation with the 2 raw feed prices
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](2);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmFeedOneParams)
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(ohmFeedTwoParams)
+        );
+
+        IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            ISimplePriceFeedStrategy.getAveragePrice.selector,
+            abi.encode(true)
+        );
+
+        uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+
+        vm.startPrank(priceWriter);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetAdded(address(weth));
+
+        price.addAsset(
+            address(weth),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(16 hours),
+            uint48(block.timestamp),
+            observations,
+            averageStrategy,
+            feeds
+        );
+
+        // Verify the asset was added correctly
+        IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
+        assertEq(asset.approved, true);
+        assertEq(asset.storeMovingAverage, true);
+        assertEq(asset.useMovingAverage, true);
+
+        // Feed1 = 10e18 and Feed2 = 10e18 (18 decimals).
+        // movingAverage = (observations[0] + observations[1]) / 2 (18 decimals).
+        // Expected CURRENT = (feed1 + feed2 + movingAverage) / 3 (18 decimals).
+        uint256 movingAverage = (observations[0] + observations[1]) / 2;
+        uint256 expectedPrice = (10e18 + 10e18 + movingAverage) / 3;
+        (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.CURRENT);
+        assertEq(price_, expectedPrice, "CURRENT should average feeds and moving average");
+
+        vm.warp(block.timestamp + 1);
+        price.storeObservation(address(weth));
+
+        (uint256 lastPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        assertEq(lastPrice, 10e18, "LAST should update from the raw feed prices");
+
+        vm.stopPrank();
+    }
+
+    function test_addAsset_withMedianStrategy_twoFeeds_movingAverage_observationPath_reverts()
+        public
+    {
+        // getMedian requires at least 3 inputs. CURRENT has 2 feeds + MA, but
+        // storeObservation excludes MA and would only provide the 2 raw feed prices.
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
             .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
@@ -3261,17 +3332,25 @@ contract PriceV2Test is PriceV2BaseTest {
         IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             ISimplePriceFeedStrategy.getMedianPrice.selector,
-            abi.encode(0)
+            abi.encode(false)
         );
 
-        uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 10e18;
+        observations[1] = 10e18;
 
         vm.startPrank(priceWriter);
-
-        // Expect an event to be emitted
-        vm.expectEmit(true, false, false, true);
-        emit AssetAdded(address(weth));
-
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_StrategyFailed.selector,
+                address(weth),
+                abi.encodeWithSelector(
+                    ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+                    2,
+                    3
+                )
+            )
+        );
         price.addAsset(
             address(weth),
             true, // storeMovingAverage
@@ -3283,18 +3362,67 @@ contract PriceV2Test is PriceV2BaseTest {
             feeds
         );
 
-        // Verify the asset was added correctly
-        IPRICEv2.Asset memory asset = price.getAssetData(address(weth));
-        assertEq(asset.approved, true);
-        assertEq(asset.storeMovingAverage, true);
-        assertEq(asset.useMovingAverage, true);
+        vm.stopPrank();
+    }
 
-        // Feed1 = 10e18 and Feed2 = 10e18.
-        // MA = (obs[0] + obs[1]) / 2 = (10.512e18 + 10e18) / 2 = 10.256e18.
-        // Median strategy sorts [10e18, 10e18, 10.256e18] and selects middle => 10e18.
-        uint256 expectedPrice = 10e18;
-        (uint256 price_, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
-        assertEq(price_, expectedPrice, "Cached price should equal median of feeds and MA");
+    function test_addAsset_withMedianStrategy_threeFeeds_movingAverage() public {
+        ChainlinkPriceFeeds.OneFeedParams memory reserveFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(reserveUsdPriceFeed, uint48(24 hours));
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(reserveFeedParams)
+        );
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmFeedOneParams)
+        );
+        feeds[2] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
+            abi.encode(ohmFeedTwoParams)
+        );
+
+        IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            ISimplePriceFeedStrategy.getMedianPrice.selector,
+            abi.encode(true)
+        );
+
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 10e18;
+        observations[1] = 10e18;
+
+        vm.startPrank(priceWriter);
+        price.addAsset(
+            address(weth),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(16 hours),
+            uint48(block.timestamp),
+            observations,
+            medianStrategy,
+            feeds
+        );
+
+        // Raw feeds are 1e18, 10e18, 10e18. MA is 10e18.
+        // CURRENT median over [1e18, 10e18, 10e18, 10e18] = 10e18.
+        (uint256 currentPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.CURRENT);
+        assertEq(currentPrice, 10e18, "CURRENT should median feeds and moving average");
+
+        vm.warp(block.timestamp + 1);
+        price.storeObservation(address(weth));
+
+        // Observation median over raw feeds [1e18, 10e18, 10e18] = 10e18.
+        (uint256 lastPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        assertEq(lastPrice, 10e18, "LAST should update from the raw feed median");
 
         vm.stopPrank();
     }
@@ -3443,6 +3571,13 @@ contract PriceV2Test is PriceV2BaseTest {
         uint256 expectedPrice = observations[1];
         (uint256 lastPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
         assertEq(lastPrice, expectedPrice, "LAST should equal latest stored observation");
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(priceWriter);
+        price.storeObservation(address(weth));
+
+        (uint256 updatedLastPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
+        assertEq(updatedLastPrice, 10e18, "LAST should update from the raw feed price");
     }
 
     function testRevert_addAsset_invalidPriceFeed() public {
@@ -3646,6 +3781,13 @@ contract PriceV2Test is PriceV2BaseTest {
 
         (uint256 cachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
         assertEq(cachedPrice, 5e18, "LAST should equal latest stored observation");
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(priceWriter);
+        price.storeObservation(address(onema));
+
+        (uint256 updatedCachedPrice, ) = price.getPrice(address(onema), IPRICEv2.Variant.LAST);
+        assertEq(updatedCachedPrice, 10e18, "LAST should update from the raw feed price");
     }
 
     // Note: Tests for updateAsset are in updateAsset.t.sol

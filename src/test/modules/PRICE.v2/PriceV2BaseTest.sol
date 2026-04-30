@@ -817,6 +817,16 @@ abstract contract PriceV2BaseTest is Test {
             );
     }
 
+    // Helper function to create a strict simple strategy component (average price)
+    function _simpleStrategyAverageStrict() internal pure returns (IPRICEv2.Component memory) {
+        return
+            IPRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                ISimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode(true)
+            );
+    }
+
     // Helper function to verify LAST price matches expected value
     function _assertLastPrice(
         address asset,
