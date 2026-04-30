@@ -387,6 +387,70 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(newPrice, 4e36, "Oracle should use updated cache policy prices");
     }
 
+    function test_givenLoanNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsPriceWithCurrentDecimals()
+        public
+    {
+        address nonContractLoan = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractLoan, 18, "NCA");
+        _setCachePrice(nonContractLoan, 1e18);
+
+        address newOracle = _createOracle(
+            address(collateralToken),
+            nonContractLoan,
+            DEFAULT_MAX_AGE
+        );
+
+        // collateral = 18 decimals, loan = 18 decimals
+        // scaleFactor = 1e36 (36 + 18 - 18)
+        // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
+
+        _setNonContractAssetMetadata(nonContractLoan, 6, "NCA");
+        priceCache.cachePrice(address(collateralToken), nonContractLoan);
+
+        // collateral = 18 decimals, loan = 6 decimals
+        // scaleFactor = 1e24 (36 + 6 - 18)
+        // price = 2e18 * 1e24 / 1e18 = 2e24
+        assertEq(
+            IMorphoOracle(newOracle).price(),
+            2e24,
+            "Price should use current loan asset decimals after metadata change"
+        );
+    }
+
+    function test_givenCollateralNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsPriceWithCurrentDecimals()
+        public
+    {
+        address nonContractCollateral = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractCollateral, 18, "NCA");
+        _setCachePrice(nonContractCollateral, 2e18);
+
+        address newOracle = _createOracle(
+            nonContractCollateral,
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        // collateral = 18 decimals, loan = 18 decimals
+        // scaleFactor = 1e36 (36 + 18 - 18)
+        // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
+
+        _setNonContractAssetMetadata(nonContractCollateral, 6, "NCA");
+        priceCache.cachePrice(nonContractCollateral, address(loanToken));
+
+        // collateral = 6 decimals, loan = 18 decimals
+        // scaleFactor = 1e48 (36 + 18 - 6)
+        // price = 2e18 * 1e48 / 1e18 = 2e48
+        assertEq(
+            IMorphoOracle(newOracle).price(),
+            2e48,
+            "Price should use current collateral asset decimals after metadata change"
+        );
+    }
+
     // when cache decimals are changed
     //  [X] it calculates price correctly
 
