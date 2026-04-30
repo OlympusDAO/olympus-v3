@@ -3365,6 +3365,53 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.stopPrank();
     }
 
+    function test_addAsset_withMedianStrategy_singleFeed_movingAverage_reverts() public {
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(onemaFeedParams)
+        );
+
+        IPRICEv2.Component memory medianStrategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            ISimplePriceFeedStrategy.getMedianPrice.selector,
+            abi.encode(false)
+        );
+
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        vm.startPrank(priceWriter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_StrategyFailed.selector,
+                address(weth),
+                abi.encodeWithSelector(
+                    ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+                    2,
+                    3
+                )
+            )
+        );
+        price.addAsset(
+            address(weth),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(16 hours),
+            uint48(block.timestamp),
+            observations,
+            medianStrategy,
+            feeds
+        );
+
+        vm.stopPrank();
+    }
+
     function test_addAsset_withMedianStrategy_threeFeeds_movingAverage() public {
         ChainlinkPriceFeeds.OneFeedParams memory reserveFeedParams = ChainlinkPriceFeeds
             .OneFeedParams(reserveUsdPriceFeed, uint48(24 hours));
@@ -3578,6 +3625,53 @@ contract PriceV2Test is PriceV2BaseTest {
 
         (uint256 updatedLastPrice, ) = price.getPrice(address(weth), IPRICEv2.Variant.LAST);
         assertEq(updatedLastPrice, 10e18, "LAST should update from the raw feed price");
+    }
+
+    function test_addAsset_withAverageStrategyStrict_singleFeed_movingAverage_reverts() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(ohmFeedOneParams)
+        );
+
+        IPRICEv2.Component memory averageStrategy = IPRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            ISimplePriceFeedStrategy.getAveragePrice.selector,
+            abi.encode(true)
+        );
+
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 10e18;
+        observations[1] = 10e18;
+
+        vm.startPrank(priceWriter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_StrategyFailed.selector,
+                address(weth),
+                abi.encodeWithSelector(
+                    ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+                    1,
+                    2
+                )
+            )
+        );
+        price.addAsset(
+            address(weth),
+            true, // storeMovingAverage
+            true, // useMovingAverage
+            uint32(16 hours),
+            uint48(block.timestamp),
+            observations,
+            averageStrategy,
+            feeds
+        );
+
+        vm.stopPrank();
     }
 
     function testRevert_addAsset_invalidPriceFeed() public {
