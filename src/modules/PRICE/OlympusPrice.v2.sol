@@ -1137,6 +1137,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         // Observation writes never include the moving average, so a moving-average strategy must
         // support raw feeds and raw feeds plus a synthetic MA value. Use the synthetic value here
         // so a stale stored MA does not block governance reconfiguration.
+        Asset storage asset = _assetData[asset_];
         bool successAllFeeds;
         if (asset.useMovingAverage) {
             successAllFeeds = _validateMovingAverageStrategy(asset_);
