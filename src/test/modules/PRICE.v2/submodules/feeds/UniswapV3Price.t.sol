@@ -13,6 +13,7 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 // Interfaces
+import {IUniswapV3Factory} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
@@ -39,6 +40,7 @@ contract UniswapV3PriceTest is Test {
     address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address internal WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address internal constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    uint24 internal constant UNISWAP_V3_FEE = 500;
 
     uint8 internal PRICE_DECIMALS = 18;
 
@@ -83,8 +85,10 @@ contract UniswapV3PriceTest is Test {
             mockUniPair.setToken0(LUSD);
             mockUniPair.setToken1(USDC);
             mockUniPair.setFactory(UNISWAP_V3_FACTORY);
+            mockUniPair.setFee(UNISWAP_V3_FEE);
             mockUniPair.setSqrtPrice(uniSqrtPrice);
             mockUniPair.setTickCumulatives(uniTickCumulatives);
+            mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, address(mockUniPair));
         }
 
         // Mock prices from PRICE
@@ -121,6 +125,19 @@ contract UniswapV3PriceTest is Test {
 
     function mockERC20Decimals(address asset_, uint8 decimals_) internal {
         vm.mockCall(asset_, abi.encodeWithSignature("decimals()"), abi.encode(decimals_));
+    }
+
+    function mockCanonicalPool(
+        address token0_,
+        address token1_,
+        uint24 fee_,
+        address pool_
+    ) internal {
+        vm.mockCall(
+            UNISWAP_V3_FACTORY,
+            abi.encodeWithSelector(IUniswapV3Factory.getPool.selector, token0_, token1_, fee_),
+            abi.encode(pool_)
+        );
     }
 
     function expectRevert_PriceZero(address asset_) internal {
@@ -339,14 +356,14 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenTWAP(WETH, PRICE_DECIMALS, params);
     }
 
-    function testRevert_getTokenTWAPOnInvalidFactory() public {
-        address invalidFactory = address(0xBEEF);
-        mockUniPair.setFactory(invalidFactory);
+    function test_getTokenTWAP_givenPoolNotReturnedByCanonicalFactory_reverts() public {
+        address canonicalPool = address(0xBEEF);
+        mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, canonicalPool);
 
         bytes memory err = abi.encodeWithSelector(
             UniswapV3Price.UniswapV3_PoolFactoryInvalid.selector,
             address(mockUniPair),
-            invalidFactory,
+            canonicalPool,
             UNISWAP_V3_FACTORY
         );
         vm.expectRevert(err);
@@ -404,6 +421,7 @@ contract UniswapV3PriceTest is Test {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
+        mockCanonicalPool(UNI, WETH, UNISWAP_V3_FEE, address(mockUniPair));
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = -30809700251260;
         tickCumulatives[1] = -30809733307660;
@@ -774,14 +792,14 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
     }
 
-    function test_getTokenPrice_invalidFactory_reverts() public {
-        address invalidFactory = address(0xBEEF);
-        mockUniPair.setFactory(invalidFactory);
+    function test_getTokenPrice_givenPoolNotReturnedByCanonicalFactory_reverts() public {
+        address canonicalPool = address(0xBEEF);
+        mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, canonicalPool);
 
         bytes memory err = abi.encodeWithSelector(
             UniswapV3Price.UniswapV3_PoolFactoryInvalid.selector,
             address(mockUniPair),
-            invalidFactory,
+            canonicalPool,
             UNISWAP_V3_FACTORY
         );
         vm.expectRevert(err);
@@ -953,6 +971,7 @@ contract UniswapV3PriceTest is Test {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
+        mockCanonicalPool(UNI, WETH, UNISWAP_V3_FEE, address(mockUniPair));
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = -30809700251260;
         tickCumulatives[1] = -30809733307660;
