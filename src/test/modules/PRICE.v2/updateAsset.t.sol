@@ -1924,13 +1924,13 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
     // when the asset strategy configuration is being updated, when useMovingAverage is true, when the moving average configuration is being updated, when storeMovingAverage is true, when the updated strategy configuration is not empty: it replaces the strategy configuration, it replaces the moving average configuration, it emits an AssetStrategyUpdated event, it emits an AssetMovingAverageUpdated event
 
-    function test_whenUpdatingStrategy_whenUseMovingAverageTrue_whenUpdatingMovingAverage_whenStoreMovingAverageTrue_whenStrategyNotEmpty()
+    function test_givenSingleFeedNoStrategyNoMovingAverage_whenUpdatingStrategyToFirstNonZeroAndEnablingMovingAverage_updatesStrategyAndMovingAverage()
         public
         givenAsset_SingleFeed_NoStrategy_NoMA
     {
         IPRICEv2.Asset memory oldAssetData = price.getAssetData(asset_SingleFeed_NoStrategy_NoMA);
 
-        IPRICEv2.Component memory newStrategy = _simpleStrategyAverage();
+        IPRICEv2.Component memory newStrategy = _simpleStrategyFirstNonZero();
 
         uint256[] memory newObs = new uint256[](3);
         newObs[0] = 100e18;
@@ -2216,7 +2216,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
     // when the asset strategy configuration is being updated, when not updating moving average configuration: moving average parameters are ignored
 
-    function test_whenUpdatingStrategy_whenNotUpdatingMovingAverage()
+    function test_givenSingleFeedAssetStoresAndUsesMovingAverage_whenUpdatingStrategyToFirstNonZeroWithoutUpdatingMovingAverage_storeObservationUsesRawFeed()
         public
         givenAsset_SingleFeed_Strategy_WithMA
     {
@@ -2232,7 +2232,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             updateStrategy: true,
             updateMovingAverage: false, // Don't update MA
             feeds: new IPRICEv2.Component[](0),
-            strategy: _simpleStrategyAverage(),
+            strategy: _simpleStrategyFirstNonZero(),
             useMovingAverage: true,
             storeMovingAverage: false, // These should be ignored
             movingAverageDuration: uint32(3 * OBSERVATION_FREQUENCY), // These should be ignored
@@ -2558,7 +2558,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
     // when the moving average configuration is being updated, when the strategy configuration is not being updated, when params.useMovingAverage is false but existing strategy uses MA: LAST remains observation-based
 
-    function test_whenUpdatingMovingAverage_whenNotUpdatingStrategy_whenParamsUseMovingAverageFalse_lastRemainsObservationBased()
+    function test_givenFirstNonZeroStrategyUsesMovingAverage_whenUpdatingMovingAverageWithUseMovingAverageFalseParam_lastRemainsObservationBased()
         public
     {
         uint256[] memory observations = new uint256[](2);
@@ -2585,11 +2585,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             uint32(observations.length) * OBSERVATION_FREQUENCY,
             uint48(block.timestamp),
             observations,
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                ISimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode(0)
-            ),
+            _simpleStrategyFirstNonZero(),
             feeds
         );
 
@@ -2625,7 +2621,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
 
     // when the moving average configured is being updated, when store moving average is true: LAST remains observation-based
 
-    function test_whenUpdatingMovingAverage_whenUseMovingAverageTrue_lastRemainsObservationBased()
+    function test_givenFirstNonZeroStrategyUsesMovingAverage_whenUpdatingMovingAverageWithUseMovingAverageTrue_lastRemainsObservationBased()
         public
     {
         uint256[] memory observations = new uint256[](2);
@@ -2652,11 +2648,7 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             uint32(observations.length) * OBSERVATION_FREQUENCY,
             uint48(block.timestamp),
             observations,
-            IPRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                ISimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode(0)
-            ),
+            _simpleStrategyFirstNonZero(),
             feeds
         );
 
