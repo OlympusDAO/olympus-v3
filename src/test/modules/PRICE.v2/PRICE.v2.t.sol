@@ -3378,7 +3378,7 @@ contract PriceV2Test is PriceV2BaseTest {
         vm.stopPrank();
     }
 
-    function test_addAsset_withMedianStrategy_singleFeed_useMovingAverage_revertsWhenCurrentPathHasTooFewValues()
+    function test_addAsset_withMedianStrategy_singleFeed_useMovingAverage_revertsWhenRawFeedObservationPathHasTooFewValues()
         public
     {
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
@@ -3408,7 +3408,7 @@ contract PriceV2Test is PriceV2BaseTest {
                 address(weth),
                 abi.encodeWithSelector(
                     ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
-                    2,
+                    1,
                     3
                 )
             )

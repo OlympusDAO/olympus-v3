@@ -256,24 +256,20 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
 
     /// @notice             Aggregates an array of prices using the configured strategy
     ///
-    /// @param asset_           The address of the asset
-    /// @param prices_          Array of prices to aggregate
-    /// @param forceStrategy_   If true, validate through the strategy even with one price
-    /// @return uint256         The aggregated price
-    function _aggregate(
-        address asset_,
-        uint256[] memory prices_,
-        bool forceStrategy_
-    ) internal view returns (uint256) {
-        // If there is only one price, ensure it is not zero and return
-        // Otherwise, send to strategy to aggregate
-        if (prices_.length == 1 && !forceStrategy_) {
+    /// @param asset_       The address of the asset
+    /// @param prices_      Array of prices to aggregate
+    /// @return uint256     The aggregated price
+    function _aggregate(address asset_, uint256[] memory prices_) internal view returns (uint256) {
+        Asset storage asset = _assetData[asset_];
+
+        // Single-feed assets without MA do not need a strategy. Early exit.
+        if (prices_.length == 1 && !asset.useMovingAverage) {
             if (prices_[0] == 0) revert PRICE_PriceZero(asset_);
             return prices_[0];
         }
 
-        // Get price from strategy
-        Component memory strategy = abi.decode(_assetData[asset_].strategy, (Component));
+        // Calculate the aggregated result using the strategy
+        Component memory strategy = abi.decode(asset.strategy, (Component));
         (bool success, bytes memory data) = address(_getSubmoduleIfInstalled(strategy.target))
             .staticcall(abi.encodeWithSelector(strategy.selector, prices_, strategy.params));
 
@@ -313,16 +309,22 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ///                     uses the raw observation value as a synthetic moving average to avoid
     ///                     rejecting updates solely because the stored moving average is stale.
     ///
+    ///                     Assumes that the asset has useMovingAverage set to true.
+    ///
     /// @param asset_       Asset to validate
     /// @return bool        Flag indicating if all feeds were successful
     function _validateMovingAverageStrategy(address asset_) internal view returns (bool) {
         (uint256[] memory prices, bool successAllFeeds) = _getFeedPrices(asset_);
         if (!successAllFeeds) return false;
 
-        uint256 obsPrice = _aggregate(asset_, prices, false);
+        // First aggregate the raw prices into an observation
+        // This mimics what is performed by storeObservation()
+        // It will also validate the strategy
+        uint256 obsPrice = _aggregate(asset_, prices);
 
-        _aggregate(asset_, _getInclusivePrices(prices, obsPrice), true);
-        _aggregate(asset_, prices, true);
+        // Then attempt to aggregate the raw prices and the observation
+        // This is what would happen normally when calling getPrice() with Variant.CURRENT
+        _aggregate(asset_, _getInclusivePrices(prices, obsPrice));
 
         return successAllFeeds;
     }
@@ -358,7 +360,7 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             prices = _getInclusivePrices(prices, asset.cumulativeObs / asset.numObservations);
         }
 
-        return (_aggregate(asset_, prices, false), uint48(block.timestamp), successAllFeeds);
+        return (_aggregate(asset_, prices), uint48(block.timestamp), successAllFeeds);
     }
 
     /// @notice                     Reverts if the moving average observation is stale

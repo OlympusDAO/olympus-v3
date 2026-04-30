@@ -1607,15 +1607,14 @@ contract PriceV2UpdateAssetTest is PriceV2BaseTest {
             observations: new uint256[](0)
         });
 
-        // The raw observation path has one feed and would return directly, but CURRENT
-        // has feed + moving average and must be validated against the median strategy.
+        // The raw observation path has one feed and must be validated against the median strategy.
         vm.expectRevert(
             abi.encodeWithSelector(
                 IPRICEv2.PRICE_StrategyFailed.selector,
                 asset_SingleFeed_NoStrategy_StoreMA,
                 abi.encodeWithSelector(
                     ISimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
-                    2,
+                    1,
                     3
                 )
             )
