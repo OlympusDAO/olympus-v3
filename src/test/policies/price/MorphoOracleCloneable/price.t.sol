@@ -404,6 +404,11 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // collateral = 18 decimals, loan = 18 decimals
         // scaleFactor = 1e36 (36 + 18 - 18)
         // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e36,
+            "Initial scale factor should use 18 decimals"
+        );
         assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
 
         _setNonContractAssetMetadata(nonContractLoan, 6, "NCA");
@@ -412,6 +417,11 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // collateral = 18 decimals, loan = 6 decimals
         // scaleFactor = 1e24 (36 + 6 - 18)
         // price = 2e18 * 1e24 / 1e18 = 2e24
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e24,
+            "Scale factor should use current loan decimals"
+        );
         assertEq(
             IMorphoOracle(newOracle).price(),
             2e24,
@@ -436,6 +446,11 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // collateral = 18 decimals, loan = 18 decimals
         // scaleFactor = 1e36 (36 + 18 - 18)
         // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e36,
+            "Initial scale factor should use 18 decimals"
+        );
         assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
 
         _setNonContractAssetMetadata(nonContractCollateral, 6, "NCA");
@@ -445,10 +460,77 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         // scaleFactor = 1e48 (36 + 18 - 6)
         // price = 2e18 * 1e48 / 1e18 = 2e48
         assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e48,
+            "Scale factor should use current collateral decimals"
+        );
+        assertEq(
             IMorphoOracle(newOracle).price(),
             2e48,
             "Price should use current collateral asset decimals after metadata change"
         );
+    }
+
+    function test_givenLoanNonContractAssetDecimalsChangeBeyondMax_whenScaleFactorIsRead_reverts()
+        public
+    {
+        address nonContractLoan = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractLoan, 18, "NCA");
+        _setCachePrice(nonContractLoan, 1e18);
+
+        address newOracle = _createOracle(
+            address(collateralToken),
+            nonContractLoan,
+            DEFAULT_MAX_AGE
+        );
+
+        _setNonContractAssetMetadata(nonContractLoan, 60, "NCA");
+        priceCache.cachePrice(address(collateralToken), nonContractLoan);
+
+        // collateral = 18 decimals, loan = 60 decimals
+        // exponent = 36 + 60 - 18 = 78 > 77
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_TokenDecimalsOutOfBounds.selector,
+                address(collateralToken),
+                nonContractLoan,
+                18,
+                60
+            )
+        );
+        IMorphoOracle(newOracle).scaleFactor();
+    }
+
+    function test_givenCollateralNonContractAssetDecimalsChangeBeyondLoan_whenScaleFactorIsRead_reverts()
+        public
+    {
+        address nonContractCollateral = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractCollateral, 18, "NCA");
+        _setCachePrice(nonContractCollateral, 2e18);
+
+        address newOracle = _createOracle(
+            nonContractCollateral,
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        _setNonContractAssetMetadata(nonContractCollateral, 60, "NCA");
+        priceCache.cachePrice(nonContractCollateral, address(loanToken));
+
+        // collateral = 60 decimals, loan = 18 decimals
+        // exponent = 36 + 18 - 60 = -6
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_TokenDecimalsOutOfBounds.selector,
+                nonContractCollateral,
+                address(loanToken),
+                60,
+                18
+            )
+        );
+        IMorphoOracle(newOracle).scaleFactor();
     }
 
     // when cache decimals are changed
@@ -473,10 +555,10 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 18 - 18 = 36)
+        // The scaleFactor is based on token decimals (36 + 18 - 18 = 36)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e36 (unchanged, based on token decimals)
+        // scaleFactor = 1e36 (based on token decimals)
         // Price calculation: 1e36 * 2e9 / 1e9 = 2e36
         // The result is still 2e36 because the ratio is preserved
         uint256 newPrice = oracle.price();
@@ -548,10 +630,10 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 18 - 9 = 45)
+        // The scaleFactor is based on token decimals (36 + 18 - 9 = 45)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e45 (unchanged, based on token decimals)
+        // scaleFactor = 1e45 (based on token decimals)
         // Price calculation: 1e45 * 2e9 / 1e9 = 2e45
         // The result is still 2e45 because the ratio is preserved
         uint256 newPrice = IMorphoOracle(newOracle).price();
@@ -623,10 +705,10 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         _setCachePrice(address(newLoanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 9 - 18 = 27)
+        // The scaleFactor is based on token decimals (36 + 9 - 18 = 27)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e27 (unchanged, based on token decimals)
+        // scaleFactor = 1e27 (based on token decimals)
         // Price calculation: 1e27 * 2e9 / 1e9 = 2e27
         // The result is still 2e27 because the ratio is preserved
         uint256 newPrice = IMorphoOracle(newOracle).price();
