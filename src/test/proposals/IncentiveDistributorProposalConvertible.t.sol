@@ -79,7 +79,9 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
         // ========== CONDITIONAL POLICY DEPLOYMENT ==========
 
         if (IS_POLICIES_DEPLOYED) {
-            teller = ConvertibleOHMTeller(addresses.getAddress("olympus-policy-iohm-teller"));
+            teller = ConvertibleOHMTeller(
+                addresses.getAddress("olympus-policy-convertible-ohm-teller")
+            );
             distributor = IncentiveDistributorConvertible(
                 addresses.getAddress("olympus-policy-incentive-distributor-convertible")
             );
@@ -102,7 +104,11 @@ contract IncentiveDistributorProposalConvertibleTest is ProposalTest {
             // Register in the address registry so the proposal can find them
             // Note: addresses.json has 0x0 placeholders which are treated as non-existent,
             // so we use addAddress (not changeAddress)
-            addresses.addAddress("olympus-policy-iohm-teller", address(teller), block.chainid);
+            addresses.addAddress(
+                "olympus-policy-convertible-ohm-teller",
+                address(teller),
+                block.chainid
+            );
             addresses.addAddress(
                 "olympus-policy-incentive-distributor-convertible",
                 address(distributor),

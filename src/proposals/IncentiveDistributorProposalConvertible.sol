@@ -101,7 +101,9 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
     function _build(Addresses addresses) internal override {
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address iohmTeller = addresses.getAddress("olympus-policy-iohm-teller");
+        address convertibleOhmTeller = addresses.getAddress(
+            "olympus-policy-convertible-ohm-teller"
+        );
         address incentiveDistributorConvertible = addresses.getAddress(
             "olympus-policy-incentive-distributor-convertible"
         );
@@ -150,7 +152,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             uint256[] memory caps = new uint256[](1);
             caps[0] = _INITIAL_DISTRIBUTOR_MINT_CAP;
             _pushAction(
-                iohmTeller,
+                convertibleOhmTeller,
                 abi.encodeWithSelector(PolicyEnabler.enable.selector, abi.encode(creators, caps)),
                 "Enable ConvertibleOHMTeller policy"
             );
@@ -167,7 +169,10 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
         // convertible tokens are swept on each Heart beat.
         _pushAction(
             heart,
-            abi.encodeWithSelector(IPeriodicTaskManager.addPeriodicTask.selector, iohmTeller),
+            abi.encodeWithSelector(
+                IPeriodicTaskManager.addPeriodicTask.selector,
+                convertibleOhmTeller
+            ),
             "Register ConvertibleOHMTeller as a periodic task on the Heart"
         );
     }
@@ -183,7 +188,9 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
     function _validate(Addresses addresses, address) internal view override {
         ROLESv1 roles = ROLESv1(addresses.getAddress("olympus-module-roles"));
-        address iohmTeller = addresses.getAddress("olympus-policy-iohm-teller");
+        address convertibleOhmTeller = addresses.getAddress(
+            "olympus-policy-convertible-ohm-teller"
+        );
         address incentiveDistributorConvertible = addresses.getAddress(
             "olympus-policy-incentive-distributor-convertible"
         );
@@ -208,14 +215,15 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
         // Validate ConvertibleOHMTeller is enabled
         require(
-            ConvertibleOHMTeller(iohmTeller).isEnabled(),
+            ConvertibleOHMTeller(convertibleOhmTeller).isEnabled(),
             "ConvertibleOHMTeller is not enabled"
         );
 
         // Validate the distributor's per-creator mint cap was set
         require(
-            ConvertibleOHMTeller(iohmTeller).creatorMintCap(incentiveDistributorConvertible) ==
-                _INITIAL_DISTRIBUTOR_MINT_CAP,
+            ConvertibleOHMTeller(convertibleOhmTeller).creatorMintCap(
+                incentiveDistributorConvertible
+            ) == _INITIAL_DISTRIBUTOR_MINT_CAP,
             "ConvertibleOHMTeller creator mint cap does not match _INITIAL_DISTRIBUTOR_MINT_CAP"
         );
 
@@ -227,7 +235,7 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
 
         // Validate the teller is registered as a periodic task on the Heart
         require(
-            IPeriodicTaskManager(heart).hasPeriodicTask(iohmTeller),
+            IPeriodicTaskManager(heart).hasPeriodicTask(convertibleOhmTeller),
             "ConvertibleOHMTeller is not registered as a Heart periodic task"
         );
 
@@ -241,13 +249,13 @@ contract IncentiveDistributorProposalConvertible is GovernorBravoProposal {
             _EXPECTED_TELLER_TASK_INDEX
         );
         require(
-            tellerTaskAddr == iohmTeller,
+            tellerTaskAddr == convertibleOhmTeller,
             "Heart periodic task at expected index is not the ConvertibleOHMTeller"
         );
     }
 }
 
-contract IOHMIncentiveDistributorProposalScript is ProposalScript {
+contract IncentiveDistributorProposalConvertibleScript is ProposalScript {
     constructor() ProposalScript(new IncentiveDistributorProposalConvertible()) {}
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
