@@ -159,8 +159,11 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Asset storage asset = _assetData[asset_];
         if (!asset.storeMovingAverage) revert PRICE_MovingAverageNotStored(asset_);
 
-        uint256 nextIdx = asset.nextObsIndex;
-        uint256 lastIdx = nextIdx == 0 ? asset.numObservations - 1 : nextIdx - 1;
+        uint16 nextIdx = asset.nextObsIndex;
+        uint16 lastIdx;
+        unchecked {
+            lastIdx = nextIdx == 0 ? asset.numObservations - 1 : nextIdx - 1;
+        }
         return (asset.obs[lastIdx], asset.lastObservationTime);
     }
 
@@ -229,26 +232,27 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         Component[] memory feeds = abi.decode(asset.feeds, (Component[]));
         uint256 numFeeds = feeds.length;
         uint256[] memory prices = new uint256[](numFeeds);
-        uint8 __decimals = _decimals;
         bool successAllFeeds = true;
 
         // Iterate through feeds to get prices to aggregate with strategy
         for (uint256 i; i < numFeeds; ) {
             (bool success_, bytes memory data_) = address(_getSubmoduleIfInstalled(feeds[i].target))
                 .staticcall(
-                    abi.encodeWithSelector(feeds[i].selector, asset_, __decimals, feeds[i].params)
+                    abi.encodeWithSelector(feeds[i].selector, asset_, _decimals, feeds[i].params)
                 );
 
             // Store price if successful, otherwise leave as zero
             // Idea is that if you have several price calls and just
             // one fails, it'll DOS the contract with this revert.
             // We handle faulty feeds in the strategy contract.
+            uint256 price;
             if (success_) {
-                prices[i] = abi.decode(data_, (uint256));
+                price = abi.decode(data_, (uint256));
+                prices[i] = price;
             }
 
             // If the feed call reverted or the price was zero, we need to mark that a failure has happened
-            if (success_ == false || prices[i] == 0) {
+            if (price == 0) {
                 successAllFeeds = false;
             }
 
@@ -473,12 +477,17 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         (uint256 obsPrice, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
 
         // Store the data in the obs index
-        uint256 oldestPrice = asset.obs[asset.nextObsIndex];
-        asset.obs[asset.nextObsIndex] = obsPrice;
+        uint16 nextObsIndex = asset.nextObsIndex;
+        uint256 oldestPrice = asset.obs[nextObsIndex];
+        asset.obs[nextObsIndex] = obsPrice;
 
         // Update the last observation time and increment the next index
         asset.lastObservationTime = currentTime;
-        asset.nextObsIndex = (asset.nextObsIndex + 1) % asset.numObservations;
+        unchecked {
+            ++nextObsIndex;
+        }
+        if (nextObsIndex == asset.numObservations) nextObsIndex = 0;
+        asset.nextObsIndex = nextObsIndex;
 
         // Update the cumulative observation
         asset.cumulativeObs = asset.cumulativeObs + obsPrice - oldestPrice;
@@ -508,7 +517,8 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     function storeObservations() public override permissioned {
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            if (_assetData[assets[i]].storeMovingAverage) _storeObservation(assets[i]);
+            address asset = assets[i];
+            if (_assetData[asset].storeMovingAverage) _storeObservation(asset);
             unchecked {
                 ++i;
             }
@@ -662,12 +672,13 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
             return;
         }
 
-        if (lastObservationTime_ > block.timestamp)
+        uint48 currentTime = uint48(block.timestamp);
+        if (lastObservationTime_ > currentTime)
             revert PRICE_ParamsLastObservationTimeInvalid(
                 asset_,
                 lastObservationTime_,
                 0,
-                uint48(block.timestamp)
+                currentTime
             );
 
         if (
