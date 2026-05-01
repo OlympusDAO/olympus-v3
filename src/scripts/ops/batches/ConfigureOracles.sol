@@ -37,6 +37,10 @@ contract ConfigureOracles is BatchScriptV2 {
         address kernel = _envAddressNotZero("olympus.Kernel");
         console2.log("Kernel:", kernel);
 
+        // Load PriceCache
+        address priceCache = _envAddressNotZero("olympus.policies.PriceCache");
+        console2.log("PriceCache:", priceCache);
+
         // Load factory addresses from env
         address chainlinkFactory = _envAddressNotZero("olympus.policies.ChainlinkOracleFactory");
         address morphoFactory = _envAddressNotZero("olympus.policies.MorphoOracleFactory");
@@ -47,9 +51,10 @@ contract ConfigureOracles is BatchScriptV2 {
         console2.log("ERC7726OracleFactory:", erc7726Factory);
 
         // Activate each factory/policy
-        _activateFactory(kernel, chainlinkFactory, "ChainlinkOracleFactory");
-        _activateFactory(kernel, morphoFactory, "MorphoOracleFactory");
-        _activateFactory(kernel, erc7726Factory, "ERC7726OracleFactory");
+        _activatePolicy(kernel, priceCache, "PriceCache");
+        _activatePolicy(kernel, chainlinkFactory, "ChainlinkOracleFactory");
+        _activatePolicy(kernel, morphoFactory, "MorphoOracleFactory");
+        _activatePolicy(kernel, erc7726Factory, "ERC7726OracleFactory");
 
         console2.log("\n=== Oracle Policies Configuration Batch Prepared ===");
         console2.log("\nPost-Batch Steps:");
@@ -76,16 +81,19 @@ contract ConfigureOracles is BatchScriptV2 {
         address erc7726Factory = _envAddressNotZero("olympus.policies.ERC7726OracleFactory");
         address priceCache = _envAddressNotZero("olympus.policies.PriceCache");
 
+        // Verify that PriceCache is activated in kernel
+        _verifyPolicyActivated(kernel, priceCache, "PriceCache");
+
         // Verify policies are activated in Kernel and resolved dependencies from the same Kernel
-        _verifyFactoryKernel(kernel, chainlinkFactory, "ChainlinkOracleFactory");
+        _verifyPolicyKernel(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _verifyPolicyActivated(kernel, chainlinkFactory, "ChainlinkOracleFactory");
         _verifyFactoryPriceCache(chainlinkFactory, "ChainlinkOracleFactory", false, priceCache);
 
-        _verifyFactoryKernel(kernel, morphoFactory, "MorphoOracleFactory");
+        _verifyPolicyKernel(kernel, morphoFactory, "MorphoOracleFactory");
         _verifyPolicyActivated(kernel, morphoFactory, "MorphoOracleFactory");
         _verifyFactoryPriceCache(morphoFactory, "MorphoOracleFactory", false, priceCache);
 
-        _verifyFactoryKernel(kernel, erc7726Factory, "ERC7726OracleFactory");
+        _verifyPolicyKernel(kernel, erc7726Factory, "ERC7726OracleFactory");
         _verifyPolicyActivated(kernel, erc7726Factory, "ERC7726OracleFactory");
         _verifyFactoryPriceCache(erc7726Factory, "ERC7726OracleFactory", true, priceCache);
 
@@ -110,7 +118,7 @@ contract ConfigureOracles is BatchScriptV2 {
     /// @param kernel_ Address of the Kernel
     /// @param factory_ Address of the factory policy
     /// @param name_ Name of the factory for logging
-    function _verifyFactoryKernel(
+    function _verifyPolicyKernel(
         address kernel_,
         address factory_,
         string memory name_
@@ -154,8 +162,8 @@ contract ConfigureOracles is BatchScriptV2 {
     /// @param kernel_ Address of the Kernel
     /// @param factory_ Address of the factory/policy to activate
     /// @param name_ Name of the factory for logging
-    function _activateFactory(address kernel_, address factory_, string memory name_) internal {
-        _verifyFactoryKernel(kernel_, factory_, name_);
+    function _activatePolicy(address kernel_, address factory_, string memory name_) internal {
+        _verifyPolicyKernel(kernel_, factory_, name_);
 
         if (Kernel(kernel_).isPolicyActive(Policy(factory_))) {
             console2.log(name_, "already active, skipping activation");
