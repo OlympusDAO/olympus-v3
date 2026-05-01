@@ -80,6 +80,15 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Load Pyth contract address from args file (shared by all Pyth feeds)
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
+        vm.label(kernel, "Kernel");
+        vm.label(priceModule, "PRICE v1.2");
+        vm.label(priceConfig, "PriceConfig v2");
+        vm.label(_usds, "USDS");
+        vm.label(_susds, "sUSDS");
+        vm.label(_weth, "WETH");
+        vm.label(_ohm, "OHM");
+        vm.label(_pyth, "Pyth");
+
         // Load configuration parameters from args file
         _uniswapOhmWethObservationWindow = _readBatchArgUint256(
             "configurePriceV1_2",
@@ -109,6 +118,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         }
 
         PRICEv1 oldPrice = PRICEv1(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+        vm.label(address(oldPrice), "PRICE v1 current module");
         _preUpgradeOhmTargetPrice = oldPrice.getTargetPrice();
         if (IPRICEv1(priceModule).observationFrequency() != oldPrice.observationFrequency()) {
             revert("PRICE observation frequency mismatch");
@@ -164,6 +174,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address simpleStrategy = _envAddressNotZero(
             "olympus.submodules.PRICE.SimplePriceFeedStrategy"
         );
+
+        vm.label(chainlinkFeeds, "PRICE.ChainlinkPriceFeeds");
+        vm.label(pythFeeds, "PRICE.PythPriceFeeds");
+        vm.label(uniswapV3Price, "PRICE.UniswapV3Price");
+        vm.label(erc4626Price, "PRICE.ERC4626Price");
+        vm.label(simpleStrategy, "PRICE.SimplePriceFeedStrategy");
 
         // Install ChainlinkPriceFeeds
         console2.log("1. Installing ChainlinkPriceFeeds submodule");
@@ -238,6 +254,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             "configurePriceV1_2",
             "pythUsdsUsdMaxConfidence"
         );
+
+        vm.label(chainlinkUsdsUsd, "Chainlink USDS/USD");
+        vm.label(chainlinkDaiUsd, "Chainlink DAI/USD");
 
         console2.log("Chainlink USDS/USD:", chainlinkUsdsUsd);
         console2.log("Chainlink DAI/USD:", chainlinkDaiUsd);
@@ -357,6 +376,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             "configurePriceV1_2",
             "wethRevertOnInsufficientPriceFeeds"
         );
+
+        vm.label(chainlinkEthUsd, "Chainlink ETH/USD");
+        vm.label(redstoneEthUsd, "RedStone ETH/USD");
+        vm.label(chainlinkBtcUsd, "Chainlink BTC/USD");
+        vm.label(chainlinkEthBtc, "Chainlink ETH/BTC");
 
         console2.log("Chainlink ETH/USD:", chainlinkEthUsd);
         console2.log("RedStone ETH/USD:", redstoneEthUsd);
@@ -506,7 +530,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("OHM asset configured with migrated 30-day moving average");
     }
 
-    function _getOhmFeeds() internal view returns (IPRICEv2.Component[] memory feeds_) {
+    function _getOhmFeeds() internal returns (IPRICEv2.Component[] memory feeds_) {
         // Read Uniswap pool addresses from args file
         address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
         address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
@@ -519,6 +543,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint48 chainlinkEthUsdUpdateThreshold = SafeCast.encodeUInt48(
             _readBatchArgUint256("configurePriceV1_2", "chainlinkEthUsdUpdateThreshold")
         );
+
+        vm.label(uniswapOhmWeth, "Uniswap OHM/WETH");
+        vm.label(uniswapOhmSusds, "Uniswap OHM/sUSDS");
+        vm.label(chainlinkOhmEth, "Chainlink OHM/ETH");
+        vm.label(chainlinkEthUsd, "Chainlink ETH/USD");
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
