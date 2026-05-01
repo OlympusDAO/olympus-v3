@@ -58,6 +58,14 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Thrown when setIsReceiveEnabled is called with the current value.
     error LZBridgeGateway_ReceiveAlreadyInDesiredState();
 
+    /// @notice Thrown when there is nothing to rescue (zero balance).
+    error LZBridgeGateway_NothingToRescue();
+
+    /// @notice Thrown when a native transfer fails during rescue.
+    /// @param recipient The intended recipient.
+    /// @param amount The amount attempted to transfer.
+    error LZBridgeGateway_NativeTransferFailed(address recipient, uint256 amount);
+
     // ========= EVENTS ========= //
 
     /// @notice Emitted when OHM is burned and sent to another chain.
@@ -106,6 +114,17 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Emitted when the isReceiveEnabled flag is changed.
     /// @param isReceiveEnabled The new value.
     event IsReceiveEnabledSet(bool isReceiveEnabled);
+
+    /// @notice Emitted when ERC20 tokens are rescued from the contract.
+    /// @param token The rescued ERC20 token address.
+    /// @param to The recipient address.
+    /// @param amount The amount rescued.
+    event Rescued(address indexed token, address indexed to, uint256 amount);
+
+    /// @notice Emitted when native token (ETH) is rescued from the contract.
+    /// @param to The recipient address.
+    /// @param amount The amount rescued.
+    event NativeRescued(address indexed to, uint256 amount);
 
     // ========= CORE FUNCTIONS ========= //
 
@@ -207,6 +226,21 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///
     /// @param eids_ The endpoint IDs to reset.
     function resetRateLimits(uint32[] memory eids_) external;
+
+    /// @notice Rescues ERC20 tokens accidentally sent to this contract.
+    /// @dev Only callable by the manager role. Sweeps the entire
+    ///      token balance to the provided recipient.
+    ///
+    /// @param token_ The ERC20 token to rescue.
+    /// @param to_ The recipient of the rescued tokens.
+    function rescue(address token_, address to_) external;
+
+    /// @notice Rescues native token (ETH) accidentally sent to or stuck in this contract.
+    /// @dev Only callable by the manager role. Sweeps the entire
+    ///      native balance to the provided recipient.
+    ///
+    /// @param to_ The recipient of the rescued native token.
+    function rescueNative(address payable to_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 

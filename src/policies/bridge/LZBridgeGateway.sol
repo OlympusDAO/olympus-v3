@@ -33,6 +33,9 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
+// Libraries
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -55,6 +58,8 @@ contract LZBridgeGateway is
     ILayerZeroReceiver,
     ILZBridgeGateway
 {
+    using SafeERC20 for IERC20;
+
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
@@ -515,6 +520,34 @@ contract LZBridgeGateway is
         bytes calldata message_
     ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
+    }
+
+    // ========= RESCUE FUNCTIONS ========= //
+
+    /// @inheritdoc ILZBridgeGateway
+    function rescue(address token_, address to_) external override onlyManagerRole {
+        _requireNonzeroAddress(token_, "token");
+        _requireNonzeroAddress(to_, "to");
+
+        uint256 balance = IERC20(token_).balanceOf(address(this));
+        if (balance == 0) revert LZBridgeGateway_NothingToRescue();
+
+        IERC20(token_).safeTransfer(to_, balance);
+
+        emit Rescued(token_, to_, balance);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    function rescueNative(address payable to_) external override onlyManagerRole {
+        _requireNonzeroAddress(to_, "to");
+
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert LZBridgeGateway_NothingToRescue();
+
+        (bool success, ) = to_.call{value: balance}("");
+        if (!success) revert LZBridgeGateway_NativeTransferFailed(to_, balance);
+
+        emit NativeRescued(to_, balance);
     }
 
     // ========= VIEW FUNCTIONS ========= //

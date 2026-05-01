@@ -74,6 +74,32 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    function rescue(address token_, address to_) external override onlyOwner {
+        _requireNonzeroAddress(token_, "token");
+        _requireNonzeroAddress(to_, "to");
+
+        uint256 balance = IERC20(token_).balanceOf(address(this));
+        if (balance == 0) revert LZCrossChainBridge_NothingToRescue();
+
+        IERC20(token_).safeTransfer(to_, balance);
+
+        emit Rescued(token_, to_, balance);
+    }
+
+    /// @inheritdoc ILZCrossChainBridge
+    function rescueNative(address payable to_) external override onlyOwner {
+        _requireNonzeroAddress(to_, "to");
+
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert LZCrossChainBridge_NothingToRescue();
+
+        (bool success, ) = to_.call{value: balance}("");
+        if (!success) revert LZCrossChainBridge_NativeTransferFailed(to_, balance);
+
+        emit NativeRescued(to_, balance);
+    }
+
+    /// @inheritdoc ILZCrossChainBridge
     function estimateSendFee(
         uint32 dstEid_,
         address to_,
