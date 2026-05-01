@@ -51,6 +51,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     uint32 internal _uniswapOhmSusdsObservationWindow;
     uint256 internal _preUpgradeOhmTargetPrice;
 
+    uint256 internal constant PRICE_SCALE = 1e18;
+
     // ========== CONFIGURATION FUNCTIONS ========== //
 
     /// @notice Configure PRICE v1.2 module with all assets
@@ -154,6 +156,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureSusds(priceConfig);
         _configureWeth(priceConfig);
         _configureOhm(priceConfig, oldPrice);
+
+        _setPostBatchValidateSelector(this._validateConfigurePriceV1_2PostBatch.selector);
 
         console2.log("PRICE v1.2 configuration batch prepared");
         proposeBatch();
@@ -530,6 +534,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("OHM asset configured with migrated 30-day moving average");
     }
 
+    /// @notice Validate configured asset prices after the batch simulation
+    function _validateConfigurePriceV1_2PostBatch() external view {
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        IPRICEv2 price = IPRICEv2(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+
+        console2.log("\n Validating PRICE v1.2 Post-Batch Prices ");
+        _logExpectedAndActualPrice(price, "wETH", _weth, "weth");
+        _logExpectedAndActualPrice(price, "sUSDS", _susds, "susds");
+        _logExpectedAndActualPrice(price, "OHM", _ohm, "ohm");
+        _logExpectedAndActualPrice(price, "USDS", _usds, "usds");
+    }
+
     function _getOhmFeeds() internal returns (IPRICEv2.Component[] memory feeds_) {
         // Read Uniswap pool addresses from args file
         address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
@@ -713,6 +729,43 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         expectations_ = _makeFeedExpectations(length_, expectedPrice, toleranceBps);
+    }
+
+    function _logExpectedAndActualPrice(
+        IPRICEv2 price_,
+        string memory symbol_,
+        address asset_,
+        string memory assetPrefix_
+    ) internal view {
+        uint256 expectedPrice = _readBatchArgUint256(
+            "configurePriceV1_2",
+            string.concat(assetPrefix_, "ExpectedPrice")
+        );
+        uint256 actualPrice = price_.getPrice(asset_);
+
+        console2.log(string.concat(symbol_, " expected price: ", _format18Decimals(expectedPrice)));
+        console2.log(string.concat(symbol_, " getPrice(): ", _format18Decimals(actualPrice)));
+    }
+
+    function _format18Decimals(uint256 value_) internal pure returns (string memory) {
+        return
+            string.concat(vm.toString(value_ / PRICE_SCALE), ".", _leftPad18(value_ % PRICE_SCALE));
+    }
+
+    function _leftPad18(uint256 value_) internal pure returns (string memory) {
+        bytes memory valueBytes = bytes(vm.toString(value_));
+        if (valueBytes.length >= 18) return string(valueBytes);
+
+        bytes memory padded = new bytes(18);
+        uint256 paddingLength = 18 - valueBytes.length;
+        for (uint256 i; i < paddingLength; i++) {
+            padded[i] = "0";
+        }
+        for (uint256 i; i < valueBytes.length; i++) {
+            padded[paddingLength + i] = valueBytes[i];
+        }
+
+        return string(padded);
     }
 
     /// @notice Create a price feed expectation array for feeds that should share a price envelope
