@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 // Interfaces
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IUniswapV3Factory} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 
 // Libraries
@@ -96,15 +97,12 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param factory_         The configured factory address
     error UniswapV3_FactoryInvalid(address factory_);
 
-    /// @notice                     The pool factory does not match the configured canonical Uniswap V3 factory
-    /// @param pool_                The address of the pool
-    /// @param poolFactory_         The factory returned by the pool
-    /// @param expectedFactory_     The expected canonical Uniswap V3 factory
-    error UniswapV3_PoolFactoryInvalid(
-        address pool_,
-        address poolFactory_,
-        address expectedFactory_
-    );
+    /// @notice                     The pool does not match the canonical Uniswap V3 factory's registered pool
+    ///
+    /// @param pool_                The provided pool address
+    /// @param expectedPool_        The pool returned by the canonical Uniswap V3 factory
+    /// @param factory_             The canonical Uniswap V3 factory
+    error UniswapV3_PoolFactoryInvalid(address pool_, address expectedPool_, address factory_);
 
     /// @notice                         The pool has insufficient observation cardinality for the TWAP window
     ///
@@ -307,25 +305,17 @@ contract UniswapV3Price is PriceSubmodule {
             revert UniswapV3_PoolTypeInvalid(address(pool_));
         }
 
-        try pool_.factory() returns (address poolFactory) {
-            if (poolFactory != UNISWAP_V3_FACTORY) {
-                revert UniswapV3_PoolFactoryInvalid(
-                    address(pool_),
-                    poolFactory,
-                    UNISWAP_V3_FACTORY
-                );
-            }
-        } catch (bytes memory) {
-            revert UniswapV3_PoolTypeInvalid(address(pool_));
-        }
-
         address quoteToken;
+        address token0;
+        address token1;
         {
             bool lookupTokenFound;
             try pool_.token0() returns (address token) {
                 // Check if token is zero address, revert if so
                 if (token == address(0))
                     revert UniswapV3_PoolTokensInvalid(address(pool_), 0, token);
+
+                token0 = token;
 
                 // If token is the lookup token, set lookupTokenFound to true
                 // Otherwise, it should be the quote token
@@ -345,6 +335,8 @@ contract UniswapV3Price is PriceSubmodule {
                 if (token == address(0))
                     revert UniswapV3_PoolTokensInvalid(address(pool_), 1, token);
 
+                token1 = token;
+
                 // If token is the lookup token, set lookupTokenFound to true
                 // Otherwise, it should be the quote token
                 // If lookup token isn't found, quote token will be set twice,
@@ -362,6 +354,27 @@ contract UniswapV3Price is PriceSubmodule {
             // If lookup token wasn't found, revert
             if (!lookupTokenFound)
                 revert UniswapV3_LookupTokenNotFound(address(pool_), lookupToken_);
+        }
+
+        uint24 fee;
+        try pool_.fee() returns (uint24 poolFee) {
+            fee = poolFee;
+        } catch (bytes memory) {
+            revert UniswapV3_PoolTypeInvalid(address(pool_));
+        }
+
+        try IUniswapV3Factory(UNISWAP_V3_FACTORY).getPool(token0, token1, fee) returns (
+            address expectedPool
+        ) {
+            if (expectedPool != address(pool_)) {
+                revert UniswapV3_PoolFactoryInvalid(
+                    address(pool_),
+                    expectedPool,
+                    UNISWAP_V3_FACTORY
+                );
+            }
+        } catch (bytes memory) {
+            revert UniswapV3_FactoryInvalid(UNISWAP_V3_FACTORY);
         }
 
         // Validate output decimals are not too high
