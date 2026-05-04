@@ -68,6 +68,10 @@ interface ILZCrossChainBridge is IVersioned {
     ///      to the provided recipient. Pass address(0) as `token_` to rescue the native
     ///      token (ETH).
     ///
+    ///      Reverts if:
+    ///      - The caller is not the owner.
+    ///      - `to_` is the zero address.
+    ///
     /// @param token_ The ERC20 token to rescue, or address(0) for native token.
     /// @param to_ The recipient of the rescued assets.
     function rescue(address token_, address payable to_) external;

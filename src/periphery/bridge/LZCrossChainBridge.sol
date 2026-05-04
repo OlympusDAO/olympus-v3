@@ -75,6 +75,9 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The caller is not the owner.
+    ///      - `to_` is the zero address.
     function rescue(address token_, address payable to_) external override onlyOwner {
         _requireNonzeroAddress(to_, "to");
 

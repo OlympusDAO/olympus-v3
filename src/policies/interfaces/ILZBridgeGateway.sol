@@ -215,9 +215,13 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     function resetRateLimits(uint32[] memory eids_) external;
 
     /// @notice Rescues assets accidentally sent to this contract.
-    /// @dev Only callable by the manager role. Sweeps the entire balance of the specified
-    ///      asset to the provided recipient. Pass address(0) as `token_` to rescue the native
-    ///      token (ETH).
+    /// @dev Only callable by the manager or admin role. Sweeps the entire balance of the
+    ///      specified asset to the provided recipient. Pass address(0) as `token_` to rescue
+    ///      the native token (ETH).
+    ///
+    ///      Reverts if:
+    ///      - The caller does not have the manager or admin role.
+    ///      - `to_` is the zero address.
     ///
     /// @param token_ The ERC20 token to rescue, or address(0) for native token.
     /// @param to_ The recipient of the rescued assets.
