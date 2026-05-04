@@ -589,7 +589,6 @@ contract LZBridgeGateway is
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
 
         _requireNonzeroAddress(to, "to");
-        if (to == address(this)) revert LZBridgeGateway_InvalidAddress("to");
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {

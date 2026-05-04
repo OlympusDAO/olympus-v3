@@ -236,6 +236,22 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
     }
 
+    function test_lzReceive_revertsIfRecipientIsZeroAddress() external {
+        Origin memory origin = Origin({
+            srcEid: NONCANONICAL_EID,
+            sender: LZConfigLib.addressToBytes32(address(gateway2)),
+            nonce: 1
+        });
+
+        bytes memory payload = abi.encode(uint8(1), abi.encode(address(0), uint256(100e9)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector, "to")
+        );
+        vm.prank(address(endpointSetup.endpointList[0]));
+        gateway.lzReceive(origin, bytes32(0), payload, address(0), bytes(""));
+    }
+
     function test_lzReceive_revertsIfBridgeDisabledAndReceiveEnabledFalse() external {
         vm.prank(admin);
         gateway2.disable(bytes(""));
