@@ -529,10 +529,7 @@ contract LZBridgeGateway is
     /// @dev Reverts if:
     ///      - The caller does not have the manager or admin role.
     ///      - `to_` is the zero address.
-    function rescue(
-        address token_,
-        address payable to_
-    ) external override onlyManagerOrAdminRole {
+    function rescue(address token_, address payable to_) external override onlyManagerOrAdminRole {
         _requireNonzeroAddress(to_, "to");
 
         uint256 balance;
