@@ -10,7 +10,7 @@ import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @dev Tests for the unified rescue function on LZCrossChainBridge.
-///      Passing address(0) as the token rescues the native (ETH) balance.
+///      Passing address(0) as the token rescues the native balance.
 contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     MockOhm internal randomToken;
     address internal recoveryRecipient = makeAddr("recoveryRecipient");
@@ -78,7 +78,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     }
 
     function test_rescue_givenZeroBalance_succeeds() external {
-        // No revert on empty balance — rescue is a rare ops function and a sweep semantics is fine.
+        // No revert on empty balance. Rescue is a rare ops function and sweep semantics are fine.
         bridge.rescue(address(randomToken), payable(recoveryRecipient));
 
         assertEq(randomToken.balanceOf(recoveryRecipient), 0, "Recipient should receive nothing");
@@ -105,7 +105,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         bridge.rescue(address(randomToken), payable(address(0)));
     }
 
-    // ========= rescue (native — token == address(0)) ========= //
+    // ========= rescue (native, token == address(0)) ========= //
 
     function test_rescue_native_givenOwner_transfersBalance() external {
         uint256 amount = 1 ether;
@@ -180,14 +180,14 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         // OZ Address.sendValue bubbles up the receiver's revert reason via Errors.FailedCall
         // when no return data is provided, otherwise re-reverts with the original data.
         // RejectingReceiver reverts with a string, which propagates as-is.
-        vm.expectRevert("RejectingReceiver: no eth");
+        vm.expectRevert("RejectingReceiver: no native");
         bridge.rescue(address(0), payable(address(rejector)));
     }
 }
 
-/// @dev Contract that rejects ETH transfers, used to test rescue() native failure paths.
+/// @dev Contract that rejects native transfers, used to test rescue() native failure paths.
 contract RejectingReceiver {
     receive() external payable {
-        revert("RejectingReceiver: no eth");
+        revert("RejectingReceiver: no native");
     }
 }

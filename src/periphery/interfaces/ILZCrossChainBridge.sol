@@ -19,7 +19,7 @@ interface ILZCrossChainBridge is IVersioned {
     error LZCrossChainBridge_InsufficientAmount();
 
     /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued ERC20 token address, or address(0) for native token.
+    /// @param token The rescued ERC20 token address, or address(0) for the native token.
     /// @param to The recipient address.
     /// @param amount The amount rescued.
     event Rescued(address indexed token, address indexed to, uint256 amount);
@@ -28,7 +28,7 @@ interface ILZCrossChainBridge is IVersioned {
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
     /// @param dstEid The LayerZero destination endpoint ID.
-    /// @param fees The native token fee paid for the bridge transfer.
+    /// @param fees The native fee paid for the bridge transfer.
     event Bridged(address indexed sender, uint256 amount, uint32 indexed dstEid, uint256 fees);
 
     /// @notice Emitted when the gateway address is updated.
@@ -38,15 +38,9 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
     ///      OHM is transferred from the user to the gateway, then the gateway burns and
-    ///      sends via LayerZero. The caller must send native token (ETH) with the call to
+    ///      sends via LayerZero. The caller must send the native token with the call to
     ///      cover the LayerZero messaging fee; excess is refunded to msg.sender.
     ///      Use estimateSendFee() to determine the required fee.
-    ///
-    ///      Reverts if:
-    ///      - The bridge is not enabled.
-    ///      - amount_ is zero.
-    ///      - The user has insufficient OHM balance or approval.
-    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
@@ -56,21 +50,13 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Sets the gateway address.
     /// @dev Only callable by the owner.
     ///
-    ///      Reverts if:
-    ///      - The caller is not the owner.
-    ///      - gateway_ is the zero address.
-    ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
 
     /// @notice Rescues assets accidentally sent to this contract.
     /// @dev Only callable by the owner. Sweeps the entire balance of the specified asset
     ///      to the provided recipient. Pass address(0) as `token_` to rescue the native
-    ///      token (ETH).
-    ///
-    ///      Reverts if:
-    ///      - The caller is not the owner.
-    ///      - `to_` is the zero address.
+    ///      token.
     ///
     /// @param token_ The ERC20 token to rescue, or address(0) for native token.
     /// @param to_ The recipient of the rescued assets.

@@ -47,6 +47,11 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The bridge is not enabled.
+    ///      - `amount_` is zero.
+    ///      - The user has insufficient OHM balance or approval.
+    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     function sendOhm(
         uint32 dstEid_,
         address to_,
@@ -70,6 +75,9 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The caller is not the owner.
+    ///      - `gateway_` is the zero address.
     function setGateway(address gateway_) external override onlyOwner {
         _setGateway(gateway_);
     }
