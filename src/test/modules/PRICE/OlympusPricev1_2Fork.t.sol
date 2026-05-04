@@ -88,6 +88,7 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant BPS_MAX = 10_000;
     uint256 internal constant WETH_DEVIATION_BPS = 500; // 5% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
+    uint256 internal constant OHM_DEVIATION_BPS = 200; // 2% deviation
     uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
     uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
@@ -232,11 +233,17 @@ contract OlympusPricev1_2ForkTest is Test {
     function _configureOhmAsset() internal {
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
-        // Create strategy component: getAveragePrice with strict mode
+        // Create strategy component: getAveragePriceExcludingDeviations
         IPRICEv2.Component memory ohmStrategy = IPRICEv2.Component({
             target: toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            selector: SimplePriceFeedStrategy.getAveragePrice.selector,
-            params: abi.encode(true) // strict mode
+            selector: SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
+            params: abi.encode(
+                ISimplePriceFeedStrategy.DeviationParams({
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    deviationBps: uint16(OHM_DEVIATION_BPS),
+                    revertOnInsufficientCount: true // strict mode
+                })
+            )
         });
 
         // Create feed components for the two Uniswap pools using getTokenTWAP, and the Chainlink OHM/ETH feed
@@ -567,6 +574,52 @@ contract OlympusPricev1_2ForkTest is Test {
         // Validate OHM price (uses Uniswap V3 TWAP feeds)
         uint256 ohmPrice = price.getPrice(OHM);
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
+    }
+
+    function test_priceValidation_ohmUsesDeviationFilteredAverage() public view {
+        IPRICEv2.Asset memory ohmAsset = price.getAssetData(OHM);
+        IPRICEv2.Component memory ohmStrategy = abi.decode(ohmAsset.strategy, (IPRICEv2.Component));
+        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
+            ohmStrategy.params,
+            (ISimplePriceFeedStrategy.DeviationParams)
+        );
+
+        assertEq(
+            ohmStrategy.selector,
+            SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
+            "OHM should use deviation-filtered average"
+        );
+        assertEq(
+            params.deviationBps,
+            OHM_DEVIATION_BPS,
+            "OHM deviation threshold should match config"
+        );
+        assertTrue(params.revertOnInsufficientCount, "OHM strategy should use strict mode");
+    }
+
+    function test_priceValidation_ohmDeviationStrategyExcludesOutlier() public view {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 202e17;
+        prices[1] = 205e17;
+        prices[2] = 30e18;
+
+        uint256 resolvedPrice = strategy.getAveragePriceExcludingDeviations(
+            prices,
+            abi.encode(
+                ISimplePriceFeedStrategy.DeviationParams({
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    deviationBps: uint16(OHM_DEVIATION_BPS),
+                    revertOnInsufficientCount: true
+                })
+            )
+        );
+
+        // prices[0] = 20.2e18 (18 decimals)
+        // prices[1] = 20.5e18 (18 decimals)
+        // prices[2] = 30e18 (18 decimals)
+        // Median benchmark is 20.5e18. With a 2% threshold, 30e18 deviates and is excluded.
+        // Expected: (20.2e18 + 20.5e18) / 2 = 20.35e18.
+        assertEq(resolvedPrice, 2035e16, "OHM strategy should exclude the outlier");
     }
 
     function _warpToNextHeartbeat() internal {

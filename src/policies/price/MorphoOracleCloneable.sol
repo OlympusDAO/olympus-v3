@@ -11,8 +11,9 @@ import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IOraclePriceCache} from "src/policies/interfaces/price/IOraclePriceCache.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
+import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {String} from "src/libraries/String.sol";
 
 /// @title  MorphoOracleCloneable
@@ -30,8 +31,9 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     // 0x14: collateral token address (20 bytes)
     // 0x28: loan token address (20 bytes)
     // 0x3C: max age (8 bytes, stored as uint64)
-    // 0x44: scale factor (32 bytes)
-    // 0x64: name (32 bytes)
+    // 0x44: name (32 bytes)
+
+    uint8 internal constant _MORPHO_DECIMALS = 36;
 
     // ========== IMMUTABLE ARGS GETTERS ========== //
 
@@ -60,11 +62,14 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     }
 
     /// @notice The scale factor for the oracle
-    /// @dev    Does not revert.
+    /// @dev    Uses the current asset decimals reported by the factory's active price cache.
+    ///         For non-contract assets, decimals are PriceCache metadata rather than token
+    ///         metadata, so this value can change when `PriceCache.setNonContractAssetMetadata()`
+    ///         updates decimals. Call `PriceCache.assetDecimals()` to confirm the active NCA scale.
     ///
-    /// @return uint256 The scale factor stored in immutable args
-    function scaleFactor() public pure returns (uint256) {
-        return _getArgUint256(0x44);
+    /// @return uint256 The current scale factor
+    function scaleFactor() public view returns (uint256) {
+        return _scaleFactor(IPriceCache(factory().getPriceCache()));
     }
 
     /// @notice The maximum allowed age for cached prices
@@ -80,7 +85,7 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///
     /// @return string The name stored in immutable args
     function name() public pure returns (string memory) {
-        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x64))));
+        return String.bytes32ToString(bytes32(abi.encodePacked(_getArgUint256(0x44))));
     }
 
     /// @notice Returns the enabled price cache policy for this oracle.
@@ -104,6 +109,11 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     /// @inheritdoc IOracle
     /// @notice     Returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
     /// @dev        This function uses cached pair snapshots only.
+    /// @dev        The Morpho scale factor is recomputed from the active price cache's current
+    ///             collateral and loan decimals. If either asset is a non-contract asset, decimals
+    ///             are PriceCache metadata rather than token metadata and can change when
+    ///             `PriceCache.setNonContractAssetMetadata()` updates decimals. Call
+    ///             `PriceCache.assetDecimals()` to confirm the active NCA scale.
     ///
     ///             This function will revert if:
     ///             - The oracle is not enabled in the factory context
@@ -117,7 +127,8 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
     ///             If callers encounter a feed-state revert, they should cache prices then retry.
     ///             A caller can alternatively call `isStale()`, call `cachePrice()` (if the result is true), and then this function.
     function price() external view override returns (uint256) {
-        IPriceCache.CachedPrice memory cachedPrice = _getEnabledPriceCache().getCachedPrice(
+        IPriceCache priceCache = _getEnabledPriceCache();
+        IPriceCache.CachedPrice memory cachedPrice = priceCache.getCachedPrice(
             collateralToken(),
             loanToken()
         );
@@ -134,7 +145,42 @@ contract MorphoOracleCloneable is IMorphoOracle, IOraclePriceCache, Clone {
             revert MorphoOracle_Stale(pairTimestamp, _latestPermissibleTimestamp(maxAge_));
         }
 
-        return cachedPrice.assetPriceUsd.mulDiv(scaleFactor(), cachedPrice.quotePriceUsd);
+        return
+            cachedPrice.assetPriceUsd.mulDiv(_scaleFactor(priceCache), cachedPrice.quotePriceUsd);
+    }
+
+    /// @notice Calculates the current Morpho scale factor from the active price cache
+    /// @dev    Morpho expects prices scaled by 1e36, adjusted for collateral and loan token
+    ///         decimals: `10 ** (36 + loanDecimals - collateralDecimals)`.
+    ///         For non-contract assets, decimals are PriceCache metadata and can change when
+    ///         `PriceCache.setNonContractAssetMetadata()` updates them, so the scale factor is
+    ///         recalculated instead of read from immutable args.
+    ///         Reverts if the exponent is negative or greater than 77, since `10 ** 78` exceeds
+    ///         `uint256`.
+    ///
+    /// @param  priceCache_     The price cache used to resolve the current asset decimals
+    /// @return scaleFactor_    The current Morpho scale factor
+    function _scaleFactor(IPriceCache priceCache_) internal view returns (uint256 scaleFactor_) {
+        address collateralToken_ = collateralToken();
+        address loanToken_ = loanToken();
+        uint8 collateralDecimals = priceCache_.assetDecimals(collateralToken_);
+        uint8 loanDecimals = priceCache_.assetDecimals(loanToken_);
+
+        // Morpho scale = 10^(36 + loanDecimals - collateralDecimals).
+        // Recompute from the active price cache so non-contract asset metadata changes are reflected.
+        int256 exponent = SafeCast.toInt256(loanDecimals) -
+            SafeCast.toInt256(collateralDecimals) +
+            SafeCast.toInt256(_MORPHO_DECIMALS);
+        if (exponent < 0 || exponent > 77) {
+            revert MorphoOracle_TokenDecimalsOutOfBounds(
+                collateralToken_,
+                loanToken_,
+                collateralDecimals,
+                loanDecimals
+            );
+        }
+
+        return 10 ** SafeCast.toUint256(exponent);
     }
 
     function _isStaleFromTimestamp(uint48 timestamp_, uint48 maxAge_) internal view returns (bool) {

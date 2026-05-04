@@ -15,6 +15,19 @@ interface IMorphoOracle is IOracle {
     /// @notice Thrown when the cached direct-pair USD legs are invalid
     error MorphoOracle_InvalidPrice();
 
+    /// @notice Thrown when token decimals result in an invalid scale factor
+    ///
+    /// @param  collateralToken     The collateral token address
+    /// @param  loanToken           The loan token address
+    /// @param  collateralDecimals  The collateral token decimals reported by the active price cache
+    /// @param  loanDecimals        The loan token decimals reported by the active price cache
+    error MorphoOracle_TokenDecimalsOutOfBounds(
+        address collateralToken,
+        address loanToken,
+        uint8 collateralDecimals,
+        uint8 loanDecimals
+    );
+
     /// @notice Thrown when the direct pair cache timestamp is stale
     ///
     /// @param  cachedTimestamp               The cached timestamp used for the collateral/loan pair
@@ -38,7 +51,11 @@ interface IMorphoOracle is IOracle {
     /// @return maxAge_  The configured maximum cache age in seconds
     function maxAge() external view returns (uint48 maxAge_);
 
-    /// @notice The scale factor for the oracle
+    /// @notice The current scale factor for the oracle
+    /// @dev    Uses the active price cache's current asset decimals. For non-contract assets,
+    ///         decimals are PriceCache metadata rather than token metadata, so this value can
+    ///         change when `PriceCache.setNonContractAssetMetadata()` updates decimals. Call
+    ///         `PriceCache.assetDecimals()` to confirm the active NCA scale.
     ///
     /// @return scaleFactor_    The scale factor
     function scaleFactor() external view returns (uint256 scaleFactor_);

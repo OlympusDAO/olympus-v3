@@ -40,7 +40,7 @@ contract MorphoOracleCloneableImmutableArgsTest is MorphoOracleCloneableTest {
     }
 
     // scaleFactor
-    //  [X] it returns scale factor from immutable args
+    //  [X] it returns scale factor from current price cache asset decimals
 
     function test_scaleFactor() public view {
         // Scale factor = 10^(36 + loanDecimals - collateralDecimals)
