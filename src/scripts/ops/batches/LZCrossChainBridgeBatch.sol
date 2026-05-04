@@ -73,8 +73,14 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
         console2.log("\n=== LZCrossChainBridge Setup (Ethereum, post-OCG) ===");
         console2.log("Bridge:", bridgeAddr);
 
-        // 1. Deactivate old CrossChainBridge in Kernel
-        console2.log("Deactivating old CrossChainBridge:", oldBridge);
+        // 1. Disable old CrossChainBridge (idempotent if disableOldBridge already ran).
+        //    Bundled here to guarantee user-facing bridge calls cannot land between
+        //    Kernel deactivation and the bridge being marked inactive.
+        console2.log("Disabling old CrossChainBridge:", oldBridge);
+        addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
+
+        // 2. Deactivate old CrossChainBridge in Kernel
+        console2.log("Deactivating old CrossChainBridge in Kernel");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -84,7 +90,7 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
             )
         );
 
-        // 2. Enable bridge
+        // 3. Enable bridge
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         proposeBatch();
