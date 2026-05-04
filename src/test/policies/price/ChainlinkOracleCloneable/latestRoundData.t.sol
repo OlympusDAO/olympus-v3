@@ -171,6 +171,54 @@ contract ChainlinkOracleCloneableLatestRoundDataTest is ChainlinkOracleCloneable
         );
     }
 
+    function test_givenQuoteNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsSameAnswer()
+        public
+    {
+        address nonContractQuote = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractQuote, 18, "NCA");
+        _setPRICEPrices(nonContractQuote, 1e18);
+
+        address newOracle = _createOracle(address(baseToken), nonContractQuote, DEFAULT_MAX_AGE);
+
+        (, int256 initialAnswer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(initialAnswer, 2e18, "Initial answer should use the cached USD ratio");
+
+        _setNonContractAssetMetadata(nonContractQuote, 6, "NCA");
+        priceCache.cachePrice(address(baseToken), nonContractQuote);
+
+        (, int256 newAnswer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(
+            newAnswer,
+            2e18,
+            "Answer should remain the same when only native quote decimals change"
+        );
+    }
+
+    function test_givenBaseNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsSameAnswer()
+        public
+    {
+        address nonContractBase = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractBase, 18, "NCA");
+        _setPRICEPrices(nonContractBase, 2e18);
+
+        address newOracle = _createOracle(nonContractBase, address(quoteToken), DEFAULT_MAX_AGE);
+
+        (, int256 initialAnswer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(initialAnswer, 2e18, "Initial answer should use the cached USD ratio");
+
+        _setNonContractAssetMetadata(nonContractBase, 6, "NCA");
+        priceCache.cachePrice(nonContractBase, address(quoteToken));
+
+        (, int256 newAnswer, , , ) = IChainlinkOracle(newOracle).latestRoundData();
+        assertEq(
+            newAnswer,
+            2e18,
+            "Answer should remain the same when only native base decimals change"
+        );
+    }
+
     function test_whenOracleIsEnabled_gasSnapshotLatestRoundData() public givenPricesAreStored {
         vm.startSnapshotGas("ChainlinkOracleCloneable.latestRoundData");
         oracle.latestRoundData();

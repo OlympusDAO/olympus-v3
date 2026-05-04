@@ -143,6 +143,40 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
         assertEq(outAmount, 3e18, "Quote should use cache decimals for registered assets");
     }
 
+    function test_givenBaseNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsQuoteWithCurrentDecimals()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 2e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 18, "NCA");
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+
+        // inAmount = 1e18
+        // assetPriceUsd = 2e18
+        // baseScale = 1e18
+        // quoteScale = 1e18
+        // quotePriceUsd = 1e18
+        // outAmount = 2e18
+        uint256 initialOutAmount = oracle.getQuote(
+            1e18,
+            registeredNonContractAsset,
+            address(loanToken)
+        );
+        assertEq(initialOutAmount, 2e18, "Initial quote should use 18 base decimals");
+
+        _setNonContractAssetMetadata(registeredNonContractAsset, 6, "NCA");
+        priceCache.cachePrice(registeredNonContractAsset, address(loanToken));
+
+        // inAmount = 1e6
+        // assetPriceUsd = 2e18
+        // baseScale = 1e6
+        // quoteScale = 1e18
+        // quotePriceUsd = 1e18
+        // outAmount = 2e18
+        uint256 newOutAmount = oracle.getQuote(1e6, registeredNonContractAsset, address(loanToken));
+        assertEq(newOutAmount, 2e18, "Quote should use current base decimals");
+    }
+
     function test_givenBaseAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_givenAssetIsNoLongerApprovedInPRICE_reverts()
         public
         givenOracleIsEnabled
@@ -204,6 +238,44 @@ contract ERC7726OracleGetQuoteTest is ERC7726OracleTest {
             registeredNonContractAsset
         );
         assertEq(outAmount, 5e7, "Quote should use cache decimals for registered assets");
+    }
+
+    function test_givenQuoteNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsQuoteWithCurrentDecimals()
+        public
+        givenOracleIsEnabled
+    {
+        _setPRICEPrices(registeredNonContractAsset, 1e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 18, "NCA");
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+
+        // inAmount = 1e18
+        // assetPriceUsd = 2e18
+        // baseScale = 1e18
+        // quoteScale = 1e18
+        // quotePriceUsd = 1e18
+        // outAmount = 2e18
+        uint256 initialOutAmount = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            registeredNonContractAsset
+        );
+        assertEq(initialOutAmount, 2e18, "Initial quote should use 18 quote decimals");
+
+        _setNonContractAssetMetadata(registeredNonContractAsset, 6, "NCA");
+        priceCache.cachePrice(address(collateralToken), registeredNonContractAsset);
+
+        // inAmount = 1e18
+        // assetPriceUsd = 2e18
+        // baseScale = 1e18
+        // quoteScale = 1e6
+        // quotePriceUsd = 1e18
+        // outAmount = 2e6
+        uint256 newOutAmount = oracle.getQuote(
+            1e18,
+            address(collateralToken),
+            registeredNonContractAsset
+        );
+        assertEq(newOutAmount, 2e6, "Quote should use current quote decimals");
     }
 
     function test_givenQuoteAssetIsRegisteredNonContractAsset_givenNonContractAssetDecimalsAreSet_givenAssetIsNoLongerApprovedInPRICE_reverts()
