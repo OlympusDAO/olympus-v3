@@ -9,7 +9,8 @@ import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
-/// @dev Tests for the rescue and rescueNative functions on LZCrossChainBridge.
+/// @dev Tests for the unified rescue function on LZCrossChainBridge.
+///      Passing address(0) as the token rescues the native (ETH) balance.
 contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     MockOhm internal randomToken;
     address internal recoveryRecipient = makeAddr("recoveryRecipient");
@@ -25,7 +26,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         uint256 amount = 100e18;
         randomToken.mint(address(bridge), amount);
 
-        bridge.rescue(address(randomToken), recoveryRecipient);
+        bridge.rescue(address(randomToken), payable(recoveryRecipient));
 
         assertEq(
             randomToken.balanceOf(recoveryRecipient),
@@ -46,7 +47,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         vm.expectEmit(true, true, true, true);
         emit ILZCrossChainBridge.Rescued(address(randomToken), recoveryRecipient, amount);
 
-        bridge.rescue(address(randomToken), recoveryRecipient);
+        bridge.rescue(address(randomToken), payable(recoveryRecipient));
     }
 
     function test_rescue_canRescueOhm() external {
@@ -55,7 +56,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         uint256 amount = 1_000e9;
         ohm.mint(address(bridge), amount);
 
-        bridge.rescue(address(ohm), recoveryRecipient);
+        bridge.rescue(address(ohm), payable(recoveryRecipient));
 
         assertEq(ohm.balanceOf(recoveryRecipient), amount, "Recipient should receive rescued OHM");
         assertEq(ohm.balanceOf(address(bridge)), 0, "Bridge should have zero OHM balance");
@@ -67,7 +68,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
 
         bridge.disable(bytes(""));
 
-        bridge.rescue(address(randomToken), recoveryRecipient);
+        bridge.rescue(address(randomToken), payable(recoveryRecipient));
 
         assertEq(
             randomToken.balanceOf(recoveryRecipient),
@@ -76,23 +77,20 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         );
     }
 
+    function test_rescue_givenZeroBalance_succeeds() external {
+        // No revert on empty balance — rescue is a rare ops function and a sweep semantics is fine.
+        bridge.rescue(address(randomToken), payable(recoveryRecipient));
+
+        assertEq(randomToken.balanceOf(recoveryRecipient), 0, "Recipient should receive nothing");
+    }
+
     function testFuzz_rescue_revertsIfNotOwner(address caller_) external {
         vm.assume(caller_ != owner);
         randomToken.mint(address(bridge), 100e18);
 
         vm.expectRevert("UNAUTHORIZED");
         vm.prank(caller_);
-        bridge.rescue(address(randomToken), recoveryRecipient);
-    }
-
-    function test_rescue_revertsIfTokenZero() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
-                "token"
-            )
-        );
-        bridge.rescue(address(0), recoveryRecipient);
+        bridge.rescue(address(randomToken), payable(recoveryRecipient));
     }
 
     function test_rescue_revertsIfRecipientZero() external {
@@ -104,25 +102,18 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
                 "to"
             )
         );
-        bridge.rescue(address(randomToken), address(0));
+        bridge.rescue(address(randomToken), payable(address(0)));
     }
 
-    function test_rescue_revertsIfZeroBalance() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZCrossChainBridge.LZCrossChainBridge_NothingToRescue.selector)
-        );
-        bridge.rescue(address(randomToken), recoveryRecipient);
-    }
+    // ========= rescue (native — token == address(0)) ========= //
 
-    // ========= rescueNative (ETH) ========= //
-
-    function test_rescueNative_givenOwner_transfersBalance() external {
+    function test_rescue_native_givenOwner_transfersBalance() external {
         uint256 amount = 1 ether;
         vm.deal(address(bridge), amount);
 
         uint256 recipientBefore = recoveryRecipient.balance;
 
-        bridge.rescueNative(payable(recoveryRecipient));
+        bridge.rescue(address(0), payable(recoveryRecipient));
 
         assertEq(
             recoveryRecipient.balance,
@@ -132,37 +123,37 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         assertEq(address(bridge).balance, 0, "Bridge should have zero native balance");
     }
 
-    function test_rescueNative_givenOwner_emitsEvent() external {
+    function test_rescue_native_givenOwner_emitsEvent() external {
         uint256 amount = 0.5 ether;
         vm.deal(address(bridge), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit ILZCrossChainBridge.NativeRescued(recoveryRecipient, amount);
+        emit ILZCrossChainBridge.Rescued(address(0), recoveryRecipient, amount);
 
-        bridge.rescueNative(payable(recoveryRecipient));
+        bridge.rescue(address(0), payable(recoveryRecipient));
     }
 
-    function test_rescueNative_givenDisabled_succeeds() external {
+    function test_rescue_native_givenDisabled_succeeds() external {
         uint256 amount = 1 ether;
         vm.deal(address(bridge), amount);
 
         bridge.disable(bytes(""));
 
-        bridge.rescueNative(payable(recoveryRecipient));
+        bridge.rescue(address(0), payable(recoveryRecipient));
 
         assertEq(recoveryRecipient.balance, amount, "Native rescue should work while disabled");
     }
 
-    function testFuzz_rescueNative_revertsIfNotOwner(address caller_) external {
+    function testFuzz_rescue_native_revertsIfNotOwner(address caller_) external {
         vm.assume(caller_ != owner);
         vm.deal(address(bridge), 1 ether);
 
         vm.expectRevert("UNAUTHORIZED");
         vm.prank(caller_);
-        bridge.rescueNative(payable(recoveryRecipient));
+        bridge.rescue(address(0), payable(recoveryRecipient));
     }
 
-    function test_rescueNative_revertsIfRecipientZero() external {
+    function test_rescue_native_revertsIfRecipientZero() external {
         vm.deal(address(bridge), 1 ether);
 
         vm.expectRevert(
@@ -171,34 +162,30 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
                 "to"
             )
         );
-        bridge.rescueNative(payable(address(0)));
+        bridge.rescue(address(0), payable(address(0)));
     }
 
-    function test_rescueNative_revertsIfZeroBalance() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZCrossChainBridge.LZCrossChainBridge_NothingToRescue.selector)
-        );
-        bridge.rescueNative(payable(recoveryRecipient));
+    function test_rescue_native_givenZeroBalance_succeeds() external {
+        bridge.rescue(address(0), payable(recoveryRecipient));
+
+        assertEq(recoveryRecipient.balance, 0, "Recipient should receive nothing");
     }
 
-    function test_rescueNative_revertsIfTransferFails() external {
+    function test_rescue_native_revertsIfTransferFails() external {
         uint256 amount = 1 ether;
         vm.deal(address(bridge), amount);
 
         RejectingReceiver rejector = new RejectingReceiver();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZCrossChainBridge.LZCrossChainBridge_NativeTransferFailed.selector,
-                address(rejector),
-                amount
-            )
-        );
-        bridge.rescueNative(payable(address(rejector)));
+        // OZ Address.sendValue bubbles up the receiver's revert reason via Errors.FailedCall
+        // when no return data is provided, otherwise re-reverts with the original data.
+        // RejectingReceiver reverts with a string, which propagates as-is.
+        vm.expectRevert("RejectingReceiver: no eth");
+        bridge.rescue(address(0), payable(address(rejector)));
     }
 }
 
-/// @dev Contract that rejects ETH transfers, used to test rescueNative failure paths.
+/// @dev Contract that rejects ETH transfers, used to test rescue() native failure paths.
 contract RejectingReceiver {
     receive() external payable {
         revert("RejectingReceiver: no eth");

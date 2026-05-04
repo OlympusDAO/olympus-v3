@@ -34,6 +34,7 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Libraries
+import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
 // Contracts
@@ -525,29 +526,19 @@ contract LZBridgeGateway is
     // ========= RESCUE FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
-    function rescue(address token_, address to_) external override onlyManagerRole {
-        _requireNonzeroAddress(token_, "token");
+    function rescue(address token_, address payable to_) external override onlyManagerRole {
         _requireNonzeroAddress(to_, "to");
 
-        uint256 balance = IERC20(token_).balanceOf(address(this));
-        if (balance == 0) revert LZBridgeGateway_NothingToRescue();
-
-        IERC20(token_).safeTransfer(to_, balance);
+        uint256 balance;
+        if (token_ == address(0)) {
+            balance = address(this).balance;
+            Address.sendValue(to_, balance);
+        } else {
+            balance = IERC20(token_).balanceOf(address(this));
+            IERC20(token_).safeTransfer(to_, balance);
+        }
 
         emit Rescued(token_, to_, balance);
-    }
-
-    /// @inheritdoc ILZBridgeGateway
-    function rescueNative(address payable to_) external override onlyManagerRole {
-        _requireNonzeroAddress(to_, "to");
-
-        uint256 balance = address(this).balance;
-        if (balance == 0) revert LZBridgeGateway_NothingToRescue();
-
-        (bool success, ) = to_.call{value: balance}("");
-        if (!success) revert LZBridgeGateway_NativeTransferFailed(to_, balance);
-
-        emit NativeRescued(to_, balance);
     }
 
     // ========= VIEW FUNCTIONS ========= //

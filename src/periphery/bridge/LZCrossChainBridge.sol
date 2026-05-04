@@ -9,6 +9,7 @@ import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
+import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
@@ -74,29 +75,19 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
-    function rescue(address token_, address to_) external override onlyOwner {
-        _requireNonzeroAddress(token_, "token");
+    function rescue(address token_, address payable to_) external override onlyOwner {
         _requireNonzeroAddress(to_, "to");
 
-        uint256 balance = IERC20(token_).balanceOf(address(this));
-        if (balance == 0) revert LZCrossChainBridge_NothingToRescue();
-
-        IERC20(token_).safeTransfer(to_, balance);
+        uint256 balance;
+        if (token_ == address(0)) {
+            balance = address(this).balance;
+            Address.sendValue(to_, balance);
+        } else {
+            balance = IERC20(token_).balanceOf(address(this));
+            IERC20(token_).safeTransfer(to_, balance);
+        }
 
         emit Rescued(token_, to_, balance);
-    }
-
-    /// @inheritdoc ILZCrossChainBridge
-    function rescueNative(address payable to_) external override onlyOwner {
-        _requireNonzeroAddress(to_, "to");
-
-        uint256 balance = address(this).balance;
-        if (balance == 0) revert LZCrossChainBridge_NothingToRescue();
-
-        (bool success, ) = to_.call{value: balance}("");
-        if (!success) revert LZCrossChainBridge_NativeTransferFailed(to_, balance);
-
-        emit NativeRescued(to_, balance);
     }
 
     /// @inheritdoc ILZCrossChainBridge
