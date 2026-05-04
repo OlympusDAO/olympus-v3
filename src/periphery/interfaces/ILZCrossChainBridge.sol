@@ -22,8 +22,17 @@ interface ILZCrossChainBridge is IVersioned {
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
     /// @param dstEid The LayerZero destination endpoint ID.
-    /// @param fees The native token fee paid for the bridge transfer.
-    event Bridged(address indexed sender, uint256 amount, uint32 indexed dstEid, uint256 fees);
+    /// @param nativeFee The native token fee actually charged by LayerZero, read from
+    ///        `MessagingReceipt`. May be less than `msgValue` when the caller overpays;
+    ///        the excess is refunded to the sender by the LayerZero endpoint.
+    /// @param msgValue The native value the caller supplied with the transaction.
+    event Bridged(
+        address indexed sender,
+        uint256 amount,
+        uint32 indexed dstEid,
+        uint256 nativeFee,
+        uint256 msgValue
+    );
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
