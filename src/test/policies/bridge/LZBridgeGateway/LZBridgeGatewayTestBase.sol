@@ -4,10 +4,10 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 
 // Contracts
@@ -25,6 +25,13 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     uint32 constant NONCANONICAL_EID = 2;
     uint256 constant INITIAL_AMOUNT = 100_000e9;
     uint256 constant SUPPLY_CAP = 1_000_000e9;
+
+    /// @dev Default rate limit applied per direction in the test base. Chosen well above
+    ///      any individual test amount so existing flow tests are not throttled. Tests
+    ///      that exercise rate limiting itself override these via `_setOutRateLimit` /
+    ///      `_setInRateLimit`.
+    uint256 constant DEFAULT_RATE_LIMIT = 1_000_000e9;
+    uint32 constant DEFAULT_RATE_WINDOW = 1 days;
 
     // Canonical stack (eid=1)
     Kernel kernel;
@@ -124,16 +131,75 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         gateway2.enable(bytes(""));
         vm.stopPrank();
 
+        // Configure default bidirectional rate limits on both gateways so flow tests
+        // are not blocked by mandatory rate limiting. Helpers prank `bridgeRateLimiter`
+        // internally, so they must run outside the admin startPrank above.
+        _setRateLimitsBoth(
+            gateway,
+            NONCANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+        _setRateLimitsBoth(
+            gateway2,
+            CANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+
         // Mint OHM and fund facilitator
         ohm.mint(facilitator, INITIAL_AMOUNT);
         vm.deal(facilitator, 100 ether);
     }
 
-    function _setRateLimit(uint32 dstEid_, uint192 limit_, uint64 window_) internal {
-        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
-        configs[0] = RateLimiter.RateLimitConfig({dstEid: dstEid_, limit: limit_, window: window_});
-        vm.prank(bridgeAdmin);
-        gateway.setRateLimits(configs);
+    /// @dev Sets the outbound rate limit for `eid_` on `gateway_` as `bridgeRateLimiter`.
+    function _setOutRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeRateLimiter);
+        gateway_.setOutRateLimits(configs);
+    }
+
+    /// @dev Sets the inbound rate limit for `eid_` on `gateway_` as `bridgeRateLimiter`.
+    function _setInRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeRateLimiter);
+        gateway_.setInRateLimits(configs);
+    }
+
+    /// @dev Sets both outbound and inbound rate limits in one call as `bridgeRateLimiter`.
+    function _setRateLimitsBoth(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 outLimit_,
+        uint256 inLimit_,
+        uint32 window_
+    ) internal {
+        _setOutRateLimit(gateway_, eid_, outLimit_, window_);
+        _setInRateLimit(gateway_, eid_, inLimit_, window_);
     }
 
     /// @dev Get fee + send from canonical to non-canonical

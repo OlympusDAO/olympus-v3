@@ -140,6 +140,88 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         // (real message at the same nonce), the protocol must reimburse.
     }
 
+    // ========== INFLOW LIMIT BELOW OUTFLOW -> FIX OUTFLOW + CLEAR + REIMBURSE ========== //
+
+    /// @notice Admin set the destination inflow limit lower than the source outflow
+    ///         ceiling. The user sends an amount that fits the outflow ceiling but
+    ///         exceeds the full inflow limit, leaving the message permanently
+    ///         undeliverable. Recovery: admin tightens outflow on the source so future
+    ///         sends cannot exceed inflow, clears the stuck message on the destination,
+    ///         decreases bridgedSupply on canonical, and reimburses the user with
+    ///         replacement OHM.
+    function test_scenario_inflowLimitLowerThanOutflowSoFixOutflowAndClearAndReimburse() external {
+        // Misconfiguration: destination inflow limit (100e9) is below source outflow
+        // ceiling (500e9). A 500e9 send passes outflow but cannot pass inflow.
+        _setInRateLimit(gateway2, CANONICAL_EID, 100e9, 3600);
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 500e9, 3600);
+
+        uint256 amount = 500e9;
+        uint256 facilitatorBalanceBefore = ohm.balanceOf(facilitator);
+
+        // User sends. OHM is burned on canonical and bridgedSupply increases
+        bytes memory packetBytes = _sendCanonicalNoDeliver(amount);
+        assertEq(
+            gateway.bridgedSupply(),
+            amount,
+            "bridgedSupply should increase by the sent amount"
+        );
+        assertEq(
+            ohm.balanceOf(facilitator),
+            facilitatorBalanceBefore - amount,
+            "Facilitator OHM should decrease by the sent amount"
+        );
+
+        // DVNs verify the message (hash stored)
+        _verifyOnly(packetBytes);
+
+        // Delivery fails permanently: the inflow limit (100e9) cannot absorb 500e9
+        // even after a full window of decay.
+        bool delivered = _tryDeliverPacket(packetBytes);
+        assertFalse(delivered, "Delivery should fail (inflow limit too low for this send)");
+
+        // Recovery step 1: admin lowers outflow to match inflow so future sends cannot
+        // exceed the destination's inbound capacity.
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 100e9, 3600);
+
+        // Recovery step 2: admin clears the stuck message on the destination so the
+        // nonce advances and the path is unblocked.
+        (bytes32 guid, bytes memory message) = this.extractGuidAndMessage(packetBytes);
+        (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
+        Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
+
+        vm.prank(bridgeAdmin);
+        gateway2.clear(origin, guid, message);
+
+        IMessagingChannel ep = _nonCanonicalEndpoint();
+        bytes32 peer = _canonicalPeer();
+        assertEq(
+            ep.inboundPayloadHash(address(gateway2), CANONICAL_EID, peer, 1),
+            bytes32(0),
+            "Hash should be empty after clear"
+        );
+        assertEq(
+            ohm.balanceOf(recipient),
+            0,
+            "Recipient should have no OHM (clear skips lzReceive)"
+        );
+
+        // Recovery step 3: correct bridgedSupply on canonical (the send increased it,
+        // but the inbound never landed).
+        vm.prank(bridgeAdmin);
+        gateway.decreaseBridgedSupply(amount);
+        assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
+
+        // Recovery step 4: reimburse the user. The user's OHM was burned on canonical
+        // but never minted on destination. Mint replacement OHM directly to make the
+        // user whole.
+        ohm.mint(facilitator, amount);
+        assertEq(
+            ohm.balanceOf(facilitator),
+            facilitatorBalanceBefore,
+            "Facilitator should be reimbursed for the burned OHM"
+        );
+    }
+
     // ========== DISABLED OLD BRIDGE -> CLEAR + FIX PEER ========== //
 
     /// @notice Peer points to a disabled gateway. LZBridgeGateway.lzReceive()

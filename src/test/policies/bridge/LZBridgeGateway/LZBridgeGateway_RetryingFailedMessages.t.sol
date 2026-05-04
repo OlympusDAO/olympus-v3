@@ -7,6 +7,7 @@ import {LZBridgeGatewayTestBase_LZMessaging} from "src/test/policies/bridge/LZBr
 import {ILayerZeroEndpointV2, MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IMessagingChannel} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessagingChannel.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Contracts
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
@@ -251,6 +252,100 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
             1000e9,
             "Recipient should receive OHM after manual retry"
         );
+    }
+
+    // ========== INFLOW RATE LIMIT EXHAUSTED -> WAIT FOR DECAY -> RETRY ========== //
+
+    /// @notice Two senders fill the destination's inbound capacity faster than the
+    ///         window decays. The second user reads `receivable` while no inbound is
+    ///         in flight (sees the full limit) and races to send; by the time their
+    ///         message is delivered, the first user's message has already consumed
+    ///         most of the capacity, so the second delivery reverts on `_inflow`.
+    ///         Recovery: wait for the window to decay the in-flight amount, then retry.
+    function test_lzReceive_inflowRateLimitSoWaitAndRetry() external {
+        uint256 inLimit = 1_000e9;
+        uint32 window = 3600;
+        _setInRateLimit(gateway2, CANONICAL_EID, inLimit, window);
+
+        bytes32 dstAddr = LZConfigLib.addressToBytes32(address(gateway2));
+
+        // User 2 reads `receivable` first, seeing full capacity (no in-flight yet)
+        (, uint256 user2InitialAvailable) = gateway2.receivable(CANONICAL_EID);
+        assertEq(user2InitialAvailable, inLimit, "Initial inbound capacity should equal the limit");
+
+        // Both users send within the same block; user 2 races on a stale read
+        _sendCanonicalNoDeliver(800e9);
+        _sendCanonicalNoDeliver(500e9);
+
+        // Deliver only the first packet (FIFO order, popBack). It consumes 800e9 of
+        // the 1000e9 inflow capacity.
+        verifyPackets(NONCANONICAL_EID, dstAddr, 1, address(0), bytes(""));
+        assertEq(ohm.balanceOf(recipient), 800e9, "User 1 should be delivered");
+        (, uint256 availableAfterFirst) = gateway2.receivable(CANONICAL_EID);
+        assertEq(availableAfterFirst, 200e9, "Only 200e9 should remain after the first delivery");
+
+        // Try to deliver the second packet: reverts because 500e9 > 200e9 available
+        (bool success, bytes memory returnData) = address(this).call(
+            abi.encodeWithSignature(
+                "verifyPackets(uint32,bytes32,uint256,address,bytes)",
+                NONCANONICAL_EID,
+                dstAddr,
+                uint256(1),
+                address(0),
+                bytes("")
+            )
+        );
+        assertFalse(success, "Second delivery should fail (inbound rate limit exhausted)");
+        assertEq(
+            returnData,
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 500e9, 200e9),
+            "Revert reason should be RateLimitExceeded(500e9, 200e9)"
+        );
+        assertEq(ohm.balanceOf(recipient), 800e9, "User 2 not delivered yet");
+
+        // Recovery: wait for the full window so the in-flight amount decays to zero
+        skip(window);
+        (, uint256 availableAfterDecay) = gateway2.receivable(CANONICAL_EID);
+        assertEq(availableAfterDecay, inLimit, "Inbound capacity should be restored");
+
+        // Retry user 2's packet: now succeeds
+        verifyPackets(NONCANONICAL_EID, dstAddr, 1, address(0), bytes(""));
+        assertEq(
+            ohm.balanceOf(recipient),
+            800e9 + 500e9,
+            "Both users delivered after waiting the rate-limit window"
+        );
+    }
+
+    // ========== INFLOW LIMIT TOO LOW FOR SEND -> RAISE LIMIT -> RETRY ========== //
+
+    /// @notice Admin set the destination inflow limit lower than the source outflow
+    ///         ceiling. The user's send passes outflow but the message exceeds the
+    ///         full inflow limit (cannot decay through). Recovery: admin raises the
+    ///         inflow limit to accommodate the message, then retry.
+    function test_lzReceive_sendAmountGreaterThanFullInflowRateLimitSoCorrectLimitAndRetry()
+        external
+    {
+        // Misconfiguration: destination inflow limit (100e9) is well below the source
+        // outflow ceiling (default 1M), so a 500e9 send passes outflow but exceeds the
+        // full inflow limit (decay alone cannot raise capacity above the limit).
+        _setInRateLimit(gateway2, CANONICAL_EID, 100e9, 3600);
+
+        // User sends 500e9 and the packet is queued
+        bytes memory packet = _sendCanonicalNoDeliver(500e9);
+        _verifyOnly(packet);
+
+        // Delivery fails: 500e9 > 100e9 inflow capacity
+        bool delivered = _tryDeliverPacket(packet);
+        assertFalse(delivered, "Delivery should fail (inflow limit too low for this send)");
+        assertEq(ohm.balanceOf(recipient), 0, "Recipient should have no OHM yet");
+
+        // Recovery: admin raises the inflow limit so the message can land
+        _setInRateLimit(gateway2, CANONICAL_EID, 1_000e9, 3600);
+
+        // Retry succeeds
+        _manualDeliver(packet, 1);
+        assertEq(ohm.balanceOf(recipient), 500e9, "Recipient should receive OHM after retry");
     }
 
     // ========== COMPROMISED DVN -> NILIFY -> HONEST DVN RE-VERIFY -> DELIVER ========== //

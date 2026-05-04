@@ -2,11 +2,14 @@
 pragma solidity >=0.8.30;
 
 /// Peer management, endpoint send/receive, and enforced-option logic ported from
-/// @layerzerolabs/oapp-evm v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).
+/// `@layerzerolabs/oapp-evm` v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).
 /// Reimplemented inline rather than inherited because those contracts assume OZ Ownable,
 /// which is incompatible with the Bophades Kernel RBAC model.
-/// RateLimiter is the only oapp-evm contract inherited directly (no Ownable dependency).
-/// _outflow() and _inflow() are overridden to make rate limiting opt-in per EID.
+/// Bidirectional rate limiting is provided by the in-repo `OffsettingRateLimiter`
+/// (src/libraries/) which tracks independent outbound and inbound limits per EID and
+/// offsets activity in one direction against the in-flight amount of the other. Limits
+/// are mandatory: every configured peer must have both directions configured before
+/// traffic is allowed.
 ///
 /// Ported logic (~ = identical, -> = differs):
 ///
@@ -29,13 +32,14 @@ import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, O
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Contracts
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {OffsettingRateLimiter} from "src/libraries/OffsettingRateLimiter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
@@ -49,11 +53,11 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 contract LZBridgeGateway is
     Policy,
     PolicyEnabler,
-    RateLimiter,
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
-    ILZBridgeGateway
+    ILZBridgeGateway,
+    OffsettingRateLimiter
 {
     // ========= CONSTANTS ========= //
 
@@ -409,17 +413,55 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
-    function setRateLimits(
-        RateLimitConfig[] calldata rateLimitConfigs_
+    ///
+    ///      Decays the existing in-flight amount of the targeted outbound limit and
+    ///      checkpoints the counterpart inbound limit before writing the new `limit`
+    ///      and `window`. The counterpart inbound limit's own `limit` and `window`
+    ///      are preserved.
+    function setOutRateLimits(
+        RateLimitConfig[] calldata configs_
     ) external override onlyRateLimitConfigurator {
-        _setRateLimits(rateLimitConfigs_);
+        _setOutRateLimits(configs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
-    function resetRateLimits(uint32[] calldata eids_) external override onlyRateLimitConfigurator {
-        _resetRateLimits(eids_);
+    ///
+    ///      Symmetric with `setOutRateLimits`: decays the existing inbound in-flight
+    ///      and checkpoints the counterpart outbound limit before writing the new
+    ///      inbound `limit` and `window`. The counterpart outbound limit's own
+    ///      `limit` and `window` are preserved.
+    function setInRateLimits(
+        RateLimitConfig[] calldata configs_
+    ) external override onlyRateLimitConfigurator {
+        _setInRateLimits(configs_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
+    ///      timestamp; the configured `limit` and `window` are preserved. The
+    ///      corresponding inbound rate limit is not affected.
+    function clearOutboundInFlight(
+        uint32[] calldata eids_
+    ) external override onlyRateLimitConfigurator {
+        _clearOutboundInFlight(eids_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
+    ///      timestamp; the configured `limit` and `window` are preserved. The
+    ///      corresponding outbound rate limit is not affected.
+    function clearInboundInFlight(
+        uint32[] calldata eids_
+    ) external override onlyRateLimitConfigurator {
+        _clearInboundInFlight(eids_);
     }
 
     // ========= LZ ENDPOINT CONFIG ========= //
@@ -556,26 +598,9 @@ contract LZBridgeGateway is
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
+            interfaceId == type(IOffsettingRateLimiter).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
-    }
-
-    // ========= RATE LIMITER OVERRIDE ========= //
-
-    /// @dev Skips rate limiting for unconfigured EIDs (limit == 0 && window == 0),
-    ///      making rate limiting opt-in rather than mandatory.
-    function _outflow(uint32 _dstEid, uint256 _amount) internal override {
-        RateLimit storage rl = rateLimits[_dstEid];
-        if (rl.limit == 0 && rl.window == 0) return;
-        super._outflow(_dstEid, _amount);
-    }
-
-    /// @dev Skips inflow accounting when no outflow is tracked for this EID.
-    ///      For unconfigured EIDs (where _outflow is also skipped), amountInFlight is always 0.
-    ///      For configured EIDs, avoids a redundant write when all outflow has been settled.
-    function _inflow(uint32 _srcEid, uint256 _amount) internal override {
-        if (rateLimits[_srcEid].amountInFlight == 0) return;
-        super._inflow(_srcEid, _amount);
     }
 
     // ========= PRIVATE FUNCTIONS ========= //

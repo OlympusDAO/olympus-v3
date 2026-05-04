@@ -19,9 +19,9 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
-| bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, rate limits via `onlyBridgeAdminOrAdmin` (admin can also call). `setPeer` and `setEnforcedOptions` are admin-only. |
+| bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, configure and clear rate limits |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
-| bridge_rate_limiter | LZBridgeGateway | Configure and reset per-EID rate limits (`setRateLimits`, `resetRateLimits`). Accepted in addition to `bridge_admin` and `admin`, enabling minimal-privilege rate-limit operators. |
+| bridge_rate_limiter | LZBridgeGateway | Configure and clear per-EID rate limits. |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
@@ -40,7 +40,6 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
-| emergency | LZBridgeGateway | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |

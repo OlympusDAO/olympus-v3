@@ -27,7 +27,7 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24751208;
+    uint256 internal constant FORK_BLOCK = 25010000;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -419,6 +419,35 @@ contract LZBridgeActivatorForkTest is Test {
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes memory opts = gateway.enforcedOptions(remoteEids[i], gateway.MSG_BRIDGE_OHM());
             assertEq(keccak256(opts), expectedHash, "Enforced options mismatch");
+        }
+    }
+
+    // ========== RATE LIMITS TESTS ========== //
+
+    function test_activate_setsRateLimits() public {
+        _grantRequiredRoles();
+
+        vm.prank(TIMELOCK);
+        activator.activate();
+
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            (, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(remoteEids[i]);
+            assertEq(outLimit, expectedOut, "Outbound limit mismatch");
+            assertEq(outWindow, expectedWindow, "Outbound window mismatch");
+
+            (, uint256 inLimit, uint32 inWindow, ) = gateway.inRateLimits(remoteEids[i]);
+            assertEq(inLimit, expectedIn, "Inbound limit mismatch");
+            assertEq(inWindow, expectedWindow, "Inbound window mismatch");
         }
     }
 

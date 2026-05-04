@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {IMessageLibManager, SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
@@ -11,8 +12,8 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 /// @title LZBridgeActivator
 /// @notice Single-use contract to configure and activate the LZBridgeGateway during the
 ///         OCG proposal. Batches all endpoint configuration, peer setup, enforced options,
-///         and enablement into a single proposal action, working around the
-///         governor's 15-action limit.
+///         per-endpoint bidirectional rate limits and enablement into a single proposal action,
+///         working around the governor's 15-action limit.
 ///
 /// @dev Assumes:
 ///      - The `admin` and `bridge_admin` roles have been granted to this contract.
@@ -104,6 +105,7 @@ contract LZBridgeActivator is Owned {
         _configureLZEndpoint();
         _setPeers();
         _setEnforcedOptions();
+        _setRateLimits();
         _enable();
 
         // Revoke delegate. Endpoint config is now locked to gateway-only.
@@ -222,6 +224,44 @@ contract LZBridgeActivator is Owned {
         }
 
         ILZBridgeGateway(GATEWAY).setEnforcedOptions(opts);
+    }
+
+    /// @dev Sets bidirectional rate limits on the gateway for all 4 remote chains.
+    ///      Outbound limit applies to OHM leaving the canonical chain; inbound limit
+    ///      applies to OHM arriving from a remote chain. Window and per-direction
+    ///      limits are sourced from `LZConfigLib`.
+    function _setRateLimits() internal {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory outConfigs = new IOffsettingRateLimiter.RateLimitConfig[](_REMOTE_CHAIN_COUNT);
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory inConfigs = new IOffsettingRateLimiter.RateLimitConfig[](_REMOTE_CHAIN_COUNT);
+
+        uint256 outLimit = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint256 inLimit = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint32 window = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            outConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: outLimit,
+                window: window
+            });
+            inConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: inLimit,
+                window: window
+            });
+        }
+
+        ILZBridgeGateway(GATEWAY).setOutRateLimits(outConfigs);
+        ILZBridgeGateway(GATEWAY).setInRateLimits(inConfigs);
     }
 
     /// @dev Enables the gateway policy.

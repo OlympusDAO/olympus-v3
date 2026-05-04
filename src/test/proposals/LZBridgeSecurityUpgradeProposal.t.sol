@@ -30,7 +30,7 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24751208;
+    uint256 public constant BLOCK = 25010000;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -38,6 +38,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Role constants.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== DEPLOYMENT TOGGLES ==========
 
@@ -243,6 +244,36 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         }
     }
 
+    /// @dev Verifies that the activator applied the canonical bidirectional rate limits
+    ///      from `LZConfigLib` to every remote endpoint.
+    function _verifyRateLimits() internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            (uint256 outInFlight, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(
+                remoteEids[i]
+            );
+            assertEq(outLimit, expectedOut, "Outbound rate limit mismatch");
+            assertEq(outWindow, expectedWindow, "Outbound rate window mismatch");
+            assertEq(outInFlight, 0, "Outbound in-flight should start at zero");
+
+            (uint256 inInFlight, uint256 inLimit, uint32 inWindow, ) = gateway.inRateLimits(
+                remoteEids[i]
+            );
+            assertEq(inLimit, expectedIn, "Inbound rate limit mismatch");
+            assertEq(inWindow, expectedWindow, "Inbound rate window mismatch");
+            assertEq(inInFlight, 0, "Inbound in-flight should start at zero");
+        }
+    }
+
     // ========================================================================
     // End State Tests
     // ========================================================================
@@ -258,6 +289,13 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "DAO MS should have bridge_admin role"
+        );
+
+        // 2b. DAO MS has bridge_rate_limiter role
+        assertTrue(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            "DAO MS should have bridge_rate_limiter role"
         );
 
         // 3. LZCrossChainBridge has bridge_facilitator role
@@ -331,6 +369,9 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             bytes memory opts = gateway.enforcedOptions(remoteEids[i], gateway.MSG_BRIDGE_OHM());
             assertGt(opts.length, 0, "Enforced options should be set");
         }
+
+        // 10. Bidirectional rate limits
+        _verifyRateLimits();
     }
 }
 

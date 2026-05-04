@@ -74,12 +74,29 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Proxies to the gateway's estimateSendFee function with empty extra options.
     function estimateSendFee(
         uint32 dstEid_,
         address to_,
         uint256 amount_
     ) external view override returns (MessagingFee memory fee) {
         return ILZBridgeGateway(gateway).estimateSendFee(dstEid_, to_, amount_, bytes(""));
+    }
+
+    /// @inheritdoc ILZCrossChainBridge
+    /// @dev Proxies to the gateway's sendable function.
+    function sendable(
+        uint32 dstEid_
+    ) external view override returns (uint256 inFlight, uint256 available) {
+        return ILZBridgeGateway(gateway).sendable(dstEid_);
+    }
+
+    /// @inheritdoc ILZCrossChainBridge
+    /// @dev Proxies to the gateway's receivable function.
+    function receivable(
+        uint32 srcEid_
+    ) external view override returns (uint256 inFlight, uint256 available) {
+        return ILZBridgeGateway(gateway).receivable(srcEid_);
     }
 
     function supportsInterface(

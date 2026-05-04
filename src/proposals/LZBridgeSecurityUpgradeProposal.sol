@@ -38,7 +38,7 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         The periphery LZCrossChainBridge is configured separately by the DAO MS.
 ///
 ///         The LZBridgeActivator performs all endpoint configuration,
-///         peer setup, enforced options, and enablement in a single proposal action.
+///         peer setup, enforced options, rate limits and enablement in a single proposal action.
 ///         It is used to work around the governor's 15-action limit,
 ///
 ///         Assumes:
@@ -57,6 +57,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     /// @dev Role constants.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== PROPOSAL ========== //
 
@@ -85,7 +86,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
                 "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
-                "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle. Rate limits are left unconfigured by default and configured separately as needed.\n",
+                "- Introduction of per-endpoint bidirectional rate limiting on outbound and inbound transfers, with a 24-hour sliding window. Outbound from Ethereum to each non-canonical chain is capped at 250,000 OHM and inbound from each non-canonical chain is capped at 110,000 OHM.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
                 "- Retained mint/burn model to avoid supply inflation and double-counting.\n",
@@ -106,7 +107,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
-                "1. Grant the `bridge_admin` role to the DAO MS.\n",
+                "1. Grant the `bridge_admin` and `bridge_rate_limiter` roles to the DAO MS.\n",
                 "2. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
                 "4. Execute LZBridgeActivator.activate() which:\n",
@@ -157,6 +158,21 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                     daoMS
                 ),
                 "Grant bridge_admin role to DAO MS"
+            );
+        }
+
+        // 1b. Grant bridge_rate_limiter role to DAO MS (conditional)
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    _BRIDGE_RATE_LIMITER_ROLE,
+                    daoMS
+                ),
+                "Grant bridge_rate_limiter role to DAO MS"
             );
         }
 
@@ -264,6 +280,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         );
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            "DAO MS does not have bridge_rate_limiter role"
+        );
+        require(
+            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge does not have bridge_facilitator role"
         );
@@ -292,7 +313,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 8. Validate enforced options
         _validateEnforcedOptions(gw);
 
-        // 9. Validate delegate is revoked
+        // 9. Validate rate limits
+        _validateRateLimits(gw);
+
+        // 10. Validate delegate is revoked
         require(
             IEndpointV2State(address(ep)).delegates(address(gw)) == address(0),
             "Delegate should be revoked"
@@ -440,6 +464,29 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             bytes memory opts = gw.enforcedOptions(remoteEids[i], gw.MSG_BRIDGE_OHM());
             require(keccak256(opts) == expectedHash, "Enforced options mismatch");
+        }
+    }
+
+    function _validateRateLimits(LZBridgeGateway gw) internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+
+        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            (, uint256 outLimit, uint32 outWindow, ) = gw.outRateLimits(remoteEids[i]);
+            require(outLimit == expectedOut, "Outbound rate limit mismatch");
+            require(outWindow == expectedWindow, "Outbound rate window mismatch");
+
+            (, uint256 inLimit, uint32 inWindow, ) = gw.inRateLimits(remoteEids[i]);
+            require(inLimit == expectedIn, "Inbound rate limit mismatch");
+            require(inWindow == expectedWindow, "Inbound rate window mismatch");
         }
     }
 

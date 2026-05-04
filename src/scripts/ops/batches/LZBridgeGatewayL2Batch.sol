@@ -7,6 +7,7 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -29,7 +30,8 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///         Entry points (run in order):
 ///         1. `activateGateway`    as Kernel executor               deactivates old bridge and activates new gateway
 ///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
-///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
+///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ, peers, enforced options,
+///                                                                  rate limits and enables
 ///         4. `revokeSetupRoles`   as RolesAdmin admin              (optional) revokes admin role granted in step 2
 contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== ERRORS =========== //
@@ -42,6 +44,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     /// @dev Role constants.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // =========== ENTRY POINTS =========== //
 
@@ -97,7 +100,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Step 2. RolesAdmin admin actions: grant bridge_admin, admin, and bridge_facilitator roles.
+    /// @notice Step 2. RolesAdmin admin actions: grant bridge_admin, bridge_rate_limiter,
+    ///         admin, and bridge_facilitator roles.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -130,6 +134,20 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                     RolesAdmin.grantRole.selector,
                     /// forge-lint: disable-next-line(unsafe-typecast)
                     _BRIDGE_ADMIN_ROLE,
+                    daoMS
+                )
+            );
+        }
+
+        // 2.1b. Grant bridge_rate_limiter role to the DAO MS
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    _BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 )
             );
@@ -172,7 +190,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Step 3. DAO MS actions (requires bridge_admin & admin roles):
-    ///         LZ config, peers, enforced options, and enable.
+    ///         LZ config, peers, enforced options, rate limits, and enable.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -203,7 +221,10 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         // 3.3. Set enforced options
         _setEnforcedOptions(gateway);
 
-        // 3.4. Enable LZBridgeGateway
+        // 3.4. Set rate limits
+        _setRateLimits(gateway);
+
+        // 3.5. Enable LZBridgeGateway
         addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
 
         _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
@@ -280,7 +301,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Validate grantRoles state after batch execution.
-    /// @dev Checks that DAO MS has bridge_admin and admin roles, and bridge has facilitator role.
+    /// @dev Checks that DAO MS has bridge_admin, bridge_rate_limiter, and admin roles,
+    ///      and that the periphery bridge has the facilitator role.
     function _validateGrantRoles() external view {
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
         address bridgeAddr = _envAddressNotZero("olympus.periphery.LZCrossChainBridge");
@@ -292,6 +314,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             revert("DAO MS does not have bridge_admin role");
         }
         console2.log("  DAO MS has bridge_admin role");
+
+        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+            revert("DAO MS does not have bridge_rate_limiter role");
+        }
+        console2.log("  DAO MS has bridge_rate_limiter role");
 
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             revert("DAO MS does not have admin role");
@@ -307,10 +334,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Validate configureAndEnable state after batch execution.
-    /// @dev Checks that gateway is enabled, peers are set, and enforced options exist.
+    /// @dev Checks that gateway is enabled, peers are set, enforced options exist, and rate limits are set.
     function _validateConfigureAndEnable() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+        uint32 localEid = _getLocalEid();
         uint32[] memory remoteEids = _getRemoteEids();
 
         console2.log("\nValidating configureAndEnable post-batch state");
@@ -345,7 +373,60 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             console2.log("  Enforced options set for EID:", remoteEids[i]);
         }
 
+        // 4. Bidirectional rate limits must match for all remote EIDs
+        _validateRateLimits(gateway, localEid, remoteEids);
+
         console2.log("configureAndEnable post-batch validation passed");
+    }
+
+    /// @notice Verifies the outbound and inbound rate limit configuration on the gateway.
+    function _validateRateLimits(
+        LZBridgeGateway gateway_,
+        uint32 localEid_,
+        uint32[] memory remoteEids_
+    ) internal view {
+        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(localEid_);
+        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(localEid_);
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < remoteEids_.length; ++i) {
+            uint32 remoteEid = remoteEids_[i];
+            (, uint256 outLimit, uint32 outWindow, ) = gateway_.outRateLimits(remoteEid);
+            if (outLimit != expectedOut) {
+                revert(
+                    string.concat(
+                        "Outbound rate limit mismatch for EID ",
+                        vm.toString(uint256(remoteEid))
+                    )
+                );
+            }
+            if (outWindow != expectedWindow) {
+                revert(
+                    string.concat(
+                        "Outbound rate window mismatch for EID ",
+                        vm.toString(uint256(remoteEid))
+                    )
+                );
+            }
+            (, uint256 inLimit, uint32 inWindow, ) = gateway_.inRateLimits(remoteEid);
+            if (inLimit != expectedIn) {
+                revert(
+                    string.concat(
+                        "Inbound rate limit mismatch for EID ",
+                        vm.toString(uint256(remoteEid))
+                    )
+                );
+            }
+            if (inWindow != expectedWindow) {
+                revert(
+                    string.concat(
+                        "Inbound rate window mismatch for EID ",
+                        vm.toString(uint256(remoteEid))
+                    )
+                );
+            }
+            console2.log("  Rate limits OK for EID:", remoteEid);
+        }
     }
 
     /// @notice Validate revokeSetupRoles state after batch execution.
@@ -459,6 +540,44 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 abi.encodeCall(ILZBridgeGateway.setPeer, (remoteEids[i], peer))
             );
         }
+    }
+
+    /// @notice Sets bidirectional OHM rate limits for all remote chains.
+    /// @dev On non-canonical chains, every remote endpoint (including Ethereum and the
+    ///      other L2s) shares the same per-direction limit. Values come from
+    ///      `LZConfigLib.outRateLimitForLocalEid` / `inRateLimitForLocalEid` keyed on
+    ///      the local chain identity.
+    function _setRateLimits(LZBridgeGateway gateway_) internal {
+        address gatewayAddr = address(gateway_);
+        uint32[] memory remoteEids = _getRemoteEids();
+        uint32 localEid = _getLocalEid();
+        uint256 outLimit = LZConfigLib.outRateLimitForLocalEid(localEid);
+        uint256 inLimit = LZConfigLib.inRateLimitForLocalEid(localEid);
+        uint32 window = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        console2.log("\nSetting rate limits");
+
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory outConfigs = new IOffsettingRateLimiter.RateLimitConfig[](remoteEids.length);
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory inConfigs = new IOffsettingRateLimiter.RateLimitConfig[](remoteEids.length);
+
+        for (uint256 i = 0; i < remoteEids.length; ++i) {
+            outConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: outLimit,
+                window: window
+            });
+            inConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: inLimit,
+                window: window
+            });
+            console2.log("  Rate limit configured for EID:", remoteEids[i]);
+        }
+
+        addToBatch(gatewayAddr, abi.encodeCall(ILZBridgeGateway.setOutRateLimits, (outConfigs)));
+        addToBatch(gatewayAddr, abi.encodeCall(ILZBridgeGateway.setInRateLimits, (inConfigs)));
     }
 
     /// @notice Sets enforced options for all remote chains.

@@ -48,7 +48,7 @@ Branch: `lz-bridge-upgrade`
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
             - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
 
-**OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
+**OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC.
 
 #### Deployment & Configuration
 
@@ -97,9 +97,9 @@ You can review previous audits here:
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
 6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation: LayerZero DVN plus a second DVN selected per route — Google Cloud DVN on chains where it is available, and Nethermind DVN for Berachain routes (where Google Cloud DVN is not available).
-7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `admin` remains available as an emergency/override actor. `setDelegate` allows setting an LZ endpoint delegate as a fallback for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set.
+7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `bridge_rate_limiter` is a narrower role gating only the four rate-limit mutators, so a minimal-privilege rate-limit operator can be granted it without `bridge_admin`'s broader powers; `bridge_admin` and `admin` retain override access to those functions. `admin` remains available as an emergency/override actor. `setDelegate` allows setting an LZ endpoint delegate as a fallback for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
-9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Rate limits are unconfigured by default and configured separately as needed. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount but are not independently capped. The gateway overrides `_outflow` and `_inflow` to skip unconfigured or fully-settled EIDs.
+9. **Per-endpoint bidirectional rate limiting**: Mandatory rate limiting via `OffsettingRateLimiter` inheritance. Each peer EID has independent outbound and inbound rate limits with a sliding-window decay; both directions revert with `RateLimitExceeded` once the configured limit is exhausted. Activity in one direction offsets the in-flight amount of the counterpart (with a floor at zero), so balanced round trips free capacity faster than purely additive accounting. Limits are applied at activation time: 250,000 OHM outbound and 110,000 OHM inbound per remote on canonical Ethereum, and 100,000 OHM outbound and 275,000 OHM inbound per remote on each non-canonical chain (24-hour window throughout). The asymmetry between paired ceilings provides headroom for in-flight messages settling after the counterpart direction has hit its limit.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin`.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
 
@@ -179,8 +179,10 @@ sequenceDiagram
 | `setDelegate`              | `bridge_admin` / `admin` |
 | `increaseBridgedSupply`    | `bridge_admin` / `admin` |
 | `decreaseBridgedSupply`    | `bridge_admin` / `admin` |
-| `setRateLimits`            | `bridge_admin` / `admin` |
-| `resetRateLimits`          | `bridge_admin` / `admin` |
+| `setOutRateLimits`         | `bridge_rate_limiter` / `bridge_admin` / `admin` |
+| `setInRateLimits`          | `bridge_rate_limiter` / `bridge_admin` / `admin` |
+| `clearOutboundInFlight`    | `bridge_rate_limiter` / `bridge_admin` / `admin` |
+| `clearInboundInFlight`     | `bridge_rate_limiter` / `bridge_admin` / `admin` |
 | `setSendLibrary`           | `bridge_admin` / `admin` |
 | `setReceiveLibrary`        | `bridge_admin` / `admin` |
 | `setReceiveLibraryTimeout` | `bridge_admin` / `admin` |
