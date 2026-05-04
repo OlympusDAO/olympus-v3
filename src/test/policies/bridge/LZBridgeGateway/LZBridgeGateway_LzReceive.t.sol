@@ -236,6 +236,10 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         gateway2.lzReceive(origin, bytes32(0), bytes(""), address(0), bytes(""));
     }
 
+    // Note: since both `gateway.burnAndSend` and `LZCrossChainBridge` validate that the recipient
+    // address is non-zero on the source side, reaching this branch would require either a bug
+    // introduced in a future version of the gateway or facilitator or a fault on the LayerZero side.
+    // This test exists as a defense-in-depth check on the receive path.
     function test_lzReceive_revertsIfRecipientIsZeroAddress() external {
         Origin memory origin = Origin({
             srcEid: NONCANONICAL_EID,
