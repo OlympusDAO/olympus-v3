@@ -717,7 +717,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev                                Assumes the caller will validate live price resolution
     ///                                     after writing the candidate configuration. This helper
     ///                                     validates structural PRICE invariants only; it does not
-    ///                                     call feeds or strategies.
+    ///                                     call feeds or strategies. It therefore does not validate
+    ///                                     feed selector/params compatibility, strategy selector/params
+    ///                                     compatibility, or whether a feed/strategy/moving-average
+    ///                                     combination can resolve a non-zero price.
     /// @dev                                Will revert if:
     ///                                     - The asset is the reserved unit-of-account address
     ///                                     - The asset is neither a contract nor a registered
@@ -794,7 +797,10 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     ///                 PRICE state.
     /// @dev            Assumes the caller will validate live price resolution after writing the
     ///                 candidate configuration. This helper validates structural PRICE invariants
-    ///                 only; it does not call feeds or strategies.
+    ///                 only; it does not call feeds or strategies. It therefore does not validate
+    ///                 feed selector/params compatibility, strategy selector/params compatibility,
+    ///                 or whether the final feed/strategy/moving-average combination can resolve a
+    ///                 non-zero price.
     /// @dev            Will revert if:
     ///                 - The asset is the reserved unit-of-account address
     ///                 - The asset is neither a contract nor a registered non-contract asset
@@ -846,6 +852,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev            Performs structural validation only. This function does not call configured
+    ///                 price feeds or strategies, and therefore does not prove that the supplied
+    ///                 feed/strategy/moving-average configuration can resolve a non-zero price.
     function validateAddAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -874,6 +883,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     }
 
     /// @inheritdoc IPRICEv2
+    /// @dev            Performs structural validation only. This function does not call configured
+    ///                 price feeds or strategies, and therefore does not prove that the final
+    ///                 feed/strategy/moving-average configuration can resolve a non-zero price.
     function validateUpdateAsset(
         address asset_,
         UpdateAssetParams memory params_
