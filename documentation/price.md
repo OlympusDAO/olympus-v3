@@ -45,6 +45,8 @@ The `PriceCache` policy supports non-contract assets in addition to normal ERC-2
 
 For contract assets, oracle adapters and factories can read decimals and symbols directly from the token contract. For non-contract assets, that metadata must instead be configured in `PriceCache` via `setNonContractAssetMetadata(asset_, decimals_, symbol_)`.
 
+Unlike ERC-20 metadata, a non-contract asset does not have an intrinsic decimal scale. Its decimal scale is the value currently configured in `PriceCache`. Integrations that use non-contract assets should confirm the active value with `PriceCache.assetDecimals(asset_)`, especially after metadata updates. Morpho-compatible oracles recalculate their scale factor from the active cache decimals when read, so a non-contract asset decimal update changes the scale used by `scaleFactor()` and `price()`.
+
 The required conditions for non-contract asset support are:
 
 1. the asset must be registered in `PRICE` as a non-contract asset, unless it is the configured unit of account

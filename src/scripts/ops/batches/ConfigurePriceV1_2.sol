@@ -444,14 +444,21 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
         address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
 
-        // Read strict mode from args file
+        // Read deviation parameters from args file
+        uint16 ohmDeviationBps = SafeCast.encodeUInt16(
+            _readBatchArgUint256("configurePriceV1_2", "ohmDeviationBps")
+        );
         bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
 
-        // Create strategy component: getAveragePrice with strict mode
-        IPRICEv2.Component memory strategy = _encodeAverageStrategy(ohmStrictMode);
+        // Create strategy component: getAveragePriceExcludingDeviations
+        IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
+            SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
+            ohmDeviationBps,
+            ohmStrictMode
+        );
         IPRICEv2.Component[] memory feeds = _getOhmFeeds();
 
         IPriceConfigv2.PriceFeedExpectation[] memory feedExpectations = _readFeedExpectations(

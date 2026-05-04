@@ -66,8 +66,9 @@ Deploys Morpho-compatible oracles implementing `IMorphoOracle`.
 
 **Special Logic**:
 
-- Calculates scale factor: `10^(loanDecimals - collateralDecimals + 36)`
+- Calculates scale factor from current `PriceCache.assetDecimals()` values: `10^(loanDecimals - collateralDecimals + 36)`
 - Validates decimals bounds to prevent overflow
+- If collateral or loan is a non-contract asset, its decimal scale is PriceCache metadata rather than ERC-20 metadata. Confirm the active value with `PriceCache.assetDecimals(asset)` before configuring or relying on a Morpho market.
 
 ### 3. ERC7726Oracle
 

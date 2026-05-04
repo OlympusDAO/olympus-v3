@@ -57,15 +57,17 @@ contract MorphoOracleFactory is BaseOracleFactory {
     /// @inheritdoc BaseOracleFactory
     /// @notice Encodes Morpho-specific oracle data for cloning
     /// @dev    Performs Morpho-specific validation (decimals bounds check),
-    ///         calculates scale factor, generates oracle name, and encodes immutable args.
+    ///         generates oracle name, and encodes immutable args.
     ///         Note: baseToken_ is used as collateralToken, quoteToken_ is used as loanToken.
+    ///         If either token is a non-contract asset, decimals are PriceCache metadata rather
+    ///         than token metadata. The clone recalculates from `PriceCache.assetDecimals()` on
+    ///         reads, so later NCA decimal updates can change the live Morpho scale factor.
     function _encodeOracleData(
         address collateralToken_,
         address loanToken_,
         uint48 maxAge_,
         bytes calldata
     ) internal view override returns (bytes memory) {
-        // Calculate scale factor
         uint8 collateralDecimals = priceCache.assetDecimals(collateralToken_);
         uint8 loanDecimals = priceCache.assetDecimals(loanToken_);
 
@@ -80,9 +82,6 @@ contract MorphoOracleFactory is BaseOracleFactory {
         if (exponent < 0 || exponent > 77) {
             revert MorphoOracleFactory_TokenDecimalsOutOfBounds(collateralToken_, loanToken_);
         }
-
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        uint256 scaleFactor = 10 ** uint256(exponent);
 
         // Compose name from token symbols and maxAge: "collateral/loan M {maxAge}s"
         string memory collateralSymbol = priceCache.assetSymbol(collateralToken_);
@@ -100,14 +99,13 @@ contract MorphoOracleFactory is BaseOracleFactory {
 
         // Create clone with immutable args
         // Layout:
-        // factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | maxAge (8 bytes) | scaleFactor (32 bytes) | name (32 bytes)
+        // factory (20 bytes) | collateral (20 bytes) | loan (20 bytes) | maxAge (8 bytes) | name (32 bytes)
         return
             abi.encodePacked(
                 address(this), // factory address
                 collateralToken_, // collateral token address
                 loanToken_, // loan token address
                 uint64(maxAge_), // max age
-                scaleFactor, // scale factor
                 oracleName // name
             );
     }
