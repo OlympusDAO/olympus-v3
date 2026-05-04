@@ -6,16 +6,13 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 // Interfaces
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
-// Constants
-import {MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-
 // Contracts
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @dev Tests for the unified rescue function on LZBridgeGateway.
 ///      Passing address(0) as the token rescues the native (ETH) balance.
-/// @dev Rescue is restricted to the manager role (the DAO multisig).
+/// @dev Rescue is restricted to the manager or admin role.
 contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     MockOhm internal randomToken;
     address internal manager = makeAddr("manager");
@@ -98,22 +95,28 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         assertEq(randomToken.balanceOf(recoveryRecipient), 0, "Recipient should receive nothing");
     }
 
-    function testFuzz_rescue_revertsIfNotManager(address caller_) external {
-        vm.assume(caller_ != manager);
+    function testFuzz_rescue_revertsIfNotManagerOrAdmin(address caller_) external {
+        vm.assume(caller_ != manager && caller_ != admin);
         randomToken.mint(address(gateway), 100e18);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, MANAGER_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
     }
 
-    function test_rescue_revertsIfAdminNotManager() external {
-        // Admin role is NOT sufficient — rescue is manager-only.
-        randomToken.mint(address(gateway), 100e18);
+    function test_rescue_givenAdmin_transfersBalance() external {
+        // Admin role is also sufficient — rescue allows manager or admin.
+        uint256 amount = 100e18;
+        randomToken.mint(address(gateway), amount);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, MANAGER_ROLE));
         vm.prank(admin);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
+
+        assertEq(
+            randomToken.balanceOf(recoveryRecipient),
+            amount,
+            "Recipient should receive rescued tokens"
+        );
     }
 
     function test_rescue_revertsIfRecipientZero() external {
@@ -169,22 +172,30 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         assertEq(recoveryRecipient.balance, amount, "Native rescue should work while disabled");
     }
 
-    function testFuzz_rescue_native_revertsIfNotManager(address caller_) external {
-        vm.assume(caller_ != manager);
+    function testFuzz_rescue_native_revertsIfNotManagerOrAdmin(address caller_) external {
+        vm.assume(caller_ != manager && caller_ != admin);
         vm.deal(address(gateway), 1 ether);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, MANAGER_ROLE));
+        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
         gateway.rescue(address(0), payable(recoveryRecipient));
     }
 
-    function test_rescue_native_revertsIfAdminNotManager() external {
-        // Admin role is NOT sufficient — rescue is manager-only.
-        vm.deal(address(gateway), 1 ether);
+    function test_rescue_native_givenAdmin_transfersBalance() external {
+        // Admin role is also sufficient — rescue allows manager or admin.
+        uint256 amount = 1 ether;
+        vm.deal(address(gateway), amount);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, MANAGER_ROLE));
+        uint256 recipientBefore = recoveryRecipient.balance;
+
         vm.prank(admin);
         gateway.rescue(address(0), payable(recoveryRecipient));
+
+        assertEq(
+            recoveryRecipient.balance,
+            recipientBefore + amount,
+            "Recipient should receive rescued native"
+        );
     }
 
     function test_rescue_native_revertsIfRecipientZero() external {
