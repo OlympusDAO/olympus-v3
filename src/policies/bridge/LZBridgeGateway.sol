@@ -460,7 +460,11 @@ contract LZBridgeGateway is
     // ========= LZ MESSAGE MANAGEMENT ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via skip
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function skip(
         uint32 srcEid_,
@@ -489,7 +493,11 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via burn
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function burn(
         uint32 srcEid_,
@@ -507,7 +515,12 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, clearing an inbound OHM mint message bypasses the gateway's
+    ///      `lzReceive` handler, so `bridgedSupply` is not decremented and the MINTR mint approval
+    ///      is not consumed. The caller MUST follow up with a corresponding `decreaseBridgedSupply`
+    ///      call to keep the bookkeeping consistent.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function clear(
         Origin calldata origin_,
