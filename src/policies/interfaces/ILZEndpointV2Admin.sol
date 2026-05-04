@@ -36,11 +36,6 @@ interface ILZEndpointV2Admin {
     // ========= MESSAGE MANAGEMENT ========= //
 
     /// @notice Skips a nonce for a source path.
-    /// @dev    On the canonical chain, permanently discarding an inbound OHM mint message via this
-    ///         function leaves `bridgedSupply` and the gateway's MINTR mint approval inflated by
-    ///         the message's amount (since the source-chain OHM was burned but will never be minted
-    ///         on canonical). The caller MUST follow up with a corresponding `decreaseBridgedSupply`
-    ///         call on the canonical chain to keep the bookkeeping consistent.
     /// @param srcEid_ The source endpoint ID.
     /// @param sender_ The sender address (bytes32).
     /// @param nonce_ The nonce to skip.
@@ -54,11 +49,6 @@ interface ILZEndpointV2Admin {
     function nilify(uint32 srcEid_, bytes32 sender_, uint64 nonce_, bytes32 payloadHash_) external;
 
     /// @notice Burns a payload for a source path.
-    /// @dev    On the canonical chain, permanently discarding an inbound OHM mint message via this
-    ///         function leaves `bridgedSupply` and the gateway's MINTR mint approval inflated by
-    ///         the message's amount (since the source-chain OHM was burned but will never be minted
-    ///         on canonical). The caller MUST follow up with a corresponding `decreaseBridgedSupply`
-    ///         call on the canonical chain to keep the bookkeeping consistent.
     /// @param srcEid_ The source endpoint ID.
     /// @param sender_ The sender address (bytes32).
     /// @param nonce_ The nonce of the message.
@@ -66,10 +56,6 @@ interface ILZEndpointV2Admin {
     function burn(uint32 srcEid_, bytes32 sender_, uint64 nonce_, bytes32 payloadHash_) external;
 
     /// @notice Clears a verified but unexecuted inbound message.
-    /// @dev    On the canonical chain, clearing an inbound OHM mint message bypasses the gateway's
-    ///         `lzReceive` handler, so `bridgedSupply` is not decremented and the MINTR mint approval
-    ///         is not consumed. The caller MUST follow up with a corresponding `decreaseBridgedSupply`
-    ///         call on the canonical chain to keep the bookkeeping consistent.
     /// @param origin_ The origin of the message.
     /// @param guid_ The GUID of the message.
     /// @param message_ The message bytes.
