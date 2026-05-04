@@ -38,6 +38,7 @@ interface ILZCrossChainBridge is IVersioned {
     ///
     ///      Reverts if:
     ///      - The bridge is not enabled.
+    ///      - to_ is the zero address.
     ///      - amount_ is zero.
     ///      - The user has insufficient OHM balance or approval.
     ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).

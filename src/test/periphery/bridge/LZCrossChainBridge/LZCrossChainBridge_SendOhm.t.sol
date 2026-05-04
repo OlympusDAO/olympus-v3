@@ -55,6 +55,17 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         bridge.sendOhm{value: 1 ether}(NONCANONICAL_EID, recipient, 1000e9);
     }
 
+    function test_sendOhm_revertsIfRecipientZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
+                "to"
+            )
+        );
+        vm.prank(user);
+        bridge.sendOhm{value: 1 ether}(NONCANONICAL_EID, address(0), 1000e9);
+    }
+
     function test_sendOhm_revertsIfAmountZero() external {
         vm.expectRevert(
             abi.encodeWithSelector(
