@@ -118,8 +118,12 @@ contract LZBridgeGatewayTests_ResetRateLimits is LZBridgeGatewayTestBase {
         _test_resetRateLimits(bridgeAdmin);
     }
 
-    function testFuzz_resetRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+    function test_resetRateLimits_bridgeRateLimiterCanCall() external {
+        _test_resetRateLimits(bridgeRateLimiter);
+    }
+
+    function testFuzz_resetRateLimits_revertsIfNotAuthorized(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
 
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;

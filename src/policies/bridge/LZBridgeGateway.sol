@@ -63,6 +63,11 @@ contract LZBridgeGateway is
     /// @notice Role required to call burnAndSend (granted to periphery facilitator contracts).
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
 
+    /// @notice Dedicated role for rate-limit configuration and state resets.
+    /// @dev Accepted in addition to bridge_admin and admin so that rate-limit operators
+    ///      can be granted minimal privileges without the broader bridge_admin powers.
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
+
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
 
@@ -81,6 +86,17 @@ contract LZBridgeGateway is
     modifier onlyBridgeAdminOrAdmin() {
         if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert PolicyAdmin.NotAuthorised();
+        _;
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the bridge_rate_limiter,
+    ///         bridge_admin, or admin role.
+    modifier onlyRateLimitConfigurator() {
+        if (
+            !ROLES.hasRole(msg.sender, _BRIDGE_RATE_LIMITER_ROLE) &&
+            !ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) &&
+            !_isAdmin(msg.sender)
+        ) revert PolicyAdmin.NotAuthorised();
         _;
     }
 
@@ -392,17 +408,17 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
     function setRateLimits(
         RateLimitConfig[] calldata rateLimitConfigs_
-    ) external override onlyBridgeAdminOrAdmin {
+    ) external override onlyRateLimitConfigurator {
         _setRateLimits(rateLimitConfigs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function resetRateLimits(uint32[] calldata eids_) external override onlyBridgeAdminOrAdmin {
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    function resetRateLimits(uint32[] calldata eids_) external override onlyRateLimitConfigurator {
         _resetRateLimits(eids_);
     }
 

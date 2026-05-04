@@ -44,6 +44,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
     address admin = makeAddr("admin");
     address bridgeAdmin = makeAddr("bridgeAdmin");
+    address bridgeRateLimiter = makeAddr("bridgeRateLimiter");
     address facilitator = makeAddr("facilitator");
     address user = makeAddr("user");
     address recipient = makeAddr("recipient");
@@ -76,6 +77,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin.grantRole("bridge_rate_limiter", bridgeRateLimiter);
         rolesAdmin.grantRole("bridge_facilitator", facilitator);
 
         // ---- Non-canonical stack (endpoint 2) ----
@@ -92,6 +94,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin2.grantRole("bridge_rate_limiter", bridgeRateLimiter);
         rolesAdmin2.grantRole("bridge_facilitator", facilitator);
 
         // ---- Wire peers ----

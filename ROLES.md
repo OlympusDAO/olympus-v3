@@ -21,6 +21,7 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, rate limits via `onlyBridgeAdminOrAdmin` (admin can also call). `setPeer` and `setEnforcedOptions` are admin-only. |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
+| bridge_rate_limiter | LZBridgeGateway | Configure and reset per-EID rate limits (`setRateLimits`, `resetRateLimits`). Accepted in addition to `bridge_admin` and `admin`, enabling minimal-privilege rate-limit operators. |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |

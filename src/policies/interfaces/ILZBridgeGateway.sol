@@ -3,7 +3,7 @@ pragma solidity >=0.8.18;
 
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
-import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
@@ -197,13 +197,14 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     function setEnforcedOptions(EnforcedOptionParam[] calldata enforcedOptions_) external;
 
     /// @notice Sets rate limits for destination endpoints.
-    /// @dev Only callable by the bridge_admin or admin role.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
     ///
     /// @param rateLimitConfigs_ Array of rate limit configurations.
     function setRateLimits(RateLimiter.RateLimitConfig[] memory rateLimitConfigs_) external;
 
     /// @notice Resets rate limit state (amountInFlight) for the given endpoint IDs.
-    /// @dev Only callable by the bridge_admin or admin role. Does not modify limit or window.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
+    ///      Does not modify limit or window.
     ///
     /// @param eids_ The endpoint IDs to reset.
     function resetRateLimits(uint32[] memory eids_) external;

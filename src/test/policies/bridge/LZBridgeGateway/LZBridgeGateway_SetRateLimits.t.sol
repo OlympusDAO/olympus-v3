@@ -63,8 +63,12 @@ contract LZBridgeGatewayTests_SetRateLimits is LZBridgeGatewayTestBase {
         _test_setRateLimits(bridgeAdmin);
     }
 
-    function testFuzz_setRateLimits_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+    function test_setRateLimits_bridgeRateLimiterCanCall() external {
+        _test_setRateLimits(bridgeRateLimiter);
+    }
+
+    function testFuzz_setRateLimits_revertsIfNotAuthorized(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
 
         RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
         configs[0] = RateLimiter.RateLimitConfig({
