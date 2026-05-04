@@ -17,8 +17,6 @@
                 "ohmExpectedPrice": "19500000000000000000",
                 "ohmExpectedToleranceBps": 500,
                 "ohmRevertOnInsufficientPriceFeeds": true,
-                "ohmSusdsObservationWindow": 1500,
-                "ohmWethObservationWindow": 1500,
                 "pyth": "0x4305FB66699C3B2702D4d05CF36551390A4c69C6",
                 "pythEthUsdFeedId": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
                 "pythEthUsdMaxConfidence": 10000000000000000000,
