@@ -12,6 +12,7 @@ import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -30,7 +31,7 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24751208;
+    uint256 public constant BLOCK = 24927772;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -178,7 +179,22 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
         assertEq(uln.requiredDVNs[0], expectedDvns[0], "Send ULN DVN[0] mismatch");
         assertEq(uln.requiredDVNs[1], expectedDvns[1], "Send ULN DVN[1] mismatch");
-        assertEq(uln.optionalDVNCount, 0, "Send ULN should have 0 optional DVNs");
+        // Resolved config reports 0 because no optional DVNs are configured at either layer.
+        assertEq(uln.optionalDVNCount, 0, "Send ULN resolved optionalDVNCount should be 0");
+
+        // Verify the *raw* app config pins optional DVNs via the NIL sentinel so the app-level
+        // config does NOT inherit LayerZero's EID-level default.
+        UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+            address(gateway),
+            remoteEid_
+        );
+        assertEq(
+            appUln.optionalDVNCount,
+            type(uint8).max,
+            "Send ULN app optionalDVNCount must be NIL"
+        );
+        assertEq(appUln.optionalDVNs.length, 0, "Send ULN app optionalDVNs must be empty");
+        assertEq(appUln.optionalDVNThreshold, 0, "Send ULN app optional threshold must be 0");
     }
 
     /// @dev Verifies Recv ULN config for a remote EID, with route-aware DVN checks.
@@ -201,7 +217,21 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
         assertEq(uln.requiredDVNs[0], expectedDvns[0], "Recv ULN DVN[0] mismatch");
         assertEq(uln.requiredDVNs[1], expectedDvns[1], "Recv ULN DVN[1] mismatch");
-        assertEq(uln.optionalDVNCount, 0, "Recv ULN should have 0 optional DVNs");
+        // Resolved config reports 0 because no optional DVNs are configured at either layer.
+        assertEq(uln.optionalDVNCount, 0, "Recv ULN resolved optionalDVNCount should be 0");
+
+        // Verify the *raw* app config pins optional DVNs via the NIL sentinel.
+        UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+            address(gateway),
+            remoteEid_
+        );
+        assertEq(
+            appUln.optionalDVNCount,
+            type(uint8).max,
+            "Recv ULN app optionalDVNCount must be NIL"
+        );
+        assertEq(appUln.optionalDVNs.length, 0, "Recv ULN app optionalDVNs must be empty");
+        assertEq(appUln.optionalDVNThreshold, 0, "Recv ULN app optional threshold must be 0");
     }
 
     function _verifyExecutorConfig(uint32 remoteEid_) internal view {

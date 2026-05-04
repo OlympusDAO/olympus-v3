@@ -12,6 +12,7 @@ import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -27,7 +28,7 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24751208;
+    uint256 internal constant FORK_BLOCK = 24927772;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -293,6 +294,20 @@ contract LZBridgeActivatorForkTest is Test {
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
             assertEq(uln.requiredDVNs[0], expectedDvns[0], "DVN[0] mismatch");
             assertEq(uln.requiredDVNs[1], expectedDvns[1], "DVN[1] mismatch");
+
+            // The app-level config must pin optional DVNs to NIL so the app config does not
+            // silently inherit LayerZero's EID-level default.
+            UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+                address(gateway),
+                eid
+            );
+            assertEq(
+                appUln.optionalDVNCount,
+                type(uint8).max,
+                "Send app optionalDVNCount must be NIL"
+            );
+            assertEq(appUln.optionalDVNs.length, 0, "Send app optionalDVNs must be empty");
+            assertEq(appUln.optionalDVNThreshold, 0, "Send app optional threshold must be 0");
         }
     }
 
@@ -331,6 +346,18 @@ contract LZBridgeActivatorForkTest is Test {
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
             assertEq(uln.requiredDVNs[0], expectedDvns[0], "DVN[0] mismatch");
             assertEq(uln.requiredDVNs[1], expectedDvns[1], "DVN[1] mismatch");
+
+            UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+                address(gateway),
+                eid
+            );
+            assertEq(
+                appUln.optionalDVNCount,
+                type(uint8).max,
+                "Recv app optionalDVNCount must be NIL"
+            );
+            assertEq(appUln.optionalDVNs.length, 0, "Recv app optionalDVNs must be empty");
+            assertEq(appUln.optionalDVNThreshold, 0, "Recv app optional threshold must be 0");
         }
     }
 
