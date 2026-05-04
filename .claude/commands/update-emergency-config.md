@@ -101,6 +101,7 @@ Analyze the contract source in this order. Stop at the first match:
 - Owner: **ask user**
 - For each arg: determine if a static value can be inferred from context
     - If any arg is dynamic (can't determine a static value from the source), flag to user and ask how to resolve
+- **statusCheck detection:** If the shutdown call goes through a proxy/policy to affect a different module (e.g., `Emergency.shutdownMinting()` affects `MINTR`), a `statusCheck` is needed. Read the shutdown function's implementation to find which module it modifies, then find the view function on that module that reflects the state change. Add a `statusCheck` pointing to the target module.
 
 ##### Level 5 — None of the above
 
@@ -171,6 +172,12 @@ Before asking the user, **generate suggested values** for all metadata fields by
 
 6. **Dependencies** (optional): Other component IDs that should be shutdown together — check if any existing components reference related contracts
 
+7. **statusCheck** (optional): Determine if a `statusCheck` is needed. A `statusCheck` is needed when the contract being called for shutdown is NOT the same contract whose state you'd read to verify the shutdown worked.
+   - For PolicyEnabler/PeripheryEnabler contracts: **NOT needed** (`isEnabled()` lives on the same contract)
+   - For components that call through a proxy/policy to affect a different module: **NEEDED** (e.g., `Emergency.shutdownMinting()` affects `MINTR`, so status should be read from `OlympusMinter.active()`)
+   - When needed, read the shutdown function's implementation to find which module it modifies, then find the view function on that module that reflects the state change
+   - Include `contractKey`, `abi`, `functionName`, and `trueIsShutdown` (whether `true` return means shut down)
+
 **Step 2: Present all suggestions to the user for confirmation:**
 
 Use AskUserQuestion to present the generated values. Format the suggestions clearly so the user can approve, modify, or skip each one. For example:
@@ -233,6 +240,12 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
       "abi": "<matched abi key>"
     }
   ],
+  "statusCheck": {
+    "contractKey": "<module env key, if needed>",
+    "abi": "<abi key for module>",
+    "functionName": "<view function name>",
+    "trueIsShutdown": false
+  },
   "availableOn": ["<chains from env.json>"],
   "postShutdownSteps": ["<from user, if provided>"],
   "dependencies": ["<from user, if provided>"]
@@ -240,6 +253,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 ```
 
 - Omit `shutdownCriteria`, `postShutdownSteps`, `dependencies` only if the user explicitly chose to skip them (the skill should always suggest values first)
+- Omit `statusCheck` when the shutdown target and status check target are the same contract (e.g., PolicyEnabler/PeripheryEnabler contracts). Include it when the shutdown action goes through a proxy/policy to affect a different module.
 
 1. Update `version` (bump patch version), `lastUpdated`, and `updatedBy` using `jq`:
 
@@ -294,6 +308,8 @@ Match function signatures to ABI keys in `documentation/emergency/emergency-abis
 | `shutdown(address[])` | `yield_repurchase_facility` |
 | `withdrawLiquidity(uint256)` | `ccip_lock_release_pool` |
 | `emergencyShutdownFixedExpiryMarket(uint256)` | `bond_manager` |
+| `active()` (OlympusMinter status check) | `mintr` |
+| `active()` (OlympusTreasury status check) | `trsry` |
 
 **Disambiguation:** If a function signature matches multiple ABI keys (e.g., `shutdown()` maps to both `emergency` and `emission_manager`; `deactivate()` maps to both `heart` and `reserve_migrator`), determine the correct key by checking which ABI contains the full set of functions used by the contract. If still ambiguous, ask the user.
 
