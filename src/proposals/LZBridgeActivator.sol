@@ -243,19 +243,17 @@ contract LZBridgeActivator is Owned {
         IOffsettingRateLimiter.RateLimitConfig[]
             memory inConfigs = new IOffsettingRateLimiter.RateLimitConfig[](_REMOTE_CHAIN_COUNT);
 
-        uint256 outLimit = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
-        uint256 inLimit = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
         uint32 window = LZConfigLib.RATE_LIMIT_WINDOW;
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             outConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
                 eid: remoteEids[i],
-                limit: outLimit,
+                limit: LZConfigLib.outRateLimitForRoute(LZConfigLib.ETH_EID, remoteEids[i]),
                 window: window
             });
             inConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
                 eid: remoteEids[i],
-                limit: inLimit,
+                limit: LZConfigLib.inRateLimitForRoute(LZConfigLib.ETH_EID, remoteEids[i]),
                 window: window
             });
         }

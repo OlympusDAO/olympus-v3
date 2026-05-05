@@ -385,12 +385,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         uint32 localEid_,
         uint32[] memory remoteEids_
     ) internal view {
-        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(localEid_);
-        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(localEid_);
         uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
 
         for (uint256 i = 0; i < remoteEids_.length; ++i) {
             uint32 remoteEid = remoteEids_[i];
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(localEid_, remoteEid);
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(localEid_, remoteEid);
             (, uint256 outLimit, uint32 outWindow, ) = gateway_.outRateLimits(remoteEid);
             if (outLimit != expectedOut) {
                 revert(
@@ -543,16 +543,14 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Sets bidirectional OHM rate limits for all remote chains.
-    /// @dev On non-canonical chains, every remote endpoint (including Ethereum and the
-    ///      other L2s) shares the same per-direction limit. Values come from
-    ///      `LZConfigLib.outRateLimitForLocalEid` / `inRateLimitForLocalEid` keyed on
-    ///      the local chain identity.
+    /// @dev Outbound limits differ per route: Ethereum gets a tighter ceiling than
+    ///      another non-canonical peer. Inbound limits do not differ by remote.
+    ///      Values come from `LZConfigLib.outRateLimitForRoute` /
+    ///      `inRateLimitForRoute` keyed on the (local, remote) EID pair.
     function _setRateLimits(LZBridgeGateway gateway_) internal {
         address gatewayAddr = address(gateway_);
         uint32[] memory remoteEids = _getRemoteEids();
         uint32 localEid = _getLocalEid();
-        uint256 outLimit = LZConfigLib.outRateLimitForLocalEid(localEid);
-        uint256 inLimit = LZConfigLib.inRateLimitForLocalEid(localEid);
         uint32 window = LZConfigLib.RATE_LIMIT_WINDOW;
 
         console2.log("\nSetting rate limits");
@@ -565,12 +563,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         for (uint256 i = 0; i < remoteEids.length; ++i) {
             outConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
                 eid: remoteEids[i],
-                limit: outLimit,
+                limit: LZConfigLib.outRateLimitForRoute(localEid, remoteEids[i]),
                 window: window
             });
             inConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
                 eid: remoteEids[i],
-                limit: inLimit,
+                limit: LZConfigLib.inRateLimitForRoute(localEid, remoteEids[i]),
                 window: window
             });
             console2.log("  Rate limit configured for EID:", remoteEids[i]);

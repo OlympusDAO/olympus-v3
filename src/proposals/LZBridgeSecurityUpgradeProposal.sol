@@ -86,7 +86,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
                 "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
-                "- Introduction of per-endpoint bidirectional rate limiting on outbound and inbound transfers, with a 24-hour sliding window. Outbound from Ethereum to each non-canonical chain is capped at 250,000 OHM and inbound from each non-canonical chain is capped at 110,000 OHM.\n",
+                "- Introduction of per-endpoint bidirectional rate limiting on outbound and inbound transfers, with a 24-hour sliding window. Outbound from Ethereum to each non-canonical chain is capped at 100,000 OHM and inbound from each non-canonical chain is capped at 55,000 OHM.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
                 "- Retained mint/burn model to avoid supply inflation and double-counting.\n",
@@ -475,11 +475,17 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             LZConfigLib.BERA_EID
         ];
 
-        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
-        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
         uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
             (, uint256 outLimit, uint32 outWindow, ) = gw.outRateLimits(remoteEids[i]);
             require(outLimit == expectedOut, "Outbound rate limit mismatch");
             require(outWindow == expectedWindow, "Outbound rate window mismatch");

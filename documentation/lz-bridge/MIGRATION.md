@@ -44,7 +44,7 @@ Execute `LZBridgeSecurityUpgradeProposal`:
    - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.
    - Sets peers for all remote chains.
    - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.
-   - Sets bidirectional rate limits per remote (250,000 OHM outbound, 110,000 OHM inbound, 24-hour window) so traffic is throttled from the moment the gateway is enabled.
+   - Sets bidirectional rate limits per remote (100,000 OHM outbound, 55,000 OHM inbound, 24-hour window) so traffic is throttled from the moment the gateway is enabled.
    - Enables the LZBridgeGateway policy.
 5. Revoke temporary roles from the LZBridgeActivator contract.
 
@@ -74,7 +74,7 @@ On each non-canonical chain (Arbitrum, Optimism, Base, Berachain), run in order:
 
 1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway`.
 2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `bridge_rate_limiter`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
-3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, set bidirectional rate limits per remote (100,000 OHM outbound, 275,000 OHM inbound, 24-hour window), and enable the gateway.
+3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, set bidirectional rate limits per remote (50,000 OHM outbound to Ethereum and 100,000 OHM outbound to each other non-canonical peer, 110,000 OHM inbound from every peer, 24-hour window), and enable the gateway.
 4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ — revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
 5. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
 

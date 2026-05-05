@@ -253,11 +253,17 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             LZConfigLib.BASE_EID,
             LZConfigLib.BERA_EID
         ];
-        uint256 expectedOut = LZConfigLib.outRateLimitForLocalEid(LZConfigLib.ETH_EID);
-        uint256 expectedIn = LZConfigLib.inRateLimitForLocalEid(LZConfigLib.ETH_EID);
         uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
 
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
             (uint256 outInFlight, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(
                 remoteEids[i]
             );
