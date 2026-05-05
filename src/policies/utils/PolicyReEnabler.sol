@@ -11,7 +11,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 ///         parameterless re-enable extension `ReEnabler` and restricts the
 ///         re-enable entry point to the manager role.
 /// @dev The mix-in is intended for policies that should allow a manager to
-///      return the contract to the enabled state after an emergency disable
+///      return the contract to the enabled state after a disable
 ///      without supplying the calldata payload that the original `enable`
 ///      would require. The admin role is deliberately not granted access to
 ///      `reEnable`, since an admin caller can always invoke the standard

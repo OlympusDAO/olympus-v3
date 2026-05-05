@@ -14,7 +14,7 @@ import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
@@ -30,7 +30,10 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24751208;
+    uint256 public constant BLOCK = 25029000;
+
+    /// @dev Grace window passed to the gateway constructor in the local-deploy branch.
+    uint32 internal constant _GRACE_SECONDS = 1 days;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -97,15 +100,18 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             gateway = new LZBridgeGateway(
                 kernel,
                 LZConfigLib.ETH_LZ_ENDPOINT,
-                true // isCanonical
+                true, // isCanonical
+                _GRACE_SECONDS
             );
             vm.label(address(gateway), "LZBridgeGateway");
 
-            // Deploy LZCrossChainBridge (periphery, owned by DAO MS)
+            // Deploy LZCrossChainBridge (periphery, owned by DAO MS, DAO MS as re-enabler)
             LZCrossChainBridge bridge = new LZCrossChainBridge(
                 address(ohm),
                 daoMS,
-                address(gateway)
+                address(gateway),
+                daoMS,
+                _GRACE_SECONDS
             );
             vm.label(address(bridge), "LZCrossChainBridge");
             lzCrossChainBridge = address(bridge);
@@ -258,6 +264,13 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "DAO MS should have bridge_admin role"
+        );
+
+        // 2b. DAO MS has manager role (gates the gateway's reEnable())
+        assertTrue(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, MANAGER_ROLE),
+            "DAO MS should have manager role"
         );
 
         // 3. LZCrossChainBridge has bridge_facilitator role

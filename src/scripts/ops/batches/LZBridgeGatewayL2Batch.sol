@@ -6,15 +6,15 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
+import {EnablerV2} from "src/libraries/EnablerV2.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
@@ -135,6 +135,21 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             );
         }
 
+        // 2.1b. Grant manager role to the DAO MS so it can re-enable the gateway after
+        //       a disable, within the grace window.
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!rolesModule.hasRole(daoMS, MANAGER_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    MANAGER_ROLE,
+                    daoMS
+                )
+            );
+        }
+
         // 2.2. Grant admin role to the DAO MS (run revokeSetupRoles after migration if granted here)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
@@ -204,7 +219,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         _setEnforcedOptions(gateway);
 
         // 3.4. Enable LZBridgeGateway
-        addToBatch(gatewayAddr, abi.encodeWithSelector(PolicyEnabler.enable.selector, ""));
+        addToBatch(gatewayAddr, abi.encodeWithSelector(EnablerV2.enable.selector, ""));
 
         _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
 
@@ -292,6 +307,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             revert("DAO MS does not have bridge_admin role");
         }
         console2.log("  DAO MS has bridge_admin role");
+
+        if (!rolesModule.hasRole(daoMS, MANAGER_ROLE)) {
+            revert("DAO MS does not have manager role");
+        }
+        console2.log("  DAO MS has manager role");
 
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             revert("DAO MS does not have admin role");

@@ -6,6 +6,9 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 // Interfaces
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase {
@@ -25,6 +28,27 @@ contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase
 
     function test_supportsInterface_IEnabler() external view {
         assertTrue(bridge.supportsInterface(type(IEnabler).interfaceId), "Should support IEnabler");
+    }
+
+    function test_supportsInterface_IEnablerV2() external view {
+        assertTrue(
+            bridge.supportsInterface(type(IEnablerV2).interfaceId),
+            "Should support IEnablerV2"
+        );
+    }
+
+    function test_supportsInterface_IEnablerV2ReEnable() external view {
+        assertTrue(
+            bridge.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
+            "Should support IEnablerV2ReEnable"
+        );
+    }
+
+    function test_supportsInterface_IEnablerV2GracePeriod() external view {
+        assertTrue(
+            bridge.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
+            "Should support IEnablerV2GracePeriod"
+        );
     }
 
     function test_supportsInterface_ERC165() external view {

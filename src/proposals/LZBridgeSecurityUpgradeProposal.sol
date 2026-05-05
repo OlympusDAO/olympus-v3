@@ -21,7 +21,7 @@ import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Policy} from "src/Kernel.sol";
@@ -29,7 +29,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {EnablerV2} from "src/libraries/EnablerV2.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy
@@ -107,14 +107,15 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "## Proposal Steps\n",
                 "\n",
                 "1. Grant the `bridge_admin` role to the DAO MS.\n",
-                "2. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
-                "3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
-                "4. Execute LZBridgeActivator.activate() which:\n",
+                "2. Grant the `manager` role to the DAO MS, authorizing it to call `reEnable()` on the LZBridgeGateway within the grace window after a disable.\n",
+                "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
+                "4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
+                "5. Execute LZBridgeActivator.activate() which:\n",
                 "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
-                "5. Revoke temporary roles from the LZBridgeActivator contract.\n",
+                "6. Revoke temporary roles from the LZBridgeActivator contract.\n",
                 "\n",
                 "At the completion of this proposal, the DAO MS will deactivate the old CrossChainBridge, configure the periphery LZCrossChainBridge, and synchronize the initial bridged supply via batch scripts.\n"
             );
@@ -160,7 +161,23 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             );
         }
 
-        // 2. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
+        // 2. Grant manager role to DAO MS so it can re-enable the gateway after
+        //    a disable, within the grace window. (conditional)
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!roles.hasRole(daoMS, MANAGER_ROLE)) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    MANAGER_ROLE,
+                    daoMS
+                ),
+                "Grant manager role to DAO MS"
+            );
+        }
+
+        // 3. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE)) {
             _pushAction(
@@ -175,7 +192,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             );
         }
 
-        // 3. Grant temporary roles to the activator
+        // 4. Grant temporary roles to the activator
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -197,14 +214,14 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Grant bridge_admin role to temporary activator contract"
         );
 
-        // 4. Execute activator (single action: LZ config + peers + options + enable)
+        // 5. Execute activator (single action: LZ config + peers + options + enable)
         _pushAction(
             activator,
             abi.encodeWithSelector(LZBridgeActivator.activate.selector),
             "Execute LZBridgeActivator"
         );
 
-        // 5. Revoke temporary roles from the activator
+        // 6. Revoke temporary roles from the activator
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -254,13 +271,18 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(Policy(address(gw)).isActive(), "LZBridgeGateway policy is not active");
 
         // 2. Validate LZBridgeGateway is enabled
-        require(PolicyEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
+        require(EnablerV2(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
 
         // 3. Validate roles
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "DAO MS does not have bridge_admin role"
+        );
+        require(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, MANAGER_ROLE),
+            "DAO MS does not have manager role"
         );
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)

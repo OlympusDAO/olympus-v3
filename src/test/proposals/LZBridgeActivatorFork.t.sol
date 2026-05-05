@@ -22,12 +22,15 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {EnablerV2} from "src/libraries/EnablerV2.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24751208;
+    uint256 internal constant FORK_BLOCK = 25029000;
+
+    // Grace window passed to the gateway constructor
+    uint32 internal constant GRACE_SECONDS = 1 days;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -58,7 +61,7 @@ contract LZBridgeActivatorForkTest is Test {
         endpoint = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
 
         // Deploy gateway (canonical on mainnet)
-        gateway = new LZBridgeGateway(kernel, LZConfigLib.ETH_LZ_ENDPOINT, true);
+        gateway = new LZBridgeGateway(kernel, LZConfigLib.ETH_LZ_ENDPOINT, true, GRACE_SECONDS);
 
         // Deploy activator (owned by timelock)
         activator = new LZBridgeActivator(
@@ -203,12 +206,12 @@ contract LZBridgeActivatorForkTest is Test {
     function test_activate_enablesGateway() public {
         _grantRequiredRoles();
 
-        assertFalse(PolicyEnabler(address(gateway)).isEnabled());
+        assertFalse(EnablerV2(address(gateway)).isEnabled());
 
         vm.prank(TIMELOCK);
         activator.activate();
 
-        assertTrue(PolicyEnabler(address(gateway)).isEnabled());
+        assertTrue(EnablerV2(address(gateway)).isEnabled());
     }
 
     function test_activate_revokesDelegateAfterExecution() public {

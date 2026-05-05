@@ -55,6 +55,7 @@ This document describes the roles that are used in the Olympus protocol.
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
 | manager | Heart | Reset the heartbeat |
+| manager | LZBridgeGateway | Re-enable the gateway after a disable, within the grace window |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |

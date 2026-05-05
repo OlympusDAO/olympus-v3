@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
+import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Contracts
@@ -16,7 +17,8 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
         LZBridgeGateway fresh = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true
+            true,
+            GRACE_SECONDS
         );
 
         // Immutables
@@ -26,10 +28,16 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
             "LZ_ENDPOINT should be set"
         );
         assertTrue(fresh.IS_CANONICAL(), "IS_CANONICAL should be true");
+        assertEq(uint256(fresh.GRACE()), uint256(GRACE_SECONDS), "GRACE should be set");
 
         // State
         assertEq(address(fresh.kernel()), address(kernel), "Kernel should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
+        assertEq(
+            uint256(fresh.lastTransitionAt()),
+            0,
+            "lastTransitionAt should be zero before first enable"
+        );
         assertEq(fresh.bridgedSupply(), 0, "Bridged supply should be zero");
     }
 
@@ -37,7 +45,8 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
         LZBridgeGateway fresh = new LZBridgeGateway(
             kernel2,
             address(endpointSetup.endpointList[1]),
-            false
+            false,
+            GRACE_SECONDS
         );
 
         assertEq(address(fresh.kernel()), address(kernel2), "Kernel should be set");
@@ -47,7 +56,13 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
             "LZ_ENDPOINT should be the non-canonical endpoint"
         );
         assertFalse(fresh.IS_CANONICAL(), "IS_CANONICAL should be false");
+        assertEq(uint256(fresh.GRACE()), uint256(GRACE_SECONDS), "GRACE should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
+        assertEq(
+            uint256(fresh.lastTransitionAt()),
+            0,
+            "lastTransitionAt should be zero before first enable"
+        );
     }
 
     function test_constructor_revertsIfKernelZero() external {
@@ -57,7 +72,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
                 "kernel"
             )
         );
-        new LZBridgeGateway(Kernel(address(0)), address(1), true);
+        new LZBridgeGateway(Kernel(address(0)), address(1), true, GRACE_SECONDS);
     }
 
     function test_constructor_revertsIfEndpointZero() external {
@@ -67,6 +82,13 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
                 "lzEndpoint"
             )
         );
-        new LZBridgeGateway(kernel, address(0), true);
+        new LZBridgeGateway(kernel, address(0), true, GRACE_SECONDS);
+    }
+
+    function test_constructor_revertsIfGraceZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(IEnablerV2GracePeriod.EnablerV2GracePeriod_ZeroPeriod.selector)
+        );
+        new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true, 0);
     }
 }

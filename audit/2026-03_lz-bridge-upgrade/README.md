@@ -176,6 +176,7 @@ sequenceDiagram
 | `setEnforcedOptions`       | `admin`                  |
 | `enable`                   | `admin`                  |
 | `disable`                  | `admin` / `emergency`    |
+| `reEnable`                 | `manager`                |
 | `setDelegate`              | `bridge_admin` / `admin` |
 | `increaseBridgedSupply`    | `bridge_admin` / `admin` |
 | `decreaseBridgedSupply`    | `bridge_admin` / `admin` |
@@ -190,10 +191,16 @@ sequenceDiagram
 | `burn`                     | `bridge_admin` / `admin` |
 | `clear`                    | `bridge_admin` / `admin` |
 
+`reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`).
+
 #### LZCrossChainBridge
 
-| Function             | Role    |
-| -------------------- | ------- |
-| `sendOhm`            | public  |
-| `setGateway`         | `owner` |
-| `enable` / `disable` | `owner` |
+| Function             | Role         |
+| -------------------- | ------------ |
+| `sendOhm`            | public       |
+| `setGateway`         | `owner`      |
+| `setReEnabler`       | `owner`      |
+| `enable` / `disable` | `owner`      |
+| `reEnable`           | `reEnabler`  |
+
+`reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`). The `reEnabler` address is set in the constructor (DAO MS in production) and can be updated or cleared by the owner via `setReEnabler`; while the address is `address(0)`, `reEnable` always reverts.

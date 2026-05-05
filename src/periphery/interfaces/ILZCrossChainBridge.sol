@@ -2,6 +2,8 @@
 pragma solidity >=0.8.4;
 
 import {IVersioned} from "../../interfaces/IVersioned.sol";
+import {IEnablerV2GracePeriod} from "../../interfaces/IEnablerV2GracePeriod.sol";
+import {IEnablerV2ReEnable} from "../../interfaces/IEnablerV2ReEnable.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
@@ -10,13 +12,21 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-interface ILZCrossChainBridge is IVersioned {
+///
+///      Inherits the `IEnablerV2ReEnable` and `IEnablerV2GracePeriod` interfaces, exposing
+///      the parameterless `reEnable()` entry point gated to the configured `reEnabler` and
+///      the `GRACE()` window length applied to that re-enable.
+interface ILZCrossChainBridge is IVersioned, IEnablerV2ReEnable, IEnablerV2GracePeriod {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
 
     /// @notice Thrown when the send amount is zero.
     error LZCrossChainBridge_InsufficientAmount();
+
+    /// @notice Thrown when `reEnable` is invoked by an account that is not the configured
+    ///         re-enabler. The check also rejects calls when no re-enabler has been set.
+    error LZCrossChainBridge_NotReEnabler();
 
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
@@ -28,6 +38,12 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
     event GatewaySet(address gateway);
+
+    /// @notice Emitted when the re-enabler address is updated.
+    /// @dev Setting the re-enabler to the zero address effectively disables the
+    ///      `reEnable()` entry point until a non-zero address is configured again.
+    /// @param reEnabler The new re-enabler address, or `address(0)` to clear.
+    event ReEnablerSet(address reEnabler);
 
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
@@ -57,8 +73,22 @@ interface ILZCrossChainBridge is IVersioned {
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
 
+    /// @notice Sets the address authorized to call `reEnable()`.
+    /// @dev Only callable by the owner. The zero address is permitted and effectively
+    ///      disables the `reEnable()` entry point until a non-zero address is set.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not the owner.
+    ///
+    /// @param reEnabler_ The new re-enabler address, or `address(0)` to clear.
+    function setReEnabler(address reEnabler_) external;
+
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);
+
+    /// @notice Returns the address authorized to call `reEnable()`.
+    /// @dev Returns `address(0)` when no re-enabler has been configured.
+    function reEnabler() external view returns (address);
 
     /// @notice Returns the OHM token address.
     // solhint-disable-next-line func-name-mixedcase

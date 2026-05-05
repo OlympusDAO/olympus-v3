@@ -43,6 +43,9 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
     address admin = makeAddr("admin");
     address user = makeAddr("user");
     address recipient = makeAddr("recipient");
+    address reEnablerAddr = makeAddr("reEnabler");
+
+    uint32 constant GRACE_SECONDS = 1 days;
 
     /// @dev Type 3 options with 200k gas for lzReceive:
     ///      WORKER_ID=1, size=17, OPTION_TYPE_LZRECEIVE=1, gas=200k
@@ -67,7 +70,12 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        gateway = new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true);
+        gateway = new LZBridgeGateway(
+            kernel,
+            address(endpointSetup.endpointList[0]),
+            true,
+            GRACE_SECONDS
+        );
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -81,7 +89,12 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         mintr2 = new OlympusMinter(kernel2, address(ohm2));
         roles2 = new OlympusRoles(kernel2);
         rolesAdmin2 = new RolesAdmin(kernel2);
-        gateway2 = new LZBridgeGateway(kernel2, address(endpointSetup.endpointList[1]), false);
+        gateway2 = new LZBridgeGateway(
+            kernel2,
+            address(endpointSetup.endpointList[1]),
+            false,
+            GRACE_SECONDS
+        );
 
         kernel2.executeAction(Actions.InstallModule, address(mintr2));
         kernel2.executeAction(Actions.InstallModule, address(roles2));
@@ -91,7 +104,13 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         rolesAdmin2.grantRole("admin", admin);
 
         // Deploy bridge (periphery, owned by this test contract)
-        bridge = new LZCrossChainBridge(address(ohm), owner, address(gateway));
+        bridge = new LZCrossChainBridge(
+            address(ohm),
+            owner,
+            address(gateway),
+            reEnablerAddr,
+            GRACE_SECONDS
+        );
 
         // Grant bridge_facilitator role to bridge on both kernels
         rolesAdmin.grantRole("bridge_facilitator", address(bridge));

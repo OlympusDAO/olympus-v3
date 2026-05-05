@@ -27,7 +27,7 @@ Key: `bridgeActive=false` blocks `sendOhm()` but not `lzReceive()`/`receiveMessa
 
 ### 1\. Deploy contracts
 
-Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. The `LZCrossChainBridge` constructor takes the gateway address as an argument. Record deployed addresses in env.json and OCG proposal constants.
+Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. Both contracts take a `graceSeconds` argument (default `86400` in `lz_bridge_canonical.json` / `lz_bridge_noncanonical.json`) used by `reEnable()` to bound how soon after a `disable` the contract may be re-enabled. The `LZCrossChainBridge` constructor additionally takes the gateway address and the re-enabler address (set to the DAO MS by `DeployV3.deployLZCrossChainBridge()`). Record deployed addresses in env.json and OCG proposal constants.
 
 ### 2\. Ethereum pre-OCG setup (MS batch)
 
@@ -38,14 +38,15 @@ Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimis
 Execute `LZBridgeSecurityUpgradeProposal`:
 
 1. Grant `bridge_admin` role to DAO MS.
-2. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
-3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
-4. Execute `LZBridgeActivator.activate()` which:
+2. Grant `manager` role to DAO MS — required so the DAO MS can call `LZBridgeGateway.reEnable()` after a disable, within the grace window.
+3. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
+4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
+5. Execute `LZBridgeActivator.activate()` which:
    - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.
    - Sets peers for all remote chains.
    - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.
    - Enables the LZBridgeGateway policy.
-5. Revoke temporary roles from the LZBridgeActivator contract.
+6. Revoke temporary roles from the LZBridgeActivator contract.
 
 After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains — no user traffic flows through the new bridge yet. Old bridges continue operating normally.
 

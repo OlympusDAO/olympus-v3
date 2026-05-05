@@ -36,9 +36,12 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2GracePeriod} from "src/libraries/EnablerV2GracePeriod.sol";
+import {ReEnabler} from "src/libraries/ReEnabler.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @title LZBridgeGateway
@@ -47,13 +50,14 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 ///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
 ///         tracks bridged supply on canonical chains, and bounds inflow minting to previously burned OHM via mint approval.
 contract LZBridgeGateway is
-    Policy,
-    PolicyEnabler,
-    RateLimiter,
+    ILayerZeroReceiver,
     IVersioned,
     ILZEndpointV2Admin,
-    ILayerZeroReceiver,
-    ILZBridgeGateway
+    ILZBridgeGateway,
+    Policy,
+    PolicyReEnabler,
+    EnablerV2GracePeriod,
+    RateLimiter
 {
     // ========= CONSTANTS ========= //
 
@@ -117,15 +121,21 @@ contract LZBridgeGateway is
     /// @dev Reverts if:
     ///      - The kernel address is the zero address.
     ///      - The LZ endpoint address is the zero address.
-    constructor(Kernel kernel_, address lzEndpoint_, bool isCanonical_) Policy(kernel_) {
+    ///      - The grace window length is zero.
+    constructor(
+        Kernel kernel_,
+        address lzEndpoint_,
+        bool isCanonical_,
+        uint32 grace_
+    ) Policy(kernel_) EnablerV2GracePeriod(grace_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(lzEndpoint_, "lzEndpoint");
 
         LZ_ENDPOINT = lzEndpoint_;
         IS_CANONICAL = isCanonical_;
 
-        // PolicyEnabler starts disabled; must be explicitly enabled after configuration.
-        // Gateway is always authorized to call endpoint functions.
+        // EnablerV2 starts disabled; the gateway must be explicitly enabled after
+        // configuration. The gateway is always authorized to call endpoint functions.
     }
 
     /// @inheritdoc Policy
@@ -180,12 +190,31 @@ contract LZBridgeGateway is
     // ========= POLICY ENABLER ========= //
 
     /// @dev Sets isReceiveEnabled to true when the gateway is enabled.
-    function _enable(bytes calldata) internal override {
-        if (!isReceiveEnabled) _setIsReceiveEnabled(true);
+    function _beforeEnable(bytes calldata) internal override {
+        _enableReceive();
     }
 
     /// @dev Resets isReceiveEnabled to false when the gateway is disabled.
-    function _disable(bytes calldata) internal override {
+    function _beforeDisable(bytes calldata) internal override {
+        _disableReceive();
+    }
+
+    /// @dev Restores isReceiveEnabled when the manager re-enables the gateway, and
+    ///      asserts that the grace window since the last transition has not yet elapsed.
+    function _beforeReEnable() internal override {
+        _requireGrace();
+        _enableReceive();
+    }
+
+    /// @notice Sets isReceiveEnabled to true if it is not already.
+    /// @dev Shared between `_beforeEnable` and `_beforeReEnable` because both
+    ///      transitions move the gateway into the enabled state with receiving allowed.
+    function _enableReceive() private {
+        if (!isReceiveEnabled) _setIsReceiveEnabled(true);
+    }
+
+    /// @notice Sets isReceiveEnabled to false if it is not already.
+    function _disableReceive() private {
         if (isReceiveEnabled) _setIsReceiveEnabled(false);
     }
 
@@ -204,7 +233,7 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable override onlyEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
+    ) external payable override whenEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
         // Note: zero-amount validation is the facilitator's responsibility
         _requireNonzeroAddress(to_, "to");
 
@@ -535,7 +564,7 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PolicyEnabler) returns (bool) {
+    ) public view override(EnablerV2GracePeriod, PolicyReEnabler) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||

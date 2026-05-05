@@ -7,6 +7,9 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
@@ -44,6 +47,27 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
         assertTrue(
             gateway.supportsInterface(type(IEnabler).interfaceId),
             "Should support IEnabler"
+        );
+    }
+
+    function test_supportsInterface_IEnablerV2() external view {
+        assertTrue(
+            gateway.supportsInterface(type(IEnablerV2).interfaceId),
+            "Should support IEnablerV2"
+        );
+    }
+
+    function test_supportsInterface_IEnablerV2ReEnable() external view {
+        assertTrue(
+            gateway.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
+            "Should support IEnablerV2ReEnable"
+        );
+    }
+
+    function test_supportsInterface_IEnablerV2GracePeriod() external view {
+        assertTrue(
+            gateway.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
+            "Should support IEnablerV2GracePeriod"
         );
     }
 

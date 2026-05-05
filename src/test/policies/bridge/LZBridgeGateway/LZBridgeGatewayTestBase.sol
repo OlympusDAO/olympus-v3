@@ -25,6 +25,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     uint32 constant NONCANONICAL_EID = 2;
     uint256 constant INITIAL_AMOUNT = 100_000e9;
     uint256 constant SUPPLY_CAP = 1_000_000e9;
+    uint32 constant GRACE_SECONDS = 1 days;
 
     // Canonical stack (eid=1)
     Kernel kernel;
@@ -44,6 +45,8 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
     address admin = makeAddr("admin");
     address bridgeAdmin = makeAddr("bridgeAdmin");
+    address manager = makeAddr("manager");
+    address emergency = makeAddr("emergency");
     address facilitator = makeAddr("facilitator");
     address user = makeAddr("user");
     address recipient = makeAddr("recipient");
@@ -67,7 +70,12 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        gateway = new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true);
+        gateway = new LZBridgeGateway(
+            kernel,
+            address(endpointSetup.endpointList[0]),
+            true,
+            GRACE_SECONDS
+        );
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -76,6 +84,8 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin.grantRole("manager", manager);
+        rolesAdmin.grantRole("emergency", emergency);
         rolesAdmin.grantRole("bridge_facilitator", facilitator);
 
         // ---- Non-canonical stack (endpoint 2) ----
@@ -83,7 +93,12 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         mintr2 = new OlympusMinter(kernel2, address(ohm));
         roles2 = new OlympusRoles(kernel2);
         rolesAdmin2 = new RolesAdmin(kernel2);
-        gateway2 = new LZBridgeGateway(kernel2, address(endpointSetup.endpointList[1]), false);
+        gateway2 = new LZBridgeGateway(
+            kernel2,
+            address(endpointSetup.endpointList[1]),
+            false,
+            GRACE_SECONDS
+        );
 
         kernel2.executeAction(Actions.InstallModule, address(mintr2));
         kernel2.executeAction(Actions.InstallModule, address(roles2));
@@ -92,6 +107,8 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin2.grantRole("manager", manager);
+        rolesAdmin2.grantRole("emergency", emergency);
         rolesAdmin2.grantRole("bridge_facilitator", facilitator);
 
         // ---- Wire peers ----

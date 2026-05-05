@@ -985,19 +985,24 @@ contract DeployV3 is WithEnvironment {
         address kernel = _getAddressNotZero("olympus.Kernel");
         address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         bool isCanonical = ChainUtils._isCanonicalChain(chain);
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZBridgeGateway", "graceSeconds")
+        );
 
         // Log parameters
         console2.log("LZBridgeGateway parameters:");
         console2.log("  kernel", kernel);
         console2.log("  lzEndpoint", lzEndpoint);
         console2.log("  isCanonical", isCanonical);
+        console2.log("  graceSeconds", grace);
 
         // Deploy
         vm.broadcast();
         LZBridgeGateway lzBridgeGateway = new LZBridgeGateway(
             Kernel(kernel),
             lzEndpoint,
-            isCanonical
+            isCanonical,
+            grace
         );
 
         return (address(lzBridgeGateway), "olympus.policies");
@@ -1045,16 +1050,30 @@ contract DeployV3 is WithEnvironment {
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
         address owner = _getAddressNotZero("olympus.multisig.dao");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        // The DAO MS is also used as the re-enabler so it can recover the bridge after
+        // a disable, mirroring its role on the gateway via the manager role.
+        address reEnabler = _getAddressNotZero("olympus.multisig.dao");
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZCrossChainBridge", "graceSeconds")
+        );
 
         // Log parameters
         console2.log("LZCrossChainBridge parameters:");
         console2.log("  ohm", ohm);
         console2.log("  owner", owner);
         console2.log("  gateway", gateway);
+        console2.log("  reEnabler", reEnabler);
+        console2.log("  graceSeconds", grace);
 
         // Deploy
         vm.broadcast();
-        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(ohm, owner, gateway);
+        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(
+            ohm,
+            owner,
+            gateway,
+            reEnabler,
+            grace
+        );
 
         return (address(lzCrossChainBridge), "olympus.periphery");
     }

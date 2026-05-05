@@ -74,6 +74,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     address sender;
     address recipient;
 
+    uint32 constant GRACE_SECONDS = 1 days;
+
     // =========== setUp =========== //
 
     function setUp() public {
@@ -212,7 +214,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         gateway_ = new LZBridgeGateway(
             kernel_,
             LZConfigLib.endpointForEid(localEid_),
-            isCanonical_
+            isCanonical_,
+            GRACE_SECONDS
         );
 
         kernel_.executeAction(Actions.InstallModule, address(mintr_));
@@ -221,7 +224,13 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         kernel_.executeAction(Actions.ActivatePolicy, address(gateway_));
         rolesAdmin_.grantRole("admin", admin);
         rolesAdmin_.grantRole("bridge_admin", bridgeAdmin);
-        bridge_ = new LZCrossChainBridge(address(ohm_), admin, address(gateway_));
+        bridge_ = new LZCrossChainBridge(
+            address(ohm_),
+            admin,
+            address(gateway_),
+            admin,
+            GRACE_SECONDS
+        );
         rolesAdmin_.grantRole("bridge_facilitator", address(bridge_));
 
         vm.startPrank(admin);
