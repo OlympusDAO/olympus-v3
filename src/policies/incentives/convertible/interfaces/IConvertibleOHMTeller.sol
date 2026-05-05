@@ -3,6 +3,7 @@ pragma solidity >=0.8.4;
 
 // Based on Bond Protocol's `IFixedStrikeOptionTeller`:
 // `https://github.com/Bond-Protocol/option-contracts/blob/b8ce2ca2bae3bd06f0e7665c3aa8d827e4d8ca2c/src/interfaces/IFixedStrikeOptionTeller.sol`
+// The AGPL-3.0 license is retained from the upstream interface this is derived from.
 
 interface IConvertibleOHMTeller {
     // ========== EVENTS ========== //
