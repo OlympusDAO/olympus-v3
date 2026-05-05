@@ -458,25 +458,32 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 )
             );
         }
-        if (sendUln.requiredDVNCount != 2) {
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
+        if (sendUln.requiredDVNCount != expectedDvns.length) {
             revert(
                 string.concat(
-                    "Send ULN should require 2 DVNs for EID ",
+                    "Send ULN required DVN count mismatch for EID ",
                     vm.toString(uint256(remoteEid_))
                 )
             );
         }
-
-        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
-        if (sendUln.requiredDVNs[0] != expectedDvns[0]) {
+        if (sendUln.requiredDVNs.length != expectedDvns.length) {
             revert(
-                string.concat("Send ULN DVN[0] mismatch for EID ", vm.toString(uint256(remoteEid_)))
+                string.concat(
+                    "Send ULN required DVN array length mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
             );
         }
-        if (sendUln.requiredDVNs[1] != expectedDvns[1]) {
-            revert(
-                string.concat("Send ULN DVN[1] mismatch for EID ", vm.toString(uint256(remoteEid_)))
-            );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            if (sendUln.requiredDVNs[d] != expectedDvns[d]) {
+                revert(
+                    string.concat(
+                        "Send ULN DVN mismatch for EID ",
+                        vm.toString(uint256(remoteEid_))
+                    )
+                );
+            }
         }
 
         // App-level NIL check: ep.getConfig returns resolved config; raw app config must be
@@ -572,25 +579,32 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 )
             );
         }
-        if (recvUln.requiredDVNCount != 2) {
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
+        if (recvUln.requiredDVNCount != expectedDvns.length) {
             revert(
                 string.concat(
-                    "Recv ULN should require 2 DVNs for EID ",
+                    "Recv ULN required DVN count mismatch for EID ",
                     vm.toString(uint256(remoteEid_))
                 )
             );
         }
-
-        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
-        if (recvUln.requiredDVNs[0] != expectedDvns[0]) {
+        if (recvUln.requiredDVNs.length != expectedDvns.length) {
             revert(
-                string.concat("Recv ULN DVN[0] mismatch for EID ", vm.toString(uint256(remoteEid_)))
+                string.concat(
+                    "Recv ULN required DVN array length mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
             );
         }
-        if (recvUln.requiredDVNs[1] != expectedDvns[1]) {
-            revert(
-                string.concat("Recv ULN DVN[1] mismatch for EID ", vm.toString(uint256(remoteEid_)))
-            );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            if (recvUln.requiredDVNs[d] != expectedDvns[d]) {
+                revert(
+                    string.concat(
+                        "Recv ULN DVN mismatch for EID ",
+                        vm.toString(uint256(remoteEid_))
+                    )
+                );
+            }
         }
 
         // App-level NIL check
@@ -636,8 +650,9 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     /// @notice Configures LZ libraries and ULN/Executor config for all remote chains
     ///         via the gateway's ILZEndpointV2Admin functions.
     /// @dev    Only for non-canonical (L2) chains.
-    ///         DVN selection is per-route: Berachain routes use Nethermind DVN instead of
-    ///         Google Cloud DVN (which is unavailable on Berachain).
+    ///         The DVN set comes from `LZConfigLib.dvnsForRoute`: every route requires
+    ///         four DVNs (LayerZero Labs, Canary, Nethermind, plus Google Cloud, or
+    ///         Horizen for routes that touch Berachain where Google Cloud is unavailable).
     function _configureLZ(LZBridgeGateway gateway_) internal {
         uint32[] memory remoteEids = _getRemoteEids();
         uint32 localEid = _getLocalEid();
@@ -650,7 +665,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         for (uint256 i = 0; i < remoteEids.length; ++i) {
             uint32 remoteEid = remoteEids[i];
-            // Select DVNs based on route (Nethermind for Berachain routes, Google Cloud otherwise)
+            // Four required DVNs per route; the fourth is Google Cloud (or Horizen for routes
+            // touching Berachain). See LZConfigLib.dvnsForRoute for the selection rule.
             address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
             console2.log("  Configuring remote EID:", remoteEid);
 

@@ -31,7 +31,7 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 24927772;
+    uint256 public constant BLOCK = 25027000;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -172,13 +172,22 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
             "Send ULN confirmations mismatch"
         );
-        assertEq(uln.requiredDVNCount, 2, "Send ULN should require 2 DVNs");
-        assertEq(uln.requiredDVNs.length, 2, "Send ULN should have 2 required DVNs");
 
         // Route-aware DVN verification
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
-        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Send ULN DVN[0] mismatch");
-        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Send ULN DVN[1] mismatch");
+        assertEq(
+            uln.requiredDVNCount,
+            uint8(expectedDvns.length),
+            "Send ULN required DVN count mismatch"
+        );
+        assertEq(
+            uln.requiredDVNs.length,
+            expectedDvns.length,
+            "Send ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            assertEq(uln.requiredDVNs[d], expectedDvns[d], "Send ULN DVN mismatch");
+        }
         // Resolved config reports 0 because no optional DVNs are configured at either layer.
         assertEq(uln.optionalDVNCount, 0, "Send ULN resolved optionalDVNCount should be 0");
 
@@ -210,13 +219,22 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
         assertEq(uln.confirmations, expectedConfirmations_, "Recv ULN confirmations mismatch");
-        assertEq(uln.requiredDVNCount, 2, "Recv ULN should require 2 DVNs");
-        assertEq(uln.requiredDVNs.length, 2, "Recv ULN should have 2 required DVNs");
 
         // Route-aware DVN verification
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
-        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Recv ULN DVN[0] mismatch");
-        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Recv ULN DVN[1] mismatch");
+        assertEq(
+            uln.requiredDVNCount,
+            uint8(expectedDvns.length),
+            "Recv ULN required DVN count mismatch"
+        );
+        assertEq(
+            uln.requiredDVNs.length,
+            expectedDvns.length,
+            "Recv ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            assertEq(uln.requiredDVNs[d], expectedDvns[d], "Recv ULN DVN mismatch");
+        }
         // Resolved config reports 0 because no optional DVNs are configured at either layer.
         assertEq(uln.optionalDVNCount, 0, "Recv ULN resolved optionalDVNCount should be 0");
 
