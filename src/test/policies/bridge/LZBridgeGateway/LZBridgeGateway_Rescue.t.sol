@@ -4,24 +4,26 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
+import {IRescuable} from "src/interfaces/IRescuable.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @dev Tests for the unified rescue function on LZBridgeGateway.
-///      Passing address(0) as the token rescues the native (ETH) balance.
-/// @dev Rescue is restricted to the manager or admin role.
+///      Passing the EIP-7528 native sentinel (`NATIVE_TOKEN`) as the token rescues the native (ETH) balance.
+///      Rescue is restricted to the manager or admin role.
 contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     MockOhm internal randomToken;
     address internal manager = makeAddr("manager");
     address internal recoveryRecipient = makeAddr("recoveryRecipient");
+    address internal nativeToken;
 
     function setUp() public override {
         super.setUp();
         randomToken = new MockOhm("Random Token", "RAND", 18);
         rolesAdmin.grantRole("manager", manager);
+        nativeToken = gateway.NATIVE_TOKEN();
     }
 
     // ========= rescue (ERC20) ========= //
@@ -50,7 +52,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         randomToken.mint(address(gateway), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.Rescued(address(randomToken), recoveryRecipient, amount);
+        emit IRescuable.Rescued(address(randomToken), recoveryRecipient, amount);
 
         vm.prank(manager);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
@@ -122,14 +124,12 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     function test_rescue_revertsIfRecipientZero() external {
         randomToken.mint(address(gateway), 100e18);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector, "to")
-        );
+        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
         vm.prank(manager);
         gateway.rescue(address(randomToken), payable(address(0)));
     }
 
-    // ========= rescue (native — token == address(0)) ========= //
+    // ========= rescue (native — token == NATIVE_TOKEN sentinel) ========= //
 
     function test_rescue_native_givenManager_transfersBalance() external {
         uint256 amount = 1 ether;
@@ -138,7 +138,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         uint256 recipientBefore = recoveryRecipient.balance;
 
         vm.prank(manager);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
 
         assertEq(
             recoveryRecipient.balance,
@@ -153,10 +153,10 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         vm.deal(address(gateway), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit ILZBridgeGateway.Rescued(address(0), recoveryRecipient, amount);
+        emit IRescuable.Rescued(nativeToken, recoveryRecipient, amount);
 
         vm.prank(manager);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
     }
 
     function test_rescue_native_givenDisabled_succeeds() external {
@@ -167,7 +167,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         gateway.disable(bytes(""));
 
         vm.prank(manager);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
 
         assertEq(recoveryRecipient.balance, amount, "Native rescue should work while disabled");
     }
@@ -178,7 +178,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
 
         vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
     }
 
     function test_rescue_native_givenAdmin_transfersBalance() external {
@@ -189,7 +189,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         uint256 recipientBefore = recoveryRecipient.balance;
 
         vm.prank(admin);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
 
         assertEq(
             recoveryRecipient.balance,
@@ -201,16 +201,14 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     function test_rescue_native_revertsIfRecipientZero() external {
         vm.deal(address(gateway), 1 ether);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector, "to")
-        );
+        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
         vm.prank(manager);
-        gateway.rescue(address(0), payable(address(0)));
+        gateway.rescue(nativeToken, payable(address(0)));
     }
 
     function test_rescue_native_givenZeroBalance_succeeds() external {
         vm.prank(manager);
-        gateway.rescue(address(0), payable(recoveryRecipient));
+        gateway.rescue(nativeToken, payable(recoveryRecipient));
 
         assertEq(recoveryRecipient.balance, 0, "Recipient should receive nothing");
     }
@@ -225,7 +223,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         // OZ Address.sendValue bubbles up the receiver's revert string.
         vm.expectRevert("RejectingReceiver: no eth");
         vm.prank(manager);
-        gateway.rescue(address(0), payable(address(rejector)));
+        gateway.rescue(nativeToken, payable(address(rejector)));
     }
 }
 

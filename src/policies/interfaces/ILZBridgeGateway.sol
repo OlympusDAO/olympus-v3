@@ -4,6 +4,7 @@ pragma solidity >=0.8.18;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IRescuable} from "src/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
@@ -11,7 +12,7 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
 ///      enforced options, rate limiting, and bridged supply tracking.
-interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
+interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin, IRescuable {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.
@@ -106,12 +107,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Emitted when the isReceiveEnabled flag is changed.
     /// @param isReceiveEnabled The new value.
     event IsReceiveEnabledSet(bool isReceiveEnabled);
-
-    /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued ERC20 token address, or address(0) for native token.
-    /// @param to The recipient address.
-    /// @param amount The amount rescued.
-    event Rescued(address indexed token, address indexed to, uint256 amount);
 
     // ========= CORE FUNCTIONS ========= //
 
@@ -213,19 +208,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///
     /// @param eids_ The endpoint IDs to reset.
     function resetRateLimits(uint32[] memory eids_) external;
-
-    /// @notice Rescues assets accidentally sent to this contract.
-    /// @dev Only callable by the manager or admin role. Sweeps the entire balance of the
-    ///      specified asset to the provided recipient. Pass address(0) as `token_` to rescue
-    ///      the native token (ETH).
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the manager or admin role.
-    ///      - `to_` is the zero address.
-    ///
-    /// @param token_ The ERC20 token to rescue, or address(0) for native token.
-    /// @param to_ The recipient of the rescued assets.
-    function rescue(address token_, address payable to_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 

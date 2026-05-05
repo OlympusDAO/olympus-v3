@@ -29,12 +29,12 @@ import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, O
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IRescuable} from "src/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Libraries
-import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
 // Contracts
@@ -42,6 +42,7 @@ import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {Rescuable} from "src/abstracts/Rescuable.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -57,6 +58,7 @@ contract LZBridgeGateway is
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
+    Rescuable,
     ILZBridgeGateway
 {
     using SafeERC20 for IERC20;
@@ -525,23 +527,10 @@ contract LZBridgeGateway is
 
     // ========= RESCUE FUNCTIONS ========= //
 
-    /// @inheritdoc ILZBridgeGateway
-    /// @dev Reverts if:
-    ///      - The caller does not have the manager or admin role.
-    ///      - `to_` is the zero address.
-    function rescue(address token_, address payable to_) external override onlyManagerOrAdminRole {
-        _requireNonzeroAddress(to_, "to");
-
-        uint256 balance;
-        if (token_ == address(0)) {
-            balance = address(this).balance;
-            Address.sendValue(to_, balance);
-        } else {
-            balance = IERC20(token_).balanceOf(address(this));
-            IERC20(token_).safeTransfer(to_, balance);
-        }
-
-        emit Rescued(token_, to_, balance);
+    /// @inheritdoc Rescuable
+    /// @dev Restricts rescue to the manager or admin role.
+    function _authenticateRescue() internal view override {
+        if (!_isManager(msg.sender) && !_isAdmin(msg.sender)) revert PolicyAdmin.NotAuthorised();
     }
 
     // ========= VIEW FUNCTIONS ========= //
@@ -567,6 +556,7 @@ contract LZBridgeGateway is
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
+            interfaceId == type(IRescuable).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
     }

@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
+import {IRescuable} from "src/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
@@ -13,6 +14,13 @@ contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase
         assertTrue(
             bridge.supportsInterface(type(ILZCrossChainBridge).interfaceId),
             "Should support ILZCrossChainBridge"
+        );
+    }
+
+    function test_supportsInterface_IRescuable() external view {
+        assertTrue(
+            bridge.supportsInterface(type(IRescuable).interfaceId),
+            "Should support IRescuable"
         );
     }
 

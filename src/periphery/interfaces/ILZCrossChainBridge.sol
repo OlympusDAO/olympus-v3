@@ -2,6 +2,7 @@
 pragma solidity >=0.8.4;
 
 import {IVersioned} from "../../interfaces/IVersioned.sol";
+import {IRescuable} from "../../interfaces/IRescuable.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
@@ -10,19 +11,13 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-interface ILZCrossChainBridge is IVersioned {
+interface ILZCrossChainBridge is IVersioned, IRescuable {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
 
     /// @notice Thrown when the send amount is zero.
     error LZCrossChainBridge_InsufficientAmount();
-
-    /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued ERC20 token address, or address(0) for the native token.
-    /// @param to The recipient address.
-    /// @param amount The amount rescued.
-    event Rescued(address indexed token, address indexed to, uint256 amount);
 
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
@@ -52,15 +47,6 @@ interface ILZCrossChainBridge is IVersioned {
     ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
-
-    /// @notice Rescues assets accidentally sent to this contract.
-    /// @dev Only callable by the owner. Sweeps the entire balance of the specified asset
-    ///      to the provided recipient. Pass address(0) as `token_` to rescue the native
-    ///      token.
-    ///
-    /// @param token_ The ERC20 token to rescue, or address(0) for native token.
-    /// @param to_ The recipient of the rescued assets.
-    function rescue(address token_, address payable to_) external;
 
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);
