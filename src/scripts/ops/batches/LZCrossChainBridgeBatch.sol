@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
@@ -41,11 +41,18 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
         _requireCanonical();
 
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
+        address kernel = _envAddressNotZero("olympus.Kernel");
 
         console2.log("\n=== Disabling Old CrossChainBridge (Ethereum) ===");
         console2.log("Old Bridge:", oldBridge);
 
-        addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
+        // setBridgeStatus relies on role permissions granted via the Kernel; once
+        // the policy is deactivated the call would revert. Skip if already inactive.
+        if (Kernel(kernel).isPolicyActive(Policy(oldBridge))) {
+            addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
+        } else {
+            console2.log("Old CrossChainBridge already inactive in Kernel; skipping.");
+        }
 
         proposeBatch();
     }
@@ -73,18 +80,30 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
         console2.log("\n=== LZCrossChainBridge Setup (Ethereum, post-OCG) ===");
         console2.log("Bridge:", bridgeAddr);
 
-        // 1. Deactivate old CrossChainBridge in Kernel
-        console2.log("Deactivating old CrossChainBridge:", oldBridge);
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                oldBridge
-            )
-        );
+        // 1+2. If the old CrossChainBridge is still active in the Kernel, mark it
+        //      inactive and then deactivate it. Bundled here to guarantee user-facing
+        //      bridge calls cannot land between Kernel deactivation and the bridge
+        //      being marked inactive. setBridgeStatus relies on role permissions
+        //      granted via the Kernel, so it must be called before deactivation,
+        //      and skipped entirely if disableOldBridge already ran.
+        if (Kernel(kernel).isPolicyActive(Policy(oldBridge))) {
+            console2.log("Disabling old CrossChainBridge:", oldBridge);
+            addToBatch(oldBridge, abi.encodeWithSignature("setBridgeStatus(bool)", false));
 
-        // 2. Enable bridge
+            console2.log("Deactivating old CrossChainBridge in Kernel");
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.DeactivatePolicy,
+                    oldBridge
+                )
+            );
+        } else {
+            console2.log("Old CrossChainBridge already inactive in Kernel; skipping.");
+        }
+
+        // 3. Enable bridge
         addToBatch(bridgeAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         proposeBatch();
