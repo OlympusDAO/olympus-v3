@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20;
 
-/// @title IRescuable
+/// @title IRescueable
 /// @notice Interface for contracts that allow privileged rescue of accidentally-sent assets.
 /// @dev The native token is identified using the EIP-7528 sentinel address
 ///      (`ERC7528Constants.NATIVE_TOKEN`).
-interface IRescuable {
+interface IRescueable {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when the rescue recipient is the zero address.
-    error Rescuable_InvalidRecipient();
+    error Rescueable_InvalidRecipient();
 
     // ========= EVENTS ========= //
 

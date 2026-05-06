@@ -4,28 +4,28 @@ pragma solidity >=0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 // Interfaces
-import {IRescuable} from "../../../bases/interfaces/IRescuable.sol";
+import {IRescueable} from "../../../bases/interfaces/IRescueable.sol";
 
 // Libraries
 import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
 
 // Contracts
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockRescuable, RejectingReceiver} from "./MockRescuable.sol";
+import {MockRescueable, RejectingReceiver} from "./MockRescueable.sol";
 
-/// @dev Unit tests for the `Rescuable` abstract contract.
-///      A harness (`MockRescuable`) exposes the parent's logic with a toggleable auth
+/// @dev Unit tests for the `Rescueable` abstract contract.
+///      A harness (`MockRescueable`) exposes the parent's logic with a toggleable auth
 ///      check so we can exercise `rescue()` without coupling to a specific permission
 ///      model.
-contract RescuableTest is Test {
-    MockRescuable internal target;
+contract RescueableTest is Test {
+    MockRescueable internal target;
     MockERC20 internal token;
     address internal recipient = makeAddr("recipient");
 
     address internal nativeSentinel = ERC7528Constants.NATIVE_TOKEN;
 
     function setUp() public {
-        target = new MockRescuable();
+        target = new MockRescueable();
         token = new MockERC20("Token", "TKN", 18);
     }
 
@@ -56,7 +56,7 @@ contract RescuableTest is Test {
         token.mint(address(target), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(address(token), recipient, amount);
+        emit IRescueable.Rescued(address(token), recipient, amount);
 
         target.rescue(address(token), payable(recipient));
     }
@@ -70,7 +70,7 @@ contract RescuableTest is Test {
 
     function test_rescue_erc20_zeroBalance_emitsEventWithZeroAmount() external {
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(address(token), recipient, 0);
+        emit IRescueable.Rescued(address(token), recipient, 0);
 
         target.rescue(address(token), payable(recipient));
     }
@@ -92,7 +92,7 @@ contract RescuableTest is Test {
         vm.deal(address(target), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(nativeSentinel, recipient, amount);
+        emit IRescueable.Rescued(nativeSentinel, recipient, amount);
 
         target.rescue(nativeSentinel, payable(recipient));
     }
@@ -120,7 +120,7 @@ contract RescuableTest is Test {
         target.setAuthShouldRevert(true);
         token.mint(address(target), 100e18);
 
-        vm.expectRevert(MockRescuable.MockRescuable_Unauthorised.selector);
+        vm.expectRevert(MockRescueable.MockRescueable_Unauthorised.selector);
         target.rescue(address(token), payable(recipient));
     }
 
@@ -128,7 +128,7 @@ contract RescuableTest is Test {
         target.setAuthShouldRevert(true);
         vm.deal(address(target), 1 ether);
 
-        vm.expectRevert(MockRescuable.MockRescuable_Unauthorised.selector);
+        vm.expectRevert(MockRescueable.MockRescueable_Unauthorised.selector);
         target.rescue(nativeSentinel, payable(recipient));
     }
 
@@ -137,7 +137,7 @@ contract RescuableTest is Test {
         // error if the caller is not authorised.
         target.setAuthShouldRevert(true);
 
-        vm.expectRevert(MockRescuable.MockRescuable_Unauthorised.selector);
+        vm.expectRevert(MockRescueable.MockRescueable_Unauthorised.selector);
         target.rescue(address(token), payable(address(0)));
     }
 
@@ -146,14 +146,14 @@ contract RescuableTest is Test {
     function test_rescue_revertsIfRecipientZero_erc20() external {
         token.mint(address(target), 100e18);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         target.rescue(address(token), payable(address(0)));
     }
 
     function test_rescue_revertsIfRecipientZero_native() external {
         vm.deal(address(target), 1 ether);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         target.rescue(nativeSentinel, payable(address(0)));
     }
 

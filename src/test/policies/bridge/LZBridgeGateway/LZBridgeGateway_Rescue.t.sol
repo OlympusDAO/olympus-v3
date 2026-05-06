@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {IRescuable} from "../../../../bases/interfaces/IRescuable.sol";
+import {IRescueable} from "../../../../bases/interfaces/IRescueable.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -52,7 +52,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         randomToken.mint(address(gateway), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(address(randomToken), recoveryRecipient, amount);
+        emit IRescueable.Rescued(address(randomToken), recoveryRecipient, amount);
 
         vm.prank(manager);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
@@ -124,7 +124,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     function test_rescue_revertsIfRecipientZero() external {
         randomToken.mint(address(gateway), 100e18);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         vm.prank(manager);
         gateway.rescue(address(randomToken), payable(address(0)));
     }
@@ -153,7 +153,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         vm.deal(address(gateway), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(nativeToken, recoveryRecipient, amount);
+        emit IRescueable.Rescued(nativeToken, recoveryRecipient, amount);
 
         vm.prank(manager);
         gateway.rescue(nativeToken, payable(recoveryRecipient));
@@ -201,7 +201,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     function test_rescue_native_revertsIfRecipientZero() external {
         vm.deal(address(gateway), 1 ether);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         vm.prank(manager);
         gateway.rescue(nativeToken, payable(address(0)));
     }

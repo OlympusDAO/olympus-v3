@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IRescuable} from "../../../../bases/interfaces/IRescuable.sol";
+import {IRescueable} from "../../../../bases/interfaces/IRescueable.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -47,7 +47,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         randomToken.mint(address(bridge), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(address(randomToken), recoveryRecipient, amount);
+        emit IRescueable.Rescued(address(randomToken), recoveryRecipient, amount);
 
         bridge.rescue(address(randomToken), payable(recoveryRecipient));
     }
@@ -98,7 +98,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function test_rescue_revertsIfRecipientZero() external {
         randomToken.mint(address(bridge), 100e18);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         bridge.rescue(address(randomToken), payable(address(0)));
     }
 
@@ -125,7 +125,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
         vm.deal(address(bridge), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit IRescuable.Rescued(nativeToken, recoveryRecipient, amount);
+        emit IRescueable.Rescued(nativeToken, recoveryRecipient, amount);
 
         bridge.rescue(nativeToken, payable(recoveryRecipient));
     }
@@ -153,7 +153,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function test_rescue_native_revertsIfRecipientZero() external {
         vm.deal(address(bridge), 1 ether);
 
-        vm.expectRevert(IRescuable.Rescuable_InvalidRecipient.selector);
+        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
         bridge.rescue(nativeToken, payable(address(0)));
     }
 

@@ -4,27 +4,27 @@ pragma solidity >=0.8.20;
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {IRescuable} from "./interfaces/IRescuable.sol";
+import {IRescueable} from "./interfaces/IRescueable.sol";
 
 // Libraries
 import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
 
-/// @title Rescuable
+/// @title Rescueable
 /// @notice Abstract base for contracts that expose a privileged `rescue()` to sweep
 ///         accidentally-sent assets. Subclasses authorize the caller via the
 ///         `_authorizeRescue()` hook.
 /// @dev Native token is identified using the EIP-7528 sentinel
 ///      (`ERC7528Constants.NATIVE_TOKEN`), which is unambiguous and cannot collide with a
 ///      deployed ERC20.
-abstract contract Rescuable is IRescuable {
+abstract contract Rescueable is IRescueable {
     using SafeERC20 for IERC20;
 
-    /// @inheritdoc IRescuable
+    /// @inheritdoc IRescueable
     address public constant override NATIVE_TOKEN = ERC7528Constants.NATIVE_TOKEN;
 
-    /// @inheritdoc IRescuable
+    /// @inheritdoc IRescueable
     /// @dev Sweeps the entire balance of the specified asset to the provided recipient.
     ///      Pass `NATIVE_TOKEN` (the EIP-7528 sentinel) as `token_` to rescue the native
     ///      token.
@@ -38,7 +38,7 @@ abstract contract Rescuable is IRescuable {
     function rescue(address token_, address payable to_) external virtual override {
         _authorizeRescue();
 
-        if (to_ == address(0)) revert Rescuable_InvalidRecipient();
+        if (to_ == address(0)) revert Rescueable_InvalidRecipient();
 
         uint256 balance;
         if (token_ == NATIVE_TOKEN) {
@@ -60,6 +60,6 @@ abstract contract Rescuable is IRescuable {
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
         return
-            interfaceId == type(IRescuable).interfaceId || interfaceId == type(IERC165).interfaceId;
+            interfaceId == type(IRescueable).interfaceId || interfaceId == type(IERC165).interfaceId;
     }
 }

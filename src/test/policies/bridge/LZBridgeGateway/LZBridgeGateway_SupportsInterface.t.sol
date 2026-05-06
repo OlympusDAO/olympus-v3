@@ -5,7 +5,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
-import {IRescuable} from "../../../../bases/interfaces/IRescuable.sol";
+import {IRescueable} from "../../../../bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -34,10 +34,10 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_supportsInterface_IRescuable() external view {
+    function test_supportsInterface_IRescueable() external view {
         assertTrue(
-            gateway.supportsInterface(type(IRescuable).interfaceId),
-            "Should support IRescuable"
+            gateway.supportsInterface(type(IRescueable).interfaceId),
+            "Should support IRescueable"
         );
     }
 

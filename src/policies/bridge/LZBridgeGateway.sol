@@ -41,7 +41,7 @@ import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {Rescuable} from "../../bases/Rescuable.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -57,7 +57,7 @@ contract LZBridgeGateway is
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
-    Rescuable,
+    Rescueable,
     ILZBridgeGateway
 {
     using SafeERC20 for IERC20;
@@ -526,7 +526,7 @@ contract LZBridgeGateway is
 
     // ========= RESCUE FUNCTIONS ========= //
 
-    /// @inheritdoc Rescuable
+    /// @inheritdoc Rescueable
     function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
 
     // ========= VIEW FUNCTIONS ========= //
@@ -547,14 +547,14 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PolicyEnabler, Rescuable) returns (bool) {
+    ) public view override(PolicyEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             PolicyEnabler.supportsInterface(interfaceId) ||
-            Rescuable.supportsInterface(interfaceId);
+            Rescueable.supportsInterface(interfaceId);
     }
 
     // ========= RATE LIMITER OVERRIDE ========= //

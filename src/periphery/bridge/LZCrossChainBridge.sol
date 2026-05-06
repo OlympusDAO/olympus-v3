@@ -14,14 +14,14 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
-import {Rescuable} from "../../bases/Rescuable.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. The user approves this contract for OHM, then calls sendOhm().
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
-contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, ILZCrossChainBridge {
+contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescueable, ILZCrossChainBridge {
     using SafeERC20 for IERC20;
 
     /// @inheritdoc ILZCrossChainBridge
@@ -82,7 +82,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, I
         _setGateway(gateway_);
     }
 
-    /// @inheritdoc Rescuable
+    /// @inheritdoc Rescueable
     function _authorizeRescue() internal view override onlyOwner {}
 
     /// @inheritdoc ILZCrossChainBridge
@@ -96,12 +96,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, I
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PeripheryEnabler, Rescuable) returns (bool) {
+    ) public view override(PeripheryEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             PeripheryEnabler.supportsInterface(interfaceId) ||
-            Rescuable.supportsInterface(interfaceId);
+            Rescueable.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc PeripheryEnabler
