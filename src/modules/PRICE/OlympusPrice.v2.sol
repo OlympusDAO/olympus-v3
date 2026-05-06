@@ -332,8 +332,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
         // It will also validate the strategy
         uint256 obsPrice = _aggregate(asset_, prices);
 
-        // Then attempt to aggregate the raw prices and the observation
-        // This is what would happen normally when calling getPrice() with Variant.CURRENT
+        // Then attempt to aggregate the raw prices and the observation as a synthetic MA value.
+        // Runtime CURRENT reads append the stored MA, but validation uses this synthetic value so a
+        // stale stored MA does not prevent governance from recovering the asset configuration.
         _aggregate(asset_, _getInclusivePrices(prices, obsPrice));
 
         return successAllFeeds;
@@ -924,6 +925,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev          both the raw observation and MA-inclusive CURRENT strategy input shapes
     /// @dev        - Adds the asset to the `assets` array and marks it as approved
     ///
+    /// @dev        When `useMovingAverage_` is true, validation appends a synthetic moving-average value derived from the current raw feed observation.
+    ///             If the last stored observation is out of consensus, call `storeObservation(asset_)` after adding the asset before consumers rely on CURRENT price reads.
+    ///
     /// @dev        Will revert if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is neither a contract nor a registered non-contract asset
@@ -1122,6 +1126,9 @@ contract OlympusPricev2 is PRICEv2, IVersioned {
     /// @dev        - Validates final configuration with `_getCurrentPrice()` or, when using a moving average,
     /// @dev          both the raw observation and MA-inclusive CURRENT strategy input shapes
     /// @dev        - Emits events based on which updates occurred
+    ///
+    /// @dev        When the final configuration uses the moving average, validation appends a synthetic moving-average value derived from the current raw feed observation, in order to allow for re-configuration when the last observation is stale or out of consensus.
+    ///             If the last stored observation is stale or out of consensus, call `storeObservation(asset_)` after updating the asset before consumers rely on CURRENT price reads.
     ///
     /// @dev        Will revert if:
     /// @dev        - All update flags are false (no-op)
