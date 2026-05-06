@@ -43,8 +43,8 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
             userEthBefore - fee.nativeFee,
             "User should spend exactly the native fee"
         );
-        assertEq(address(bridge).balance, 0, "Bridge should hold no ETH after send");
-        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
+        assertEq(address(bridge).balance, 0, "Bridge should hold no native after send");
+        assertEq(address(gateway).balance, 0, "Gateway should hold no native after send");
         assertEq(
             gateway.bridgedSupply(),
             amount,
@@ -153,11 +153,11 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         uint256 amount = 1000e9;
         MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
 
-        // Drain user's ETH so they can't cover the fee
+        // Drain user's native balance so they can't cover the fee
         uint256 userBalance = user.balance;
         vm.prank(user);
         payable(address(0xdead)).transfer(userBalance);
-        assertEq(user.balance, 0, "User should have no ETH");
+        assertEq(user.balance, 0, "User should have no native balance");
 
         // Low-level call because vm.prank + {value} reverts at cheatcode level
         // when sender has insufficient balance
@@ -165,7 +165,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         (bool success, ) = address(bridge).call{value: fee.nativeFee}(
             abi.encodeWithSelector(bridge.sendOhm.selector, NONCANONICAL_EID, recipient, amount)
         );
-        assertFalse(success, "Should revert with insufficient ETH balance");
+        assertFalse(success, "Should revert with insufficient native balance");
     }
 
     function testFuzz_sendOhm_variousAmounts(uint256 amount_) external {

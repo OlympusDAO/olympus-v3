@@ -41,15 +41,9 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
     ///      OHM is transferred from the user to the gateway, then the gateway burns and
-    ///      sends via LayerZero. The caller must send native token (ETH) with the call to
+    ///      sends via LayerZero. The caller must send the native token with the call to
     ///      cover the LayerZero messaging fee; excess is refunded to msg.sender.
     ///      Use estimateSendFee() to determine the required fee.
-    ///
-    ///      Reverts if:
-    ///      - The bridge is not enabled.
-    ///      - amount_ is zero.
-    ///      - The user has insufficient OHM balance or approval.
-    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
@@ -58,10 +52,6 @@ interface ILZCrossChainBridge is IVersioned {
 
     /// @notice Sets the gateway address.
     /// @dev Only callable by the owner.
-    ///
-    ///      Reverts if:
-    ///      - The caller is not the owner.
-    ///      - gateway_ is the zero address.
     ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;

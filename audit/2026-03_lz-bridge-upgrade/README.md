@@ -47,6 +47,10 @@ Branch: `lz-bridge-upgrade`
         - [interfaces/](../../src/policies/interfaces/)
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
             - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
+    - [bases/](../../src/bases/)
+        - [Rescuable.sol](../../src/bases/Rescuable.sol) - Reusable abstract base exposing privileged `rescue()` to sweep accidentally-sent assets; subclasses authorize via the `_authorizeRescue()` hook
+        - [interfaces/IRescuable.sol](../../src/bases/interfaces/IRescuable.sol) - Rescue interface (declares `NATIVE_TOKEN`, `Rescued` event, and `Rescuable_InvalidRecipient` error)
+    - [libraries/ERC7528Constants.sol](../../src/libraries/ERC7528Constants.sol) - EIP-7528 native-token sentinel address
 
 **OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
 
@@ -102,6 +106,7 @@ You can review previous audits here:
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Rate limits are unconfigured by default and configured separately as needed. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount but are not independently capped. The gateway overrides `_outflow` and `_inflow` to skip unconfigured or fully-settled EIDs.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin`.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
+12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescuable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native token, identified via the EIP-7528 sentinel `NATIVE_TOKEN`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
 ### LZ V2 Receiver Callbacks
 
@@ -189,6 +194,7 @@ sequenceDiagram
 | `nilify`                   | `bridge_admin` / `admin` |
 | `burn`                     | `bridge_admin` / `admin` |
 | `clear`                    | `bridge_admin` / `admin` |
+| `rescue`                   | `manager` / `admin`      |
 
 #### LZCrossChainBridge
 
@@ -197,3 +203,4 @@ sequenceDiagram
 | `sendOhm`            | public  |
 | `setGateway`         | `owner` |
 | `enable` / `disable` | `owner` |
+| `rescue`             | `owner` |
