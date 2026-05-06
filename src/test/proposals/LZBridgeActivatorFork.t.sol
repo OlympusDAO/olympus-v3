@@ -28,7 +28,7 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 25027000;
+    uint256 internal constant FORK_BLOCK = 24751208;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
