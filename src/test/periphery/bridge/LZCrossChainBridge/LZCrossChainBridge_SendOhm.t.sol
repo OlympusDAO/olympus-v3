@@ -21,7 +21,13 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
 
         vm.expectEmit(true, true, true, true);
-        emit ILZCrossChainBridge.Bridged(user, amount, NONCANONICAL_EID, fee.nativeFee);
+        emit ILZCrossChainBridge.Bridged(
+            user,
+            amount,
+            NONCANONICAL_EID,
+            fee.nativeFee,
+            fee.nativeFee
+        );
 
         vm.prank(user);
         bridge.sendOhm{value: fee.nativeFee}(NONCANONICAL_EID, recipient, amount);
@@ -44,6 +50,42 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
             amount,
             "Bridged supply should increase by amount on canonical"
         );
+    }
+
+    /// @notice When the caller overpays, the Bridged event reports the actual nativeFee
+    ///         charged by LayerZero, and the excess is refunded to msg.sender.
+    function test_sendOhm_emitsActualNativeFeeOnOverpayment() external {
+        uint256 amount = 1000e9;
+        MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
+
+        uint256 excess = 3 ether;
+        uint256 totalSent = fee.nativeFee + excess;
+        uint256 userEthBefore = user.balance;
+
+        vm.expectEmit(true, true, true, true);
+        emit ILZCrossChainBridge.Bridged(user, amount, NONCANONICAL_EID, fee.nativeFee, totalSent);
+
+        vm.prank(user);
+        bridge.sendOhm{value: totalSent}(NONCANONICAL_EID, recipient, amount);
+
+        // Deliver packet so the OHM is credited on destination
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+
+        // User should only be debited the actual fee (excess is refunded to msg.sender).
+        uint256 userEthAfter = user.balance;
+        assertGe(
+            userEthAfter,
+            userEthBefore - fee.nativeFee - 0.01 ether,
+            "User should be charged only the actual fee (plus small refund tolerance)"
+        );
+        assertLe(
+            userEthAfter,
+            userEthBefore - fee.nativeFee,
+            "User cannot be charged less than the actual fee"
+        );
+
+        assertEq(address(bridge).balance, 0, "Bridge should hold no ETH after send");
+        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
     }
 
     function test_sendOhm_revertsIfNotEnabled() external {

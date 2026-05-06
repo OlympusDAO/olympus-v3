@@ -3,7 +3,7 @@ pragma solidity >=0.8.30;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -58,7 +58,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
         IERC20(OHM).safeTransferFrom(msg.sender, gateway, amount_);
 
         // Gateway burns and sends via LayerZero
-        ILZBridgeGateway(gateway).burnAndSend{value: msg.value}(
+        MessagingReceipt memory receipt = ILZBridgeGateway(gateway).burnAndSend{value: msg.value}(
             dstEid_,
             to_,
             amount_,
@@ -66,7 +66,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
             bytes("")
         );
 
-        emit Bridged(msg.sender, amount_, dstEid_, msg.value);
+        emit Bridged(msg.sender, amount_, dstEid_, receipt.fee.nativeFee, msg.value);
     }
 
     /// @inheritdoc ILZCrossChainBridge

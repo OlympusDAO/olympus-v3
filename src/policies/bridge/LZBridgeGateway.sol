@@ -204,7 +204,14 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable override onlyEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
+    )
+        external
+        payable
+        override
+        onlyEnabled
+        onlyRole(_BRIDGE_FACILITATOR_ROLE)
+        returns (MessagingReceipt memory receipt)
+    {
         // Note: zero-amount validation is the facilitator's responsibility
         _requireNonzeroAddress(to_, "to");
 
@@ -231,7 +238,7 @@ contract LZBridgeGateway is
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
         bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
 
-        MessagingReceipt memory receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
+        receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
             MessagingParams({
                 dstEid: dstEid_,
                 receiver: peer,
@@ -587,6 +594,8 @@ contract LZBridgeGateway is
     function _receiveBridgeOhm(uint32 srcEid_, bytes32 guid_, bytes memory data_) private {
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
+
+        _requireNonzeroAddress(to, "to");
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
