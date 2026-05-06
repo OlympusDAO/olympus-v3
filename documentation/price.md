@@ -104,6 +104,9 @@ The following values match `src/scripts/ops/batches/args/ConfigurePriceV1_2.json
 - The price of OHM will be determined by three separate paths: OHM/sUSDS (via USDS through `ERC4626.getPriceFromUnderlying(sUSDS)`), wETH and the Chainlink OHM-ETH × ETH-USD derived feed.
     - After any zero value or deviating values (> 2% from the median) have been excluded, the average is taken.
     - Strict mode remains enabled, so OHM requires two valid prices and can tolerate one failed OHM path.
+    - If one OHM path is unavailable or returns zero, the two remaining non-zero prices are compared against their midpoint. With a 200 bps tolerance, two prices that differ by a little more than 400 bps relative to the lower price can both sit outside the allowed range from that midpoint, causing `SimpleStrategy_PriceCountInvalid(0, 2)`.
+    - Guardian Audits' historical analysis found no observed threshold crossings in the checked windows. During the known OHM/sUSDS zero-quote period from block `24831090` through `24877959`, sampled every 300 blocks, all `155` comparable OHM/WETH-vs-Chainlink samples stayed below the two-price threshold, with a maximum divergence of `183` bps. A broader daily-scale review from block `24000000` through `25021851` likewise found no crossings across `142` comparable samples, with a maximum divergence of `190` bps.
+    - Based on this analysis, the 200 bps tolerance should be sufficient and avoid disruption of the heartbeat.
 - OHM's 30-day moving average state is migrated from the live PRICE v1 module during the upgrade. The moving average is stored for backwards-compatible target-price reads and is not used as an input to OHM spot price resolution.
 
 ### Price Feed Configuration Parameters
