@@ -595,6 +595,8 @@ contract LZBridgeGateway is
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
 
+        _requireNonzeroAddress(to, "to");
+
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
             if (bridgedSupply < amount)
