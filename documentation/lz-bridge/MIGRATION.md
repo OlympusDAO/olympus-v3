@@ -41,7 +41,7 @@ Execute `LZBridgeSecurityUpgradeProposal`:
 2. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
 3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
 4. Execute `LZBridgeActivator.activate()` which:
-   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.
+   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Every route requires four DVNs: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, `optionalDVNCount == type(uint8).max`) so the OApp config does not inherit LayerZero's EID-level default.
    - Sets peers for all remote chains.
    - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.
    - Enables the LZBridgeGateway policy.
