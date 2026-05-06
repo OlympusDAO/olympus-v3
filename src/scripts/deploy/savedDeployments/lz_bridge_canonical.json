@@ -1,7 +1,7 @@
 {
     "sequence": [
-        { "name": "LZCrossChainBridge", "args": {} },
         { "name": "LZBridgeGateway", "args": {} },
+        { "name": "LZCrossChainBridge", "args": {} },
         { "name": "LZBridgeActivator", "args": {} }
     ]
 }
