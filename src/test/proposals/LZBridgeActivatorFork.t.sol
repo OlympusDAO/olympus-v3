@@ -288,12 +288,22 @@ contract LZBridgeActivatorForkTest is Test {
                 LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
                 "Send confirmations mismatch"
             );
-            assertEq(uln.requiredDVNCount, 2, "Should require 2 DVNs");
 
             // Route-aware DVN verification
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-            assertEq(uln.requiredDVNs[0], expectedDvns[0], "DVN[0] mismatch");
-            assertEq(uln.requiredDVNs[1], expectedDvns[1], "DVN[1] mismatch");
+            assertEq(
+                uln.requiredDVNCount,
+                uint8(expectedDvns.length),
+                "Send required DVN count mismatch"
+            );
+            assertEq(
+                uln.requiredDVNs.length,
+                expectedDvns.length,
+                "Send required DVN array length mismatch"
+            );
+            for (uint256 d = 0; d < expectedDvns.length; ++d) {
+                assertEq(uln.requiredDVNs[d], expectedDvns[d], "Send DVN mismatch");
+            }
 
             // The app-level config must pin optional DVNs to NIL so the app config does not
             // silently inherit LayerZero's EID-level default.
@@ -341,11 +351,21 @@ contract LZBridgeActivatorForkTest is Test {
             UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
 
             assertEq(uln.confirmations, remoteConfs[i], "Recv confirmations mismatch");
-            assertEq(uln.requiredDVNCount, 2, "Should require 2 DVNs");
 
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-            assertEq(uln.requiredDVNs[0], expectedDvns[0], "DVN[0] mismatch");
-            assertEq(uln.requiredDVNs[1], expectedDvns[1], "DVN[1] mismatch");
+            assertEq(
+                uln.requiredDVNCount,
+                uint8(expectedDvns.length),
+                "Recv required DVN count mismatch"
+            );
+            assertEq(
+                uln.requiredDVNs.length,
+                expectedDvns.length,
+                "Recv required DVN array length mismatch"
+            );
+            for (uint256 d = 0; d < expectedDvns.length; ++d) {
+                assertEq(uln.requiredDVNs[d], expectedDvns[d], "Recv DVN mismatch");
+            }
 
             UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
                 address(gateway),
@@ -451,13 +471,14 @@ contract LZBridgeActivatorForkTest is Test {
 
     // ========== DVN ROUTE VERIFICATION ========== //
 
-    function test_activate_berachainRouteUsesNethermindDvn() public {
+    function test_activate_berachainRouteIncludesHorizenAndExcludesGoogleCloud() public {
         _grantRequiredRoles();
 
         vm.prank(TIMELOCK);
         activator.activate();
 
-        // Verify Berachain route uses Nethermind, not Google Cloud
+        // Verify Berachain route includes the Horizen DVN (since Google Cloud is unavailable
+        // there) along with the LayerZero Labs, Canary and Nethermind DVNs.
         bytes memory sendCfg = endpoint.getConfig(
             address(gateway),
             LZConfigLib.ETH_SEND_ULN_302,
@@ -466,25 +487,27 @@ contract LZBridgeActivatorForkTest is Test {
         );
         UlnConfig memory sendUln = abi.decode(sendCfg, (UlnConfig));
 
-        address[] memory beraDvns = LZConfigLib.dvnsForRoute(
-            LZConfigLib.ETH_EID,
-            LZConfigLib.BERA_EID
-        );
-        // Should be ETH_LZ_DVN + ETH_NETHERMIND_DVN (not GCLOUD_DVN)
-        assertEq(sendUln.requiredDVNs[0], beraDvns[0], "Bera route DVN[0] should be ETH_LZ_DVN");
-        assertEq(
-            sendUln.requiredDVNs[1],
-            beraDvns[1],
-            "Bera route DVN[1] should be ETH_NETHERMIND_DVN"
-        );
-        assertEq(
-            sendUln.requiredDVNs[1],
-            LZConfigLib.ETH_NETHERMIND_DVN,
-            "Bera route should use Nethermind DVN"
-        );
+        bool hasHorizen;
+        bool hasLz;
+        bool hasCanary;
+        bool hasNethermind;
+        bool hasGoogleCloud;
+        for (uint256 d = 0; d < sendUln.requiredDVNs.length; ++d) {
+            address dvn = sendUln.requiredDVNs[d];
+            if (dvn == LZConfigLib.ETH_HORIZEN_DVN) hasHorizen = true;
+            if (dvn == LZConfigLib.ETH_LZ_DVN) hasLz = true;
+            if (dvn == LZConfigLib.ETH_CANARY_DVN) hasCanary = true;
+            if (dvn == LZConfigLib.ETH_NETHERMIND_DVN) hasNethermind = true;
+            if (dvn == LZConfigLib.ETH_GCLOUD_DVN) hasGoogleCloud = true;
+        }
+        assertTrue(hasLz, "Bera route should include LayerZero Labs DVN");
+        assertTrue(hasCanary, "Bera route should include Canary DVN");
+        assertTrue(hasNethermind, "Bera route should include Nethermind DVN");
+        assertTrue(hasHorizen, "Bera route should include Horizen DVN");
+        assertFalse(hasGoogleCloud, "Bera route must not include Google Cloud DVN");
     }
 
-    function test_activate_nonBerachainRoutesUseGoogleCloudDvn() public {
+    function test_activate_nonBerachainRoutesIncludeGoogleCloudAndExcludeHorizen() public {
         _grantRequiredRoles();
 
         vm.prank(TIMELOCK);
@@ -504,11 +527,25 @@ contract LZBridgeActivatorForkTest is Test {
                 LZConfigLib.CONFIG_TYPE_ULN
             );
             UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
-            assertEq(
-                uln.requiredDVNs[1],
-                LZConfigLib.ETH_GCLOUD_DVN,
-                "Non-Bera route should use Google Cloud DVN"
-            );
+
+            bool hasGoogleCloud;
+            bool hasHorizen;
+            bool hasLz;
+            bool hasCanary;
+            bool hasNethermind;
+            for (uint256 d = 0; d < uln.requiredDVNs.length; ++d) {
+                address dvn = uln.requiredDVNs[d];
+                if (dvn == LZConfigLib.ETH_GCLOUD_DVN) hasGoogleCloud = true;
+                if (dvn == LZConfigLib.ETH_HORIZEN_DVN) hasHorizen = true;
+                if (dvn == LZConfigLib.ETH_LZ_DVN) hasLz = true;
+                if (dvn == LZConfigLib.ETH_CANARY_DVN) hasCanary = true;
+                if (dvn == LZConfigLib.ETH_NETHERMIND_DVN) hasNethermind = true;
+            }
+            assertTrue(hasLz, "Non-Bera route should include LayerZero Labs DVN");
+            assertTrue(hasCanary, "Non-Bera route should include Canary DVN");
+            assertTrue(hasNethermind, "Non-Bera route should include Nethermind DVN");
+            assertTrue(hasGoogleCloud, "Non-Bera route should include Google Cloud DVN");
+            assertFalse(hasHorizen, "Non-Bera route must not include Horizen DVN");
         }
     }
 }
