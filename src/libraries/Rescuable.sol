@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.20;
+
+// Interfaces
+import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IRescuable} from "src/interfaces/IRescuable.sol";
+
+// Libraries
+import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
+
+/// @title Rescuable
+/// @notice Abstract base for contracts that expose a privileged `rescue()` to sweep
+///         accidentally-sent assets. Subclasses authorize the caller via the
+///         `_authorizeRescue()` hook.
+/// @dev Native token is identified using the EIP-7528 sentinel
+///      (`ERC7528Constants.NATIVE_TOKEN`), which is unambiguous and cannot collide with a
+///      deployed ERC20.
+abstract contract Rescuable is IRescuable {
+    using SafeERC20 for IERC20;
+
+    /// @inheritdoc IRescuable
+    address public constant override NATIVE_TOKEN = ERC7528Constants.NATIVE_TOKEN;
+
+    /// @inheritdoc IRescuable
+    /// @dev Sweeps the entire balance of the specified asset to the provided recipient.
+    ///      Pass `NATIVE_TOKEN` (the EIP-7528 sentinel) as `token_` to rescue the native
+    ///      token.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not authorised by the implementation's `_authorizeRescue()`.
+    ///      - `to_` is the zero address.
+    ///
+    ///      Does NOT revert when the contract's balance of `token_` is zero — the call is
+    ///      a no-op apart from the emitted event with `amount == 0`.
+    function rescue(address token_, address payable to_) external virtual override {
+        _authorizeRescue();
+
+        if (to_ == address(0)) revert Rescuable_InvalidRecipient();
+
+        uint256 balance;
+        if (token_ == NATIVE_TOKEN) {
+            balance = address(this).balance;
+            Address.sendValue(to_, balance);
+        } else {
+            balance = IERC20(token_).balanceOf(address(this));
+            IERC20(token_).safeTransfer(to_, balance);
+        }
+
+        emit Rescued(token_, to_, balance);
+    }
+
+    /// @notice Hook for subclasses to authorize the caller of `rescue()`.
+    /// @dev Implementations MUST revert if the caller is not authorised.
+    function _authorizeRescue() internal view virtual;
+}

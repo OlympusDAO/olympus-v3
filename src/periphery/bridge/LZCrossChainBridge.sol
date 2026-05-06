@@ -15,7 +15,7 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
-import {Rescuable} from "src/abstracts/Rescuable.sol";
+import {Rescuable} from "src/libraries/Rescuable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
@@ -84,12 +84,9 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, I
     }
 
     /// @inheritdoc Rescuable
-    /// @dev Restricts rescue to the owner. Reverts with `"UNAUTHORIZED"` for callers that
-    ///      are not the owner (matches `Owned.onlyOwner`).
-    function _authenticateRescue() internal view override {
-        // String literal for consistency with solmate's Owned.onlyOwner modifier
-        // solhint-disable-next-line gas-custom-errors
-        if (msg.sender != owner) revert("UNAUTHORIZED");
+    /// @dev Restricts rescue to the owner via `_onlyOwner()`.
+    function _authorizeRescue() internal view override {
+        _onlyOwner();
     }
 
     /// @inheritdoc ILZCrossChainBridge
