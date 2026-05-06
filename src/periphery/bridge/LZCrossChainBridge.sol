@@ -57,6 +57,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescueable, 
         address to_,
         uint256 amount_
     ) external payable override onlyEnabled {
+        _requireNonzeroAddress(to_, "to");
         if (amount_ == 0) revert LZCrossChainBridge_InsufficientAmount();
 
         // Transfer OHM from the user to the gateway
