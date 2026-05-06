@@ -10,6 +10,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 **Installation and Build:**
 
+- Node.js >=24 is required for local development and CI
 - `pnpm install` - Install all dependencies (runs postinstall script)
 - `pnpm build` or `forge build` - Build all files
 - `forge build --contracts path/to/contract.sol` - Build a specific contract
@@ -175,13 +176,11 @@ Configuration is in `.mcp.json`. API keys are set via environment variables:
 The protocol follows the Default Framework pattern with a three major components:
 
 1. **Kernel** (`src/Kernel.sol`) - Central governance and access control system
-
     - Manages installation/upgrading of modules and activation/deactivation of policies
     - Implements role-based access control with 5-byte keycodes
     - Executes governance actions: InstallModule, UpgradeModule, ActivatePolicy, DeactivatePolicy, ChangeExecutor, MigrateKernel
 
 2. **Modules** (`src/modules/`) - Shared state storage with minimal dependencies
-
     - Each module has a 5-byte keycode identifier (e.g., TRSRY, MINTR, PRICE)
     - Define roles for policies to access module functions
     - Can be upgraded by installing new versions with same keycode
@@ -321,13 +320,11 @@ When working with Solidity code involving mathematical operations, follow these 
 1. **No Floating-Point**: Solidity has no floating-point numbers - all numbers are integers.
 
 2. **Decimal Representation**:
-
     - Decimal numbers are represented as integers with an associated decimal scale
     - Example: 1.0 with 18 decimals = 1000000000000000000 (1e18)
     - Always track and document the decimal scale of each variable
 
 3. **Multiplication & Division Order**:
-
     - When multiplying/dividing numbers with different scales, order matters
     - General pattern: multiply first, then divide to maintain precision
     - Example: `result = a * scaleB / scaleC` where result has scaleB decimals
@@ -335,7 +332,6 @@ When working with Solidity code involving mathematical operations, follow these 
     - Phantom overflows can occur, where `a * scaleB` (from the example above) overflows the maximum value of `uint256`. For that reason, it is advisable to use the FullMath library in `src/libraries/FullMath.sol`.
 
 4. **Rounding Behavior**:
-
     - Solidity rounds DOWN by default (floor division)
     - Use `mulDiv()` for standard rounding down
     - Use `mulDivUp()` when rounding up is needed

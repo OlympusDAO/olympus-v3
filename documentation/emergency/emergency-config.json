@@ -29,7 +29,9 @@
             "contracts": {
                 "CrossChainBridge": "0xBA42BE149e5260EbA4B82418A6306f55D532eA47",
                 "Emergency": "0xCA7240A7B439c9D458B47831d38c3d69C1287469",
-                "OHM": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+                "OHM": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+                "OlympusMinter": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+                "OlympusTreasury": "0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1"
             },
             "multisigs": {
                 "dao": "0x91494D1BC2286343D51c55E46AE80C9356D099b5",
@@ -56,6 +58,8 @@
                 "EmissionManager": "0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff",
                 "OHM": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
                 "OlympusHeart": "0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB",
+                "OlympusMinter": "0xa90bFe53217da78D900749eb6Ef513ee5b6a491e",
+                "OlympusTreasury": "0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613",
                 "ReserveMigrator": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
                 "ReserveWrapper": "0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9",
                 "V1Migrator": "0x5131654eFCd63f7b797e00118792e0d0dD90B8B0",
@@ -97,6 +101,8 @@
                 "EmissionManager": "0x79cF5D3824CaBD3C7617F8470B94033EB10b28CA",
                 "OHM": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
                 "OlympusHeart": "0x1dc2c4E15189a7aa61Eff2b3DD3D5EAe8fA03377",
+                "OlympusMinter": "0x203C46cbB4FCC18977f521a9f7fdE007E1A564f6",
+                "OlympusTreasury": "0xC48abD1431f17212379557397Dd603912174131E",
                 "ReserveMigrator": "0x8B92A1dea210B7b7516443b52fdf5Dae677e93b0",
                 "ReserveWrapper": "0x46a01AE30571855FBB5988eEd9D116aa2A3f2377",
                 "YieldRepurchaseFacility": "0xf8ABE1D9502BbcaD4576433490D851D03c22A6B4"
@@ -134,7 +140,13 @@
                 "Unauthorized withdrawals detected",
                 "Treasury contract compromised",
                 "Funds at immediate risk"
-            ]
+            ],
+            "statusCheck": {
+                "abi": "trsry",
+                "contractKey": "olympus.modules.OlympusTreasury",
+                "functionName": "active",
+                "trueIsShutdown": false
+            }
         },
         {
             "availableOn": ["mainnet", "sepolia", "berachain"],
@@ -162,7 +174,13 @@
                 "Unauthorized minting detected",
                 "Minting controls bypassed",
                 "Infinite supply risk"
-            ]
+            ],
+            "statusCheck": {
+                "abi": "mintr",
+                "contractKey": "olympus.modules.OlympusMinter",
+                "functionName": "active",
+                "trueIsShutdown": false
+            }
         },
         {
             "availableOn": ["mainnet", "sepolia"],
@@ -752,12 +770,12 @@
         "V1Migrator",
         "YieldRepurchaseFacility"
     ],
-    "lastUpdated": "2026-03-10T11:54:31Z",
+    "lastUpdated": "2026-03-26T00:00:00Z",
     "metadata": {
         "description": "Emergency shutdown configuration for Olympus Protocol. This file is the single source of truth for emergency shutdown procedures and is used by the frontend for codegen.",
         "docsUrl": "https://docs.olympusdao.finance/emergency",
         "repository": "OlympusDAO/olympus-v3"
     },
     "updatedBy": "claude-code",
-    "version": "1.0.4"
+    "version": "1.0.5"
 }
