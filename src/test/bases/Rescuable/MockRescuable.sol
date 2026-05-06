@@ -2,7 +2,7 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.20;
 
-import {Rescuable} from "src/libraries/Rescuable.sol";
+import {Rescuable} from "../../../bases/Rescuable.sol";
 
 /// @notice Harness exposing `Rescuable` with no auth so the parent's logic can be exercised
 ///         without coupling to a specific permission model.

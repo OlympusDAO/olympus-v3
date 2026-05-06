@@ -29,7 +29,7 @@ import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, O
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IRescuable} from "src/interfaces/IRescuable.sol";
+import {IRescuable} from "../../bases/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
@@ -42,7 +42,7 @@ import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {Rescuable} from "src/libraries/Rescuable.sol";
+import {Rescuable} from "../../bases/Rescuable.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -528,10 +528,7 @@ contract LZBridgeGateway is
     // ========= RESCUE FUNCTIONS ========= //
 
     /// @inheritdoc Rescuable
-    /// @dev Restricts rescue to the manager or admin role.
-    function _authorizeRescue() internal view override {
-        if (!_isManager(msg.sender) && !_isAdmin(msg.sender)) revert PolicyAdmin.NotAuthorised();
-    }
+    function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
 
     // ========= VIEW FUNCTIONS ========= //
 

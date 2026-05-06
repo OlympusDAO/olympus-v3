@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IRescuable} from "src/interfaces/IRescuable.sol";
+import {IRescuable} from "../../../../bases/interfaces/IRescuable.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";

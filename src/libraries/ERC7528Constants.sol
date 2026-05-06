@@ -7,8 +7,5 @@ pragma solidity >=0.8.20;
 /// @dev See https://eips.ethereum.org/EIPS/eip-7528.
 library ERC7528Constants {
     /// @notice Sentinel address representing the native token (ETH).
-    /// @dev `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`. Cannot collide with a deployed
-    ///      ERC20 because no contract can be deployed at this address (it is not a CREATE
-    ///      output and has no associated private key).
     address internal constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 }

@@ -3,7 +3,7 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IRescuable} from "src/interfaces/IRescuable.sol";
+import {IRescuable} from "./interfaces/IRescuable.sol";
 
 // Libraries
 import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";

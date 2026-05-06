@@ -2,7 +2,7 @@
 pragma solidity >=0.8.4;
 
 import {IVersioned} from "../../interfaces/IVersioned.sol";
-import {IRescuable} from "../../interfaces/IRescuable.sol";
+import {IRescuable} from "../../bases/interfaces/IRescuable.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge

@@ -4,7 +4,7 @@ pragma solidity >=0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 // Interfaces
-import {IRescuable} from "src/interfaces/IRescuable.sol";
+import {IRescuable} from "../../../bases/interfaces/IRescuable.sol";
 
 // Libraries
 import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";

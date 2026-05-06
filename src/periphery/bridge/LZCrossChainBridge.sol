@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {IRescuable} from "src/interfaces/IRescuable.sol";
+import {IRescuable} from "../../bases/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -15,7 +15,7 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
-import {Rescuable} from "src/libraries/Rescuable.sol";
+import {Rescuable} from "../../bases/Rescuable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
@@ -84,10 +84,7 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, I
     }
 
     /// @inheritdoc Rescuable
-    /// @dev Restricts rescue to the owner via `_onlyOwner()`.
-    function _authorizeRescue() internal view override {
-        _onlyOwner();
-    }
+    function _authorizeRescue() internal view override onlyOwner {}
 
     /// @inheritdoc ILZCrossChainBridge
     function estimateSendFee(
