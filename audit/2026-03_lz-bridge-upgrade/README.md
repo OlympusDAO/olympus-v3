@@ -12,8 +12,8 @@ The existing `CrossChainBridge` policy (deployed on Ethereum, Arbitrum, Optimism
 
 The new design splits the bridge into two contracts:
 
-1. **LZBridgeGateway** (Policy) — Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, bridged supply tracking, and proxying of LZ V2 endpoint configuration and message management functions.
-2. **LZCrossChainBridge** (Periphery) — User-facing facilitator contract authorized via the `bridge_facilitator` role. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
+1. **LZBridgeGateway** (Policy) - Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, bridged supply tracking, and proxying of LZ V2 endpoint configuration and message management functions.
+2. **LZCrossChainBridge** (Periphery) - User-facing facilitator contract authorized via the `bridge_facilitator` role. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
 
 ```text
 User -> LZCrossChainBridge (bridge_facilitator role) -> LZBridgeGateway (policy) -> LZ Endpoint V2 -> [destination]
@@ -96,7 +96,7 @@ You can review previous audits here:
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
-6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation: LayerZero DVN plus a second DVN selected per route — Google Cloud DVN on chains where it is available, and Nethermind DVN for Berachain routes (where Google Cloud DVN is not available).
+6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation: LayerZero DVN plus a second DVN selected per route - Google Cloud DVN on chains where it is available, and Nethermind DVN for Berachain routes (where Google Cloud DVN is not available).
 7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `admin` remains available as an emergency/override actor. `setDelegate` allows setting an LZ endpoint delegate as a fallback for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Rate limits are unconfigured by default and configured separately as needed. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount but are not independently capped. The gateway overrides `_outflow` and `_inflow` to skip unconfigured or fully-settled EIDs.
@@ -108,7 +108,7 @@ You can review previous audits here:
 The gateway implements `ILayerZeroReceiver`:
 
 - **`allowInitializePath(origin)`**: Returns `true` only if the peer for `origin.srcEid` is non-zero and equals `origin.sender`. The explicit zero check prevents a cleared or unset peer from matching a zero sender. Controls which communication paths the LZ V2 endpoint can initialize for this contract.
-- **`nextNonce(_, _)`**: Returns `0` — unordered (nonce-independent) delivery, the default per `OAppReceiver` (`@lz-oapp-evm-0.4.1`). Matches the original V1 CrossChainBridge, which also does not enforce message ordering.
+- **`nextNonce(_, _)`**: Returns `0` - unordered (nonce-independent) delivery, the default per `OAppReceiver` (`@lz-oapp-evm-0.4.1`). Matches the original V1 CrossChainBridge, which also does not enforce message ordering.
 
 ### Bridged Supply Tracking
 

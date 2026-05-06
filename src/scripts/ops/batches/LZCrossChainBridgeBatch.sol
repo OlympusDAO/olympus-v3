@@ -84,7 +84,7 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
         //      inactive and then deactivate it. Bundled here to guarantee user-facing
         //      bridge calls cannot land between Kernel deactivation and the bridge
         //      being marked inactive. setBridgeStatus relies on role permissions
-        //      granted via the Kernel, so it must be called before deactivation —
+        //      granted via the Kernel, so it must be called before deactivation,
         //      and skipped entirely if disableOldBridge already ran.
         if (Kernel(kernel).isPolicyActive(Policy(oldBridge))) {
             console2.log("Disabling old CrossChainBridge:", oldBridge);
