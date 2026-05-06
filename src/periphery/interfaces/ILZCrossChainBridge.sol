@@ -18,12 +18,6 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Thrown when the send amount is zero.
     error LZCrossChainBridge_InsufficientAmount();
 
-    /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued ERC20 token address, or address(0) for the native token.
-    /// @param to The recipient address.
-    /// @param amount The amount rescued.
-    event Rescued(address indexed token, address indexed to, uint256 amount);
-
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
@@ -52,15 +46,6 @@ interface ILZCrossChainBridge is IVersioned {
     ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
-
-    /// @notice Rescues assets accidentally sent to this contract.
-    /// @dev Only callable by the owner. Sweeps the entire balance of the specified asset
-    ///      to the provided recipient. Pass address(0) as `token_` to rescue the native
-    ///      token.
-    ///
-    /// @param token_ The ERC20 token to rescue, or address(0) for native token.
-    /// @param to_ The recipient of the rescued assets.
-    function rescue(address token_, address payable to_) external;
 
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);

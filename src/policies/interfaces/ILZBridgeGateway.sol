@@ -107,12 +107,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param isReceiveEnabled The new value.
     event IsReceiveEnabledSet(bool isReceiveEnabled);
 
-    /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued ERC20 token address, or address(0) for native token.
-    /// @param to The recipient address.
-    /// @param amount The amount rescued.
-    event Rescued(address indexed token, address indexed to, uint256 amount);
-
     // ========= CORE FUNCTIONS ========= //
 
     /// @notice Burns OHM held by the gateway and sends a bridge message to a destination chain.
@@ -213,19 +207,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     ///
     /// @param eids_ The endpoint IDs to reset.
     function resetRateLimits(uint32[] memory eids_) external;
-
-    /// @notice Rescues assets accidentally sent to this contract.
-    /// @dev Only callable by the manager or admin role. Sweeps the entire balance of the
-    ///      specified asset to the provided recipient. Pass address(0) as `token_` to rescue
-    ///      the native token (ETH).
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the manager or admin role.
-    ///      - `to_` is the zero address.
-    ///
-    /// @param token_ The ERC20 token to rescue, or address(0) for native token.
-    /// @param to_ The recipient of the rescued assets.
-    function rescue(address token_, address payable to_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 

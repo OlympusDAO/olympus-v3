@@ -34,7 +34,6 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Libraries
-import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
 // Contracts
@@ -42,6 +41,7 @@ import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -57,6 +57,7 @@ contract LZBridgeGateway is
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
+    Rescueable,
     ILZBridgeGateway
 {
     using SafeERC20 for IERC20;
@@ -525,24 +526,8 @@ contract LZBridgeGateway is
 
     // ========= RESCUE FUNCTIONS ========= //
 
-    /// @inheritdoc ILZBridgeGateway
-    /// @dev Reverts if:
-    ///      - The caller does not have the manager or admin role.
-    ///      - `to_` is the zero address.
-    function rescue(address token_, address payable to_) external override onlyManagerOrAdminRole {
-        _requireNonzeroAddress(to_, "to");
-
-        uint256 balance;
-        if (token_ == address(0)) {
-            balance = address(this).balance;
-            Address.sendValue(to_, balance);
-        } else {
-            balance = IERC20(token_).balanceOf(address(this));
-            IERC20(token_).safeTransfer(to_, balance);
-        }
-
-        emit Rescued(token_, to_, balance);
-    }
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
 
     // ========= VIEW FUNCTIONS ========= //
 
@@ -562,13 +547,14 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PolicyEnabler) returns (bool) {
+    ) public view override(PolicyEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            PolicyEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     // ========= RATE LIMITER OVERRIDE ========= //

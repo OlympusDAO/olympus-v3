@@ -9,19 +9,19 @@ import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. The user approves this contract for OHM, then calls sendOhm().
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
-contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChainBridge {
+contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescueable, ILZCrossChainBridge {
     using SafeERC20 for IERC20;
 
     /// @inheritdoc ILZCrossChainBridge
@@ -82,24 +82,8 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
         _setGateway(gateway_);
     }
 
-    /// @inheritdoc ILZCrossChainBridge
-    /// @dev Reverts if:
-    ///      - The caller is not the owner.
-    ///      - `to_` is the zero address.
-    function rescue(address token_, address payable to_) external override onlyOwner {
-        _requireNonzeroAddress(to_, "to");
-
-        uint256 balance;
-        if (token_ == address(0)) {
-            balance = address(this).balance;
-            Address.sendValue(to_, balance);
-        } else {
-            balance = IERC20(token_).balanceOf(address(this));
-            IERC20(token_).safeTransfer(to_, balance);
-        }
-
-        emit Rescued(token_, to_, balance);
-    }
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyOwner {}
 
     /// @inheritdoc ILZCrossChainBridge
     function estimateSendFee(
@@ -112,11 +96,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PeripheryEnabler) returns (bool) {
+    ) public view override(PeripheryEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            PeripheryEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc PeripheryEnabler
