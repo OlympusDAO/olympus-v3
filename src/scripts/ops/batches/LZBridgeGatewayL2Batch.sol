@@ -458,7 +458,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 )
             );
         }
-        if (sendUln.requiredDVNCount != 2) {
+        if (sendUln.requiredDVNCount != 2 || sendUln.requiredDVNs.length != 2) {
             revert(
                 string.concat(
                     "Send ULN should require 2 DVNs for EID ",
