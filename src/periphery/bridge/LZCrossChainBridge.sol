@@ -4,7 +4,6 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {IRescuable} from "../../bases/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -97,12 +96,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescuable, I
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PeripheryEnabler) returns (bool) {
+    ) public view override(PeripheryEnabler, Rescuable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
-            interfaceId == type(IRescuable).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            PeripheryEnabler.supportsInterface(interfaceId) ||
+            Rescuable.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc PeripheryEnabler

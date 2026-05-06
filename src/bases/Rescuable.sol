@@ -3,6 +3,7 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IRescuable} from "./interfaces/IRescuable.sol";
 
 // Libraries
@@ -54,4 +55,11 @@ abstract contract Rescuable is IRescuable {
     /// @notice Hook for subclasses to authorize the caller of `rescue()`.
     /// @dev Implementations MUST revert if the caller is not authorised.
     function _authorizeRescue() internal view virtual;
+
+    // ========= ERC165 ========= //
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return
+            interfaceId == type(IRescuable).interfaceId || interfaceId == type(IERC165).interfaceId;
+    }
 }

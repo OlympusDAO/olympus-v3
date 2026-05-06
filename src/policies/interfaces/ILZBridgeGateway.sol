@@ -4,7 +4,6 @@ pragma solidity >=0.8.18;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {IRescuable} from "../../bases/interfaces/IRescuable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
@@ -12,7 +11,7 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
 ///      enforced options, rate limiting, and bridged supply tracking.
-interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin, IRescuable {
+interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.
