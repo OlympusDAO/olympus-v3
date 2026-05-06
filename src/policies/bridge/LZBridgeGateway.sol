@@ -474,7 +474,13 @@ contract LZBridgeGateway is
     // ========= LZ MESSAGE MANAGEMENT ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via skip
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///      Depending on the cause of the skip, a separate governance proposal may also be required
+    ///      to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function skip(
         uint32 srcEid_,
@@ -503,7 +509,13 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via burn
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///      Depending on the cause of the burn, a separate governance proposal may also be required
+    ///      to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function burn(
         uint32 srcEid_,
@@ -521,7 +533,13 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, clearing an inbound OHM mint message bypasses the gateway's
+    ///      `lzReceive` handler, so `bridgedSupply` is not decremented and the MINTR mint approval
+    ///      is not consumed. The caller MUST follow up with a corresponding `decreaseBridgedSupply`
+    ///      call to keep the bookkeeping consistent. Depending on the cause of the clear, a separate
+    ///      governance proposal may also be required to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function clear(
         Origin calldata origin_,
