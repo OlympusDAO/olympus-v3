@@ -31,7 +31,7 @@ Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimis
 
 ### 2\. Ethereum pre-OCG setup (MS batch)
 
-**`LZBridgeGatewayBatch.activateGateway()`** - activate `LZBridgeGateway` in the Kernel. The old `CrossChainBridge` remains active, users can continue bridging via the old bridge.
+**`LZBridgeGatewayBatch.activateGateway()`** — activate `LZBridgeGateway` in the Kernel. The old `CrossChainBridge` remains active, users can continue bridging via the old bridge.
 
 ### 3\. OCG Proposal
 
@@ -47,40 +47,40 @@ Execute `LZBridgeSecurityUpgradeProposal`:
    - Enables the LZBridgeGateway policy.
 5. Revoke temporary roles from the LZBridgeActivator contract.
 
-After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains - no user traffic flows through the new bridge yet. Old bridges continue operating normally.
+After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains — no user traffic flows through the new bridge yet. Old bridges continue operating normally.
 
 ### 4\. Stop old bridge traffic
 
 **`LZCrossChainBridgeBatch.disableOldBridge()`** on Ethereum. **`LZCrossChainBridgeL2Batch.disableOldBridge()`** on each non-canonical chain.
 
-This sets `bridgeActive=false` on each old `CrossChainBridge`, which blocks new `sendOhm()` calls. However, `lzReceive()`/`receiveMessage()` remains functional - in-flight messages sent before disable will still be delivered.
+This sets `bridgeActive=false` on each old `CrossChainBridge`, which blocks new `sendOhm()` calls. However, `lzReceive()`/`receiveMessage()` remains functional — in-flight messages sent before disable will still be delivered.
 
 Even if users send messages while disableOldBridge is being executed across chains, those messages will still be received on the destination (only sending is blocked, not receiving).
 
-**Wait approximately 3-15 minutes for all in-flight LayerZero V1 messages to be delivered.** This ensures the bridged supply snapshot in step 5 is accurate. Running `calc_bridged_supply.sh` immediately is safe - the script will fail if in-flight messages are detected.
+**Wait approximately 3-15 minutes for all in-flight LayerZero V1 messages to be delivered.** This ensures the bridged supply snapshot in step 5 is accurate. Running `calc_bridged_supply.sh` immediately is safe — the script will fail if in-flight messages are detected.
 
 At this point: users cannot bridge via old bridges (send blocked) and cannot bridge via new bridges (LZCrossChainBridge still disabled). This is the migration downtime window.
 
 ### 5\. Calculate and set bridged supply on Ethereum
 
-1. **`shell/calc_bridged_supply.sh`** - verifies all old bridges are disabled, checks for in-flight LZ V1 messages and unretried failed messages, cross-checks via LayerZero Scan API, and computes the initial bridged supply (sum of OHM totalSupply across non-canonical chains). Fill the output value into the `LZBridgeGatewayBatch` args file.
-2. If the script reports unretried failed messages: **`shell/retry_failed_messages.sh \--account \<name\>`** - retries failed LZ V1 messages by calling `retryMessage()` on each destination bridge. Reads `shell/failed_messages.json` generated in step 1 (payloads are auto-fetched where possible; fill in missing ones from LayerZero Scan or `MessageFailed` event logs). `retryMessage()` is permissionless. After retrying, re-run `calc_bridged_supply.sh` to confirm a clean state.
-3. **`LZBridgeGatewayBatch.initBridgedSupply()`** - writes the bridged supply to the new gateway via `increaseBridgedSupply()`. Must be done before non-canonical bridges go live.
+1. **`shell/calc_bridged_supply.sh`** — verifies all old bridges are disabled, checks for in-flight LZ V1 messages and unretried failed messages, cross-checks via LayerZero Scan API, and computes the initial bridged supply (sum of OHM totalSupply across non-canonical chains). Fill the output value into the `LZBridgeGatewayBatch` args file.
+2. If the script reports unretried failed messages: **`shell/retry_failed_messages.sh \--account \<name\>`** — retries failed LZ V1 messages by calling `retryMessage()` on each destination bridge. Reads `shell/failed_messages.json` generated in step 1 (payloads are auto-fetched where possible; fill in missing ones from LayerZero Scan or `MessageFailed` event logs). `retryMessage()` is permissionless. After retrying, re-run `calc_bridged_supply.sh` to confirm a clean state.
+3. **`LZBridgeGatewayBatch.initBridgedSupply()`** — writes the bridged supply to the new gateway via `increaseBridgedSupply()`. Must be done before non-canonical bridges go live.
 
 ### 6\. Configure and activate non-canonical bridges
 
 On each non-canonical chain (Arbitrum, Optimism, Base, Berachain), run in order:
 
-1. **`LZBridgeGatewayL2Batch.activateGateway()`** - deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway`.
-2. **`LZBridgeGatewayL2Batch.grantRoles()`** - grant `bridge_admin`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) - this determines whether step 4 is needed.
-3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** - pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, enable gateway.
-4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ - revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
-5. **`LZCrossChainBridgeL2Batch.setupL2()`** - enable the periphery bridge (gateway was set in the constructor at deployment).
+1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway`.
+2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
+3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, enable gateway.
+4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ — revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
+5. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
 
-After this step, non-canonical bridges are live. Users can bridge to/from non-canonical chains. Ethereum bridge periphery is still disabled - users on Ethereum cannot send yet, but Ethereum can receive from non-canonical chains.
+After this step, non-canonical bridges are live. Users can bridge to/from non-canonical chains. Ethereum bridge periphery is still disabled — users on Ethereum cannot send yet, but Ethereum can receive from non-canonical chains.
 
 ### 7\. Activate Ethereum bridge
 
-**`LZCrossChainBridgeBatch.setup()`** - deactivate old `CrossChainBridge` in the Kernel and enable `LZCrossChainBridge`. `LZCrossChainBridge` is a peripheral contract controlled by the DAO MS (its owner).
+**`LZCrossChainBridgeBatch.setup()`** — deactivate old `CrossChainBridge` in the Kernel and enable `LZCrossChainBridge`. `LZCrossChainBridge` is a peripheral contract controlled by the DAO MS (its owner).
 
 Migration complete. All bridge traffic now flows through the new LZ V2 contracts.
