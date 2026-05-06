@@ -330,6 +330,18 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the admin role.
+    ///
+    ///      WARNING: Updating or clearing the peer for an EID strands any in-flight inbound
+    ///      messages from the previous peer that have already been verified on the LayerZero
+    ///      endpoint but not yet executed. Such messages will revert in `lzReceive` on the
+    ///      peer check and become permanently undeliverable.
+    ///
+    ///      Recovery requires the admin to handle each stranded message individually via the
+    ///      LayerZero endpoint recovery functions (`skip`, `nilify`, `burn`, or `clear`).
+    ///      A separate governance proposal may also be required to restore the OHM owed to
+    ///      the affected users, and a corresponding `decreaseBridgedSupply` call is required
+    ///      to keep the bookkeeping consistent.
+    ///
     function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
         peers[eid_] = peer_;
         emit PeerSet(eid_, peer_);
