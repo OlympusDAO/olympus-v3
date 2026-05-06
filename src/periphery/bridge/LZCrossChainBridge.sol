@@ -21,7 +21,13 @@ import {Rescueable} from "../../bases/Rescueable.sol";
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. The user approves this contract for OHM, then calls sendOhm().
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
-contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescueable, ILZCrossChainBridge {
+contract LZCrossChainBridge is
+    Owned,
+    PeripheryEnabler,
+    IVersioned,
+    Rescueable,
+    ILZCrossChainBridge
+{
     using SafeERC20 for IERC20;
 
     /// @inheritdoc ILZCrossChainBridge

@@ -60,6 +60,7 @@ abstract contract Rescueable is IRescueable {
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
         return
-            interfaceId == type(IRescueable).interfaceId || interfaceId == type(IERC165).interfaceId;
+            interfaceId == type(IRescueable).interfaceId ||
+            interfaceId == type(IERC165).interfaceId;
     }
 }
