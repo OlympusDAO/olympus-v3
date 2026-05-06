@@ -33,11 +33,15 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
+// Libraries
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
@@ -53,8 +57,11 @@ contract LZBridgeGateway is
     IVersioned,
     ILZEndpointV2Admin,
     ILayerZeroReceiver,
+    Rescueable,
     ILZBridgeGateway
 {
+    using SafeERC20 for IERC20;
+
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
@@ -524,6 +531,11 @@ contract LZBridgeGateway is
         ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
     }
 
+    // ========= RESCUE FUNCTIONS ========= //
+
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
+
     // ========= VIEW FUNCTIONS ========= //
 
     /// @inheritdoc ILZBridgeGateway
@@ -542,13 +554,14 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PolicyEnabler) returns (bool) {
+    ) public view override(PolicyEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            PolicyEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     // ========= RATE LIMITER OVERRIDE ========= //

@@ -14,13 +14,14 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {PeripheryEnabler} from "src/periphery/PeripheryEnabler.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. The user approves this contract for OHM, then calls sendOhm().
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
-contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChainBridge {
+contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, Rescueable, ILZCrossChainBridge {
     using SafeERC20 for IERC20;
 
     /// @inheritdoc ILZCrossChainBridge
@@ -46,6 +47,11 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The bridge is not enabled.
+    ///      - `amount_` is zero.
+    ///      - The user has insufficient OHM balance or approval.
+    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     function sendOhm(
         uint32 dstEid_,
         address to_,
@@ -70,9 +76,15 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The caller is not the owner.
+    ///      - `gateway_` is the zero address.
     function setGateway(address gateway_) external override onlyOwner {
         _setGateway(gateway_);
     }
+
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyOwner {}
 
     /// @inheritdoc ILZCrossChainBridge
     function estimateSendFee(
@@ -85,11 +97,12 @@ contract LZCrossChainBridge is Owned, PeripheryEnabler, IVersioned, ILZCrossChai
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PeripheryEnabler) returns (bool) {
+    ) public view override(PeripheryEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            PeripheryEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc PeripheryEnabler
