@@ -133,7 +133,7 @@ contract RescuableTest is Test {
     }
 
     function test_rescue_authChecked_beforeRecipientValidation() external {
-        // Auth is the first check — even an invalid recipient should not surface its
+        // Auth is the first check, so even an invalid recipient should not surface its
         // error if the caller is not authorised.
         target.setAuthShouldRevert(true);
 

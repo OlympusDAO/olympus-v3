@@ -90,7 +90,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     }
 
     function test_rescue_givenZeroBalance_succeeds() external {
-        // No revert on empty balance — rescue is a rare ops function and a sweep semantics is fine.
+        // No revert on empty balance, so rescue is a rare ops function and a sweep semantics is fine.
         vm.prank(manager);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
 
@@ -107,7 +107,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     }
 
     function test_rescue_givenAdmin_transfersBalance() external {
-        // Admin role is also sufficient — rescue allows manager or admin.
+        // Admin role is also sufficient, so rescue allows manager or admin.
         uint256 amount = 100e18;
         randomToken.mint(address(gateway), amount);
 
@@ -129,7 +129,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         gateway.rescue(address(randomToken), payable(address(0)));
     }
 
-    // ========= rescue (native — token == NATIVE_TOKEN sentinel) ========= //
+    // ========= rescue (native, so token == NATIVE_TOKEN sentinel) ========= //
 
     function test_rescue_native_givenManager_transfersBalance() external {
         uint256 amount = 1 ether;
@@ -182,7 +182,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
     }
 
     function test_rescue_native_givenAdmin_transfersBalance() external {
-        // Admin role is also sufficient — rescue allows manager or admin.
+        // Admin role is also sufficient, so rescue allows manager or admin.
         uint256 amount = 1 ether;
         vm.deal(address(gateway), amount);
 
