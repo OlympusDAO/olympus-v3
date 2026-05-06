@@ -19,6 +19,7 @@ import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -110,7 +111,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "2. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
                 "4. Execute LZBridgeActivator.activate() which:\n",
-                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
+                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes. No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
@@ -361,6 +362,20 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(sendUln.requiredDVNs[0] == expectedDvns[0], "Send ULN DVN[0] mismatch");
         require(sendUln.requiredDVNs[1] == expectedDvns[1], "Send ULN DVN[1] mismatch");
 
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default).
+        // `ep.getConfig` returns the resolved config, so we must read the raw app config
+        // directly from the SendUln302 library to check the NIL sentinel.
+        UlnConfig memory sendAppUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            sendAppUln.optionalDVNCount == type(uint8).max,
+            "Send ULN optional DVNs must be explicit NIL"
+        );
+        require(sendAppUln.optionalDVNs.length == 0, "Send ULN optional DVNs must be empty");
+        require(sendAppUln.optionalDVNThreshold == 0, "Send ULN optional DVN threshold must be 0");
+
         // Executor
         bytes memory execCfg = ep.getConfig(
             address(gw),
@@ -398,6 +413,18 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
         require(recvUln.requiredDVNs[0] == expectedDvns[0], "Recv ULN DVN[0] mismatch");
         require(recvUln.requiredDVNs[1] == expectedDvns[1], "Recv ULN DVN[1] mismatch");
+
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default)
+        UlnConfig memory recvAppUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            recvAppUln.optionalDVNCount == type(uint8).max,
+            "Recv ULN optional DVNs must be explicit NIL"
+        );
+        require(recvAppUln.optionalDVNs.length == 0, "Recv ULN optional DVNs must be empty");
+        require(recvAppUln.optionalDVNThreshold == 0, "Recv ULN optional DVN threshold must be 0");
     }
 
     function _validatePeers(LZBridgeGateway gw, LZBridgeActivator activator) internal view {

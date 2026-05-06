@@ -144,7 +144,12 @@ library LZConfigLib {
 
     // ========== ENCODING HELPERS ========== //
 
-    /// @notice ABI-encodes a UlnConfig struct.
+    /// @notice ABI-encodes a UlnConfig struct with no optional DVNs pinned to the app.
+    /// @dev `optionalDVNCount` uses the LayerZero NIL sentinel (`type(uint8).max`) so that the
+    ///      OApp-level config explicitly declares "no optional DVNs" instead of inheriting the
+    ///      EID-level default. In `UlnBase.sol`, `0` means DEFAULT (inherit) and
+    ///      `type(uint8).max` means NIL/NONE; using `0` would let a future change to the
+    ///      LayerZero default silently add an optional DVN requirement on verified messages.
     /// @param confirmations_ The number of block confirmations required.
     /// @param requiredDVNs_ Sorted ascending array of required DVN addresses.
     function encodeUlnConfig(
@@ -157,7 +162,7 @@ library LZConfigLib {
                 UlnConfig({
                     confirmations: confirmations_,
                     requiredDVNCount: uint8(requiredDVNs_.length),
-                    optionalDVNCount: 0,
+                    optionalDVNCount: type(uint8).max,
                     optionalDVNThreshold: 0,
                     requiredDVNs: requiredDVNs_,
                     optionalDVNs: empty
