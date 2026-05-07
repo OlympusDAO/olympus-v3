@@ -8,7 +8,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
 import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
-import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
+
+// Libraries
+import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -72,9 +74,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         vm.assume(caller_ != reEnablerAddr);
         bridge.disable(bytes(""));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZCrossChainBridge.LZCrossChainBridge_NotReEnabler.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unauthorized.selector, caller_, "reEnabler"));
         vm.prank(caller_);
         bridge.reEnable();
     }
@@ -84,7 +84,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         bridge.setReEnabler(address(0));
 
         vm.expectRevert(
-            abi.encodeWithSelector(ILZCrossChainBridge.LZCrossChainBridge_NotReEnabler.selector)
+            abi.encodeWithSelector(Errors.Unauthorized.selector, reEnablerAddr, "reEnabler")
         );
         vm.prank(reEnablerAddr);
         bridge.reEnable();
@@ -126,9 +126,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         // Owner holds enable/disable authority but is not the configured re-enabler.
         bridge.disable(bytes(""));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ILZCrossChainBridge.LZCrossChainBridge_NotReEnabler.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Errors.Unauthorized.selector, owner, "reEnabler"));
         bridge.reEnable();
     }
 }

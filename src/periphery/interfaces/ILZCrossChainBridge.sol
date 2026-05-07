@@ -24,10 +24,6 @@ interface ILZCrossChainBridge is IVersioned, IEnablerV2ReEnable, IEnablerV2Grace
     /// @notice Thrown when the send amount is zero.
     error LZCrossChainBridge_InsufficientAmount();
 
-    /// @notice Thrown when `reEnable` is invoked by an account that is not the configured
-    ///         re-enabler. The check also rejects calls when no re-enabler has been set.
-    error LZCrossChainBridge_NotReEnabler();
-
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.

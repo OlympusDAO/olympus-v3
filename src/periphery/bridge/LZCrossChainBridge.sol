@@ -11,6 +11,7 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 // Libraries
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
+import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {EnablerV2} from "src/libraries/EnablerV2.sol";
@@ -149,10 +150,10 @@ contract LZCrossChainBridge is
     }
 
     /// @inheritdoc ReEnabler
-    /// @dev Reverts if `msg.sender` is not the configured re-enabler. The check also
-    ///      rejects calls when no re-enabler has been set.
+    /// @dev Reverts if `msg.sender` is not the configured re-enabler. The check also rejects calls when no re-enabler
+    ///      has been set (i.e. `reEnabler == address(0)`).
     function _authorizeReEnable() internal view override {
-        if (msg.sender != reEnabler) revert LZCrossChainBridge_NotReEnabler();
+        if (msg.sender != reEnabler) revert Errors.Unauthorized(msg.sender, "reEnabler");
     }
 
     /// @inheritdoc ReEnabler
