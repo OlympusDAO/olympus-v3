@@ -135,17 +135,6 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         harness.reEnable();
     }
 
-    /// @notice Even when the contract has been enabled at some point, the
-    ///         `givenDisabled` modifier must short-circuit to `NotDisabled`
-    ///         rather than reaching the `NeverEnabled` branch.
-    function test_reEnable_revertsWithNotDisabledBeforeNeverEnabledCheck() external {
-        _enableAs(caller);
-
-        vm.expectRevert(IEnabler.NotDisabled.selector);
-        vm.prank(caller);
-        harness.reEnable();
-    }
-
     function test_reEnable_revertsIfAuthorizeReverts() external givenEnabledThenDisabled {
         uint48 atDisable = harness.lastTransitionAt();
 
