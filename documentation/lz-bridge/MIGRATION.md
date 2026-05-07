@@ -27,7 +27,7 @@ Key: `bridgeActive=false` blocks `sendOhm()` but not `lzReceive()`/`receiveMessa
 
 ### 1\. Deploy contracts
 
-Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. Both contracts take a `graceSeconds` argument (default `86400` in `lz_bridge_canonical.json` / `lz_bridge_noncanonical.json`) used by `reEnable()` to bound how soon after a `disable` the contract may be re-enabled. The `LZCrossChainBridge` constructor additionally takes the gateway address and the re-enabler address (set to the DAO MS by `DeployV3.deployLZCrossChainBridge()`). Record deployed addresses in env.json and OCG proposal constants.
+Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. Both contracts take a `graceSeconds` argument (default `86400` in `lz_bridge_canonical.json` / `lz_bridge_noncanonical.json`) that defines the maximum window after a `disable` during which `reEnable()` may be called — i.e. an upper bound on the re-enable window, not a minimum wait. The `LZCrossChainBridge` constructor additionally takes the gateway address and the re-enabler address (set to the DAO MS by `DeployV3.deployLZCrossChainBridge()`). Record deployed addresses in env.json and OCG proposal constants.
 
 ### 2\. Ethereum pre-OCG setup (MS batch)
 
