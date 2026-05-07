@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 // Contracts
 import {EnablerV2} from "src/libraries/EnablerV2.sol";

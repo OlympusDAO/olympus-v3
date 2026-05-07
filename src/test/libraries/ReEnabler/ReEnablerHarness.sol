@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 // Contracts
 import {ReEnabler} from "src/libraries/ReEnabler.sol";

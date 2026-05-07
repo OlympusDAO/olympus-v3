@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 import {ReEnablerGracePeriodTestBase} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
 import {ReEnablerGracePeriodHarness} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
