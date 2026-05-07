@@ -33,6 +33,23 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         );
     }
 
+    function test_reEnable_succeedsAtExactDeadline() external {
+        bridge.disable(bytes(""));
+        uint48 disabledAt = bridge.lastTransitionAt();
+
+        vm.warp(uint256(disabledAt) + GRACE_SECONDS);
+
+        vm.prank(reEnablerAddr);
+        bridge.reEnable();
+
+        assertTrue(bridge.isEnabled(), "Bridge should be enabled after reEnable at exact deadline");
+        assertEq(
+            uint256(bridge.lastTransitionAt()),
+            uint256(uint48(block.timestamp)),
+            "lastTransitionAt should be refreshed by reEnable at exact deadline"
+        );
+    }
+
     function test_reEnable_emitsLegacyAndTransitionEvents() external {
         bridge.disable(bytes(""));
 
@@ -88,6 +105,24 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         );
         vm.prank(reEnablerAddr);
         bridge.reEnable();
+    }
+
+    function test_reEnable_succeedsAtGraceDeadline() external {
+        bridge.disable(bytes(""));
+        uint48 disabledAt = bridge.lastTransitionAt();
+        uint48 deadline = disabledAt + GRACE_SECONDS;
+
+        vm.warp(uint256(deadline));
+
+        vm.prank(reEnablerAddr);
+        bridge.reEnable();
+
+        assertTrue(bridge.isEnabled(), "Bridge should be enabled after reEnable at grace deadline");
+        assertEq(
+            uint256(bridge.lastTransitionAt()),
+            uint256(uint48(block.timestamp)),
+            "lastTransitionAt should be refreshed by reEnable at grace deadline"
+        );
     }
 
     function test_reEnable_revertsAfterGraceExpires() external {
