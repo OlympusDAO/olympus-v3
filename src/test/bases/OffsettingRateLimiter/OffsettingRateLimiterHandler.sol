@@ -162,7 +162,14 @@ contract OffsettingRateLimiterHandler is Test {
             if (inDecayedBefore > 0 && inAfter == 0 && amount >= inDecayedBefore) {
                 counterpartFloorHits += 1;
             }
-        } catch (bytes memory) {
+        } catch (bytes memory err) {
+            // Only count `RateLimitExceeded`; bubble panics and any other
+            // unexpected reverts so the invariant run actually fails.
+            if (bytes4(err) != IOffsettingRateLimiter.RateLimitExceeded.selector) {
+                assembly {
+                    revert(add(err, 0x20), mload(err))
+                }
+            }
             rateLimitExceededReverts += 1;
         }
 
@@ -187,7 +194,14 @@ contract OffsettingRateLimiterHandler is Test {
             if (outDecayedBefore > 0 && outAfter == 0 && amount >= outDecayedBefore) {
                 counterpartFloorHits += 1;
             }
-        } catch (bytes memory) {
+        } catch (bytes memory err) {
+            // Only count `RateLimitExceeded`; bubble panics and any other
+            // unexpected reverts so the invariant run actually fails.
+            if (bytes4(err) != IOffsettingRateLimiter.RateLimitExceeded.selector) {
+                assembly {
+                    revert(add(err, 0x20), mload(err))
+                }
+            }
             rateLimitExceededReverts += 1;
         }
 
