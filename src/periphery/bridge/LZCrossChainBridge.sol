@@ -15,8 +15,8 @@ import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {EnablerV2} from "src/libraries/EnablerV2.sol";
-import {EnablerV2GracePeriod} from "src/libraries/EnablerV2GracePeriod.sol";
 import {ReEnabler} from "src/libraries/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/libraries/ReEnablerGracePeriod.sol";
 import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
@@ -34,8 +34,7 @@ import {Rescueable} from "../../bases/Rescueable.sol";
 contract LZCrossChainBridge is
     Owned,
     IVersioned,
-    EnablerV2GracePeriod,
-    ReEnabler,
+    ReEnablerGracePeriod,
     ILZCrossChainBridge,
     Rescueable
 {
@@ -56,7 +55,7 @@ contract LZCrossChainBridge is
         address gateway_,
         address reEnabler_,
         uint32 grace_
-    ) Owned(owner_) EnablerV2GracePeriod(grace_) {
+    ) Owned(owner_) ReEnablerGracePeriod(grace_) {
         _requireNonzeroAddress(ohm_, "ohm");
         _requireNonzeroAddress(owner_, "owner");
 
@@ -130,12 +129,11 @@ contract LZCrossChainBridge is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(EnablerV2GracePeriod, ReEnabler, Rescueable) returns (bool) {
+    ) public view override(ReEnablerGracePeriod, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            EnablerV2GracePeriod.supportsInterface(interfaceId) ||
-            ReEnabler.supportsInterface(interfaceId) ||
+            ReEnablerGracePeriod.supportsInterface(interfaceId) ||
             Rescueable.supportsInterface(interfaceId);
     }
 
@@ -154,12 +152,6 @@ contract LZCrossChainBridge is
     ///      has been set (i.e. `reEnabler == address(0)`).
     function _authorizeReEnable() internal view override {
         if (msg.sender != reEnabler) revert Errors.Unauthorized(msg.sender, "reEnabler");
-    }
-
-    /// @inheritdoc ReEnabler
-    /// @dev Asserts that the grace window since the last transition has not yet elapsed.
-    function _beforeReEnable() internal view override {
-        _requireGrace();
     }
 
     function _onlyOwner() private view {

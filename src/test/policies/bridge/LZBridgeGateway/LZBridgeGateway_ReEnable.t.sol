@@ -6,7 +6,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
@@ -107,10 +107,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         vm.warp(uint256(deadline) + 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
-                deadline
-            )
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
         );
         vm.prank(manager);
         gateway.reEnable();

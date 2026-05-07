@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Contracts
@@ -24,7 +24,7 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
         assertEq(fresh.owner(), address(this), "Owner should be the deployer");
         assertEq(fresh.gateway(), address(gateway), "Gateway should be set from constructor");
         assertEq(fresh.reEnabler(), reEnablerAddr, "ReEnabler should be set from constructor");
-        assertEq(uint256(fresh.GRACE()), uint256(GRACE_SECONDS), "GRACE should be set");
+        assertEq(uint256(fresh.gracePeriod()), uint256(GRACE_SECONDS), "gracePeriod should be set");
         assertFalse(fresh.isEnabled(), "Bridge should start disabled");
         assertEq(
             uint256(fresh.lastTransitionAt()),
@@ -96,9 +96,7 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
     }
 
     function test_constructor_revertsIfGraceZero() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(IEnablerV2GracePeriod.EnablerV2GracePeriod_ZeroPeriod.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector));
         new LZCrossChainBridge(address(ohm), address(this), address(gateway), reEnablerAddr, 0);
     }
 }

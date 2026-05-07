@@ -2,7 +2,7 @@
 pragma solidity >=0.8.4;
 
 import {IVersioned} from "../../interfaces/IVersioned.sol";
-import {IEnablerV2GracePeriod} from "../../interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "../../interfaces/IGracePeriod.sol";
 import {IReEnabler} from "../../interfaces/IReEnabler.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
@@ -13,10 +13,10 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
 ///
-///      Inherits the `IReEnabler` and `IEnablerV2GracePeriod` interfaces, exposing
+///      Inherits the `IReEnabler` and `IGracePeriod` interfaces, exposing
 ///      the parameterless `reEnable()` entry point gated to the configured `reEnabler` and
 ///      the `GRACE()` window length applied to that re-enable.
-interface ILZCrossChainBridge is IVersioned, IReEnabler, IEnablerV2GracePeriod {
+interface ILZCrossChainBridge is IVersioned, IReEnabler, IGracePeriod {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);

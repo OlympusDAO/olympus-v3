@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20;
 
-import {EnablerV2GracePeriodTestBase} from "src/test/libraries/EnablerV2GracePeriod/EnablerV2GracePeriodTestBase.sol";
+import {ReEnablerGracePeriodTestBase} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
-/// @dev Tests for `EnablerV2GracePeriod.supportsInterface`. The mix-in must
-///      advertise its own interface identifier in addition to every
-///      identifier inherited from `EnablerV2`.
-contract EnablerV2GracePeriodTests_SupportsInterface is EnablerV2GracePeriodTestBase {
+/// @dev Tests for `ReEnablerGracePeriod.supportsInterface`. The mix-in must advertise its
+///      own interface identifier in addition to every identifier inherited from
+///      `ReEnabler` and `EnablerV2`.
+contract ReEnablerGracePeriodTests_SupportsInterface is ReEnablerGracePeriodTestBase {
     function test_supportsInterface_validatesIERC165Self() external view {
         ERC165Helper.validateSupportsInterface(address(harness));
     }
@@ -38,10 +39,17 @@ contract EnablerV2GracePeriodTests_SupportsInterface is EnablerV2GracePeriodTest
         );
     }
 
-    function test_supportsInterface_returnsTrueForIEnablerV2GracePeriod() external view {
+    function test_supportsInterface_returnsTrueForIReEnabler() external view {
         assertTrue(
-            harness.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
-            "IEnablerV2GracePeriod not advertised"
+            harness.supportsInterface(type(IReEnabler).interfaceId),
+            "IReEnabler not advertised"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIGracePeriod() external view {
+        assertTrue(
+            harness.supportsInterface(type(IGracePeriod).interfaceId),
+            "IGracePeriod not advertised"
         );
     }
 

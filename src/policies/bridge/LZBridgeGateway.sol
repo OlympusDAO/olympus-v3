@@ -40,8 +40,8 @@ import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {EnablerV2} from "src/libraries/EnablerV2.sol";
-import {EnablerV2GracePeriod} from "src/libraries/EnablerV2GracePeriod.sol";
 import {ReEnabler} from "src/libraries/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/libraries/ReEnablerGracePeriod.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
@@ -60,7 +60,7 @@ contract LZBridgeGateway is
     ILZBridgeGateway,
     Policy,
     PolicyReEnabler,
-    EnablerV2GracePeriod,
+    ReEnablerGracePeriod,
     RateLimiter,
     Rescueable
 {
@@ -134,7 +134,7 @@ contract LZBridgeGateway is
         address lzEndpoint_,
         bool isCanonical_,
         uint32 grace_
-    ) Policy(kernel_) EnablerV2GracePeriod(grace_) {
+    ) Policy(kernel_) ReEnablerGracePeriod(grace_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(lzEndpoint_, "lzEndpoint");
 
@@ -206,10 +206,10 @@ contract LZBridgeGateway is
         _disableReceive();
     }
 
-    /// @dev Restores isReceiveEnabled when the manager re-enables the gateway, and
-    ///      asserts that the grace window since the last transition has not yet elapsed.
-    function _beforeReEnable() internal override {
-        _requireGrace();
+    /// @dev Restores isReceiveEnabled when the manager re-enables the gateway. The grace
+    ///      check is inherited from `ReEnablerGracePeriod` via `super`.
+    function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
+        super._beforeReEnable();
         _enableReceive();
     }
 
@@ -613,14 +613,14 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(EnablerV2GracePeriod, PolicyReEnabler, Rescueable) returns (bool) {
+    ) public view override(PolicyReEnabler, ReEnablerGracePeriod, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            EnablerV2GracePeriod.supportsInterface(interfaceId) ||
             PolicyReEnabler.supportsInterface(interfaceId) ||
+            ReEnablerGracePeriod.supportsInterface(interfaceId) ||
             Rescueable.supportsInterface(interfaceId);
     }
 

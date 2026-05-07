@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20;
 
-import {EnablerV2GracePeriodTestBase} from "src/test/libraries/EnablerV2GracePeriod/EnablerV2GracePeriodTestBase.sol";
-import {EnablerV2GracePeriodHarness} from "src/test/libraries/EnablerV2GracePeriod/EnablerV2GracePeriodHarness.sol";
+import {ReEnablerGracePeriodTestBase} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
+import {ReEnablerGracePeriodHarness} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
 
 // Interfaces
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 
-/// @dev Tests for `EnablerV2GracePeriod._requireGrace`. The deadline is
-///      computed as `lastTransitionAt + GRACE`. The check passes when
-///      `block.timestamp <= deadline` and reverts when
-///      `block.timestamp >  deadline`.
-contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase {
+/// @dev Tests for `ReEnablerGracePeriod._requireGrace`. The deadline is computed as
+///      `lastTransitionAt + _GRACE`. The check passes when `block.timestamp <= deadline`
+///      and reverts when `block.timestamp >  deadline`.
+contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase {
     // ========== SUCCESS ========== //
 
-    /// @notice With `lastTransitionAt == 0`, the deadline is `GRACE`. Tests
-    ///         that the boundary is treated inclusively when the current
-    ///         block has not yet reached the deadline.
+    /// @notice With `lastTransitionAt == 0`, the deadline is `_GRACE`. Tests that the
+    ///         boundary is treated inclusively when the current block has not yet reached
+    ///         the deadline.
     function test_requireGrace_passesIfWithinWindowBeforeAnyTransition() external {
         // setUp warps to START_TIMESTAMP, which is far above DEFAULT_GRACE,
         // so we explicitly warp back to a timestamp inside the deadline.
@@ -54,9 +53,8 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
         harness.requireGrace();
     }
 
-    /// @notice Each transition recorded by `EnablerV2` updates
-    ///         `lastTransitionAt`, which moves the grace deadline forward
-    ///         by the same offset.
+    /// @notice Each transition recorded by `EnablerV2` updates `lastTransitionAt`, which
+    ///         moves the grace deadline forward by the same offset.
     function test_requireGrace_restartsWindowOnEachTransition() external {
         _enable();
         skip(DEFAULT_GRACE / 2);
@@ -88,8 +86,8 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
         );
         elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(grace_)));
 
-        EnablerV2GracePeriodHarness fresh = new EnablerV2GracePeriodHarness(grace_);
-        vm.label(address(fresh), "EnablerV2GracePeriodHarness:fuzz");
+        ReEnablerGracePeriodHarness fresh = new ReEnablerGracePeriodHarness(grace_);
+        vm.label(address(fresh), "ReEnablerGracePeriodHarness:fuzz");
 
         // Drive `lastTransitionAt` to `transitionAt_` via an enable.
         vm.warp(uint256(transitionAt_));
@@ -106,10 +104,7 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
         vm.warp(uint256(DEFAULT_GRACE) + 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
-                uint48(DEFAULT_GRACE)
-            )
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, uint48(DEFAULT_GRACE))
         );
         harness.requireGrace();
     }
@@ -121,7 +116,7 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
+                IGracePeriod.GracePeriod_Expired.selector,
                 enableAt + DEFAULT_GRACE
             )
         );
@@ -137,7 +132,7 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
+                IGracePeriod.GracePeriod_Expired.selector,
                 disableAt + DEFAULT_GRACE
             )
         );
@@ -153,7 +148,7 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
+                IGracePeriod.GracePeriod_Expired.selector,
                 latestTransitionAt + DEFAULT_GRACE
             )
         );
@@ -177,8 +172,8 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
         uint256 maxOvershoot = uint256(UINT48_MAX) - uint256(transitionAt_) - uint256(grace_);
         overshoot_ = uint64(bound(uint256(overshoot_), 1, maxOvershoot));
 
-        EnablerV2GracePeriodHarness fresh = new EnablerV2GracePeriodHarness(grace_);
-        vm.label(address(fresh), "EnablerV2GracePeriodHarness:fuzz");
+        ReEnablerGracePeriodHarness fresh = new ReEnablerGracePeriodHarness(grace_);
+        vm.label(address(fresh), "ReEnablerGracePeriodHarness:fuzz");
 
         vm.warp(uint256(transitionAt_));
         vm.prank(caller);
@@ -188,7 +183,7 @@ contract EnablerV2GracePeriodTests_RequireGrace is EnablerV2GracePeriodTestBase 
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
+                IGracePeriod.GracePeriod_Expired.selector,
                 uint48(uint256(transitionAt_) + uint256(grace_))
             )
         );

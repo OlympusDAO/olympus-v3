@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Contracts
@@ -28,7 +28,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
             "LZ_ENDPOINT should be set"
         );
         assertTrue(fresh.IS_CANONICAL(), "IS_CANONICAL should be true");
-        assertEq(uint256(fresh.GRACE()), uint256(GRACE_SECONDS), "GRACE should be set");
+        assertEq(uint256(fresh.gracePeriod()), uint256(GRACE_SECONDS), "GRACE should be set");
 
         // State
         assertEq(address(fresh.kernel()), address(kernel), "Kernel should be set");
@@ -56,7 +56,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
             "LZ_ENDPOINT should be the non-canonical endpoint"
         );
         assertFalse(fresh.IS_CANONICAL(), "IS_CANONICAL should be false");
-        assertEq(uint256(fresh.GRACE()), uint256(GRACE_SECONDS), "GRACE should be set");
+        assertEq(uint256(fresh.gracePeriod()), uint256(GRACE_SECONDS), "GRACE should be set");
         assertFalse(fresh.isEnabled(), "Should start disabled");
         assertEq(
             uint256(fresh.lastTransitionAt()),
@@ -86,9 +86,7 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
     }
 
     function test_constructor_revertsIfGraceZero() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(IEnablerV2GracePeriod.EnablerV2GracePeriod_ZeroPeriod.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector));
         new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true, 0);
     }
 }

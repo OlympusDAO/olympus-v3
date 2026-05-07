@@ -9,7 +9,7 @@ import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
@@ -60,10 +60,10 @@ contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase
         );
     }
 
-    function test_supportsInterface_returnsTrueForIEnablerV2GracePeriod() external view {
+    function test_supportsInterface_returnsTrueForIGracePeriod() external view {
         assertTrue(
-            bridge.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
-            "Should support IEnablerV2GracePeriod"
+            bridge.supportsInterface(type(IGracePeriod).interfaceId),
+            "Should support IGracePeriod"
         );
     }
 

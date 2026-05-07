@@ -6,7 +6,7 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
+import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 
 // Libraries
@@ -98,10 +98,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         vm.warp(uint256(deadline) + 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IEnablerV2GracePeriod.EnablerV2GracePeriod_GracePeriodExpired.selector,
-                deadline
-            )
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
         );
         vm.prank(reEnablerAddr);
         bridge.reEnable();
