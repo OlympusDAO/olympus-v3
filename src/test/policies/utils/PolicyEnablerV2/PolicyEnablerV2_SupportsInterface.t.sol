@@ -6,7 +6,7 @@ import {PolicyEnablerV2TestBase} from "src/test/policies/utils/PolicyEnablerV2/P
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";

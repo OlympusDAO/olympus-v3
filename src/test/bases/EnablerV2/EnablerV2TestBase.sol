@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Contracts
-import {EnablerV2Harness} from "src/test/libraries/EnablerV2/EnablerV2Harness.sol";
+import {EnablerV2Harness} from "src/test/bases/EnablerV2/EnablerV2Harness.sol";
 
 /// @notice Shared test base for the `EnablerV2` unit and fuzz tests. Defines
 ///         named actors, sentinel timestamps, and helpers for the most

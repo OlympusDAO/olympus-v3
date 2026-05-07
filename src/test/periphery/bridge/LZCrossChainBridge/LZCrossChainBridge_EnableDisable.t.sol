@@ -5,7 +5,7 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
     function test_enable() external {

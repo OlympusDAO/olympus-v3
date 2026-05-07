@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Contracts
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @title PolicyEnablerV2

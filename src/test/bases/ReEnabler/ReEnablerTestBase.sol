@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Contracts
-import {ReEnablerHarness} from "src/test/libraries/ReEnabler/ReEnablerHarness.sol";
+import {ReEnablerHarness} from "src/test/bases/ReEnabler/ReEnablerHarness.sol";
 
 /// @notice Shared test base for the `ReEnabler` unit and fuzz tests.
 ///         Defines named actors, sentinel timestamps, and helpers for the

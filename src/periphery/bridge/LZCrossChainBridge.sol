@@ -14,9 +14,9 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
-import {ReEnabler} from "src/libraries/ReEnabler.sol";
-import {ReEnablerGracePeriod} from "src/libraries/ReEnablerGracePeriod.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge

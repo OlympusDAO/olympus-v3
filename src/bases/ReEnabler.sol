@@ -2,10 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
 // Contracts
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 
 /// @title ReEnabler
 /// @notice An abstract extension of `EnablerV2` that adds a parameterless `reEnable` entry

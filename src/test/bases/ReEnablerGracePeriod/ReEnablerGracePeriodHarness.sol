@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Contracts
-import {ReEnablerGracePeriod} from "src/libraries/ReEnablerGracePeriod.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 
 /// @notice Test harness exposing `_requireGrace` of `ReEnablerGracePeriod` as an external
 ///         pass-through. The `_authorizeEnable`, `_authorizeDisable`, and

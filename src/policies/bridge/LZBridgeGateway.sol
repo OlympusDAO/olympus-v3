@@ -39,9 +39,9 @@ import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
-import {ReEnabler} from "src/libraries/ReEnabler.sol";
-import {ReEnablerGracePeriod} from "src/libraries/ReEnablerGracePeriod.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";

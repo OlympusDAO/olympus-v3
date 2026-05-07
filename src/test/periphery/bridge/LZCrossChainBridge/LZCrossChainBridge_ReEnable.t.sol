@@ -5,9 +5,9 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";

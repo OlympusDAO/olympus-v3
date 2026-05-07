@@ -6,7 +6,7 @@ import {MockPolicyReEnabler} from "src/test/policies/utils/PolicyReEnabler/MockP
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 import {MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";

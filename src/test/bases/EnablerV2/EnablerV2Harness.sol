@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Contracts
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 
 /// @notice Test harness exposing every internal hook of `EnablerV2` as a
 ///         togglable mock. Inherits the abstract base directly so that the

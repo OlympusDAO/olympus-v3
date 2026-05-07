@@ -3,7 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 // Contracts
 import {ERC165, IERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {EnablerV2TestBase} from "src/test/libraries/EnablerV2/EnablerV2TestBase.sol";
-import {EnablerV2Harness} from "src/test/libraries/EnablerV2/EnablerV2Harness.sol";
+import {EnablerV2TestBase} from "src/test/bases/EnablerV2/EnablerV2TestBase.sol";
+import {EnablerV2Harness} from "src/test/bases/EnablerV2/EnablerV2Harness.sol";
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";

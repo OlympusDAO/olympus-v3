@@ -30,7 +30,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy

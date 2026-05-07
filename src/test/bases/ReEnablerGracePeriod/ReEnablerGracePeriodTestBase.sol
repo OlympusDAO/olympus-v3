@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Contracts
-import {ReEnablerGracePeriodHarness} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
+import {ReEnablerGracePeriodHarness} from "src/test/bases/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
 
 /// @notice Shared test base for the `ReEnablerGracePeriod` unit and fuzz tests. Defines
 ///         named actors, sentinel timestamps, and helpers for deploying the harness with

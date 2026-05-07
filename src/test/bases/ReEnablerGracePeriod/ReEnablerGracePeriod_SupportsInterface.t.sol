@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {ReEnablerGracePeriodTestBase} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
+import {ReEnablerGracePeriodTestBase} from "src/test/bases/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";

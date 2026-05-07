@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {ReEnablerTestBase} from "src/test/libraries/ReEnabler/ReEnablerTestBase.sol";
-import {ReEnablerHarness, ReEnablerDefaultBeforeHarness} from "src/test/libraries/ReEnabler/ReEnablerHarness.sol";
+import {ReEnablerTestBase} from "src/test/bases/ReEnabler/ReEnablerTestBase.sol";
+import {ReEnablerHarness, ReEnablerDefaultBeforeHarness} from "src/test/bases/ReEnabler/ReEnablerHarness.sol";
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
 /// @dev Tests for `ReEnabler.reEnable`.
 contract ReEnablerTests_ReEnable is ReEnablerTestBase {

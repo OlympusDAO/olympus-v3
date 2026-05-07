@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Contracts

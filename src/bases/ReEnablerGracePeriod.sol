@@ -2,10 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 // Contracts
-import {ReEnabler} from "src/libraries/ReEnabler.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
 
 /// @title ReEnablerGracePeriod
 /// @notice An abstract extension of `ReEnabler` that gates `reEnable` on a fixed grace

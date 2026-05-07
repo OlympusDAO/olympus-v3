@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Contracts

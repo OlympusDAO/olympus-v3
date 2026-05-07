@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {EnablerV2TestBase} from "src/test/libraries/EnablerV2/EnablerV2TestBase.sol";
+import {ReEnablerTestBase} from "src/test/bases/ReEnabler/ReEnablerTestBase.sol";
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
-/// @dev Tests for `EnablerV2.supportsInterface`. The base contract is
-///      expected to advertise `IERC165`, the legacy `IEnabler`, and
-///      `IEnablerV2`, and to return false for any other interface
-///      identifier.
-contract EnablerV2Tests_SupportsInterface is EnablerV2TestBase {
+/// @dev Tests for `ReEnabler.supportsInterface`. The mix-in must advertise
+///      its own interface identifier in addition to every identifier
+///      inherited from `EnablerV2`.
+contract ReEnablerTests_SupportsInterface is ReEnablerTestBase {
     function test_supportsInterface_validatesIERC165Self() external view {
         ERC165Helper.validateSupportsInterface(address(harness));
     }
@@ -35,6 +35,13 @@ contract EnablerV2Tests_SupportsInterface is EnablerV2TestBase {
         assertTrue(
             harness.supportsInterface(type(IEnablerV2).interfaceId),
             "IEnablerV2 not advertised"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIReEnabler() external view {
+        assertTrue(
+            harness.supportsInterface(type(IReEnabler).interfaceId),
+            "IReEnabler not advertised"
         );
     }
 

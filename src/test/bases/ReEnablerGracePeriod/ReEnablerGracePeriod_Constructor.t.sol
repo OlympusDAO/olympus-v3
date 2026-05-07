@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {ReEnablerGracePeriodTestBase} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
-import {ReEnablerGracePeriodHarness} from "src/test/libraries/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
+import {ReEnablerGracePeriodTestBase} from "src/test/bases/ReEnablerGracePeriod/ReEnablerGracePeriodTestBase.sol";
+import {ReEnablerGracePeriodHarness} from "src/test/bases/ReEnablerGracePeriod/ReEnablerGracePeriodHarness.sol";
 
 // Interfaces
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 /// @dev Tests for the constructor of `ReEnablerGracePeriod`, which gates the configured
 ///      window length against zero and otherwise stores it as the immutable `_GRACE`,

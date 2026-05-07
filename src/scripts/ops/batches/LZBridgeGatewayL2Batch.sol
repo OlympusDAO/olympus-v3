@@ -12,7 +12,7 @@ import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptio
 import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
-import {EnablerV2} from "src/libraries/EnablerV2.sol";
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";

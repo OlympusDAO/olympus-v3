@@ -8,9 +8,9 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Libraries

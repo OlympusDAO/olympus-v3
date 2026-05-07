@@ -5,9 +5,9 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IGracePeriod} from "src/interfaces/IGracePeriod.sol";
-import {IReEnabler} from "src/interfaces/IReEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Constants

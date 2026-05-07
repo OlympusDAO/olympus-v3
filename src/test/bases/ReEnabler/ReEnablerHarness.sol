@@ -3,7 +3,7 @@
 pragma solidity >=0.8.24;
 
 // Contracts
-import {ReEnabler} from "src/libraries/ReEnabler.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
 
 /// @notice Test harness exposing every internal hook of `ReEnabler` as a
 ///         togglable mock. Inherits the abstract base directly so that the
