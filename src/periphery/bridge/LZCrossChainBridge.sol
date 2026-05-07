@@ -3,7 +3,7 @@ pragma solidity >=0.8.30;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -16,6 +16,7 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {EnablerV2} from "src/libraries/EnablerV2.sol";
 import {EnablerV2GracePeriod} from "src/libraries/EnablerV2GracePeriod.sol";
 import {ReEnabler} from "src/libraries/ReEnabler.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.
@@ -34,7 +35,8 @@ contract LZCrossChainBridge is
     IVersioned,
     EnablerV2GracePeriod,
     ReEnabler,
-    ILZCrossChainBridge
+    ILZCrossChainBridge,
+    Rescueable
 {
     using SafeERC20 for IERC20;
 
@@ -72,18 +74,24 @@ contract LZCrossChainBridge is
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The bridge is not enabled.
+    ///      - `amount_` is zero.
+    ///      - The user has insufficient OHM balance or approval.
+    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     function sendOhm(
         uint32 dstEid_,
         address to_,
         uint256 amount_
     ) external payable override whenEnabled {
+        _requireNonzeroAddress(to_, "to");
         if (amount_ == 0) revert LZCrossChainBridge_InsufficientAmount();
 
         // Transfer OHM from the user to the gateway
         IERC20(OHM).safeTransferFrom(msg.sender, gateway, amount_);
 
         // Gateway burns and sends via LayerZero
-        ILZBridgeGateway(gateway).burnAndSend{value: msg.value}(
+        MessagingReceipt memory receipt = ILZBridgeGateway(gateway).burnAndSend{value: msg.value}(
             dstEid_,
             to_,
             amount_,
@@ -91,13 +99,19 @@ contract LZCrossChainBridge is
             bytes("")
         );
 
-        emit Bridged(msg.sender, amount_, dstEid_, msg.value);
+        emit Bridged(msg.sender, amount_, dstEid_, receipt.fee.nativeFee, msg.value);
     }
 
     /// @inheritdoc ILZCrossChainBridge
+    /// @dev Reverts if:
+    ///      - The caller is not the owner.
+    ///      - `gateway_` is the zero address.
     function setGateway(address gateway_) external override onlyOwner {
         _setGateway(gateway_);
     }
+
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyOwner {}
 
     /// @inheritdoc ILZCrossChainBridge
     function setReEnabler(address reEnabler_) external override onlyOwner {
@@ -115,11 +129,13 @@ contract LZCrossChainBridge is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(EnablerV2GracePeriod, ReEnabler) returns (bool) {
+    ) public view override(EnablerV2GracePeriod, ReEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            EnablerV2GracePeriod.supportsInterface(interfaceId) ||
+            ReEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc EnablerV2

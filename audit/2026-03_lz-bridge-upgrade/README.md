@@ -38,15 +38,19 @@ Branch: `lz-bridge-upgrade`
 - [src/](../../src)
     - [periphery/](../../src/periphery/)
         - [bridge/](../../src/periphery/bridge/)
-            - [LZCrossChainBridge.sol](../../src/periphery/bridge/LZCrossChainBridge.sol) - Facilitator (periphery)
+            - [LZCrossChainBridge.sol](../../src/periphery/bridge/LZCrossChainBridge.sol) — Facilitator (periphery)
         - [interfaces/](../../src/periphery/interfaces/)
-            - [ILZCrossChainBridge.sol](../../src/periphery/interfaces/ILZCrossChainBridge.sol) - Facilitator interface
+            - [ILZCrossChainBridge.sol](../../src/periphery/interfaces/ILZCrossChainBridge.sol) — Facilitator interface
     - [policies/](../../src/policies/)
         - [bridge/](../../src/policies/bridge/)
-            - [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) - Gateway infrastructure policy
+            - [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) — Gateway infrastructure policy
         - [interfaces/](../../src/policies/interfaces/)
-            - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) - Gateway interface
-            - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) - LZ V2 endpoint admin interface
+            - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) — Gateway interface
+            - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) — LZ V2 endpoint admin interface
+    - [bases/](../../src/bases/)
+        - [Rescuable.sol](../../src/bases/Rescuable.sol) — Reusable abstract base exposing privileged `rescue()` to sweep accidentally-sent assets; subclasses authorize via the `_authorizeRescue()` hook
+        - [interfaces/IRescuable.sol](../../src/bases/interfaces/IRescuable.sol) — Rescue interface (declares `NATIVE_TOKEN`, `Rescued` event, and `Rescuable_InvalidRecipient` error)
+    - [libraries/ERC7528Constants.sol](../../src/libraries/ERC7528Constants.sol) — EIP-7528 native-token sentinel address
 
 **OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
 
@@ -56,17 +60,17 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
 
 - [src/](../../src)
     - [scripts/deploy/](../../src/scripts/deploy/)
-        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) - `deployLZBridgeGateway()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
+        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) — `deployLZBridgeGateway()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
     - [libraries/](../../src/libraries/)
-        - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) - Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
+        - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) — Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
     - [proposals/](../../src/proposals/)
-        - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) - OCG proposal: configures and enables the gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options, grants bridge roles)
-        - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) - OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (e.g. Nethermind DVN for Berachain where Google Cloud DVN is unavailable)
+        - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) — OCG proposal: configures and enables the gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options, grants bridge roles)
+        - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) — OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (four required DVNs per route, swapping the Google Cloud DVN for the Horizen DVN on routes that touch Berachain; no optional DVNs — pins the NIL sentinel)
     - [scripts/ops/batches/](../../src/scripts/ops/batches/)
-        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) - Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (initial bridged supply setter)
-        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) - L2 MS batch split into four entry points by caller responsibility: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant the bridge roles), `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable), and `revokeSetupRoles` (optional post-setup cleanup: revoke admin role from DAO MS on chains where it was granted during migration). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses.
-        - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) - Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
-        - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) - L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
+        - [LZBridgeGatewayBatch.sol](../../src/scripts/ops/batches/LZBridgeGatewayBatch.sol) — Ethereum MS batch: `activateGateway` (install in Kernel) and `initBridgedSupply` (initial bridged supply setter)
+        - [LZBridgeGatewayL2Batch.sol](../../src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol) — L2 MS batch split into four entry points by caller responsibility: `activateGateway` (deactivate old bridge, activate new gateway), `grantRoles` (grant the bridge roles), `configureAndEnable` (configure LZ V2 libraries/ULN/executor, set peers, set enforced options, enable), and `revokeSetupRoles` (optional post-setup cleanup: revoke admin role from DAO MS on chains where it was granted during migration). Each entry point has a matching post-batch `_validate*` check. Inlines the shared LZ V2 configuration helpers and per-chain DVN addresses.
+        - [LZCrossChainBridgeBatch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeBatch.sol) — Ethereum MS batch: `disableOldBridge` (post-OCG), `setup` (deactivate old + enable new)
+        - [LZCrossChainBridgeL2Batch.sol](../../src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol) — L2 MS batch: `disableOldBridge`, `setupL2` (enable bridge)
 
 ### Previous Audits
 
@@ -96,12 +100,13 @@ You can review previous audits here:
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
-6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification uses dual-DVN confirmation: LayerZero DVN plus a second DVN selected per route — Google Cloud DVN on chains where it is available, and Nethermind DVN for Berachain routes (where Google Cloud DVN is not available).
+6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification requires four DVNs on every route: LayerZero Labs, Canary, and Nethermind, plus a fourth DVN selected per route — Google Cloud on chains where it is available, and Horizen for routes that touch Berachain (where Google Cloud is not available). Optional DVNs are pinned to the LayerZero NIL sentinel (`optionalDVNCount == type(uint8).max`) so the OApp-level config explicitly declares "no optional DVNs" rather than inheriting the EID-level default — a future change to LayerZero's default cannot silently attach an optional DVN to verified messages.
 7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `admin` remains available as an emergency/override actor. `setDelegate` allows setting an LZ endpoint delegate as a fallback for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Rate limits are unconfigured by default and configured separately as needed. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount but are not independently capped. The gateway overrides `_outflow` and `_inflow` to skip unconfigured or fully-settled EIDs.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin`.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
+12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescuable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native token, identified via the EIP-7528 sentinel `NATIVE_TOKEN`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
 ### LZ V2 Receiver Callbacks
 
@@ -190,6 +195,7 @@ sequenceDiagram
 | `nilify`                   | `bridge_admin` / `admin` |
 | `burn`                     | `bridge_admin` / `admin` |
 | `clear`                    | `bridge_admin` / `admin` |
+| `rescue`                   | `manager` / `admin`      |
 
 `reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`).
 
@@ -202,5 +208,6 @@ sequenceDiagram
 | `setReEnabler`       | `owner`      |
 | `enable` / `disable` | `owner`      |
 | `reEnable`           | `reEnabler`  |
+| `rescue`             | `owner` |
 
 `reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`). The `reEnabler` address is set in the constructor (DAO MS in production) and can be updated or cleared by the owner via `setReEnabler`; while the address is `address(0)`, `reEnable` always reverts.

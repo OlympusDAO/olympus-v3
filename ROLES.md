@@ -14,7 +14,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
-| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, and all bridge_admin functions as override |
+| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, rescue accidentally-sent assets, and all bridge_admin functions as override |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
@@ -54,6 +54,7 @@ This document describes the roles that are used in the Olympus protocol.
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
+| manager | LZBridgeGateway | Rescue accidentally-sent assets |
 | manager | Heart | Reset the heartbeat |
 | manager | LZBridgeGateway | Re-enable the gateway after a disable, within the grace window |
 | operator_admin | Operator | Activate/deactivate the functionality |

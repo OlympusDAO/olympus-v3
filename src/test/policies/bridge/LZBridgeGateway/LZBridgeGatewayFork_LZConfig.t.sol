@@ -9,6 +9,7 @@ import {Test} from "forge-std/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ILayerZeroDVNState} from "src/interfaces/layerzero/ILayerZeroDVNState.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -400,6 +401,32 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                 LZConfigLib.CONFIG_TYPE_ULN
             );
             assertGt(rCfg.length, 0, "recv ULN config stored");
+
+            // Send/Recv app-level ULN configs must pin optional DVNs to NIL so the app does
+            // not inherit LayerZero's EID-level default.
+            UlnConfig memory sendApp = IUlnConfigState(sendLib).getAppUlnConfig(
+                address(gw),
+                remoteEid
+            );
+            assertEq(
+                sendApp.optionalDVNCount,
+                type(uint8).max,
+                "send app optionalDVNCount must be NIL"
+            );
+            assertEq(sendApp.optionalDVNs.length, 0, "send app optionalDVNs must be empty");
+            assertEq(sendApp.optionalDVNThreshold, 0, "send app optional threshold must be 0");
+
+            UlnConfig memory recvApp = IUlnConfigState(recvLib).getAppUlnConfig(
+                address(gw),
+                remoteEid
+            );
+            assertEq(
+                recvApp.optionalDVNCount,
+                type(uint8).max,
+                "recv app optionalDVNCount must be NIL"
+            );
+            assertEq(recvApp.optionalDVNs.length, 0, "recv app optionalDVNs must be empty");
+            assertEq(recvApp.optionalDVNThreshold, 0, "recv app optional threshold must be 0");
         }
     }
 

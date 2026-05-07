@@ -3,7 +3,7 @@ pragma solidity >=0.8.18;
 
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
-import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
 import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -132,13 +132,16 @@ interface ILZBridgeGateway is
     /// @param amount_ The amount of OHM to burn and send.
     /// @param refundAddress_ The address to receive excess native token refund.
     /// @param extraOptions_ Additional Type 3 options to combine with enforced options.
+    /// @return receipt The LayerZero messaging receipt. `receipt.fee.nativeFee` is the
+    ///         actual native amount charged by the endpoint (may be less than msg.value;
+    ///         excess is refunded to `refundAddress_`).
     function burnAndSend(
         uint32 dstEid_,
         address to_,
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable;
+    ) external payable returns (MessagingReceipt memory receipt);
 
     // ========= FEE ESTIMATION ========= //
 

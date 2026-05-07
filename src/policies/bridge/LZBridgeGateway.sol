@@ -33,6 +33,9 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
+// Libraries
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -42,6 +45,7 @@ import {ReEnabler} from "src/libraries/ReEnabler.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
+import {Rescueable} from "../../bases/Rescueable.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @title LZBridgeGateway
@@ -57,8 +61,11 @@ contract LZBridgeGateway is
     Policy,
     PolicyReEnabler,
     EnablerV2GracePeriod,
-    RateLimiter
+    RateLimiter,
+    Rescueable
 {
+    using SafeERC20 for IERC20;
+
     // ========= CONSTANTS ========= //
 
     /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
@@ -233,7 +240,14 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable override whenEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
+    )
+        external
+        payable
+        override
+        whenEnabled
+        onlyRole(_BRIDGE_FACILITATOR_ROLE)
+        returns (MessagingReceipt memory receipt)
+    {
         // Note: zero-amount validation is the facilitator's responsibility
         _requireNonzeroAddress(to_, "to");
 
@@ -260,7 +274,7 @@ contract LZBridgeGateway is
         bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
         bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
 
-        MessagingReceipt memory receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
+        receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
             MessagingParams({
                 dstEid: dstEid_,
                 receiver: peer,
@@ -315,6 +329,7 @@ contract LZBridgeGateway is
     ///      - The message type is not MSG_BRIDGE_OHM.
     ///      - The bridge data payload has an unexpected length.
     ///      - (Canonical) The bridged supply would underflow.
+    ///      - The OHM recipient address is the zero address when the message type is MSG_BRIDGE_OHM.
     function lzReceive(
         Origin calldata origin_,
         bytes32 guid_,
@@ -345,6 +360,17 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the admin role.
+    ///
+    ///      WARNING: Updating or clearing the peer for an EID strands any in-flight inbound
+    ///      messages from the previous peer that have already been verified on the LayerZero
+    ///      endpoint but not yet executed. Such messages will revert in `lzReceive` on the
+    ///      peer check and become permanently undeliverable.
+    ///
+    ///      Recovery requires the admin to handle each stranded message individually via the
+    ///      LayerZero endpoint recovery functions (`skip`, `nilify`, `burn`, or `clear`).
+    ///      A separate governance proposal may also be required to restore the OHM owed to
+    ///      the affected users, and a corresponding `decreaseBridgedSupply` call is required
+    ///      to keep the bookkeeping consistent.
     function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
         peers[eid_] = peer_;
         emit PeerSet(eid_, peer_);
@@ -489,7 +515,13 @@ contract LZBridgeGateway is
     // ========= LZ MESSAGE MANAGEMENT ========= //
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via skip
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///      Depending on the cause of the skip, a separate governance proposal may also be required
+    ///      to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function skip(
         uint32 srcEid_,
@@ -518,7 +550,13 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via burn
+    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
+    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
+    ///      Depending on the cause of the burn, a separate governance proposal may also be required
+    ///      to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function burn(
         uint32 srcEid_,
@@ -536,7 +574,13 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
+    /// @dev On the canonical chain, clearing an inbound OHM mint message bypasses the gateway's
+    ///      `lzReceive` handler, so `bridgedSupply` is not decremented and the MINTR mint approval
+    ///      is not consumed. The caller MUST follow up with a corresponding `decreaseBridgedSupply`
+    ///      call to keep the bookkeeping consistent. Depending on the cause of the clear, a separate
+    ///      governance proposal may also be required to restore the OHM owed to the affected user.
+    ///
+    ///      Reverts if:
     ///      - The caller does not have the bridge_admin or admin role.
     function clear(
         Origin calldata origin_,
@@ -545,6 +589,11 @@ contract LZBridgeGateway is
     ) external override onlyBridgeAdminOrAdmin {
         ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
     }
+
+    // ========= RESCUE FUNCTIONS ========= //
+
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
 
     // ========= VIEW FUNCTIONS ========= //
 
@@ -564,13 +613,15 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(EnablerV2GracePeriod, PolicyReEnabler) returns (bool) {
+    ) public view override(EnablerV2GracePeriod, PolicyReEnabler, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId);
+            EnablerV2GracePeriod.supportsInterface(interfaceId) ||
+            PolicyReEnabler.supportsInterface(interfaceId) ||
+            Rescueable.supportsInterface(interfaceId);
     }
 
     // ========= RATE LIMITER OVERRIDE ========= //
@@ -616,6 +667,8 @@ contract LZBridgeGateway is
     function _receiveBridgeOhm(uint32 srcEid_, bytes32 guid_, bytes memory data_) private {
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
+
+        _requireNonzeroAddress(to, "to");
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {

@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -41,7 +41,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.expectEmit(true, true, true, false);
         emit ILZBridgeGateway.Sent(facilitator, amount, NONCANONICAL_EID, bytes32(0));
 
-        gateway.burnAndSend{value: fee.nativeFee}(
+        MessagingReceipt memory receipt = gateway.burnAndSend{value: fee.nativeFee}(
             NONCANONICAL_EID,
             recipient,
             amount,
@@ -49,6 +49,14 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             bytes("")
         );
         vm.stopPrank();
+
+        assertEq(
+            receipt.fee.nativeFee,
+            fee.nativeFee,
+            "Receipt native fee should match estimated fee"
+        );
+        assertEq(receipt.fee.lzTokenFee, 0, "Receipt should have no lzToken fee");
+        assertTrue(receipt.guid != bytes32(0), "Receipt guid should be non-zero");
 
         assertEq(
             ohm.balanceOf(facilitator),
@@ -139,7 +147,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), amount);
-        gateway.burnAndSend{value: totalSent}(
+        MessagingReceipt memory receipt = gateway.burnAndSend{value: totalSent}(
             NONCANONICAL_EID,
             recipient,
             amount,
@@ -147,6 +155,14 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             bytes("")
         );
         vm.stopPrank();
+
+        // Receipt records the actual fee charged, not the excess msg.value.
+        assertEq(receipt.fee.nativeFee, fee.nativeFee, "Receipt should report actual fee charged");
+        assertLt(
+            receipt.fee.nativeFee,
+            totalSent,
+            "Receipt fee must be less than totalSent when overpaying"
+        );
 
         uint256 refundReceived = refundAddr.balance - refundBalanceBefore;
         // Refund should be approximately the excess (minus any rounding)
@@ -320,7 +336,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         (, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
         assertEq(canSend, 0, "No capacity remaining");
 
-        // Attempt to send more — reverts
+        // Attempt to send more, reverts
         uint256 retryAmount = 1_000e9;
         ohm.mint(facilitator, retryAmount);
         MessagingFee memory fee = gateway.estimateSendFee(
@@ -345,7 +361,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         // Wait for rate limit window to fully elapse
         skip(window);
 
-        // Retry — succeeds
+        // Retry, succeeds
         fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, retryAmount, bytes(""));
         vm.startPrank(facilitator);
         gateway.burnAndSend{value: fee.nativeFee}(

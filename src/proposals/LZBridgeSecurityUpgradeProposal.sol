@@ -19,6 +19,7 @@ import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
 import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -84,7 +85,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- Bridged supply tracking with underflow checks on inbound receives, preventing unlimited mints from non-canonical chains.\n",
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
-                "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
+                "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification requires four DVNs on every route.\n",
                 "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle. Rate limits are left unconfigured by default and configured separately as needed.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
@@ -111,7 +112,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
                 "5. Execute LZBridgeActivator.activate() which:\n",
-                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
+                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
@@ -376,12 +377,35 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             sendUln.confirmations == LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
             "Send ULN confirmations mismatch"
         );
-        require(sendUln.requiredDVNCount == 2, "Send ULN should require 2 DVNs");
+        require(sendUln.requiredDVNCount == 4, "Send ULN should require 4 DVNs");
 
         // Verify DVNs are route-correct
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-        require(sendUln.requiredDVNs[0] == expectedDvns[0], "Send ULN DVN[0] mismatch");
-        require(sendUln.requiredDVNs[1] == expectedDvns[1], "Send ULN DVN[1] mismatch");
+        require(
+            sendUln.requiredDVNCount == expectedDvns.length,
+            "Send ULN required DVN count mismatch"
+        );
+        require(
+            sendUln.requiredDVNs.length == expectedDvns.length,
+            "Send ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            require(sendUln.requiredDVNs[d] == expectedDvns[d], "Send ULN DVN mismatch");
+        }
+
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default).
+        // `ep.getConfig` returns the resolved config, so we must read the raw app config
+        // directly from the SendUln302 library to check the NIL sentinel.
+        UlnConfig memory sendAppUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            sendAppUln.optionalDVNCount == type(uint8).max,
+            "Send ULN optional DVNs must be explicit NIL"
+        );
+        require(sendAppUln.optionalDVNs.length == 0, "Send ULN optional DVNs must be empty");
+        require(sendAppUln.optionalDVNThreshold == 0, "Send ULN optional DVN threshold must be 0");
 
         // Executor
         bytes memory execCfg = ep.getConfig(
@@ -414,12 +438,33 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(recvUlnCfg.length > 0, "Recv ULN config not set");
         UlnConfig memory recvUln = abi.decode(recvUlnCfg, (UlnConfig));
         require(recvUln.confirmations == expectedConf, "Recv ULN confirmations mismatch");
-        require(recvUln.requiredDVNCount == 2, "Recv ULN should require 2 DVNs");
+        require(recvUln.requiredDVNCount == 4, "Recv ULN should require 4 DVNs");
 
         // Verify DVNs are route-correct
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-        require(recvUln.requiredDVNs[0] == expectedDvns[0], "Recv ULN DVN[0] mismatch");
-        require(recvUln.requiredDVNs[1] == expectedDvns[1], "Recv ULN DVN[1] mismatch");
+        require(
+            recvUln.requiredDVNCount == expectedDvns.length,
+            "Recv ULN required DVN count mismatch"
+        );
+        require(
+            recvUln.requiredDVNs.length == expectedDvns.length,
+            "Recv ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            require(recvUln.requiredDVNs[d] == expectedDvns[d], "Recv ULN DVN mismatch");
+        }
+
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default)
+        UlnConfig memory recvAppUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            recvAppUln.optionalDVNCount == type(uint8).max,
+            "Recv ULN optional DVNs must be explicit NIL"
+        );
+        require(recvAppUln.optionalDVNs.length == 0, "Recv ULN optional DVNs must be empty");
+        require(recvAppUln.optionalDVNThreshold == 0, "Recv ULN optional DVN threshold must be 0");
     }
 
     function _validatePeers(LZBridgeGateway gw, LZBridgeActivator activator) internal view {

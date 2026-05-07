@@ -4,6 +4,8 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
@@ -11,51 +13,65 @@ import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
 import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
+// Libraries
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
+
 contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase {
-    function test_supportsInterface_ILZCrossChainBridge() external view {
+    function test_supportsInterface_validatesIERC165Self() external view {
+        ERC165Helper.validateSupportsInterface(address(bridge));
+    }
+
+    function test_supportsInterface_returnsTrueForILZCrossChainBridge() external view {
         assertTrue(
             bridge.supportsInterface(type(ILZCrossChainBridge).interfaceId),
             "Should support ILZCrossChainBridge"
         );
     }
 
-    function test_supportsInterface_IVersioned() external view {
+    function test_supportsInterface_returnsTrueForIRescueable() external view {
+        assertTrue(
+            bridge.supportsInterface(type(IRescueable).interfaceId),
+            "Should support IRescueable"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIVersioned() external view {
         assertTrue(
             bridge.supportsInterface(type(IVersioned).interfaceId),
             "Should support IVersioned"
         );
     }
 
-    function test_supportsInterface_IEnabler() external view {
+    function test_supportsInterface_returnsTrueForIEnabler() external view {
         assertTrue(bridge.supportsInterface(type(IEnabler).interfaceId), "Should support IEnabler");
     }
 
-    function test_supportsInterface_IEnablerV2() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2() external view {
         assertTrue(
             bridge.supportsInterface(type(IEnablerV2).interfaceId),
             "Should support IEnablerV2"
         );
     }
 
-    function test_supportsInterface_IEnablerV2ReEnable() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2ReEnable() external view {
         assertTrue(
             bridge.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
             "Should support IEnablerV2ReEnable"
         );
     }
 
-    function test_supportsInterface_IEnablerV2GracePeriod() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2GracePeriod() external view {
         assertTrue(
             bridge.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
             "Should support IEnablerV2GracePeriod"
         );
     }
 
-    function test_supportsInterface_ERC165() external view {
-        assertTrue(bridge.supportsInterface(bytes4(0x01ffc9a7)), "Should support ERC-165");
+    function test_supportsInterface_returnsTrueForIERC165() external view {
+        assertTrue(bridge.supportsInterface(type(IERC165).interfaceId), "Should support IERC165");
     }
 
-    function test_supportsInterface_unsupported() external view {
+    function test_supportsInterface_returnsFalseForUnsupportedInterface() external view {
         assertFalse(
             bridge.supportsInterface(bytes4(0xdeadbeef)),
             "Should not support random interface"

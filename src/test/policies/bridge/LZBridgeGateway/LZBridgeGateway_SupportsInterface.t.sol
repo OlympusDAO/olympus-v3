@@ -5,6 +5,8 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
@@ -13,69 +15,83 @@ import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
+// Libraries
+import {ERC165Helper} from "src/test/lib/ERC165.sol";
+
 /// @dev ERC-165 interface detection.
 contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
-    function test_supportsInterface_ILZBridgeGateway() external view {
+    function test_supportsInterface_validatesIERC165Self() external view {
+        ERC165Helper.validateSupportsInterface(address(gateway));
+    }
+
+    function test_supportsInterface_returnsTrueForILZBridgeGateway() external view {
         assertTrue(
             gateway.supportsInterface(type(ILZBridgeGateway).interfaceId),
             "Should support ILZBridgeGateway"
         );
     }
 
-    function test_supportsInterface_ILZEndpointV2Admin() external view {
+    function test_supportsInterface_returnsTrueForILZEndpointV2Admin() external view {
         assertTrue(
             gateway.supportsInterface(type(ILZEndpointV2Admin).interfaceId),
             "Should support ILZEndpointV2Admin"
         );
     }
 
-    function test_supportsInterface_ILayerZeroReceiver() external view {
+    function test_supportsInterface_returnsTrueForILayerZeroReceiver() external view {
         assertTrue(
             gateway.supportsInterface(type(ILayerZeroReceiver).interfaceId),
             "Should support ILayerZeroReceiver"
         );
     }
 
-    function test_supportsInterface_IVersioned() external view {
+    function test_supportsInterface_returnsTrueForIRescueable() external view {
+        assertTrue(
+            gateway.supportsInterface(type(IRescueable).interfaceId),
+            "Should support IRescueable"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIVersioned() external view {
         assertTrue(
             gateway.supportsInterface(type(IVersioned).interfaceId),
             "Should support IVersioned"
         );
     }
 
-    function test_supportsInterface_IEnabler() external view {
+    function test_supportsInterface_returnsTrueForIEnabler() external view {
         assertTrue(
             gateway.supportsInterface(type(IEnabler).interfaceId),
             "Should support IEnabler"
         );
     }
 
-    function test_supportsInterface_IEnablerV2() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2() external view {
         assertTrue(
             gateway.supportsInterface(type(IEnablerV2).interfaceId),
             "Should support IEnablerV2"
         );
     }
 
-    function test_supportsInterface_IEnablerV2ReEnable() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2ReEnable() external view {
         assertTrue(
             gateway.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
             "Should support IEnablerV2ReEnable"
         );
     }
 
-    function test_supportsInterface_IEnablerV2GracePeriod() external view {
+    function test_supportsInterface_returnsTrueForIEnablerV2GracePeriod() external view {
         assertTrue(
             gateway.supportsInterface(type(IEnablerV2GracePeriod).interfaceId),
             "Should support IEnablerV2GracePeriod"
         );
     }
 
-    function test_supportsInterface_ERC165() external view {
-        assertTrue(gateway.supportsInterface(bytes4(0x01ffc9a7)), "Should support ERC-165");
+    function test_supportsInterface_returnsTrueForIERC165() external view {
+        assertTrue(gateway.supportsInterface(type(IERC165).interfaceId), "Should support IERC165");
     }
 
-    function test_supportsInterface_unsupported() external view {
+    function test_supportsInterface_returnsFalseForUnsupportedInterface() external view {
         assertFalse(
             gateway.supportsInterface(bytes4(0xdeadbeef)),
             "Should not support random interface"

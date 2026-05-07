@@ -3,10 +3,14 @@
 pragma solidity >=0.8.30;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
+import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
+import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
+import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {EnablerV2} from "src/libraries/EnablerV2.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
@@ -327,11 +331,15 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     }
 
     /// @notice Validate configureAndEnable state after batch execution.
-    /// @dev Checks that gateway is enabled, peers are set, and enforced options exist.
+    /// @dev Mirrors LZBridgeSecurityUpgradeProposal._validateLZConfig for L2 chains.
+    ///      Checks that gateway is enabled, peers are set, enforced options exist,
+    ///      libraries are pinned, and ULN/Executor config is correct for every remote EID.
     function _validateConfigureAndEnable() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+        uint32 localEid = _getLocalEid();
         uint32[] memory remoteEids = _getRemoteEids();
+        ILayerZeroEndpointV2 endpoint = ILayerZeroEndpointV2(gateway.LZ_ENDPOINT());
 
         console2.log("\nValidating configureAndEnable post-batch state");
 
@@ -365,6 +373,17 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             console2.log("  Enforced options set for EID:", remoteEids[i]);
         }
 
+        // 4. Libraries + ULN/Executor config must match for all remote EIDs
+        address sendLib = LZConfigLib.sendUln302ForEid(localEid);
+        address recvLib = LZConfigLib.recvUln302ForEid(localEid);
+        uint64 localConf = LZConfigLib.outboundConfirmationsForEid(localEid);
+        for (uint256 i = 0; i < remoteEids.length; ++i) {
+            uint32 remoteEid = remoteEids[i];
+            _validateLibraries(endpoint, gatewayAddr, remoteEid, sendLib, recvLib);
+            _validateSendConfig(endpoint, gatewayAddr, localEid, remoteEid, sendLib, localConf);
+            _validateRecvConfig(endpoint, gatewayAddr, localEid, remoteEid, recvLib);
+        }
+
         console2.log("configureAndEnable post-batch validation passed");
     }
 
@@ -385,6 +404,261 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         console2.log("revokeSetupRoles post-batch validation passed");
     }
 
+    // =========== LZ CONFIGURATION VALIDATION HELPERS =========== //
+
+    /// @notice Verifies that send/receive libraries are pinned to the expected addresses.
+    function _validateLibraries(
+        ILayerZeroEndpointV2 endpoint_,
+        address gateway_,
+        uint32 remoteEid_,
+        address sendLib_,
+        address recvLib_
+    ) internal view {
+        if (endpoint_.getSendLibrary(gateway_, remoteEid_) != sendLib_) {
+            revert(
+                string.concat("Send library not pinned for EID ", vm.toString(uint256(remoteEid_)))
+            );
+        }
+        if (endpoint_.isDefaultSendLibrary(gateway_, remoteEid_)) {
+            revert(
+                string.concat(
+                    "Send library is still default for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        (address pinnedRecvLib, bool isDefault) = endpoint_.getReceiveLibrary(gateway_, remoteEid_);
+        if (pinnedRecvLib != recvLib_) {
+            revert(
+                string.concat(
+                    "Receive library not pinned for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (isDefault) {
+            revert(
+                string.concat(
+                    "Receive library is still default for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        console2.log("  Libraries pinned for EID:", remoteEid_);
+    }
+
+    /// @notice Verifies the Send ULN config (DVNs + confirmations) and Executor config.
+    /// @dev Reads app-level ULN config via IUlnConfigState to confirm optional DVNs are
+    ///      pinned to the NIL sentinel.
+    function _validateSendConfig(
+        ILayerZeroEndpointV2 endpoint_,
+        address gateway_,
+        uint32 localEid_,
+        uint32 remoteEid_,
+        address sendLib_,
+        uint64 expectedConf_
+    ) internal view {
+        bytes memory sendUlnCfg = endpoint_.getConfig(
+            gateway_,
+            sendLib_,
+            remoteEid_,
+            LZConfigLib.CONFIG_TYPE_ULN
+        );
+        if (sendUlnCfg.length == 0) {
+            revert(
+                string.concat("Send ULN config not set for EID ", vm.toString(uint256(remoteEid_)))
+            );
+        }
+        UlnConfig memory sendUln = abi.decode(sendUlnCfg, (UlnConfig));
+        if (sendUln.confirmations != expectedConf_) {
+            revert(
+                string.concat(
+                    "Send ULN confirmations mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
+        if (sendUln.requiredDVNCount != expectedDvns.length) {
+            revert(
+                string.concat(
+                    "Send ULN required DVN count mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (sendUln.requiredDVNs.length != expectedDvns.length) {
+            revert(
+                string.concat(
+                    "Send ULN required DVN array length mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            if (sendUln.requiredDVNs[d] != expectedDvns[d]) {
+                revert(
+                    string.concat(
+                        "Send ULN DVN mismatch for EID ",
+                        vm.toString(uint256(remoteEid_))
+                    )
+                );
+            }
+        }
+
+        // App-level NIL check: ep.getConfig returns resolved config; raw app config must be
+        // explicit NIL so that future LZ default changes cannot drag in optional DVNs.
+        UlnConfig memory sendAppUln = IUlnConfigState(sendLib_).getAppUlnConfig(
+            gateway_,
+            remoteEid_
+        );
+        if (sendAppUln.optionalDVNCount != type(uint8).max) {
+            revert(
+                string.concat(
+                    "Send ULN optional DVNs must be explicit NIL for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (sendAppUln.optionalDVNs.length != 0) {
+            revert(
+                string.concat(
+                    "Send ULN optional DVNs must be empty for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (sendAppUln.optionalDVNThreshold != 0) {
+            revert(
+                string.concat(
+                    "Send ULN optional DVN threshold must be 0 for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+
+        // Executor config
+        bytes memory execCfg = endpoint_.getConfig(
+            gateway_,
+            sendLib_,
+            remoteEid_,
+            LZConfigLib.CONFIG_TYPE_EXECUTOR
+        );
+        if (execCfg.length == 0) {
+            revert(
+                string.concat("Executor config not set for EID ", vm.toString(uint256(remoteEid_)))
+            );
+        }
+        ExecutorConfig memory exec = abi.decode(execCfg, (ExecutorConfig));
+        if (exec.executor != LZConfigLib.executorForEid(localEid_)) {
+            revert(
+                string.concat(
+                    "Executor address mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (exec.maxMessageSize != LZConfigLib.MAX_MESSAGE_SIZE) {
+            revert(
+                string.concat(
+                    "Executor maxMessageSize mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        console2.log("  Send ULN + Executor config OK for EID:", remoteEid_);
+    }
+
+    /// @notice Verifies the Recv ULN config (DVNs + confirmations).
+    /// @dev Inbound confirmations equal the remote chain's outbound confirmations.
+    function _validateRecvConfig(
+        ILayerZeroEndpointV2 endpoint_,
+        address gateway_,
+        uint32 localEid_,
+        uint32 remoteEid_,
+        address recvLib_
+    ) internal view {
+        bytes memory recvUlnCfg = endpoint_.getConfig(
+            gateway_,
+            recvLib_,
+            remoteEid_,
+            LZConfigLib.CONFIG_TYPE_ULN
+        );
+        if (recvUlnCfg.length == 0) {
+            revert(
+                string.concat("Recv ULN config not set for EID ", vm.toString(uint256(remoteEid_)))
+            );
+        }
+        UlnConfig memory recvUln = abi.decode(recvUlnCfg, (UlnConfig));
+        uint64 expectedConf = LZConfigLib.outboundConfirmationsForEid(remoteEid_);
+        if (recvUln.confirmations != expectedConf) {
+            revert(
+                string.concat(
+                    "Recv ULN confirmations mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        address[] memory expectedDvns = LZConfigLib.dvnsForRoute(localEid_, remoteEid_);
+        if (recvUln.requiredDVNCount != expectedDvns.length) {
+            revert(
+                string.concat(
+                    "Recv ULN required DVN count mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (recvUln.requiredDVNs.length != expectedDvns.length) {
+            revert(
+                string.concat(
+                    "Recv ULN required DVN array length mismatch for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            if (recvUln.requiredDVNs[d] != expectedDvns[d]) {
+                revert(
+                    string.concat(
+                        "Recv ULN DVN mismatch for EID ",
+                        vm.toString(uint256(remoteEid_))
+                    )
+                );
+            }
+        }
+
+        // App-level NIL check
+        UlnConfig memory recvAppUln = IUlnConfigState(recvLib_).getAppUlnConfig(
+            gateway_,
+            remoteEid_
+        );
+        if (recvAppUln.optionalDVNCount != type(uint8).max) {
+            revert(
+                string.concat(
+                    "Recv ULN optional DVNs must be explicit NIL for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (recvAppUln.optionalDVNs.length != 0) {
+            revert(
+                string.concat(
+                    "Recv ULN optional DVNs must be empty for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        if (recvAppUln.optionalDVNThreshold != 0) {
+            revert(
+                string.concat(
+                    "Recv ULN optional DVN threshold must be 0 for EID ",
+                    vm.toString(uint256(remoteEid_))
+                )
+            );
+        }
+        console2.log("  Recv ULN config OK for EID:", remoteEid_);
+    }
+
     // =========== LZ CONFIGURATION HELPERS =========== //
 
     /// @notice Reverts if called on a canonical chain (mainnet/sepolia).
@@ -396,8 +670,9 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     /// @notice Configures LZ libraries and ULN/Executor config for all remote chains
     ///         via the gateway's ILZEndpointV2Admin functions.
     /// @dev    Only for non-canonical (L2) chains.
-    ///         DVN selection is per-route: Berachain routes use Nethermind DVN instead of
-    ///         Google Cloud DVN (which is unavailable on Berachain).
+    ///         The DVN set comes from `LZConfigLib.dvnsForRoute`: every route requires
+    ///         four DVNs (LayerZero Labs, Canary, Nethermind, plus Google Cloud, or
+    ///         Horizen for routes that touch Berachain where Google Cloud is unavailable).
     function _configureLZ(LZBridgeGateway gateway_) internal {
         uint32[] memory remoteEids = _getRemoteEids();
         uint32 localEid = _getLocalEid();
@@ -410,7 +685,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         for (uint256 i = 0; i < remoteEids.length; ++i) {
             uint32 remoteEid = remoteEids[i];
-            // Select DVNs based on route (Nethermind for Berachain routes, Google Cloud otherwise)
+            // Four required DVNs per route; the fourth is Google Cloud (or Horizen for routes
+            // touching Berachain). See LZConfigLib.dvnsForRoute for the selection rule.
             address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
             console2.log("  Configuring remote EID:", remoteEid);
 

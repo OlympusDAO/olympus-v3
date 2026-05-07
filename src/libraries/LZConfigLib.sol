@@ -71,18 +71,34 @@ library LZConfigLib {
     address internal constant BERA_LZ_DVN = 0x282b3386571f7f794450d5789911a9804FA346b4;
     address internal constant OPT_LZ_DVN = 0x6A02D83e8d433304bba74EF1c427913958187142;
 
-    // Google Cloud DVN (same CREATE2 address on supported chains; NOT available on Berachain)
-    address internal constant ETH_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
-    address internal constant ARB_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
-    address internal constant BASE_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
-    address internal constant OPT_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
+    // Canary DVN
+    address internal constant ETH_CANARY_DVN = 0xa4fE5A5B9A846458a70Cd0748228aED3bF65c2cd;
+    address internal constant ARB_CANARY_DVN = 0xf2E380c90e6c09721297526dbC74f870e114dfCb;
+    address internal constant BASE_CANARY_DVN = 0x554833698Ae0FB22ECC90B01222903fD62CA4B47;
+    address internal constant BERA_CANARY_DVN = 0x06e8042729CeF3aE6D6DB5350f48F9D736C3675d;
+    address internal constant OPT_CANARY_DVN = 0x5b6735c66d97479cCD18294fc96B3084EcB2fa3f;
 
-    // Nethermind DVN (used for Berachain routes where Google Cloud is unavailable)
+    // Nethermind DVN
     address internal constant ETH_NETHERMIND_DVN = 0xa59BA433ac34D2927232918Ef5B2eaAfcF130BA5;
     address internal constant ARB_NETHERMIND_DVN = 0xa7b5189bcA84Cd304D8553977c7C614329750d99;
     address internal constant BASE_NETHERMIND_DVN = 0xcd37CA043f8479064e10635020c65FfC005d36f6;
     address internal constant BERA_NETHERMIND_DVN = 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B;
     address internal constant OPT_NETHERMIND_DVN = 0xa7b5189bcA84Cd304D8553977c7C614329750d99;
+
+    // Google Cloud DVN (same CREATE2 address on supported chains; NOT available on Berachain).
+    // Used as the fourth required DVN on routes that do not touch Berachain.
+    address internal constant ETH_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
+    address internal constant ARB_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
+    address internal constant BASE_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
+    address internal constant OPT_GCLOUD_DVN = 0xD56e4eAb23cb81f43168F9F45211Eb027b9aC7cc;
+
+    // Horizen DVN (used as the fourth required DVN on routes that touch Berachain, since the
+    // Google Cloud DVN is not available there).
+    address internal constant ETH_HORIZEN_DVN = 0x380275805876Ff19055EA900CDb2B46a94ecF20D;
+    address internal constant ARB_HORIZEN_DVN = 0x19670Df5E16bEa2ba9b9e68b48C054C5bAEa06B8;
+    address internal constant BASE_HORIZEN_DVN = 0xa7b5189bcA84Cd304D8553977c7C614329750d99;
+    address internal constant BERA_HORIZEN_DVN = 0xeCbaA45c33ce6Fa284995e5F8314f5bC7F1C2008;
+    address internal constant OPT_HORIZEN_DVN = 0x9E930731cb4A6bf7eCc11F695A295c60bDd212eB;
 
     // ========== CONFIG TYPES (EndpointV2 / SetConfigParam.configType) ========== //
 
@@ -144,7 +160,12 @@ library LZConfigLib {
 
     // ========== ENCODING HELPERS ========== //
 
-    /// @notice ABI-encodes a UlnConfig struct.
+    /// @notice ABI-encodes a UlnConfig struct with no optional DVNs pinned to the app.
+    /// @dev `optionalDVNCount` uses the LayerZero NIL sentinel (`type(uint8).max`) so that the
+    ///      OApp-level config explicitly declares "no optional DVNs" instead of inheriting the
+    ///      EID-level default. In `UlnBase.sol`, `0` means DEFAULT (inherit) and
+    ///      `type(uint8).max` means NIL/NONE; using `0` would let a future change to the
+    ///      LayerZero default silently add an optional DVN requirement on verified messages.
     /// @param confirmations_ The number of block confirmations required.
     /// @param requiredDVNs_ Sorted ascending array of required DVN addresses.
     function encodeUlnConfig(
@@ -157,7 +178,7 @@ library LZConfigLib {
                 UlnConfig({
                     confirmations: confirmations_,
                     requiredDVNCount: uint8(requiredDVNs_.length),
-                    optionalDVNCount: 0,
+                    optionalDVNCount: type(uint8).max,
                     optionalDVNThreshold: 0,
                     requiredDVNs: requiredDVNs_,
                     optionalDVNs: empty
@@ -238,18 +259,17 @@ library LZConfigLib {
         revert LZConfigLib_UnsupportedEid(eid_);
     }
 
-    /// @notice Returns the Google Cloud DVN address for a given V2 EID.
-    /// @dev Not available on Berachain.
-    function gcloudDvnForEid(uint32 eid_) internal pure returns (address) {
-        if (eid_ == ETH_EID) return ETH_GCLOUD_DVN;
-        if (eid_ == ARB_EID) return ARB_GCLOUD_DVN;
-        if (eid_ == OPT_EID) return OPT_GCLOUD_DVN;
-        if (eid_ == BASE_EID) return BASE_GCLOUD_DVN;
+    /// @notice Returns the Canary DVN address for a given V2 EID.
+    function canaryDvnForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_CANARY_DVN;
+        if (eid_ == ARB_EID) return ARB_CANARY_DVN;
+        if (eid_ == OPT_EID) return OPT_CANARY_DVN;
+        if (eid_ == BASE_EID) return BASE_CANARY_DVN;
+        if (eid_ == BERA_EID) return BERA_CANARY_DVN;
         revert LZConfigLib_UnsupportedEid(eid_);
     }
 
     /// @notice Returns the Nethermind DVN address for a given V2 EID.
-    /// @dev Used for Berachain routes where Google Cloud DVN is unavailable.
     function nethermindDvnForEid(uint32 eid_) internal pure returns (address) {
         if (eid_ == ETH_EID) return ETH_NETHERMIND_DVN;
         if (eid_ == ARB_EID) return ARB_NETHERMIND_DVN;
@@ -259,28 +279,59 @@ library LZConfigLib {
         revert LZConfigLib_UnsupportedEid(eid_);
     }
 
-    /// @notice Returns the DVN pair for a specific route, sorted ascending.
-    /// @dev Routes involving Berachain use Nethermind DVN (Google Cloud is unavailable
-    ///      on Berachain). All other routes use Google Cloud DVN.
+    /// @notice Returns the Google Cloud DVN address for a given V2 EID.
+    /// @dev Not available on Berachain. Use the Horizen DVN for routes touching Berachain.
+    function gcloudDvnForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_GCLOUD_DVN;
+        if (eid_ == ARB_EID) return ARB_GCLOUD_DVN;
+        if (eid_ == OPT_EID) return OPT_GCLOUD_DVN;
+        if (eid_ == BASE_EID) return BASE_GCLOUD_DVN;
+        revert LZConfigLib_UnsupportedEid(eid_);
+    }
+
+    /// @notice Returns the Horizen DVN address for a given V2 EID.
+    /// @dev Used as the fourth required DVN on routes touching Berachain, where the Google
+    ///      Cloud DVN is unavailable.
+    function horizenDvnForEid(uint32 eid_) internal pure returns (address) {
+        if (eid_ == ETH_EID) return ETH_HORIZEN_DVN;
+        if (eid_ == ARB_EID) return ARB_HORIZEN_DVN;
+        if (eid_ == OPT_EID) return OPT_HORIZEN_DVN;
+        if (eid_ == BASE_EID) return BASE_HORIZEN_DVN;
+        if (eid_ == BERA_EID) return BERA_HORIZEN_DVN;
+        revert LZConfigLib_UnsupportedEid(eid_);
+    }
+
+    /// @notice Returns the four required DVNs for a specific route, sorted ascending.
+    /// @dev Every route requires four DVNs: LayerZero Labs, Canary and Nethermind, plus a
+    ///      fourth DVN selected per route. Routes that touch Berachain (either as the local
+    ///      or remote chain) use the Horizen DVN as the fourth member, since the Google
+    ///      Cloud DVN is not deployed on Berachain. All other routes use the Google Cloud
+    ///      DVN as the fourth member. The returned addresses are local to `localEid_`.
     /// @param localEid_ The local chain's V2 EID.
     /// @param remoteEid_ The remote chain's V2 EID.
     function dvnsForRoute(
         uint32 localEid_,
         uint32 remoteEid_
     ) internal pure returns (address[] memory dvns) {
-        address localLzDvn = lzDvnForEid(localEid_);
-        address secondDvn = (localEid_ == BERA_EID || remoteEid_ == BERA_EID)
-            ? nethermindDvnForEid(localEid_)
-            : gcloudDvnForEid(localEid_);
+        bool involvesBerachain = (localEid_ == BERA_EID || remoteEid_ == BERA_EID);
 
-        // Sort ascending for ULN config
-        dvns = new address[](2);
-        if (localLzDvn < secondDvn) {
-            dvns[0] = localLzDvn;
-            dvns[1] = secondDvn;
-        } else {
-            dvns[0] = secondDvn;
-            dvns[1] = localLzDvn;
+        dvns = new address[](4);
+        dvns[0] = lzDvnForEid(localEid_);
+        dvns[1] = canaryDvnForEid(localEid_);
+        dvns[2] = nethermindDvnForEid(localEid_);
+        dvns[3] = involvesBerachain ? horizenDvnForEid(localEid_) : gcloudDvnForEid(localEid_);
+
+        // Insertion sort to produce an ascending order required by the ULN config.
+        for (uint256 i = 1; i < dvns.length; ++i) {
+            address key = dvns[i];
+            uint256 j = i;
+            while (j > 0 && dvns[j - 1] > key) {
+                dvns[j] = dvns[j - 1];
+                unchecked {
+                    --j;
+                }
+            }
+            dvns[j] = key;
         }
     }
 }
