@@ -26,7 +26,9 @@ contract MockRescueable is Rescueable {
 /// @notice Recipient that rejects native transfers, used to exercise the native-transfer
 ///         failure path in `Rescueable.rescue()`.
 contract RejectingReceiver {
+    error NoNative();
+
     receive() external payable {
-        revert("RejectingReceiver: no native");
+        revert NoNative();
     }
 }

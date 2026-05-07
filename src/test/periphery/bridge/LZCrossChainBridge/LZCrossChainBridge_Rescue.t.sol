@@ -8,13 +8,7 @@ import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-
-/// @dev Contract that rejects native transfers, used to test rescue() native failure paths.
-contract RejectingReceiver {
-    receive() external payable {
-        revert("RejectingReceiver: no native");
-    }
-}
+import {RejectingReceiver} from "src/test/bases/Rescueable/MockRescueable.sol";
 
 /// @dev Tests for the unified rescue function on LZCrossChainBridge.
 ///      Passing the EIP-7528 native sentinel (`NATIVE_TOKEN`) as the token rescues the native balance.
@@ -176,10 +170,8 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
 
         RejectingReceiver rejector = new RejectingReceiver();
 
-        // OZ Address.sendValue bubbles up the receiver's revert reason via Errors.FailedCall
-        // when no return data is provided, otherwise re-reverts with the original data.
-        // RejectingReceiver reverts with a string, which propagates as-is.
-        vm.expectRevert("RejectingReceiver: no native");
+        // OZ Address.sendValue bubbles up the receiver's revert data.
+        vm.expectRevert(abi.encodeWithSelector(RejectingReceiver.NoNative.selector));
         bridge.rescue(nativeToken, payable(address(rejector)));
     }
 }

@@ -109,8 +109,8 @@ contract RescueableTests is Test {
 
         RejectingReceiver rejector = new RejectingReceiver();
 
-        // OZ Address.sendValue propagates the receiver's revert reason.
-        vm.expectRevert("RejectingReceiver: no native");
+        // OZ Address.sendValue propagates the receiver's revert data.
+        vm.expectRevert(abi.encodeWithSelector(RejectingReceiver.NoNative.selector));
         target.rescue(nativeSentinel, payable(address(rejector)));
     }
 

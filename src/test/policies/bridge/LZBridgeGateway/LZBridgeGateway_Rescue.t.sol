@@ -9,6 +9,7 @@ import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {RejectingReceiver} from "src/test/bases/Rescueable/MockRescueable.sol";
 
 /// @dev Tests for the unified rescue function on LZBridgeGateway.
 ///      Passing the EIP-7528 native sentinel (`NATIVE_TOKEN`) as the token rescues the native (ETH) balance.
@@ -219,16 +220,9 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         // Deploy a contract that rejects ETH and use it as recipient
         RejectingReceiver rejector = new RejectingReceiver();
 
-        // OZ Address.sendValue bubbles up the receiver's revert string.
-        vm.expectRevert("RejectingReceiver: no eth");
+        // OZ Address.sendValue bubbles up the receiver's revert data.
+        vm.expectRevert(abi.encodeWithSelector(RejectingReceiver.NoNative.selector));
         vm.prank(manager);
         gateway.rescue(nativeToken, payable(address(rejector)));
-    }
-}
-
-/// @dev Contract that rejects ETH transfers, used to test rescue() native failure paths.
-contract RejectingReceiver {
-    receive() external payable {
-        revert("RejectingReceiver: no eth");
     }
 }
