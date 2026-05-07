@@ -5,7 +5,7 @@ import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimite
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @dev Tests for the public view functions `sendable` / `receivable`, the
 ///      internal helper `_currentState` (exposed via the harness),

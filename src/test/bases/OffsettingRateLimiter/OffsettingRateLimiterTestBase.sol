@@ -4,7 +4,7 @@ pragma solidity >=0.8.18;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {OffsettingRateLimiterConstants} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";

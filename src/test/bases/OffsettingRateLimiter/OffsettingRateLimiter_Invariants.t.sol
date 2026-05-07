@@ -5,7 +5,7 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {StdInvariant} from "@forge-std-1.9.6/StdInvariant.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {OffsettingRateLimiterConstants} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";

@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 /// @dev Setting outbound rate limits.

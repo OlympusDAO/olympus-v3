@@ -4,7 +4,7 @@ pragma solidity >=0.8.18;
 import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @dev Tests for `_clearOutboundInFlight` and `_clearInboundInFlight`,
 ///      exposed via the harness as `clearOutboundInFlight` and

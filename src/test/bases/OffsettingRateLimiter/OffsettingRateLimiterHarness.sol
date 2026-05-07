@@ -2,7 +2,7 @@
 pragma solidity >=0.8.18;
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Contracts
 import {OffsettingRateLimiter} from "src/bases/OffsettingRateLimiter.sol";

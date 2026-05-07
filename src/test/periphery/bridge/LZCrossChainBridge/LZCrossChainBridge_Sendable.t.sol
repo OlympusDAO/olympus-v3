@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @dev `LZCrossChainBridge.sendable` proxies to the gateway's bidirectional limiter.
 contract LZCrossChainBridgeTests_Sendable is LZCrossChainBridgeTestBase {

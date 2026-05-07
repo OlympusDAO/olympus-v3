@@ -7,7 +7,7 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";

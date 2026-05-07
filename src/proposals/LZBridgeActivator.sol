@@ -4,7 +4,7 @@ pragma solidity >=0.8.30;
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {IMessageLibManager, SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
-import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";

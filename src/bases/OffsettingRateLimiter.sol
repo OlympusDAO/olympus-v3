@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.18;
 
-import {IOffsettingRateLimiter} from "../interfaces/IOffsettingRateLimiter.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @title OffsettingRateLimiter
 /// @notice An abstract rate limiter that maintains independent outbound and inbound
