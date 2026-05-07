@@ -7,7 +7,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Constants
@@ -125,7 +125,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
             GRACE_SECONDS
         );
 
-        vm.expectRevert(abi.encodeWithSelector(IEnablerV2ReEnable.NeverEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IReEnabler.NeverEnabled.selector));
         vm.prank(manager);
         fresh.reEnable();
     }

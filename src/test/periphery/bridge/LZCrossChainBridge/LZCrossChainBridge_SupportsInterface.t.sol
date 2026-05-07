@@ -10,7 +10,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Libraries
@@ -53,10 +53,10 @@ contract LZCrossChainBridgeTests_SupportsInterface is LZCrossChainBridgeTestBase
         );
     }
 
-    function test_supportsInterface_returnsTrueForIEnablerV2ReEnable() external view {
+    function test_supportsInterface_returnsTrueForIReEnabler() external view {
         assertTrue(
-            bridge.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
-            "Should support IEnablerV2ReEnable"
+            bridge.supportsInterface(type(IReEnabler).interfaceId),
+            "Should support IReEnabler"
         );
     }
 

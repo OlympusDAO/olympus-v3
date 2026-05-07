@@ -5,7 +5,7 @@ import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptio
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
@@ -14,15 +14,10 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
 ///      enforced options, rate limiting, and bridged supply tracking.
 ///
-///      Inherits the `IEnablerV2ReEnable` and `IEnablerV2GracePeriod` interfaces, exposing
+///      Inherits the `IReEnabler` and `IEnablerV2GracePeriod` interfaces, exposing
 ///      the manager-gated `reEnable()` entry point and the `GRACE()` window length used to
 ///      bound how soon after a `disable` the contract may be re-enabled.
-interface ILZBridgeGateway is
-    IVersioned,
-    ILZEndpointV2Admin,
-    IEnablerV2ReEnable,
-    IEnablerV2GracePeriod
-{
+interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin, IReEnabler, IEnablerV2GracePeriod {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.

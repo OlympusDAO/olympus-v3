@@ -6,7 +6,7 @@ import {ReEnablerHarness, ReEnablerDefaultBeforeHarness} from "src/test/librarie
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 
 /// @dev Tests for `ReEnabler.reEnable`.
 contract ReEnablerTests_ReEnable is ReEnablerTestBase {
@@ -122,7 +122,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
     // ========== REVERTS ========== //
 
     function test_reEnable_revertsIfNeverEnabled() external {
-        vm.expectRevert(IEnablerV2ReEnable.NeverEnabled.selector);
+        vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(caller);
         harness.reEnable();
     }

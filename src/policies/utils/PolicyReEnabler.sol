@@ -37,7 +37,7 @@ abstract contract PolicyReEnabler is ReEnabler, PolicyEnablerV2 {
     /// @inheritdoc EnablerV2
     /// @dev The override resolves the diamond between `ReEnabler` and
     ///      `PolicyEnablerV2` and forwards the lookup through the linearized
-    ///      base chain, which advertises `IEnablerV2`, `IEnablerV2ReEnable`,
+    ///      base chain, which advertises `IEnablerV2`, `IReEnabler`,
     ///      and the legacy `IEnabler`.
     function supportsInterface(
         bytes4 interfaceId_

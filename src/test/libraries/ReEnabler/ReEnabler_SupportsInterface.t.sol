@@ -7,7 +7,7 @@ import {ReEnablerTestBase} from "src/test/libraries/ReEnabler/ReEnablerTestBase.
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
@@ -38,10 +38,10 @@ contract ReEnablerTests_SupportsInterface is ReEnablerTestBase {
         );
     }
 
-    function test_supportsInterface_returnsTrueForIEnablerV2ReEnable() external view {
+    function test_supportsInterface_returnsTrueForIReEnabler() external view {
         assertTrue(
-            harness.supportsInterface(type(IEnablerV2ReEnable).interfaceId),
-            "IEnablerV2ReEnable not advertised"
+            harness.supportsInterface(type(IReEnabler).interfaceId),
+            "IReEnabler not advertised"
         );
     }
 

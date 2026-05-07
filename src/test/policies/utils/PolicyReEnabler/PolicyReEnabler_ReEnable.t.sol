@@ -6,7 +6,7 @@ import {MockPolicyReEnabler} from "src/test/policies/utils/PolicyReEnabler/MockP
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 import {MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -59,7 +59,7 @@ contract PolicyReEnablerTests_ReEnable is PolicyReEnablerTestBase {
     // ========== REVERTS ========== //
 
     function test_reEnable_revertsIfNeverEnabled() external {
-        vm.expectRevert(IEnablerV2ReEnable.NeverEnabled.selector);
+        vm.expectRevert(IReEnabler.NeverEnabled.selector);
         vm.prank(manager);
         policy.reEnable();
     }

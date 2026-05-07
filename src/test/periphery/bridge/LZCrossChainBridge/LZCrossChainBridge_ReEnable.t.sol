@@ -7,7 +7,7 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/interfaces/IEnablerV2.sol";
 import {IEnablerV2GracePeriod} from "src/interfaces/IEnablerV2GracePeriod.sol";
-import {IEnablerV2ReEnable} from "src/interfaces/IEnablerV2ReEnable.sol";
+import {IReEnabler} from "src/interfaces/IReEnabler.sol";
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
@@ -117,7 +117,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
             GRACE_SECONDS
         );
 
-        vm.expectRevert(abi.encodeWithSelector(IEnablerV2ReEnable.NeverEnabled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IReEnabler.NeverEnabled.selector));
         vm.prank(reEnablerAddr);
         fresh.reEnable();
     }
