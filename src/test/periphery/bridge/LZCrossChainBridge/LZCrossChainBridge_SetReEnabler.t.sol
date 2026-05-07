@@ -10,7 +10,7 @@ contract LZCrossChainBridgeTests_SetReEnabler is LZCrossChainBridgeTestBase {
     function test_setReEnabler_succeedsForOwner() external {
         address newReEnabler = makeAddr("newReEnabler");
 
-        vm.expectEmit(false, false, false, true);
+        vm.expectEmit(true, false, false, true);
         emit ILZCrossChainBridge.ReEnablerSet(newReEnabler);
         bridge.setReEnabler(newReEnabler);
 

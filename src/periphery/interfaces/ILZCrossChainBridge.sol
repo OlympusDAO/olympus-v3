@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IVersioned} from "../../interfaces/IVersioned.sol";
-import {IGracePeriod} from "../../interfaces/IGracePeriod.sol";
-import {IReEnabler} from "../../interfaces/IReEnabler.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
@@ -12,11 +9,7 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-///
-///      Inherits the `IReEnabler` and `IGracePeriod` interfaces, exposing
-///      the parameterless `reEnable()` entry point gated to the configured `reEnabler` and
-///      the `GRACE()` window length applied to that re-enable.
-interface ILZCrossChainBridge is IVersioned, IReEnabler, IGracePeriod {
+interface ILZCrossChainBridge {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
@@ -42,13 +35,13 @@ interface ILZCrossChainBridge is IVersioned, IReEnabler, IGracePeriod {
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
-    event GatewaySet(address gateway);
+    event GatewaySet(address indexed gateway);
 
     /// @notice Emitted when the re-enabler address is updated.
     /// @dev Setting the re-enabler to the zero address effectively disables the
     ///      `reEnable()` entry point until a non-zero address is configured again.
     /// @param reEnabler The new re-enabler address, or `address(0)` to clear.
-    event ReEnablerSet(address reEnabler);
+    event ReEnablerSet(address indexed reEnabler);
 
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
