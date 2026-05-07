@@ -6,7 +6,7 @@ pragma solidity >=0.8.30;
 /// Reimplemented inline rather than inherited because those contracts assume OZ Ownable,
 /// which is incompatible with the Bophades Kernel RBAC model.
 /// Bidirectional rate limiting is provided by the in-repo `OffsettingRateLimiter`
-/// (src/libraries/) which tracks independent outbound and inbound limits per EID and
+/// (src/bases/) which tracks independent outbound and inbound limits per EID and
 /// offsets activity in one direction against the in-flight amount of the other. Limits
 /// are mandatory: every configured peer must have both directions configured before
 /// traffic is allowed.
@@ -39,7 +39,7 @@ import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol
 
 // Contracts
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
-import {OffsettingRateLimiter} from "src/libraries/OffsettingRateLimiter.sol";
+import {OffsettingRateLimiter} from "src/bases/OffsettingRateLimiter.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";

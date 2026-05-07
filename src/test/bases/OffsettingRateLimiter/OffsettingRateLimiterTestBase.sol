@@ -7,10 +7,10 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
-import {OffsettingRateLimiterConstants} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";
+import {OffsettingRateLimiterConstants} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";
 
 // Contracts
-import {OffsettingRateLimiterHarness} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
+import {OffsettingRateLimiterHarness} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
 
 /// @notice Shared test base for the OffsettingRateLimiter unit, scenario and fuzz tests.
 /// @dev Defines named constants for every eid, every default rate limit, and every

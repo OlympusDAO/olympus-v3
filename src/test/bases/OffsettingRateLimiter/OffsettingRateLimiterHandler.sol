@@ -7,7 +7,7 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Contracts
-import {OffsettingRateLimiterHarness} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
+import {OffsettingRateLimiterHarness} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
 
 /// @notice Invariant-test handler that wraps `OffsettingRateLimiterHarness` and
 ///         exposes a constrained set of mutating actions over a small fixed

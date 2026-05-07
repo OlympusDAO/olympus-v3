@@ -5,7 +5,7 @@ pragma solidity >=0.8.18;
 import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Contracts
-import {OffsettingRateLimiter} from "src/libraries/OffsettingRateLimiter.sol";
+import {OffsettingRateLimiter} from "src/bases/OffsettingRateLimiter.sol";
 
 /// @notice Test harness exposing every internal function of `OffsettingRateLimiter` as
 ///         an external pass-through with no extra logic. Intended for unit, fuzz

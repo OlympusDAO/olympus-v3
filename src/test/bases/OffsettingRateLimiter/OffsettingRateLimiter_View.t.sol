@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.18;
 
-import {OffsettingRateLimiterTestBase} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
+import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
 import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 // Interfaces

@@ -8,11 +8,11 @@ import {StdInvariant} from "@forge-std-1.9.6/StdInvariant.sol";
 import {IOffsettingRateLimiter} from "src/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
-import {OffsettingRateLimiterConstants} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";
+import {OffsettingRateLimiterConstants} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterConstants.sol";
 
 // Contracts
-import {OffsettingRateLimiterHarness} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
-import {OffsettingRateLimiterHandler} from "src/test/libraries/OffsettingRateLimiter/OffsettingRateLimiterHandler.sol";
+import {OffsettingRateLimiterHarness} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterHarness.sol";
+import {OffsettingRateLimiterHandler} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterHandler.sol";
 
 /// @notice Invariant tests for the OffsettingRateLimiter abstract contract. The
 ///         fuzzer drives the handler's restricted action surface; we read the
