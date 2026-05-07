@@ -114,6 +114,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
+                "   - Sets per-endpoint bidirectional rate limits (outbound and inbound) on each remote chain.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
                 "5. Revoke temporary roles from the LZBridgeActivator contract.\n",
                 "\n",

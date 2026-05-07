@@ -275,7 +275,8 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         assertFalse(success, "verifyPackets should fail when canonical inbound limit is zero");
         assertEq(
             returnData,
-            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0),
+            "canonical lzReceive should revert with RateLimitExceeded(requested=1, available=0)"
         );
     }
 
@@ -307,7 +308,8 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         assertFalse(success, "verifyPackets should fail when non-canonical inbound limit is zero");
         assertEq(
             returnData,
-            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0),
+            "non-canonical lzReceive should revert with RateLimitExceeded(requested=1, available=0)"
         );
     }
 
