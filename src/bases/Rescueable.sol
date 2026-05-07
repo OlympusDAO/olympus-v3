@@ -3,7 +3,6 @@ pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 
 // Libraries
@@ -11,12 +10,15 @@ import {Address} from "@openzeppelin-5.3.0/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
 
+// Contracts
+import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+
 /// @title Rescueable
 /// @notice An abstract base for contracts that expose a privileged `rescue()` to sweep
 ///         accidentally-sent assets.
 ///         Derived contracts authorize the caller via the `_authorizeRescue()` hook.
 /// @dev Native token is identified using the EIP-7528 sentinel.
-abstract contract Rescueable is IRescueable {
+abstract contract Rescueable is IRescueable, ERC165 {
     using SafeERC20 for IERC20;
 
     /// @inheritdoc IRescueable
@@ -56,9 +58,7 @@ abstract contract Rescueable is IRescueable {
 
     // ========= ERC165 ========= //
 
-    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
-        return
-            interfaceId == type(IRescueable).interfaceId ||
-            interfaceId == type(IERC165).interfaceId;
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return interfaceId == type(IRescueable).interfaceId || super.supportsInterface(interfaceId);
     }
 }

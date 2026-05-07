@@ -133,8 +133,7 @@ contract LZCrossChainBridge is
         return
             interfaceId == type(ILZCrossChainBridge).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            ReEnablerGracePeriod.supportsInterface(interfaceId) ||
-            Rescueable.supportsInterface(interfaceId);
+            super.supportsInterface(interfaceId);
     }
 
     /// @inheritdoc EnablerV2

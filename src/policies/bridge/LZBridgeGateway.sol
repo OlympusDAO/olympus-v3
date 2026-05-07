@@ -619,9 +619,7 @@ contract LZBridgeGateway is
             interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
-            PolicyReEnabler.supportsInterface(interfaceId) ||
-            ReEnablerGracePeriod.supportsInterface(interfaceId) ||
-            Rescueable.supportsInterface(interfaceId);
+            super.supportsInterface(interfaceId);
     }
 
     // ========= RATE LIMITER OVERRIDE ========= //
