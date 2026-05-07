@@ -83,7 +83,7 @@ contract LZCrossChainBridge is
         uint32 dstEid_,
         address to_,
         uint256 amount_
-    ) external payable override whenEnabled {
+    ) external payable override givenEnabled {
         _requireNonzeroAddress(to_, "to");
         if (amount_ == 0) revert LZCrossChainBridge_InsufficientAmount();
 

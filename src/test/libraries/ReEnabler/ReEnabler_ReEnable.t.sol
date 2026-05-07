@@ -136,7 +136,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
     }
 
     /// @notice Even when the contract has been enabled at some point, the
-    ///         `whenDisabled` modifier must short-circuit to `NotDisabled`
+    ///         `givenDisabled` modifier must short-circuit to `NotDisabled`
     ///         rather than reaching the `NeverEnabled` branch.
     function test_reEnable_revertsWithNotDisabledBeforeNeverEnabledCheck() external {
         _enableAs(caller);

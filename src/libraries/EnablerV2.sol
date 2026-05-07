@@ -56,7 +56,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      - The contract is currently enabled.
     ///      - `_authorizeEnable` rejects the caller.
     ///      - `_beforeEnable` reverts.
-    function enable(bytes calldata data_) external override whenDisabled {
+    function enable(bytes calldata data_) external override givenDisabled {
         _authorizeEnable(data_);
         _beforeEnable(data_);
         isEnabled = true;
@@ -74,7 +74,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      - The contract is currently disabled.
     ///      - `_authorizeDisable` rejects the caller.
     ///      - `_beforeDisable` reverts.
-    function disable(bytes calldata data_) external override whenEnabled {
+    function disable(bytes calldata data_) external override givenEnabled {
         _authorizeDisable(data_);
         _beforeDisable(data_);
         isEnabled = false;
@@ -134,7 +134,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     }
 
     /// @notice Modifier that reverts when the contract is not currently enabled.
-    modifier whenEnabled() {
+    modifier givenEnabled() {
         _requireEnabled();
         _;
     }
@@ -150,7 +150,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     }
 
     /// @notice Modifier that reverts when the contract is currently enabled.
-    modifier whenDisabled() {
+    modifier givenDisabled() {
         _requireDisabled();
         _;
     }

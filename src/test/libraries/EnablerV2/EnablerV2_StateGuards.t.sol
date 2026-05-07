@@ -8,8 +8,8 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @dev Tests for the state-guard helpers `_requireEnabled` and
 ///      `_requireDisabled`, exposed via the harness as `requireEnabled` and
-///      `requireDisabled`, and for the `whenEnabled` and `whenDisabled`
-///      modifiers, exposed via `gatedWhenEnabled` and `gatedWhenDisabled`.
+///      `requireDisabled`, and for the `givenEnabled` and `givenDisabled`
+///      modifiers, exposed via `gatedGivenEnabled` and `gatedGivenDisabled`.
 contract EnablerV2Tests_StateGuards is EnablerV2TestBase {
     // ========== _requireEnabled ========== //
 
@@ -37,29 +37,29 @@ contract EnablerV2Tests_StateGuards is EnablerV2TestBase {
         harness.requireDisabled();
     }
 
-    // ========== whenEnabled MODIFIER ========== //
+    // ========== givenEnabled MODIFIER ========== //
 
-    function test_whenEnabled_doesNotRevertIfEnabled() external {
+    function test_givenEnabled_doesNotRevertIfEnabled() external {
         _enableAs(caller, "");
 
-        assertTrue(harness.gatedWhenEnabled(), "modifier passes when enabled");
+        assertTrue(harness.gatedGivenEnabled(), "modifier passes when enabled");
     }
 
-    function test_whenEnabled_revertsIfDisabled() external {
+    function test_givenEnabled_revertsIfDisabled() external {
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        harness.gatedWhenEnabled();
+        harness.gatedGivenEnabled();
     }
 
-    // ========== whenDisabled MODIFIER ========== //
+    // ========== givenDisabled MODIFIER ========== //
 
-    function test_whenDisabled_doesNotRevertIfDisabled() external view {
-        assertTrue(harness.gatedWhenDisabled(), "modifier passes when disabled");
+    function test_givenDisabled_doesNotRevertIfDisabled() external view {
+        assertTrue(harness.gatedGivenDisabled(), "modifier passes when disabled");
     }
 
-    function test_whenDisabled_revertsIfEnabled() external {
+    function test_givenDisabled_revertsIfEnabled() external {
         _enableAs(caller, "");
 
         vm.expectRevert(IEnabler.NotDisabled.selector);
-        harness.gatedWhenDisabled();
+        harness.gatedGivenDisabled();
     }
 }

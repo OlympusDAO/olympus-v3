@@ -90,13 +90,13 @@ contract EnablerV2Harness is EnablerV2 {
         _requireDisabled();
     }
 
-    /// @notice Trivial gated function that exercises the `whenEnabled` modifier.
-    function gatedWhenEnabled() external view whenEnabled returns (bool) {
+    /// @notice Trivial gated function that exercises the `givenEnabled` modifier.
+    function gatedGivenEnabled() external view givenEnabled returns (bool) {
         return true;
     }
 
-    /// @notice Trivial gated function that exercises the `whenDisabled` modifier.
-    function gatedWhenDisabled() external view whenDisabled returns (bool) {
+    /// @notice Trivial gated function that exercises the `givenDisabled` modifier.
+    function gatedGivenDisabled() external view givenDisabled returns (bool) {
         return true;
     }
 }

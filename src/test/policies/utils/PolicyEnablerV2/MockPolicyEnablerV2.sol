@@ -51,11 +51,11 @@ contract MockPolicyEnablerV2 is Policy, PolicyEnablerV2 {
         if (beforeDisableShouldRevert) revert MockBeforeDisableReverted();
     }
 
-    function gatedWhenEnabled() external view whenEnabled returns (bool) {
+    function gatedGivenEnabled() external view givenEnabled returns (bool) {
         return true;
     }
 
-    function gatedWhenDisabled() external view whenDisabled returns (bool) {
+    function gatedGivenDisabled() external view givenDisabled returns (bool) {
         return true;
     }
 }

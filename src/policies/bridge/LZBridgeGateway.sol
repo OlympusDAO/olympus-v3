@@ -244,7 +244,7 @@ contract LZBridgeGateway is
         external
         payable
         override
-        whenEnabled
+        givenEnabled
         onlyRole(_BRIDGE_FACILITATOR_ROLE)
         returns (MessagingReceipt memory receipt)
     {
@@ -384,7 +384,7 @@ contract LZBridgeGateway is
     function setIsReceiveEnabled(
         bool isReceiveEnabled_
     ) external override onlyEmergencyOrAdminRole {
-        if (isEnabled) revert LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
+        if (isEnabled) revert LZBridgeGateway_ReceiveControlOnlyGivenDisabled();
         if (isReceiveEnabled == isReceiveEnabled_)
             revert LZBridgeGateway_ReceiveAlreadyInDesiredState();
         _setIsReceiveEnabled(isReceiveEnabled_);

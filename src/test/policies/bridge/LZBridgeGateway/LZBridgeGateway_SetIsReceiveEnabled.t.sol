@@ -54,7 +54,7 @@ contract LZBridgeGatewayTests_SetIsReceiveEnabled is LZBridgeGatewayTestBase {
     function test_setIsReceiveEnabled_revertsIfBridgeEnabled() external {
         vm.expectRevert(
             abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_ReceiveControlOnlyWhenDisabled.selector
+                ILZBridgeGateway.LZBridgeGateway_ReceiveControlOnlyGivenDisabled.selector
             )
         );
         vm.prank(admin);

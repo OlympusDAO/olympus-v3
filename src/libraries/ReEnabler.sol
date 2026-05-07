@@ -39,7 +39,7 @@ abstract contract ReEnabler is IEnablerV2ReEnable, EnablerV2 {
     ///      - The contract has never been enabled (`lastTransitionAt` is zero).
     ///      - `_authorizeReEnable` rejects the caller.
     ///      - `_beforeReEnable` reverts.
-    function reEnable() external override whenDisabled {
+    function reEnable() external override givenDisabled {
         if (lastTransitionAt == 0) revert NeverEnabled();
         _authorizeReEnable();
         _beforeReEnable();
