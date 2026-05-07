@@ -12,7 +12,7 @@ import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptio
 import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
-import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
@@ -223,7 +223,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         _setEnforcedOptions(gateway);
 
         // 3.4. Enable LZBridgeGateway
-        addToBatch(gatewayAddr, abi.encodeWithSelector(EnablerV2.enable.selector, ""));
+        addToBatch(gatewayAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
 
         _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
 

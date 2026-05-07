@@ -30,7 +30,7 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy
@@ -272,7 +272,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(Policy(address(gw)).isActive(), "LZBridgeGateway policy is not active");
 
         // 2. Validate LZBridgeGateway is enabled
-        require(EnablerV2(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
+        require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
 
         // 3. Validate roles
         require(

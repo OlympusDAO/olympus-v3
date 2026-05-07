@@ -23,7 +23,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
@@ -207,12 +207,12 @@ contract LZBridgeActivatorForkTest is Test {
     function test_activate_enablesGateway() public {
         _grantRequiredRoles();
 
-        assertFalse(EnablerV2(address(gateway)).isEnabled());
+        assertFalse(IEnabler(address(gateway)).isEnabled());
 
         vm.prank(TIMELOCK);
         activator.activate();
 
-        assertTrue(EnablerV2(address(gateway)).isEnabled());
+        assertTrue(IEnabler(address(gateway)).isEnabled());
     }
 
     function test_activate_revokesDelegateAfterExecution() public {
