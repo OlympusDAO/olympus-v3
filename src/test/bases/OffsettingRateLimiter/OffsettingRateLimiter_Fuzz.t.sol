@@ -77,6 +77,62 @@ contract OffsettingRateLimiterTests_Fuzz is OffsettingRateLimiterTestBase {
         harness.outflow(EID_A, amount_);
     }
 
+    // ========== INFLOW WITHIN AVAILABLE NEVER REVERTS ========== //
+
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_inflow_neverRevertsWithinAvailable(
+        uint256 limit_,
+        uint32 window_,
+        uint256 amount_,
+        uint64 elapsed_
+    ) external {
+        limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
+        elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window_) - 1));
+
+        harness.setInRateLimits(_configs(_config(EID_A, limit_, window_)));
+        skip(elapsed_);
+
+        // No prior inflow, so available equals limit (decay irrelevant)
+        amount_ = bound(amount_, 0, limit_);
+
+        harness.inflow(EID_A, amount_);
+
+        (uint256 inInFlight, , , uint48 inLu) = harness.inRateLimits(EID_A);
+        // Pre-existing inFlight was zero, so post = 0 + amount_ = amount_
+        assertEq(inInFlight, amount_, "post-state matches simulation");
+        assertEq(inLu, uint48(block.timestamp), "lastUpdated refreshed");
+    }
+
+    // ========== INFLOW ABOVE AVAILABLE ALWAYS REVERTS ========== //
+
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_inflow_alwaysRevertsAboveAvailable(
+        uint256 limit_,
+        uint32 window_,
+        uint256 amount_,
+        uint64 elapsed_
+    ) external {
+        limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
+        elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window_) - 1));
+
+        harness.setInRateLimits(_configs(_config(EID_A, limit_, window_)));
+        skip(elapsed_);
+
+        // Available is `limit_` since stored inFlight is zero
+        amount_ = bound(amount_, limit_ + 1, type(uint256).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOffsettingRateLimiter.RateLimitExceeded.selector,
+                amount_,
+                limit_
+            )
+        );
+        harness.inflow(EID_A, amount_);
+    }
+
     // ========== DECAY MONOTONIC IN ELAPSED ========== //
 
     /// forge-config: default.fuzz.runs = 512
