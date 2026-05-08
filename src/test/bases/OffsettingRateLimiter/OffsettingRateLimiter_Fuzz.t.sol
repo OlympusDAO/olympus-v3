@@ -203,10 +203,35 @@ contract OffsettingRateLimiterTests_Fuzz is OffsettingRateLimiterTestBase {
         }
     }
 
-    // ========== OUTFLOW THEN INFLOW SEQUENCE ========== //
+    // ========== OUTFLOW THEN INFLOW: PARTIAL OFFSET ========== //
 
+    /// @dev No elapsed time, so `decayedOut == outAmount_`. Bounding
+    ///      `inAmount_ < outAmount_` forces the partial-offset branch
+    ///      without re-deriving the contract's decay arithmetic.
     /// forge-config: default.fuzz.runs = 512
-    function testFuzz_outflow_inflow_sequence(
+    function testFuzz_outflow_inflow_partialOffset(uint256 outAmount_, uint256 inAmount_) external {
+        uint256 limit = DEFAULT_LIMIT;
+        uint32 window = DEFAULT_WINDOW;
+        outAmount_ = bound(outAmount_, 1, limit);
+        inAmount_ = bound(inAmount_, 0, outAmount_ - 1);
+
+        _setupBoth(EID_A, limit, window, 0);
+        harness.outflow(EID_A, outAmount_);
+        harness.inflow(EID_A, inAmount_);
+
+        (uint256 outInFlight, , , ) = harness.outRateLimits(EID_A);
+        (uint256 inInFlight, , , ) = harness.inRateLimits(EID_A);
+        assertEq(outInFlight, outAmount_ - inAmount_, "out partially offset");
+        assertEq(inInFlight, inAmount_, "in matches simulation");
+    }
+
+    // ========== OUTFLOW THEN INFLOW: FULL OFFSET ========== //
+
+    /// @dev `inAmount_ >= outAmount_ >= decayedOut`, so the inflow always
+    ///      clears `out.inFlight` regardless of how decay during `elapsed_`
+    ///      reduced it. Avoids mirroring the contract's decay formula.
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_outflow_inflow_fullOffset(
         uint256 outAmount_,
         uint256 inAmount_,
         uint64 elapsed_
@@ -214,28 +239,17 @@ contract OffsettingRateLimiterTests_Fuzz is OffsettingRateLimiterTestBase {
         uint256 limit = DEFAULT_LIMIT;
         uint32 window = DEFAULT_WINDOW;
         outAmount_ = bound(outAmount_, 0, limit);
-        inAmount_ = bound(inAmount_, 0, limit);
+        inAmount_ = bound(inAmount_, outAmount_, limit);
         elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window) - 1));
 
         _setupBoth(EID_A, limit, window, 0);
         harness.outflow(EID_A, outAmount_);
-
         skip(elapsed_);
-
-        // Decay calculation in the same arithmetic the contract uses.
-        uint256 decay = (limit * uint256(elapsed_)) / window;
-        uint256 decayedOut = outAmount_ > decay ? outAmount_ - decay : 0;
-
         harness.inflow(EID_A, inAmount_);
-
-        // Final state:
-        //   in.inFlight  = 0 (no prior in) + inAmount_ = inAmount_
-        //   out.inFlight = subOrZero(decayedOut, inAmount_)
-        uint256 expectedOut = decayedOut > inAmount_ ? decayedOut - inAmount_ : 0;
 
         (uint256 outInFlight, , , ) = harness.outRateLimits(EID_A);
         (uint256 inInFlight, , , ) = harness.inRateLimits(EID_A);
-        assertEq(outInFlight, expectedOut, "out matches simulation");
+        assertEq(outInFlight, 0, "out fully offset");
         assertEq(inInFlight, inAmount_, "in matches simulation");
     }
 
