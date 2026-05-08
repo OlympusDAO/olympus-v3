@@ -16,11 +16,11 @@ contract ReEnablerGracePeriodRejectingAuthHarness is ReEnablerGracePeriod {
 
     constructor(uint32 period_) ReEnablerGracePeriod(period_) {}
 
-    function _authorizeEnable(bytes calldata) internal override {}
+    function _authorizeEnable(bytes calldata) internal view override {}
 
-    function _authorizeDisable(bytes calldata) internal override {}
+    function _authorizeDisable(bytes calldata) internal view override {}
 
-    function _authorizeReEnable() internal override {}
+    function _authorizeReEnable() internal view override {}
 
     function _authorizeSetGracePeriod() internal pure override {
         revert AuthorizeSetGracePeriod_Rejected();

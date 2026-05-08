@@ -5,6 +5,7 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Contracts
 import {EnablerV2Harness} from "src/test/bases/EnablerV2/EnablerV2Harness.sol";
+import {StaticCallProbe} from "src/test/bases/EnablerV2/StaticCallProbe.sol";
 
 /// @notice Shared test base for the `EnablerV2` unit and fuzz tests. Defines
 ///         named actors, sentinel timestamps, and helpers for the most
@@ -37,6 +38,7 @@ contract EnablerV2TestBase is Test {
     // ========== STATE ========== //
 
     EnablerV2Harness internal harness;
+    StaticCallProbe internal probe;
 
     // ========== SETUP ========== //
 
@@ -46,8 +48,13 @@ contract EnablerV2TestBase is Test {
         caller = makeAddr("caller");
         otherCaller = makeAddr("otherCaller");
 
+        probe = new StaticCallProbe();
+        vm.label(address(probe), "StaticCallProbe");
+
         harness = new EnablerV2Harness();
         vm.label(address(harness), "EnablerV2Harness");
+
+        harness.setProbe(probe);
     }
 
     // ========== HIGHER-LEVEL HELPERS ========== //

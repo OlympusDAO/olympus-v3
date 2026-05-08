@@ -5,6 +5,7 @@ import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Contracts
 import {ReEnablerHarness} from "src/test/bases/ReEnabler/ReEnablerHarness.sol";
+import {StaticCallProbe} from "src/test/bases/EnablerV2/StaticCallProbe.sol";
 
 /// @notice Shared test base for the `ReEnabler` unit and fuzz tests.
 ///         Defines named actors, sentinel timestamps, and helpers for the
@@ -30,6 +31,7 @@ contract ReEnablerTestBase is Test {
     // ========== STATE ========== //
 
     ReEnablerHarness internal harness;
+    StaticCallProbe internal probe;
 
     // ========== SETUP ========== //
 
@@ -39,8 +41,13 @@ contract ReEnablerTestBase is Test {
         caller = makeAddr("caller");
         otherCaller = makeAddr("otherCaller");
 
+        probe = new StaticCallProbe();
+        vm.label(address(probe), "StaticCallProbe");
+
         harness = new ReEnablerHarness();
         vm.label(address(harness), "ReEnablerHarness");
+
+        harness.setProbe(probe);
     }
 
     // ========== HIGHER-LEVEL HELPERS ========== //

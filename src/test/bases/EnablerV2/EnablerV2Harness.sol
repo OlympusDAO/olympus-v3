@@ -3,14 +3,18 @@ pragma solidity >=0.8.24;
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {StaticCallProbe} from "src/test/bases/EnablerV2/StaticCallProbe.sol";
 
 /// @notice Test harness exposing every internal hook of `EnablerV2` as a
 ///         togglable mock. Inherits the abstract base directly so that the
 ///         `EnablerV2` surface can be exercised in isolation from any
-///         policy-specific role plumbing. Each hook tracks its invocation
-///         count and the data it received, and exposes a `setXShouldRevert`
-///         knob that flips the hook into the revert branch with a dedicated
-///         custom error so tests can match on the exact selector.
+///         policy-specific role plumbing. The `_before*` hooks track their
+///         invocation count and received data; the `_authorize*` hooks are
+///         `view` and therefore route through an external `StaticCallProbe`
+///         so that tests can still observe their invocation via
+///         `vm.expectCall`. Every hook exposes a `setXShouldRevert` knob that
+///         flips it into the revert branch with a dedicated custom error so
+///         tests can match on the exact selector.
 contract EnablerV2Harness is EnablerV2 {
     // ========== ERRORS ========== //
 
@@ -31,10 +35,14 @@ contract EnablerV2Harness is EnablerV2 {
     bytes public lastBeforeEnableData;
     bytes public lastBeforeDisableData;
 
-    uint256 public authorizeEnableCount;
-    uint256 public authorizeDisableCount;
     uint256 public beforeEnableCount;
     uint256 public beforeDisableCount;
+
+    /// @notice External probe used to make `_authorize*` invocations
+    ///         observable to tests via `vm.expectCall`. The hooks read this
+    ///         storage slot and forward to the probe under STATICCALL
+    ///         semantics; tests install an instance via `setProbe`.
+    StaticCallProbe public probe;
 
     // ========== TOGGLE SETTERS ========== //
 
@@ -54,15 +62,19 @@ contract EnablerV2Harness is EnablerV2 {
         beforeDisableShouldRevert = v_;
     }
 
+    function setProbe(StaticCallProbe probe_) external {
+        probe = probe_;
+    }
+
     // ========== HOOK OVERRIDES ========== //
 
-    function _authorizeEnable(bytes calldata) internal override {
-        ++authorizeEnableCount;
+    function _authorizeEnable(bytes calldata) internal view override {
+        if (address(probe) != address(0)) probe.note();
         if (authorizeEnableShouldRevert) revert MockUnauthorizedEnable();
     }
 
-    function _authorizeDisable(bytes calldata) internal override {
-        ++authorizeDisableCount;
+    function _authorizeDisable(bytes calldata) internal view override {
+        if (address(probe) != address(0)) probe.note();
         if (authorizeDisableShouldRevert) revert MockUnauthorizedDisable();
     }
 

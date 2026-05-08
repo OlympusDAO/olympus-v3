@@ -7,6 +7,9 @@ import {EnablerV2Harness} from "src/test/bases/EnablerV2/EnablerV2Harness.sol";
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
+// Contracts
+import {StaticCallProbe} from "src/test/bases/EnablerV2/StaticCallProbe.sol";
+
 /// @dev Tests for `EnablerV2.enable`.
 contract EnablerV2Tests_Enable is EnablerV2TestBase {
     bytes internal constant SAMPLE_DATA = hex"deadbeef";
@@ -21,9 +24,9 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
     }
 
     function test_enable_invokesAuthorizeBeforeBeforeHook() external {
+        vm.expectCall(address(probe), abi.encodeCall(StaticCallProbe.note, ()), 1);
         _enableAs(caller, SAMPLE_DATA);
 
-        assertEq(harness.authorizeEnableCount(), 1, "authorize invoked once");
         assertEq(harness.beforeEnableCount(), 1, "before invoked once");
         assertEq(harness.lastBeforeEnableData(), SAMPLE_DATA, "data forwarded to before hook");
     }

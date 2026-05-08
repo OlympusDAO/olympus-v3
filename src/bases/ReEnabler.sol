@@ -62,7 +62,7 @@ abstract contract ReEnabler is IReEnabler, EnablerV2 {
     ///
     ///      Reverts if:
     ///      - The caller is not authorized to perform the re-enable.
-    function _authorizeReEnable() internal virtual;
+    function _authorizeReEnable() internal view virtual;
 
     /// @dev Performs implementation-specific state changes that must run immediately
     ///      before the contract is moved back to the enabled state.

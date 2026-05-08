@@ -9,11 +9,11 @@ import {ReEnablerGracePeriodImmutable} from "src/bases/ReEnablerGracePeriodImmut
 contract ReEnablerGracePeriodImmutableHarness is ReEnablerGracePeriodImmutable {
     constructor(uint32 period_) ReEnablerGracePeriodImmutable(period_) {}
 
-    function _authorizeEnable(bytes calldata) internal override {}
+    function _authorizeEnable(bytes calldata) internal view override {}
 
-    function _authorizeDisable(bytes calldata) internal override {}
+    function _authorizeDisable(bytes calldata) internal view override {}
 
-    function _authorizeReEnable() internal override {}
+    function _authorizeReEnable() internal view override {}
 
     function _authorizeSetGracePeriod() internal view override {}
 }

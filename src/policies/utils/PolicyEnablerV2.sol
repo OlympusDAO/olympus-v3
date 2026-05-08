@@ -29,10 +29,10 @@ abstract contract PolicyEnablerV2 is EnablerV2, PolicyAdmin {
     /// @inheritdoc EnablerV2
     /// @dev Reverts if:
     ///      - The caller does not hold the admin role.
-    function _authorizeEnable(bytes calldata) internal override onlyAdminRole {}
+    function _authorizeEnable(bytes calldata) internal view override onlyAdminRole {}
 
     /// @inheritdoc EnablerV2
     /// @dev Reverts if:
     ///      - The caller holds neither the admin role nor the emergency role.
-    function _authorizeDisable(bytes calldata) internal override onlyEmergencyOrAdminRole {}
+    function _authorizeDisable(bytes calldata) internal view override onlyEmergencyOrAdminRole {}
 }

@@ -8,6 +8,9 @@ import {ReEnablerHarness, ReEnablerDefaultBeforeHarness} from "src/test/bases/Re
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 
+// Contracts
+import {StaticCallProbe} from "src/test/bases/EnablerV2/StaticCallProbe.sol";
+
 /// @dev Tests for `ReEnabler.reEnable`.
 contract ReEnablerTests_ReEnable is ReEnablerTestBase {
     // ========== SUCCESS ========== //
@@ -22,10 +25,10 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
     }
 
     function test_reEnable_invokesAuthorizeBeforeBeforeHook() external givenEnabledThenDisabled {
+        vm.expectCall(address(probe), abi.encodeCall(StaticCallProbe.note, ()), 1);
         vm.prank(caller);
         harness.reEnable();
 
-        assertEq(harness.authorizeReEnableCount(), 1, "authorize invoked once");
         assertEq(harness.beforeReEnableCount(), 1, "before invoked once");
     }
 

@@ -93,7 +93,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      Reverts if:
     ///      - The caller is not authorized to perform the enable.
     /// @param data_ The calldata payload passed to `enable`.
-    function _authorizeEnable(bytes calldata data_) internal virtual;
+    function _authorizeEnable(bytes calldata data_) internal view virtual;
 
     /// @notice Validates that the caller is permitted to disable the contract.
     /// @dev The function is invoked from `disable` before any state mutation.
@@ -103,7 +103,7 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      Reverts if:
     ///      - The caller is not authorized to perform the disable.
     /// @param data_ The calldata payload passed to `disable`.
-    function _authorizeDisable(bytes calldata data_) internal virtual;
+    function _authorizeDisable(bytes calldata data_) internal view virtual;
 
     /// @notice Performs implementation-specific state changes that must run
     ///         immediately before the contract is moved to the enabled state.

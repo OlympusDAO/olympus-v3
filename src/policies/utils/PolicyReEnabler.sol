@@ -30,7 +30,7 @@ abstract contract PolicyReEnabler is ReEnabler, PolicyEnablerV2 {
     /// @inheritdoc ReEnabler
     /// @dev Reverts if:
     ///      - The caller does not hold the manager role.
-    function _authorizeReEnable() internal override onlyManagerRole {}
+    function _authorizeReEnable() internal view override onlyManagerRole {}
 
     // ========== ERC-165 ========== //
 
