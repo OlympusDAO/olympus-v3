@@ -15,8 +15,22 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
     function test_setInRateLimits_singleEntry_storesAllFields() external {
         harness.setInRateLimits(_configs(_config(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW)));
 
-        _assertInState(EID_A, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, uint48(block.timestamp), "single");
-        _assertOutState(EID_A, 0, 0, 0, uint48(block.timestamp), "out: lastUpdated refreshed");
+        _assertInState(
+            EID_A,
+            0,
+            DEFAULT_LIMIT,
+            DEFAULT_WINDOW,
+            uint48(vm.getBlockTimestamp()),
+            "single"
+        );
+        _assertOutState(
+            EID_A,
+            0,
+            0,
+            0,
+            uint48(vm.getBlockTimestamp()),
+            "out: lastUpdated refreshed"
+        );
     }
 
     function test_setInRateLimits_singleEntry_preservesExistingInFlight() external {
@@ -28,7 +42,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
         uint32 newWindow = DEFAULT_WINDOW * 4;
         harness.setInRateLimits(_configs(_config(EID_A, newLimit, newWindow)));
 
-        _assertInState(EID_A, amount, newLimit, newWindow, uint48(block.timestamp), "in");
+        _assertInState(EID_A, amount, newLimit, newWindow, uint48(vm.getBlockTimestamp()), "in");
     }
 
     // ========== MULTI-ELEMENT CONFIG ========== //
@@ -42,7 +56,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
 
         harness.setInRateLimits(configs);
 
-        uint48 t = uint48(block.timestamp);
+        uint48 t = uint48(vm.getBlockTimestamp());
         _assertInState(EID_A, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "A");
         _assertInState(EID_B, 0, DEFAULT_LIMIT * 2, DEFAULT_WINDOW * 2, t, "B");
         _assertInState(EID_C, 0, DEFAULT_LIMIT * 3, DEFAULT_WINDOW * 3, t, "C");
@@ -77,7 +91,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             0,
             SMALL_LIMIT * 3,
             SMALL_WINDOW / 4,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "duplicate, last wins"
         );
     }
@@ -98,7 +112,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             SMALL_LIMIT / 2,
             SMALL_LIMIT * 8,
             SMALL_WINDOW / 4,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "duplicate same block: inFlight preserved"
         );
     }
@@ -141,7 +155,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             expected,
             newLimit,
             newWindow,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "checkpointed at previous rate"
         );
     }
@@ -165,13 +179,13 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
         uint32 newInWindow = DEFAULT_WINDOW / 2;
         harness.setInRateLimits(_configs(_config(EID_A, newInLimit, newInWindow)));
 
-        _assertInState(EID_A, 0, newInLimit, newInWindow, uint48(block.timestamp), "in");
+        _assertInState(EID_A, 0, newInLimit, newInWindow, uint48(vm.getBlockTimestamp()), "in");
         _assertOutState(
             EID_A,
             expectedDecayedOut,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "out checkpointed only"
         );
     }
@@ -190,7 +204,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             DEFAULT_LIMIT,
             newLimit,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "reduced limit"
         );
         _assertReceivable(EID_A, DEFAULT_LIMIT, 0, "available zero until decay catches up");
@@ -232,7 +246,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             storedInFlight,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW * 2,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "stored after checkpoint"
         );
 
@@ -295,7 +309,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
             0,
             DEFAULT_LIMIT * 7,
             DEFAULT_WINDOW * 11,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "out untouched"
         );
     }
@@ -311,8 +325,8 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
 
     // ========== TIMESTAMP PAST UINT48 ========== //
 
-    /// @notice Locks in cast-truncation behaviour at `block.timestamp ==
-    ///         type(uint48).max + 1`. The cast `uint48(block.timestamp)`
+    /// @notice Locks in cast-truncation behaviour at `vm.getBlockTimestamp() ==
+    ///         type(uint48).max + 1`. The cast `uint48(vm.getBlockTimestamp())`
     ///         truncates to zero, so any subsequent read sees a huge `elapsed`
     ///         and falls into the early-return path. Flagged in the summary.
     function test_setInRateLimits_writesAtTimestampPastUint48_truncates() external {
@@ -349,7 +363,7 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
         );
         harness.setInRateLimits(configs);
 
-        _assertInState(eid_, 0, limit2_, window2_, uint48(block.timestamp), "in");
+        _assertInState(eid_, 0, limit2_, window2_, uint48(vm.getBlockTimestamp()), "in");
     }
 
     /// forge-config: default.fuzz.runs = 256

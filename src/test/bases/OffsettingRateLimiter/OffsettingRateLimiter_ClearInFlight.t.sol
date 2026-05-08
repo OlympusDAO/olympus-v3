@@ -26,7 +26,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "after clear"
         );
     }
@@ -42,7 +42,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
 
         harness.clearOutboundInFlight(_eids(EID_A, EID_B, EID_C));
 
-        uint48 t = uint48(block.timestamp);
+        uint48 t = uint48(vm.getBlockTimestamp());
         _assertOutState(EID_A, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "A");
         _assertOutState(EID_B, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "B");
         _assertOutState(EID_C, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "C");
@@ -65,7 +65,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             DEFAULT_LIMIT / 2,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "untouched"
         );
     }
@@ -81,7 +81,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "duplicate eids"
         );
     }
@@ -107,7 +107,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "A cleared"
         );
         _assertOutState(
@@ -115,7 +115,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "C cleared"
         );
         _assertOutState(EID_B, inFlightB, limitB, windowB, luB, "B untouched");
@@ -178,7 +178,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
         }
 
         harness.clearOutboundInFlight(eids);
-        uint48 t1 = uint48(block.timestamp);
+        uint48 t1 = uint48(vm.getBlockTimestamp());
         for (uint256 i = 0; i < len; i++) {
             (uint256 inFlight, , , uint48 lu) = harness.outRateLimits(eids[i]);
             assertEq(inFlight, 0, "first clear: inFlight zero");
@@ -209,7 +209,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "after clear"
         );
     }
@@ -225,7 +225,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
 
         harness.clearInboundInFlight(_eids(EID_A, EID_B, EID_C));
 
-        uint48 t = uint48(block.timestamp);
+        uint48 t = uint48(vm.getBlockTimestamp());
         _assertInState(EID_A, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "A");
         _assertInState(EID_B, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "B");
         _assertInState(EID_C, 0, DEFAULT_LIMIT, DEFAULT_WINDOW, t, "C");
@@ -247,7 +247,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             DEFAULT_LIMIT / 2,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "untouched"
         );
     }
@@ -263,7 +263,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "duplicate eids"
         );
     }
@@ -288,7 +288,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "A cleared"
         );
         _assertInState(
@@ -296,7 +296,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "C cleared"
         );
         _assertInState(EID_B, inFlightB, limitB, windowB, luB, "B untouched");
@@ -356,7 +356,7 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
         }
 
         harness.clearInboundInFlight(eids);
-        uint48 t1 = uint48(block.timestamp);
+        uint48 t1 = uint48(vm.getBlockTimestamp());
         for (uint256 i = 0; i < len; i++) {
             (uint256 inFlight, , , uint48 lu) = harness.inRateLimits(eids[i]);
             assertEq(inFlight, 0, "first clear: inFlight zero");

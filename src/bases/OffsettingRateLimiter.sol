@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.18;
 
+// Interfaces
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
+
+// Libraries
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 
 /// @title OffsettingRateLimiter
 /// @notice An abstract rate limiter that maintains independent outbound and inbound
@@ -228,7 +232,7 @@ abstract contract OffsettingRateLimiter is IOffsettingRateLimiter {
         uint256 elapsed = block.timestamp - lastUpdated_;
         if (elapsed >= window_) return (0, limit_);
 
-        uint256 decay = (limit_ * elapsed) / window_;
+        uint256 decay = Math.mulDiv(limit_, elapsed, window_);
         inFlight = _subOrZero(inFlight_, decay);
         available = _subOrZero(limit_, inFlight);
         return (inFlight, available);

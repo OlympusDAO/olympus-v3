@@ -112,7 +112,7 @@ contract OffsettingRateLimiterHandler is Test {
         (, , uint32 window, uint48 lastUpdated) = out_
             ? harness.outRateLimits(eid_)
             : harness.inRateLimits(eid_);
-        if (window == 0 || block.timestamp - uint256(lastUpdated) >= window) {
+        if (window == 0 || vm.getBlockTimestamp() - uint256(lastUpdated) >= window) {
             elapsedGreaterEqualWindowPathTaken += 1;
         } else {
             linearDecayPathTaken += 1;
@@ -304,7 +304,7 @@ contract OffsettingRateLimiterHandler is Test {
 
     function warp(uint64 secs_) external {
         uint64 secs = uint64(bound(uint256(secs_), 1, MAX_WARP));
-        vm.warp(block.timestamp + secs);
+        vm.warp(vm.getBlockTimestamp() + secs);
     }
 
     // ========== READ-ONLY VIEWS ========== //

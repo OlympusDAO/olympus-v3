@@ -21,7 +21,7 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
         uint32 window = DEFAULT_WINDOW;
 
         harness.setOutRateLimits(_configs(_config(EID_A, limit, window)));
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         harness.outflow(EID_A, limit);
 
         // Inline timestamp table covering the three regions.
@@ -81,7 +81,7 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
 
         // Step 1: initial config of outbound only.
         harness.setOutRateLimits(_configs(_config(EID_A, limit1, window1)));
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         _assertOutState(EID_A, 0, limit1, window1, t0, "step 1: initial config");
         _assertSendable(EID_A, 0, limit1, "step 1: full capacity");
 
@@ -101,7 +101,7 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
         // The setter checkpoints under the *previous* schedule first, then
         // writes the new (limit, window).
         harness.setOutRateLimits(_configs(_config(EID_A, limit2, window2)));
-        uint48 t1 = uint48(block.timestamp);
+        uint48 t1 = uint48(vm.getBlockTimestamp());
         _assertOutState(EID_A, expectedDecayed1, limit2, window2, t1, "step 4: config switch");
         _assertSendable(
             EID_A,
@@ -130,7 +130,7 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
         // Step 6: outflow that fits the post-second-decay headroom.
         uint256 step6Amount = limit2 - expectedDecayed2;
         harness.outflow(EID_A, step6Amount);
-        uint48 t2 = uint48(block.timestamp);
+        uint48 t2 = uint48(vm.getBlockTimestamp());
         _assertOutState(
             EID_A,
             expectedDecayed2 + step6Amount,
@@ -149,7 +149,7 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
 
         // Step 8: reset.
         harness.clearOutboundInFlight(_eids(EID_A));
-        uint48 t3 = uint48(block.timestamp);
+        uint48 t3 = uint48(vm.getBlockTimestamp());
         _assertOutState(EID_A, 0, limit2, window2, t3, "step 8: cleared");
         _assertSendable(EID_A, 0, limit2, "step 8: full capacity post-reset");
 

@@ -251,12 +251,12 @@ contract OffsettingRateLimiterTestBase is Test {
     // ========== HIGHER-LEVEL HELPERS ========== //
 
     /// @dev Configures both directions for `eid_` with the same `(limit, window)`
-    ///      then warps `block.timestamp` forward by `delay_` seconds.
+    ///      then warps `vm.getBlockTimestamp()` forward by `delay_` seconds.
     function _setupBoth(uint32 eid_, uint256 limit_, uint32 window_, uint64 delay_) internal {
         harness.setOutRateLimits(_configs(_config(eid_, limit_, window_)));
         harness.setInRateLimits(_configs(_config(eid_, limit_, window_)));
         if (delay_ != 0) {
-            vm.warp(block.timestamp + delay_);
+            vm.warp(vm.getBlockTimestamp() + delay_);
         }
     }
 
@@ -284,12 +284,12 @@ contract OffsettingRateLimiterTestBase is Test {
         );
         assertEq(
             outLastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             string.concat(label_, ": out.lastUpdated after outflow")
         );
         assertEq(
             inLastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             string.concat(label_, ": in.lastUpdated after outflow")
         );
     }
@@ -318,12 +318,12 @@ contract OffsettingRateLimiterTestBase is Test {
         );
         assertEq(
             inLastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             string.concat(label_, ": in.lastUpdated after inflow")
         );
         assertEq(
             outLastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             string.concat(label_, ": out.lastUpdated after inflow")
         );
     }

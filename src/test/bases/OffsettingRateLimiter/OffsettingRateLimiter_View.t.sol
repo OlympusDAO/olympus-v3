@@ -2,10 +2,12 @@
 pragma solidity >=0.8.18;
 
 import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
-import {stdError} from "@forge-std-1.9.6/StdError.sol";
 
 // Interfaces
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
+
+// Libraries
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 
 /// @dev Tests for the public view functions `sendable` / `receivable`, the
 ///      internal helper `_currentState` (exposed via the harness),
@@ -209,14 +211,14 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
             DEFAULT_LIMIT / 4,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp)
+            uint48(vm.getBlockTimestamp())
         );
         assertEq(inFlight, DEFAULT_LIMIT / 4, "inFlight unchanged when elapsed == 0");
         assertEq(available, DEFAULT_LIMIT - DEFAULT_LIMIT / 4, "available correct");
     }
 
     function test_currentState_elapsedEqualWindow_returnsZeroAndFullLimit() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         skip(DEFAULT_WINDOW);
 
         (uint256 inFlight, uint256 available) = harness.currentState(
@@ -230,7 +232,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     }
 
     function test_currentState_elapsedGreaterThanWindow_returnsZeroAndFullLimit() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         skip(uint256(DEFAULT_WINDOW) * 100);
 
         (uint256 inFlight, uint256 available) = harness.currentState(
@@ -244,7 +246,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     }
 
     function test_currentState_windowZero_guardsDivisionByZero() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         skip(123);
 
         (uint256 inFlight, uint256 available) = harness.currentState(
@@ -258,7 +260,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     }
 
     function test_currentState_partialDecay_matchesIntegerArithmetic() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         skip(PARTIAL_DECAY_ELAPSED);
 
         uint256 storedInFlight = (DEFAULT_LIMIT * 3) / 5;
@@ -278,7 +280,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     }
 
     function test_currentState_decayFloorsAtZero() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         // (SMALL_LIMIT * 10) / SMALL_WINDOW per second decay rate; pick
         // storedInFlight at LIMIT/10 and elapsed at WINDOW/2 so decay
         // (= LIMIT/2) cleanly exceeds storedInFlight (= LIMIT/10) before the
@@ -304,7 +306,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
             storedInFlight,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp)
+            uint48(vm.getBlockTimestamp())
         );
         assertEq(inFlight, storedInFlight, "stored above limit returned as is");
         assertEq(available, 0, "available clamped to zero when stored > limit");
@@ -315,7 +317,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     ///      about this regime; the new contract does not, so we capture the
     ///      observed behaviour here for review.
     function test_currentState_decayPrecision_smallLimitLargeWindow() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         uint256 storedInFlight = PRECISION_LIMIT;
 
         // Decay step size is `window / limit` seconds per unit drop. With
@@ -358,26 +360,64 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         assertEq(available, 10, "available == 10 at ten steps");
     }
 
-    /// @notice Locks in the `limit * elapsed` overflow boundary inside
-    ///         `_currentState`. The multiplication is not in an `unchecked`
-    ///         block, so a `limit` close to `type(uint256).max` reverts with an
-    ///         arithmetic-overflow panic for any non-zero `elapsed` < `window`.
-    /// @dev This effectively bricks the eid+direction until decay catches up
-    ///      (i.e. until `elapsed >= window`, where the early return path
-    ///      avoids the multiplication). Flagged in the test summary.
-    function test_currentState_limitTimesElapsed_overflowReverts() external {
-        uint48 t0 = uint48(block.timestamp);
-        // elapsed > 1 causes `type(uint256).max * elapsed` to overflow.
+    /// @notice Locks in that `_currentState` handles `limit * elapsed`
+    ///         products that exceed `2 ** 256` via the 512-bit intermediate
+    ///         in `Math.mulDiv`, so a `limit` close to `type(uint256).max`
+    ///         no longer reverts mid-window.
+    function test_currentState_limitMaxValue_doesNotOverflowMidWindow() external {
+        uint48 t0 = uint48(vm.getBlockTimestamp());
+        // elapsed > 1 used to overflow `type(uint256).max * elapsed`.
         skip(2);
 
-        vm.expectRevert(stdError.arithmeticError);
-        harness.currentState(0, type(uint256).max, DEFAULT_WINDOW, t0);
+        (uint256 inFlight, uint256 available) = harness.currentState(
+            0,
+            type(uint256).max,
+            DEFAULT_WINDOW,
+            t0
+        );
+        // Stored inFlight was zero, so the post-decay value clamps at zero
+        // regardless of the computed decay magnitude.
+        assertEq(inFlight, 0, "inFlight stays at zero");
+        // available = limit - inFlight = type(uint256).max - 0.
+        assertEq(available, type(uint256).max, "available is full max limit");
     }
 
-    /// @notice At `elapsed >= window`, the early-return short-circuits the
-    ///         multiplication, so the same `limit` value does not revert.
+    /// @notice Locks in that `_currentState` does not revert when every
+    ///         input is saturated at its type maximum just below the window
+    ///         boundary. `Math.mulDiv` reverts only when the *result*
+    ///         exceeds `type(uint256).max`; here `decay = floor(limit *
+    ///         elapsed / window) < limit <= type(uint256).max` because
+    ///         `elapsed < window`, so the result always fits.
+    function test_currentState_allMaxValuesJustBelowWindow_doesNotRevert() external {
+        uint48 t0 = uint48(vm.getBlockTimestamp());
+        uint32 window = type(uint32).max;
+        skip(uint256(window) - 1);
+
+        (uint256 inFlight, uint256 available) = harness.currentState(
+            type(uint256).max,
+            type(uint256).max,
+            window,
+            t0
+        );
+
+        // With `inFlight_ = limit_ = max` and `elapsed = window - 1`,
+        // `decay = floor(max * (window - 1) / window)`, the post-decay
+        // value is `max - decay`, and `available = limit - inFlight`.
+        uint256 expectedDecay = Math.mulDiv(
+            type(uint256).max,
+            uint256(window) - 1,
+            uint256(window)
+        );
+        uint256 expectedInFlight = type(uint256).max - expectedDecay;
+        assertEq(inFlight, expectedInFlight, "inFlight matches mulDiv");
+        assertEq(available, type(uint256).max - expectedInFlight, "available matches");
+    }
+
+    /// @notice At `elapsed >= window` the early-return path skips the
+    ///         multiplication entirely, so the same `limit` value passes
+    ///         through without touching `Math.mulDiv`.
     function test_currentState_limitMaxValue_doesNotOverflowOnceWindowElapsed() external {
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         skip(DEFAULT_WINDOW);
 
         (uint256 inFlight, uint256 available) = harness.currentState(
@@ -390,16 +430,16 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         assertEq(available, type(uint256).max, "early return: available is full max limit");
     }
 
-    /// @notice Documents that `block.timestamp - lastUpdated` is computed in
+    /// @notice Documents that `vm.getBlockTimestamp() - lastUpdated` is computed in
     ///         `uint256` after the cast, so the cast-truncation surface is in
     ///         the *write* path, not in `_currentState`. Two assertions: the
     ///         first locks in the trivial `elapsed == 0` case at a high
-    ///         `lastUpdated_`, the second pushes `block.timestamp` past
+    ///         `lastUpdated_`, the second pushes `vm.getBlockTimestamp()` past
     ///         `lastUpdated_` (using a uint64-capable warp target above
     ///         `UINT48_MAX`) and verifies the subtraction does not overflow.
     function test_currentState_lastUpdatedAtUint48Max_doesNotOverflow() external {
         vm.warp(UINT48_MAX);
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
 
         // Sub-case 1: elapsed == 0 returns the stored value via the early-
         // return path without touching the multiplication.
@@ -412,7 +452,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         assertEq(inFlight, DEFAULT_LIMIT / 2, "elapsed == 0 returns stored value");
         assertEq(available, DEFAULT_LIMIT / 2, "available correct at uint48 boundary");
 
-        // Sub-case 2: warp past UINT48_MAX so `block.timestamp` is in the
+        // Sub-case 2: warp past UINT48_MAX so `vm.getBlockTimestamp()` is in the
         // uint64 region while `lastUpdated_` is at the uint48 ceiling, then
         // call `currentState` with the same `lastUpdated_`. The subtraction
         // is computed in uint256 after the cast so it must not overflow, and
@@ -439,15 +479,15 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
         window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
         inFlight_ = bound(inFlight_, 0, FUZZ_LIMIT_CEIL);
-        // Pick t1 <= t2 inside the window. Warp forward so `block.timestamp -
+        // Pick t1 <= t2 inside the window. Warp forward so `vm.getBlockTimestamp() -
         // t1/t2` stays well-defined.
         t1_ = uint64(bound(uint256(t1_), 0, uint256(window_) - 1));
         t2_ = uint64(bound(uint256(t2_), uint256(t1_), uint256(window_) - 1));
-        // Ensure block.timestamp is past `window_` so the subtraction below
+        // Ensure vm.getBlockTimestamp() is past `window_` so the subtraction below
         // does not underflow regardless of the (now-bounded) inputs.
         vm.warp(uint256(window_) + START_TIMESTAMP);
 
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
         uint48 lu1 = uint48(uint256(t0) - uint256(t1_));
         uint48 lu2 = uint48(uint256(t0) - uint256(t2_));
         (uint256 inFlightAtT1, ) = harness.currentState(inFlight_, limit_, window_, lu1);
@@ -469,10 +509,10 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         // Cap elapsed at the uint48 max so the cast below stays in range
         elapsed_ = uint64(bound(uint256(elapsed_), uint256(window_), UINT48_MAX / 2));
 
-        // Warp far enough that `block.timestamp - elapsed_` does not underflow
+        // Warp far enough that `vm.getBlockTimestamp() - elapsed_` does not underflow
         // and stays in uint48.
         vm.warp(UINT48_MAX);
-        uint48 lastUpdated = uint48(block.timestamp - elapsed_);
+        uint48 lastUpdated = uint48(vm.getBlockTimestamp() - elapsed_);
 
         (uint256 inFlight, uint256 available) = harness.currentState(
             inFlight_,
@@ -499,7 +539,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "after setOut"
         );
     }
@@ -507,7 +547,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     function test_outRateLimits_afterOutflow_returnsRawNotDecayedInFlight() external {
         _setupBoth(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW, 0);
         uint256 amount = DEFAULT_LIMIT / 4;
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
 
         harness.outflow(EID_A, amount);
 
@@ -547,7 +587,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "after setIn"
         );
     }
@@ -555,7 +595,7 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
     function test_inRateLimits_afterInflow_returnsRawNotDecayedInFlight() external {
         _setupBoth(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW, 0);
         uint256 amount = DEFAULT_LIMIT / 4;
-        uint48 t0 = uint48(block.timestamp);
+        uint48 t0 = uint48(vm.getBlockTimestamp());
 
         harness.inflow(EID_A, amount);
 

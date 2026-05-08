@@ -74,7 +74,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             DEFAULT_LIMIT,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "boundary"
         );
         _assertReceivable(EID_A, DEFAULT_LIMIT, 0, "no capacity left");
@@ -87,8 +87,8 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
         // touches both sides without recording any flow.
         harness.inflow(EID_A, 0);
 
-        _assertOutState(EID_A, 0, 0, 0, uint48(block.timestamp), "out cp");
-        _assertInState(EID_A, 0, 0, 0, uint48(block.timestamp), "in cp");
+        _assertOutState(EID_A, 0, 0, 0, uint48(vm.getBlockTimestamp()), "out cp");
+        _assertInState(EID_A, 0, 0, 0, uint48(vm.getBlockTimestamp()), "in cp");
     }
 
     function test_inflow_zeroAmount_actsAsCheckpoint() external {
@@ -121,7 +121,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             expectedOut,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "out cp"
         );
         _assertInState(
@@ -129,7 +129,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             expectedIn,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "in cp"
         );
     }
@@ -150,7 +150,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             DEFAULT_LIMIT / 2,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "in debited"
         );
         _assertOutState(
@@ -158,7 +158,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "out clamped at zero"
         );
     }
@@ -182,11 +182,11 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
 
         (uint256 inInFlight, , , uint48 inLu) = harness.inRateLimits(EID_A);
         assertEq(inInFlight, amount, "in.inFlight = amount");
-        assertEq(inLu, uint48(block.timestamp), "in.lastUpdated refreshed");
+        assertEq(inLu, uint48(vm.getBlockTimestamp()), "in.lastUpdated refreshed");
 
         (uint256 outInFlight, , , uint48 outLu) = harness.outRateLimits(EID_A);
         assertEq(outInFlight, expectedOutDecayed - amount, "out.inFlight = decayedOut - amount");
-        assertEq(outLu, uint48(block.timestamp), "out.lastUpdated refreshed");
+        assertEq(outLu, uint48(vm.getBlockTimestamp()), "out.lastUpdated refreshed");
     }
 
     // ========== COUNTERPART CREDIT CLAMPED AT ZERO ========== //
@@ -201,7 +201,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "out stays at zero"
         );
     }
@@ -220,7 +220,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             0,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "counterpart wiped"
         );
         _assertInState(
@@ -228,7 +228,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             a,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "in debited in full"
         );
     }
@@ -249,7 +249,7 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
             DEFAULT_LIMIT,
             DEFAULT_LIMIT,
             DEFAULT_WINDOW,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "accumulated"
         );
     }
@@ -297,6 +297,6 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
         // The pre-existing inFlight was zero, so the post-state is
         // `0 + amount_ == amount_`.
         assertEq(inInFlight, amount_, "post-state matches simulation");
-        assertEq(inLu, uint48(block.timestamp), "lastUpdated refreshed");
+        assertEq(inLu, uint48(vm.getBlockTimestamp()), "lastUpdated refreshed");
     }
 }
