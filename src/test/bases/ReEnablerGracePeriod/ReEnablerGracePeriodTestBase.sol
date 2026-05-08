@@ -18,8 +18,8 @@ contract ReEnablerGracePeriodTestBase is Test {
     // ========== SENTINEL TIMESTAMPS ========== //
 
     /// @dev A non-zero starting timestamp picked so that every grace window deadline
-    ///      (which is `lastTransitionAt + _GRACE`) stays well above zero, and so that the
-    ///      harness can warp far forward without crossing the `uint48` ceiling.
+    ///      (which is `lastTransitionAt + gracePeriod`) stays well above zero, and so that
+    ///      the harness can warp far forward without crossing the `uint48` ceiling.
     uint48 internal constant START_TIMESTAMP = 1_000_000;
 
     /// @dev Maximum timestamp representable in `uint48`.

@@ -26,7 +26,8 @@ import {Rescueable} from "../../bases/Rescueable.sol";
 ///      OHM is transferred to the gateway, which burns it and sends a LayerZero message.
 ///
 ///      Authorization for the lifecycle entry points follows two roles:
-///      - `enable`, `disable`, `setGateway`, and `setReEnabler` are restricted to the owner.
+///      - `enable`, `disable`, `setGateway`, `setReEnabler`, and `setGracePeriod` are
+///        restricted to the owner.
 ///      - `reEnable` is restricted to the configured `reEnabler`, which is set in the
 ///        constructor and may be updated or cleared by the owner via `setReEnabler`.
 ///        A re-enable additionally requires that the grace window since the last transition
@@ -152,6 +153,10 @@ contract LZCrossChainBridge is
     function _authorizeReEnable() internal view override {
         if (msg.sender != reEnabler) revert Errors.Unauthorized(msg.sender, "reEnabler");
     }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Restricts `setGracePeriod` to the owner.
+    function _authorizeSetGracePeriod() internal view override onlyOwner {}
 
     function _onlyOwner() private view {
         // String literal for consistency with solmate's Owned.onlyOwner modifier

@@ -8,43 +8,63 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ReEnabler} from "src/bases/ReEnabler.sol";
 
 /// @title ReEnablerGracePeriod
-/// @notice An abstract extension of `ReEnabler` that gates `reEnable` on a fixed grace
-///         window measured from the most recent transition timestamp.
+/// @notice An abstract extension of `ReEnabler` that gates `reEnable` on a grace window
+///         measured from the most recent transition timestamp.
 /// @dev The contract exposes the configured grace window via `gracePeriod()` and wires
-///      the grace check into the `_beforeReEnable` hook. Inheriting contracts that override
-///      `_beforeReEnable` must call `super._beforeReEnable()` (or invoke `_requireGrace()`
-///      themselves) to keep the gate.
+///      the grace check into the `_beforeReEnable` hook. Inheriting contracts that
+///      override `_beforeReEnable` must call `super._beforeReEnable()` (or invoke
+///      `_requireGrace()` themselves) to keep the gate.
 ///
 ///      The grace window restarts on every transition recorded by the underlying
 ///      `EnablerV2` state, so a fresh transition opens a new window of the same length.
+///
+///      The window is mutable: an authorised caller may update it after construction via
+///      `setGracePeriod`. The contract is agnostic to the access-control model used by
+///      the implementation, so an inheriting contract must override
+///      `_authorizeSetGracePeriod` to revert when the caller is not permitted to update
+///      the window. An implementation that prefers an immutable window may inherit
+///      `ReEnablerGracePeriodImmutable` instead, which overrides `setGracePeriod` to
+///      revert with the canonical `GracePeriod_NotConfigurable` error.
 abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     // ========== STATE VARIABLES ========== //
 
-    /// @dev The grace window in seconds.
-    uint32 internal immutable _GRACE;
+    /// @inheritdoc IGracePeriod
+    /// @dev The length of the grace window in seconds. Initialised by the constructor and
+    ///      updatable through `setGracePeriod` when the implementation authorises the
+    ///      caller.
+    ///
+    ///      The value is the length of the window measured from
+    ///      `IEnablerV2.lastTransitionAt`, so a fresh transition restarts the window at
+    ///      its full length. The value is mutable through `setGracePeriod` unless the
+    ///      implementation has locked the setter.
+    uint32 public override gracePeriod;
 
     // ========== INITIALIZATION ========== //
 
-    /// @notice Configures the grace window with the supplied length in seconds.
-    /// @dev A zero window would prevent any grace-gated operation from succeeding and is
-    ///      therefore rejected at construction time.
+    /// @notice Configures the initial grace window with the supplied length in seconds.
+    /// @dev The constructor routes the value through `_setGracePeriod` so that the
+    ///      zero-check and the `GracePeriodSet` event share a single code path with the
+    ///      external setter.
     ///
     ///      Reverts if:
-    ///      - `p_` is zero.
-    /// @param p_ The length of the grace window in seconds.
-    constructor(uint32 p_) {
-        if (p_ == 0) revert GracePeriod_ZeroPeriod();
-        _GRACE = p_;
+    ///      - `period_` is zero.
+    /// @param period_ The initial length of the grace window in seconds.
+    constructor(uint32 period_) {
+        _setGracePeriod(period_);
     }
 
-    // ========== VIEW FUNCTIONS ========== //
+    // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IGracePeriod
-    /// @dev The value is set at construction time and cannot be changed afterwards, and
-    ///      is the length of the window measured from `IEnablerV2.lastTransitionAt`, so a
-    ///      fresh transition restarts the window at its full length.
-    function gracePeriod() external view override returns (uint32 period) {
-        return _GRACE;
+    /// @dev The function delegates the caller authorisation to
+    ///      `_authorizeSetGracePeriod` and the value validation plus event emission to
+    ///      `_setGracePeriod`. The function is declared `virtual` so that an
+    ///      implementation that wishes to lock the window after construction can
+    ///      override it and revert with `GracePeriod_NotConfigurable`; see
+    ///      `ReEnablerGracePeriodImmutable` for the canonical lock.
+    function setGracePeriod(uint32 period_) external virtual override {
+        _authorizeSetGracePeriod();
+        _setGracePeriod(period_);
     }
 
     // ========== HOOKS ========== //
@@ -56,20 +76,46 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
         _requireGrace();
     }
 
+    /// @notice Validates that the caller is permitted to update the grace window.
+    /// @dev The function is invoked from `setGracePeriod` before any state mutation. The
+    ///      base contract is agnostic to the access-control model, so the inheriting
+    ///      contract must implement the hook and revert when the caller is not
+    ///      authorised. An implementation that overrides `setGracePeriod` to always
+    ///      revert is still required to provide an implementation; reverting is the
+    ///      recommended default in that case.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not authorised to update the grace window.
+    function _authorizeSetGracePeriod() internal view virtual;
+
     // ========== INTERNAL HELPERS ========== //
 
-    /// @notice Asserts that the grace window measured from `lastTransitionAt` has not yet
-    ///         elapsed.
-    /// @dev The deadline is computed as `lastTransitionAt + _GRACE`, and the check passes
-    ///      when the current timestamp is less than or equal to that deadline. The
-    ///      function is virtual so that inheriting contracts can extend or replace the
-    ///      deadline calculation.
+    /// @notice Asserts that the grace window measured from `lastTransitionAt` has not
+    ///         yet elapsed.
+    /// @dev The deadline is computed as `lastTransitionAt + gracePeriod`, and the check
+    ///      passes when the current timestamp is less than or equal to that deadline.
+    ///      The function is virtual so that an inheriting contract can extend or replace
+    ///      the deadline calculation.
     ///
     ///      Reverts if:
     ///      - The current timestamp is strictly greater than the computed deadline.
     function _requireGrace() internal view virtual {
-        uint48 deadline = lastTransitionAt + _GRACE;
+        uint48 deadline = lastTransitionAt + gracePeriod;
         if (_getBlockTimestamp() > deadline) revert GracePeriod_Expired(deadline);
+    }
+
+    /// @notice Validates the supplied window length, writes it to storage, and emits the
+    ///         `GracePeriodSet` event.
+    /// @dev The helper centralises the zero-check and the event so that the constructor
+    ///      and the external setter share a single code path.
+    ///
+    ///      Reverts if:
+    ///      - `period_` is zero.
+    /// @param period_ The new length of the grace window in seconds.
+    function _setGracePeriod(uint32 period_) internal {
+        if (period_ == 0) revert GracePeriod_ZeroPeriod();
+        gracePeriod = period_;
+        emit GracePeriodSet(period_);
     }
 
     // ========== ERC-165 ========== //

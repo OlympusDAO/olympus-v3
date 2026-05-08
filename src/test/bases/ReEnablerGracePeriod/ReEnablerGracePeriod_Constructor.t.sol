@@ -8,8 +8,10 @@ import {ReEnablerGracePeriodHarness} from "src/test/bases/ReEnablerGracePeriod/R
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 /// @dev Tests for the constructor of `ReEnablerGracePeriod`, which gates the configured
-///      window length against zero and otherwise stores it as the immutable `_GRACE`,
-///      exposed externally via `gracePeriod()`.
+///      window length against zero and otherwise stores it in the `gracePeriod` slot,
+///      exposed externally via the public getter. The constructor routes the value through
+///      `_setGracePeriod`, so a successful deployment also emits a `GracePeriodSet`
+///      event.
 contract ReEnablerGracePeriodTests_Constructor is ReEnablerGracePeriodTestBase {
     // ========== SUCCESS ========== //
 
@@ -18,6 +20,12 @@ contract ReEnablerGracePeriodTests_Constructor is ReEnablerGracePeriodTestBase {
         vm.label(address(fresh), "ReEnablerGracePeriodHarness:gracePeriod=1");
 
         assertEq(fresh.gracePeriod(), 1, "gracePeriod stored as one second");
+    }
+
+    function test_constructor_emitsGracePeriodSet() external {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(DEFAULT_GRACE);
+        new ReEnablerGracePeriodHarness(DEFAULT_GRACE);
     }
 
     function test_constructor_storesGraceForMaxPeriod() external {

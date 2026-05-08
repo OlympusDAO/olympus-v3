@@ -212,6 +212,10 @@ contract LZBridgeGateway is
         _enableReceive();
     }
 
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Restricts `setGracePeriod` to the admin role.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
     /// @notice Sets isReceiveEnabled to true if it is not already.
     /// @dev Shared between `_beforeEnable` and `_beforeReEnable` because both
     ///      transitions move the gateway into the enabled state with receiving allowed.

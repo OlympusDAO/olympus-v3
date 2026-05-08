@@ -89,4 +89,10 @@ contract LZBridgeGatewayTests_Constructor is LZBridgeGatewayTestBase {
         vm.expectRevert(abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector));
         new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true, 0);
     }
+
+    function test_constructor_emitsGracePeriodSet() external {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(GRACE_SECONDS);
+        new LZBridgeGateway(kernel, address(endpointSetup.endpointList[0]), true, GRACE_SECONDS);
+    }
 }

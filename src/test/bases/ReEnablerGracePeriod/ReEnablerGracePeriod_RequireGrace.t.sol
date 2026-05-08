@@ -8,14 +8,14 @@ import {ReEnablerGracePeriodHarness} from "src/test/bases/ReEnablerGracePeriod/R
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 /// @dev Tests for `ReEnablerGracePeriod._requireGrace`. The deadline is computed as
-///      `lastTransitionAt + _GRACE`. The check passes when `block.timestamp <= deadline`
+///      `lastTransitionAt + gracePeriod`. The check passes when `block.timestamp <= deadline`
 ///      and reverts when `block.timestamp >  deadline`.
 contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase {
     // ========== SUCCESS ========== //
 
-    /// @notice With `lastTransitionAt == 0`, the deadline is `_GRACE`. Tests that the
-    ///         boundary is treated inclusively when the current block has not yet reached
-    ///         the deadline.
+    /// @notice With `lastTransitionAt == 0`, the deadline is `gracePeriod`. Tests that the
+    ///         boundary is treated inclusively when the current block has not yet
+    ///         reached the deadline.
     function test_requireGrace_passesIfWithinWindowBeforeAnyTransition() external {
         // setUp warps to START_TIMESTAMP, which is far above DEFAULT_GRACE,
         // so we explicitly warp back to a timestamp inside the deadline.
@@ -67,6 +67,20 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
         // would revert. With the restart, it must pass even after warping
         // to the new deadline.
         skip(DEFAULT_GRACE);
+        harness.requireGrace();
+    }
+
+    /// @notice The deadline reads `gracePeriod` from storage on every call, so a
+    ///         successful `setGracePeriod` immediately extends the window for the
+    ///         current `lastTransitionAt`.
+    function test_requireGrace_usesIncreasedPeriodAfterSet() external {
+        _enable();
+        uint32 newPeriod = DEFAULT_GRACE * 2;
+        vm.prank(caller);
+        harness.setGracePeriod(newPeriod);
+
+        // Warp past the original deadline but inside the new one.
+        skip(uint256(DEFAULT_GRACE) + 1);
         harness.requireGrace();
     }
 
@@ -135,6 +149,26 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
                 IGracePeriod.GracePeriod_Expired.selector,
                 disableAt + DEFAULT_GRACE
             )
+        );
+        harness.requireGrace();
+    }
+
+    /// @notice A shorter `gracePeriod` brings the deadline forward; the revert reports
+    ///         the new deadline rather than the one implied by the constructor value.
+    function test_requireGrace_revertsWithNewDeadlineAfterDecrease() external {
+        _enable();
+        uint48 enableAt = uint48(block.timestamp);
+
+        uint32 newPeriod = DEFAULT_GRACE / 2;
+        vm.prank(caller);
+        harness.setGracePeriod(newPeriod);
+
+        // Warp past the new deadline but still inside the original window.
+        uint48 newDeadline = enableAt + newPeriod;
+        vm.warp(uint256(newDeadline) + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, newDeadline)
         );
         harness.requireGrace();
     }

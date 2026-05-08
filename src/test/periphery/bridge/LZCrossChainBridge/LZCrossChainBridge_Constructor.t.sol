@@ -99,4 +99,16 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
         vm.expectRevert(abi.encodeWithSelector(IGracePeriod.GracePeriod_ZeroPeriod.selector));
         new LZCrossChainBridge(address(ohm), address(this), address(gateway), reEnablerAddr, 0);
     }
+
+    function test_constructor_emitsGracePeriodSet() external {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(GRACE_SECONDS);
+        new LZCrossChainBridge(
+            address(ohm),
+            address(this),
+            address(gateway),
+            reEnablerAddr,
+            GRACE_SECONDS
+        );
+    }
 }
