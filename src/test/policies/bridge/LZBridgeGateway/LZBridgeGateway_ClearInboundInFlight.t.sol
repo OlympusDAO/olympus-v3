@@ -38,7 +38,7 @@ contract LZBridgeGatewayTests_ClearInboundInFlight is LZBridgeGatewayTestBase {
         assertEq(inFlight, 0, "Inbound in-flight should be reset");
         assertEq(limit, 1_000e9, "Inbound limit should be preserved");
         assertEq(window, 3600, "Inbound window should be preserved");
-        assertEq(lastUpdated, uint48(block.timestamp), "lastUpdated should be refreshed");
+        assertEq(lastUpdated, uint48(vm.getBlockTimestamp()), "lastUpdated should be refreshed");
 
         (, uint256 available) = gateway2.receivable(CANONICAL_EID);
         assertEq(available, 1_000e9, "Full inbound capacity should be available after clear");

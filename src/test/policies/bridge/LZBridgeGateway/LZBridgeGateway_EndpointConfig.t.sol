@@ -157,7 +157,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
 
     function test_setReceiveLibraryTimeout_proxiesToEndpoint() external {
         address lib = address(0xBEEF);
-        uint256 expiry = block.timestamp + 1 days;
+        uint256 expiry = vm.getBlockTimestamp() + 1 days;
         address endpoint_ = gateway.LZ_ENDPOINT();
 
         vm.mockCall(
@@ -187,7 +187,7 @@ contract LZBridgeGatewayTests_EndpointConfig is LZBridgeGatewayTestBase {
 
     function _test_setReceiveLibraryTimeout(address caller_) internal {
         address lib = address(0xBEEF);
-        uint256 expiry = block.timestamp + 1 days;
+        uint256 expiry = vm.getBlockTimestamp() + 1 days;
         address endpoint_ = gateway.LZ_ENDPOINT();
 
         vm.mockCall(

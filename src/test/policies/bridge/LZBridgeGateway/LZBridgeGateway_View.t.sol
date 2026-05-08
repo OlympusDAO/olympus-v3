@@ -192,7 +192,7 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         assertEq(window, DEFAULT_RATE_WINDOW, "Outbound window should be unchanged by the send");
         assertEq(
             lastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "lastUpdated should be the current timestamp"
         );
     }
@@ -208,7 +208,7 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         assertEq(window, DEFAULT_RATE_WINDOW, "Inbound window should be unchanged by the receive");
         assertEq(
             lastUpdated,
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "lastUpdated should be the current timestamp"
         );
     }
