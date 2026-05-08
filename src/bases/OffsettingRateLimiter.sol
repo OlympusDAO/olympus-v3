@@ -69,6 +69,9 @@ abstract contract OffsettingRateLimiter is IOffsettingRateLimiter {
     ///      its `limit` and `window` are not modified.
     ///      Repeated entries for the same endpoint within the same call are
     ///      applied in order, so the last entry determines the final state.
+    ///      This deviates from the typical convention elsewhere in the codebase
+    ///      of reverting on duplicate inputs; here duplicates are accepted and
+    ///      the trailing entry overrides the earlier ones.
     ///
     ///     Emits an `OutRateLimitsSet` event.
     /// @param configs_ The outbound rate limit configurations to apply.
@@ -88,6 +91,9 @@ abstract contract OffsettingRateLimiter is IOffsettingRateLimiter {
     ///      its `limit` and `window` are not modified.
     ///      Repeated entries for the same endpoint within the same call are
     ///      applied in order, so the last entry determines the final state.
+    ///      This deviates from the typical convention elsewhere in the codebase
+    ///      of reverting on duplicate inputs; here duplicates are accepted and
+    ///      the trailing entry overrides the earlier ones.
     ///
     ///      Emits an `InRateLimitsSet` event.
     /// @param configs_ The inbound rate limit configurations to apply.
@@ -200,6 +206,13 @@ abstract contract OffsettingRateLimiter is IOffsettingRateLimiter {
     ///      a fully decayed result with `inFlight` equal to zero and `available`
     ///      equal to the full `limit_`. The early return also avoids a division by
     ///      zero when `window_` is zero.
+    ///
+    ///      Integer division of `decay` rounds DOWN, so the effective
+    ///      `inFlight` is rounded UP and `available` is rounded DOWN relative
+    ///      to the exact linear curve. This is the protocol-favourable
+    ///      direction: a user can never observe more capacity than the true
+    ///      linear decay would grant, and any sub-quantum slack is held back
+    ///      rather than handed out early.
     /// @param inFlight_ The stored in-flight amount at the last update.
     /// @param limit_ The maximum amount that may be in flight at any point.
     /// @param window_ The length in seconds of the sliding window.
