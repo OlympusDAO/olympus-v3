@@ -7,7 +7,7 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {Test} from "forge-std/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {ILayerZeroDVNState} from "src/interfaces/layerzero/ILayerZeroDVNState.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";

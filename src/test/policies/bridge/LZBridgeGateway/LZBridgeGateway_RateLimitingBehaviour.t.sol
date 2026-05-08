@@ -8,7 +8,7 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @dev End-to-end rate-limiting behaviour through `burnAndSend` and `lzReceive`.
 contract LZBridgeGatewayTests_RateLimitingBehaviour is LZBridgeGatewayTestBase {

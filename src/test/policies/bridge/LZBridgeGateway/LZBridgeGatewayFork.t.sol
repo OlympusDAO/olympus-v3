@@ -8,7 +8,7 @@ import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {Errors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Contracts
 import {LZBridgeGatewayForkTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayForkTestBase.sol";

@@ -9,7 +9,10 @@ src/policies/interfaces/ILZBridgeGateway.sol
 src/policies/interfaces/ILZEndpointV2Admin.sol
 src/periphery/bridge/LZCrossChainBridge.sol
 src/periphery/interfaces/ILZCrossChainBridge.sol
-src/libraries/LZConfigLib.sol
+
+# Shared Libraries
+
+src/scripts/ops/lib/LZConfigLib.sol
 
 # Deployment & Configuration
 

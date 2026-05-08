@@ -11,7 +11,7 @@ import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimite
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Contracts
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";

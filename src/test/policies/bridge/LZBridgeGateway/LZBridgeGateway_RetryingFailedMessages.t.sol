@@ -13,7 +13,7 @@ import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimite
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @dev Retrying messages that failed due to fixable causes. Each test simulates
 ///      a transient or correctable failure (wrong peer, low supply, insufficient
