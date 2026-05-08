@@ -428,20 +428,61 @@ contract OffsettingRateLimiterTests_View is OffsettingRateLimiterTestBase {
         assertEq(available, DEFAULT_LIMIT, "early return: available is full limit");
     }
 
-    /// @notice Locks in cast-truncation behaviour at `block.timestamp ==
-    ///         type(uint48).max + 1`. The cast `uint48(block.timestamp)`
-    ///         truncates to zero, so any subsequent read sees a huge `elapsed`
-    ///         and falls into the early-return path. Flagged in the summary.
-    function test_setRateLimits_writesAtTimestampPastUint48_truncates() external {
-        vm.warp(UINT48_MAX + 1);
-        harness.setOutRateLimits(_configs(_config(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW)));
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_currentState_decayMonotonic(
+        uint256 limit_,
+        uint32 window_,
+        uint256 inFlight_,
+        uint64 t1_,
+        uint64 t2_
+    ) external {
+        limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
+        inFlight_ = bound(inFlight_, 0, FUZZ_LIMIT_CEIL);
+        // Pick t1 <= t2 inside the window. Warp forward so `block.timestamp -
+        // t1/t2` stays well-defined.
+        t1_ = uint64(bound(uint256(t1_), 0, uint256(window_) - 1));
+        t2_ = uint64(bound(uint256(t2_), uint256(t1_), uint256(window_) - 1));
+        // Ensure block.timestamp is past `window_` so the subtraction below
+        // does not underflow regardless of the (now-bounded) inputs.
+        vm.warp(uint256(window_) + START_TIMESTAMP);
 
-        (, , , uint48 lastUpdated) = harness.outRateLimits(EID_A);
-        assertEq(lastUpdated, 0, "uint48 cast wraps to zero one past the boundary");
+        uint48 t0 = uint48(block.timestamp);
+        uint48 lu1 = uint48(uint256(t0) - uint256(t1_));
+        uint48 lu2 = uint48(uint256(t0) - uint256(t2_));
+        (uint256 inFlightAtT1, ) = harness.currentState(inFlight_, limit_, window_, lu1);
+        (uint256 inFlightAtT2, ) = harness.currentState(inFlight_, limit_, window_, lu2);
 
-        // The view consequently reports `elapsed >= window` and returns full
-        // capacity even though no time has passed in the calling perspective.
-        _assertSendable(EID_A, 0, DEFAULT_LIMIT, "view sees full capacity after truncation");
+        assertLe(inFlightAtT2, inFlightAtT1, "inFlight monotonic non-increasing in elapsed");
+    }
+
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_currentState_decayRecoversAfterWindow(
+        uint256 limit_,
+        uint32 window_,
+        uint256 inFlight_,
+        uint64 elapsed_
+    ) external {
+        limit_ = bound(limit_, 0, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), 0, MAX_WINDOW));
+        inFlight_ = bound(inFlight_, 0, type(uint256).max);
+        // Cap elapsed at the uint48 max so the cast below stays in range
+        elapsed_ = uint64(bound(uint256(elapsed_), uint256(window_), UINT48_MAX / 2));
+
+        // Warp far enough that `block.timestamp - elapsed_` does not underflow
+        // and stays in uint48.
+        vm.warp(UINT48_MAX);
+        uint48 lastUpdated = uint48(block.timestamp - elapsed_);
+
+        (uint256 inFlight, uint256 available) = harness.currentState(
+            inFlight_,
+            limit_,
+            window_,
+            lastUpdated
+        );
+
+        assertEq(inFlight, 0, "decayed to zero past window");
+        assertEq(available, limit_, "full limit available past window");
     }
 
     // ========== outRateLimits ========== //

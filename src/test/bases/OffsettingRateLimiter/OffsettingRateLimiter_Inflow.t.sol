@@ -35,11 +35,31 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
         harness.inflow(EID_A, 1);
     }
 
-    function test_inflow_unconfiguredEid_zeroAmount_doesNotRevert() external {
-        harness.inflow(EID_A, 0);
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_inflow_alwaysRevertsAboveAvailable(
+        uint256 limit_,
+        uint32 window_,
+        uint256 amount_,
+        uint64 elapsed_
+    ) external {
+        limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
+        elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window_) - 1));
 
-        _assertOutState(EID_A, 0, 0, 0, uint48(block.timestamp), "out cp");
-        _assertInState(EID_A, 0, 0, 0, uint48(block.timestamp), "in cp");
+        harness.setInRateLimits(_configs(_config(EID_A, limit_, window_)));
+        skip(elapsed_);
+
+        // The available capacity is `limit_` since the stored inFlight is zero
+        amount_ = bound(amount_, limit_ + 1, type(uint256).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOffsettingRateLimiter.RateLimitExceeded.selector,
+                amount_,
+                limit_
+            )
+        );
+        harness.inflow(EID_A, amount_);
     }
 
     // ========== SUCCESS AT BOUNDARY ========== //
@@ -61,6 +81,15 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
     }
 
     // ========== ZERO AMOUNT ========== //
+
+    function test_inflow_unconfiguredEid_zeroAmount_doesNotRevert() external {
+        // A zero-amount call against an unconfigured eid is a checkpoint that
+        // touches both sides without recording any flow.
+        harness.inflow(EID_A, 0);
+
+        _assertOutState(EID_A, 0, 0, 0, uint48(block.timestamp), "out cp");
+        _assertInState(EID_A, 0, 0, 0, uint48(block.timestamp), "in cp");
+    }
 
     function test_inflow_zeroAmount_actsAsCheckpoint() external {
         _setupBoth(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW, 0);
@@ -240,5 +269,34 @@ contract OffsettingRateLimiterTests_Inflow is OffsettingRateLimiterTestBase {
 
         _assertOutState(EID_B, outInFlightB, outLimitB, outWindowB, outLuB, "B out untouched");
         _assertInState(EID_B, inInFlightB, inLimitB, inWindowB, inLuB, "B in untouched");
+    }
+
+    // ========== POST-STATE: FUZZ WITHIN AVAILABLE ========== //
+
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_inflow_neverRevertsWithinAvailable(
+        uint256 limit_,
+        uint32 window_,
+        uint256 amount_,
+        uint64 elapsed_
+    ) external {
+        limit_ = bound(limit_, 1, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), MIN_WINDOW, MAX_WINDOW));
+        elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window_) - 1));
+
+        harness.setInRateLimits(_configs(_config(EID_A, limit_, window_)));
+        skip(elapsed_);
+
+        // No prior inflow, so the available capacity equals the limit (decay
+        // is irrelevant).
+        amount_ = bound(amount_, 0, limit_);
+
+        harness.inflow(EID_A, amount_);
+
+        (uint256 inInFlight, , , uint48 inLu) = harness.inRateLimits(EID_A);
+        // The pre-existing inFlight was zero, so the post-state is
+        // `0 + amount_ == amount_`.
+        assertEq(inInFlight, amount_, "post-state matches simulation");
+        assertEq(inLu, uint48(block.timestamp), "lastUpdated refreshed");
     }
 }

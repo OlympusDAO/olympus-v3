@@ -308,4 +308,67 @@ contract OffsettingRateLimiterTests_SetInRateLimits is OffsettingRateLimiterTest
         _assertOutState(EID_B, 0, 0, 0, 0, "other eid out");
         _assertInState(EID_B, 0, 0, 0, 0, "other eid in");
     }
+
+    // ========== TIMESTAMP PAST UINT48 ========== //
+
+    /// @notice Locks in cast-truncation behaviour at `block.timestamp ==
+    ///         type(uint48).max + 1`. The cast `uint48(block.timestamp)`
+    ///         truncates to zero, so any subsequent read sees a huge `elapsed`
+    ///         and falls into the early-return path. Flagged in the summary.
+    function test_setInRateLimits_writesAtTimestampPastUint48_truncates() external {
+        vm.warp(UINT48_MAX + 1);
+        harness.setInRateLimits(_configs(_config(EID_A, DEFAULT_LIMIT, DEFAULT_WINDOW)));
+
+        (, , , uint48 lastUpdated) = harness.inRateLimits(EID_A);
+        assertEq(lastUpdated, 0, "uint48 cast wraps to zero one past the boundary");
+
+        // The view consequently reports `elapsed >= window` and returns full
+        // capacity even though no time has passed in the calling perspective.
+        _assertReceivable(EID_A, 0, DEFAULT_LIMIT, "view sees full capacity after truncation");
+    }
+
+    // ========== FUZZ ========== //
+
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_setInRateLimits_lastEntryWins(
+        uint32 eid_,
+        uint256 limit1_,
+        uint256 limit2_,
+        uint32 window1_,
+        uint32 window2_
+    ) external {
+        // Bounds: keep limits / windows positive and within sane ranges
+        limit1_ = bound(limit1_, 0, FUZZ_LIMIT_CEIL);
+        limit2_ = bound(limit2_, 0, FUZZ_LIMIT_CEIL);
+        window1_ = uint32(bound(uint256(window1_), 0, MAX_WINDOW));
+        window2_ = uint32(bound(uint256(window2_), 0, MAX_WINDOW));
+
+        IOffsettingRateLimiter.RateLimitConfig[] memory configs = _configs(
+            _config(eid_, limit1_, window1_),
+            _config(eid_, limit2_, window2_)
+        );
+        harness.setInRateLimits(configs);
+
+        _assertInState(eid_, 0, limit2_, window2_, uint48(block.timestamp), "in");
+    }
+
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_setInRateLimits_independentEids(
+        uint32 eidA_,
+        uint32 eidB_,
+        uint256 limit_,
+        uint32 window_
+    ) external {
+        vm.assume(eidA_ != eidB_);
+        limit_ = bound(limit_, 0, FUZZ_LIMIT_CEIL);
+        window_ = uint32(bound(uint256(window_), 0, MAX_WINDOW));
+
+        bytes32 outBefore = _outFingerprint(eidB_);
+        bytes32 inBefore = _inFingerprint(eidB_);
+
+        harness.setInRateLimits(_configs(_config(eidA_, limit_, window_)));
+
+        assertEq(_outFingerprint(eidB_), outBefore, "eidB out four-tuple unchanged");
+        assertEq(_inFingerprint(eidB_), inBefore, "eidB in four-tuple unchanged");
+    }
 }

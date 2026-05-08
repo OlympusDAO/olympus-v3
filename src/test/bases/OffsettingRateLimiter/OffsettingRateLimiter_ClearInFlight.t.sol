@@ -156,6 +156,44 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
         harness.clearOutboundInFlight(eids);
     }
 
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_clearOutboundInFlight_idempotent(uint32[] calldata eids_) external {
+        // Bound the array length and copy into a memory array.
+        uint256 len = bound(eids_.length, 0, 8);
+        uint32[] memory eids = new uint32[](len);
+        for (uint256 i = 0; i < len; i++) {
+            eids[i] = eids_[i];
+        }
+
+        // Configure each eid (re-configuring a duplicate is idempotent on
+        // (limit, window) at the same block).
+        for (uint256 i = 0; i < len; i++) {
+            harness.setOutRateLimits(_configs(_config(eids[i], DEFAULT_LIMIT, DEFAULT_WINDOW)));
+        }
+        // Drive each one to a non-zero in-flight. Use a small per-iteration
+        // amount so duplicate eids do not exhaust the limit by accumulating
+        // across iterations: 8 * 1 = 8 << DEFAULT_LIMIT.
+        for (uint256 i = 0; i < len; i++) {
+            harness.outflow(eids[i], 1);
+        }
+
+        harness.clearOutboundInFlight(eids);
+        uint48 t1 = uint48(block.timestamp);
+        for (uint256 i = 0; i < len; i++) {
+            (uint256 inFlight, , , uint48 lu) = harness.outRateLimits(eids[i]);
+            assertEq(inFlight, 0, "first clear: inFlight zero");
+            assertEq(lu, t1, "first clear: lastUpdated current");
+        }
+
+        // The second clear at the same block produces an identical result.
+        harness.clearOutboundInFlight(eids);
+        for (uint256 i = 0; i < len; i++) {
+            (uint256 inFlight, , , uint48 lu) = harness.outRateLimits(eids[i]);
+            assertEq(inFlight, 0, "second clear: inFlight zero");
+            assertEq(lu, t1, "second clear: lastUpdated unchanged at same block");
+        }
+    }
+
     // ========== _clearInboundInFlight ========== //
 
     function test_clearInboundInFlight_singleEid_resetsInFlightAndRefreshesLastUpdated() external {
@@ -294,5 +332,43 @@ contract OffsettingRateLimiterTests_ClearInFlight is OffsettingRateLimiterTestBa
         emit IOffsettingRateLimiter.InboundInFlightCleared(eids);
 
         harness.clearInboundInFlight(eids);
+    }
+
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_clearInboundInFlight_idempotent(uint32[] calldata eids_) external {
+        // Bound the array length and copy into a memory array.
+        uint256 len = bound(eids_.length, 0, 8);
+        uint32[] memory eids = new uint32[](len);
+        for (uint256 i = 0; i < len; i++) {
+            eids[i] = eids_[i];
+        }
+
+        // Configure each eid (re-configuring a duplicate is idempotent on
+        // (limit, window) at the same block).
+        for (uint256 i = 0; i < len; i++) {
+            harness.setInRateLimits(_configs(_config(eids[i], DEFAULT_LIMIT, DEFAULT_WINDOW)));
+        }
+        // Drive each one to a non-zero in-flight. Use a small per-iteration
+        // amount so duplicate eids do not exhaust the limit by accumulating
+        // across iterations: 8 * 1 = 8 << DEFAULT_LIMIT.
+        for (uint256 i = 0; i < len; i++) {
+            harness.inflow(eids[i], 1);
+        }
+
+        harness.clearInboundInFlight(eids);
+        uint48 t1 = uint48(block.timestamp);
+        for (uint256 i = 0; i < len; i++) {
+            (uint256 inFlight, , , uint48 lu) = harness.inRateLimits(eids[i]);
+            assertEq(inFlight, 0, "first clear: inFlight zero");
+            assertEq(lu, t1, "first clear: lastUpdated current");
+        }
+
+        // The second clear at the same block produces an identical result.
+        harness.clearInboundInFlight(eids);
+        for (uint256 i = 0; i < len; i++) {
+            (uint256 inFlight, , , uint48 lu) = harness.inRateLimits(eids[i]);
+            assertEq(inFlight, 0, "second clear: inFlight zero");
+            assertEq(lu, t1, "second clear: lastUpdated unchanged at same block");
+        }
     }
 }

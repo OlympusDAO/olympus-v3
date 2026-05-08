@@ -71,6 +71,16 @@ contract OffsettingRateLimiterTestBase is Test {
     ///      `lastUpdated`).
     uint256 internal constant UINT48_MAX = type(uint48).max;
 
+    // ========== FUZZ BOUNDS ========== //
+
+    /// @dev Picked so `limit * window` fits in uint256 even when `limit` and
+    ///      `window` both saturate the bound. Since `window <= type(uint32).max`
+    ///      (the storage size) the bound on `limit` only needs to keep the
+    ///      product in range; we pick a generous `2**192` ceiling.
+    uint256 internal constant FUZZ_LIMIT_CEIL = 2 ** 192;
+    uint32 internal constant MIN_WINDOW = 1;
+    uint32 internal constant MAX_WINDOW = type(uint32).max;
+
     // ========== STATE ========== //
 
     OffsettingRateLimiterHarness internal harness;
@@ -349,5 +359,21 @@ contract OffsettingRateLimiterTestBase is Test {
         uint256 decay = (limit_ * elapsed_) / window_;
         inFlight = decay >= inFlight_ ? 0 : inFlight_ - decay;
         available = limit_ > inFlight ? limit_ - inFlight : 0;
+    }
+
+    // ========== FUZZ HELPERS ========== //
+
+    /// @dev Hashes the full four-tuple of stored outbound state for `eid_`,
+    ///      so before/after comparisons can be expressed as a single equality.
+    function _outFingerprint(uint32 eid_) internal view returns (bytes32) {
+        (uint256 inFlight, uint256 limit, uint32 window, uint48 lu) = harness.outRateLimits(eid_);
+        return keccak256(abi.encode(inFlight, limit, window, lu));
+    }
+
+    /// @dev Hashes the full four-tuple of stored inbound state for `eid_`,
+    ///      so before/after comparisons can be expressed as a single equality.
+    function _inFingerprint(uint32 eid_) internal view returns (bytes32) {
+        (uint256 inFlight, uint256 limit, uint32 window, uint48 lu) = harness.inRateLimits(eid_);
+        return keccak256(abi.encode(inFlight, limit, window, lu));
     }
 }

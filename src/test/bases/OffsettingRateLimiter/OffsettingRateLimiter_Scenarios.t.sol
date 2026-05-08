@@ -158,4 +158,115 @@ contract OffsettingRateLimiterTests_Scenarios is OffsettingRateLimiterTestBase {
         _assertOutState(EID_A, limit2, limit2, window2, t3, "step 9: outflow post-reset");
         _assertSendable(EID_A, limit2, 0, "step 9: zero capacity again");
     }
+
+    // ========== SETTER PRESERVES IN-FLIGHT ACROSS CONFIG CHANGE ========== //
+
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_scenario_setOutRateLimitsPreservesInFlightAcrossChange(
+        uint256 limitOld_,
+        uint32 windowOld_,
+        uint256 amount_,
+        uint256 limitNew_,
+        uint32 windowNew_
+    ) external {
+        limitOld_ = bound(limitOld_, 1, FUZZ_LIMIT_CEIL);
+        windowOld_ = uint32(bound(uint256(windowOld_), 1, MAX_WINDOW));
+        amount_ = bound(amount_, 0, limitOld_);
+        limitNew_ = bound(limitNew_, 0, FUZZ_LIMIT_CEIL);
+        windowNew_ = uint32(bound(uint256(windowNew_), 0, MAX_WINDOW));
+
+        harness.setOutRateLimits(_configs(_config(EID_A, limitOld_, windowOld_)));
+        harness.outflow(EID_A, amount_);
+
+        // Configure under the new schedule in the same block (no decay between
+        // the outflow and the setter call).
+        harness.setOutRateLimits(_configs(_config(EID_A, limitNew_, windowNew_)));
+
+        (uint256 inFlightAfter, , , ) = harness.outRateLimits(EID_A);
+        assertEq(inFlightAfter, amount_, "stored inFlight preserved across config change");
+    }
+
+    // ========== SETTER PRESERVES COUNTERPART (LIMIT, WINDOW) ========== //
+
+    /// forge-config: default.fuzz.runs = 256
+    function testFuzz_scenario_setRateLimitsPreservesCounterpartLimitWindow(
+        uint256 outLimit_,
+        uint32 outWindow_,
+        uint256 inLimit_,
+        uint32 inWindow_
+    ) external {
+        outLimit_ = bound(outLimit_, 0, FUZZ_LIMIT_CEIL);
+        outWindow_ = uint32(bound(uint256(outWindow_), 0, MAX_WINDOW));
+        inLimit_ = bound(inLimit_, 0, FUZZ_LIMIT_CEIL);
+        inWindow_ = uint32(bound(uint256(inWindow_), 0, MAX_WINDOW));
+
+        // Set the inbound side first, then the outbound side. The outbound
+        // setter must not modify the inbound (limit, window).
+        harness.setInRateLimits(_configs(_config(EID_A, inLimit_, inWindow_)));
+        harness.setOutRateLimits(_configs(_config(EID_A, outLimit_, outWindow_)));
+
+        (, uint256 inLimitAfter, uint32 inWindowAfter, ) = harness.inRateLimits(EID_A);
+        assertEq(inLimitAfter, inLimit_, "in.limit preserved");
+        assertEq(inWindowAfter, inWindow_, "in.window preserved");
+
+        // And vice versa: a subsequent inbound setter must not modify the
+        // outbound (limit, window).
+        harness.setInRateLimits(_configs(_config(EID_A, inLimit_, inWindow_)));
+        (, uint256 outLimitAfter, uint32 outWindowAfter, ) = harness.outRateLimits(EID_A);
+        assertEq(outLimitAfter, outLimit_, "out.limit preserved");
+        assertEq(outWindowAfter, outWindow_, "out.window preserved");
+    }
+
+    // ========== OUTFLOW THEN INFLOW: PARTIAL OFFSET ========== //
+
+    /// @dev No elapsed time, so `decayedOut == outAmount_`. Bounding
+    ///      `inAmount_ < outAmount_` forces the partial-offset branch
+    ///      without re-deriving the contract's decay arithmetic.
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_scenario_outflowThenInflowPartialOffset(
+        uint256 outAmount_,
+        uint256 inAmount_
+    ) external {
+        uint256 limit = DEFAULT_LIMIT;
+        uint32 window = DEFAULT_WINDOW;
+        outAmount_ = bound(outAmount_, 1, limit);
+        inAmount_ = bound(inAmount_, 0, outAmount_ - 1);
+
+        _setupBoth(EID_A, limit, window, 0);
+        harness.outflow(EID_A, outAmount_);
+        harness.inflow(EID_A, inAmount_);
+
+        (uint256 outInFlight, , , ) = harness.outRateLimits(EID_A);
+        (uint256 inInFlight, , , ) = harness.inRateLimits(EID_A);
+        assertEq(outInFlight, outAmount_ - inAmount_, "out partially offset");
+        assertEq(inInFlight, inAmount_, "in matches simulation");
+    }
+
+    // ========== OUTFLOW THEN INFLOW: FULL OFFSET ========== //
+
+    /// @dev `inAmount_ >= outAmount_ >= decayedOut`, so the inflow always
+    ///      clears `out.inFlight` regardless of how decay during `elapsed_`
+    ///      reduced it. Avoids mirroring the contract's decay formula.
+    /// forge-config: default.fuzz.runs = 512
+    function testFuzz_scenario_outflowThenInflowFullOffset(
+        uint256 outAmount_,
+        uint256 inAmount_,
+        uint64 elapsed_
+    ) external {
+        uint256 limit = DEFAULT_LIMIT;
+        uint32 window = DEFAULT_WINDOW;
+        outAmount_ = bound(outAmount_, 0, limit);
+        inAmount_ = bound(inAmount_, outAmount_, limit);
+        elapsed_ = uint64(bound(uint256(elapsed_), 0, uint256(window) - 1));
+
+        _setupBoth(EID_A, limit, window, 0);
+        harness.outflow(EID_A, outAmount_);
+        skip(elapsed_);
+        harness.inflow(EID_A, inAmount_);
+
+        (uint256 outInFlight, , , ) = harness.outRateLimits(EID_A);
+        (uint256 inInFlight, , , ) = harness.inRateLimits(EID_A);
+        assertEq(outInFlight, 0, "out fully offset");
+        assertEq(inInFlight, inAmount_, "in matches simulation");
+    }
 }
