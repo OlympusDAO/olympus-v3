@@ -1,0 +1,21 @@
+{
+    "functions": [
+        {
+            "args": {
+                "inboundRateLimiterConfig": {
+                    "capacity": "10000000000000",
+                    "isEnabled": true,
+                    "rate": "115740740"
+                },
+                "localChain": "mainnet",
+                "outboundRateLimiterConfig": {
+                    "capacity": "10000000000000",
+                    "isEnabled": true,
+                    "rate": "115740740"
+                },
+                "remoteChain": "solana"
+            },
+            "name": "setRateLimits"
+        }
+    ]
+}
