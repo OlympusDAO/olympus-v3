@@ -158,6 +158,12 @@ contract LZCrossChainBridge is
     /// @dev Restricts `setGracePeriod` to the owner.
     function _authorizeSetGracePeriod() internal view override onlyOwner {}
 
+    /// @notice Same as `ReEnablerGracePeriod.setGracePeriod`, but restricted to the enabled
+    ///         state.
+    function setGracePeriod(uint32 period_) public override givenEnabled {
+        super.setGracePeriod(period_);
+    }
+
     function _onlyOwner() private view {
         // String literal for consistency with solmate's Owned.onlyOwner modifier
         // solhint-disable-next-line gas-custom-errors

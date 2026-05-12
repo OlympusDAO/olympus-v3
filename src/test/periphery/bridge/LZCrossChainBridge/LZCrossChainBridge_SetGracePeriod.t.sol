@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 contract LZCrossChainBridgeTests_SetGracePeriod is LZCrossChainBridgeTestBase {
@@ -54,62 +55,6 @@ contract LZCrossChainBridgeTests_SetGracePeriod is LZCrossChainBridgeTestBase {
         );
     }
 
-    function test_setGracePeriod_succeedsWhileDisabled() external {
-        bridge.disable(bytes(""));
-        assertFalse(bridge.isEnabled(), "Bridge should be disabled before the setter call");
-
-        bridge.setGracePeriod(GRACE_SECONDS * 2);
-
-        assertEq(
-            bridge.gracePeriod(),
-            GRACE_SECONDS * 2,
-            "gracePeriod should be updatable while the bridge is disabled"
-        );
-    }
-
-    /// @dev An increase in the grace period extends the deadline measured from
-    ///      `lastTransitionAt`, so a re-enable that would have expired under the original
-    ///      window succeeds after the increase.
-    function test_setGracePeriod_extendedWindowAllowsLateReEnable() external {
-        bridge.disable(bytes(""));
-        uint48 disabledAt = bridge.lastTransitionAt();
-
-        // Double the grace window before the original deadline.
-        uint32 newPeriod = GRACE_SECONDS * 2;
-        bridge.setGracePeriod(newPeriod);
-
-        // Warp past the original deadline but inside the new one. Without the increase,
-        // `reEnable` would revert with `GracePeriod_Expired`.
-        vm.warp(uint256(disabledAt) + uint256(GRACE_SECONDS) + 1);
-
-        vm.prank(reEnablerAddr);
-        bridge.reEnable();
-
-        assertTrue(bridge.isEnabled(), "Bridge should re-enable inside the extended window");
-    }
-
-    /// @dev A decrease in the grace period shortens the deadline measured from
-    ///      `lastTransitionAt`, so a re-enable that would have succeeded under the
-    ///      original window reverts after the decrease.
-    function test_setGracePeriod_shortenedWindowRejectsLateReEnable() external {
-        bridge.disable(bytes(""));
-        uint48 disabledAt = bridge.lastTransitionAt();
-
-        // Halve the grace window.
-        uint32 newPeriod = GRACE_SECONDS / 2;
-        bridge.setGracePeriod(newPeriod);
-
-        // Warp past the new deadline but still inside the original one.
-        uint48 newDeadline = disabledAt + newPeriod;
-        vm.warp(uint256(newDeadline) + 1);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, newDeadline)
-        );
-        vm.prank(reEnablerAddr);
-        bridge.reEnable();
-    }
-
     // ========== REVERTS ========== //
 
     function test_setGracePeriod_revertsIfZeroPeriod() external {
@@ -122,6 +67,14 @@ contract LZCrossChainBridgeTests_SetGracePeriod is LZCrossChainBridgeTestBase {
 
         vm.expectRevert("UNAUTHORIZED");
         vm.prank(caller_);
+        bridge.setGracePeriod(GRACE_SECONDS * 2);
+    }
+
+    function test_setGracePeriod_revertsWhileDisabled() external {
+        bridge.disable(bytes(""));
+        assertFalse(bridge.isEnabled(), "Bridge should be disabled before the setter call");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
         bridge.setGracePeriod(GRACE_SECONDS * 2);
     }
 }
