@@ -152,13 +152,10 @@ interface ILZBridgeGateway {
     /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
     function setPeer(uint32 eid_, bytes32 peer_) external;
 
-    /// @notice Sets whether the gateway can receive messages.
+    /// @notice Sets whether the gateway can process inbound LayerZero messages.
     /// @dev Only callable by the emergency or admin role.
-    ///      Managed automatically by enable()/disable(), but can be set manually
-    ///      to allow receiving while the gateway is disabled
-    ///      (e.g. during gateway replacements, to deliver in-flight messages).
     ///
-    /// @param isReceiveEnabled_ The desired state.
+    /// @param isReceiveEnabled_ The desired state of the flag.
     function setIsReceiveEnabled(bool isReceiveEnabled_) external;
 
     /// @notice Sets the delegate on the LayerZero endpoint.

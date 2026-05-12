@@ -52,7 +52,7 @@ Branch: `lz-bridge-upgrade`
             - [ILZEndpointV2Authorized.sol](../../src/policies/interfaces/ILZEndpointV2Authorized.sol) — LZ V2 endpoint delegate-callable surface (libraries, ULN/Executor config, inbound message recovery)
     - [bases/](../../src/bases/)
         - [Rescueable.sol](../../src/bases/Rescueable.sol) — Reusable abstract base exposing privileged `rescue()` to sweep accidentally-sent assets; subclasses authorize via the `_authorizeRescue()` hook.
-        - [interfaces/IRescueable.sol](../../src/bases/interfaces/IRescueable.sol) — Rescue interface (declares only the `rescue(token, to)` function
+        - [interfaces/IRescueable.sol](../../src/bases/interfaces/IRescueable.sol) — Rescue interface (declares only the `rescue(token, to)` function)
     - [libraries/Errors.sol](../../src/libraries/Errors.sol) — Shared custom errors to be reused by different contracts instead of contract-local duplicates
     - [libraries/ERC7528Constants.sol](../../src/libraries/ERC7528Constants.sol) — EIP-7528 native-asset sentinel address
 

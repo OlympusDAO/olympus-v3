@@ -405,6 +405,23 @@ contract LZBridgeGateway is
     ///      - The caller does not have the emergency or admin role.
     ///      - The gateway is currently enabled.
     ///      - The value is already in the desired state.
+    ///
+    ///      The flag is managed automatically by the policy lifecycle:
+    ///      `enable()` and the re-enable path set it to `true`, and `disable()` resets it to
+    ///      `false`. This function provides a manual override for the disabled state, so that
+    ///      a disabled gateway can keep delivering in-flight inbound LayerZero messages after
+    ///      sending stops.
+    ///
+    ///      The intended use case is a gateway replacement on a given chain.
+    ///      The admin calls `disable` followed by `setIsReceiveEnabled(true)`. The old gateway
+    ///      is disabled (which stops outbound sends), but any inbound LayerZero messages already
+    ///      in flight to the old gateway can still settle on it. Once the migration is complete,
+    ///      the old gateway is deactivated in the Kernel.
+    ///
+    ///      If `disable` is triggered by the emergency role without a proposal, it automatically
+    ///      sets `isReceiveEnabled` to `false`. If it is confirmed that re-enabling is safe, the
+    ///      manager can call `reEnable` within the grace window, which automatically sets
+    ///      `isReceiveEnabled` to `true`.
     function setIsReceiveEnabled(
         bool isReceiveEnabled_
     ) external override givenDisabled onlyEmergencyOrAdminRole {
