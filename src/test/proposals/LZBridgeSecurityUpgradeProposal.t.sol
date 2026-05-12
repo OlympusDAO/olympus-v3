@@ -20,9 +20,11 @@ import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 // Proposal
@@ -54,6 +56,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     Kernel public kernel;
     LZBridgeGateway public gateway;
+    LZEndpointDelegate public lzDelegate;
     LZBridgeActivator public activator;
     LZBridgeSecurityUpgradeProposal public proposal;
     ROLESv1 public roles;
@@ -93,6 +96,9 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         if (IS_CONTRACTS_DEPLOYED) {
             gateway = LZBridgeGateway(addresses.getAddress("olympus-policy-lz-bridge-gateway"));
+            lzDelegate = LZEndpointDelegate(
+                addresses.getAddress("olympus-policy-lz-endpoint-delegate")
+            );
             activator = LZBridgeActivator(addresses.getAddress("olympus-lz-bridge-activator"));
             lzCrossChainBridge = addresses.getAddress("olympus-periphery-lz-cross-chain-bridge");
             console2.log("Contracts already deployed on mainnet");
@@ -105,6 +111,10 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 _GRACE_SECONDS
             );
             vm.label(address(gateway), "LZBridgeGateway");
+
+            // Deploy LZEndpointDelegate (policy)
+            lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
+            vm.label(address(lzDelegate), "LZEndpointDelegate");
 
             // Deploy LZCrossChainBridge (periphery, owned by DAO MS, DAO MS as re-enabler)
             LZCrossChainBridge bridge = new LZCrossChainBridge(
@@ -121,6 +131,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             activator = new LZBridgeActivator(
                 timelock,
                 address(gateway),
+                address(lzDelegate),
                 LZConfigLib.ETH_LZ_ENDPOINT,
                 makeAddr("ARB_GATEWAY"),
                 makeAddr("OPT_GATEWAY"),
@@ -136,6 +147,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 block.chainid
             );
             addresses.addAddress(
+                "olympus-policy-lz-endpoint-delegate",
+                address(lzDelegate),
+                block.chainid
+            );
+            addresses.addAddress(
                 "olympus-periphery-lz-cross-chain-bridge",
                 address(bridge),
                 block.chainid
@@ -146,9 +162,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // ========== PRE-OCG: MS BATCH 1 ==========
 
-        // Simulate what the DAO MS does before the OCG proposal: activate new LZBridgeGateway
-        vm.prank(daoMS);
+        // Simulate what the DAO MS does before the OCG proposal: activate the new
+        // LZBridgeGateway and the LZEndpointDelegate policy.
+        vm.startPrank(daoMS);
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
+        vm.stopPrank();
 
         // ========== SIMULATE PROPOSAL ==========
 
@@ -396,6 +415,20 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             bytes memory opts = gateway.enforcedOptions(remoteEids[i], gateway.MSG_BRIDGE_OHM());
             assertGt(opts.length, 0, "Enforced options should be set");
         }
+
+        // 10. LZEndpointDelegate is the LZ endpoint delegate for the gateway
+        assertTrue(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate should be active");
+        assertEq(
+            IEndpointV2State(address(ep)).delegates(address(gateway)),
+            address(lzDelegate),
+            "LZ endpoint delegate should be LZEndpointDelegate"
+        );
+        assertEq(lzDelegate.GATEWAY(), address(gateway), "LZEndpointDelegate.GATEWAY mismatch");
+        assertEq(
+            lzDelegate.LZ_ENDPOINT(),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            "LZEndpointDelegate.LZ_ENDPOINT mismatch"
+        );
     }
 }
 

@@ -26,11 +26,9 @@ pragma solidity >=0.8.30;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Contracts
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
@@ -48,10 +46,11 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 ///         OHM transfers.
 ///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
 ///         tracks bridged supply on canonical chains, and bounds inflow minting to previously burned OHM via mint approval.
+///         OApp-authorized endpoint operations (libraries, ULN/Executor config, inbound message recovery)
+///         live on the LZEndpointDelegate policy, which is assigned via `setDelegate`.
 contract LZBridgeGateway is
     ILayerZeroReceiver,
     IVersioned,
-    ILZEndpointV2Admin,
     ILZBridgeGateway,
     Policy,
     PolicyReEnabler,
@@ -151,7 +150,7 @@ contract LZBridgeGateway is
         IS_CANONICAL = isCanonical_;
 
         // EnablerV2 starts disabled; the gateway must be explicitly enabled after
-        // configuration. The gateway is always authorized to call endpoint functions.
+        // configuration.
     }
 
     /// @inheritdoc Policy
@@ -478,135 +477,6 @@ contract LZBridgeGateway is
         _resetRateLimits(eids_);
     }
 
-    // ========= LZ ENDPOINT CONFIG ========= //
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setReceiveLibrary(
-        uint32 eid_,
-        address lib_,
-        uint256 gracePeriod_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibrary(
-            address(this),
-            eid_,
-            lib_,
-            gracePeriod_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setReceiveLibraryTimeout(
-        uint32 eid_,
-        address lib_,
-        uint256 expiry_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibraryTimeout(
-            address(this),
-            eid_,
-            lib_,
-            expiry_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setEndpointConfig(
-        address lib_,
-        SetConfigParam[] calldata params_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, params_);
-    }
-
-    // ========= LZ MESSAGE MANAGEMENT ========= //
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via skip
-    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
-    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
-    ///      Depending on the cause of the skip, a separate governance proposal may also be required
-    ///      to restore the OHM owed to the affected user.
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function skip(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function nilify(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev On the canonical chain, permanently discarding an inbound OHM mint message via burn
-    ///      does NOT update `bridgedSupply` or the MINTR mint approval. The caller MUST follow up
-    ///      with a corresponding `decreaseBridgedSupply` call to keep the bookkeeping consistent.
-    ///      Depending on the cause of the burn, a separate governance proposal may also be required
-    ///      to restore the OHM owed to the affected user.
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function burn(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev On the canonical chain, clearing an inbound OHM mint message bypasses the gateway's
-    ///      `lzReceive` handler, so `bridgedSupply` is not decremented and the MINTR mint approval
-    ///      is not consumed. The caller MUST follow up with a corresponding `decreaseBridgedSupply`
-    ///      call to keep the bookkeeping consistent. Depending on the cause of the clear, a separate
-    ///      governance proposal may also be required to restore the OHM owed to the affected user.
-    ///
-    ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function clear(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
-    }
-
     // ========= RESCUE FUNCTIONS ========= //
 
     /// @inheritdoc Rescueable
@@ -633,7 +503,6 @@ contract LZBridgeGateway is
     ) public view override(PolicyReEnabler, ReEnablerGracePeriod, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
-            interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);

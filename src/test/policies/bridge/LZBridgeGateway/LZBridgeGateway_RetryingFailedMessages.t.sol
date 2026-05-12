@@ -287,9 +287,10 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         bytes32 storedHash = ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1);
         assertEq(storedHash, fakeHash, "Fake hash should be stored by compromised DVN");
 
-        // 3. Admin detects the compromise and nilifies the fake hash
+        // 3. Admin detects the compromise and nilifies the fake hash via the LZEndpointDelegate
+        //    policy, which is the gateway's endpoint delegate.
         vm.prank(bridgeAdmin);
-        gateway.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
+        lzDelegate.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
 
         bytes32 nilValue = ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1);
         assertEq(nilValue, bytes32(type(uint256).max), "Hash should be NIL after nilify");

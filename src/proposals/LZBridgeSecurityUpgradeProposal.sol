@@ -28,6 +28,7 @@ import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -43,9 +44,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///         It is used to work around the governor's 15-action limit,
 ///
 ///         Assumes:
-///         - LZBridgeGateway, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum mainnet.
+///         - LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum mainnet.
 ///         - Remote instances have been deployed on Arbitrum, Optimism, Base, and Berachain.
-///         - DAO MS has already activated LZBridgeGateway in the Kernel.
+///         - DAO MS has already activated LZBridgeGateway and LZEndpointDelegate in the Kernel.
 ///         - OCG timelock already has the `admin` and `bridge_admin` roles.
 contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     Kernel internal _kernel;
@@ -100,9 +101,9 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "## Assumptions\n",
                 "\n",
-                "- LZBridgeGateway, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum.\n",
-                "- Remote LZBridgeGateway and LZCrossChainBridge instances have been deployed on Arbitrum, Optimism, Base, and Berachain.\n",
-                "- The DAO MS has already activated LZBridgeGateway in the Kernel.\n",
+                "- LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum.\n",
+                "- Remote LZBridgeGateway, LZEndpointDelegate and LZCrossChainBridge instances have been deployed on Arbitrum, Optimism, Base, and Berachain.\n",
+                "- The DAO MS has already activated LZBridgeGateway and LZEndpointDelegate in the Kernel.\n",
                 "- The OCG timelock already has the `admin` and `bridge_admin` roles (required for endpoint configuration, peer setup, and enabling).\n",
                 "\n",
                 "## Proposal Steps\n",
@@ -112,7 +113,8 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
                 "5. Execute LZBridgeActivator.activate() which:\n",
-                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
+                "   - Sets the LZEndpointDelegate policy as the gateway's LayerZero endpoint delegate. This is the steady-state configuration: subsequent OApp-authorized endpoint operations are driven through LZEndpointDelegate.\n",
+                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain) via the LZEndpointDelegate policy. Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
@@ -260,6 +262,9 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         LZBridgeGateway gw = LZBridgeGateway(
             addresses.getAddress("olympus-policy-lz-bridge-gateway")
         );
+        LZEndpointDelegate lzDelegate = LZEndpointDelegate(
+            addresses.getAddress("olympus-policy-lz-endpoint-delegate")
+        );
         LZBridgeActivator activator = LZBridgeActivator(
             addresses.getAddress("olympus-lz-bridge-activator")
         );
@@ -268,8 +273,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "olympus-periphery-lz-cross-chain-bridge"
         );
 
-        // 1. Validate LZBridgeGateway is active in the Kernel (activated by MS before OCG)
+        // 1. Validate LZBridgeGateway and LZEndpointDelegate are active in the Kernel
+        //    (activated by the DAO MS before OCG).
         require(Policy(address(gw)).isActive(), "LZBridgeGateway policy is not active");
+        require(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate policy is not active");
 
         // 2. Validate LZBridgeGateway is enabled
         require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
@@ -315,10 +322,17 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 8. Validate enforced options
         _validateEnforcedOptions(gw);
 
-        // 9. Validate delegate is revoked
+        // 9. Validate the LZEndpointDelegate policy is configured as the gateway's LZ endpoint delegate
         require(
-            IEndpointV2State(address(ep)).delegates(address(gw)) == address(0),
-            "Delegate should be revoked"
+            IEndpointV2State(address(ep)).delegates(address(gw)) == address(lzDelegate),
+            "Delegate should be LZEndpointDelegate"
+        );
+
+        // 10. Validate LZEndpointDelegate parameters point at the gateway and endpoint
+        require(lzDelegate.GATEWAY() == address(gw), "LZEndpointDelegate GATEWAY mismatch");
+        require(
+            lzDelegate.LZ_ENDPOINT() == LZConfigLib.ETH_LZ_ENDPOINT,
+            "LZEndpointDelegate LZ_ENDPOINT mismatch"
         );
     }
 

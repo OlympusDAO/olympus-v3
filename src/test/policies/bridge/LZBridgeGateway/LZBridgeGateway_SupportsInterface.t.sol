@@ -13,7 +13,7 @@ import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
+import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
@@ -28,13 +28,6 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
         assertTrue(
             gateway.supportsInterface(type(ILZBridgeGateway).interfaceId),
             "Should support ILZBridgeGateway"
-        );
-    }
-
-    function test_supportsInterface_returnsTrueForILZEndpointV2Admin() external view {
-        assertTrue(
-            gateway.supportsInterface(type(ILZEndpointV2Admin).interfaceId),
-            "Should support ILZEndpointV2Admin"
         );
     }
 

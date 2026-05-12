@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.9.6/console2.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
@@ -14,8 +14,8 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 /// @notice Ethereum MS batch scripts for the LZBridgeGateway policy.
 ///
 ///         Entry points:
-///         - `activateGateway` (pre-OCG): activate new gateway in Kernel
-///         - `initBridgedSupply` (post-OCG): set initial bridged supply tracking
+///         - `activateGateway` (pre-OCG): activate the new gateway and the LZEndpointDelegate policy in the Kernel
+///         - `initBridgedSupply` (post-OCG): set the initial bridged supply tracking
 ///
 ///         The old CrossChainBridge is deactivated post-OCG via LZCrossChainBridgeBatch.setup().
 contract LZBridgeGatewayBatch is BatchScriptV2 {
@@ -31,9 +31,9 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
     // =========== ENTRY POINTS =========== //
 
-    /// @notice Ethereum Phase 1 (pre-OCG): activate new gateway in Kernel.
-    ///         The old CrossChainBridge remains active during the OCG voting period
-    ///         and is deactivated post-OCG via LZCrossChainBridgeBatch.setup().
+    /// @notice Ethereum Phase 1 (pre-OCG): activate the new gateway and delegate policies in the Kernel.
+    ///         The old CrossChainBridge remains active during the OCG voting period and is
+    ///         deactivated post-OCG via LZCrossChainBridgeBatch.setup().
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -51,17 +51,30 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
         address kernel = _envAddressNotZero("olympus.Kernel");
         address newGateway = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address newDelegate = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
 
-        console2.log("\n=== Ethereum Phase 1: Activate Gateway ===");
+        console2.log("\n=== Ethereum Phase 1: Activate Gateway + Delegate ===");
         console2.log("New LZBridgeGateway:", newGateway);
+        console2.log("New LZEndpointDelegate:", newDelegate);
 
-        // Activate new LZBridgeGateway
+        // Activate the new LZBridgeGateway
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
                 newGateway
+            )
+        );
+
+        // Activate the new LZEndpointDelegate policy so the OCG activator can set it as the
+        // gateway's LZ endpoint delegate.
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                newDelegate
             )
         );
 
@@ -130,9 +143,10 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== VALIDATION =========== //
 
     /// @notice Validate activateGateway state after batch execution.
-    /// @dev Checks that the gateway is active in the Kernel.
+    /// @dev Checks that the gateway and the delegate are active in the Kernel.
     function _validateActivateGateway() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
 
         console2.log("\nValidating activateGateway post-batch state");
@@ -141,6 +155,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
             revert("LZBridgeGateway is not active in the Kernel");
         }
         console2.log("  LZBridgeGateway is active in the Kernel");
+
+        if (!Policy(delegateAddr).isActive()) {
+            revert("LZEndpointDelegate is not active in the Kernel");
+        }
+        console2.log("  LZEndpointDelegate is active in the Kernel");
 
         console2.log("activateGateway post-batch validation passed");
     }

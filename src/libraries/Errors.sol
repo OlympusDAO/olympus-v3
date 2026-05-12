@@ -12,4 +12,8 @@ library Errors {
 
     /// @notice Thrown when a recipient address is invalid (e.g. the zero address).
     error InvalidRecipient();
+
+    /// @notice Thrown when an input argument fails.
+    /// @param parameter A short identifier of the offending input (e.g. the parameter name).
+    error BadInput(string parameter);
 }

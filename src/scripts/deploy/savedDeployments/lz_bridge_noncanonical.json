@@ -6,6 +6,7 @@
                 "graceSeconds": 86400
             }
         },
+        { "name": "LZEndpointDelegate", "args": {} },
         {
             "name": "LZCrossChainBridge",
             "args": {

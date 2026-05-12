@@ -10,6 +10,7 @@ import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLib
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -17,8 +18,9 @@ import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ILZEndpointDelegate} from "src/policies/interfaces/ILZEndpointDelegate.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
+import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
@@ -31,10 +33,14 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///         can be run by the correct caller:
 ///
 ///         Entry points (run in order):
-///         1. `activateGateway`    as Kernel executor               deactivates old bridge and activates new gateway
-///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS
-///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) configures LZ & peers and enables
-///         4. `revokeSetupRoles`   as RolesAdmin admin              (optional) revokes admin role granted in step 2
+///         1. `activateGateway`    as Kernel executor               deactivates the old bridge and activates the new
+///                                                                  gateway and delegate policies.
+///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS.
+///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) sets the LZEndpointDelegate policy as the gateway's
+///                                                                  LZ endpoint delegate, configures LZ
+///                                                                  libraries/config via the delegate, sets
+///                                                                  peers/enforced options, and enables.
+///         4. `revokeSetupRoles`   as RolesAdmin admin              (optional) revokes admin role granted in step 2.
 contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== ERRORS =========== //
 
@@ -49,7 +55,8 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
     // =========== ENTRY POINTS =========== //
 
-    /// @notice Step 1. Kernel executor actions: deactivate old bridge, activate new gateway.
+    /// @notice Step 1. Kernel executor actions: deactivate the old bridge, activate the new
+    ///         gateway and LZEndpointDelegate policies.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -69,14 +76,24 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
 
         console2.log(
-            "\n=== [L2] [Step 1] Deactivate Old Gateway & Activate New Gateway:",
+            "\n=== [L2] [Step 1] Deactivate Old Gateway & Activate New Gateway + Delegate:",
             chain,
             "==="
         );
 
-        // 1.1. Deactivate old CrossChainBridge
+        // Pre-flight invariant: the LZEndpointDelegate policy must be deployed for this gateway.
+        // Caught here so a misconfigured env.json fails before the multisig collects step 2 / 3
+        // signatures; step 3 repeats the same check as defence in depth.
+        // solhint-disable-next-line custom-errors,gas-custom-errors
+        require(
+            ILZEndpointDelegate(delegateAddr).GATEWAY() == gatewayAddr,
+            "LZEndpointDelegate GATEWAY mismatch"
+        );
+
+        // 1.1. Deactivate the old CrossChainBridge
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -86,13 +103,24 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             )
         );
 
-        // 1.2. Activate new LZBridgeGateway
+        // 1.2. Activate the new LZBridgeGateway
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
                 gatewayAddr
+            )
+        );
+
+        // 1.3. Activate the new LZEndpointDelegate policy. The delegate policy is the steady-state
+        //      LZ endpoint delegate for the gateway, set in step 3 via `setDelegate`.
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                delegateAddr
             )
         );
 
@@ -209,25 +237,72 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         _skipHeartbeatValidation = true;
 
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
+        ILayerZeroEndpointV2 endpoint = ILayerZeroEndpointV2(gateway.LZ_ENDPOINT());
 
         console2.log("\n=== [L2] [Step 3] Configure & Enable:", chain, "===");
 
-        // 3.1. Configure LZ libraries and ULN/Executor config
-        _configureLZ(gateway);
+        // Pre-flight invariant: the LZEndpointDelegate policy must be deployed for this gateway.
+        // solhint-disable-next-line custom-errors,gas-custom-errors
+        require(
+            ILZEndpointDelegate(delegateAddr).GATEWAY() == gatewayAddr,
+            "LZEndpointDelegate GATEWAY mismatch"
+        );
 
-        // 3.2. Set peers
+        // 3.1. Point the gateway's LZ endpoint delegate at the LZEndpointDelegate policy. This is
+        //      the steady-state configuration; the subsequent OApp-authorized endpoint calls in
+        //      step 3.2 are forwarded through the delegate contract. Skipped if the delegate is
+        //      already pointed at the same address; reverts on a foreign delegate so the batch
+        //      does not silently overwrite it.
+        _setDelegateIfNeeded(endpoint, gatewayAddr, delegateAddr);
+
+        // 3.2. Configure LZ libraries and ULN/Executor config via LZEndpointDelegate. Library
+        //      pinning is skipped per EID when the gateway is already pinned to the expected
+        //      library (otherwise `EndpointV2.setSendLibrary` / `setReceiveLibrary` reverts with
+        //      `LZ_SameValue` on a repeat run).
+        _configureLZ(delegateAddr, endpoint, gatewayAddr);
+
+        // 3.3. Set peers on the gateway
         _setPeers(gateway);
 
-        // 3.3. Set enforced options
+        // 3.4. Set enforced options on the gateway
         _setEnforcedOptions(gateway);
 
-        // 3.4. Enable LZBridgeGateway
-        addToBatch(gatewayAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+        // 3.5. Enable LZBridgeGateway (skipped if already enabled; `EnablerV2.enable` reverts
+        //      on a repeat call via the `givenDisabled` modifier).
+        if (gateway.isEnabled()) {
+            console2.log("  Gateway already enabled. Skipping enable.");
+        } else {
+            addToBatch(gatewayAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+        }
 
         _setPostBatchValidateSelector(this._validateConfigureAndEnable.selector);
 
         proposeBatch();
+    }
+
+    /// @notice Conditional `setDelegate` for the gateway's LZ endpoint delegate.
+    /// @dev Skips the call when the delegate is already pointed at `delegateAddr_`. Reverts in
+    ///      preflight when some foreign delegate is configured so the batch does not silently
+    ///      overwrite it.
+    function _setDelegateIfNeeded(
+        ILayerZeroEndpointV2 endpoint_,
+        address gatewayAddr_,
+        address delegateAddr_
+    ) internal {
+        address currentDelegate = IEndpointV2State(address(endpoint_)).delegates(gatewayAddr_);
+        if (currentDelegate == delegateAddr_) {
+            console2.log("  LZ endpoint delegate already set. Skipping setDelegate.");
+            return;
+        }
+        if (currentDelegate != address(0)) {
+            // solhint-disable-next-line custom-errors,gas-custom-errors
+            revert(
+                "LZ endpoint delegate is already set to a foreign address; refusing to overwrite"
+            );
+        }
+        addToBatch(gatewayAddr_, abi.encodeCall(ILZBridgeGateway.setDelegate, (delegateAddr_)));
     }
 
     /// @notice Step 4 (optional). Revoke the admin role from the DAO MS.
@@ -278,10 +353,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== VALIDATION =========== //
 
     /// @notice Validate activateGateway state after batch execution.
-    /// @dev Checks that old bridge is deactivated and new gateway is active.
+    /// @dev Checks that the old bridge is deactivated and the new gateway and delegate are active.
     function _validateActivateGateway() external view {
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
 
         console2.log("\nValidating activateGateway post-batch state");
 
@@ -294,6 +370,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             revert("LZBridgeGateway is not active in the Kernel");
         }
         console2.log("  LZBridgeGateway is active in the Kernel");
+
+        if (!Policy(delegateAddr).isActive()) {
+            revert("LZEndpointDelegate is not active in the Kernel");
+        }
+        console2.log("  LZEndpointDelegate is active in the Kernel");
 
         console2.log("activateGateway post-batch validation passed");
     }
@@ -332,10 +413,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
     /// @notice Validate configureAndEnable state after batch execution.
     /// @dev Mirrors LZBridgeSecurityUpgradeProposal._validateLZConfig for L2 chains.
-    ///      Checks that gateway is enabled, peers are set, enforced options exist,
-    ///      libraries are pinned, and ULN/Executor config is correct for every remote EID.
+    ///      Checks that the LZEndpointDelegate policy is the gateway's LZ endpoint delegate, the
+    ///      gateway is enabled, peers are set, enforced options exist, libraries are pinned,
+    ///      and ULN/Executor config is correct for every remote EID.
     function _validateConfigureAndEnable() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
         uint32 localEid = _getLocalEid();
         uint32[] memory remoteEids = _getRemoteEids();
@@ -343,7 +426,14 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         console2.log("\nValidating configureAndEnable post-batch state");
 
-        // 1. Gateway must be enabled
+        // 1a. The LZEndpointDelegate policy must be configured as the gateway's LZ endpoint delegate
+        address currentDelegate = IEndpointV2State(address(endpoint)).delegates(gatewayAddr);
+        if (currentDelegate != delegateAddr) {
+            revert("LZEndpointDelegate is not the gateway's LZ endpoint delegate");
+        }
+        console2.log("  LZEndpointDelegate is the LZ endpoint delegate");
+
+        // 1b. Gateway must be enabled
         if (!gateway.isEnabled()) {
             revert("LZBridgeGateway is not enabled");
         }
@@ -667,19 +757,38 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         if (ChainUtils._isCanonicalChain(chain)) revert LZBridgeGatewayL2Batch_CanonicalChain();
     }
 
-    /// @notice Configures LZ libraries and ULN/Executor config for all remote chains
-    ///         via the gateway's ILZEndpointV2Admin functions.
-    /// @dev    Only for non-canonical (L2) chains.
-    ///         The DVN set comes from `LZConfigLib.dvnsForRoute`: every route requires
-    ///         four DVNs (LayerZero Labs, Canary, Nethermind, plus Google Cloud, or
-    ///         Horizen for routes that touch Berachain where Google Cloud is unavailable).
-    function _configureLZ(LZBridgeGateway gateway_) internal {
+    /// @notice Configures LZ libraries and ULN/Executor config for all remote chains via the
+    ///         LZEndpointDelegate policy's ILZEndpointV2Authorized functions.
+    /// @dev    Only for non-canonical (L2) chains. The LZEndpointDelegate policy must already be
+    ///         set as the gateway's LZ endpoint delegate when the batch executes.
+    ///
+    ///         Library pins are skipped per EID when the gateway is already pinned to the same
+    ///         library address. `EndpointV2.setSendLibrary` and `setReceiveLibrary` revert with
+    ///         `LZ_SameValue` on a no-op re-pin, so unconditional re-application would break a
+    ///         repeat run of the batch.
+    ///
+    ///         ULN/Executor `setConfig` is left unconditional. It is idempotent inside the
+    ///         message library and the cost of a no-op repeat (a single SSTORE per slot, all to
+    ///         their existing values) is small compared to the gas spent reading and comparing
+    ///         the existing config.
+    ///
+    ///         The DVN set comes from `LZConfigLib.dvnsForRoute`: every route requires four DVNs
+    ///         (LayerZero Labs, Canary, Nethermind, plus Google Cloud, or Horizen for routes that
+    ///         touch Berachain where Google Cloud is unavailable).
+    /// @param  delegateAddr_ The LZEndpointDelegate policy address to forward OApp-authorized
+    ///                      endpoint calls through.
+    /// @param  endpoint_ The LayerZero V2 endpoint used to read the currently pinned libraries.
+    /// @param  gatewayAddr_ The gateway acting as the OApp on the endpoint.
+    function _configureLZ(
+        address delegateAddr_,
+        ILayerZeroEndpointV2 endpoint_,
+        address gatewayAddr_
+    ) internal {
         uint32[] memory remoteEids = _getRemoteEids();
         uint32 localEid = _getLocalEid();
         address sendLib = _getSendUln302();
         address recvLib = _getRecvUln302();
         uint64 localConf = _outboundConfirmations();
-        address gatewayAddr = address(gateway_);
 
         console2.log("\nConfiguring LZ - sendLib:", sendLib, "recvLib:", recvLib);
 
@@ -690,19 +799,10 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
             console2.log("  Configuring remote EID:", remoteEid);
 
-            // Pin send library via gateway
-            addToBatch(
-                gatewayAddr,
-                abi.encodeCall(ILZEndpointV2Admin.setSendLibrary, (remoteEid, sendLib))
-            );
+            _pinSendLibraryIfNeeded(delegateAddr_, endpoint_, gatewayAddr_, remoteEid, sendLib);
+            _pinReceiveLibraryIfNeeded(delegateAddr_, endpoint_, gatewayAddr_, remoteEid, recvLib);
 
-            // Pin receive library via gateway
-            addToBatch(
-                gatewayAddr,
-                abi.encodeCall(ILZEndpointV2Admin.setReceiveLibrary, (remoteEid, recvLib, 0))
-            );
-
-            // Send ULN + Executor config
+            // Send ULN + Executor config (unconditional; setConfig is idempotent on the message lib).
             SetConfigParam[] memory sendParams = new SetConfigParam[](2);
             sendParams[0] = SetConfigParam({
                 eid: remoteEid,
@@ -715,11 +815,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 config: LZConfigLib.encodeExecutorConfig(localEid)
             });
             addToBatch(
-                gatewayAddr,
-                abi.encodeCall(ILZEndpointV2Admin.setEndpointConfig, (sendLib, sendParams))
+                delegateAddr_,
+                abi.encodeCall(ILZEndpointV2Authorized.setEndpointConfig, (sendLib, sendParams))
             );
 
-            // Receive ULN config (inbound = remote chain's outbound confirmations)
+            // Receive ULN config (inbound confirmations = the remote chain's outbound confirmations).
             uint64 remoteConf = LZConfigLib.outboundConfirmationsForEid(remoteEid);
             SetConfigParam[] memory recvParams = new SetConfigParam[](1);
             recvParams[0] = SetConfigParam({
@@ -728,10 +828,57 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
                 config: LZConfigLib.encodeUlnConfig(remoteConf, dvns)
             });
             addToBatch(
-                gatewayAddr,
-                abi.encodeCall(ILZEndpointV2Admin.setEndpointConfig, (recvLib, recvParams))
+                delegateAddr_,
+                abi.encodeCall(ILZEndpointV2Authorized.setEndpointConfig, (recvLib, recvParams))
             );
         }
+    }
+
+    /// @dev Pins the gateway's send library for `remoteEid_` to `sendLib_`. Skipped when the
+    ///      library is already pinned (not falling back to the default) to the expected
+    ///      address, otherwise `EndpointV2.setSendLibrary` reverts with `LZ_SameValue`.
+    function _pinSendLibraryIfNeeded(
+        address delegateAddr_,
+        ILayerZeroEndpointV2 endpoint_,
+        address gatewayAddr_,
+        uint32 remoteEid_,
+        address sendLib_
+    ) private {
+        if (
+            !endpoint_.isDefaultSendLibrary(gatewayAddr_, remoteEid_) &&
+            endpoint_.getSendLibrary(gatewayAddr_, remoteEid_) == sendLib_
+        ) {
+            console2.log("    Send library already pinned for EID:", remoteEid_);
+            return;
+        }
+        addToBatch(
+            delegateAddr_,
+            abi.encodeCall(ILZEndpointV2Authorized.setSendLibrary, (remoteEid_, sendLib_))
+        );
+    }
+
+    /// @dev Pins the gateway's receive library for `remoteEid_` to `recvLib_`. Skipped when the
+    ///      library is already pinned (not falling back to the default) to the expected
+    ///      address, otherwise `EndpointV2.setReceiveLibrary` reverts with `LZ_SameValue`.
+    function _pinReceiveLibraryIfNeeded(
+        address delegateAddr_,
+        ILayerZeroEndpointV2 endpoint_,
+        address gatewayAddr_,
+        uint32 remoteEid_,
+        address recvLib_
+    ) private {
+        (address currentRecvLib, bool isDefault) = endpoint_.getReceiveLibrary(
+            gatewayAddr_,
+            remoteEid_
+        );
+        if (!isDefault && currentRecvLib == recvLib_) {
+            console2.log("    Receive library already pinned for EID:", remoteEid_);
+            return;
+        }
+        addToBatch(
+            delegateAddr_,
+            abi.encodeCall(ILZEndpointV2Authorized.setReceiveLibrary, (remoteEid_, recvLib_, 0))
+        );
     }
 
     /// @notice Sets peers for all remote chains from env.json addresses.

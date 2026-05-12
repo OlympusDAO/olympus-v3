@@ -1,12 +1,12 @@
 # LZ Bridge Migration Flow
 
-Step-by-step operational sequence for replacing `CrossChainBridge` (LZ V1) with `LZBridgeGateway` + `LZCrossChainBridge` (LZ V2).
+Step-by-step operational sequence for replacing `CrossChainBridge` (LZ V1) with `LZBridgeGateway` + `LZEndpointDelegate` + `LZCrossChainBridge` (LZ V2).
 
 Chains: Ethereum, Arbitrum, Optimism, Base, Berachain.
 
 ## Prerequisites
 
-- All contracts deployed and addresses recorded in env.json (remote gateway addresses are set as immutables in `LZBridgeActivator` at deployment time).
+- All contracts (`LZBridgeGateway`, `LZEndpointDelegate`, `LZCrossChainBridge`, and on Ethereum `LZBridgeActivator`) deployed and addresses recorded in env.json (remote gateway addresses are set as immutables in `LZBridgeActivator` at deployment time).
 - Proposal ID set in `LZBridgeSecurityUpgradeProposal.id()` before submission.
 - `initialBridgedSupply` filled in `LZBridgeGatewayBatch` args file before step 5.
 
@@ -27,11 +27,11 @@ Key: `bridgeActive=false` blocks `sendOhm()` but not `lzReceive()`/`receiveMessa
 
 ### 1\. Deploy contracts
 
-Deploy `LZBridgeGateway` and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. Both contracts take a `graceSeconds` argument (default `86400` in `lz_bridge_canonical.json` / `lz_bridge_noncanonical.json`) that defines the maximum window after a `disable` during which `reEnable()` may be called — i.e. an upper bound on the re-enable window, not a minimum wait. The `LZCrossChainBridge` constructor additionally takes the gateway address and the re-enabler address (set to the DAO MS by `DeployV3.deployLZCrossChainBridge()`). Record deployed addresses in env.json and OCG proposal constants.
+Deploy `LZBridgeGateway`, `LZEndpointDelegate`, and `LZCrossChainBridge` on Ethereum, Arbitrum, Optimism, Base, and Berachain. The gateway and the periphery bridge both take a `graceSeconds` argument (default `86400` in `lz_bridge_canonical.json` / `lz_bridge_noncanonical.json`) that defines the maximum window after a `disable` during which `reEnable()` may be called — i.e. an upper bound on the re-enable window, not a minimum wait. The `LZCrossChainBridge` constructor additionally takes the gateway address and the re-enabler address (set to the DAO MS by `DeployV3.deployLZCrossChainBridge()`). `LZEndpointDelegate` takes the gateway address and the LayerZero V2 endpoint address as immutables; its sequence entry has no args (see `deployLZEndpointDelegate()`). Record deployed addresses in env.json and OCG proposal constants.
 
 ### 2\. Ethereum pre-OCG setup (MS batch)
 
-**`LZBridgeGatewayBatch.activateGateway()`** — activate `LZBridgeGateway` in the Kernel. The old `CrossChainBridge` remains active, users can continue bridging via the old bridge.
+**`LZBridgeGatewayBatch.activateGateway()`** — activate `LZBridgeGateway` and `LZEndpointDelegate` in the Kernel. The old `CrossChainBridge` remains active, users can continue bridging via the old bridge.
 
 ### 3\. OCG Proposal
 
@@ -42,11 +42,12 @@ Execute `LZBridgeSecurityUpgradeProposal`:
 3. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
 4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
 5. Execute `LZBridgeActivator.activate()` which:
-   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains. Every route requires four DVNs: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, `optionalDVNCount == type(uint8).max`) so the OApp config does not inherit LayerZero's EID-level default.
-   - Sets peers for all remote chains.
-   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.
-   - Enables the LZBridgeGateway policy.
-6. Revoke temporary roles from the LZBridgeActivator contract.
+   - Sets the `LZEndpointDelegate` policy as the gateway's LayerZero endpoint delegate. This is the steady-state delegate, not revoked after activation; subsequent OApp-authorized endpoint operations (libraries, ULN/Executor config, message recovery) are forwarded through `LZEndpointDelegate`.
+   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains, forwarded through `LZEndpointDelegate`. Every route requires four DVNs: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, `optionalDVNCount == type(uint8).max`) so the OApp config does not inherit LayerZero's EID-level default.
+   - Sets peers for all remote chains on the gateway.
+   - Sets enforced options on the gateway: 200,000 gas minimum for lzReceive on each destination.
+   - Enables the `LZBridgeGateway` policy.
+6. Revoke temporary roles from the `LZBridgeActivator` contract.
 
 After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains — no user traffic flows through the new bridge yet. Old bridges continue operating normally.
 
@@ -72,9 +73,9 @@ At this point: users cannot bridge via old bridges (send blocked) and cannot bri
 
 On each non-canonical chain (Arbitrum, Optimism, Base, Berachain), run in order:
 
-1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway`.
+1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway` and `LZEndpointDelegate`.
 2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
-3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — pin LZ V2 libraries, set ULN/Executor config, set peers, set enforced options, enable gateway.
+3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — point the gateway's LZ endpoint delegate at `LZEndpointDelegate`, pin LZ V2 libraries, set ULN/Executor config via `LZEndpointDelegate`, set peers, set enforced options, enable the gateway.
 4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ — revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
 5. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
 

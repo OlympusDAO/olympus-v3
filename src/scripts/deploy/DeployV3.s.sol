@@ -25,6 +25,7 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -1008,11 +1009,30 @@ contract DeployV3 is WithEnvironment {
         return (address(lzBridgeGateway), "olympus.policies");
     }
 
+    function deployLZEndpointDelegate() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+
+        // Log parameters
+        console2.log("LZEndpointDelegate parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  gateway", gateway);
+
+        // Deploy
+        vm.broadcast();
+        LZEndpointDelegate lzEndpointDelegate = new LZEndpointDelegate(Kernel(kernel), gateway);
+
+        return (address(lzEndpointDelegate), "olympus.policies");
+    }
+
     function deployLZBridgeActivator() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address timelock = _getAddressNotZero("olympus.governance.Timelock");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegate = _getAddressNotZero("olympus.policies.LZEndpointDelegate");
         address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         address arbGateway = _envAddressNotZero("arbitrum", "olympus.policies.LZBridgeGateway");
         address optGateway = _envAddressNotZero("optimism", "olympus.policies.LZBridgeGateway");
@@ -1023,6 +1043,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("LZBridgeActivator parameters:");
         console2.log("  timelock", timelock);
         console2.log("  gateway", gateway);
+        console2.log("  delegate", delegate);
         console2.log("  lzEndpoint", lzEndpoint);
         console2.log("  arbGateway", arbGateway);
         console2.log("  optGateway", optGateway);
@@ -1034,6 +1055,7 @@ contract DeployV3 is WithEnvironment {
         LZBridgeActivator activator = new LZBridgeActivator(
             timelock,
             gateway,
+            delegate,
             lzEndpoint,
             arbGateway,
             optGateway,

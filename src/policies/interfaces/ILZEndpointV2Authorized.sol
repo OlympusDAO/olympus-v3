@@ -4,11 +4,16 @@ pragma solidity >=0.8.0;
 import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 
-/// @title ILZEndpointV2Admin
-/// @notice Interface for LayerZero endpoint v2 delegate-callable functions.
-/// @dev LZ endpoints assume msg.sender is OApp, so the policy calls these endpoint functions
-///      on its own behalf. Implementations MUST enforce access control.
-interface ILZEndpointV2Admin {
+/// @title ILZEndpointV2Authorized
+/// @notice Subset of LayerZero EndpointV2 operations protected by
+///         EndpointV2._assertAuthorized (msg.sender must be the OApp itself
+///         or its registered delegate). Covers MessageLibManager configuration
+///         (libraries, ULN/Executor config) and MessagingChannel inbound
+///         control (skip / nilify / burn / clear).
+/// @dev Implementations are the OApp's delegate from the Endpoint's perspective
+///      and call into EndpointV2 on their own behalf. Access control on the
+///      external entrypoints is the implementation's responsibility.
+interface ILZEndpointV2Authorized {
     // ========= LIBRARY MANAGEMENT ========= //
 
     /// @notice Pins send library for a destination EID.

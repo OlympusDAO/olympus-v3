@@ -5,13 +5,16 @@
 # Core Contracts
 
 src/policies/bridge/LZBridgeGateway.sol
+src/policies/bridge/LZEndpointDelegate.sol
 src/policies/interfaces/ILZBridgeGateway.sol
-src/policies/interfaces/ILZEndpointV2Admin.sol
+src/policies/interfaces/ILZEndpointDelegate.sol
+src/policies/interfaces/ILZEndpointV2Authorized.sol
 src/periphery/bridge/LZCrossChainBridge.sol
 src/periphery/interfaces/ILZCrossChainBridge.sol
 src/libraries/LZConfigLib.sol
-src/bases/Rescuable.sol
-src/bases/interfaces/IRescuable.sol
+src/bases/Rescueable.sol
+src/bases/interfaces/IRescueable.sol
+src/libraries/Errors.sol
 src/libraries/ERC7528Constants.sol
 
 # Deployment & Configuration

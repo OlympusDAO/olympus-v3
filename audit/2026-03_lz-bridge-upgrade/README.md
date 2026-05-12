@@ -10,10 +10,11 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 The existing `CrossChainBridge` policy (deployed on Ethereum, Arbitrum, Optimism, Base, and Berachain) combines user-facing bridging, LayerZero V1 endpoint communication, and OHM mint/burn into a single contract. This upgrade separates concerns into two contracts and introduces several security hardening measures.
 
-The new design splits the bridge into two contracts:
+The new design splits the bridge into three contracts:
 
-1. **LZBridgeGateway** (Policy) — Infrastructure contract that handles all LayerZero V2 endpoint communication, OHM mint/burn via MINTR, peer management, enforced options, rate limiting, bridged supply tracking, and proxying of LZ V2 endpoint configuration and message management functions.
-2. **LZCrossChainBridge** (Periphery) — User-facing facilitator contract authorized via the `bridge_facilitator` role. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
+1. **LZBridgeGateway** (Policy) — Infrastructure contract that handles user-facing LayerZero V2 endpoint communication (send/receive, peer management, enforced options, rate limiting), OHM mint/burn via MINTR, and bridged supply tracking. OApp-authorized endpoint operations (libraries, ULN/Executor config, inbound message recovery) live on the LZEndpointDelegate policy.
+2. **LZEndpointDelegate** (Policy) — Stateless policy assigned as the gateway's LayerZero V2 endpoint delegate. Forwards OApp-authorized endpoint calls (library and config management, inbound message recovery) on behalf of the gateway, gated by `bridge_admin` or `admin`.
+3. **LZCrossChainBridge** (Periphery) — User-facing facilitator contract authorized via the `bridge_facilitator` role. Users approve and send OHM through this contract, which transfers it to the gateway for burning and cross-chain messaging.
 
 ```text
 User -> LZCrossChainBridge (bridge_facilitator role) -> LZBridgeGateway (policy) -> LZ Endpoint V2 -> [destination]
@@ -44,13 +45,16 @@ Branch: `lz-bridge-upgrade`
     - [policies/](../../src/policies/)
         - [bridge/](../../src/policies/bridge/)
             - [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) — Gateway infrastructure policy
+            - [LZEndpointDelegate.sol](../../src/policies/bridge/LZEndpointDelegate.sol) — Stateless policy assigned as the gateway's LZ V2 endpoint delegate. Every external function forwards the call to the LayerZero endpoint with `LZEndpointDelegate.GATEWAY` as the OApp argument; the endpoint accepts these calls only while this policy is the gateway's endpoint delegate
         - [interfaces/](../../src/policies/interfaces/)
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) — Gateway interface
-            - [ILZEndpointV2Admin.sol](../../src/policies/interfaces/ILZEndpointV2Admin.sol) — LZ V2 endpoint admin interface
+            - [ILZEndpointDelegate.sol](../../src/policies/interfaces/ILZEndpointDelegate.sol) — Delegate policy interface (immutables, view accessors)
+            - [ILZEndpointV2Authorized.sol](../../src/policies/interfaces/ILZEndpointV2Authorized.sol) — LZ V2 endpoint delegate-callable surface (libraries, ULN/Executor config, inbound message recovery)
     - [bases/](../../src/bases/)
-        - [Rescuable.sol](../../src/bases/Rescuable.sol) — Reusable abstract base exposing privileged `rescue()` to sweep accidentally-sent assets; subclasses authorize via the `_authorizeRescue()` hook
-        - [interfaces/IRescuable.sol](../../src/bases/interfaces/IRescuable.sol) — Rescue interface (declares `NATIVE_TOKEN`, `Rescued` event, and `Rescuable_InvalidRecipient` error)
-    - [libraries/ERC7528Constants.sol](../../src/libraries/ERC7528Constants.sol) — EIP-7528 native-token sentinel address
+        - [Rescueable.sol](../../src/bases/Rescueable.sol) — Reusable abstract base exposing privileged `rescue()` to sweep accidentally-sent assets; subclasses authorize via the `_authorizeRescue()` hook.
+        - [interfaces/IRescueable.sol](../../src/bases/interfaces/IRescueable.sol) — Rescue interface (declares only the `rescue(token, to)` function
+    - [libraries/Errors.sol](../../src/libraries/Errors.sol) — Shared custom errors to be reused by different contracts instead of contract-local duplicates
+    - [libraries/ERC7528Constants.sol](../../src/libraries/ERC7528Constants.sol) — EIP-7528 native-asset sentinel address
 
 **OApp provenance:** Peer management, endpoint send/receive, and enforced-option logic are ported inline from `@lz-oapp-evm v0.4.1` (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3) because those contracts assume OZ Ownable, incompatible with Bophades Kernel RBAC. `RateLimiter` is the only OApp contract inherited directly (no Ownable dependency); its integration and `_outflow`/`_inflow` overrides are in scope, the base contract itself is not.
 
@@ -60,7 +64,7 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
 
 - [src/](../../src)
     - [scripts/deploy/](../../src/scripts/deploy/)
-        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) — `deployLZBridgeGateway()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
+        - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) — `deployLZBridgeGateway()`, `deployLZEndpointDelegate()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
     - [libraries/](../../src/libraries/)
         - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) — Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
     - [proposals/](../../src/proposals/)
@@ -101,12 +105,12 @@ You can review previous audits here:
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
 6. **Explicit LZ V2 endpoint configuration**: Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification requires four DVNs on every route: LayerZero Labs, Canary, and Nethermind, plus a fourth DVN selected per route — Google Cloud on chains where it is available, and Horizen for routes that touch Berachain (where Google Cloud is not available). Optional DVNs are pinned to the LayerZero NIL sentinel (`optionalDVNCount == type(uint8).max`) so the OApp-level config explicitly declares "no optional DVNs" rather than inheriting the EID-level default — a future change to LayerZero's default cannot silently attach an optional DVN to verified messages.
-7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `admin` remains available as an emergency/override actor. `setDelegate` allows setting an LZ endpoint delegate as a fallback for future endpoint interface changes not yet proxied by the gateway; by default no delegate is set.
+7. **`bridge_admin` role separation**: `bridge_admin` is the primary operational role for LZ endpoint configuration, message recovery, and bridged supply adjustments. `admin` remains available as an emergency/override actor. The LayerZero V2 OApp-authorized endpoint surface (libraries, ULN/Executor config, inbound message recovery) lives on the `LZEndpointDelegate` policy, which the gateway points at via `LZBridgeGateway.setDelegate`. The LayerZero endpoint then accepts these calls from `LZEndpointDelegate` with the gateway passed as the OApp argument. `setDelegate` is retained on the gateway so the delegate can be reassigned in the future (for example, after redeploying the delegate policy).
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint rate limiting**: Opt-in rate limiting via `RateLimiter` inheritance. Rate limits are unconfigured by default and configured separately as needed. Outbound transfers are enforced against a per-EID limit; inbound transfers reduce the in-flight amount but are not independently capped. The gateway overrides `_outflow` and `_inflow` to skip unconfigured or fully-settled EIDs.
 10. **V2 message recovery primitives**: Replaces the V1 `forceResumeReceive` with native V2 recovery functions (`skip`, `nilify`, `burn`, `clear`), administered by `bridge_admin` or `admin`.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
-12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescuable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native token, identified via the EIP-7528 sentinel `NATIVE_TOKEN`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
+12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescueable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native asset, identified via the EIP-7528 sentinel `ERC7528Constants`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
 ### LZ V2 Receiver Callbacks
 
@@ -173,20 +177,30 @@ sequenceDiagram
 
 #### LZBridgeGateway
 
+| Function                | Role                     |
+| ----------------------- | ------------------------ |
+| `burnAndSend`           | `bridge_facilitator`     |
+| `lzReceive`             | LZ Endpoint + peer       |
+| `setPeer`               | `admin`                  |
+| `setEnforcedOptions`    | `admin`                  |
+| `enable`                | `admin`                  |
+| `disable`               | `admin` / `emergency`    |
+| `reEnable`              | `manager`                |
+| `setDelegate`           | `bridge_admin` / `admin` |
+| `increaseBridgedSupply` | `bridge_admin` / `admin` |
+| `decreaseBridgedSupply` | `bridge_admin` / `admin` |
+| `setRateLimits`         | `bridge_admin` / `admin` |
+| `resetRateLimits`       | `bridge_admin` / `admin` |
+| `rescue`                | `manager` / `admin`      |
+
+`reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`).
+
+`setDelegate` points the gateway's LayerZero endpoint delegate at the `LZEndpointDelegate` policy, whose surface is listed below.
+
+#### LZEndpointDelegate
+
 | Function                   | Role                     |
 | -------------------------- | ------------------------ |
-| `burnAndSend`              | `bridge_facilitator`     |
-| `lzReceive`                | LZ Endpoint + peer       |
-| `setPeer`                  | `admin`                  |
-| `setEnforcedOptions`       | `admin`                  |
-| `enable`                   | `admin`                  |
-| `disable`                  | `admin` / `emergency`    |
-| `reEnable`                 | `manager`                |
-| `setDelegate`              | `bridge_admin` / `admin` |
-| `increaseBridgedSupply`    | `bridge_admin` / `admin` |
-| `decreaseBridgedSupply`    | `bridge_admin` / `admin` |
-| `setRateLimits`            | `bridge_admin` / `admin` |
-| `resetRateLimits`          | `bridge_admin` / `admin` |
 | `setSendLibrary`           | `bridge_admin` / `admin` |
 | `setReceiveLibrary`        | `bridge_admin` / `admin` |
 | `setReceiveLibraryTimeout` | `bridge_admin` / `admin` |
@@ -195,9 +209,6 @@ sequenceDiagram
 | `nilify`                   | `bridge_admin` / `admin` |
 | `burn`                     | `bridge_admin` / `admin` |
 | `clear`                    | `bridge_admin` / `admin` |
-| `rescue`                   | `manager` / `admin`      |
-
-`reEnable` is additionally bounded by the immutable `GRACE` window measured from `lastTransitionAt`, configured at construction time (default `1 days`).
 
 #### LZCrossChainBridge
 

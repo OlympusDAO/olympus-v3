@@ -15,6 +15,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
@@ -33,6 +34,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     OlympusRoles roles;
     RolesAdmin rolesAdmin;
     LZBridgeGateway gateway;
+    LZEndpointDelegate lzDelegate;
 
     // Non-canonical stack (eid=2)
     Kernel kernel2;
@@ -40,6 +42,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     OlympusRoles roles2;
     RolesAdmin rolesAdmin2;
     LZBridgeGateway gateway2;
+    LZEndpointDelegate lzDelegate2;
 
     MockOhm ohm;
 
@@ -76,11 +79,13 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
             true,
             GRACE_SECONDS
         );
+        lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
 
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
@@ -99,11 +104,13 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
             false,
             GRACE_SECONDS
         );
+        lzDelegate2 = new LZEndpointDelegate(kernel2, address(gateway2));
 
         kernel2.executeAction(Actions.InstallModule, address(mintr2));
         kernel2.executeAction(Actions.InstallModule, address(roles2));
         kernel2.executeAction(Actions.ActivatePolicy, address(rolesAdmin2));
         kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
+        kernel2.executeAction(Actions.ActivatePolicy, address(lzDelegate2));
 
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
@@ -111,10 +118,13 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         rolesAdmin2.grantRole("emergency", emergency);
         rolesAdmin2.grantRole("bridge_facilitator", facilitator);
 
-        // ---- Wire peers ----
+        // Wire peers, point each gateway's LZ endpoint delegate at the corresponding
+        // LZEndpointDelegate policy.
         vm.startPrank(admin);
         gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
         gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
+        gateway.setDelegate(address(lzDelegate));
+        gateway2.setDelegate(address(lzDelegate2));
 
         // Set enforced options
         EnforcedOptionParam[] memory enforcedOpts = new EnforcedOptionParam[](1);

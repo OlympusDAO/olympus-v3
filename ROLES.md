@@ -14,12 +14,14 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
+| admin | LZEndpointDelegate | LZ endpoint config, message management. Acts on behalf of LZBridgeGateway as the gateway's LZ endpoint delegate. |
 | admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, rescue accidentally-sent assets, and all bridge_admin functions as override |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
-| bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, rate limits via `onlyBridgeAdminOrAdmin` (admin can also call). `setPeer` and `setEnforcedOptions` are admin-only. |
+| bridge_admin | LZEndpointDelegate | LZ endpoint config (set send/receive libraries, library timeout, endpoint config) and message management (skip, nilify, burn, clear). Forwards each call to the LZ endpoint with LZBridgeGateway as the OApp, while LZEndpointDelegate is the gateway's endpoint delegate. |
+| bridge_admin | LZBridgeGateway | Set the LZ endpoint delegate, set bridged supply, rate limits. OApp-authorized endpoint operations (libraries, ULN/Executor config, message management) are exposed through the separate LZEndpointDelegate policy. |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
