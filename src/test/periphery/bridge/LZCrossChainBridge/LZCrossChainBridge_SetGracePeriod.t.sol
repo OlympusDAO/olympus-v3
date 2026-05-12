@@ -11,8 +11,8 @@ contract LZCrossChainBridgeTests_SetGracePeriod is LZCrossChainBridgeTestBase {
     // ========== SUCCESS ========== //
 
     function test_setGracePeriod_succeedsWhileEnabled() external {
-        // The bridge is enabled by the test base. The setter must not require a
-        // particular lifecycle state.
+        // The bridge is enabled by the test base. The setter requires the bridge
+        // to be in the enabled state.
         assertTrue(bridge.isEnabled(), "Bridge should start enabled in the test base");
 
         uint32 newPeriod = GRACE_SECONDS * 2;
