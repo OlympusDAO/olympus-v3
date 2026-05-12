@@ -50,9 +50,6 @@ interface ILZBridgeGateway {
     /// @notice Thrown when lzReceive is called while receiving is disabled.
     error LZBridgeGateway_ReceiveNotEnabled();
 
-    /// @notice Thrown when setIsReceiveEnabled is called while the gateway is enabled.
-    error LZBridgeGateway_ReceiveControlOnlyGivenDisabled();
-
     /// @notice Thrown when setIsReceiveEnabled is called with the current value.
     error LZBridgeGateway_ReceiveAlreadyInDesiredState();
 

@@ -9,4 +9,7 @@ library Errors {
     /// @param account The unauthorized account.
     /// @param reason An identifier of the role or capability the account was expected to hold (e.g. "owner").
     error Unauthorized(address account, string reason);
+
+    /// @notice Thrown when a recipient address is invalid (e.g. the zero address).
+    error InvalidRecipient();
 }

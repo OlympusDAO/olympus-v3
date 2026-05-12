@@ -17,7 +17,7 @@ import {Errors} from "src/libraries/Errors.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnabler} from "src/bases/ReEnabler.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
-import {Rescueable} from "../../bases/Rescueable.sol";
+import {Rescueable} from "src/bases/Rescueable.sol";
 
 /// @title LZCrossChainBridge
 /// @notice Sends OHM to other chains using LayerZero V2.

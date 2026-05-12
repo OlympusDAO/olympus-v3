@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
@@ -52,11 +53,7 @@ contract LZBridgeGatewayTests_SetIsReceiveEnabled is LZBridgeGatewayTestBase {
     }
 
     function test_setIsReceiveEnabled_revertsIfBridgeEnabled() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeGateway.LZBridgeGateway_ReceiveControlOnlyGivenDisabled.selector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotDisabled.selector));
         vm.prank(admin);
         gateway.setIsReceiveEnabled(false);
     }

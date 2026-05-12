@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: Unlicense
-// solhint-disable one-contract-per-file
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {Rescueable} from "../../../bases/Rescueable.sol";
+import {Rescueable} from "src/bases/Rescueable.sol";
 
 /// @notice Harness exposing `Rescueable` with no auth so the parent's logic can be exercised
 ///         without coupling to a specific permission model.
@@ -21,14 +20,4 @@ contract MockRescueable is Rescueable {
     }
 
     receive() external payable {}
-}
-
-/// @notice Recipient that rejects native transfers, used to exercise the native-transfer
-///         failure path in `Rescueable.rescue()`.
-contract RejectingReceiver {
-    error NoNative();
-
-    receive() external payable {
-        revert NoNative();
-    }
 }
