@@ -57,6 +57,10 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         console2.log("New LZBridgeGateway:", newGateway);
         console2.log("New LZEndpointDelegate:", newDelegate);
 
+        // Pre-flight: the gateway's `LZ_ENDPOINT` must match env.json so a gateway deployed
+        // against the wrong endpoint is caught here, before the OCG activator runs against it.
+        _assertGatewayEndpointMatchesEnv(newGateway);
+
         // Activate the new LZBridgeGateway
         addToBatch(
             kernel,
@@ -161,6 +165,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         }
         console2.log("  LZEndpointDelegate is active in the Kernel");
 
+        // Re-check the gateway's LZ_ENDPOINT against env.json so the post-batch validator is
+        // independently checkable (the same gate also runs in the pre-flight).
+        _assertGatewayEndpointMatchesEnv(gatewayAddr);
+        console2.log("  Gateway LZ_ENDPOINT matches the expected endpoint for this chain");
+
         console2.log("activateGateway post-batch validation passed");
     }
 
@@ -211,9 +220,23 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== INTERNAL HELPERS =========== //
 
     /// @notice Reverts if called on a non-canonical chain (L2).
-    /// @dev    This batch script is only for canonical chains (mainnet/sepolia).
+    /// @dev This batch script is only for canonical chains (mainnet/sepolia).
     function _requireCanonical() internal view {
         if (!ChainUtils._isCanonicalChain(chain)) revert LZBridgeGatewayBatch_NonCanonicalChain();
+    }
+
+    /// @notice Asserts the gateway's `LZ_ENDPOINT` immutable matches env.json for this chain.
+    /// @dev Cross-checks the gateway's immutable against an independent source so a deploy
+    ///      against the wrong endpoint cannot pass through this batch silently.
+    /// @param gatewayAddr_ The gateway whose `LZ_ENDPOINT` immutable to compare.
+    function _assertGatewayEndpointMatchesEnv(address gatewayAddr_) internal view {
+        address expectedEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
+        address gatewayEndpoint = LZBridgeGateway(gatewayAddr_).LZ_ENDPOINT();
+        // solhint-disable-next-line custom-errors,gas-custom-errors
+        require(
+            gatewayEndpoint == expectedEndpoint,
+            "Gateway LZ_ENDPOINT does not match the expected endpoint for this chain"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)
