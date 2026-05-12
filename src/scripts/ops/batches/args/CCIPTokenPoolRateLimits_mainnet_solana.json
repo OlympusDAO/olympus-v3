@@ -3,9 +3,9 @@
         {
             "args": {
                 "inboundRateLimiterConfig": {
-                    "capacity": "10000000000000",
+                    "capacity": "11000000000000",
                     "isEnabled": true,
-                    "rate": "115740740"
+                    "rate": "127314814"
                 },
                 "localChain": "mainnet",
                 "outboundRateLimiterConfig": {
