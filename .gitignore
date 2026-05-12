@@ -1,6 +1,7 @@
 /out/
 cache/
 node_modules/
+.pnpm-store/
 .env
 .env.*
 remappings.txt
