@@ -672,20 +672,15 @@ contract LZBridgeGateway is
         // No caller options, return enforced
         if (extraOptions_.length == 0) return enforced;
 
-        // Caller provided extra options must be Type 3
-        if (extraOptions_.length >= 2) {
-            _assertOptionsType3(extraOptions_);
-            // Strip the 2-byte Type 3 prefix from extra options before concatenation
-            return bytes.concat(enforced, extraOptions_[2:]);
-        }
+        _assertOptionsType3(extraOptions_);
 
-        // Invalid options
-        revert LZBridgeGateway_InvalidOptions(extraOptions_);
+        // Strip the 2-byte Type 3 prefix from extra options before concatenation
+        return bytes.concat(enforced, extraOptions_[2:]);
     }
 
     /// @notice Validates that calldata options bytes begin with the Type 3 prefix.
     function _assertOptionsType3(bytes calldata options_) internal pure {
-        if (uint16(bytes2(options_[:2])) != _OPTION_TYPE_3)
+        if (options_.length < 2 || uint16(bytes2(options_[:2])) != _OPTION_TYPE_3)
             revert LZBridgeGateway_InvalidOptions(options_);
     }
 }
