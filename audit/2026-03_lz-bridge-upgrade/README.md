@@ -66,7 +66,7 @@ These contracts configure and deploy the core contracts. Misconfiguration here (
     - [scripts/deploy/](../../src/scripts/deploy/)
         - [DeployV3.s.sol](../../src/scripts/deploy/DeployV3.s.sol) — `deployLZBridgeGateway()`, `deployLZEndpointDelegate()`, `deployLZCrossChainBridge()`, and `deployLZBridgeActivator()` deployment functions
     - [libraries/](../../src/libraries/)
-        - [LZConfigLib.sol](../../src/libraries/LZConfigLib.sol) — Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
+        - [LZConfigLib.sol](../../src/scripts/ops/lib/LZConfigLib.sol) — Shared LZ V2 constants (endpoints, message libraries, DVNs, executors, confirmation counts), chain/EID mappings, and configuration encoding helpers
     - [proposals/](../../src/proposals/)
         - [LZBridgeSecurityUpgradeProposal.sol](../../src/proposals/LZBridgeSecurityUpgradeProposal.sol) — OCG proposal: configures and enables the gateway on Ethereum (pins V2 libraries, sets ULN/Executor config, peers, enforced options, grants bridge roles)
         - [LZBridgeActivator.sol](../../src/proposals/LZBridgeActivator.sol) — OCG activator contract invoked by the proposal; splits LZ V2 configuration across multiple actions to stay within the governance 15-action limit, and carries per-chain DVN routing (four required DVNs per route, swapping the Google Cloud DVN for the Horizen DVN on routes that touch Berachain; no optional DVNs — pins the NIL sentinel)

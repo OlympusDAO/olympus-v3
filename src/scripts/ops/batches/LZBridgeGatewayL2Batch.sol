@@ -14,7 +14,7 @@ import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";

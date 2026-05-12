@@ -8,7 +8,7 @@ import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @dev Inbound message handling (mint on receive).
 contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {

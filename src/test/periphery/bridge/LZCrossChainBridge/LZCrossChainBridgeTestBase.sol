@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 
 // Contracts

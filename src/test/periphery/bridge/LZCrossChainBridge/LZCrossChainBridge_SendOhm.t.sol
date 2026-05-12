@@ -11,7 +11,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
     function test_sendOhm() external {
