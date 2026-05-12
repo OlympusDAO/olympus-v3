@@ -5,6 +5,7 @@ import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChain
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 
 contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
     function test_enable() external {
@@ -14,6 +15,19 @@ contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
 
         bridge.enable(bytes(""));
         assertTrue(bridge.isEnabled(), "Should be enabled");
+        assertEq(
+            uint256(bridge.lastTransitionAt()),
+            uint256(uint48(block.timestamp)),
+            "lastTransitionAt should be refreshed on enable"
+        );
+    }
+
+    function test_enable_emitsTransitionEvent() external {
+        bridge.disable(bytes(""));
+
+        vm.expectEmit(true, true, false, true);
+        emit IEnablerV2.Transition(owner, true, bytes(""), uint48(block.timestamp));
+        bridge.enable(bytes(""));
     }
 
     function testFuzz_enable_revertsIfAlreadyEnabled(address caller_) external {

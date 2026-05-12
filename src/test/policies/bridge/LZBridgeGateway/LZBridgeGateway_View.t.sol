@@ -7,7 +7,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Contracts
 import {Actions, Kernel} from "src/Kernel.sol";
@@ -92,7 +92,8 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         LZBridgeGateway freshGateway = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true
+            true,
+            GRACE_SECONDS
         );
         assertFalse(freshGateway.isReceiveEnabled(), "isReceiveEnabled should default to false");
     }
@@ -101,7 +102,8 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         LZBridgeGateway freshGateway = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true
+            true,
+            GRACE_SECONDS
         );
         kernel.executeAction(Actions.ActivatePolicy, address(freshGateway));
 

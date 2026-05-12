@@ -1,33 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.4;
 
 /// @title IRescueable
 /// @notice Interface for contracts that allow privileged rescue of accidentally-sent assets.
-/// @dev The native token is identified using the EIP-7528 sentinel address
-///      (`ERC7528Constants.NATIVE_TOKEN`).
+/// @dev The native asset is identified using the EIP-7528 sentinel address
+///      (`ERC7528Constants.NATIVE_ASSET`).
 interface IRescueable {
-    // ========= ERRORS ========= //
-
-    /// @notice Thrown when the rescue recipient is the zero address.
-    error Rescueable_InvalidRecipient();
-
-    // ========= EVENTS ========= //
-
-    /// @notice Emitted when assets are rescued from the contract.
-    /// @param token The rescued token address. Equals `NATIVE_TOKEN` for the native token.
-    /// @param to The recipient address.
-    /// @param amount The amount rescued.
-    event Rescued(address indexed token, address indexed to, uint256 amount);
-
     // ========= FUNCTIONS ========= //
 
     /// @notice Rescues assets accidentally sent to this contract.
     ///
-    /// @param token_ The token to rescue, or `NATIVE_TOKEN` for the native token.
+    /// @param token_ The token to rescue, or the EIP-7528 native sentinel for the native asset.
     /// @param to_ The recipient of the rescued assets.
     function rescue(address token_, address payable to_) external;
-
-    /// @notice The EIP-7528 sentinel address used to represent the native token.
-    // solhint-disable-next-line func-name-mixedcase
-    function NATIVE_TOKEN() external pure returns (address);
 }

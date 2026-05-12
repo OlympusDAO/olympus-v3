@@ -4,13 +4,18 @@ pragma solidity >=0.8.30;
 import {LZCrossChainBridgeTestBase} from "src/test/periphery/bridge/LZCrossChainBridge/LZCrossChainBridgeTestBase.sol";
 
 // Interfaces
-import {IRescueable} from "../../../../bases/interfaces/IRescueable.sol";
+import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+
+// Libraries
+import {ERC7528Constants} from "src/libraries/ERC7528Constants.sol";
+import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {RejectingReceiver} from "src/test/bases/Rescueable/RejectingReceiver.sol";
 
 /// @dev Tests for the unified rescue function on LZCrossChainBridge.
-///      Passing the EIP-7528 native sentinel (`NATIVE_TOKEN`) as the token rescues the native balance.
+///      Passing the EIP-7528 native sentinel as the token rescues the native balance.
 contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     MockOhm internal randomToken;
     address internal recoveryRecipient = makeAddr("recoveryRecipient");
@@ -19,7 +24,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function setUp() public override {
         super.setUp();
         randomToken = new MockOhm("Random Token", "RAND", 18);
-        nativeToken = bridge.NATIVE_TOKEN();
+        nativeToken = ERC7528Constants.NATIVE_ASSET;
     }
 
     // ========= rescue (ERC20) ========= //
@@ -27,6 +32,9 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function test_rescue_givenOwner_transfersBalance() external {
         uint256 amount = 100e18;
         randomToken.mint(address(bridge), amount);
+
+        vm.expectEmit(true, true, true, true, address(randomToken));
+        emit IERC20.Transfer(address(bridge), recoveryRecipient, amount);
 
         bridge.rescue(address(randomToken), payable(recoveryRecipient));
 
@@ -40,16 +48,6 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
             0,
             "Bridge should have zero token balance"
         );
-    }
-
-    function test_rescue_givenOwner_emitsEvent() external {
-        uint256 amount = 50e18;
-        randomToken.mint(address(bridge), amount);
-
-        vm.expectEmit(true, true, true, true);
-        emit IRescueable.Rescued(address(randomToken), recoveryRecipient, amount);
-
-        bridge.rescue(address(randomToken), payable(recoveryRecipient));
     }
 
     function test_rescue_canRescueOhm() external {
@@ -80,7 +78,10 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     }
 
     function test_rescue_givenZeroBalance_succeeds() external {
-        // No revert on empty balance. Rescue is a rare ops function and sweep semantics are fine.
+        // No revert on empty balance. Rescue is a rare ops function and sweep semantics are fine
+        vm.expectEmit(true, true, true, true, address(randomToken));
+        emit IERC20.Transfer(address(bridge), recoveryRecipient, 0);
+
         bridge.rescue(address(randomToken), payable(recoveryRecipient));
 
         assertEq(randomToken.balanceOf(recoveryRecipient), 0, "Recipient should receive nothing");
@@ -98,11 +99,11 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function test_rescue_revertsIfRecipientZero() external {
         randomToken.mint(address(bridge), 100e18);
 
-        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
+        vm.expectRevert(Errors.InvalidRecipient.selector);
         bridge.rescue(address(randomToken), payable(address(0)));
     }
 
-    // ========= rescue (native, token == NATIVE_TOKEN sentinel) ========= //
+    // ========= rescue (native, token == EIP-7528 sentinel) ========= //
 
     function test_rescue_native_givenOwner_transfersBalance() external {
         uint256 amount = 1 ether;
@@ -118,16 +119,6 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
             "Recipient should receive rescued native"
         );
         assertEq(address(bridge).balance, 0, "Bridge should have zero native balance");
-    }
-
-    function test_rescue_native_givenOwner_emitsEvent() external {
-        uint256 amount = 0.5 ether;
-        vm.deal(address(bridge), amount);
-
-        vm.expectEmit(true, true, true, true);
-        emit IRescueable.Rescued(nativeToken, recoveryRecipient, amount);
-
-        bridge.rescue(nativeToken, payable(recoveryRecipient));
     }
 
     function test_rescue_native_givenDisabled_succeeds() external {
@@ -153,7 +144,7 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
     function test_rescue_native_revertsIfRecipientZero() external {
         vm.deal(address(bridge), 1 ether);
 
-        vm.expectRevert(IRescueable.Rescueable_InvalidRecipient.selector);
+        vm.expectRevert(Errors.InvalidRecipient.selector);
         bridge.rescue(nativeToken, payable(address(0)));
     }
 
@@ -169,17 +160,8 @@ contract LZCrossChainBridgeTests_Rescue is LZCrossChainBridgeTestBase {
 
         RejectingReceiver rejector = new RejectingReceiver();
 
-        // OZ Address.sendValue bubbles up the receiver's revert reason via Errors.FailedCall
-        // when no return data is provided, otherwise re-reverts with the original data.
-        // RejectingReceiver reverts with a string, which propagates as-is.
-        vm.expectRevert("RejectingReceiver: no native");
+        // OZ Address.sendValue bubbles up the receiver's revert data.
+        vm.expectRevert(abi.encodeWithSelector(RejectingReceiver.NoNative.selector));
         bridge.rescue(nativeToken, payable(address(rejector)));
-    }
-}
-
-/// @dev Contract that rejects native transfers, used to test rescue() native failure paths.
-contract RejectingReceiver {
-    receive() external payable {
-        revert("RejectingReceiver: no native");
     }
 }

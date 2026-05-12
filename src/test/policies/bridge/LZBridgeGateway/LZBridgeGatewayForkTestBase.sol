@@ -8,7 +8,7 @@ import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Contracts
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -30,6 +30,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
     uint256 constant MESSAGE_OFFSET = 113;
 
     uint256 constant MINT_AMOUNT = 10_000e9;
+    uint32 constant GRACE_SECONDS = 1 days;
 
     // ========= FORKS ========= //
 
@@ -136,7 +137,8 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         ethGateway = new LZBridgeGateway(
             ethKernel,
             LZConfigLib.ETH_LZ_ENDPOINT,
-            true // Canonical
+            true, // Canonical
+            GRACE_SECONDS
         );
 
         ethKernel.executeAction(Actions.InstallModule, address(ethMintr));
@@ -145,7 +147,13 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
         ethRolesAdmin.grantRole("admin", admin);
-        ethBridge = new LZCrossChainBridge(address(ethOhm), admin, address(ethGateway));
+        ethBridge = new LZCrossChainBridge(
+            address(ethOhm),
+            admin,
+            address(ethGateway),
+            admin,
+            GRACE_SECONDS
+        );
         ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
 
         vm.startPrank(admin);
@@ -176,7 +184,8 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbGateway = new LZBridgeGateway(
             arbKernel,
             LZConfigLib.ARB_LZ_ENDPOINT,
-            false // Non-canonical
+            false, // Non-canonical
+            GRACE_SECONDS
         );
 
         arbKernel.executeAction(Actions.InstallModule, address(arbMintr));
@@ -185,7 +194,13 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
         arbRolesAdmin.grantRole("admin", admin);
-        arbBridge = new LZCrossChainBridge(address(arbOhm), admin, address(arbGateway));
+        arbBridge = new LZCrossChainBridge(
+            address(arbOhm),
+            admin,
+            address(arbGateway),
+            admin,
+            GRACE_SECONDS
+        );
         arbRolesAdmin.grantRole("bridge_facilitator", address(arbBridge));
 
         vm.startPrank(admin);

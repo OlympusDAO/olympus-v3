@@ -4,14 +4,12 @@ pragma solidity >=0.8.18;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
 ///      enforced options, rate limiting, and bridged supply tracking.
-interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
+interface ILZBridgeGateway {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.
@@ -52,9 +50,6 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @notice Thrown when lzReceive is called while receiving is disabled.
     error LZBridgeGateway_ReceiveNotEnabled();
 
-    /// @notice Thrown when setIsReceiveEnabled is called while the gateway is enabled.
-    error LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
-
     /// @notice Thrown when setIsReceiveEnabled is called with the current value.
     error LZBridgeGateway_ReceiveAlreadyInDesiredState();
 
@@ -81,7 +76,7 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
 
     /// @notice Emitted when the delegate is set on the endpoint.
     /// @param delegate The new delegate address.
-    event DelegateSet(address delegate);
+    event DelegateSet(address indexed delegate);
 
     /// @notice Emitted when bridged supply is forcibly increased by an admin.
     /// @param amount The amount added.
@@ -157,13 +152,10 @@ interface ILZBridgeGateway is IVersioned, ILZEndpointV2Admin {
     /// @param peer_ The peer (remote gateway) address (bytes32 or `bytes32(0)` to clear).
     function setPeer(uint32 eid_, bytes32 peer_) external;
 
-    /// @notice Sets whether the gateway can receive messages.
+    /// @notice Sets whether the gateway can process inbound LayerZero messages.
     /// @dev Only callable by the emergency or admin role.
-    ///      Managed automatically by enable()/disable(), but can be set manually
-    ///      to allow receiving while the gateway is disabled
-    ///      (e.g. during gateway replacements, to deliver in-flight messages).
     ///
-    /// @param isReceiveEnabled_ The desired state.
+    /// @param isReceiveEnabled_ The desired state of the flag.
     function setIsReceiveEnabled(bool isReceiveEnabled_) external;
 
     /// @notice Sets the delegate on the LayerZero endpoint.

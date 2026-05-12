@@ -7,7 +7,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Constants
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";

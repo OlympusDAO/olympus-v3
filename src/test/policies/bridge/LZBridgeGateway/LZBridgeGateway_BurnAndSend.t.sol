@@ -10,7 +10,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 // Contracts
@@ -336,7 +336,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         (, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
         assertEq(canSend, 0, "No capacity remaining");
 
-        // Attempt to send more — reverts
+        // Attempt to send more, reverts
         uint256 retryAmount = 1_000e9;
         ohm.mint(facilitator, retryAmount);
         MessagingFee memory fee = gateway.estimateSendFee(
@@ -361,7 +361,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         // Wait for rate limit window to fully elapse
         skip(window);
 
-        // Retry — succeeds
+        // Retry, succeeds
         fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, retryAmount, bytes(""));
         vm.startPrank(facilitator);
         gateway.burnAndSend{value: fee.nativeFee}(

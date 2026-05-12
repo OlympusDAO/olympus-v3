@@ -7,7 +7,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 /// @dev Rate limiting behaviour on burnAndSend (outflow).

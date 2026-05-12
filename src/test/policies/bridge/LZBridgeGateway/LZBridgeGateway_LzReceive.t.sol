@@ -8,7 +8,7 @@ import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @dev Inbound message handling (mint on receive).
 contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
@@ -61,7 +61,7 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
         assertFalse(gateway2.isEnabled(), "isEnabled should be false");
         assertTrue(gateway2.isReceiveEnabled(), "isReceiveEnabled should be true");
 
-        // Send from canonical — gateway2 should still receive
+        // Send from canonical, so gateway2 should still receive
         _sendCanonicalToNonCanonical(recipient, 1000e9);
 
         assertEq(ohm.balanceOf(recipient), 1000e9, "Recipient should receive OHM despite disabled");

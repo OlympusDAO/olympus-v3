@@ -5,7 +5,7 @@ pragma solidity >=0.8.30;
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Interfaces
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
@@ -21,14 +21,20 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {MockLZEndpointDelegate} from "src/test/policies/bridge/LZEndpointDelegate/MockLZEndpointDelegate.sol";
+import {MockLZBridgeGateway} from "src/test/policies/bridge/LZEndpointDelegate/MockLZBridgeGateway.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration
-    uint256 internal constant FORK_BLOCK = 24751208;
+    uint256 internal constant FORK_BLOCK = 25029000;
+
+    // Grace window passed to the gateway constructor
+    uint32 internal constant GRACE_SECONDS = 1 days;
 
     // Role constants
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
@@ -47,6 +53,7 @@ contract LZBridgeActivatorForkTest is Test {
     ROLESv1 public roles;
     RolesAdmin public rolesAdmin;
     LZBridgeGateway public gateway;
+    LZEndpointDelegate public lzDelegate;
     LZBridgeActivator public activator;
     ILayerZeroEndpointV2 public endpoint;
 
@@ -58,13 +65,17 @@ contract LZBridgeActivatorForkTest is Test {
         rolesAdmin = RolesAdmin(ROLES_ADMIN);
         endpoint = ILayerZeroEndpointV2(LZConfigLib.ETH_LZ_ENDPOINT);
 
-        // Deploy gateway (canonical on mainnet)
-        gateway = new LZBridgeGateway(kernel, LZConfigLib.ETH_LZ_ENDPOINT, true);
+        // Deploy the gateway (canonical on mainnet)
+        gateway = new LZBridgeGateway(kernel, LZConfigLib.ETH_LZ_ENDPOINT, true, GRACE_SECONDS);
 
-        // Deploy activator (owned by timelock)
+        // Deploy the delegate policy pointing at this gateway
+        lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
+
+        // Deploy the activator (owned by the timelock)
         activator = new LZBridgeActivator(
             TIMELOCK,
             address(gateway),
+            address(lzDelegate),
             LZConfigLib.ETH_LZ_ENDPOINT,
             makeAddr("ARB_GATEWAY"),
             makeAddr("OPT_GATEWAY"),
@@ -72,9 +83,11 @@ contract LZBridgeActivatorForkTest is Test {
             makeAddr("BERA_GATEWAY")
         );
 
-        // Activate gateway in kernel (as DAO MS, which is the kernel executor)
-        vm.prank(DAO_MS);
+        // Activate the gateway and the delegate policy in the Kernel (as DAO MS, the executor)
+        vm.startPrank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
+        vm.stopPrank();
     }
 
     function _grantRequiredRoles() internal {
@@ -89,6 +102,7 @@ contract LZBridgeActivatorForkTest is Test {
     function test_constructor_setsParametersCorrectly() public {
         assertEq(activator.owner(), TIMELOCK);
         assertEq(activator.GATEWAY(), address(gateway));
+        assertEq(activator.DELEGATE(), address(lzDelegate));
         assertEq(activator.ENDPOINT(), LZConfigLib.ETH_LZ_ENDPOINT);
         assertEq(activator.ARB_GATEWAY(), makeAddr("ARB_GATEWAY"));
         assertEq(activator.OPT_GATEWAY(), makeAddr("OPT_GATEWAY"));
@@ -103,6 +117,23 @@ contract LZBridgeActivatorForkTest is Test {
         );
         new LZBridgeActivator(
             TIMELOCK,
+            address(0),
+            address(lzDelegate),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
+    }
+
+    function test_constructor_revertsWhen_zeroDelegate() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "delegate")
+        );
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
             address(0),
             LZConfigLib.ETH_LZ_ENDPOINT,
             makeAddr("A"),
@@ -119,6 +150,7 @@ contract LZBridgeActivatorForkTest is Test {
         new LZBridgeActivator(
             TIMELOCK,
             address(gateway),
+            address(lzDelegate),
             address(0),
             makeAddr("A"),
             makeAddr("O"),
@@ -132,6 +164,7 @@ contract LZBridgeActivatorForkTest is Test {
         new LZBridgeActivator(
             address(0),
             address(gateway),
+            address(lzDelegate),
             LZConfigLib.ETH_LZ_ENDPOINT,
             makeAddr("A"),
             makeAddr("O"),
@@ -141,6 +174,8 @@ contract LZBridgeActivatorForkTest is Test {
     }
 
     function test_constructor_revertsWhen_endpointMismatch() public {
+        // The endpoint must match the gateway's LZ_ENDPOINT immutable; passing a fake address
+        // exercises the gateway-side check before the delegate-side check runs.
         address wrongEndpoint = makeAddr("WRONG_ENDPOINT");
         vm.expectRevert(
             abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "endpoint")
@@ -148,7 +183,55 @@ contract LZBridgeActivatorForkTest is Test {
         new LZBridgeActivator(
             TIMELOCK,
             address(gateway),
+            address(lzDelegate),
             wrongEndpoint,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
+    }
+
+    function test_constructor_revertsWhen_delegateGatewayMismatch() public {
+        // A delegate whose GATEWAY immutable points at a different contract must be rejected.
+        // LZEndpointDelegate reads LZ_ENDPOINT from its gateway at construction, so the foreign
+        // gateway must report the same endpoint as the real one.
+        MockLZBridgeGateway foreignGateway = new MockLZBridgeGateway(LZConfigLib.ETH_LZ_ENDPOINT);
+        LZEndpointDelegate foreignDelegate = new LZEndpointDelegate(
+            kernel,
+            address(foreignGateway)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "delegate")
+        );
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
+            address(foreignDelegate),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            makeAddr("A"),
+            makeAddr("O"),
+            makeAddr("B"),
+            makeAddr("Be")
+        );
+    }
+
+    function test_constructor_revertsWhen_delegateEndpointMismatch() public {
+        address wrongEndpoint = makeAddr("wrongEndpoint");
+        MockLZEndpointDelegate mismatchedDelegate = new MockLZEndpointDelegate(
+            address(gateway),
+            wrongEndpoint
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LZBridgeActivator.InvalidParams.selector, "delegate")
+        );
+        new LZBridgeActivator(
+            TIMELOCK,
+            address(gateway),
+            address(mismatchedDelegate),
+            LZConfigLib.ETH_LZ_ENDPOINT,
             makeAddr("A"),
             makeAddr("O"),
             makeAddr("B"),
@@ -204,25 +287,25 @@ contract LZBridgeActivatorForkTest is Test {
     function test_activate_enablesGateway() public {
         _grantRequiredRoles();
 
-        assertFalse(PolicyEnabler(address(gateway)).isEnabled());
+        assertFalse(IEnabler(address(gateway)).isEnabled());
 
         vm.prank(TIMELOCK);
         activator.activate();
 
-        assertTrue(PolicyEnabler(address(gateway)).isEnabled());
+        assertTrue(IEnabler(address(gateway)).isEnabled());
     }
 
-    function test_activate_revokesDelegateAfterExecution() public {
+    function test_activate_setsLZEndpointDelegateAsDelegate() public {
         _grantRequiredRoles();
 
         vm.prank(TIMELOCK);
         activator.activate();
 
-        // Delegate should be revoked (address(0))
+        // Delegate should be the LZEndpointDelegate policy, not revoked.
         assertEq(
             IEndpointV2State(address(endpoint)).delegates(address(gateway)),
-            address(0),
-            "Delegate should be revoked after activation"
+            address(lzDelegate),
+            "Delegate should be set to LZEndpointDelegate after activation"
         );
     }
 
@@ -288,6 +371,7 @@ contract LZBridgeActivatorForkTest is Test {
                 LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
                 "Send confirmations mismatch"
             );
+            assertEq(uln.requiredDVNCount, 4, "Should require 4 DVNs");
 
             // Route-aware DVN verification
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
@@ -351,6 +435,7 @@ contract LZBridgeActivatorForkTest is Test {
             UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
 
             assertEq(uln.confirmations, remoteConfs[i], "Recv confirmations mismatch");
+            assertEq(uln.requiredDVNCount, 4, "Should require 4 DVNs");
 
             address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
             assertEq(

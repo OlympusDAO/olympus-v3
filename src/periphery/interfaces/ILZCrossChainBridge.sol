@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IVersioned} from "../../interfaces/IVersioned.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
@@ -10,7 +9,7 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-interface ILZCrossChainBridge is IVersioned {
+interface ILZCrossChainBridge {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
@@ -36,7 +35,13 @@ interface ILZCrossChainBridge is IVersioned {
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
-    event GatewaySet(address gateway);
+    event GatewaySet(address indexed gateway);
+
+    /// @notice Emitted when the re-enabler address is updated.
+    /// @dev Setting the re-enabler to the zero address effectively disables the
+    ///      `reEnable()` entry point until a non-zero address is configured again.
+    /// @param reEnabler The new re-enabler address, or `address(0)` to clear.
+    event ReEnablerSet(address indexed reEnabler);
 
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
@@ -56,8 +61,22 @@ interface ILZCrossChainBridge is IVersioned {
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
 
+    /// @notice Sets the address authorized to call `reEnable()`.
+    /// @dev Only callable by the owner. The zero address is permitted and effectively
+    ///      disables the `reEnable()` entry point until a non-zero address is set.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not the owner.
+    ///
+    /// @param reEnabler_ The new re-enabler address, or `address(0)` to clear.
+    function setReEnabler(address reEnabler_) external;
+
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);
+
+    /// @notice Returns the address authorized to call `reEnable()`.
+    /// @dev Returns `address(0)` when no re-enabler has been configured.
+    function reEnabler() external view returns (address);
 
     /// @notice Returns the OHM token address.
     // solhint-disable-next-line func-name-mixedcase
