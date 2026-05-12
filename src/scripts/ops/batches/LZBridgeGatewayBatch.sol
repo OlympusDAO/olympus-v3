@@ -23,6 +23,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
     error LZBridgeGatewayBatch_NonCanonicalChain();
     error LZBridgeGatewayBatch_ZeroInitialBridgedSupply();
+    error LZBridgeGatewayBatch_EndpointMismatch(address expected, address actual);
 
     // =========== STATE =========== //
 
@@ -232,11 +233,9 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     function _assertGatewayEndpointMatchesEnv(address gatewayAddr_) internal view {
         address expectedEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         address gatewayEndpoint = LZBridgeGateway(gatewayAddr_).LZ_ENDPOINT();
-        // solhint-disable-next-line custom-errors,gas-custom-errors
-        require(
-            gatewayEndpoint == expectedEndpoint,
-            "Gateway LZ_ENDPOINT does not match the expected endpoint for this chain"
-        );
+        if (gatewayEndpoint != expectedEndpoint) {
+            revert LZBridgeGatewayBatch_EndpointMismatch(expectedEndpoint, gatewayEndpoint);
+        }
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

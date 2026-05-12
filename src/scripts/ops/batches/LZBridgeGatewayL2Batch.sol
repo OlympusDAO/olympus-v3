@@ -46,6 +46,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
     error LZBridgeGatewayL2Batch_CanonicalChain();
     error LZBridgeGatewayL2Batch_UnsupportedChain();
+    error LZBridgeGatewayL2Batch_EndpointMismatch(address expected, address actual);
 
     // =========== CONSTANTS =========== //
 
@@ -779,11 +780,9 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     ) internal view returns (address endpoint) {
         endpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         address gatewayEndpoint = LZBridgeGateway(gatewayAddr_).LZ_ENDPOINT();
-        // solhint-disable-next-line custom-errors,gas-custom-errors
-        require(
-            gatewayEndpoint == endpoint,
-            "Gateway LZ_ENDPOINT does not match the expected endpoint for this chain"
-        );
+        if (gatewayEndpoint != endpoint) {
+            revert LZBridgeGatewayL2Batch_EndpointMismatch(endpoint, gatewayEndpoint);
+        }
     }
 
     /// @notice Configures LZ libraries and ULN/Executor config for all remote chains via the
