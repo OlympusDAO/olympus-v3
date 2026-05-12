@@ -43,7 +43,7 @@ abstract contract ReEnabler is IReEnabler, EnablerV2 {
     ///      - The contract has never been enabled (`lastTransitionAt` is zero).
     ///      - `_authorizeReEnable` rejects the caller.
     ///      - `_beforeReEnable` reverts.
-    function reEnable() external override givenDisabled {
+    function reEnable() public virtual override givenDisabled {
         if (lastTransitionAt == 0) revert NeverEnabled();
         _authorizeReEnable();
         _beforeReEnable();

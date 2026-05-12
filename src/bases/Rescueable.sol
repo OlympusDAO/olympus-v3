@@ -31,7 +31,7 @@ abstract contract Rescueable is IRescueable, ERC165 {
     ///
     ///      Does NOT revert when the contract's balance of `token_` is zero, so the call is
     ///      a no-op in that case.
-    function rescue(address token_, address payable to_) external virtual override {
+    function rescue(address token_, address payable to_) public virtual override {
         _authorizeRescue();
 
         if (to_ == address(0)) revert Errors.InvalidRecipient();

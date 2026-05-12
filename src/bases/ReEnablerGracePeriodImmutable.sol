@@ -20,7 +20,7 @@ abstract contract ReEnablerGracePeriodImmutable is ReEnablerGracePeriod {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc ReEnablerGracePeriod
-    function setGracePeriod(uint32) external pure override {
+    function setGracePeriod(uint32) public pure override {
         revert GracePeriod_NotConfigurable();
     }
 }

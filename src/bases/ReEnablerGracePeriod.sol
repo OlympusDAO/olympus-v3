@@ -62,7 +62,7 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     ///      implementation that wishes to lock the window after construction can
     ///      override it and revert with `GracePeriod_NotConfigurable`; see
     ///      `ReEnablerGracePeriodImmutable` for the canonical lock.
-    function setGracePeriod(uint32 period_) external virtual override {
+    function setGracePeriod(uint32 period_) public virtual override {
         _authorizeSetGracePeriod();
         _setGracePeriod(period_);
     }
