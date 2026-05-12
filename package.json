@@ -8,12 +8,11 @@
         "type": "git",
         "url": "git+https://github.com/OlympusDAO/olympus-v3.git"
     },
-    "packageManager": "pnpm@10.33.0",
     "engines": {
         "node": ">=24",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
-        "pnpm": "10.33.0"
+        "pnpm": ">=10.33.0"
     },
     "scripts": {
         "preinstall": "npx only-allow@1.2.2 pnpm",

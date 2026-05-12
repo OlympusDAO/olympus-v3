@@ -1,0 +1,5 @@
+minimumReleaseAge: 10080
+preferFrozenLockfile: true
+engineStrict: true
+strictDepBuilds: true
+blockExoticSubdeps: true
