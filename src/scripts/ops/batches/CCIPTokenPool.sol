@@ -615,6 +615,7 @@ contract CCIPTokenPool is BatchScriptV2 {
             // solhint-disable-next-line gas-custom-errors
             revert("Local chain arg does not match the execution chain");
         }
+        _skipHeartbeatValidation = true;
 
         string memory remoteChain = _readBatchArgString("setRateLimits", "remoteChain");
         uint64 remoteChainSelector = uint64(
