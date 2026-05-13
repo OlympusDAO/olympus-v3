@@ -22,6 +22,8 @@ jobs:
 
             - name: Setup lcov
               uses: hrishikesh-kadam/setup-lcov@6c1aa0cc9e1c02f9f58f01ac599f1064ccc83470 # v1
+              with:
+                  ref: v2.4
 
             - name: Add swap space
               run: |
