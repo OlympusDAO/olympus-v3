@@ -92,7 +92,8 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         LZBridgeGateway freshGateway = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true
+            true,
+            GRACE_SECONDS
         );
         assertFalse(freshGateway.isReceiveEnabled(), "isReceiveEnabled should default to false");
     }
@@ -101,7 +102,8 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
         LZBridgeGateway freshGateway = new LZBridgeGateway(
             kernel,
             address(endpointSetup.endpointList[0]),
-            true
+            true,
+            GRACE_SECONDS
         );
         kernel.executeAction(Actions.ActivatePolicy, address(freshGateway));
 

@@ -14,14 +14,16 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
-| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, and all bridge_admin functions as override |
+| admin | LZEndpointDelegate | LZ endpoint config, messaging channel control. Acts on behalf of LZBridgeGateway as the gateway's LZ endpoint delegate |
+| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, set the grace window, rescue accidentally-sent assets, and all bridge_admin functions |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
-| bridge_admin | LZBridgeGateway | LZ endpoint config, message recovery, set delegate, set bridged supply, configure and clear rate limits |
+| bridge_admin | LZEndpointDelegate | LZ endpoint config (set send/receive libraries, library timeout, endpoint config) and messaging channel control (skip, nilify, burn, clear). Forwards each call to the LZ endpoint with LZBridgeGateway as the OApp, while LZEndpointDelegate is the gateway's endpoint delegate |
+| bridge_admin | LZBridgeGateway | Set the LZ endpoint delegate, set bridged supply, configure and clear rate limits. OApp-authorized endpoint operations (libraries, ULN/Executor config, messaging channel control) are exposed through the separate LZEndpointDelegate policy |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
-| bridge_rate_limiter | LZBridgeGateway | Configure and clear per-EID rate limits. |
+| bridge_rate_limiter | LZBridgeGateway | Configure and clear per-EID rate limits |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
@@ -54,7 +56,9 @@ This document describes the roles that are used in the Olympus protocol.
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
+| manager | LZBridgeGateway | Rescue accidentally-sent assets |
 | manager | Heart | Reset the heartbeat |
+| manager | LZBridgeGateway | Re-enable the gateway after a disable, within the grace window |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |

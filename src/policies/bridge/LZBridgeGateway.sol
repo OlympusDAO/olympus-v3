@@ -19,9 +19,8 @@ pragma solidity >=0.8.30;
 ///                     -> Routes via _decodeAndRoute() instead of virtual _lzReceive().
 ///   OAppSender:       estimateSendFee() <- _quote(); burnAndSend() <- _lzSend()
 ///                     -> msg.value forwarded directly; no _payNative()/_payLzToken().
-///   OAppOptionsType3: enforcedOptions, setEnforcedOptions(), _combineOptions(),
-///                     _assertOptionsType3() ~
-///                     -> Adds _assertOptionsType3Calldata() for calldata inputs.
+///   OAppOptionsType3: enforcedOptions, setEnforcedOptions(), _combineOptions() ~
+///                     -> _assertOptionsType3 accepts calldata only (memory variant unused).
 ///
 /// Not ported: oAppVersion() (-> IVersioned), isComposeMsgSender(), _payNative()/_payLzToken().
 /// Access control: onlyOwner -> the ROLES module.
@@ -30,19 +29,20 @@ pragma solidity >=0.8.30;
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {ILZEndpointV2Admin} from "src/policies/interfaces/ILZEndpointV2Admin.sol";
 
 // Contracts
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {OffsettingRateLimiter} from "src/bases/OffsettingRateLimiter.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
+import {Rescueable} from "src/bases/Rescueable.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 /// @title LZBridgeGateway
@@ -50,14 +50,17 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 ///         OHM transfers.
 ///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
 ///         tracks bridged supply on canonical chains, and bounds inflow minting to previously burned OHM via mint approval.
+///         OApp-authorized endpoint operations (libraries, ULN/Executor config, messaging channel control)
+///         live on the LZEndpointDelegate policy, which is assigned via `setDelegate`.
 contract LZBridgeGateway is
-    Policy,
-    PolicyEnabler,
-    IVersioned,
-    ILZEndpointV2Admin,
     ILayerZeroReceiver,
+    IVersioned,
     ILZBridgeGateway,
-    OffsettingRateLimiter
+    Policy,
+    PolicyReEnabler,
+    ReEnablerGracePeriod,
+    OffsettingRateLimiter,
+    Rescueable
 {
     // ========= CONSTANTS ========= //
 
@@ -84,24 +87,52 @@ contract LZBridgeGateway is
     /// @notice Type 3 option type identifier.
     uint16 internal constant _OPTION_TYPE_3 = 3;
 
+    /// @notice Keycode for the MINTR module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("MINTR")`.
+    Keycode internal constant _KEYCODE_MINTR = Keycode.wrap(0x4D494E5452); // toKeycode("MINTR")
+
+    /// @notice Keycode for the ROLES module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("ROLES")`.
+    Keycode internal constant _KEYCODE_ROLES = Keycode.wrap(0x524F4C4553); // toKeycode("ROLES")
+
     // ========= MODIFIERS ========= //
 
-    /// @notice Modifier that reverts if the caller does not have the bridge_admin or admin role.
+    /// @notice Modifier that reverts if the caller does not have the `bridge_admin` or `admin` role.
     modifier onlyBridgeAdminOrAdmin() {
-        if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
-            revert PolicyAdmin.NotAuthorised();
+        _requireBridgeAdminOrAdmin();
         _;
     }
 
-    /// @notice Modifier that reverts if the caller does not have the bridge_rate_limiter,
-    ///         bridge_admin, or admin role.
+    /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
+    ///         `bridge_admin` nor the `admin` role.
+    function _requireBridgeAdminOrAdmin() private view {
+        if (!_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+            revert PolicyAdmin.NotAuthorised();
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the `bridge_rate_limiter`,
+    ///         `bridge_admin`, or `admin` role.
     modifier onlyRateLimitConfigurator() {
+        _requireRateLimitConfigurator();
+        _;
+    }
+
+    /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
+    ///         `bridge_rate_limiter` nor the `bridge_admin` nor the admin role.
+    function _requireRateLimitConfigurator() private view {
         if (
-            !ROLES.hasRole(msg.sender, _BRIDGE_RATE_LIMITER_ROLE) &&
-            !ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) &&
+            !_hasRole(msg.sender, _BRIDGE_RATE_LIMITER_ROLE) &&
+            !_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) &&
             !_isAdmin(msg.sender)
         ) revert PolicyAdmin.NotAuthorised();
-        _;
+    }
+
+    /// @notice Returns whether `account_` holds `role_` on the linked `ROLES` module.
+    /// @param account_ The address whose role membership is being checked.
+    /// @param role_ The role identifier to test.
+    /// @return True if `account_` holds `role_`, false otherwise.
+    function _hasRole(address account_, bytes32 role_) private view returns (bool) {
+        return ROLES.hasRole(account_, role_);
     }
 
     // ========= IMMUTABLES ========= //
@@ -137,37 +168,52 @@ contract LZBridgeGateway is
     /// @dev Reverts if:
     ///      - The kernel address is the zero address.
     ///      - The LZ endpoint address is the zero address.
-    constructor(Kernel kernel_, address lzEndpoint_, bool isCanonical_) Policy(kernel_) {
+    ///      - The grace window length is zero.
+    constructor(
+        Kernel kernel_,
+        address lzEndpoint_,
+        bool isCanonical_,
+        uint32 grace_
+    ) Policy(kernel_) ReEnablerGracePeriod(grace_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(lzEndpoint_, "lzEndpoint");
 
         LZ_ENDPOINT = lzEndpoint_;
         IS_CANONICAL = isCanonical_;
 
-        // PolicyEnabler starts disabled; must be explicitly enabled after configuration.
-        // Gateway is always authorized to call endpoint functions.
+        // EnablerV2 starts disabled; the gateway must be explicitly enabled after
+        // configuration.
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("MINTR");
-        dependencies[1] = toKeycode("ROLES");
+        dependencies[0] = _KEYCODE_MINTR;
+        dependencies[1] = _KEYCODE_ROLES;
 
         MINTRv1 mintr = MINTRv1(getModuleAddress(dependencies[0]));
         ROLESv1 roles = ROLESv1(getModuleAddress(dependencies[1]));
 
         // Ensure modules are using the expected major version
         (uint8 major, ) = mintr.VERSION();
-        if (major != 1) revert Policy_WrongModuleVersion(abi.encode([1, 1]));
+        _requireMajorV1(major);
         (major, ) = roles.VERSION();
-        if (major != 1) revert Policy_WrongModuleVersion(abi.encode([1, 1]));
+        _requireMajorV1(major);
 
         MINTR = mintr;
         ROLES = roles;
 
         // Set OHM from MINTR
-        ohm = address(MINTR.ohm());
+        ohm = address(mintr.ohm());
+
+        return dependencies;
+    }
+
+    /// @notice Reverts with `Policy_WrongModuleVersion` if the given module major version is
+    ///         not 1.
+    /// @param  major_ The major version reported by the module's `VERSION()`.
+    function _requireMajorV1(uint8 major_) private pure {
+        if (major_ != 1) revert Policy_WrongModuleVersion(abi.encode([1, 1]));
     }
 
     /// @inheritdoc Policy
@@ -189,6 +235,7 @@ contract LZBridgeGateway is
             keycode: kc,
             funcSelector: MINTRv1.decreaseMintApproval.selector
         });
+        return permissions;
     }
 
     /// forge-lint: disable-next-item(mixed-case-function)
@@ -200,13 +247,31 @@ contract LZBridgeGateway is
     // ========= POLICY ENABLER ========= //
 
     /// @dev Sets isReceiveEnabled to true when the gateway is enabled.
-    function _enable(bytes calldata) internal override {
-        if (!isReceiveEnabled) _setIsReceiveEnabled(true);
+    function _beforeEnable(bytes calldata) internal override {
+        _enableReceive();
     }
 
-    /// @dev Resets isReceiveEnabled to false when the gateway is disabled.
-    function _disable(bytes calldata) internal override {
+    /// @dev Resets isReceiveEnabled to false if it is not already when the gateway is disabled.
+    function _beforeDisable(bytes calldata) internal override {
         if (isReceiveEnabled) _setIsReceiveEnabled(false);
+    }
+
+    /// @dev Restores isReceiveEnabled when the manager re-enables the gateway. The grace
+    ///      check is inherited from `ReEnablerGracePeriod` via `super`.
+    function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
+        super._beforeReEnable();
+        _enableReceive();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev Restricts `setGracePeriod` to the admin role.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @notice Sets isReceiveEnabled to true if it is not already.
+    /// @dev Shared between `_beforeEnable` and `_beforeReEnable` because both
+    ///      transitions move the gateway into the enabled state with receiving allowed.
+    function _enableReceive() private {
+        if (!isReceiveEnabled) _setIsReceiveEnabled(true);
     }
 
     // ========= OHM BRIDGING ========= //
@@ -224,9 +289,16 @@ contract LZBridgeGateway is
         uint256 amount_,
         address payable refundAddress_,
         bytes calldata extraOptions_
-    ) external payable override onlyEnabled onlyRole(_BRIDGE_FACILITATOR_ROLE) {
+    )
+        external
+        payable
+        override
+        givenEnabled
+        onlyRole(_BRIDGE_FACILITATOR_ROLE)
+        returns (MessagingReceipt memory receipt)
+    {
         // Note: zero-amount validation is the facilitator's responsibility
-        _requireNonzeroAddress(to_, "to");
+        _requireNonzeroRecipient(to_);
 
         bytes32 peer = _getPeerOrRevert(dstEid_);
 
@@ -234,12 +306,10 @@ contract LZBridgeGateway is
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
-            bridgedSupply += amount_;
-            emit BridgedSupplyIncreased(amount_);
-
             // Pre-fund mint approval so future inflow can mint without JIT self approval.
             // Bounds the canonical inflow mint to the amount of OHM actually burned via outflow.
-            MINTR.increaseMintApproval(address(this), amount_);
+            _increaseSupplyAndMintApproval(amount_);
+            emit BridgedSupplyIncreased(amount_);
         }
 
         // Burn OHM held by the gateway (transferred here by the facilitator)
@@ -248,10 +318,14 @@ contract LZBridgeGateway is
         MINTR.burnOhm(address(this), amount_);
 
         // Encode and send the bridge message
-        bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
-        bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
+        (bytes memory payload, bytes memory options) = _encodeBridgeOhmMessage(
+            dstEid_,
+            to_,
+            amount_,
+            extraOptions_
+        );
 
-        MessagingReceipt memory receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
+        receipt = ILayerZeroEndpointV2(LZ_ENDPOINT).send{value: msg.value}(
             MessagingParams({
                 dstEid: dstEid_,
                 receiver: peer,
@@ -276,10 +350,14 @@ contract LZBridgeGateway is
         uint256 amount_,
         bytes calldata extraOptions_
     ) external view override returns (MessagingFee memory fee) {
-        _requireNonzeroAddress(to_, "to");
+        _requireNonzeroRecipient(to_);
         bytes32 peer = _getPeerOrRevert(dstEid_);
-        bytes memory payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
-        bytes memory options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
+        (bytes memory payload, bytes memory options) = _encodeBridgeOhmMessage(
+            dstEid_,
+            to_,
+            amount_,
+            extraOptions_
+        );
 
         return
             ILayerZeroEndpointV2(LZ_ENDPOINT).quote(
@@ -306,6 +384,7 @@ contract LZBridgeGateway is
     ///      - The message type is not MSG_BRIDGE_OHM.
     ///      - The bridge data payload has an unexpected length.
     ///      - (Canonical) The bridged supply would underflow.
+    ///      - The OHM recipient address is the zero address when the message type is MSG_BRIDGE_OHM.
     function lzReceive(
         Origin calldata origin_,
         bytes32 guid_,
@@ -323,7 +402,8 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILayerZeroReceiver
     function allowInitializePath(Origin calldata origin_) external view override returns (bool) {
-        return peers[origin_.srcEid] != bytes32(0) && peers[origin_.srcEid] == origin_.sender;
+        bytes32 peer = peers[origin_.srcEid];
+        return peer != bytes32(0) && peer == origin_.sender;
     }
 
     /// @inheritdoc ILayerZeroReceiver
@@ -336,6 +416,17 @@ contract LZBridgeGateway is
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
     ///      - The caller does not have the admin role.
+    ///
+    ///      WARNING: Updating or clearing the peer for an EID strands any in-flight inbound
+    ///      messages from the previous peer that have already been verified on the LayerZero
+    ///      endpoint but not yet executed. Such messages will revert in `lzReceive` on the
+    ///      peer check and become permanently undeliverable.
+    ///
+    ///      Recovery requires the admin to handle each stranded message individually via the
+    ///      LayerZero endpoint recovery functions (`skip`, `nilify`, `burn`, or `clear`).
+    ///      A separate governance proposal may also be required to restore the OHM owed to
+    ///      the affected users, and a corresponding `decreaseBridgedSupply` call is required
+    ///      to keep the bookkeeping consistent.
     function setPeer(uint32 eid_, bytes32 peer_) external override onlyAdminRole {
         peers[eid_] = peer_;
         emit PeerSet(eid_, peer_);
@@ -346,10 +437,26 @@ contract LZBridgeGateway is
     ///      - The caller does not have the emergency or admin role.
     ///      - The gateway is currently enabled.
     ///      - The value is already in the desired state.
+    ///
+    ///      The flag `isReceiveEnabled` is managed automatically by the policy lifecycle:
+    ///      `enable()` and the re-enable path set it to `true`, and `disable()` resets it to
+    ///      `false`. This function provides a manual override for the disabled state, so that
+    ///      a disabled gateway can keep delivering in-flight inbound LayerZero messages after
+    ///      sending stops.
+    ///
+    ///      The intended use case is a gateway replacement on a given chain.
+    ///      The admin calls `disable` followed by `setIsReceiveEnabled(true)`. The old gateway
+    ///      is disabled (which stops outbound sends), but any inbound LayerZero messages already
+    ///      in flight to the old gateway can still settle on it. Once the migration is complete,
+    ///      the old gateway is deactivated in the Kernel.
+    ///
+    ///      If `disable` is triggered by the emergency role without a proposal, it automatically
+    ///      sets `isReceiveEnabled` to `false`. If it is confirmed that re-enabling is safe, the
+    ///      manager can call `reEnable` within the grace window, which automatically sets
+    ///      `isReceiveEnabled` to `true`.
     function setIsReceiveEnabled(
         bool isReceiveEnabled_
-    ) external override onlyEmergencyOrAdminRole {
-        if (isEnabled) revert LZBridgeGateway_ReceiveControlOnlyWhenDisabled();
+    ) external override givenDisabled onlyEmergencyOrAdminRole {
         if (isReceiveEnabled == isReceiveEnabled_)
             revert LZBridgeGateway_ReceiveAlreadyInDesiredState();
         _setIsReceiveEnabled(isReceiveEnabled_);
@@ -370,9 +477,7 @@ contract LZBridgeGateway is
     function increaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
 
-        bridgedSupply += amount_;
-        MINTR.increaseMintApproval(address(this), amount_);
-
+        _increaseSupplyAndMintApproval(amount_);
         emit BridgedSupplyForciblyIncreased(amount_);
     }
 
@@ -384,13 +489,8 @@ contract LZBridgeGateway is
     function decreaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
 
-        if (bridgedSupply < amount_)
-            revert LZBridgeGateway_BridgedSupplyUnderflow(bridgedSupply, amount_);
-        unchecked {
-            bridgedSupply -= amount_;
-        }
+        _decreaseSupply(amount_);
         MINTR.decreaseMintApproval(address(this), amount_);
-
         emit BridgedSupplyForciblyDecreased(amount_);
     }
 
@@ -464,116 +564,10 @@ contract LZBridgeGateway is
         _clearInboundInFlight(eids_);
     }
 
-    // ========= LZ ENDPOINT CONFIG ========= //
+    // ========= RESCUE FUNCTIONS ========= //
 
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(address(this), eid_, lib_);
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setReceiveLibrary(
-        uint32 eid_,
-        address lib_,
-        uint256 gracePeriod_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibrary(
-            address(this),
-            eid_,
-            lib_,
-            gracePeriod_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setReceiveLibraryTimeout(
-        uint32 eid_,
-        address lib_,
-        uint256 expiry_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibraryTimeout(
-            address(this),
-            eid_,
-            lib_,
-            expiry_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setEndpointConfig(
-        address lib_,
-        SetConfigParam[] calldata params_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(address(this), lib_, params_);
-    }
-
-    // ========= LZ MESSAGE MANAGEMENT ========= //
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function skip(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).skip(address(this), srcEid_, sender_, nonce_);
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function nilify(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).nilify(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function burn(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).burn(
-            address(this),
-            srcEid_,
-            sender_,
-            nonce_,
-            payloadHash_
-        );
-    }
-
-    /// @inheritdoc ILZEndpointV2Admin
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function clear(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_
-    ) external override onlyBridgeAdminOrAdmin {
-        ILayerZeroEndpointV2(LZ_ENDPOINT).clear(address(this), origin_, guid_, message_);
-    }
+    /// @inheritdoc Rescueable
+    function _authorizeRescue() internal view override onlyManagerOrAdminRole {}
 
     // ========= VIEW FUNCTIONS ========= //
 
@@ -593,10 +587,9 @@ contract LZBridgeGateway is
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(PolicyEnabler) returns (bool) {
+    ) public view override(PolicyReEnabler, ReEnablerGracePeriod, Rescueable) returns (bool) {
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
-            interfaceId == type(ILZEndpointV2Admin).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
             interfaceId == type(IOffsettingRateLimiter).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
@@ -605,9 +598,57 @@ contract LZBridgeGateway is
 
     // ========= PRIVATE FUNCTIONS ========= //
 
+    /// @notice Increments `bridgedSupply` by `amount_` and grants the matching MINTR mint
+    ///         approval to the gateway.
+    /// @dev Used on canonical chains to keep `bridgedSupply` and the MINTR mint approval in
+    ///      lockstep during outflow and forced supply increases.
+    /// @param amount_ The amount of OHM to add to bridged supply and mint approval.
+    function _increaseSupplyAndMintApproval(uint256 amount_) private {
+        bridgedSupply += amount_;
+        _increaseMintApproval(amount_);
+    }
+
+    /// @notice Grants `amount_` of additional MINTR mint approval to the gateway.
+    /// @dev Wraps the MINTR call so the `address(this)` argument is not duplicated at each
+    ///      use site, saving bytecode.
+    /// @param amount_ The mint approval delta to add.
+    function _increaseMintApproval(uint256 amount_) private {
+        MINTR.increaseMintApproval(address(this), amount_);
+    }
+
+    /// @notice Sets `isReceiveEnabled` and emits the corresponding event.
+    /// @param  isReceiveEnabled_ The new flag value.
     function _setIsReceiveEnabled(bool isReceiveEnabled_) private {
         isReceiveEnabled = isReceiveEnabled_;
         emit IsReceiveEnabledSet(isReceiveEnabled_);
+    }
+
+    /// @notice Decrements `bridgedSupply` by `amount_`, reverting on underflow.
+    /// @param amount_ The amount to subtract from bridged supply.
+    function _decreaseSupply(uint256 amount_) private {
+        uint256 supply = bridgedSupply;
+        if (supply < amount_) revert LZBridgeGateway_BridgedSupplyUnderflow(supply, amount_);
+        unchecked {
+            bridgedSupply = supply - amount_;
+        }
+    }
+
+    /// @notice Builds the outbound bridge-OHM payload and the combined options for a given
+    ///         destination.
+    /// @param dstEid_ The LayerZero destination endpoint ID.
+    /// @param to_ The recipient address on the destination chain.
+    /// @param amount_ The amount of OHM being bridged.
+    /// @param extraOptions_ Caller-supplied Type 3 options to merge with enforced options.
+    /// @return payload The ABI-encoded `(MSG_BRIDGE_OHM, abi.encode(to_, amount_))` message.
+    /// @return options The combination of enforced and caller-supplied options.
+    function _encodeBridgeOhmMessage(
+        uint32 dstEid_,
+        address to_,
+        uint256 amount_,
+        bytes calldata extraOptions_
+    ) private view returns (bytes memory payload, bytes memory options) {
+        payload = abi.encode(MSG_BRIDGE_OHM, abi.encode(to_, amount_));
+        options = _combineOptions(dstEid_, MSG_BRIDGE_OHM, extraOptions_);
     }
 
     /// @notice Decodes the message type from the payload and routes to the appropriate handler.
@@ -629,18 +670,16 @@ contract LZBridgeGateway is
         if (data_.length != _BRIDGE_OHM_DATA_LENGTH) revert LZBridgeGateway_InvalidPayload();
         (address to, uint256 amount) = abi.decode(data_, (address, uint256));
 
+        _requireNonzeroRecipient(to);
+
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
-            if (bridgedSupply < amount)
-                revert LZBridgeGateway_BridgedSupplyUnderflow(bridgedSupply, amount);
-            unchecked {
-                bridgedSupply -= amount;
-            }
+            _decreaseSupply(amount);
             emit BridgedSupplyDecreased(amount);
             // Approval already exists from outflow, no JIT needed
         } else {
             // Non-canonical: JIT self approval
-            MINTR.increaseMintApproval(address(this), amount);
+            _increaseMintApproval(amount);
         }
 
         _inflow(srcEid_, amount); // Rate limit inflow
@@ -664,6 +703,12 @@ contract LZBridgeGateway is
         if (address_ == address(0)) revert LZBridgeGateway_InvalidAddress(parameter_);
     }
 
+    /// @notice Reverts with `LZBridgeGateway_InvalidAddress("to")` if `to_` is the zero address.
+    /// @param  to_ The recipient address to validate.
+    function _requireNonzeroRecipient(address to_) private pure {
+        _requireNonzeroAddress(to_, "to");
+    }
+
     // ========= ENFORCED OPTIONS (composed from OAppOptionsType3) ========= //
 
     /// @notice Combines enforced options with caller-provided extra options.
@@ -680,30 +725,15 @@ contract LZBridgeGateway is
         // No caller options, return enforced
         if (extraOptions_.length == 0) return enforced;
 
-        // Caller provided extra options must be Type 3
-        if (extraOptions_.length >= 2) {
-            _assertOptionsType3Calldata(extraOptions_);
-            // Strip the 2-byte Type 3 prefix from extra options before concatenation
-            return bytes.concat(enforced, extraOptions_[2:]);
-        }
+        _assertOptionsType3(extraOptions_);
 
-        // Invalid options
-        revert LZBridgeGateway_InvalidOptions(extraOptions_);
-    }
-
-    /// @notice Validates that options bytes begin with the Type 3 prefix.
-    /// @dev Assembly pattern from OAppOptionsType3._assertOptionsType3() (@layerzerolabs/oapp-evm v0.4.1).
-    function _assertOptionsType3(bytes memory options_) internal pure {
-        uint16 optionsType;
-        assembly {
-            optionsType := mload(add(options_, 2))
-        }
-        if (optionsType != _OPTION_TYPE_3) revert LZBridgeGateway_InvalidOptions(options_);
+        // Strip the 2-byte Type 3 prefix from extra options before concatenation
+        return bytes.concat(enforced, extraOptions_[2:]);
     }
 
     /// @notice Validates that calldata options bytes begin with the Type 3 prefix.
-    function _assertOptionsType3Calldata(bytes calldata options_) internal pure {
-        uint16 optionsType = uint16(bytes2(options_[:2]));
-        if (optionsType != _OPTION_TYPE_3) revert LZBridgeGateway_InvalidOptions(options_);
+    function _assertOptionsType3(bytes calldata options_) internal pure {
+        if (options_.length < 2 || uint16(bytes2(options_[:2])) != _OPTION_TYPE_3)
+            revert LZBridgeGateway_InvalidOptions(options_);
     }
 }

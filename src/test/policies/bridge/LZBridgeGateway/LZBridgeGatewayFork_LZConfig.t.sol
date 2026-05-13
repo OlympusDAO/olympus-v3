@@ -9,16 +9,19 @@ import {Test} from "forge-std/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {ILayerZeroDVNState} from "src/interfaces/layerzero/ILayerZeroDVNState.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @notice Fork-based tests for LZ V2 endpoint configuration on Ethereum, Arbitrum, Optimism, Base.
-/// @dev Validates the security-hardened configuration procedure using production DVN/Executor addresses.
-///      All endpoint config is done through the gateway's ILZEndpointV2Admin functions.
+/// @dev Validates the security-hardened configuration procedure using production DVN/Executor
+///      addresses. All endpoint config is forwarded through the LZEndpointDelegate policy, which is
+///      set as the gateway's LZ endpoint delegate during stack deployment.
 contract LZBridgeGatewayForkTests_LZConfig is Test {
     // =========== TEST CONSTANTS =========== //
 
@@ -41,6 +44,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     OlympusRoles ethRoles;
     RolesAdmin ethRolesAdmin;
     LZBridgeGateway ethGateway;
+    LZEndpointDelegate ethLzAdmin;
     LZCrossChainBridge ethBridge;
 
     MockOhm arbOhm;
@@ -49,6 +53,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     OlympusRoles arbRoles;
     RolesAdmin arbRolesAdmin;
     LZBridgeGateway arbGateway;
+    LZEndpointDelegate arbLzAdmin;
     LZCrossChainBridge arbBridge;
 
     MockOhm optOhm;
@@ -57,6 +62,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     OlympusRoles optRoles;
     RolesAdmin optRolesAdmin;
     LZBridgeGateway optGateway;
+    LZEndpointDelegate optLzAdmin;
     LZCrossChainBridge optBridge;
 
     MockOhm baseOhm;
@@ -65,6 +71,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     OlympusRoles baseRoles;
     RolesAdmin baseRolesAdmin;
     LZBridgeGateway baseGateway;
+    LZEndpointDelegate baseLzAdmin;
     LZCrossChainBridge baseBridge;
 
     // =========== HELPERS =========== //
@@ -73,6 +80,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
     address bridgeAdmin;
     address sender;
     address recipient;
+
+    uint32 constant GRACE_SECONDS = 1 days;
 
     // =========== setUp =========== //
 
@@ -93,48 +102,16 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
         // Deploy stacks on each fork
         vm.selectFork(ethForkId);
-        (
-            ethOhm,
-            ethKernel,
-            ethMintr,
-            ethRoles,
-            ethRolesAdmin,
-            ethGateway,
-            ethBridge
-        ) = _deployStack(true, LZConfigLib.ETH_EID);
+        _deployEthStack();
 
         vm.selectFork(arbForkId);
-        (
-            arbOhm,
-            arbKernel,
-            arbMintr,
-            arbRoles,
-            arbRolesAdmin,
-            arbGateway,
-            arbBridge
-        ) = _deployStack(false, LZConfigLib.ARB_EID);
+        _deployArbStack();
 
         vm.selectFork(optForkId);
-        (
-            optOhm,
-            optKernel,
-            optMintr,
-            optRoles,
-            optRolesAdmin,
-            optGateway,
-            optBridge
-        ) = _deployStack(false, LZConfigLib.OPT_EID);
+        _deployOptStack();
 
         vm.selectFork(baseForkId);
-        (
-            baseOhm,
-            baseKernel,
-            baseMintr,
-            baseRoles,
-            baseRolesAdmin,
-            baseGateway,
-            baseBridge
-        ) = _deployStack(false, LZConfigLib.BASE_EID);
+        _deployBaseStack();
 
         // Set peers (full mesh)
         _crossPeer(
@@ -189,50 +166,118 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
     // =========== DEPLOY HELPERS =========== //
 
+    struct ChainStack {
+        MockOhm ohm;
+        Kernel kernel;
+        OlympusMinter mintr;
+        OlympusRoles roles;
+        RolesAdmin rolesAdmin;
+        LZBridgeGateway gateway;
+        LZEndpointDelegate lzDelegate;
+        LZCrossChainBridge bridge;
+    }
+
     function _deployStack(
         bool isCanonical_,
         uint32 localEid_
-    )
-        internal
-        returns (
-            MockOhm ohm_,
-            Kernel kernel_,
-            OlympusMinter mintr_,
-            OlympusRoles roles_,
-            RolesAdmin rolesAdmin_,
-            LZBridgeGateway gateway_,
-            LZCrossChainBridge bridge_
-        )
-    {
-        ohm_ = new MockOhm("OHM", "OHM", 9);
-        kernel_ = new Kernel();
-        mintr_ = new OlympusMinter(kernel_, address(ohm_));
-        roles_ = new OlympusRoles(kernel_);
-        rolesAdmin_ = new RolesAdmin(kernel_);
-        gateway_ = new LZBridgeGateway(
-            kernel_,
+    ) internal returns (ChainStack memory s) {
+        s.ohm = new MockOhm("OHM", "OHM", 9);
+        s.kernel = new Kernel();
+        s.mintr = new OlympusMinter(s.kernel, address(s.ohm));
+        s.roles = new OlympusRoles(s.kernel);
+        s.rolesAdmin = new RolesAdmin(s.kernel);
+        s.gateway = new LZBridgeGateway(
+            s.kernel,
             LZConfigLib.endpointForEid(localEid_),
-            isCanonical_
+            isCanonical_,
+            GRACE_SECONDS
         );
+        s.lzDelegate = new LZEndpointDelegate(s.kernel, address(s.gateway));
 
-        kernel_.executeAction(Actions.InstallModule, address(mintr_));
-        kernel_.executeAction(Actions.InstallModule, address(roles_));
-        kernel_.executeAction(Actions.ActivatePolicy, address(rolesAdmin_));
-        kernel_.executeAction(Actions.ActivatePolicy, address(gateway_));
-        rolesAdmin_.grantRole("admin", admin);
-        rolesAdmin_.grantRole("bridge_admin", bridgeAdmin);
-        bridge_ = new LZCrossChainBridge(address(ohm_), admin, address(gateway_));
-        rolesAdmin_.grantRole("bridge_facilitator", address(bridge_));
+        s.kernel.executeAction(Actions.InstallModule, address(s.mintr));
+        s.kernel.executeAction(Actions.InstallModule, address(s.roles));
+        s.kernel.executeAction(Actions.ActivatePolicy, address(s.rolesAdmin));
+        s.kernel.executeAction(Actions.ActivatePolicy, address(s.gateway));
+        s.kernel.executeAction(Actions.ActivatePolicy, address(s.lzDelegate));
+        s.rolesAdmin.grantRole("admin", admin);
+        s.rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+
+        s.bridge = new LZCrossChainBridge(
+            address(s.ohm),
+            admin,
+            address(s.gateway),
+            admin,
+            GRACE_SECONDS
+        );
+        s.rolesAdmin.grantRole("bridge_facilitator", address(s.bridge));
 
         vm.startPrank(admin);
-        gateway_.enable(bytes(""));
-        bridge_.enable(bytes(""));
+        s.gateway.setDelegate(address(s.lzDelegate));
+        s.gateway.enable(bytes(""));
+        s.bridge.enable(bytes(""));
         vm.stopPrank();
 
-        ohm_.mint(sender, MINT_AMOUNT);
+        s.ohm.mint(sender, MINT_AMOUNT);
         vm.deal(sender, 100 ether);
 
-        _makePersistent(ohm_, kernel_, mintr_, roles_, rolesAdmin_, gateway_, bridge_);
+        _makePersistent(
+            s.ohm,
+            s.kernel,
+            s.mintr,
+            s.roles,
+            s.rolesAdmin,
+            s.gateway,
+            s.lzDelegate,
+            s.bridge
+        );
+    }
+
+    function _deployEthStack() internal {
+        ChainStack memory s = _deployStack(true, LZConfigLib.ETH_EID);
+        ethOhm = s.ohm;
+        ethKernel = s.kernel;
+        ethMintr = s.mintr;
+        ethRoles = s.roles;
+        ethRolesAdmin = s.rolesAdmin;
+        ethGateway = s.gateway;
+        ethLzAdmin = s.lzDelegate;
+        ethBridge = s.bridge;
+    }
+
+    function _deployArbStack() internal {
+        ChainStack memory s = _deployStack(false, LZConfigLib.ARB_EID);
+        arbOhm = s.ohm;
+        arbKernel = s.kernel;
+        arbMintr = s.mintr;
+        arbRoles = s.roles;
+        arbRolesAdmin = s.rolesAdmin;
+        arbGateway = s.gateway;
+        arbLzAdmin = s.lzDelegate;
+        arbBridge = s.bridge;
+    }
+
+    function _deployOptStack() internal {
+        ChainStack memory s = _deployStack(false, LZConfigLib.OPT_EID);
+        optOhm = s.ohm;
+        optKernel = s.kernel;
+        optMintr = s.mintr;
+        optRoles = s.roles;
+        optRolesAdmin = s.rolesAdmin;
+        optGateway = s.gateway;
+        optLzAdmin = s.lzDelegate;
+        optBridge = s.bridge;
+    }
+
+    function _deployBaseStack() internal {
+        ChainStack memory s = _deployStack(false, LZConfigLib.BASE_EID);
+        baseOhm = s.ohm;
+        baseKernel = s.kernel;
+        baseMintr = s.mintr;
+        baseRoles = s.roles;
+        baseRolesAdmin = s.rolesAdmin;
+        baseGateway = s.gateway;
+        baseLzAdmin = s.lzDelegate;
+        baseBridge = s.bridge;
     }
 
     function _makePersistent(
@@ -242,6 +287,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         OlympusRoles roles_,
         RolesAdmin rolesAdmin_,
         LZBridgeGateway gateway_,
+        LZEndpointDelegate lzDelegate_,
         LZCrossChainBridge bridge_
     ) internal {
         vm.makePersistent(address(ohm_));
@@ -250,6 +296,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         vm.makePersistent(address(roles_));
         vm.makePersistent(address(rolesAdmin_));
         vm.makePersistent(address(gateway_));
+        vm.makePersistent(address(lzDelegate_));
         vm.makePersistent(address(bridge_));
     }
 
@@ -295,12 +342,21 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         revert("unknown eid");
     }
 
+    function _lzDelegate(uint32 eid) internal view returns (LZEndpointDelegate) {
+        if (eid == LZConfigLib.ETH_EID) return ethLzAdmin;
+        if (eid == LZConfigLib.ARB_EID) return arbLzAdmin;
+        if (eid == LZConfigLib.OPT_EID) return optLzAdmin;
+        if (eid == LZConfigLib.BASE_EID) return baseLzAdmin;
+        revert("unknown eid");
+    }
+
     // =========== CHAIN CONFIG PROCEDURE =========== //
 
-    /// @dev Pins libraries and sets DVN/Executor config for all remote chains via gateway.
+    /// @dev Pins libraries and sets DVN/Executor config for all remote chains by forwarding
+    ///      the calls through the LZEndpointDelegate policy (the gateway's LZ endpoint delegate).
     function _configureChain(uint32 localEid) internal {
         vm.selectFork(_forkId(localEid));
-        LZBridgeGateway gw = _gateway(localEid);
+        LZEndpointDelegate lzDelegate_ = _lzDelegate(localEid);
         address sendLib = LZConfigLib.sendUln302ForEid(localEid);
         address recvLib = LZConfigLib.recvUln302ForEid(localEid);
         uint64 sendConf = LZConfigLib.outboundConfirmationsForEid(localEid);
@@ -313,9 +369,9 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             uint32 remoteEid = eids[i];
             address[] memory dvns = LZConfigLib.dvnsForRoute(localEid, remoteEid);
 
-            // Pin libraries
-            gw.setSendLibrary(remoteEid, sendLib);
-            gw.setReceiveLibrary(remoteEid, recvLib, 0);
+            // Pin libraries via the delegate policy
+            lzDelegate_.setSendLibrary(remoteEid, sendLib);
+            lzDelegate_.setReceiveLibrary(remoteEid, recvLib, 0);
 
             // Send config (ULN + Executor)
             SetConfigParam[] memory sendParams = new SetConfigParam[](2);
@@ -329,7 +385,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                 configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
                 config: LZConfigLib.encodeExecutorConfig(localEid)
             });
-            gw.setEndpointConfig(sendLib, sendParams);
+            lzDelegate_.setEndpointConfig(sendLib, sendParams);
 
             // Receive config (ULN only)
             uint64 recvConf = LZConfigLib.outboundConfirmationsForEid(remoteEid);
@@ -339,7 +395,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                 configType: LZConfigLib.CONFIG_TYPE_ULN,
                 config: LZConfigLib.encodeUlnConfig(recvConf, dvns)
             });
-            gw.setEndpointConfig(recvLib, recvParams);
+            lzDelegate_.setEndpointConfig(recvLib, recvParams);
         }
         vm.stopPrank();
     }
@@ -391,6 +447,32 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
                 LZConfigLib.CONFIG_TYPE_ULN
             );
             assertGt(rCfg.length, 0, "recv ULN config stored");
+
+            // Send/Recv app-level ULN configs must pin optional DVNs to NIL so the app does
+            // not inherit LayerZero's EID-level default.
+            UlnConfig memory sendApp = IUlnConfigState(sendLib).getAppUlnConfig(
+                address(gw),
+                remoteEid
+            );
+            assertEq(
+                sendApp.optionalDVNCount,
+                type(uint8).max,
+                "send app optionalDVNCount must be NIL"
+            );
+            assertEq(sendApp.optionalDVNs.length, 0, "send app optionalDVNs must be empty");
+            assertEq(sendApp.optionalDVNThreshold, 0, "send app optional threshold must be 0");
+
+            UlnConfig memory recvApp = IUlnConfigState(recvLib).getAppUlnConfig(
+                address(gw),
+                remoteEid
+            );
+            assertEq(
+                recvApp.optionalDVNCount,
+                type(uint8).max,
+                "recv app optionalDVNCount must be NIL"
+            );
+            assertEq(recvApp.optionalDVNs.length, 0, "recv app optionalDVNs must be empty");
+            assertEq(recvApp.optionalDVNThreshold, 0, "recv app optional threshold must be 0");
         }
     }
 

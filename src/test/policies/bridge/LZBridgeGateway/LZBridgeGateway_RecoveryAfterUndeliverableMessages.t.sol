@@ -103,9 +103,10 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         );
 
         // 3. Admin cannot call clear() because the real payload is unknown.
-        //    Admin nilifies the fake hash instead.
+        //    Admin nilifies the fake hash instead via the LZEndpointDelegate policy, which is the
+        //    gateway's endpoint delegate.
         vm.prank(bridgeAdmin);
-        gateway.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
+        lzDelegate.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
 
         assertEq(
             ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1),
@@ -117,11 +118,11 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         //    inboundNonce() returns 1 (NIL hash counts as "verified" for nonce tracking).
         //    skip() requires nonce == inboundNonce + 1, so we skip nonce 2.
         vm.prank(bridgeAdmin);
-        gateway.skip(NONCANONICAL_EID, peer, 2);
+        lzDelegate.skip(NONCANONICAL_EID, peer, 2);
 
         // 5. Burn the nilified nonce permanently (pass NIL hash as payloadHash)
         vm.prank(bridgeAdmin);
-        gateway.burn(NONCANONICAL_EID, peer, 1, bytes32(type(uint256).max));
+        lzDelegate.burn(NONCANONICAL_EID, peer, 1, bytes32(type(uint256).max));
 
         assertEq(
             ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1),
@@ -190,7 +191,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
         vm.prank(bridgeAdmin);
-        gateway2.clear(origin, guid, message);
+        lzDelegate2.clear(origin, guid, message);
 
         IMessagingChannel ep = _nonCanonicalEndpoint();
         bytes32 peer = _canonicalPeer();
@@ -245,13 +246,14 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         bool delivered = _tryDeliverPacket(packetBytes);
         assertFalse(delivered, "Delivery should fail (gateway disabled)");
 
-        // 5. Admin clears the message from the old gateway (clear works when disabled)
+        // 5. Admin clears the message from the old gateway via the destination's delegate policy
+        //    (clear works when disabled because it bypasses the gateway's `lzReceive`).
         (bytes32 guid, bytes memory message) = this.extractGuidAndMessage(packetBytes);
         (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
         vm.prank(bridgeAdmin);
-        gateway2.clear(origin, guid, message);
+        lzDelegate2.clear(origin, guid, message);
 
         // 6. Verify clear outcome: hash deleted, nonce advanced, no OHM minted
         IMessagingChannel ep = _nonCanonicalEndpoint();

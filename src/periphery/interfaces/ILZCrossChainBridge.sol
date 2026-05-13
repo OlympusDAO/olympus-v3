@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import {IVersioned} from "../../interfaces/IVersioned.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 
 /// @title ILZCrossChainBridge
@@ -10,7 +9,7 @@ import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEnd
 /// @dev It is a periphery contract, as it does not require any privileged access to the
 ///      Olympus protocol. It transfers OHM from the user to the gateway, which handles
 ///      burning and sending.
-interface ILZCrossChainBridge is IVersioned {
+interface ILZCrossChainBridge {
     /// @notice Thrown when an address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZCrossChainBridge_InvalidAddress(string parameter);
@@ -22,25 +21,34 @@ interface ILZCrossChainBridge is IVersioned {
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
     /// @param dstEid The LayerZero destination endpoint ID.
-    /// @param fees The native token fee paid for the bridge transfer.
-    event Bridged(address indexed sender, uint256 amount, uint32 indexed dstEid, uint256 fees);
+    /// @param nativeFee The native token fee actually charged by LayerZero, read from
+    ///        `MessagingReceipt`. May be less than `msgValue` when the caller overpays;
+    ///        the excess is refunded to the sender by the LayerZero endpoint.
+    /// @param msgValue The native value the caller supplied with the transaction.
+    event Bridged(
+        address indexed sender,
+        uint256 amount,
+        uint32 indexed dstEid,
+        uint256 nativeFee,
+        uint256 msgValue
+    );
 
     /// @notice Emitted when the gateway address is updated.
     /// @param gateway The new gateway address.
-    event GatewaySet(address gateway);
+    event GatewaySet(address indexed gateway);
+
+    /// @notice Emitted when the re-enabler address is updated.
+    /// @dev Setting the re-enabler to the zero address effectively disables the
+    ///      `reEnable()` entry point until a non-zero address is configured again.
+    /// @param reEnabler The new re-enabler address, or `address(0)` to clear.
+    event ReEnablerSet(address indexed reEnabler);
 
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
     ///      OHM is transferred from the user to the gateway, then the gateway burns and
-    ///      sends via LayerZero. The caller must send native token (ETH) with the call to
+    ///      sends via LayerZero. The caller must send the native token with the call to
     ///      cover the LayerZero messaging fee; excess is refunded to msg.sender.
     ///      Use estimateSendFee() to determine the required fee.
-    ///
-    ///      Reverts if:
-    ///      - The bridge is not enabled.
-    ///      - amount_ is zero.
-    ///      - The user has insufficient OHM balance or approval.
-    ///      - The gateway reverts (e.g. no peer configured, rate limit exceeded, gateway not enabled).
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
@@ -50,15 +58,21 @@ interface ILZCrossChainBridge is IVersioned {
     /// @notice Sets the gateway address.
     /// @dev Only callable by the owner.
     ///
-    ///      Reverts if:
-    ///      - The caller is not the owner.
-    ///      - gateway_ is the zero address.
-    ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
 
+    /// @notice Sets the address authorized to call `reEnable()`.
+    /// @dev Only callable by the owner. The zero address is permitted and effectively
+    ///      disables the `reEnable()` entry point until a non-zero address is set.
+    /// @param reEnabler_ The new re-enabler address, or `address(0)` to clear.
+    function setReEnabler(address reEnabler_) external;
+
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);
+
+    /// @notice Returns the address authorized to call `reEnable()`.
+    /// @dev Returns `address(0)` when no re-enabler has been configured.
+    function reEnabler() external view returns (address);
 
     /// @notice Returns the OHM token address.
     // solhint-disable-next-line func-name-mixedcase

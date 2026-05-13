@@ -12,16 +12,19 @@ import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 // Proposal
@@ -30,7 +33,10 @@ import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpg
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 25010000;
+    uint256 public constant BLOCK = 25029000;
+
+    /// @dev Grace window passed to the gateway constructor in the local-deploy branch.
+    uint32 internal constant _GRACE_SECONDS = 1 days;
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -51,6 +57,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     Kernel public kernel;
     LZBridgeGateway public gateway;
+    LZEndpointDelegate public lzDelegate;
     LZBridgeActivator public activator;
     LZBridgeSecurityUpgradeProposal public proposal;
     ROLESv1 public roles;
@@ -90,6 +97,9 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         if (IS_CONTRACTS_DEPLOYED) {
             gateway = LZBridgeGateway(addresses.getAddress("olympus-policy-lz-bridge-gateway"));
+            lzDelegate = LZEndpointDelegate(
+                addresses.getAddress("olympus-policy-lz-endpoint-delegate")
+            );
             activator = LZBridgeActivator(addresses.getAddress("olympus-lz-bridge-activator"));
             lzCrossChainBridge = addresses.getAddress("olympus-periphery-lz-cross-chain-bridge");
             console2.log("Contracts already deployed on mainnet");
@@ -98,15 +108,22 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             gateway = new LZBridgeGateway(
                 kernel,
                 LZConfigLib.ETH_LZ_ENDPOINT,
-                true // isCanonical
+                true, // isCanonical
+                _GRACE_SECONDS
             );
             vm.label(address(gateway), "LZBridgeGateway");
 
-            // Deploy LZCrossChainBridge (periphery, owned by DAO MS)
+            // Deploy LZEndpointDelegate (policy)
+            lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
+            vm.label(address(lzDelegate), "LZEndpointDelegate");
+
+            // Deploy LZCrossChainBridge (periphery, owned by the DAO MS, the DAO MS as re-enabler)
             LZCrossChainBridge bridge = new LZCrossChainBridge(
                 address(ohm),
                 daoMS,
-                address(gateway)
+                address(gateway),
+                daoMS,
+                _GRACE_SECONDS
             );
             vm.label(address(bridge), "LZCrossChainBridge");
             lzCrossChainBridge = address(bridge);
@@ -115,6 +132,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             activator = new LZBridgeActivator(
                 timelock,
                 address(gateway),
+                address(lzDelegate),
                 LZConfigLib.ETH_LZ_ENDPOINT,
                 makeAddr("ARB_GATEWAY"),
                 makeAddr("OPT_GATEWAY"),
@@ -130,6 +148,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 block.chainid
             );
             addresses.addAddress(
+                "olympus-policy-lz-endpoint-delegate",
+                address(lzDelegate),
+                block.chainid
+            );
+            addresses.addAddress(
                 "olympus-periphery-lz-cross-chain-bridge",
                 address(bridge),
                 block.chainid
@@ -140,9 +163,12 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // ========== PRE-OCG: MS BATCH 1 ==========
 
-        // Simulate what the DAO MS does before the OCG proposal: activate new LZBridgeGateway
-        vm.prank(daoMS);
+        // Simulate what the DAO MS does before the OCG proposal: activate the new
+        // LZBridgeGateway and the LZEndpointDelegate policy.
+        vm.startPrank(daoMS);
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
+        vm.stopPrank();
 
         // ========== SIMULATE PROPOSAL ==========
 
@@ -172,14 +198,40 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
             "Send ULN confirmations mismatch"
         );
-        assertEq(uln.requiredDVNCount, 2, "Send ULN should require 2 DVNs");
-        assertEq(uln.requiredDVNs.length, 2, "Send ULN should have 2 required DVNs");
+        assertEq(uln.requiredDVNCount, 4, "Send ULN should require 4 DVNs");
+        assertEq(uln.requiredDVNs.length, 4, "Send ULN should have 4 required DVNs");
 
         // Route-aware DVN verification
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
-        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Send ULN DVN[0] mismatch");
-        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Send ULN DVN[1] mismatch");
-        assertEq(uln.optionalDVNCount, 0, "Send ULN should have 0 optional DVNs");
+        assertEq(
+            uln.requiredDVNCount,
+            uint8(expectedDvns.length),
+            "Send ULN required DVN count mismatch"
+        );
+        assertEq(
+            uln.requiredDVNs.length,
+            expectedDvns.length,
+            "Send ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            assertEq(uln.requiredDVNs[d], expectedDvns[d], "Send ULN DVN mismatch");
+        }
+        // Resolved config reports 0 because no optional DVNs are configured at either layer.
+        assertEq(uln.optionalDVNCount, 0, "Send ULN resolved optionalDVNCount should be 0");
+
+        // Verify the *raw* app config pins optional DVNs via the NIL sentinel so the app-level
+        // config does NOT inherit LayerZero's EID-level default.
+        UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+            address(gateway),
+            remoteEid_
+        );
+        assertEq(
+            appUln.optionalDVNCount,
+            type(uint8).max,
+            "Send ULN app optionalDVNCount must be NIL"
+        );
+        assertEq(appUln.optionalDVNs.length, 0, "Send ULN app optionalDVNs must be empty");
+        assertEq(appUln.optionalDVNThreshold, 0, "Send ULN app optional threshold must be 0");
     }
 
     /// @dev Verifies Recv ULN config for a remote EID, with route-aware DVN checks.
@@ -195,14 +247,39 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         UlnConfig memory uln = abi.decode(cfg, (UlnConfig));
         assertEq(uln.confirmations, expectedConfirmations_, "Recv ULN confirmations mismatch");
-        assertEq(uln.requiredDVNCount, 2, "Recv ULN should require 2 DVNs");
-        assertEq(uln.requiredDVNs.length, 2, "Recv ULN should have 2 required DVNs");
+        assertEq(uln.requiredDVNCount, 4, "Recv ULN should require 4 DVNs");
+        assertEq(uln.requiredDVNs.length, 4, "Recv ULN should have 4 required DVNs");
 
         // Route-aware DVN verification
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, remoteEid_);
-        assertEq(uln.requiredDVNs[0], expectedDvns[0], "Recv ULN DVN[0] mismatch");
-        assertEq(uln.requiredDVNs[1], expectedDvns[1], "Recv ULN DVN[1] mismatch");
-        assertEq(uln.optionalDVNCount, 0, "Recv ULN should have 0 optional DVNs");
+        assertEq(
+            uln.requiredDVNCount,
+            uint8(expectedDvns.length),
+            "Recv ULN required DVN count mismatch"
+        );
+        assertEq(
+            uln.requiredDVNs.length,
+            expectedDvns.length,
+            "Recv ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            assertEq(uln.requiredDVNs[d], expectedDvns[d], "Recv ULN DVN mismatch");
+        }
+        // Resolved config reports 0 because no optional DVNs are configured at either layer.
+        assertEq(uln.optionalDVNCount, 0, "Recv ULN resolved optionalDVNCount should be 0");
+
+        // Verify the *raw* app config pins optional DVNs via the NIL sentinel.
+        UlnConfig memory appUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+            address(gateway),
+            remoteEid_
+        );
+        assertEq(
+            appUln.optionalDVNCount,
+            type(uint8).max,
+            "Recv ULN app optionalDVNCount must be NIL"
+        );
+        assertEq(appUln.optionalDVNs.length, 0, "Recv ULN app optionalDVNs must be empty");
+        assertEq(appUln.optionalDVNThreshold, 0, "Recv ULN app optional threshold must be 0");
     }
 
     function _verifyExecutorConfig(uint32 remoteEid_) internal view {
@@ -290,18 +367,25 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertTrue(Policy(address(gateway)).isActive(), "LZBridgeGateway should be active");
         assertTrue(gateway.isEnabled(), "LZBridgeGateway should be enabled");
 
-        // 2. DAO MS has bridge_admin role
+        // 2. The DAO MS has bridge_admin role
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
-            "DAO MS should have bridge_admin role"
+            "The DAO MS should have bridge_admin role"
         );
 
-        // 2b. DAO MS has bridge_rate_limiter role
+        // 2b. The DAO MS has bridge_rate_limiter role
         assertTrue(
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
-            "DAO MS should have bridge_rate_limiter role"
+            "The DAO MS should have bridge_rate_limiter role"
+        );
+
+        // 2c. The DAO MS has manager role (gates the gateway's reEnable())
+        assertTrue(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, MANAGER_ROLE),
+            "The DAO MS should have manager role"
         );
 
         // 3. LZCrossChainBridge has bridge_facilitator role
@@ -378,6 +462,20 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // 10. Bidirectional rate limits
         _verifyRateLimits();
+
+        // 11. LZEndpointDelegate is the LZ endpoint delegate for the gateway
+        assertTrue(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate should be active");
+        assertEq(
+            IEndpointV2State(address(ep)).delegates(address(gateway)),
+            address(lzDelegate),
+            "LZ endpoint delegate should be LZEndpointDelegate"
+        );
+        assertEq(lzDelegate.GATEWAY(), address(gateway), "LZEndpointDelegate.GATEWAY mismatch");
+        assertEq(
+            lzDelegate.LZ_ENDPOINT(),
+            LZConfigLib.ETH_LZ_ENDPOINT,
+            "LZEndpointDelegate.LZ_ENDPOINT mismatch"
+        );
     }
 }
 

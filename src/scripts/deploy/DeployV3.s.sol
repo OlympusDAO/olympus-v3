@@ -25,6 +25,7 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
@@ -985,22 +986,45 @@ contract DeployV3 is WithEnvironment {
         address kernel = _getAddressNotZero("olympus.Kernel");
         address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         bool isCanonical = ChainUtils._isCanonicalChain(chain);
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZBridgeGateway", "graceSeconds")
+        );
 
         // Log parameters
         console2.log("LZBridgeGateway parameters:");
         console2.log("  kernel", kernel);
         console2.log("  lzEndpoint", lzEndpoint);
         console2.log("  isCanonical", isCanonical);
+        console2.log("  graceSeconds", grace);
 
         // Deploy
         vm.broadcast();
         LZBridgeGateway lzBridgeGateway = new LZBridgeGateway(
             Kernel(kernel),
             lzEndpoint,
-            isCanonical
+            isCanonical,
+            grace
         );
 
         return (address(lzBridgeGateway), "olympus.policies");
+    }
+
+    function deployLZEndpointDelegate() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+
+        // Log parameters
+        console2.log("LZEndpointDelegate parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  gateway", gateway);
+
+        // Deploy
+        vm.broadcast();
+        LZEndpointDelegate lzEndpointDelegate = new LZEndpointDelegate(Kernel(kernel), gateway);
+
+        return (address(lzEndpointDelegate), "olympus.policies");
     }
 
     function deployLZBridgeActivator() public returns (address, string memory) {
@@ -1008,6 +1032,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address timelock = _getAddressNotZero("olympus.governance.Timelock");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegate = _getAddressNotZero("olympus.policies.LZEndpointDelegate");
         address lzEndpoint = _envAddressNotZero("external.layerzero-v2.endpoint");
         address arbGateway = _envAddressNotZero("arbitrum", "olympus.policies.LZBridgeGateway");
         address optGateway = _envAddressNotZero("optimism", "olympus.policies.LZBridgeGateway");
@@ -1018,6 +1043,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("LZBridgeActivator parameters:");
         console2.log("  timelock", timelock);
         console2.log("  gateway", gateway);
+        console2.log("  delegate", delegate);
         console2.log("  lzEndpoint", lzEndpoint);
         console2.log("  arbGateway", arbGateway);
         console2.log("  optGateway", optGateway);
@@ -1029,6 +1055,7 @@ contract DeployV3 is WithEnvironment {
         LZBridgeActivator activator = new LZBridgeActivator(
             timelock,
             gateway,
+            delegate,
             lzEndpoint,
             arbGateway,
             optGateway,
@@ -1045,16 +1072,30 @@ contract DeployV3 is WithEnvironment {
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
         address owner = _getAddressNotZero("olympus.multisig.dao");
         address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        // The DAO MS is also used as the re-enabler so it can recover the bridge after
+        // a disable, mirroring its role on the gateway via the manager role.
+        address reEnabler = _getAddressNotZero("olympus.multisig.dao");
+        uint32 grace = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("LZCrossChainBridge", "graceSeconds")
+        );
 
         // Log parameters
         console2.log("LZCrossChainBridge parameters:");
         console2.log("  ohm", ohm);
         console2.log("  owner", owner);
         console2.log("  gateway", gateway);
+        console2.log("  reEnabler", reEnabler);
+        console2.log("  graceSeconds", grace);
 
         // Deploy
         vm.broadcast();
-        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(ohm, owner, gateway);
+        LZCrossChainBridge lzCrossChainBridge = new LZCrossChainBridge(
+            ohm,
+            owner,
+            gateway,
+            reEnabler,
+            grace
+        );
 
         return (address(lzCrossChainBridge), "olympus.periphery");
     }

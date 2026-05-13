@@ -19,17 +19,19 @@ import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
+import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @notice OCG proposal for the LayerZero Bridge Security Upgrade.
 ///         Replaces the old CrossChainBridge with a hardened LZBridgeGateway policy
@@ -42,9 +44,9 @@ import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 ///         It is used to work around the governor's 15-action limit,
 ///
 ///         Assumes:
-///         - LZBridgeGateway, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum mainnet.
+///         - LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum mainnet.
 ///         - Remote instances have been deployed on Arbitrum, Optimism, Base, and Berachain.
-///         - DAO MS has already activated LZBridgeGateway in the Kernel.
+///         - DAO MS has already activated LZBridgeGateway and LZEndpointDelegate in the Kernel.
 ///         - OCG timelock already has the `admin` and `bridge_admin` roles.
 contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     Kernel internal _kernel;
@@ -85,7 +87,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- Bridged supply tracking with underflow checks on inbound receives, preventing unlimited mints from non-canonical chains.\n",
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
-                "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification with dual-DVN confirmation.\n",
+                "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification requires four DVNs on every route.\n",
                 "- Introduction of per-endpoint bidirectional rate limiting on outbound and inbound transfers, with a 24-hour sliding window. Outbound from Ethereum to each non-canonical chain is capped at 100,000 OHM and inbound from each non-canonical chain is capped at 55,000 OHM.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
@@ -100,23 +102,25 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "## Assumptions\n",
                 "\n",
-                "- LZBridgeGateway, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum.\n",
-                "- Remote LZBridgeGateway and LZCrossChainBridge instances have been deployed on Arbitrum, Optimism, Base, and Berachain.\n",
-                "- The DAO MS has already activated LZBridgeGateway in the Kernel.\n",
+                "- LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, LZBridgeActivator have been deployed on Ethereum.\n",
+                "- Remote LZBridgeGateway, LZEndpointDelegate and LZCrossChainBridge instances have been deployed on Arbitrum, Optimism, Base, and Berachain.\n",
+                "- The DAO MS has already activated LZBridgeGateway and LZEndpointDelegate in the Kernel.\n",
                 "- The OCG timelock already has the `admin` and `bridge_admin` roles (required for endpoint configuration, peer setup, and enabling).\n",
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
                 "1. Grant the `bridge_admin` and `bridge_rate_limiter` roles to the DAO MS.\n",
-                "2. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
-                "3. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
-                "4. Execute LZBridgeActivator.activate() which:\n",
-                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain). Dual-DVN verification: LayerZero Labs + Google Cloud for non-Berachain routes, LayerZero Labs + Nethermind for Berachain routes.\n",
+                "2. Grant the `manager` role to the DAO MS, authorizing it to call `reEnable()` on the LZBridgeGateway within the grace window after a disable.\n",
+                "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
+                "4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
+                "5. Execute LZBridgeActivator.activate() which:\n",
+                "   - Sets the LZEndpointDelegate policy as the gateway's LayerZero endpoint delegate. This is the steady-state configuration: subsequent OApp-authorized endpoint operations are driven through LZEndpointDelegate.\n",
+                "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain) via the LZEndpointDelegate policy. Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Sets per-endpoint bidirectional rate limits (outbound and inbound) on each remote chain.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
-                "5. Revoke temporary roles from the LZBridgeActivator contract.\n",
+                "6. Revoke temporary roles from the LZBridgeActivator contract.\n",
                 "\n",
                 "At the completion of this proposal, the DAO MS will deactivate the old CrossChainBridge, configure the periphery LZCrossChainBridge, and synchronize the initial bridged supply via batch scripts.\n"
             );
@@ -147,7 +151,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
         ROLESv1 roles = ROLESv1(rolesAddr);
 
-        // 1. Grant bridge_admin role to DAO MS (conditional)
+        // 1. Grant bridge_admin role to the DAO MS (conditional)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
             _pushAction(
@@ -158,11 +162,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                     _BRIDGE_ADMIN_ROLE,
                     daoMS
                 ),
-                "Grant bridge_admin role to DAO MS"
+                "Grant bridge_admin role to the DAO MS"
             );
         }
 
-        // 1b. Grant bridge_rate_limiter role to DAO MS (conditional)
+        // 1b. Grant bridge_rate_limiter role to the DAO MS (conditional)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
             _pushAction(
@@ -173,11 +177,27 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                     _BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 ),
-                "Grant bridge_rate_limiter role to DAO MS"
+                "Grant bridge_rate_limiter role to the DAO MS"
             );
         }
 
-        // 2. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
+        // 2. Grant manager role to the DAO MS so it can re-enable the gateway after
+        //    a disable, within the grace window. (conditional)
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        if (!roles.hasRole(daoMS, MANAGER_ROLE)) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    /// forge-lint: disable-next-line(unsafe-typecast)
+                    MANAGER_ROLE,
+                    daoMS
+                ),
+                "Grant manager role to the DAO MS"
+            );
+        }
+
+        // 3. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
         /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE)) {
             _pushAction(
@@ -192,7 +212,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             );
         }
 
-        // 3. Grant temporary roles to the activator
+        // 4. Grant temporary roles to the activator
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -214,14 +234,14 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Grant bridge_admin role to temporary activator contract"
         );
 
-        // 4. Execute activator (single action: LZ config + peers + options + enable)
+        // 5. Execute activator (single action: LZ config + peers + options + enable)
         _pushAction(
             activator,
             abi.encodeWithSelector(LZBridgeActivator.activate.selector),
             "Execute LZBridgeActivator"
         );
 
-        // 5. Revoke temporary roles from the activator
+        // 6. Revoke temporary roles from the activator
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -259,6 +279,9 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         LZBridgeGateway gw = LZBridgeGateway(
             addresses.getAddress("olympus-policy-lz-bridge-gateway")
         );
+        LZEndpointDelegate lzDelegate = LZEndpointDelegate(
+            addresses.getAddress("olympus-policy-lz-endpoint-delegate")
+        );
         LZBridgeActivator activator = LZBridgeActivator(
             addresses.getAddress("olympus-lz-bridge-activator")
         );
@@ -267,11 +290,13 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "olympus-periphery-lz-cross-chain-bridge"
         );
 
-        // 1. Validate LZBridgeGateway is active in the Kernel (activated by MS before OCG)
+        // 1. Validate LZBridgeGateway and LZEndpointDelegate are active in the Kernel
+        //    (activated by the DAO MS before OCG).
         require(Policy(address(gw)).isActive(), "LZBridgeGateway policy is not active");
+        require(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate policy is not active");
 
         // 2. Validate LZBridgeGateway is enabled
-        require(PolicyEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
+        require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
 
         // 3. Validate roles
         require(
@@ -283,6 +308,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
             "DAO MS does not have bridge_rate_limiter role"
+        );
+        require(
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            roles.hasRole(daoMS, MANAGER_ROLE),
+            "DAO MS does not have manager role"
         );
         require(
             /// forge-lint: disable-next-line(unsafe-typecast)
@@ -317,10 +347,17 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 9. Validate rate limits
         _validateRateLimits(gw);
 
-        // 10. Validate delegate is revoked
+        // 10. Validate the LZEndpointDelegate policy is configured as the gateway's LZ endpoint delegate
         require(
-            IEndpointV2State(address(ep)).delegates(address(gw)) == address(0),
-            "Delegate should be revoked"
+            IEndpointV2State(address(ep)).delegates(address(gw)) == address(lzDelegate),
+            "Delegate should be LZEndpointDelegate"
+        );
+
+        // 11. Validate LZEndpointDelegate parameters point at the gateway and endpoint
+        require(lzDelegate.GATEWAY() == address(gw), "LZEndpointDelegate GATEWAY mismatch");
+        require(
+            lzDelegate.LZ_ENDPOINT() == LZConfigLib.ETH_LZ_ENDPOINT,
+            "LZEndpointDelegate LZ_ENDPOINT mismatch"
         );
     }
 
@@ -379,12 +416,35 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             sendUln.confirmations == LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS,
             "Send ULN confirmations mismatch"
         );
-        require(sendUln.requiredDVNCount == 2, "Send ULN should require 2 DVNs");
+        require(sendUln.requiredDVNCount == 4, "Send ULN should require 4 DVNs");
 
         // Verify DVNs are route-correct
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-        require(sendUln.requiredDVNs[0] == expectedDvns[0], "Send ULN DVN[0] mismatch");
-        require(sendUln.requiredDVNs[1] == expectedDvns[1], "Send ULN DVN[1] mismatch");
+        require(
+            sendUln.requiredDVNCount == expectedDvns.length,
+            "Send ULN required DVN count mismatch"
+        );
+        require(
+            sendUln.requiredDVNs.length == expectedDvns.length,
+            "Send ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            require(sendUln.requiredDVNs[d] == expectedDvns[d], "Send ULN DVN mismatch");
+        }
+
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default).
+        // `ep.getConfig` returns the resolved config, so we must read the raw app config
+        // directly from the SendUln302 library to check the NIL sentinel.
+        UlnConfig memory sendAppUln = IUlnConfigState(LZConfigLib.ETH_SEND_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            sendAppUln.optionalDVNCount == type(uint8).max,
+            "Send ULN optional DVNs must be explicit NIL"
+        );
+        require(sendAppUln.optionalDVNs.length == 0, "Send ULN optional DVNs must be empty");
+        require(sendAppUln.optionalDVNThreshold == 0, "Send ULN optional DVN threshold must be 0");
 
         // Executor
         bytes memory execCfg = ep.getConfig(
@@ -417,12 +477,33 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(recvUlnCfg.length > 0, "Recv ULN config not set");
         UlnConfig memory recvUln = abi.decode(recvUlnCfg, (UlnConfig));
         require(recvUln.confirmations == expectedConf, "Recv ULN confirmations mismatch");
-        require(recvUln.requiredDVNCount == 2, "Recv ULN should require 2 DVNs");
+        require(recvUln.requiredDVNCount == 4, "Recv ULN should require 4 DVNs");
 
         // Verify DVNs are route-correct
         address[] memory expectedDvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
-        require(recvUln.requiredDVNs[0] == expectedDvns[0], "Recv ULN DVN[0] mismatch");
-        require(recvUln.requiredDVNs[1] == expectedDvns[1], "Recv ULN DVN[1] mismatch");
+        require(
+            recvUln.requiredDVNCount == expectedDvns.length,
+            "Recv ULN required DVN count mismatch"
+        );
+        require(
+            recvUln.requiredDVNs.length == expectedDvns.length,
+            "Recv ULN required DVN array length mismatch"
+        );
+        for (uint256 d = 0; d < expectedDvns.length; ++d) {
+            require(recvUln.requiredDVNs[d] == expectedDvns[d], "Recv ULN DVN mismatch");
+        }
+
+        // Verify app-level config pins optional DVNs to NIL (not inherited from LZ default)
+        UlnConfig memory recvAppUln = IUlnConfigState(LZConfigLib.ETH_RECV_ULN_302).getAppUlnConfig(
+            address(gw),
+            eid
+        );
+        require(
+            recvAppUln.optionalDVNCount == type(uint8).max,
+            "Recv ULN optional DVNs must be explicit NIL"
+        );
+        require(recvAppUln.optionalDVNs.length == 0, "Recv ULN optional DVNs must be empty");
+        require(recvAppUln.optionalDVNThreshold == 0, "Recv ULN optional DVN threshold must be 0");
     }
 
     function _validatePeers(LZBridgeGateway gw, LZBridgeActivator activator) internal view {
