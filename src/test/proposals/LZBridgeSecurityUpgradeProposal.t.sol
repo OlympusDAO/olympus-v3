@@ -379,10 +379,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
 
         // 2c. The DAO MS has manager role (gates the gateway's reEnable())
-        assertTrue(
-            roles.hasRole(daoMS, MANAGER_ROLE),
-            "The DAO MS should have manager role"
-        );
+        assertTrue(roles.hasRole(daoMS, MANAGER_ROLE), "The DAO MS should have manager role");
 
         // 3. LZCrossChainBridge has bridge_facilitator role
         assertTrue(
