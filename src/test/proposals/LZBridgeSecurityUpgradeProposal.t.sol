@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {ProposalTest} from "./ProposalTest.sol";
@@ -369,40 +368,34 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // 2. The DAO MS has bridge_admin role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "The DAO MS should have bridge_admin role"
         );
 
         // 2b. The DAO MS has bridge_rate_limiter role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
             "The DAO MS should have bridge_rate_limiter role"
         );
 
         // 2c. The DAO MS has manager role (gates the gateway's reEnable())
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, MANAGER_ROLE),
             "The DAO MS should have manager role"
         );
 
         // 3. LZCrossChainBridge has bridge_facilitator role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge should have bridge_facilitator role"
         );
 
         // 4. Activator roles revoked and spent
         assertFalse(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(activator), ADMIN_ROLE),
             "Activator should not have admin role"
         );
         assertFalse(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
@@ -478,5 +471,3 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
     }
 }
-
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

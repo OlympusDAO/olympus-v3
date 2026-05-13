@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {console2} from "@forge-std-1.9.6/console2.sol";
@@ -1146,4 +1145,3 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         return keccak256(abi.encodePacked(chain)) == keccak256(abi.encodePacked(name_));
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

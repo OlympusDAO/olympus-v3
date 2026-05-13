@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -669,4 +668,3 @@ contract LZBridgeActivatorForkTest is Test {
         }
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

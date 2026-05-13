@@ -238,7 +238,6 @@ contract LZBridgeGateway is
         return permissions;
     }
 
-    /// forge-lint: disable-next-item(mixed-case-function)
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);

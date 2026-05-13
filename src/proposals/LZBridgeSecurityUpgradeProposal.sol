@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
 pragma solidity >=0.8.30;
@@ -152,13 +151,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         ROLESv1 roles = ROLESv1(rolesAddr);
 
         // 1. Grant bridge_admin role to the DAO MS (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
                     _BRIDGE_ADMIN_ROLE,
                     daoMS
                 ),
@@ -167,13 +164,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         }
 
         // 1b. Grant bridge_rate_limiter role to the DAO MS (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
                     _BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 ),
@@ -183,13 +178,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
         // 2. Grant manager role to the DAO MS so it can re-enable the gateway after
         //    a disable, within the grace window. (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(daoMS, MANAGER_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
                     MANAGER_ROLE,
                     daoMS
                 ),
@@ -198,13 +191,11 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         }
 
         // 3. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
                     _BRIDGE_FACILITATOR_ROLE,
                     lzCrossChainBridge
                 ),
@@ -217,7 +208,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 ADMIN_ROLE,
                 activator
             ),
@@ -227,7 +217,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 _BRIDGE_ADMIN_ROLE,
                 activator
             ),
@@ -246,7 +235,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.revokeRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 ADMIN_ROLE,
                 activator
             ),
@@ -256,7 +244,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.revokeRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
                 _BRIDGE_ADMIN_ROLE,
                 activator
             ),
@@ -300,34 +287,28 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
         // 3. Validate roles
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
             "DAO MS does not have bridge_admin role"
         );
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
             "DAO MS does not have bridge_rate_limiter role"
         );
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, MANAGER_ROLE),
             "DAO MS does not have manager role"
         );
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge does not have bridge_facilitator role"
         );
 
         // 4. Validate activator roles revoked
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             !roles.hasRole(address(activator), ADMIN_ROLE),
             "Activator should not have admin role"
         );
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             !roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
@@ -590,4 +571,3 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 contract LZBridgeSecurityUpgradeProposalScript is ProposalScript {
     constructor() ProposalScript(new LZBridgeSecurityUpgradeProposal()) {}
 }
-/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
