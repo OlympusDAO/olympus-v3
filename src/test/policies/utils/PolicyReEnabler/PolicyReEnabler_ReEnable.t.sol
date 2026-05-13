@@ -24,13 +24,17 @@ contract PolicyReEnablerTests_ReEnable is PolicyReEnablerTestBase {
         vm.expectEmit(true, true, true, true, address(policy));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(policy));
-        emit Transition(manager, true, "", uint48(block.timestamp));
+        emit Transition(manager, true, "", uint48(vm.getBlockTimestamp()));
 
         vm.prank(manager);
         policy.reEnable();
 
         assertTrue(policy.isEnabled(), "isEnabled true");
-        assertEq(policy.lastTransitionAt(), uint48(block.timestamp), "lastTransitionAt refreshed");
+        assertEq(
+            policy.lastTransitionAt(),
+            uint48(vm.getBlockTimestamp()),
+            "lastTransitionAt refreshed"
+        );
         assertEq(policy.reEnableCount(), 1, "before-reEnable hook invoked");
     }
 

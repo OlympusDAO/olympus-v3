@@ -21,13 +21,17 @@ contract PolicyEnablerV2Tests_Disable is PolicyEnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(policy));
         emit Disabled();
         vm.expectEmit(true, true, true, true, address(policy));
-        emit Transition(admin, false, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(admin, false, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(admin);
         policy.disable(SAMPLE_DATA);
 
         assertFalse(policy.isEnabled(), "isEnabled false");
-        assertEq(policy.lastTransitionAt(), uint48(block.timestamp), "lastTransitionAt refreshed");
+        assertEq(
+            policy.lastTransitionAt(),
+            uint48(vm.getBlockTimestamp()),
+            "lastTransitionAt refreshed"
+        );
         assertEq(policy.lastBeforeDisableData(), SAMPLE_DATA, "data forwarded to before hook");
     }
 
@@ -35,7 +39,7 @@ contract PolicyEnablerV2Tests_Disable is PolicyEnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(policy));
         emit Disabled();
         vm.expectEmit(true, true, true, true, address(policy));
-        emit Transition(emergency, false, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(emergency, false, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(emergency);
         policy.disable(SAMPLE_DATA);

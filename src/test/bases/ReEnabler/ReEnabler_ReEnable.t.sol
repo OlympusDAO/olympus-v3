@@ -21,7 +21,11 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         harness.reEnable();
 
         assertTrue(harness.isEnabled(), "isEnabled true");
-        assertEq(harness.lastTransitionAt(), uint48(block.timestamp), "lastTransitionAt refreshed");
+        assertEq(
+            harness.lastTransitionAt(),
+            uint48(vm.getBlockTimestamp()),
+            "lastTransitionAt refreshed"
+        );
     }
 
     function test_reEnable_invokesAuthorizeBeforeBeforeHook() external givenEnabledThenDisabled {
@@ -39,7 +43,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller, true, "", uint48(block.timestamp));
+        emit Transition(caller, true, "", uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller);
         harness.reEnable();
@@ -71,7 +75,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         assertTrue(defaultHarness.isEnabled(), "isEnabled true");
         assertEq(
             defaultHarness.lastTransitionAt(),
-            uint48(block.timestamp),
+            uint48(vm.getBlockTimestamp()),
             "lastTransitionAt refreshed"
         );
     }
@@ -92,7 +96,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         vm.prank(caller);
         harness.reEnable();
         assertTrue(harness.isEnabled(), "second re-enable");
-        assertEq(harness.lastTransitionAt(), uint48(block.timestamp), "latest timestamp");
+        assertEq(harness.lastTransitionAt(), uint48(vm.getBlockTimestamp()), "latest timestamp");
     }
 
     // ========== SUCCESS - FUZZ ========== //
@@ -104,7 +108,7 @@ contract ReEnablerTests_ReEnable is ReEnablerTestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller_, true, "", uint48(block.timestamp));
+        emit Transition(caller_, true, "", uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller_);
         harness.reEnable();

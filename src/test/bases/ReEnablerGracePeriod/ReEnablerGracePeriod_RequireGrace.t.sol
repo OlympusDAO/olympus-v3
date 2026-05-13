@@ -125,7 +125,7 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
 
     function test_requireGrace_revertsIfPastDeadlineAfterEnable() external {
         _enable();
-        uint48 enableAt = uint48(block.timestamp);
+        uint48 enableAt = uint48(vm.getBlockTimestamp());
         skip(uint256(DEFAULT_GRACE) + 1);
 
         vm.expectRevert(
@@ -141,7 +141,7 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
         _enable();
         skip(uint256(DEFAULT_GRACE) * 2);
         _disable();
-        uint48 disableAt = uint48(block.timestamp);
+        uint48 disableAt = uint48(vm.getBlockTimestamp());
         skip(uint256(DEFAULT_GRACE) + 1);
 
         vm.expectRevert(
@@ -157,7 +157,7 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
     ///         the new deadline rather than the one implied by the constructor value.
     function test_requireGrace_revertsWithNewDeadlineAfterDecrease() external {
         _enable();
-        uint48 enableAt = uint48(block.timestamp);
+        uint48 enableAt = uint48(vm.getBlockTimestamp());
 
         uint32 newPeriod = DEFAULT_GRACE / 2;
         vm.prank(caller);
@@ -177,7 +177,7 @@ contract ReEnablerGracePeriodTests_RequireGrace is ReEnablerGracePeriodTestBase 
         _enable();
         skip(DEFAULT_GRACE / 4);
         _disable();
-        uint48 latestTransitionAt = uint48(block.timestamp);
+        uint48 latestTransitionAt = uint48(vm.getBlockTimestamp());
         skip(uint256(DEFAULT_GRACE) + 1);
 
         vm.expectRevert(
