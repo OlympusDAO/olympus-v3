@@ -163,11 +163,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    _BRIDGE_ADMIN_ROLE,
-                    daoMS
-                )
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, daoMS)
             );
         }
 
@@ -188,11 +184,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         if (!rolesModule.hasRole(daoMS, MANAGER_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    MANAGER_ROLE,
-                    daoMS
-                )
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, MANAGER_ROLE, daoMS)
             );
         }
 
@@ -200,11 +192,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    ADMIN_ROLE,
-                    daoMS
-                )
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, ADMIN_ROLE, daoMS)
             );
             console2.log("  admin role GRANTED to DAO MS, so run revokeSetupRoles after migration");
         } else {
@@ -346,11 +334,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         addToBatch(
             rolesAdminAddr,
-            abi.encodeWithSelector(
-                RolesAdmin.revokeRole.selector,
-                ADMIN_ROLE,
-                daoMS
-            )
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, ADMIN_ROLE, daoMS)
         );
 
         _setPostBatchValidateSelector(this._validateRevokeSetupRoles.selector);
