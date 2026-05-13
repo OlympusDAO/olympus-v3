@@ -10,7 +10,7 @@ import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBri
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 
-contract CCIPBridgeBatch is BatchScriptV2 {
+contract CCIPBridge is BatchScriptV2 {
     // [X] Declarative configuration of a bridge
     // [X] Enable trusted remotes for the specified chains
     // [X] Management of gas limit

@@ -23,7 +23,7 @@ import {SafeCast} from "src/libraries/SafeCast.sol";
 ///         This scripts is designed to define the desired configuration,
 ///         and the script will execute the necessary transactions to
 ///         configure the CCIP bridge to the desired state.
-contract CCIPTokenPoolBatch is BatchScriptV2 {
+contract CCIPTokenPool is BatchScriptV2 {
     using SafeCast for uint256;
 
     /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
