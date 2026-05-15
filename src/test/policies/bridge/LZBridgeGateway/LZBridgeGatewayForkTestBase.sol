@@ -18,7 +18,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @notice Shared setup, deploy helpers, and packet-parsing utilities for LZBridgeGateway fork tests.
@@ -68,6 +68,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
     // ========= ADDRESSES ========= //
 
     address admin;
+    address bridgeConfigurator;
     address sender;
     address recipient;
 
@@ -78,9 +79,11 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbForkId = vm.createFork("arbitrum");
 
         admin = makeAddr("admin");
+        bridgeConfigurator = makeAddr("bridgeConfigurator");
         sender = makeAddr("sender");
         recipient = makeAddr("recipient");
         vm.makePersistent(admin);
+        vm.makePersistent(bridgeConfigurator);
         vm.makePersistent(sender);
         vm.makePersistent(recipient);
 
@@ -134,10 +137,10 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         vm.selectFork(ethForkId);
     }
 
-    /// @dev Configures generous outbound and inbound rate limits as `admin` for the
-    ///      given peer EID. Called from the per-stack deploy helpers BEFORE
-    ///      `vm.makePersistent`, so the limits are part of the gateway's initial
-    ///      state on its native fork and survive subsequent `vm.selectFork` calls.
+    /// @dev Configures generous outbound and inbound rate limits as `bridgeConfigurator` for
+    ///      the given peer EID. Called from the per-stack deploy helpers BEFORE
+    ///      `vm.makePersistent`, so the limits are part of the gateway's initial state on
+    ///      its native fork and survive subsequent `vm.selectFork` calls.
     function _configureRateLimits(LZBridgeGateway gateway_, uint32 eid_) internal {
         IOffsettingRateLimiter.RateLimitConfig[]
             memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
@@ -146,7 +149,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
             limit: DEFAULT_RATE_LIMIT,
             window: DEFAULT_RATE_WINDOW
         });
-        vm.startPrank(admin);
+        vm.startPrank(bridgeConfigurator);
         gateway_.setOutRateLimits(configs);
         gateway_.setInRateLimits(configs);
         vm.stopPrank();
@@ -173,6 +176,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
         ethRolesAdmin.grantRole(ADMIN_ROLE, admin);
+        ethRolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
         ethBridge = new LZCrossChainBridge(
             address(ethOhm),
             admin,
@@ -224,6 +228,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
         arbRolesAdmin.grantRole(ADMIN_ROLE, admin);
+        arbRolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
         arbBridge = new LZCrossChainBridge(
             address(arbOhm),
             admin,

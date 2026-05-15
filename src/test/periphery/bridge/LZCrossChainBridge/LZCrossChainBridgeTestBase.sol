@@ -16,7 +16,9 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
+import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
+import {ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 contract LZCrossChainBridgeTestBase is TestHelperOz5 {
@@ -34,6 +36,8 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
     OlympusRoles roles;
     RolesAdmin rolesAdmin;
     LZBridgeGateway gateway;
+    LZEndpointDelegate lzDelegate;
+    LZBridgeAndDelegateConfig lzConfig;
 
     // Non-canonical stack for receiving
     Kernel kernel2;
@@ -51,6 +55,11 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
     address user = makeAddr("user");
     address recipient = makeAddr("recipient");
     address reEnablerAddr = makeAddr("reEnabler");
+    address bridgeConfiguratorRole = makeAddr("bridgeConfiguratorRole");
+    /// @dev Address of the real LZBridgeAndDelegateConfig policy deployed in `setUp`. Used as
+    ///      the periphery bridge's `configurator` after bootstrap: `setGateway`,
+    ///      `setReEnabler`, and `setGracePeriod` accept calls from this address.
+    address bridgeConfiguratorContract;
 
     uint32 constant GRACE_SECONDS = 1 days;
 
@@ -83,13 +92,16 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
             true,
             GRACE_SECONDS
         );
+        lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
 
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfiguratorRole);
 
         // Deploy non-canonical stack for destination
         kernel2 = new Kernel();
@@ -109,6 +121,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
 
         rolesAdmin2.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin2.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfiguratorRole);
 
         // Deploy bridge (periphery, owned by this test contract)
         bridge = new LZCrossChainBridge(
@@ -123,14 +136,24 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(bridge));
         rolesAdmin2.grantRole(BRIDGE_FACILITATOR_ROLE, address(bridge));
 
-        // Configure gateways
-        vm.startPrank(admin);
+        // Deploy the real LZBridgeAndDelegateConfig and use it as the periphery bridge's
+        // configurator. The config policy itself does not need to be active on the kernel
+        // for the periphery tests; the periphery only inspects its ERC-165 selector and
+        // pranks the policy address as `msg.sender` for the configurator-gated setters.
+        lzConfig = new LZBridgeAndDelegateConfig(
+            kernel,
+            address(gateway),
+            address(lzDelegate),
+            address(bridge),
+            1 days
+        );
+        bridgeConfiguratorContract = address(lzConfig);
 
-        // Set peers
+        // Configure gateways: peers, enforced options, and lifecycle stay under admin
+        vm.startPrank(admin);
         gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
         gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
 
-        // Set enforced options
         EnforcedOptionParam[] memory opts1 = new EnforcedOptionParam[](1);
         opts1[0] = EnforcedOptionParam({
             eid: NONCANONICAL_EID,
@@ -147,16 +170,20 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         });
         gateway2.setEnforcedOptions(opts2);
 
-        // Enable gateways
         gateway.enable(bytes(""));
         gateway2.enable(bytes(""));
+        vm.stopPrank();
 
-        // Configure default bidirectional rate limits on both gateways so flow tests
-        // are not blocked by mandatory rate limiting. The `admin` prank above is still
-        // active here, and `admin` satisfies `onlyRateLimitConfigurator`.
+        vm.startPrank(bridgeConfiguratorRole);
         _configureRateLimits(gateway, NONCANONICAL_EID);
         _configureRateLimits(gateway2, CANONICAL_EID);
         vm.stopPrank();
+
+        // Bootstrap the periphery bridge's configurator slot with the config policy. The
+        // policy advertises `ILZBridgeAndDelegateConfig` via ERC-165, so the bootstrap guard
+        // in `setConfigurator` passes without a mock.
+        vm.prank(owner);
+        bridge.setConfigurator(bridgeConfiguratorContract);
 
         // Configure bridge
         bridge.enable(bytes(""));
@@ -170,9 +197,8 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         vm.deal(user, 100 ether);
     }
 
-    /// @dev Configures generous outbound and inbound rate limits on a gateway for the
-    ///      given peer EID. Caller must already be authorised under
-    ///      `onlyRateLimitConfigurator` (admin/bridge_admin/bridge_rate_limiter).
+    /// @dev Configures generous outbound and inbound rate limits on a gateway for the given
+    ///      peer EID. Caller must already be pranked as `bridgeConfiguratorRole`.
     function _configureRateLimits(LZBridgeGateway gateway_, uint32 eid_) internal {
         IOffsettingRateLimiter.RateLimitConfig[]
             memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);

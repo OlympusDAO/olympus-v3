@@ -6,9 +6,13 @@
 
 src/policies/bridge/LZBridgeGateway.sol
 src/policies/bridge/LZEndpointDelegate.sol
+src/policies/bridge/LZBridgeAndDelegateConfig.sol
 src/policies/interfaces/ILZBridgeGateway.sol
 src/policies/interfaces/ILZEndpointDelegate.sol
 src/policies/interfaces/ILZEndpointV2Authorized.sol
+src/policies/interfaces/ILZBridgeAndDelegateConfig.sol
+src/policies/utils/TimelockBatchQueue.sol
+src/policies/interfaces/utils/ITimelockBatchQueue.sol
 src/periphery/bridge/LZCrossChainBridge.sol
 src/periphery/interfaces/ILZCrossChainBridge.sol
 src/bases/OffsettingRateLimiter.sol
@@ -37,3 +41,4 @@ src/scripts/ops/batches/LZBridgeGatewayBatch.sol
 src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol
 src/scripts/ops/batches/LZCrossChainBridgeBatch.sol
 src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol
+src/scripts/ops/batches/LZBridgeAndDelegateConfigBatch.sol

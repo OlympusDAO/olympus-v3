@@ -27,6 +27,7 @@ import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.so
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
@@ -1098,6 +1099,38 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(lzCrossChainBridge), "olympus.periphery");
+    }
+
+    function deployLZBridgeAndDelegateConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address gateway = _getAddressNotZero("olympus.policies.LZBridgeGateway");
+        address delegate = _getAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address facilitator = _getAddressNotZero("olympus.periphery.LZCrossChainBridge");
+        uint48 initialDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("LZBridgeAndDelegateConfig", "initialTimelockDelay")
+        );
+
+        // Log parameters
+        console2.log("LZBridgeAndDelegateConfig parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  gateway", gateway);
+        console2.log("  delegate", delegate);
+        console2.log("  facilitator", facilitator);
+        console2.log("  initialTimelockDelay", initialDelay);
+
+        // Deploy
+        vm.broadcast();
+        LZBridgeAndDelegateConfig lzBridgeAndDelegateConfig = new LZBridgeAndDelegateConfig(
+            Kernel(kernel),
+            gateway,
+            delegate,
+            facilitator,
+            initialDelay
+        );
+
+        return (address(lzBridgeAndDelegateConfig), "olympus.policies");
     }
 }
 /// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

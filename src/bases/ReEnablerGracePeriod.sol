@@ -18,7 +18,7 @@ import {ReEnabler} from "src/bases/ReEnabler.sol";
 ///      The grace window restarts on every transition recorded by the underlying
 ///      `EnablerV2` state, so a fresh transition opens a new window of the same length.
 ///
-///      The window is mutable: an authorised caller may update it after construction via
+///      The window is mutable: an authorized caller may update it after construction via
 ///      `setGracePeriod`. The contract is agnostic to the access-control model used by
 ///      the implementation, so an inheriting contract must override
 ///      `_authorizeSetGracePeriod` to revert when the caller is not permitted to update
@@ -29,8 +29,8 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     // ========== STATE VARIABLES ========== //
 
     /// @inheritdoc IGracePeriod
-    /// @dev The length of the grace window in seconds. Initialised by the constructor and
-    ///      updatable through `setGracePeriod` when the implementation authorises the
+    /// @dev The length of the grace window in seconds. Initialized by the constructor and
+    ///      updatable through `setGracePeriod` when the implementation authorizes the
     ///      caller.
     ///
     ///      The value is the length of the window measured from
@@ -56,7 +56,7 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IGracePeriod
-    /// @dev The function delegates the caller authorisation to
+    /// @dev The function delegates the caller authorization to
     ///      `_authorizeSetGracePeriod` and the value validation plus event emission to
     ///      `_setGracePeriod`. The function is declared `virtual` so that an
     ///      implementation that wishes to lock the window after construction can
@@ -80,12 +80,12 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     /// @dev The function is invoked from `setGracePeriod` before any state mutation. The
     ///      base contract is agnostic to the access-control model, so the inheriting
     ///      contract must implement the hook and revert when the caller is not
-    ///      authorised. An implementation that overrides `setGracePeriod` to always
+    ///      authorized. An implementation that overrides `setGracePeriod` to always
     ///      revert is still required to provide an implementation; reverting is the
     ///      recommended default in that case.
     ///
     ///      Reverts if:
-    ///      - The caller is not authorised to update the grace window.
+    ///      - The caller is not authorized to update the grace window.
     function _authorizeSetGracePeriod() internal view virtual;
 
     // ========== INTERNAL HELPERS ========== //
@@ -106,7 +106,7 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
 
     /// @notice Validates the supplied window length, writes it to storage, and emits the
     ///         `GracePeriodSet` event.
-    /// @dev The helper centralises the zero-check and the event so that the constructor
+    /// @dev The helper centralizes the zero-check and the event so that the constructor
     ///      and the external setter share a single code path.
     ///
     ///      Reverts if:

@@ -5,9 +5,14 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
-/// @dev Clearing outbound in-flight state.
+// Constants
+import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+
+/// @dev Clearing outbound in-flight state. Gated to the `bridge_configurator` role.
 contract LZBridgeGatewayTests_ClearOutboundInFlight is LZBridgeGatewayTestBase {
     function _consumeOutbound() internal {
         // Bring the outbound rate limit down to a tighter ceiling so it can be saturated
@@ -27,7 +32,7 @@ contract LZBridgeGatewayTests_ClearOutboundInFlight is LZBridgeGatewayTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOffsettingRateLimiter.OutboundInFlightCleared(eids);
 
-        vm.prank(bridgeRateLimiter);
+        vm.prank(bridgeConfigurator);
         gateway.clearOutboundInFlight(eids);
 
         (uint256 inFlight, uint256 limit, uint32 window, uint48 lastUpdated) = gateway
@@ -48,7 +53,7 @@ contract LZBridgeGatewayTests_ClearOutboundInFlight is LZBridgeGatewayTestBase {
 
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;
-        vm.prank(bridgeRateLimiter);
+        vm.prank(bridgeConfigurator);
         gateway.clearOutboundInFlight(eids);
 
         (uint256 inInFlightAfter, uint256 inLimitAfter, uint32 inWindowAfter, ) = gateway
@@ -58,37 +63,17 @@ contract LZBridgeGatewayTests_ClearOutboundInFlight is LZBridgeGatewayTestBase {
         assertEq(inWindowAfter, inWindowBefore, "Inbound window must be unchanged");
     }
 
-    function _runClearOutboundInFlightBy(address caller_) internal {
-        _consumeOutbound();
-        uint32[] memory eids = new uint32[](1);
-        eids[0] = NONCANONICAL_EID;
-
-        vm.prank(caller_);
-        gateway.clearOutboundInFlight(eids);
-
-        (uint256 inFlight, , , ) = gateway.outRateLimits(NONCANONICAL_EID);
-        assertEq(inFlight, 0, "Outbound in-flight should be reset by authorized caller");
-    }
-
-    function test_clearOutboundInFlight_adminCanCall() external {
-        _runClearOutboundInFlightBy(admin);
-    }
-
-    function test_clearOutboundInFlight_bridgeAdminCanCall() external {
-        _runClearOutboundInFlightBy(bridgeAdmin);
-    }
-
-    function test_clearOutboundInFlight_bridgeRateLimiterCanCall() external {
-        _runClearOutboundInFlightBy(bridgeRateLimiter);
-    }
-
-    function testFuzz_clearOutboundInFlight_revertsIfNotAuthorised(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
+    function testFuzz_clearOutboundInFlight_revertsIfNotBridgeConfigurator(
+        address caller_
+    ) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
         uint32[] memory eids = new uint32[](1);
         eids[0] = NONCANONICAL_EID;
 
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         gateway.clearOutboundInFlight(eids);
     }

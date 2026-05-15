@@ -16,7 +16,7 @@ import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
-import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @notice Fork-based tests for LZ V2 endpoint configuration on Ethereum, Arbitrum, Optimism, Base.
@@ -79,6 +79,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
     address admin;
     address bridgeAdmin;
+    address bridgeConfigurator;
     address sender;
     address recipient;
 
@@ -94,10 +95,12 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
         admin = makeAddr("admin");
         bridgeAdmin = makeAddr("bridgeAdmin");
+        bridgeConfigurator = makeAddr("bridgeConfigurator");
         sender = makeAddr("sender");
         recipient = makeAddr("recipient");
         vm.makePersistent(admin);
         vm.makePersistent(bridgeAdmin);
+        vm.makePersistent(bridgeConfigurator);
         vm.makePersistent(sender);
         vm.makePersistent(recipient);
 
@@ -202,6 +205,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         s.kernel.executeAction(Actions.ActivatePolicy, address(s.lzDelegate));
         s.rolesAdmin.grantRole(ADMIN_ROLE, admin);
         s.rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        s.rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
 
         s.bridge = new LZCrossChainBridge(
             address(s.ohm),
@@ -212,8 +216,9 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         );
         s.rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(s.bridge));
 
-        vm.startPrank(admin);
+        vm.prank(bridgeConfigurator);
         s.gateway.setDelegate(address(s.lzDelegate));
+        vm.startPrank(admin);
         s.gateway.enable(bytes(""));
         s.bridge.enable(bytes(""));
         vm.stopPrank();
@@ -364,7 +369,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
 
         uint32[CHAIN_COUNT] memory eids = _allEids();
 
-        vm.startPrank(bridgeAdmin);
+        vm.startPrank(bridgeConfigurator);
         for (uint256 i = 0; i < CHAIN_COUNT; ++i) {
             if (eids[i] == localEid) continue;
             uint32 remoteEid = eids[i];

@@ -44,7 +44,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
 import {Rescueable} from "src/bases/Rescueable.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
-import {BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title LZBridgeGateway
 /// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
@@ -88,6 +88,8 @@ contract LZBridgeGateway is
     // ========= MODIFIERS ========= //
 
     /// @notice Modifier that reverts if the caller does not have the `bridge_admin` or `admin` role.
+    /// @dev Used only by the one-shot `initializeBridgedSupply`; the other privileged mutators
+    ///      are gated by `onlyBridgeConfigurator`.
     modifier onlyBridgeAdminOrAdmin() {
         _requireBridgeAdminOrAdmin();
         _;
@@ -100,21 +102,21 @@ contract LZBridgeGateway is
             revert PolicyAdmin.NotAuthorised();
     }
 
-    /// @notice Modifier that reverts if the caller does not have the `bridge_rate_limiter`,
-    ///         `bridge_admin`, or `admin` role.
-    modifier onlyRateLimitConfigurator() {
-        _requireRateLimitConfigurator();
+    /// @notice Modifier that reverts if the caller does not have the `bridge_configurator` role.
+    /// @dev Gated solely by the role; the role is expected to be granted exclusively to
+    ///      `LZBridgeAndDelegateConfig` (the timelock policy), in which case calls are
+    ///      dispatched through that policy's timelock queue. Any holder that does not
+    ///      itself enforce a timelock on these mutators should only be granted the role
+    ///      temporarily for bootstrap.
+    modifier onlyBridgeConfigurator() {
+        _requireBridgeConfigurator();
         _;
     }
 
-    /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
-    ///         `bridge_rate_limiter` nor the `bridge_admin` nor the admin role.
-    function _requireRateLimitConfigurator() private view {
-        if (
-            !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE) &&
-            !_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
-            !_isAdmin(msg.sender)
-        ) revert PolicyAdmin.NotAuthorised();
+    /// @notice Reverts if `msg.sender` does not hold the `bridge_configurator` role.
+    function _requireBridgeConfigurator() private view {
+        if (!_hasRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE))
+            revert ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE);
     }
 
     /// @notice Returns whether `account_` holds `role_` on the linked `ROLES` module.
@@ -143,6 +145,9 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     uint256 public override bridgedSupply;
+
+    /// @inheritdoc ILZBridgeGateway
+    bool public override bridgedSupplyInitialized;
 
     /// @inheritdoc ILZBridgeGateway
     bool public override isReceiveEnabled;
@@ -253,8 +258,12 @@ contract LZBridgeGateway is
     }
 
     /// @inheritdoc ReEnablerGracePeriod
-    /// @dev Restricts `setGracePeriod` to the admin role.
-    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+    /// @dev Restricts `setGracePeriod` to the `bridge_configurator` role; that role is
+    ///      expected to be granted exclusively to `LZBridgeAndDelegateConfig` (the
+    ///      timelock policy).
+    function _authorizeSetGracePeriod() internal view override {
+        _requireBridgeConfigurator();
+    }
 
     /// @notice Sets isReceiveEnabled to true if it is not already.
     /// @dev Shared between `_beforeEnable` and `_beforeReEnable` because both
@@ -453,18 +462,48 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setDelegate(address delegate_) external override onlyBridgeAdminOrAdmin {
+    ///      - The caller does not have the bridge_configurator role.
+    ///      - `delegate_` is the zero address.
+    function setDelegate(address delegate_) external override onlyBridgeConfigurator {
+        // Checks: delegate_ != address(0)
+        validateSetDelegate(delegate_);
         ILayerZeroEndpointV2(LZ_ENDPOINT).setDelegate(delegate_);
         emit DelegateSet(delegate_);
     }
 
     /// @inheritdoc ILZBridgeGateway
-    /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    ///      - IS_CANONICAL is false.
-    function increaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
+    /// @dev Intended for use immediately after the OCG proposal so the DAO MS can write
+    ///      the computed initial bridged supply without going through the
+    ///      `bridge_configurator` role (and therefore, in the intended deployment,
+    ///      without waiting for the `LZBridgeAndDelegateConfig` timelock). After this
+    ///      call further mutations must go through `increaseBridgedSupply` /
+    ///      `decreaseBridgedSupply`.
+    ///
+    ///      Reverts if:
+    ///      - The caller does not have the `bridge_admin` or `admin` role.
+    ///      - The chain is not canonical.
+    ///      - The bridged supply has already been initialized.
+    ///      - The current bridged supply is non-zero.
+    ///      - `amount_` is zero.
+    function initializeBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
         _requireCanonical();
+        if (bridgedSupplyInitialized) revert LZBridgeGateway_BridgedSupplyAlreadyInitialized();
+        if (bridgedSupply != 0) revert LZBridgeGateway_BridgedSupplyAlreadyNonZero(bridgedSupply);
+        _requireNonzeroAmount(amount_);
+
+        bridgedSupplyInitialized = true;
+        _increaseSupplyAndMintApproval(amount_);
+        emit BridgedSupplyInitialized(amount_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_configurator role.
+    ///      - IS_CANONICAL is false.
+    ///      - `amount_` is zero.
+    function increaseBridgedSupply(uint256 amount_) external override onlyBridgeConfigurator {
+        // Checks: IS_CANONICAL; amount_ != 0
+        validateIncreaseBridgedSupply(amount_);
 
         _increaseSupplyAndMintApproval(amount_);
         emit BridgedSupplyForciblyIncreased(amount_);
@@ -472,13 +511,17 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///      - IS_CANONICAL is false.
+    ///      - `amount_` is zero.
     ///      - The bridged supply would underflow.
-    function decreaseBridgedSupply(uint256 amount_) external override onlyBridgeAdminOrAdmin {
-        _requireCanonical();
+    function decreaseBridgedSupply(uint256 amount_) external override onlyBridgeConfigurator {
+        // Checks: IS_CANONICAL; amount_ != 0; bridgedSupply >= amount_
+        validateDecreaseBridgedSupply(amount_);
 
-        _decreaseSupply(amount_);
+        unchecked {
+            bridgedSupply -= amount_;
+        }
         MINTR.decreaseMintApproval(address(this), amount_);
         emit BridgedSupplyForciblyDecreased(amount_);
     }
@@ -501,7 +544,7 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///
     ///      Decays the existing in-flight amount of the targeted outbound limit and
     ///      checkpoints the counterpart inbound limit before writing the new `limit`
@@ -509,13 +552,13 @@ contract LZBridgeGateway is
     ///      are preserved.
     function setOutRateLimits(
         RateLimitConfig[] calldata configs_
-    ) external override onlyRateLimitConfigurator {
+    ) external override onlyBridgeConfigurator {
         _setOutRateLimits(configs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///
     ///      Symmetric with `setOutRateLimits`: decays the existing inbound in-flight
     ///      and checkpoints the counterpart outbound limit before writing the new
@@ -523,33 +566,33 @@ contract LZBridgeGateway is
     ///      `limit` and `window` are preserved.
     function setInRateLimits(
         RateLimitConfig[] calldata configs_
-    ) external override onlyRateLimitConfigurator {
+    ) external override onlyBridgeConfigurator {
         _setInRateLimits(configs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///
     ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
     ///      timestamp; the configured `limit` and `window` are preserved. The
     ///      corresponding inbound rate limit is not affected.
     function clearOutboundInFlight(
         uint32[] calldata eids_
-    ) external override onlyRateLimitConfigurator {
+    ) external override onlyBridgeConfigurator {
         _clearOutboundInFlight(eids_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///
     ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
     ///      timestamp; the configured `limit` and `window` are preserved. The
     ///      corresponding outbound rate limit is not affected.
     function clearInboundInFlight(
         uint32[] calldata eids_
-    ) external override onlyRateLimitConfigurator {
+    ) external override onlyBridgeConfigurator {
         _clearInboundInFlight(eids_);
     }
 
@@ -570,6 +613,33 @@ contract LZBridgeGateway is
         bytes calldata extraOptions_
     ) external view override returns (bytes memory) {
         return _combineOptions(eid_, msgType_, extraOptions_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - `delegate_` is the zero address.
+    function validateSetDelegate(address delegate_) public pure override {
+        _requireNonzeroAddress(delegate_, "delegate");
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The chain is not canonical.
+    ///      - `amount_` is zero.
+    function validateIncreaseBridgedSupply(uint256 amount_) public view override {
+        _requireCanonical();
+        _requireNonzeroAmount(amount_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The chain is not canonical.
+    ///      - `amount_` is zero.
+    ///      - The current `bridgedSupply` is below `amount_`.
+    function validateDecreaseBridgedSupply(uint256 amount_) public view override {
+        _requireCanonical();
+        _requireNonzeroAmount(amount_);
+        _requireSupplyAtLeastAmount(amount_);
     }
 
     // ========= ERC165 ========= //
@@ -612,14 +682,18 @@ contract LZBridgeGateway is
         emit IsReceiveEnabledSet(isReceiveEnabled_);
     }
 
-    /// @notice Decrements `bridgedSupply` by `amount_`, reverting on underflow.
-    /// @param amount_ The amount to subtract from bridged supply.
-    function _decreaseSupply(uint256 amount_) private {
+    /// @notice Reverts with `LZBridgeGateway_BridgedSupplyUnderflow` if the current
+    ///         `bridgedSupply` is below `amount_`.
+    /// @param amount_ The amount that would be subtracted from bridged supply.
+    function _requireSupplyAtLeastAmount(uint256 amount_) private view {
         uint256 supply = bridgedSupply;
         if (supply < amount_) revert LZBridgeGateway_BridgedSupplyUnderflow(supply, amount_);
-        unchecked {
-            bridgedSupply = supply - amount_;
-        }
+    }
+
+    /// @notice Reverts with `LZBridgeGateway_ZeroAmount` if `amount_` is zero.
+    /// @param amount_ The amount to validate.
+    function _requireNonzeroAmount(uint256 amount_) private pure {
+        if (amount_ == 0) revert LZBridgeGateway_ZeroAmount();
     }
 
     /// @notice Builds the outbound bridge-OHM payload and the combined options for a given
@@ -663,7 +737,10 @@ contract LZBridgeGateway is
 
         // Track bridged supply on canonical chain
         if (IS_CANONICAL) {
-            _decreaseSupply(amount);
+            _requireSupplyAtLeastAmount(amount);
+            unchecked {
+                bridgedSupply -= amount;
+            }
             emit BridgedSupplyDecreased(amount);
             // Approval already exists from outflow, no JIT needed
         } else {

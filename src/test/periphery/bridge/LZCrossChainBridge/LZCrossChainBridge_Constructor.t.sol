@@ -24,6 +24,11 @@ contract LZCrossChainBridgeTests_Constructor is LZCrossChainBridgeTestBase {
         assertEq(fresh.owner(), address(this), "Owner should be the deployer");
         assertEq(fresh.gateway(), address(gateway), "Gateway should be set from constructor");
         assertEq(fresh.reEnabler(), reEnablerAddr, "ReEnabler should be set from constructor");
+        assertEq(
+            fresh.configurator(),
+            address(0),
+            "Configurator should start unset (owner-bootstrapped post-deploy)"
+        );
         assertEq(uint256(fresh.gracePeriod()), uint256(GRACE_SECONDS), "gracePeriod should be set");
         assertFalse(fresh.isEnabled(), "Bridge should start disabled");
         assertEq(

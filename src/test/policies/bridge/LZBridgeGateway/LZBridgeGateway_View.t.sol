@@ -5,6 +5,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
@@ -213,5 +214,68 @@ contract LZBridgeGatewayTests_View is LZBridgeGatewayTestBase {
             uint48(vm.getBlockTimestamp()),
             "lastUpdated should be the current timestamp"
         );
+    }
+
+    // ========= validateSetDelegate ========= //
+
+    function test_validateSetDelegate_acceptsNonzero() external {
+        gateway.validateSetDelegate(makeAddr("anyDelegate"));
+    }
+
+    function test_validateSetDelegate_revertsIfZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector,
+                "delegate"
+            )
+        );
+        gateway.validateSetDelegate(address(0));
+    }
+
+    // ========= validateIncreaseBridgedSupply ========= //
+
+    function test_validateIncreaseBridgedSupply_acceptsNonzeroOnCanonical() external {
+        gateway.validateIncreaseBridgedSupply(1);
+    }
+
+    function test_validateIncreaseBridgedSupply_revertsIfNotCanonical() external {
+        vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_NotCanonical.selector);
+        gateway2.validateIncreaseBridgedSupply(1);
+    }
+
+    function test_validateIncreaseBridgedSupply_revertsIfZeroAmount() external {
+        vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_ZeroAmount.selector);
+        gateway.validateIncreaseBridgedSupply(0);
+    }
+
+    // ========= validateDecreaseBridgedSupply ========= //
+
+    function test_validateDecreaseBridgedSupply_acceptsAmountWithinSupply() external {
+        vm.prank(bridgeConfigurator);
+        gateway.increaseBridgedSupply(100e9);
+
+        gateway.validateDecreaseBridgedSupply(50e9);
+    }
+
+    function test_validateDecreaseBridgedSupply_revertsIfNotCanonical() external {
+        vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_NotCanonical.selector);
+        gateway2.validateDecreaseBridgedSupply(1);
+    }
+
+    function test_validateDecreaseBridgedSupply_revertsIfZeroAmount() external {
+        vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_ZeroAmount.selector);
+        gateway.validateDecreaseBridgedSupply(0);
+    }
+
+    function test_validateDecreaseBridgedSupply_revertsIfUnderflow() external {
+        // Supply is zero in the canonical test base; any positive amount must underflow
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_BridgedSupplyUnderflow.selector,
+                0,
+                7
+            )
+        );
+        gateway.validateDecreaseBridgedSupply(7);
     }
 }

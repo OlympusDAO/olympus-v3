@@ -14,13 +14,14 @@ import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
@@ -52,6 +53,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     Kernel public kernel;
     LZBridgeGateway public gateway;
     LZEndpointDelegate public lzDelegate;
+    LZBridgeAndDelegateConfig public lzConfig;
     LZBridgeActivator public activator;
     LZBridgeSecurityUpgradeProposal public proposal;
     ROLESv1 public roles;
@@ -96,6 +98,9 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             );
             activator = LZBridgeActivator(addresses.getAddress("olympus-lz-bridge-activator"));
             lzCrossChainBridge = addresses.getAddress("olympus-periphery-lz-cross-chain-bridge");
+            lzConfig = LZBridgeAndDelegateConfig(
+                addresses.getAddress("olympus-policy-lz-bridge-and-delegate-config")
+            );
             console2.log("Contracts already deployed on mainnet");
         } else {
             // Deploy LZBridgeGateway (policy, canonical on mainnet)
@@ -121,6 +126,16 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             );
             vm.label(address(bridge), "LZCrossChainBridge");
             lzCrossChainBridge = address(bridge);
+
+            // Deploy LZBridgeAndDelegateConfig (timelock policy)
+            lzConfig = new LZBridgeAndDelegateConfig(
+                kernel,
+                address(gateway),
+                address(lzDelegate),
+                address(bridge),
+                1 days
+            );
+            vm.label(address(lzConfig), "LZBridgeAndDelegateConfig");
 
             // Deploy LZBridgeActivator (single-use, owned by timelock)
             activator = new LZBridgeActivator(
@@ -151,6 +166,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
                 address(bridge),
                 block.chainid
             );
+            addresses.addAddress(
+                "olympus-policy-lz-bridge-and-delegate-config",
+                address(lzConfig),
+                block.chainid
+            );
             addresses.addAddress("olympus-lz-bridge-activator", address(activator), block.chainid);
             console2.log("Contracts deployed locally");
         }
@@ -158,10 +178,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         // ========== PRE-OCG: MS BATCH 1 ==========
 
         // Simulate what the DAO MS does before the OCG proposal: activate the new
-        // LZBridgeGateway and the LZEndpointDelegate policy.
+        // LZBridgeGateway, LZEndpointDelegate, and LZBridgeAndDelegateConfig policies.
         vm.startPrank(daoMS);
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
         kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzConfig));
         vm.stopPrank();
 
         // ========== SIMULATE PROPOSAL ==========
@@ -360,6 +381,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         // 1. Policy active and enabled
         assertTrue(Policy(address(gateway)).isActive(), "LZBridgeGateway should be active");
         assertTrue(gateway.isEnabled(), "LZBridgeGateway should be enabled");
+        assertTrue(
+            Policy(address(lzConfig)).isActive(),
+            "LZBridgeAndDelegateConfig should be active"
+        );
+        assertTrue(lzConfig.isEnabled(), "LZBridgeAndDelegateConfig should be enabled");
 
         // 2. The DAO MS has bridge_admin role
         assertTrue(
@@ -391,7 +417,21 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             roles.hasRole(address(activator), BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
+        assertFalse(
+            roles.hasRole(address(activator), BRIDGE_CONFIGURATOR_ROLE),
+            "Activator should not have bridge_configurator role"
+        );
         assertTrue(activator.isActivated(), "Activator should be marked as activated");
+
+        // 4b. The permanent bridge_configurator role lives on the config policy.
+        assertTrue(
+            roles.hasRole(address(lzConfig), BRIDGE_CONFIGURATOR_ROLE),
+            "LZBridgeAndDelegateConfig should hold bridge_configurator role"
+        );
+        assertFalse(
+            roles.hasRole(daoMS, BRIDGE_CONFIGURATOR_ROLE),
+            "DAO MS should not hold bridge_configurator role"
+        );
 
         // 5. Gateway immutables
         assertEq(gateway.LZ_ENDPOINT(), LZConfigLib.ETH_LZ_ENDPOINT, "Endpoint should match");

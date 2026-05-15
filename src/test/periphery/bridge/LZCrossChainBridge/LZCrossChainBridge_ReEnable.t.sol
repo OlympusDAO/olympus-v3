@@ -98,6 +98,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
 
     function test_reEnable_revertsIfReEnablerCleared() external {
         bridge.disable(bytes(""));
+        vm.prank(bridgeConfiguratorContract);
         bridge.setReEnabler(address(0));
 
         vm.expectRevert(

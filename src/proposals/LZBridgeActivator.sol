@@ -18,7 +18,13 @@ import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 ///         working around the governor's 15-action limit.
 ///
 /// @dev Assumes:
-///      - The `admin` and `bridge_admin` roles have been granted to this contract.
+///      - The `admin`, `bridge_admin`, and `bridge_configurator` roles have been granted to
+///        this contract for the duration of the activation. `bridge_configurator` is the role
+///        that gates the privileged configuration mutators on the gateway and the LZ
+///        endpoint delegate; granting it temporarily lets the activator drive setup
+///        directly, without routing the calls through the LZBridgeAndDelegateConfig timelock.
+///        All three are revoked immediately after `activate()`, leaving `bridge_configurator`
+///        only on the LZBridgeAndDelegateConfig policy.
 ///      - The gateway and the LZEndpointDelegate policy have been activated in the Kernel
 ///        (by the DAO MS pre-OCG).
 ///      - The caller is this contract's owner (the OCG timelock).
@@ -103,7 +109,8 @@ contract LZBridgeActivator is Owned {
 
     /// @notice Configures and activates the LZBridgeGateway.
     /// @dev  This function assumes:
-    ///       - The `admin` and `bridge_admin` roles have been granted to this contract.
+    ///       - The `admin`, `bridge_admin`, and `bridge_configurator` roles have been granted
+    ///         to this contract for the duration of the activation.
     ///       - The LZEndpointDelegate policy is active in the Kernel.
     ///
     ///       This function reverts if:

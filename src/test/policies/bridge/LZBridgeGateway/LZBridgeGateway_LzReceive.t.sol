@@ -324,7 +324,7 @@ contract LZBridgeGatewayTests_LzReceive is LZBridgeGatewayTestBase {
 
         // Add extra bridgedSupply so the later inbound (500e9) does not underflow.
         // increaseBridgedSupply does not touch outRateLimits, preserving the 100e9 prime.
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.increaseBridgedSupply(400e9);
 
         // Receive 500e9 from non-canonical: the inflow clamps canonical outbound to zero

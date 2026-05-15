@@ -43,7 +43,7 @@ contract LZCrossChainBridgeTests_Sendable is LZCrossChainBridgeTestBase {
             limit: newLimit,
             window: DEFAULT_RATE_WINDOW
         });
-        vm.prank(admin);
+        vm.prank(bridgeConfiguratorRole);
         gateway.setOutRateLimits(configs);
 
         (, uint256 available) = bridge.sendable(NONCANONICAL_EID);

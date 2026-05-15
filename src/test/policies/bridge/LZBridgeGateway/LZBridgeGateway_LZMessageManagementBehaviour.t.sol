@@ -32,7 +32,7 @@ contract LZBridgeGatewayTests_LZMessageManagementBehaviour is LZBridgeGatewayTes
         bytes32 peer = _canonicalPeer();
 
         // 2. Skip nonce 1 before DVN verification, via the destination's delegate policy.
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.skip(CANONICAL_EID, peer, 1);
 
         assertEq(
@@ -65,7 +65,7 @@ contract LZBridgeGatewayTests_LZMessageManagementBehaviour is LZBridgeGatewayTes
         assertTrue(hashBefore != bytes32(0), "Payload hash should be set after verify");
 
         // 2. Admin nilifies the verified message via the destination's delegate policy.
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.nilify(CANONICAL_EID, peer, 1, hashBefore);
 
         bytes32 hashAfter = ep.inboundPayloadHash(address(gateway2), CANONICAL_EID, peer, 1);
@@ -95,17 +95,17 @@ contract LZBridgeGatewayTests_LZMessageManagementBehaviour is LZBridgeGatewayTes
         assertTrue(payloadHash != bytes32(0), "Payload hash should be set");
 
         // 2. Nilify (invalidate the hash, replacing it with NIL).
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.nilify(CANONICAL_EID, peer, 1, payloadHash);
 
         // 3. Advance lazyInboundNonce past nonce 1 (burn requires nonce <= lazyInboundNonce).
         //    inboundNonce() returns 1 (the NIL hash counts as "verified" for nonce tracking).
         //    skip() requires nonce == inboundNonce + 1, so we skip nonce 2.
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.skip(CANONICAL_EID, peer, 2);
 
         // 4. Burn the nilified nonce (pass the NIL hash as the payloadHash).
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.burn(CANONICAL_EID, peer, 1, bytes32(type(uint256).max));
 
         // 5. The payload hash is permanently deleted.
@@ -138,7 +138,7 @@ contract LZBridgeGatewayTests_LZMessageManagementBehaviour is LZBridgeGatewayTes
         (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         lzDelegate2.clear(origin, guid, message);
 
         // 3. The payload hash is deleted and the nonce advances.

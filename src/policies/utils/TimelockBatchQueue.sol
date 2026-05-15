@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
+import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
 
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -31,7 +31,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         Child contracts must implement the virtual hooks by reverting on failure. Hooks
 ///         should not return booleans; a successful return means the hook accepted the
 ///         operation.
-abstract contract TimelockBatchQueue is ITimelockBatchQueue {
+abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     // ========== STATE ========== //
 
     /// @inheritdoc ITimelockBatchQueue
@@ -405,9 +405,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue {
     ///
     /// @param  interfaceId_ The interface identifier, as specified in ERC-165.
     /// @return bool         True if the contract implements `interfaceId_`.
-    function supportsInterface(bytes4 interfaceId_) public view virtual returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
-            interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(ITimelockBatchQueue).interfaceId;
+            interfaceId_ == type(ITimelockBatchQueue).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }

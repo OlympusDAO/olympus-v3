@@ -5,13 +5,19 @@ import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDel
 
 // Interfaces
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
+// Constants
+import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev ILZEndpointV2Authorized endpoint configuration via the LZEndpointDelegate policy: mock-based
-///      verification that every external OApp-authorized call lands on the LZ endpoint with the gateway
-///      passed as the OApp argument, plus role-gated access control.
+///      verification that every external OApp-authorized call lands on the LZ endpoint with the
+///      gateway passed as the OApp argument, plus role-gated access control. Every entry point
+///      is gated to `bridge_configurator`.
 contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
-    function _test_setSendLibrary(address caller_) internal {
+    function test_setSendLibrary_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
 
         vm.mockCall(
@@ -33,27 +39,21 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
                 lib
             )
         );
-        vm.prank(caller_);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setSendLibrary(NONCANONICAL_EID, lib);
     }
 
-    function test_setSendLibrary_adminCanCall() external {
-        _test_setSendLibrary(admin);
-    }
+    function testFuzz_setSendLibrary_revertsIfNotBridgeConfigurator(address caller_) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
-    function test_setSendLibrary_bridgeAdminCanCall() external {
-        _test_setSendLibrary(bridgeAdmin);
-    }
-
-    function testFuzz_setSendLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         lzDelegate.setSendLibrary(NONCANONICAL_EID, address(1));
     }
 
-    function _test_setReceiveLibrary(address caller_) internal {
+    function test_setReceiveLibrary_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
         uint256 gracePeriod = 100;
 
@@ -78,27 +78,21 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
                 gracePeriod
             )
         );
-        vm.prank(caller_);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setReceiveLibrary(NONCANONICAL_EID, lib, gracePeriod);
     }
 
-    function test_setReceiveLibrary_adminCanCall() external {
-        _test_setReceiveLibrary(admin);
-    }
+    function testFuzz_setReceiveLibrary_revertsIfNotBridgeConfigurator(address caller_) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
-    function test_setReceiveLibrary_bridgeAdminCanCall() external {
-        _test_setReceiveLibrary(bridgeAdmin);
-    }
-
-    function testFuzz_setReceiveLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         lzDelegate.setReceiveLibrary(NONCANONICAL_EID, address(1), 0);
     }
 
-    function _test_setReceiveLibraryTimeout(address caller_) internal {
+    function test_setReceiveLibraryTimeout_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
         uint256 expiry = vm.getBlockTimestamp() + 1 days;
 
@@ -123,29 +117,23 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
                 expiry
             )
         );
-        vm.prank(caller_);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setReceiveLibraryTimeout(NONCANONICAL_EID, lib, expiry);
     }
 
-    function test_setReceiveLibraryTimeout_adminCanCall() external {
-        _test_setReceiveLibraryTimeout(admin);
-    }
-
-    function test_setReceiveLibraryTimeout_bridgeAdminCanCall() external {
-        _test_setReceiveLibraryTimeout(bridgeAdmin);
-    }
-
-    function testFuzz_setReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_setReceiveLibraryTimeout_revertsIfNotBridgeConfigurator(
         address caller_
     ) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+        vm.assume(caller_ != bridgeConfigurator);
 
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         lzDelegate.setReceiveLibraryTimeout(NONCANONICAL_EID, address(1), 0);
     }
 
-    function _test_setEndpointConfig(address caller_) internal {
+    function test_setEndpointConfig_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
         SetConfigParam[] memory params = new SetConfigParam[](0);
 
@@ -168,23 +156,17 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
                 params
             )
         );
-        vm.prank(caller_);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setEndpointConfig(lib, params);
     }
 
-    function test_setEndpointConfig_adminCanCall() external {
-        _test_setEndpointConfig(admin);
-    }
-
-    function test_setEndpointConfig_bridgeAdminCanCall() external {
-        _test_setEndpointConfig(bridgeAdmin);
-    }
-
-    function testFuzz_setEndpointConfig_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+    function testFuzz_setEndpointConfig_revertsIfNotBridgeConfigurator(address caller_) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
         SetConfigParam[] memory params = new SetConfigParam[](0);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         lzDelegate.setEndpointConfig(address(1), params);
     }

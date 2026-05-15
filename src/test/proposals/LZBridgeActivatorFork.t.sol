@@ -14,7 +14,7 @@ import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -90,6 +90,7 @@ contract LZBridgeActivatorForkTest is Test {
         vm.startPrank(TIMELOCK);
         rolesAdmin.grantRole(ADMIN_ROLE, address(activator));
         rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, address(activator));
+        rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, address(activator));
         vm.stopPrank();
     }
 

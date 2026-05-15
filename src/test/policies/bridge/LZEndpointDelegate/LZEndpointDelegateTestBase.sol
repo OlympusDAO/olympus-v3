@@ -8,7 +8,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
-import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockLZBridgeGateway} from "src/test/policies/bridge/LZEndpointDelegate/MockLZBridgeGateway.sol";
 
 /// @dev Minimal test base for LZEndpointDelegate. The delegate is deployed against a freshly
@@ -26,6 +26,7 @@ contract LZEndpointDelegateTestBase is Test {
 
     address admin = makeAddr("admin");
     address bridgeAdmin = makeAddr("bridgeAdmin");
+    address bridgeConfigurator = makeAddr("bridgeConfigurator");
 
     uint32 constant CANONICAL_EID = 1;
     uint32 constant NONCANONICAL_EID = 2;
@@ -45,5 +46,6 @@ contract LZEndpointDelegateTestBase is Test {
 
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
     }
 }

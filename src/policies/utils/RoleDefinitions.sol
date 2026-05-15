@@ -10,19 +10,19 @@ bytes32 constant MANAGER_ROLE = "manager";
 /// @dev Heart role, e.g. performing periodic tasks.
 bytes32 constant HEART_ROLE = "heart";
 
-/// @dev LZ bridge configurator role. Held by the LZBridgeAndDelegateConfig policy so that
-///      timelocked LayerZero bridge configuration goes through the timelock queue.
-///      Direct holders bypass the timelock and should only be granted temporarily for
-///      bootstrap.
+/// @dev LZ bridge configurator role. Gates the privileged configuration mutators on
+///      LZBridgeGateway and LZEndpointDelegate. Expected to be granted exclusively to the
+///      LZBridgeAndDelegateConfig policy, in which case calls are dispatched through that
+///      policy's timelock queue. Any holder that does not itself enforce a timelock on
+///      these mutators should only be granted the role temporarily for bootstrap.
 bytes32 constant BRIDGE_CONFIGURATOR_ROLE = "bridge_configurator";
-/// @dev LZ bridge administrator role. After the timelock migration the role is a queue
-///      proposer on LZBridgeAndDelegateConfig and the caller of LZBridgeGateway's
-///      one-shot initializeBridgedSupply.
+/// @dev LZ bridge administrator role. Queue proposer on LZBridgeAndDelegateConfig for the
+///      gateway / delegate / periphery configuration helpers, and the caller of
+///      LZBridgeGateway's one-shot `initializeBridgedSupply` bootstrap.
 bytes32 constant BRIDGE_ADMIN_ROLE = "bridge_admin";
-/// @dev LZ bridge facilitator role. Held by the periphery LZCrossChainBridge contract so
-///      that it can call LZBridgeGateway.burnAndSend on behalf of users.
+/// @dev LZ bridge facilitator role. Typically assigned to the periphery LZCrossChainBridge
+///      contract so that it can call LZBridgeGateway.burnAndSend on behalf of users.
 bytes32 constant BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-/// @dev LZ bridge rate-limit proposer role. After the timelock migration it is a queue
-///      proposer on LZBridgeAndDelegateConfig for rate-limit and in-flight clear
-///      operations.
+/// @dev LZ bridge rate-limit proposer role. Queue proposer on LZBridgeAndDelegateConfig
+///      for the rate-limit and in-flight-clear helpers.
 bytes32 constant BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
