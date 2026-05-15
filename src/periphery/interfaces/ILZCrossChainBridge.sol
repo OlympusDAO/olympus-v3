@@ -64,10 +64,6 @@ interface ILZCrossChainBridge {
     /// @notice Sets the address authorized to call `reEnable()`.
     /// @dev Only callable by the owner. The zero address is permitted and effectively
     ///      disables the `reEnable()` entry point until a non-zero address is set.
-    ///
-    ///      Reverts if:
-    ///      - The caller is not the owner.
-    ///
     /// @param reEnabler_ The new re-enabler address, or `address(0)` to clear.
     function setReEnabler(address reEnabler_) external;
 
@@ -83,7 +79,6 @@ interface ILZCrossChainBridge {
     function OHM() external view returns (address);
 
     /// @notice Estimates the fee for sending OHM to a destination chain.
-    /// @dev Proxies to the gateway's estimateSendFee function with empty extra options.
     ///
     /// @param dstEid_ The LayerZero destination endpoint ID.
     /// @param to_ The recipient address on the destination chain.
@@ -94,4 +89,22 @@ interface ILZCrossChainBridge {
         address to_,
         uint256 amount_
     ) external view returns (MessagingFee memory fee);
+
+    /// @notice Returns the current outbound capacity for a destination endpoint, with the
+    ///         in-flight amount decayed against the current timestamp.
+    ///
+    /// @param dstEid_ The LayerZero destination endpoint ID.
+    /// @return inFlight The decayed outbound in-flight amount at the current timestamp.
+    /// @return available The amount that may still be sent to the destination before the
+    ///         outbound rate limit is exceeded.
+    function sendable(uint32 dstEid_) external view returns (uint256 inFlight, uint256 available);
+
+    /// @notice Returns the current inbound capacity for a source endpoint, with the
+    ///         in-flight amount decayed against the current timestamp.
+    ///
+    /// @param srcEid_ The LayerZero source endpoint ID.
+    /// @return inFlight The decayed inbound in-flight amount at the current timestamp.
+    /// @return available The amount that may still be received from the source before
+    ///         the inbound rate limit is exceeded.
+    function receivable(uint32 srcEid_) external view returns (uint256 inFlight, uint256 available);
 }

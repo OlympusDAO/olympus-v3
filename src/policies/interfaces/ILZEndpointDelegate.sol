@@ -6,8 +6,8 @@ pragma solidity >=0.8.18;
 ///         a LayerZero V2 endpoint delegate for a specific LZBridgeGateway, exposing the
 ///         OApp-authorized endpoint surface via ILZEndpointV2Authorized.
 /// @dev Implementations are designed to be assigned as the endpoint delegate of the gateway
-///      (via `LZBridgeGateway.setDelegate(...)`) so the LayerZero endpoint accepts the calls
-///      forwarded by this policy with the gateway as the OApp argument.
+///      so the LayerZero endpoint accepts the calls forwarded by this policy with the gateway
+///      as the OApp argument.
 interface ILZEndpointDelegate {
     // ========= VIEW FUNCTIONS ========= //
 

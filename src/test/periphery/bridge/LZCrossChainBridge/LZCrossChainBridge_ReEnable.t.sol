@@ -20,7 +20,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         bridge.disable(bytes(""));
         assertFalse(bridge.isEnabled(), "Bridge should be disabled");
 
-        vm.warp(block.timestamp + (GRACE_SECONDS - 1));
+        vm.warp(vm.getBlockTimestamp() + (GRACE_SECONDS - 1));
 
         vm.prank(reEnablerAddr);
         bridge.reEnable();
@@ -28,7 +28,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         assertTrue(bridge.isEnabled(), "Bridge should be enabled after reEnable");
         assertEq(
             uint256(bridge.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed by reEnable"
         );
     }
@@ -45,7 +45,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         assertTrue(bridge.isEnabled(), "Bridge should be enabled after reEnable at exact deadline");
         assertEq(
             uint256(bridge.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed by reEnable at exact deadline"
         );
     }
@@ -53,12 +53,12 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
     function test_reEnable_emitsLegacyAndTransitionEvents() external {
         bridge.disable(bytes(""));
 
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
 
         vm.expectEmit(false, false, false, false);
         emit IEnabler.Enabled();
         vm.expectEmit(true, true, false, true);
-        emit IEnablerV2.Transition(reEnablerAddr, true, bytes(""), uint48(block.timestamp));
+        emit IEnablerV2.Transition(reEnablerAddr, true, bytes(""), uint48(vm.getBlockTimestamp()));
         vm.prank(reEnablerAddr);
         bridge.reEnable();
     }
@@ -66,7 +66,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
     function test_reEnable_secondCycleSucceeds() external {
         // First disable + reEnable
         bridge.disable(bytes(""));
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.prank(reEnablerAddr);
         bridge.reEnable();
         assertTrue(bridge.isEnabled(), "Bridge should be enabled after first reEnable");
@@ -75,7 +75,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         bridge.disable(bytes(""));
         assertFalse(bridge.isEnabled(), "Bridge should be disabled after second disable");
 
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.prank(reEnablerAddr);
         bridge.reEnable();
         assertTrue(bridge.isEnabled(), "Bridge should be enabled after second reEnable");
@@ -120,7 +120,7 @@ contract LZCrossChainBridgeTests_ReEnable is LZCrossChainBridgeTestBase {
         assertTrue(bridge.isEnabled(), "Bridge should be enabled after reEnable at grace deadline");
         assertEq(
             uint256(bridge.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed by reEnable at grace deadline"
         );
     }

@@ -17,7 +17,7 @@ contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
         assertTrue(bridge.isEnabled(), "Should be enabled");
         assertEq(
             uint256(bridge.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed on enable"
         );
     }
@@ -26,7 +26,7 @@ contract LZCrossChainBridgeTests_EnableDisable is LZCrossChainBridgeTestBase {
         bridge.disable(bytes(""));
 
         vm.expectEmit(true, true, false, true);
-        emit IEnablerV2.Transition(owner, true, bytes(""), uint48(block.timestamp));
+        emit IEnablerV2.Transition(owner, true, bytes(""), uint48(vm.getBlockTimestamp()));
         bridge.enable(bytes(""));
     }
 

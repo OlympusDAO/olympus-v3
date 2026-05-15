@@ -35,7 +35,7 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller, true, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(caller, true, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller);
         harness.enable(SAMPLE_DATA);
@@ -44,7 +44,7 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
     function test_enable_succeedsWithEmptyData() external {
         _enableAs(caller, "");
 
-        _assertState(true, uint48(block.timestamp), "post-enable");
+        _assertState(true, uint48(vm.getBlockTimestamp()), "post-enable");
         assertEq(harness.lastBeforeEnableData(), "", "empty data forwarded");
     }
 
@@ -60,12 +60,12 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
         _enableAs(caller, SAMPLE_DATA);
         skip(100);
         _disableAs(caller, SAMPLE_DATA);
-        uint48 atDisable = uint48(block.timestamp);
+        uint48 atDisable = uint48(vm.getBlockTimestamp());
 
         skip(200);
         _enableAs(caller, SAMPLE_DATA);
 
-        _assertState(true, uint48(block.timestamp), "post re-enable through enable");
+        _assertState(true, uint48(vm.getBlockTimestamp()), "post re-enable through enable");
         assertGt(harness.lastTransitionAt(), atDisable, "transition timestamp advanced");
     }
 
@@ -73,7 +73,7 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(otherCaller, true, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(otherCaller, true, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(otherCaller);
         harness.enable(SAMPLE_DATA);
@@ -95,7 +95,7 @@ contract EnablerV2Tests_Enable is EnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller_, true, "", uint48(block.timestamp));
+        emit Transition(caller_, true, "", uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller_);
         harness.enable("");

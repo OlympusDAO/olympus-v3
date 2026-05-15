@@ -25,7 +25,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         assertFalse(gateway.isEnabled(), "Gateway should be disabled");
         assertFalse(gateway.isReceiveEnabled(), "isReceiveEnabled should be false after disable");
 
-        vm.warp(block.timestamp + (GRACE_SECONDS - 1));
+        vm.warp(vm.getBlockTimestamp() + (GRACE_SECONDS - 1));
 
         vm.prank(manager);
         gateway.reEnable();
@@ -37,7 +37,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         );
         assertEq(
             uint256(gateway.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed by reEnable"
         );
     }
@@ -46,12 +46,12 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         vm.prank(admin);
         gateway.disable(bytes(""));
 
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
 
         vm.expectEmit(false, false, false, false);
         emit IEnabler.Enabled();
         vm.expectEmit(true, true, false, true);
-        emit IEnablerV2.Transition(manager, true, bytes(""), uint48(block.timestamp));
+        emit IEnablerV2.Transition(manager, true, bytes(""), uint48(vm.getBlockTimestamp()));
         vm.prank(manager);
         gateway.reEnable();
     }
@@ -60,7 +60,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         // First disable + reEnable
         vm.prank(admin);
         gateway.disable(bytes(""));
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.prank(manager);
         gateway.reEnable();
         assertTrue(gateway.isEnabled(), "Gateway should be enabled after first reEnable");
@@ -71,7 +71,7 @@ contract LZBridgeGatewayTests_ReEnable is LZBridgeGatewayTestBase {
         gateway.disable(bytes(""));
         assertFalse(gateway.isEnabled(), "Gateway should be disabled after second disable");
 
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.prank(manager);
         gateway.reEnable();
         assertTrue(gateway.isEnabled(), "Gateway should be enabled after second reEnable");

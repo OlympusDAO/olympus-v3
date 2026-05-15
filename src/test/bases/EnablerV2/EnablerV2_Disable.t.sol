@@ -25,7 +25,7 @@ contract EnablerV2Tests_Disable is EnablerV2TestBase {
         skip(500);
         _disableAs(caller, SAMPLE_DATA);
 
-        _assertState(false, uint48(block.timestamp), "post-disable");
+        _assertState(false, uint48(vm.getBlockTimestamp()), "post-disable");
     }
 
     function test_disable_invokesAuthorizeBeforeBeforeHook() external givenEnabled {
@@ -40,7 +40,7 @@ contract EnablerV2Tests_Disable is EnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Disabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller, false, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(caller, false, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller);
         harness.disable(SAMPLE_DATA);
@@ -49,7 +49,7 @@ contract EnablerV2Tests_Disable is EnablerV2TestBase {
     function test_disable_succeedsWithEmptyData() external givenEnabled {
         _disableAs(caller, "");
 
-        _assertState(false, uint48(block.timestamp), "post-disable");
+        _assertState(false, uint48(vm.getBlockTimestamp()), "post-disable");
         assertEq(harness.lastBeforeDisableData(), "", "empty data forwarded");
     }
 
@@ -89,7 +89,7 @@ contract EnablerV2Tests_Disable is EnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(harness));
         emit Disabled();
         vm.expectEmit(true, true, true, true, address(harness));
-        emit Transition(caller_, false, "", uint48(block.timestamp));
+        emit Transition(caller_, false, "", uint48(vm.getBlockTimestamp()));
 
         vm.prank(caller_);
         harness.disable("");

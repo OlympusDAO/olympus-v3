@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.4;
 
 import {ExecutorConfig} from "@lz-evm-messagelib-v2-3.0.162/SendLibBase.sol";
 import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
@@ -116,6 +116,34 @@ library LZConfigLib {
 
     uint32 internal constant MAX_MESSAGE_SIZE = 10_000;
 
+    // ========== OHM BRIDGE RATE LIMITS ========== //
+
+    /// @notice Sliding-window length applied to every outbound and inbound rate limit on
+    ///         the LZ bridge gateway, in seconds.
+    /// @dev Matches the `window` field in `IOffsettingRateLimiter.RateLimitConfig`.
+    uint32 internal constant RATE_LIMIT_WINDOW = 1 days;
+
+    /// @notice Outbound OHM rate limit (9 decimals) per remote endpoint when the local
+    ///         chain is canonical (Ethereum). Applies to every non-canonical peer.
+    uint256 internal constant ETH_OUT_RATE_LIMIT = 100_000e9;
+
+    /// @notice Inbound OHM rate limit (9 decimals) per remote endpoint when the local
+    ///         chain is canonical (Ethereum). Applies to every non-canonical peer.
+    uint256 internal constant ETH_IN_RATE_LIMIT = 55_000e9;
+
+    /// @notice Outbound OHM rate limit (9 decimals) when the local chain is
+    ///         non-canonical and the remote endpoint is Ethereum (canonical).
+    uint256 internal constant L2_OUT_TO_ETH_RATE_LIMIT = 50_000e9;
+
+    /// @notice Outbound OHM rate limit (9 decimals) when the local chain is
+    ///         non-canonical and the remote endpoint is another non-canonical peer.
+    uint256 internal constant L2_OUT_TO_L2_RATE_LIMIT = 100_000e9;
+
+    /// @notice Inbound OHM rate limit (9 decimals) per remote endpoint when the local
+    ///         chain is non-canonical (Arbitrum, Optimism, Base, Berachain). Applies
+    ///         to deliveries from Ethereum and from every other non-canonical peer.
+    uint256 internal constant L2_IN_RATE_LIMIT = 110_000e9;
+
     // ========== CONFIRMATIONS ========== //
 
     // Source: LayerZero Scan Default Checker and OFT Quickstart guides
@@ -227,6 +255,79 @@ library LZConfigLib {
         if (eid_ == BASE_EID) return BASE_OUTBOUND_CONFIRMATIONS;
         if (eid_ == BERA_EID) return BERA_OUTBOUND_CONFIRMATIONS;
         revert LZConfigLib_UnsupportedEid(eid_);
+    }
+
+    /// @notice Returns the outbound OHM rate limit for the given (local, remote) EID
+    ///         pair.
+    /// @dev On canonical Ethereum every remote shares the same outbound ceiling. On a
+    ///      non-canonical chain the ceiling depends on whether the remote is Ethereum
+    ///      or another non-canonical peer.
+    function outRateLimitForRoute(
+        uint32 localEid_,
+        uint32 remoteEid_
+    ) internal pure returns (uint256) {
+        if (localEid_ == ETH_EID) {
+            if (
+                remoteEid_ == ARB_EID ||
+                remoteEid_ == OPT_EID ||
+                remoteEid_ == BASE_EID ||
+                remoteEid_ == BERA_EID
+            ) return ETH_OUT_RATE_LIMIT;
+            revert LZConfigLib_UnsupportedEid(remoteEid_);
+        }
+        if (
+            localEid_ == ARB_EID ||
+            localEid_ == OPT_EID ||
+            localEid_ == BASE_EID ||
+            localEid_ == BERA_EID
+        ) {
+            if (remoteEid_ == ETH_EID) return L2_OUT_TO_ETH_RATE_LIMIT;
+            if (
+                remoteEid_ == ARB_EID ||
+                remoteEid_ == OPT_EID ||
+                remoteEid_ == BASE_EID ||
+                remoteEid_ == BERA_EID
+            ) return L2_OUT_TO_L2_RATE_LIMIT;
+            revert LZConfigLib_UnsupportedEid(remoteEid_);
+        }
+        revert LZConfigLib_UnsupportedEid(localEid_);
+    }
+
+    /// @notice Returns the inbound OHM rate limit for the given (local, remote) EID
+    ///         pair.
+    /// @dev Inbound limits do not differ by remote on non-canonical chains; the same
+    ///      ceiling applies to deliveries from Ethereum and from every other
+    ///      non-canonical peer. The `remoteEid_` argument is validated for symmetry
+    ///      with `outRateLimitForRoute`.
+    function inRateLimitForRoute(
+        uint32 localEid_,
+        uint32 remoteEid_
+    ) internal pure returns (uint256) {
+        if (localEid_ == ETH_EID) {
+            if (
+                remoteEid_ == ARB_EID ||
+                remoteEid_ == OPT_EID ||
+                remoteEid_ == BASE_EID ||
+                remoteEid_ == BERA_EID
+            ) return ETH_IN_RATE_LIMIT;
+            revert LZConfigLib_UnsupportedEid(remoteEid_);
+        }
+        if (
+            localEid_ == ARB_EID ||
+            localEid_ == OPT_EID ||
+            localEid_ == BASE_EID ||
+            localEid_ == BERA_EID
+        ) {
+            if (
+                remoteEid_ == ETH_EID ||
+                remoteEid_ == ARB_EID ||
+                remoteEid_ == OPT_EID ||
+                remoteEid_ == BASE_EID ||
+                remoteEid_ == BERA_EID
+            ) return L2_IN_RATE_LIMIT;
+            revert LZConfigLib_UnsupportedEid(remoteEid_);
+        }
+        revert LZConfigLib_UnsupportedEid(localEid_);
     }
 
     /// @notice Returns the executor address for a given V2 EID.

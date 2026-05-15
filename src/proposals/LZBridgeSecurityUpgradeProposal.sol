@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
 pragma solidity >=0.8.30;
@@ -40,7 +39,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 ///         The periphery LZCrossChainBridge is configured separately by the DAO MS.
 ///
 ///         The LZBridgeActivator performs all endpoint configuration,
-///         peer setup, enforced options, and enablement in a single proposal action.
+///         peer setup, enforced options, rate limits and enablement in a single proposal action.
 ///         It is used to work around the governor's 15-action limit,
 ///
 ///         Assumes:
@@ -59,6 +58,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     /// @dev Role constants.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== PROPOSAL ========== //
 
@@ -87,7 +87,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- Separation into an infrastructure policy (LZBridgeGateway) that handles privileged operations and a user-facing periphery contract (LZCrossChainBridge), following the pattern established by the CCIP bridge.\n",
                 "- Hardened bridge operations: send and receive are blocked while the bridge is disabled; the custom failed-message retry mechanism is removed in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from untrusted senders.\n",
                 "- Migration from default LayerZero V1 configuration to explicitly pinned V2 endpoint configuration (SendUln302/ReceiveUln302 libraries, DVN and Executor config), eliminating the drag-along vulnerability and the proof library substitution attack vector. Verification requires four DVNs on every route.\n",
-                "- Introduction of per-endpoint rate limiting on both outbound and inbound transfers, providing a time-windowed throttle. Rate limits are left unconfigured by default and configured separately as needed.\n",
+                "- Introduction of per-endpoint bidirectional rate limiting on outbound and inbound transfers, with a 24-hour sliding window. Outbound from Ethereum to each non-canonical chain is capped at 100,000 OHM and inbound from each non-canonical chain is capped at 55,000 OHM.\n",
                 "- Replacement of the LayerZero V1 endpoint's forceResumeReceive with native V2 message recovery primitives (skip, nilify, burn, clear), administered by the bridge_admin role.\n",
                 "- Replacement of LayerZero V1 endpoint adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message. The gateway supports combining enforced options with caller-supplied options at send time, enabling future facilitator upgrades; the current LZCrossChainBridge facilitator passes no extra options.\n",
                 "- Retained mint/burn model to avoid supply inflation and double-counting.\n",
@@ -108,7 +108,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
-                "1. Grant the `bridge_admin` role to the DAO MS.\n",
+                "1. Grant the `bridge_admin` and `bridge_rate_limiter` roles to the DAO MS.\n",
                 "2. Grant the `manager` role to the DAO MS, authorizing it to call `reEnable()` on the LZBridgeGateway within the grace window after a disable.\n",
                 "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.\n",
@@ -117,6 +117,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain) via the LZEndpointDelegate policy. Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
+                "   - Sets per-endpoint bidirectional rate limits (outbound and inbound) on each remote chain.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
                 "6. Revoke temporary roles from the LZBridgeActivator contract.\n",
                 "\n",
@@ -149,45 +150,44 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
         ROLESv1 roles = ROLESv1(rolesAddr);
 
-        // 1. Grant bridge_admin role to DAO MS (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
+        // 1. Grant bridge_admin role to the DAO MS (conditional)
         if (!roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
             _pushAction(
                 rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
-                    _BRIDGE_ADMIN_ROLE,
-                    daoMS
-                ),
-                "Grant bridge_admin role to DAO MS"
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, daoMS),
+                "Grant bridge_admin role to the DAO MS"
             );
         }
 
-        // 2. Grant manager role to DAO MS so it can re-enable the gateway after
-        //    a disable, within the grace window. (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
-        if (!roles.hasRole(daoMS, MANAGER_ROLE)) {
+        // 1b. Grant bridge_rate_limiter role to the DAO MS (conditional)
+        if (!roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
-                    MANAGER_ROLE,
+                    _BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 ),
-                "Grant manager role to DAO MS"
+                "Grant bridge_rate_limiter role to the DAO MS"
+            );
+        }
+
+        // 2. Grant manager role to the DAO MS so it can re-enable the gateway after
+        //    a disable, within the grace window. (conditional)
+        if (!roles.hasRole(daoMS, MANAGER_ROLE)) {
+            _pushAction(
+                rolesAdmin,
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, MANAGER_ROLE, daoMS),
+                "Grant manager role to the DAO MS"
             );
         }
 
         // 3. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
-        /// forge-lint: disable-next-line(unsafe-typecast)
         if (!roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    /// forge-lint: disable-next-line(unsafe-typecast)
                     _BRIDGE_FACILITATOR_ROLE,
                     lzCrossChainBridge
                 ),
@@ -198,22 +198,12 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 4. Grant temporary roles to the activator
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                ADMIN_ROLE,
-                activator
-            ),
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, ADMIN_ROLE, activator),
             "Grant admin role to temporary activator contract"
         );
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                _BRIDGE_ADMIN_ROLE,
-                activator
-            ),
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, activator),
             "Grant bridge_admin role to temporary activator contract"
         );
 
@@ -227,22 +217,12 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 6. Revoke temporary roles from the activator
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.revokeRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                ADMIN_ROLE,
-                activator
-            ),
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, ADMIN_ROLE, activator),
             "Revoke admin role from temporary activator contract"
         );
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.revokeRole.selector,
-                /// forge-lint: disable-next-line(unsafe-typecast)
-                _BRIDGE_ADMIN_ROLE,
-                activator
-            ),
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, _BRIDGE_ADMIN_ROLE, activator),
             "Revoke bridge_admin role from temporary activator contract"
         );
     }
@@ -282,30 +262,23 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
 
         // 3. Validate roles
+        require(roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE), "DAO MS does not have bridge_admin role");
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
-            "DAO MS does not have bridge_admin role"
+            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            "DAO MS does not have bridge_rate_limiter role"
         );
+        require(roles.hasRole(daoMS, MANAGER_ROLE), "DAO MS does not have manager role");
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, MANAGER_ROLE),
-            "DAO MS does not have manager role"
-        );
-        require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge does not have bridge_facilitator role"
         );
 
         // 4. Validate activator roles revoked
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             !roles.hasRole(address(activator), ADMIN_ROLE),
             "Activator should not have admin role"
         );
         require(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             !roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
@@ -322,13 +295,16 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         // 8. Validate enforced options
         _validateEnforcedOptions(gw);
 
-        // 9. Validate the LZEndpointDelegate policy is configured as the gateway's LZ endpoint delegate
+        // 9. Validate rate limits
+        _validateRateLimits(gw);
+
+        // 10. Validate the LZEndpointDelegate policy is configured as the gateway's LZ endpoint delegate
         require(
             IEndpointV2State(address(ep)).delegates(address(gw)) == address(lzDelegate),
             "Delegate should be LZEndpointDelegate"
         );
 
-        // 10. Validate LZEndpointDelegate parameters point at the gateway and endpoint
+        // 11. Validate LZEndpointDelegate parameters point at the gateway and endpoint
         require(lzDelegate.GATEWAY() == address(gw), "LZEndpointDelegate GATEWAY mismatch");
         require(
             lzDelegate.LZ_ENDPOINT() == LZConfigLib.ETH_LZ_ENDPOINT,
@@ -524,6 +500,35 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         }
     }
 
+    function _validateRateLimits(LZBridgeGateway gw) internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            (, uint256 outLimit, uint32 outWindow, ) = gw.outRateLimits(remoteEids[i]);
+            require(outLimit == expectedOut, "Outbound rate limit mismatch");
+            require(outWindow == expectedWindow, "Outbound rate window mismatch");
+
+            (, uint256 inLimit, uint32 inWindow, ) = gw.inRateLimits(remoteEids[i]);
+            require(inLimit == expectedIn, "Inbound rate limit mismatch");
+            require(inWindow == expectedWindow, "Inbound rate window mismatch");
+        }
+    }
+
     // ========== INTERNAL HELPERS ========== //
 
     /// @notice Reverts if the address is zero, including the registry key in the message.
@@ -536,4 +541,3 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 contract LZBridgeSecurityUpgradeProposalScript is ProposalScript {
     constructor() ProposalScript(new LZBridgeSecurityUpgradeProposal()) {}
 }
-/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)

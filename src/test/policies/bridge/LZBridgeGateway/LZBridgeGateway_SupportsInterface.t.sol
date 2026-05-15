@@ -6,6 +6,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 // Interfaces
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {IRescueable} from "src/bases/interfaces/IRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -13,7 +14,6 @@ import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 
 // Libraries
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
@@ -35,6 +35,13 @@ contract LZBridgeGatewayTests_SupportsInterface is LZBridgeGatewayTestBase {
         assertTrue(
             gateway.supportsInterface(type(ILayerZeroReceiver).interfaceId),
             "Should support ILayerZeroReceiver"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIOffsettingRateLimiter() external view {
+        assertTrue(
+            gateway.supportsInterface(type(IOffsettingRateLimiter).interfaceId),
+            "Should support IOffsettingRateLimiter"
         );
     }
 

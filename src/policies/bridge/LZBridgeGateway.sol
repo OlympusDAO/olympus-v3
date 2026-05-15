@@ -2,11 +2,14 @@
 pragma solidity >=0.8.30;
 
 /// Peer management, endpoint send/receive, and enforced-option logic ported from
-/// @layerzerolabs/oapp-evm v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).
+/// `@layerzerolabs/oapp-evm` v0.4.1 (OAppCore, OAppSender, OAppReceiver, OAppOptionsType3).
 /// Reimplemented inline rather than inherited because those contracts assume OZ Ownable,
 /// which is incompatible with the Bophades Kernel RBAC model.
-/// RateLimiter is the only oapp-evm contract inherited directly (no Ownable dependency).
-/// _outflow() and _inflow() are overridden to make rate limiting opt-in per EID.
+/// Bidirectional rate limiting is provided by the in-repo `OffsettingRateLimiter`
+/// (src/bases/) which tracks independent outbound and inbound limits per EID and
+/// offsets activity in one direction against the in-flight amount of the other. Limits
+/// are mandatory: every configured peer must have both directions configured before
+/// traffic is allowed.
 ///
 /// Ported logic (~ = identical, -> = differs):
 ///
@@ -27,12 +30,13 @@ import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptio
 import {ILayerZeroEndpointV2, MessagingParams, MessagingFee, MessagingReceipt, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {ILayerZeroReceiver} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroReceiver.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Contracts
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
+import {OffsettingRateLimiter} from "src/bases/OffsettingRateLimiter.sol";
 import {ReEnabler} from "src/bases/ReEnabler.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
@@ -46,7 +50,7 @@ import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 ///         OHM transfers.
 ///         Performs OHM mint/burn via MINTR, manages peers, enforces options and rate limits,
 ///         tracks bridged supply on canonical chains, and bounds inflow minting to previously burned OHM via mint approval.
-///         OApp-authorized endpoint operations (libraries, ULN/Executor config, inbound message recovery)
+///         OApp-authorized endpoint operations (libraries, ULN/Executor config, messaging channel control)
 ///         live on the LZEndpointDelegate policy, which is assigned via `setDelegate`.
 contract LZBridgeGateway is
     ILayerZeroReceiver,
@@ -55,7 +59,7 @@ contract LZBridgeGateway is
     Policy,
     PolicyReEnabler,
     ReEnablerGracePeriod,
-    RateLimiter,
+    OffsettingRateLimiter,
     Rescueable
 {
     // ========= CONSTANTS ========= //
@@ -65,6 +69,11 @@ contract LZBridgeGateway is
 
     /// @notice Role required to call burnAndSend (granted to periphery facilitator contracts).
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+
+    /// @notice Dedicated role for rate-limit configuration and state resets.
+    /// @dev Accepted in addition to bridge_admin and admin so that rate-limit operators
+    ///      can be granted minimal privileges without the broader bridge_admin powers.
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
@@ -88,19 +97,42 @@ contract LZBridgeGateway is
 
     // ========= MODIFIERS ========= //
 
-    /// @notice Modifier that reverts if the caller does not have the bridge_admin or admin role.
-    /// @dev Delegates to `_requireBridgeAdminOrAdmin()` so the check body lives in a single
-    ///      function rather than being inlined at every call site of the modifier.
+    /// @notice Modifier that reverts if the caller does not have the `bridge_admin` or `admin` role.
     modifier onlyBridgeAdminOrAdmin() {
         _requireBridgeAdminOrAdmin();
         _;
     }
 
     /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
-    ///         `bridge_admin` nor the admin role.
+    ///         `bridge_admin` nor the `admin` role.
     function _requireBridgeAdminOrAdmin() private view {
-        if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert PolicyAdmin.NotAuthorised();
+    }
+
+    /// @notice Modifier that reverts if the caller does not have the `bridge_rate_limiter`,
+    ///         `bridge_admin`, or `admin` role.
+    modifier onlyRateLimitConfigurator() {
+        _requireRateLimitConfigurator();
+        _;
+    }
+
+    /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
+    ///         `bridge_rate_limiter` nor the `bridge_admin` nor the admin role.
+    function _requireRateLimitConfigurator() private view {
+        if (
+            !_hasRole(msg.sender, _BRIDGE_RATE_LIMITER_ROLE) &&
+            !_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) &&
+            !_isAdmin(msg.sender)
+        ) revert PolicyAdmin.NotAuthorised();
+    }
+
+    /// @notice Returns whether `account_` holds `role_` on the linked `ROLES` module.
+    /// @param account_ The address whose role membership is being checked.
+    /// @param role_ The role identifier to test.
+    /// @return True if `account_` holds `role_`, false otherwise.
+    function _hasRole(address account_, bytes32 role_) private view returns (bool) {
+        return ROLES.hasRole(account_, role_);
     }
 
     // ========= IMMUTABLES ========= //
@@ -206,7 +238,6 @@ contract LZBridgeGateway is
         return permissions;
     }
 
-    /// forge-lint: disable-next-item(mixed-case-function)
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
@@ -406,7 +437,7 @@ contract LZBridgeGateway is
     ///      - The gateway is currently enabled.
     ///      - The value is already in the desired state.
     ///
-    ///      The flag is managed automatically by the policy lifecycle:
+    ///      The flag `isReceiveEnabled` is managed automatically by the policy lifecycle:
     ///      `enable()` and the re-enable path set it to `true`, and `disable()` resets it to
     ///      `false`. This function provides a manual override for the disabled state, so that
     ///      a disabled gateway can keep delivering in-flight inbound LayerZero messages after
@@ -480,18 +511,56 @@ contract LZBridgeGateway is
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function setRateLimits(
-        RateLimitConfig[] calldata rateLimitConfigs_
-    ) external override onlyBridgeAdminOrAdmin {
-        _setRateLimits(rateLimitConfigs_);
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Decays the existing in-flight amount of the targeted outbound limit and
+    ///      checkpoints the counterpart inbound limit before writing the new `limit`
+    ///      and `window`. The counterpart inbound limit's own `limit` and `window`
+    ///      are preserved.
+    function setOutRateLimits(
+        RateLimitConfig[] calldata configs_
+    ) external override onlyRateLimitConfigurator {
+        _setOutRateLimits(configs_);
     }
 
     /// @inheritdoc ILZBridgeGateway
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
-    function resetRateLimits(uint32[] calldata eids_) external override onlyBridgeAdminOrAdmin {
-        _resetRateLimits(eids_);
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Symmetric with `setOutRateLimits`: decays the existing inbound in-flight
+    ///      and checkpoints the counterpart outbound limit before writing the new
+    ///      inbound `limit` and `window`. The counterpart outbound limit's own
+    ///      `limit` and `window` are preserved.
+    function setInRateLimits(
+        RateLimitConfig[] calldata configs_
+    ) external override onlyRateLimitConfigurator {
+        _setInRateLimits(configs_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
+    ///      timestamp; the configured `limit` and `window` are preserved. The
+    ///      corresponding inbound rate limit is not affected.
+    function clearOutboundInFlight(
+        uint32[] calldata eids_
+    ) external override onlyRateLimitConfigurator {
+        _clearOutboundInFlight(eids_);
+    }
+
+    /// @inheritdoc ILZBridgeGateway
+    /// @dev Reverts if:
+    ///      - The caller does not have the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    ///      Sets `inFlight` to zero and refreshes `lastUpdated` to the current
+    ///      timestamp; the configured `limit` and `window` are preserved. The
+    ///      corresponding outbound rate limit is not affected.
+    function clearInboundInFlight(
+        uint32[] calldata eids_
+    ) external override onlyRateLimitConfigurator {
+        _clearInboundInFlight(eids_);
     }
 
     // ========= RESCUE FUNCTIONS ========= //
@@ -521,26 +590,9 @@ contract LZBridgeGateway is
         return
             interfaceId == type(ILZBridgeGateway).interfaceId ||
             interfaceId == type(ILayerZeroReceiver).interfaceId ||
+            interfaceId == type(IOffsettingRateLimiter).interfaceId ||
             interfaceId == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId);
-    }
-
-    // ========= RATE LIMITER OVERRIDE ========= //
-
-    /// @dev Skips rate limiting for unconfigured EIDs (limit == 0 && window == 0),
-    ///      making rate limiting opt-in rather than mandatory.
-    function _outflow(uint32 _dstEid, uint256 _amount) internal override {
-        RateLimit storage rl = rateLimits[_dstEid];
-        if (rl.limit == 0 && rl.window == 0) return;
-        super._outflow(_dstEid, _amount);
-    }
-
-    /// @dev Skips inflow accounting when no outflow is tracked for this EID.
-    ///      For unconfigured EIDs (where _outflow is also skipped), amountInFlight is always 0.
-    ///      For configured EIDs, avoids a redundant write when all outflow has been settled.
-    function _inflow(uint32 _srcEid, uint256 _amount) internal override {
-        if (rateLimits[_srcEid].amountInFlight == 0) return;
-        super._inflow(_srcEid, _amount);
     }
 
     // ========= PRIVATE FUNCTIONS ========= //
@@ -549,7 +601,7 @@ contract LZBridgeGateway is
     ///         approval to the gateway.
     /// @dev Used on canonical chains to keep `bridgedSupply` and the MINTR mint approval in
     ///      lockstep during outflow and forced supply increases.
-    /// @param  amount_ The amount of OHM to add to bridged supply and mint approval.
+    /// @param amount_ The amount of OHM to add to bridged supply and mint approval.
     function _increaseSupplyAndMintApproval(uint256 amount_) private {
         bridgedSupply += amount_;
         _increaseMintApproval(amount_);
@@ -558,7 +610,7 @@ contract LZBridgeGateway is
     /// @notice Grants `amount_` of additional MINTR mint approval to the gateway.
     /// @dev Wraps the MINTR call so the `address(this)` argument is not duplicated at each
     ///      use site, saving bytecode.
-    /// @param  amount_ The mint approval delta to add.
+    /// @param amount_ The mint approval delta to add.
     function _increaseMintApproval(uint256 amount_) private {
         MINTR.increaseMintApproval(address(this), amount_);
     }
@@ -571,7 +623,7 @@ contract LZBridgeGateway is
     }
 
     /// @notice Decrements `bridgedSupply` by `amount_`, reverting on underflow.
-    /// @param  amount_ The amount to subtract from bridged supply.
+    /// @param amount_ The amount to subtract from bridged supply.
     function _decreaseSupply(uint256 amount_) private {
         uint256 supply = bridgedSupply;
         if (supply < amount_) revert LZBridgeGateway_BridgedSupplyUnderflow(supply, amount_);

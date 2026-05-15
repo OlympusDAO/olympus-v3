@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
@@ -554,6 +553,41 @@ contract LZBridgeActivatorForkTest is Test {
         }
     }
 
+    // ========== RATE LIMITS TESTS ========== //
+
+    function test_activate_setsRateLimits() public {
+        _grantRequiredRoles();
+
+        vm.prank(TIMELOCK);
+        activator.activate();
+
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            (, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(remoteEids[i]);
+            assertEq(outLimit, expectedOut, "Outbound limit mismatch");
+            assertEq(outWindow, expectedWindow, "Outbound window mismatch");
+
+            (, uint256 inLimit, uint32 inWindow, ) = gateway.inRateLimits(remoteEids[i]);
+            assertEq(inLimit, expectedIn, "Inbound limit mismatch");
+            assertEq(inWindow, expectedWindow, "Inbound window mismatch");
+        }
+    }
+
     // ========== DVN ROUTE VERIFICATION ========== //
 
     function test_activate_berachainRouteIncludesHorizenAndExcludesGoogleCloud() public {
@@ -634,4 +668,3 @@ contract LZBridgeActivatorForkTest is Test {
         }
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

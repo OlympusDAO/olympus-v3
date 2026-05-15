@@ -100,7 +100,7 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
 
     function _test_setReceiveLibraryTimeout(address caller_) internal {
         address lib = address(0xBEEF);
-        uint256 expiry = block.timestamp + 1 days;
+        uint256 expiry = vm.getBlockTimestamp() + 1 days;
 
         vm.mockCall(
             lzEndpoint,

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: UNLICENSED
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {ProposalTest} from "./ProposalTest.sol";
@@ -44,6 +43,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev Role constants.
     bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
     bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
+    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== DEPLOYMENT TOGGLES ==========
 
@@ -116,7 +116,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
             vm.label(address(lzDelegate), "LZEndpointDelegate");
 
-            // Deploy LZCrossChainBridge (periphery, owned by DAO MS, DAO MS as re-enabler)
+            // Deploy LZCrossChainBridge (periphery, owned by the DAO MS, the DAO MS as re-enabler)
             LZCrossChainBridge bridge = new LZCrossChainBridge(
                 address(ohm),
                 daoMS,
@@ -320,6 +320,42 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         }
     }
 
+    /// @dev Verifies that the activator applied the canonical bidirectional rate limits
+    ///      from `LZConfigLib` to every remote endpoint.
+    function _verifyRateLimits() internal view {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+        uint32 expectedWindow = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            uint256 expectedOut = LZConfigLib.outRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            uint256 expectedIn = LZConfigLib.inRateLimitForRoute(
+                LZConfigLib.ETH_EID,
+                remoteEids[i]
+            );
+            (uint256 outInFlight, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(
+                remoteEids[i]
+            );
+            assertEq(outLimit, expectedOut, "Outbound rate limit mismatch");
+            assertEq(outWindow, expectedWindow, "Outbound rate window mismatch");
+            assertEq(outInFlight, 0, "Outbound in-flight should start at zero");
+
+            (uint256 inInFlight, uint256 inLimit, uint32 inWindow, ) = gateway.inRateLimits(
+                remoteEids[i]
+            );
+            assertEq(inLimit, expectedIn, "Inbound rate limit mismatch");
+            assertEq(inWindow, expectedWindow, "Inbound rate window mismatch");
+            assertEq(inInFlight, 0, "Inbound in-flight should start at zero");
+        }
+    }
+
     // ========================================================================
     // End State Tests
     // ========================================================================
@@ -330,35 +366,33 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         assertTrue(Policy(address(gateway)).isActive(), "LZBridgeGateway should be active");
         assertTrue(gateway.isEnabled(), "LZBridgeGateway should be enabled");
 
-        // 2. DAO MS has bridge_admin role
+        // 2. The DAO MS has bridge_admin role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
-            "DAO MS should have bridge_admin role"
+            "The DAO MS should have bridge_admin role"
         );
 
-        // 2b. DAO MS has manager role (gates the gateway's reEnable())
+        // 2b. The DAO MS has bridge_rate_limiter role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
-            roles.hasRole(daoMS, MANAGER_ROLE),
-            "DAO MS should have manager role"
+            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            "The DAO MS should have bridge_rate_limiter role"
         );
+
+        // 2c. The DAO MS has manager role (gates the gateway's reEnable())
+        assertTrue(roles.hasRole(daoMS, MANAGER_ROLE), "The DAO MS should have manager role");
 
         // 3. LZCrossChainBridge has bridge_facilitator role
         assertTrue(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge should have bridge_facilitator role"
         );
 
         // 4. Activator roles revoked and spent
         assertFalse(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(activator), ADMIN_ROLE),
             "Activator should not have admin role"
         );
         assertFalse(
-            /// forge-lint: disable-next-line(unsafe-typecast)
             roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
@@ -416,7 +450,10 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             assertGt(opts.length, 0, "Enforced options should be set");
         }
 
-        // 10. LZEndpointDelegate is the LZ endpoint delegate for the gateway
+        // 10. Bidirectional rate limits
+        _verifyRateLimits();
+
+        // 11. LZEndpointDelegate is the LZ endpoint delegate for the gateway
         assertTrue(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate should be active");
         assertEq(
             IEndpointV2State(address(ep)).delegates(address(gateway)),
@@ -431,5 +468,3 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
         );
     }
 }
-
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -3,6 +3,7 @@ pragma solidity >=0.8.30;
 
 // Interfaces
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
@@ -21,6 +22,11 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
     uint32 constant CANONICAL_EID = 1;
     uint32 constant NONCANONICAL_EID = 2;
     uint256 constant SUPPLY_CAP = 100_000e9;
+
+    /// @dev Default rate limit applied per direction in the periphery test base. Sized
+    ///      far above any individual test amount so flow tests are not throttled.
+    uint256 constant DEFAULT_RATE_LIMIT = 1_000_000e9;
+    uint32 constant DEFAULT_RATE_WINDOW = 1 days;
 
     Kernel kernel;
     OlympusMinter mintr;
@@ -143,6 +149,12 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         // Enable gateways
         gateway.enable(bytes(""));
         gateway2.enable(bytes(""));
+
+        // Configure default bidirectional rate limits on both gateways so flow tests
+        // are not blocked by mandatory rate limiting. The `admin` prank above is still
+        // active here, and `admin` satisfies `onlyRateLimitConfigurator`.
+        _configureRateLimits(gateway, NONCANONICAL_EID);
+        _configureRateLimits(gateway2, CANONICAL_EID);
         vm.stopPrank();
 
         // Configure bridge
@@ -155,5 +167,20 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
 
         // Fund user for native fees
         vm.deal(user, 100 ether);
+    }
+
+    /// @dev Configures generous outbound and inbound rate limits on a gateway for the
+    ///      given peer EID. Caller must already be authorised under
+    ///      `onlyRateLimitConfigurator` (admin/bridge_admin/bridge_rate_limiter).
+    function _configureRateLimits(LZBridgeGateway gateway_, uint32 eid_) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: DEFAULT_RATE_LIMIT,
+            window: DEFAULT_RATE_WINDOW
+        });
+        gateway_.setOutRateLimits(configs);
+        gateway_.setInRateLimits(configs);
     }
 }

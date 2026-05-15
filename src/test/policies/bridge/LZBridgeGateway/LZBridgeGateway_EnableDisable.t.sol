@@ -25,11 +25,11 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         uint48 disabledAt = gateway.lastTransitionAt();
         assertGt(uint256(disabledAt), 0, "lastTransitionAt should be non-zero after disable");
 
-        vm.warp(block.timestamp + 30);
+        vm.warp(vm.getBlockTimestamp() + 30);
         gateway.enable(bytes(""));
         assertEq(
             uint256(gateway.lastTransitionAt()),
-            uint256(uint48(block.timestamp)),
+            uint256(uint48(vm.getBlockTimestamp())),
             "lastTransitionAt should be refreshed on enable"
         );
         vm.stopPrank();
@@ -40,7 +40,7 @@ contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
         gateway.disable(bytes(""));
 
         vm.expectEmit(true, true, false, true);
-        emit IEnablerV2.Transition(admin, true, bytes(""), uint48(block.timestamp));
+        emit IEnablerV2.Transition(admin, true, bytes(""), uint48(vm.getBlockTimestamp()));
         gateway.enable(bytes(""));
         vm.stopPrank();
     }

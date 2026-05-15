@@ -2,14 +2,14 @@
 pragma solidity >=0.8.18;
 
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @title ILZBridgeGateway
 /// @notice Interface for the LZ Bridge Gateway infrastructure policy (LayerZero V2).
 /// @dev Handles LayerZero endpoint communication, OHM mint/burn via MINTR, peer management,
-///      enforced options, rate limiting, and bridged supply tracking.
-interface ILZBridgeGateway {
+///      enforced options, bidirectional rate limiting, and bridged supply tracking.
+interface ILZBridgeGateway is IOffsettingRateLimiter {
     // ========= ERRORS ========= //
 
     /// @notice Thrown when an address argument is the zero address.
@@ -191,17 +191,29 @@ interface ILZBridgeGateway {
     /// @param enforcedOptions_ Array of enforced option parameters.
     function setEnforcedOptions(EnforcedOptionParam[] calldata enforcedOptions_) external;
 
-    /// @notice Sets rate limits for destination endpoints.
-    /// @dev Only callable by the bridge_admin or admin role.
+    /// @notice Configures outbound rate limits for one or more destination endpoints.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
     ///
-    /// @param rateLimitConfigs_ Array of rate limit configurations.
-    function setRateLimits(RateLimiter.RateLimitConfig[] memory rateLimitConfigs_) external;
+    /// @param configs_ The outbound rate limit configurations to apply.
+    function setOutRateLimits(RateLimitConfig[] calldata configs_) external;
 
-    /// @notice Resets rate limit state (amountInFlight) for the given endpoint IDs.
-    /// @dev Only callable by the bridge_admin or admin role. Does not modify limit or window.
+    /// @notice Configures inbound rate limits for one or more source endpoints.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
     ///
-    /// @param eids_ The endpoint IDs to reset.
-    function resetRateLimits(uint32[] memory eids_) external;
+    /// @param configs_ The inbound rate limit configurations to apply.
+    function setInRateLimits(RateLimitConfig[] calldata configs_) external;
+
+    /// @notice Clears the outbound in-flight amount for one or more destination endpoints.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    /// @param eids_ The endpoint identifiers whose outbound in-flight amount should be cleared.
+    function clearOutboundInFlight(uint32[] calldata eids_) external;
+
+    /// @notice Clears the inbound in-flight amount for one or more source endpoints.
+    /// @dev Only callable by the bridge_rate_limiter, bridge_admin, or admin role.
+    ///
+    /// @param eids_ The endpoint identifiers whose inbound in-flight amount should be cleared.
+    function clearInboundInFlight(uint32[] calldata eids_) external;
 
     // ========= VIEW FUNCTIONS ========= //
 

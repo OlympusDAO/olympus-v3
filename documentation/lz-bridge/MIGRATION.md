@@ -37,8 +37,8 @@ Deploy `LZBridgeGateway`, `LZEndpointDelegate`, and `LZCrossChainBridge` on Ethe
 
 Execute `LZBridgeSecurityUpgradeProposal`:
 
-1. Grant `bridge_admin` role to DAO MS.
-2. Grant `manager` role to DAO MS — required so the DAO MS can call `LZBridgeGateway.reEnable()` after a disable, within the grace window.
+1. Grant `bridge_admin` and `bridge_rate_limiter` roles to the DAO MS.
+2. Grant `manager` role to the DAO MS — required so the DAO MS can call `LZBridgeGateway.reEnable()` after a disable, within the grace window.
 3. Grant `bridge_facilitator` role to the LZCrossChainBridge periphery contract.
 4. Grant temporary `admin` and `bridge_admin` roles to the LZBridgeActivator contract.
 5. Execute `LZBridgeActivator.activate()` which:
@@ -46,6 +46,7 @@ Execute `LZBridgeSecurityUpgradeProposal`:
    - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains, forwarded through `LZEndpointDelegate`. Every route requires four DVNs: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, `optionalDVNCount == type(uint8).max`) so the OApp config does not inherit LayerZero's EID-level default.
    - Sets peers for all remote chains on the gateway.
    - Sets enforced options on the gateway: 200,000 gas minimum for lzReceive on each destination.
+   - Sets bidirectional rate limits per remote on the gateway (100,000 OHM outbound, 55,000 OHM inbound, 24-hour window) so traffic is throttled from the moment the gateway is enabled.
    - Enables the `LZBridgeGateway` policy.
 6. Revoke temporary roles from the `LZBridgeActivator` contract.
 
@@ -74,8 +75,8 @@ At this point: users cannot bridge via old bridges (send blocked) and cannot bri
 On each non-canonical chain (Arbitrum, Optimism, Base, Berachain), run in order:
 
 1. **`LZBridgeGatewayL2Batch.activateGateway()`** — deactivate old `CrossChainBridge` in Kernel, activate new `LZBridgeGateway` and `LZEndpointDelegate`.
-2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
-3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — point the gateway's LZ endpoint delegate at `LZEndpointDelegate`, pin LZ V2 libraries, set ULN/Executor config via `LZEndpointDelegate`, set peers, set enforced options, enable the gateway.
+2. **`LZBridgeGatewayL2Batch.grantRoles()`** — grant `bridge_admin`, `bridge_rate_limiter`, `manager`, `admin`, and `bridge_facilitator` roles. Note whether the script reports that `admin` was granted (vs. already present) — this determines whether step 4 is needed.
+3. **`LZBridgeGatewayL2Batch.configureAndEnable()`** — point the gateway's LZ endpoint delegate at `LZEndpointDelegate`, pin LZ V2 libraries, set ULN/Executor config via `LZEndpointDelegate`, set peers, set enforced options, set bidirectional rate limits per remote (50,000 OHM outbound to Ethereum and 100,000 OHM outbound to each other non-canonical peer, 110,000 OHM inbound from every peer, 24-hour window), and enable the gateway.
 4. **`LZBridgeGatewayL2Batch.revokeSetupRoles()`** _(optional)_ — revoke the `admin` role from the DAO MS. Only run on chains where step 2 granted the role (i.e. the DAO MS did not already have it).
 5. **`LZCrossChainBridgeL2Batch.setupL2()`** — enable the periphery bridge (gateway was set in the constructor at deployment).
 

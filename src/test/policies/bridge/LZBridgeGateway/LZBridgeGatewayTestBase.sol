@@ -4,10 +4,10 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 
 // Contracts
@@ -27,6 +27,13 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
     uint256 constant INITIAL_AMOUNT = 100_000e9;
     uint256 constant SUPPLY_CAP = 1_000_000e9;
     uint32 constant GRACE_SECONDS = 1 days;
+
+    /// @dev Default rate limit applied per direction in the test base. Chosen well above
+    ///      any individual test amount so existing flow tests are not throttled. Tests
+    ///      that exercise rate limiting itself override these via `_setOutRateLimit` /
+    ///      `_setInRateLimit`.
+    uint256 constant DEFAULT_RATE_LIMIT = 1_000_000e9;
+    uint32 constant DEFAULT_RATE_WINDOW = 1 days;
 
     // Canonical stack (eid=1)
     Kernel kernel;
@@ -48,6 +55,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
     address admin = makeAddr("admin");
     address bridgeAdmin = makeAddr("bridgeAdmin");
+    address bridgeRateLimiter = makeAddr("bridgeRateLimiter");
     address manager = makeAddr("manager");
     address emergency = makeAddr("emergency");
     address facilitator = makeAddr("facilitator");
@@ -89,6 +97,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin.grantRole("admin", admin);
         rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin.grantRole("bridge_rate_limiter", bridgeRateLimiter);
         rolesAdmin.grantRole("manager", manager);
         rolesAdmin.grantRole("emergency", emergency);
         rolesAdmin.grantRole("bridge_facilitator", facilitator);
@@ -114,6 +123,7 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
 
         rolesAdmin2.grantRole("admin", admin);
         rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
+        rolesAdmin2.grantRole("bridge_rate_limiter", bridgeRateLimiter);
         rolesAdmin2.grantRole("manager", manager);
         rolesAdmin2.grantRole("emergency", emergency);
         rolesAdmin2.grantRole("bridge_facilitator", facilitator);
@@ -148,16 +158,75 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         gateway2.enable(bytes(""));
         vm.stopPrank();
 
+        // Configure default bidirectional rate limits on both gateways so flow tests
+        // are not blocked by mandatory rate limiting. Helpers prank `bridgeRateLimiter`
+        // internally, so they must run outside the admin startPrank above.
+        _setRateLimitsBoth(
+            gateway,
+            NONCANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+        _setRateLimitsBoth(
+            gateway2,
+            CANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+
         // Mint OHM and fund facilitator
         ohm.mint(facilitator, INITIAL_AMOUNT);
         vm.deal(facilitator, 100 ether);
     }
 
-    function _setRateLimit(uint32 dstEid_, uint192 limit_, uint64 window_) internal {
-        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
-        configs[0] = RateLimiter.RateLimitConfig({dstEid: dstEid_, limit: limit_, window: window_});
-        vm.prank(bridgeAdmin);
-        gateway.setRateLimits(configs);
+    /// @dev Sets the outbound rate limit for `eid_` on `gateway_` as `bridgeRateLimiter`.
+    function _setOutRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeRateLimiter);
+        gateway_.setOutRateLimits(configs);
+    }
+
+    /// @dev Sets the inbound rate limit for `eid_` on `gateway_` as `bridgeRateLimiter`.
+    function _setInRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeRateLimiter);
+        gateway_.setInRateLimits(configs);
+    }
+
+    /// @dev Sets both outbound and inbound rate limits in one call as `bridgeRateLimiter`.
+    function _setRateLimitsBoth(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 outLimit_,
+        uint256 inLimit_,
+        uint32 window_
+    ) internal {
+        _setOutRateLimit(gateway_, eid_, outLimit_, window_);
+        _setInRateLimit(gateway_, eid_, inLimit_, window_);
     }
 
     /// @dev Get fee + send from canonical to non-canonical

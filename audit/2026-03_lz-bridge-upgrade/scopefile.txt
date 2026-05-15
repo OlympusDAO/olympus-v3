@@ -2,7 +2,7 @@
 
 # Olympus V3 — LZ Bridge Security Upgrade
 
-# Core Contracts
+# Core Contracts & Interfaces
 
 src/policies/bridge/LZBridgeGateway.sol
 src/policies/bridge/LZEndpointDelegate.sol
@@ -11,14 +11,16 @@ src/policies/interfaces/ILZEndpointDelegate.sol
 src/policies/interfaces/ILZEndpointV2Authorized.sol
 src/periphery/bridge/LZCrossChainBridge.sol
 src/periphery/interfaces/ILZCrossChainBridge.sol
+src/bases/OffsettingRateLimiter.sol
+src/bases/interfaces/IOffsettingRateLimiter.sol
 src/bases/Rescueable.sol
 src/bases/interfaces/IRescueable.sol
-src/libraries/Errors.sol
-src/libraries/ERC7528Constants.sol
 
-# Shared
+# Shared Libraries
 
 src/scripts/ops/lib/LZConfigLib.sol
+src/libraries/Errors.sol
+src/libraries/ERC7528Constants.sol
 
 # Deployment & Configuration
 

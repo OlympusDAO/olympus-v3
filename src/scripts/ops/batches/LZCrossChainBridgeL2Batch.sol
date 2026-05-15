@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.30;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -136,4 +135,3 @@ contract LZCrossChainBridgeL2Batch is BatchScriptV2 {
         if (ChainUtils._isCanonicalChain(chain)) revert LZCrossChainBridgeL2Batch_CanonicalChain();
     }
 }
-/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std/Test.sol";
 // Interfaces
 import {MessagingFee, Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
@@ -31,6 +32,12 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
 
     uint256 constant MINT_AMOUNT = 10_000e9;
     uint32 constant GRACE_SECONDS = 1 days;
+
+    /// @dev Generous default rate limit applied per direction in fork-test setup so the
+    ///      flow tests are not throttled by mandatory rate limiting. Sized far above
+    ///      MINT_AMOUNT.
+    uint256 constant DEFAULT_RATE_LIMIT = 1_000_000e9;
+    uint32 constant DEFAULT_RATE_WINDOW = 1 days;
 
     // ========= FORKS ========= //
 
@@ -126,6 +133,24 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         vm.selectFork(ethForkId);
     }
 
+    /// @dev Configures generous outbound and inbound rate limits as `admin` for the
+    ///      given peer EID. Called from the per-stack deploy helpers BEFORE
+    ///      `vm.makePersistent`, so the limits are part of the gateway's initial
+    ///      state on its native fork and survive subsequent `vm.selectFork` calls.
+    function _configureRateLimits(LZBridgeGateway gateway_, uint32 eid_) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: DEFAULT_RATE_LIMIT,
+            window: DEFAULT_RATE_WINDOW
+        });
+        vm.startPrank(admin);
+        gateway_.setOutRateLimits(configs);
+        gateway_.setInRateLimits(configs);
+        vm.stopPrank();
+    }
+
     // ========= DEPLOY HELPERS ========= //
 
     function _deployEthStack() internal {
@@ -160,6 +185,10 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         ethGateway.enable(bytes(""));
         ethBridge.enable(bytes(""));
         vm.stopPrank();
+
+        // Configure generous default rate limits on the canonical gateway so flow
+        // tests are not blocked by mandatory rate limiting.
+        _configureRateLimits(ethGateway, LZConfigLib.ARB_EID);
 
         ethOhm.mint(sender, MINT_AMOUNT);
         vm.deal(sender, 100 ether);
@@ -207,6 +236,10 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbGateway.enable(bytes(""));
         arbBridge.enable(bytes(""));
         vm.stopPrank();
+
+        // Configure generous default rate limits on the non-canonical gateway so flow
+        // tests are not blocked by mandatory rate limiting.
+        _configureRateLimits(arbGateway, LZConfigLib.ETH_EID);
 
         arbOhm.mint(sender, MINT_AMOUNT);
         vm.deal(sender, 100 ether);

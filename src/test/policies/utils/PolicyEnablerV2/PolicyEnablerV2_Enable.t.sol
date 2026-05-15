@@ -22,13 +22,17 @@ contract PolicyEnablerV2Tests_Enable is PolicyEnablerV2TestBase {
         vm.expectEmit(true, true, true, true, address(policy));
         emit Enabled();
         vm.expectEmit(true, true, true, true, address(policy));
-        emit Transition(admin, true, SAMPLE_DATA, uint48(block.timestamp));
+        emit Transition(admin, true, SAMPLE_DATA, uint48(vm.getBlockTimestamp()));
 
         vm.prank(admin);
         policy.enable(SAMPLE_DATA);
 
         assertTrue(policy.isEnabled(), "isEnabled true");
-        assertEq(policy.lastTransitionAt(), uint48(block.timestamp), "lastTransitionAt refreshed");
+        assertEq(
+            policy.lastTransitionAt(),
+            uint48(vm.getBlockTimestamp()),
+            "lastTransitionAt refreshed"
+        );
         assertEq(policy.lastBeforeEnableData(), SAMPLE_DATA, "data forwarded to before hook");
     }
 

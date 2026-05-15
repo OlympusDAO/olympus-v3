@@ -7,11 +7,11 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {MessagingFee, MessagingReceipt} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
-import {RateLimiter} from "@lz-oapp-evm-0.4.1/oapp/utils/RateLimiter.sol";
 
 // Contracts
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
@@ -19,7 +19,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev Outbound OHM bridging (burn + LZ send).
 contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
-    function test_burnAndSend_canonical() external {
+    function test_burnAndSend_burnsWithSupplyTrackingOnCanonical() external {
         uint256 amount = 1000e9;
         uint256 facilitatorBalanceBefore = ohm.balanceOf(facilitator);
 
@@ -79,7 +79,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
     }
 
-    function test_burnAndSend_nonCanonical_burnsWithoutSupplyTracking() external {
+    function test_burnAndSend_burnsWithoutSupplyTrackingOnNonCanonical() external {
         // 1. Preparation: first bridge to non-canonical so facilitator has OHM there
         _sendCanonicalToNonCanonical(facilitator, 5000e9);
 
@@ -207,82 +207,48 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         assertEq(gateway.bridgedSupply(), amount, "Bridged supply should increase");
     }
 
-    function test_burnAndSend_skipsUnconfiguredRateLimits() external {
-        // No rate limit configured on either gateway
-        (, , uint192 limit, uint64 window) = gateway.rateLimits(NONCANONICAL_EID);
-        assertEq(limit, 0, "Limit should be 0");
-        assertEq(window, 0, "Window should be 0");
+    /// @notice Canonical outbound activity offsets gateway's own inbound in-flight,
+    ///         freeing inbound capacity on the same EID.
+    function test_burnAndSend_outflowOffsetsInflowOnCanonical() external {
+        // Bootstrap canonical bridgedSupply so the priming inbound delivery (from
+        // gateway2 to gateway) does not underflow when received on canonical.
+        _sendCanonicalToNonCanonical(recipient, 1_000e9);
 
-        // Outflow succeeds
-        _sendCanonicalToNonCanonical(recipient, 1000e9);
+        // Prime gateway's inbound side by delivering a non-canonical -> canonical send
+        ohm.mint(facilitator, 200e9);
+        _sendNonCanonicalToCanonical(recipient, 200e9);
 
-        // Inflow succeeds
-        vm.prank(recipient);
-        ohm.transfer(facilitator, 1000e9);
-        _sendNonCanonicalToCanonical(recipient, 1000e9);
+        (uint256 inInFlight, , , ) = gateway.inRateLimits(NONCANONICAL_EID);
+        assertEq(inInFlight, 200e9, "Inbound in-flight should be primed by delivery");
+
+        // Now an outbound from canonical -> non-canonical settles 150e9 against the
+        // inbound counterpart on gateway.
+        _sendCanonicalToNonCanonical(recipient, 150e9);
+
+        (inInFlight, , , ) = gateway.inRateLimits(NONCANONICAL_EID);
+        assertEq(inInFlight, 50e9, "Inbound in-flight should drop by the outbound amount");
     }
 
-    function test_burnAndSend_canonical_inflowRateLimit() external {
-        // Set rate limit on canonical for both directions
-        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
-        configs[0] = RateLimiter.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: 10_000e9,
-            window: 3600
-        });
-        vm.prank(bridgeAdmin);
-        gateway.setRateLimits(configs);
+    /// @notice Non-canonical outbound activity offsets gateway2's own inbound in-flight,
+    ///         freeing inbound capacity on the same EID.
+    function test_burnAndSend_outflowOffsetsInflowOnNonCanonical() external {
+        // Prime gateway2's inbound side first by delivering a canonical -> non-canonical send
+        _sendCanonicalToNonCanonical(recipient, 200e9);
 
-        // Send some out
-        _sendCanonicalToNonCanonical(recipient, 5000e9);
+        (uint256 inInFlight, , , ) = gateway2.inRateLimits(CANONICAL_EID);
+        assertEq(inInFlight, 200e9, "Inbound in-flight should be primed by delivery");
 
-        (uint256 inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 5000e9, "5000e9 should be in flight");
+        // Now an outbound from non-canonical -> canonical settles 150e9 against the
+        // inbound counterpart on gateway2.
+        ohm.mint(facilitator, 150e9);
+        _sendNonCanonicalToCanonical(recipient, 150e9);
 
-        // Bridge back: _inflow(NONCANONICAL_EID) reduces amountInFlight for the same key
-        _sendNonCanonicalToCanonical(recipient, 2000e9);
-
-        (inFlight, ) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
-        assertEq(inFlight, 3000e9, "Inflow should reduce in-flight");
+        (inInFlight, , , ) = gateway2.inRateLimits(CANONICAL_EID);
+        assertEq(inInFlight, 50e9, "Inbound in-flight should drop by the outbound amount");
     }
 
-    function test_burnAndSend_nonCanonical_inflowSkipsWhenAmountInFlightZero() external {
-        // Configure rate limit on non-canonical gateway for inbound from canonical
-        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
-        configs[0] = RateLimiter.RateLimitConfig({
-            dstEid: CANONICAL_EID,
-            limit: 10_000e9,
-            window: 3600
-        });
-        vm.prank(bridgeAdmin);
-        gateway2.setRateLimits(configs);
-
-        // No outflow from gateway2: amountInFlight for CANONICAL_EID is 0
-        (uint192 amountInFlight, , , ) = gateway2.rateLimits(CANONICAL_EID);
-        assertEq(amountInFlight, 0, "amountInFlight should be 0 before inflow");
-
-        // Send from canonical to non-canonical: gateway2 receives, _inflow hits amountInFlight == 0
-        _sendCanonicalToNonCanonical(recipient, 1000e9);
-
-        // amountInFlight remains 0: the _inflow override skipped the write
-        (amountInFlight, , , ) = gateway2.rateLimits(CANONICAL_EID);
-        assertEq(amountInFlight, 0, "amountInFlight should remain 0 after skipped inflow");
-
-        // Full outflow capacity on gateway2 is still available
-        (, uint256 canSend) = gateway2.getAmountCanBeSent(CANONICAL_EID);
-        assertEq(canSend, 10_000e9, "Full outflow capacity should be available");
-    }
-
-    function test_burnAndSend_canonical_outflowRateLimit() external {
-        // Set rate limit on canonical
-        RateLimiter.RateLimitConfig[] memory configs = new RateLimiter.RateLimitConfig[](1);
-        configs[0] = RateLimiter.RateLimitConfig({
-            dstEid: NONCANONICAL_EID,
-            limit: 5_000e9,
-            window: 3600
-        });
-        vm.prank(bridgeAdmin);
-        gateway.setRateLimits(configs);
+    function test_burnAndSend_revertsIfExceedingOutLimitOnCanonical() external {
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 5_000e9, 3600);
 
         // Send within limit succeeds
         MessagingFee memory fee = gateway.estimateSendFee(
@@ -302,7 +268,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         );
         vm.stopPrank();
 
-        (uint256 inFlight, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        (uint256 inFlight, uint256 canSend) = gateway.sendable(NONCANONICAL_EID);
         assertEq(inFlight, 3_000e9, "3000e9 should be in flight");
         assertEq(canSend, 2_000e9, "2000e9 should remain");
 
@@ -311,7 +277,13 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, 2_001e9, bytes(""));
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), 2_001e9);
-        vm.expectRevert(abi.encodeWithSelector(RateLimiter.RateLimitExceeded.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOffsettingRateLimiter.RateLimitExceeded.selector,
+                2_001e9,
+                2_000e9
+            )
+        );
         gateway.burnAndSend{value: fee.nativeFee}(
             NONCANONICAL_EID,
             recipient,
@@ -322,18 +294,123 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.stopPrank();
     }
 
-    /// @notice Outflow rate limit blocks burnAndSend, but succeeds after the window elapses.
-    function test_burnAndSend_outflowRateLimitSoRetryAfterWindowElapsed() external {
+    /// @notice An outbound limit of zero blocks every burnAndSend on canonical, including 1 wei.
+    function test_burnAndSend_revertsIfZeroOutLimitOnCanonical() external {
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 0, 3600);
+
+        (, uint256 available) = gateway.sendable(NONCANONICAL_EID);
+        assertEq(available, 0, "Sendable amount should be zero with limit=0");
+
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            1,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+        );
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            1,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    /// @notice An outbound limit of zero blocks every burnAndSend on non-canonical, including 1 wei.
+    function test_burnAndSend_revertsIfZeroOutLimitOnNonCanonical() external {
+        _setOutRateLimit(gateway2, CANONICAL_EID, 0, 3600);
+
+        (, uint256 available) = gateway2.sendable(CANONICAL_EID);
+        assertEq(available, 0, "Sendable amount should be zero with limit=0");
+
+        ohm.mint(facilitator, 1);
+        MessagingFee memory fee = gateway2.estimateSendFee(CANONICAL_EID, recipient, 1, bytes(""));
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+        );
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            recipient,
+            1,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    /// @notice Non-canonical outbound limit is enforced: within-limit succeeds, over-limit reverts.
+    function test_burnAndSend_revertsIfExceedingOutLimitOnNonCanonical() external {
+        _setOutRateLimit(gateway2, CANONICAL_EID, 5_000e9, 3600);
+
+        // Send within the limit succeeds. We don't deliver to canonical here to avoid
+        // bootstrapping bridgedSupply; this test is scoped to outflow accounting only.
+        ohm.mint(facilitator, 3_000e9);
+        MessagingFee memory fee = gateway2.estimateSendFee(
+            CANONICAL_EID,
+            recipient,
+            3_000e9,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), 3_000e9);
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            recipient,
+            3_000e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        (uint256 inFlight, uint256 canSend) = gateway2.sendable(CANONICAL_EID);
+        assertEq(inFlight, 3_000e9, "3000e9 should be in flight");
+        assertEq(canSend, 2_000e9, "2000e9 should remain");
+
+        // Send exceeding remaining limit reverts
+        ohm.mint(facilitator, 2_001e9);
+        fee = gateway2.estimateSendFee(CANONICAL_EID, recipient, 2_001e9, bytes(""));
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), 2_001e9);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOffsettingRateLimiter.RateLimitExceeded.selector,
+                2_001e9,
+                2_000e9
+            )
+        );
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            recipient,
+            2_001e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    /// @notice On canonical: outflow rate limit blocks burnAndSend, but succeeds after the
+    ///         window elapses.
+    function test_burnAndSend_revertsIfOutflowRateLimitSoRetryAfterWindowElapsedOnCanonical()
+        external
+    {
         // Set tight rate limit: 5000 OHM per hour
-        uint192 limit = 5_000e9;
-        uint64 window = 3600;
-        _setRateLimit(NONCANONICAL_EID, limit, window);
+        uint256 limit = 5_000e9;
+        uint32 window = 3600;
+        _setOutRateLimit(gateway, NONCANONICAL_EID, limit, window);
 
         // Send up to the limit
         uint256 firstAmount = 5_000e9;
         _sendCanonicalToNonCanonical(recipient, firstAmount);
 
-        (, uint256 canSend) = gateway.getAmountCanBeSent(NONCANONICAL_EID);
+        (, uint256 canSend) = gateway.sendable(NONCANONICAL_EID);
         assertEq(canSend, 0, "No capacity remaining");
 
         // Attempt to send more, reverts
@@ -348,7 +425,13 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
 
         vm.startPrank(facilitator);
         ohm.transfer(address(gateway), retryAmount);
-        vm.expectRevert(abi.encodeWithSelector(RateLimiter.RateLimitExceeded.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOffsettingRateLimiter.RateLimitExceeded.selector,
+                retryAmount,
+                0
+            )
+        );
         gateway.burnAndSend{value: fee.nativeFee}(
             NONCANONICAL_EID,
             recipient,
@@ -579,6 +662,105 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
             NONCANONICAL_EID,
             recipient,
             100e9,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    /// @notice On canonical: burnAndSend up to the outbound limit succeeds; one wei over
+    ///         reverts with `RateLimitExceeded`.
+    function testFuzz_burnAndSend_revertsIfOutRateLimitOnCanonical(
+        uint64 limit_,
+        uint32 window_
+    ) external {
+        limit_ = uint64(bound(uint256(limit_), 1, 100_000e9));
+        window_ = uint32(bound(uint256(window_), 60, 365 days));
+
+        _setOutRateLimit(gateway, NONCANONICAL_EID, limit_, window_);
+
+        ohm.mint(facilitator, uint256(limit_) + 1);
+        vm.deal(facilitator, 100 ether);
+
+        // Exact-limit send succeeds
+        MessagingFee memory fee = gateway.estimateSendFee(
+            NONCANONICAL_EID,
+            recipient,
+            limit_,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), limit_);
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            limit_,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // One more wei reverts with the explicit (requested, available) selector
+        fee = gateway.estimateSendFee(NONCANONICAL_EID, recipient, 1, bytes(""));
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+        );
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            recipient,
+            1,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+    }
+
+    /// @notice On non-canonical: burnAndSend up to the outbound limit succeeds; one wei over
+    ///         reverts with `RateLimitExceeded`. The packet is not delivered, scoping the
+    ///         test to outflow accounting on gateway2.
+    function testFuzz_burnAndSend_revertsIfOutRateLimitOnNonCanonical(
+        uint64 limit_,
+        uint32 window_
+    ) external {
+        limit_ = uint64(bound(uint256(limit_), 1, 100_000e9));
+        window_ = uint32(bound(uint256(window_), 60, 365 days));
+
+        _setOutRateLimit(gateway2, CANONICAL_EID, limit_, window_);
+
+        ohm.mint(facilitator, uint256(limit_) + 1);
+        vm.deal(facilitator, 100 ether);
+
+        // Exact-limit send succeeds
+        MessagingFee memory fee = gateway2.estimateSendFee(
+            CANONICAL_EID,
+            recipient,
+            limit_,
+            bytes("")
+        );
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), limit_);
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            recipient,
+            limit_,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // One more wei reverts with the explicit (requested, available) selector
+        fee = gateway2.estimateSendFee(CANONICAL_EID, recipient, 1, bytes(""));
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOffsettingRateLimiter.RateLimitExceeded.selector, 1, 0)
+        );
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            recipient,
+            1,
             payable(facilitator),
             bytes("")
         );
