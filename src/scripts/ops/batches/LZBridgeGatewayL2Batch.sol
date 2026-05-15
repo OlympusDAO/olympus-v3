@@ -8,7 +8,7 @@ import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
-import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
@@ -48,13 +48,6 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     error LZBridgeGatewayL2Batch_CanonicalChain();
     error LZBridgeGatewayL2Batch_UnsupportedChain();
     error LZBridgeGatewayL2Batch_EndpointMismatch(address expected, address actual);
-
-    // =========== CONSTANTS =========== //
-
-    /// @dev Role constants.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // =========== ENTRY POINTS =========== //
 
@@ -159,20 +152,20 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         console2.log("\n=== [L2] [Step 2] Grant Roles:", chain, "===");
 
         // 2.1. Grant bridge_admin role to the DAO MS
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, daoMS)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, daoMS)
             );
         }
 
         // 2.1b. Grant bridge_rate_limiter role to the DAO MS
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_RATE_LIMITER_ROLE,
+                    BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 )
             );
@@ -199,12 +192,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
 
         // 2.3. Grant bridge_facilitator role to LZCrossChainBridge
-        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+        if (!rolesModule.hasRole(bridgeAddr, BRIDGE_FACILITATOR_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_FACILITATOR_ROLE,
+                    BRIDGE_FACILITATOR_ROLE,
                     bridgeAddr
                 )
             );
@@ -385,12 +378,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         console2.log("\nValidating grantRoles post-batch state");
 
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
             revert("DAO MS does not have bridge_admin role");
         }
         console2.log("  DAO MS has bridge_admin role");
 
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE)) {
             revert("DAO MS does not have bridge_rate_limiter role");
         }
         console2.log("  DAO MS has bridge_rate_limiter role");
@@ -405,7 +398,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
         console2.log("  DAO MS has admin role");
 
-        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+        if (!rolesModule.hasRole(bridgeAddr, BRIDGE_FACILITATOR_ROLE)) {
             revert("LZCrossChainBridge does not have bridge_facilitator role");
         }
         console2.log("  LZCrossChainBridge has bridge_facilitator role");

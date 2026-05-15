@@ -16,6 +16,7 @@ import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @notice Fork-based tests for LZ V2 endpoint configuration on Ethereum, Arbitrum, Optimism, Base.
@@ -199,8 +200,8 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         s.kernel.executeAction(Actions.ActivatePolicy, address(s.rolesAdmin));
         s.kernel.executeAction(Actions.ActivatePolicy, address(s.gateway));
         s.kernel.executeAction(Actions.ActivatePolicy, address(s.lzDelegate));
-        s.rolesAdmin.grantRole("admin", admin);
-        s.rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
+        s.rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        s.rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
 
         s.bridge = new LZCrossChainBridge(
             address(s.ohm),
@@ -209,7 +210,7 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
             admin,
             GRACE_SECONDS
         );
-        s.rolesAdmin.grantRole("bridge_facilitator", address(s.bridge));
+        s.rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(s.bridge));
 
         vm.startPrank(admin);
         s.gateway.setDelegate(address(s.lzDelegate));

@@ -44,6 +44,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
 import {Rescueable} from "src/bases/Rescueable.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title LZBridgeGateway
 /// @notice Infrastructure policy handling LayerZero V2 endpoint communication for cross-chain
@@ -63,17 +64,6 @@ contract LZBridgeGateway is
     Rescueable
 {
     // ========= CONSTANTS ========= //
-
-    /// @notice Role required for LayerZero endpoint configuration and bridged supply setting.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-
-    /// @notice Role required to call burnAndSend (granted to periphery facilitator contracts).
-    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-
-    /// @notice Dedicated role for rate-limit configuration and state resets.
-    /// @dev Accepted in addition to bridge_admin and admin so that rate-limit operators
-    ///      can be granted minimal privileges without the broader bridge_admin powers.
-    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     /// @inheritdoc ILZBridgeGateway
     uint8 public constant override MSG_BRIDGE_OHM = 1;
@@ -106,7 +96,7 @@ contract LZBridgeGateway is
     /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
     ///         `bridge_admin` nor the `admin` role.
     function _requireBridgeAdminOrAdmin() private view {
-        if (!_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert PolicyAdmin.NotAuthorised();
     }
 
@@ -121,8 +111,8 @@ contract LZBridgeGateway is
     ///         `bridge_rate_limiter` nor the `bridge_admin` nor the admin role.
     function _requireRateLimitConfigurator() private view {
         if (
-            !_hasRole(msg.sender, _BRIDGE_RATE_LIMITER_ROLE) &&
-            !_hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) &&
+            !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE) &&
+            !_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
             !_isAdmin(msg.sender)
         ) revert PolicyAdmin.NotAuthorised();
     }
@@ -293,7 +283,7 @@ contract LZBridgeGateway is
         payable
         override
         givenEnabled
-        onlyRole(_BRIDGE_FACILITATOR_ROLE)
+        onlyRole(BRIDGE_FACILITATOR_ROLE)
         returns (MessagingReceipt memory receipt)
     {
         // Note: zero-amount validation is the facilitator's responsibility

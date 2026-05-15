@@ -14,7 +14,7 @@ import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
@@ -39,11 +39,6 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
-
-    /// @dev Role constants.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== DEPLOYMENT TOGGLES ==========
 
@@ -368,13 +363,13 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // 2. The DAO MS has bridge_admin role
         assertTrue(
-            roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE),
+            roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE),
             "The DAO MS should have bridge_admin role"
         );
 
         // 2b. The DAO MS has bridge_rate_limiter role
         assertTrue(
-            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            roles.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE),
             "The DAO MS should have bridge_rate_limiter role"
         );
 
@@ -383,7 +378,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // 3. LZCrossChainBridge has bridge_facilitator role
         assertTrue(
-            roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
+            roles.hasRole(lzCrossChainBridge, BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge should have bridge_facilitator role"
         );
 
@@ -393,7 +388,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
             "Activator should not have admin role"
         );
         assertFalse(
-            roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
+            roles.hasRole(address(activator), BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
         assertTrue(activator.isActivated(), "Activator should be marked as activated");

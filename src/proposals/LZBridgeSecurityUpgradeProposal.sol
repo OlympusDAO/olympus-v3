@@ -21,7 +21,7 @@ import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Policy} from "src/Kernel.sol";
@@ -54,11 +54,6 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
     /// @dev Number of remote chains (Arbitrum, Optimism, Base, Berachain).
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
-
-    /// @dev Role constants.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // ========== PROPOSAL ========== //
 
@@ -151,21 +146,21 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         ROLESv1 roles = ROLESv1(rolesAddr);
 
         // 1. Grant bridge_admin role to the DAO MS (conditional)
-        if (!roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+        if (!roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
             _pushAction(
                 rolesAdmin,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, daoMS),
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, daoMS),
                 "Grant bridge_admin role to the DAO MS"
             );
         }
 
         // 1b. Grant bridge_rate_limiter role to the DAO MS (conditional)
-        if (!roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+        if (!roles.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_RATE_LIMITER_ROLE,
+                    BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 ),
                 "Grant bridge_rate_limiter role to the DAO MS"
@@ -183,12 +178,12 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         }
 
         // 3. Grant bridge_facilitator role to LZCrossChainBridge (conditional)
-        if (!roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE)) {
+        if (!roles.hasRole(lzCrossChainBridge, BRIDGE_FACILITATOR_ROLE)) {
             _pushAction(
                 rolesAdmin,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_FACILITATOR_ROLE,
+                    BRIDGE_FACILITATOR_ROLE,
                     lzCrossChainBridge
                 ),
                 "Grant bridge_facilitator role to LZCrossChainBridge"
@@ -203,7 +198,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         );
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, activator),
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, activator),
             "Grant bridge_admin role to temporary activator contract"
         );
 
@@ -222,7 +217,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         );
         _pushAction(
             rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, _BRIDGE_ADMIN_ROLE, activator),
+            abi.encodeWithSelector(RolesAdmin.revokeRole.selector, BRIDGE_ADMIN_ROLE, activator),
             "Revoke bridge_admin role from temporary activator contract"
         );
     }
@@ -262,14 +257,14 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
 
         // 3. Validate roles
-        require(roles.hasRole(daoMS, _BRIDGE_ADMIN_ROLE), "DAO MS does not have bridge_admin role");
+        require(roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE), "DAO MS does not have bridge_admin role");
         require(
-            roles.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE),
+            roles.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE),
             "DAO MS does not have bridge_rate_limiter role"
         );
         require(roles.hasRole(daoMS, MANAGER_ROLE), "DAO MS does not have manager role");
         require(
-            roles.hasRole(lzCrossChainBridge, _BRIDGE_FACILITATOR_ROLE),
+            roles.hasRole(lzCrossChainBridge, BRIDGE_FACILITATOR_ROLE),
             "LZCrossChainBridge does not have bridge_facilitator role"
         );
 
@@ -279,7 +274,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Activator should not have admin role"
         );
         require(
-            !roles.hasRole(address(activator), _BRIDGE_ADMIN_ROLE),
+            !roles.hasRole(address(activator), BRIDGE_ADMIN_ROLE),
             "Activator should not have bridge_admin role"
         );
 

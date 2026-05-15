@@ -17,6 +17,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 // solhint-disable max-states-count
@@ -95,12 +96,12 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
         kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
 
-        rolesAdmin.grantRole("admin", admin);
-        rolesAdmin.grantRole("bridge_admin", bridgeAdmin);
-        rolesAdmin.grantRole("bridge_rate_limiter", bridgeRateLimiter);
-        rolesAdmin.grantRole("manager", manager);
-        rolesAdmin.grantRole("emergency", emergency);
-        rolesAdmin.grantRole("bridge_facilitator", facilitator);
+        rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        rolesAdmin.grantRole(BRIDGE_RATE_LIMITER_ROLE, bridgeRateLimiter);
+        rolesAdmin.grantRole(MANAGER_ROLE, manager);
+        rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, facilitator);
 
         // ---- Non-canonical stack (endpoint 2) ----
         kernel2 = new Kernel();
@@ -121,12 +122,12 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
         kernel2.executeAction(Actions.ActivatePolicy, address(lzDelegate2));
 
-        rolesAdmin2.grantRole("admin", admin);
-        rolesAdmin2.grantRole("bridge_admin", bridgeAdmin);
-        rolesAdmin2.grantRole("bridge_rate_limiter", bridgeRateLimiter);
-        rolesAdmin2.grantRole("manager", manager);
-        rolesAdmin2.grantRole("emergency", emergency);
-        rolesAdmin2.grantRole("bridge_facilitator", facilitator);
+        rolesAdmin2.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin2.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        rolesAdmin2.grantRole(BRIDGE_RATE_LIMITER_ROLE, bridgeRateLimiter);
+        rolesAdmin2.grantRole(MANAGER_ROLE, manager);
+        rolesAdmin2.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin2.grantRole(BRIDGE_FACILITATOR_ROLE, facilitator);
 
         // Wire peers, point each gateway's LZ endpoint delegate at the corresponding
         // LZEndpointDelegate policy.

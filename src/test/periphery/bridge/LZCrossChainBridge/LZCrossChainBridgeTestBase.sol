@@ -16,6 +16,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 contract LZCrossChainBridgeTestBase is TestHelperOz5 {
@@ -88,7 +89,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(gateway));
 
-        rolesAdmin.grantRole("admin", admin);
+        rolesAdmin.grantRole(ADMIN_ROLE, admin);
 
         // Deploy non-canonical stack for destination
         kernel2 = new Kernel();
@@ -107,7 +108,7 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         kernel2.executeAction(Actions.ActivatePolicy, address(rolesAdmin2));
         kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
 
-        rolesAdmin2.grantRole("admin", admin);
+        rolesAdmin2.grantRole(ADMIN_ROLE, admin);
 
         // Deploy bridge (periphery, owned by this test contract)
         bridge = new LZCrossChainBridge(
@@ -119,8 +120,8 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         );
 
         // Grant bridge_facilitator role to bridge on both kernels
-        rolesAdmin.grantRole("bridge_facilitator", address(bridge));
-        rolesAdmin2.grantRole("bridge_facilitator", address(bridge));
+        rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(bridge));
+        rolesAdmin2.grantRole(BRIDGE_FACILITATOR_ROLE, address(bridge));
 
         // Configure gateways
         vm.startPrank(admin);

@@ -17,6 +17,7 @@ import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
 import {Kernel, Keycode, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title LZEndpointDelegate
 /// @notice Thin policy that proxies LayerZero V2 OApp-authorized endpoint calls on behalf of a single
@@ -32,9 +33,6 @@ contract LZEndpointDelegate is
     PolicyAdmin
 {
     // ========= CONSTANTS ========= //
-
-    /// @notice Role allowed to forward OApp-authorized endpoint calls. Mirrors the gateway's role name.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
 
     /// @notice Pre-computed keycode for the ROLES module dependency.
     /// @dev Avoids the runtime cost of `toKeycode("ROLES")` at the call site.
@@ -59,7 +57,7 @@ contract LZEndpointDelegate is
     /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
     ///         `bridge_admin` nor the admin role.
     function _requireBridgeAdminOrAdmin() private view {
-        if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!ROLES.hasRole(msg.sender, BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert PolicyAdmin.NotAuthorised();
     }
 

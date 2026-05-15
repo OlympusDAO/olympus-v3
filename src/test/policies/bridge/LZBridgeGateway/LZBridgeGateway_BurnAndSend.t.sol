@@ -10,6 +10,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
+// Constants
+import {BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
@@ -773,10 +776,7 @@ contract LZBridgeGatewayTests_BurnAndSend is LZBridgeGatewayTestBase {
         vm.deal(caller_, 10 ether);
         vm.prank(caller_);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ROLESv1.ROLES_RequireRole.selector,
-                bytes32("bridge_facilitator")
-            )
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_FACILITATOR_ROLE)
         );
         gateway.burnAndSend{value: 1 ether}(
             NONCANONICAL_EID,

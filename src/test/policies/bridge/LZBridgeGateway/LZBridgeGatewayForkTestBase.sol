@@ -18,6 +18,7 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ADMIN_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 /// @notice Shared setup, deploy helpers, and packet-parsing utilities for LZBridgeGateway fork tests.
@@ -171,7 +172,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethRolesAdmin));
         ethKernel.executeAction(Actions.ActivatePolicy, address(ethGateway));
 
-        ethRolesAdmin.grantRole("admin", admin);
+        ethRolesAdmin.grantRole(ADMIN_ROLE, admin);
         ethBridge = new LZCrossChainBridge(
             address(ethOhm),
             admin,
@@ -179,7 +180,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
             admin,
             GRACE_SECONDS
         );
-        ethRolesAdmin.grantRole("bridge_facilitator", address(ethBridge));
+        ethRolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(ethBridge));
 
         vm.startPrank(admin);
         ethGateway.enable(bytes(""));
@@ -222,7 +223,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbRolesAdmin));
         arbKernel.executeAction(Actions.ActivatePolicy, address(arbGateway));
 
-        arbRolesAdmin.grantRole("admin", admin);
+        arbRolesAdmin.grantRole(ADMIN_ROLE, admin);
         arbBridge = new LZCrossChainBridge(
             address(arbOhm),
             admin,
@@ -230,7 +231,7 @@ abstract contract LZBridgeGatewayForkTestBase is Test {
             admin,
             GRACE_SECONDS
         );
-        arbRolesAdmin.grantRole("bridge_facilitator", address(arbBridge));
+        arbRolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(arbBridge));
 
         vm.startPrank(admin);
         arbGateway.enable(bytes(""));
