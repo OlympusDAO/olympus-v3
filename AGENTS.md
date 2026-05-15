@@ -54,6 +54,58 @@ Ask first:
 - Changing file permissions
 - Full test suites (`test`, `test:unit`, `test:fork` or `test:proposal`)
 
+## Repo Workflow
+
+Use the repo's existing commands and tooling for commit, push, and PR work. Do not add scripts for this workflow.
+
+### Validation Gates
+
+- Before every commit, run the repo's existing lint/format command: `pnpm run lint`.
+- Before pushing, run the repo's existing full validation commands:
+    - `pnpm build` or `forge build`
+    - `pnpm run lint:check`
+    - `pnpm run test` when the change is ready for full-suite validation or touches protocol behavior, tests, deployment, dependencies, or shared tooling
+    - Include other existing focused validation commands when they are directly relevant to the changed files
+- Keep focused tests and single-file builds available during implementation, but do not substitute them for the push gate when the change is ready to publish.
+- CodeRabbit is a sparse pre-push review tool. Run it before pushing or when explicitly requested, not before every commit.
+- When using CodeRabbit, run `coderabbit review --agent --base <PR base>`. Verify the PR base and diff scope before trusting the result. Treat an instant "0 issues" response as suspicious until the base and reviewed diff have been confirmed.
+
+### Approval Gates
+
+Batch approval into two explicit gates. If the user approves a gate, do not ask separately for lint, `git add`, `git commit`, `git push`, or PR creation steps covered by that gate.
+
+1. Commit approval:
+    - Show the current branch.
+    - Show the exact files that will be staged.
+    - Show the validation command that will run before commit.
+    - Show the exact commit message.
+    - After approval, run validation, stage only the listed files, and commit.
+
+2. Publish approval:
+    - Show the current branch.
+    - Show the remote and PR base.
+    - Show the push validation commands, including full tests when appropriate.
+    - Show the CodeRabbit command when it applies.
+    - Show the PR action: create or update.
+    - Show the PR title and a summary of the PR body.
+    - After approval, validate, push, and create or update the PR.
+
+Never stage unrelated files. If the worktree has unrelated modifications, leave them unstaged and call them out in the approval summary.
+
+### Worktree Environment
+
+- For worktrees, check whether `.env` exists before running fork tests or full validation that needs RPC credentials.
+- If `.env` is missing, bootstrap it from the documented shared/local env source. If the source is unknown, ask once for the source and reuse that answer for the current worktree.
+- Do not repeatedly rediscover or re-report the same missing env issue after the source has been identified.
+
+### Audit and Review Intake
+
+- For audit issues or manually pasted CodeRabbit comments, first verify applicability against the current code.
+- State whether each issue applies, does not apply, or partially applies.
+- Identify the red test or smallest validation that demonstrates the issue before implementing, when a test is practical.
+- Implement only applicable fixes, then run focused validation before the normal commit or publish gate.
+- Include audit issue IDs in PR bodies when relevant.
+
 ## Agent Behaviour
 
 ### Communication Style
@@ -117,8 +169,7 @@ Ask first:
 
 ### Commit and Git Hygiene
 
-- Never create commits unless explicitly asked
-- Never push unless explicitly asked
+- Use the Repo Workflow approval gates for commits, pushes, and PRs. Do not commit or push outside those gates unless the user explicitly requests a different flow.
 - The git commit message should follow the format of: `<type>(<scope>): <description>`
     - `type` may be one of:
         - feat: Introduces a new feature.
@@ -268,7 +319,7 @@ Key standards summary:
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
 - Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
 - Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
-- When completing a minor or major milestone and before any git commits, run the formatter: `pnpm run prettier`
+- For commit and push validation, follow the Repo Workflow section.
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
 - Between milestones, run a build (`forge build`) and prettier (`pnpm run prettier`)
 - Do not use `require()` for assertions. Instead, preference custom errors. Custom errors should be defined in the contract's parent interface (where available), or else in the contract itself.
@@ -407,13 +458,7 @@ Always think through the decimal arithmetic step-by-step and make the reasoning 
 
 ### Code Reviews with CodeRabbit
 
-If CodeRabbit is installed, run it as a way to review your code. Run the command: `coderabbit -h` for details on commands available.
-
-In general, I want you to run coderabbit with the `--prompt-only` flag.
-
-To review uncommitted changes (this is what we'll use most of the time) run: `coderabbit --prompt-only -t uncommitted`.
-
-It is more useful if the review is performed against a base branch, using the `--base <branchName>` flag.
+Use CodeRabbit through the Repo Workflow section, which defines timing, base verification, and the standard review command. Run `coderabbit -h` for CLI details if the installed command syntax is unclear.
 
 IMPORTANT: When running CodeRabbit to review code changes, don't run it more than 3 times in a given set of changes.
 
