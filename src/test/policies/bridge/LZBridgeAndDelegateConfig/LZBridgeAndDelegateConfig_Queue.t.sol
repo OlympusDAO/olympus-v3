@@ -277,6 +277,27 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         config.queue(batch);
     }
 
+    function test_queue_revertsIfBatchMixesBridgeAdminAndAdminOnlySubActions() external {
+        // A `bridge_admin` proposer clears the bridge-admin gate on gateway.setDelegate but
+        // not the admin-only gate on facilitator.setConfigurator, exercising the
+        // `ROLES_RequireRole(ADMIN_ROLE)` revert path (distinct from `NotAuthorised` above).
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.setDelegate.selector,
+            payload: abi.encode(makeAddr("delegateCandidate"))
+        });
+        batch[1] = ITimelockBatchQueue.BatchAction({
+            target: address(facilitator),
+            selector: ILZCrossChainBridge.setConfigurator.selector,
+            payload: abi.encode(makeAddr("configuratorCandidate"))
+        });
+
+        _expectAdminRole();
+        vm.prank(bridgeAdmin);
+        config.queue(batch);
+    }
+
     function test_queue_revertsIfSubActionTargetIsUnknown() external {
         ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](1);
         batch[0] = ITimelockBatchQueue.BatchAction({
