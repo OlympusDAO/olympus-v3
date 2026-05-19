@@ -87,9 +87,9 @@ contract LZBridgeAndDelegateConfig is
         _requireNonzeroAddress(delegate_, "delegate");
         _requireNonzeroAddress(facilitator_, "facilitator");
 
-        gateway = gateway_;
-        delegate = delegate_;
-        facilitator = facilitator_;
+        _setTargetGateway(gateway_);
+        _setTargetDelegate(delegate_);
+        _setTargetFacilitator(facilitator_);
 
         // EnablerV2 starts disabled
     }
@@ -108,15 +108,8 @@ contract LZBridgeAndDelegateConfig is
     }
 
     /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        override
-        returns (Permissions[] memory permissions)
-    {
-        // The config policy interacts with target contracts via their public role-gated
-        // surfaces, not via the Kernel permission system.
-        permissions = new Permissions[](0);
+    function requestPermissions() external pure override returns (Permissions[] memory) {
+        // No permissions
     }
 
     /// @inheritdoc IVersioned
@@ -619,15 +612,15 @@ contract LZBridgeAndDelegateConfig is
 
     /// @notice Requires the caller to hold `bridge_admin` or `admin`.
     function _requireBridgeAdminProposer(address caller_) private view {
-        if (!ROLES.hasRole(caller_, BRIDGE_ADMIN_ROLE) && !_isAdmin(caller_))
+        if (!_hasRole(caller_, BRIDGE_ADMIN_ROLE) && !_isAdmin(caller_))
             revert IPolicyAdmin.NotAuthorised();
     }
 
     /// @notice Requires the caller to hold `bridge_rate_limiter`, `bridge_admin`, or `admin`.
     function _requireRateLimiterProposer(address caller_) private view {
         if (
-            !ROLES.hasRole(caller_, BRIDGE_RATE_LIMITER_ROLE) &&
-            !ROLES.hasRole(caller_, BRIDGE_ADMIN_ROLE) &&
+            !_hasRole(caller_, BRIDGE_RATE_LIMITER_ROLE) &&
+            !_hasRole(caller_, BRIDGE_ADMIN_ROLE) &&
             !_isAdmin(caller_)
         ) revert IPolicyAdmin.NotAuthorised();
     }
@@ -635,6 +628,11 @@ contract LZBridgeAndDelegateConfig is
     /// @notice Requires the caller to hold `admin`.
     function _requireAdminProposer(address caller_) private view {
         if (!_isAdmin(caller_)) revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
+    }
+
+    /// @notice Returns whether `account_` holds `role_` on the `ROLES` module.
+    function _hasRole(address account_, bytes32 role_) private view returns (bool) {
+        return ROLES.hasRole(account_, role_);
     }
 
     // ========== SUB-ACTION VALIDATORS ========== //
@@ -839,7 +837,7 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel == ILZBridgeGateway.clearInboundInFlight.selector) {
             gw.clearInboundInFlight(abi.decode(action_.payload, (uint32[])));
         } else if (sel == IGracePeriod.setGracePeriod.selector) {
-            IGracePeriod(gateway).setGracePeriod(abi.decode(action_.payload, (uint32)));
+            IGracePeriod(address(gw)).setGracePeriod(abi.decode(action_.payload, (uint32)));
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
         }
@@ -906,7 +904,7 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel == ILZCrossChainBridge.setReEnabler.selector) {
             fac.setReEnabler(abi.decode(action_.payload, (address)));
         } else if (sel == IGracePeriod.setGracePeriod.selector) {
-            IGracePeriod(facilitator).setGracePeriod(abi.decode(action_.payload, (uint32)));
+            IGracePeriod(address(fac)).setGracePeriod(abi.decode(action_.payload, (uint32)));
         } else if (sel == ILZCrossChainBridge.setConfigurator.selector) {
             fac.setConfigurator(abi.decode(action_.payload, (address)));
         } else {
@@ -914,25 +912,22 @@ contract LZBridgeAndDelegateConfig is
         }
     }
 
+    /// @dev Queue-time validation in `_validateSelfSubAction` already enforces non-zero target
+    ///      addresses and the timelock delay bounds, so this execute path trusts the decoded
+    ///      payload and routes to the matching `_setTarget*` helper.
     function _executeSelfSubAction(ITimelockBatchQueue.BatchAction memory action_) private {
         bytes4 sel = action_.selector;
-        if (sel == this.queueSetTargetGateway.selector) {
-            address newGateway = abi.decode(action_.payload, (address));
-            _requireNonzeroAddress(newGateway, "gateway");
-            gateway = newGateway;
-            emit TargetGatewaySet(newGateway);
-        } else if (sel == this.queueSetTargetDelegate.selector) {
-            address newDelegate = abi.decode(action_.payload, (address));
-            _requireNonzeroAddress(newDelegate, "delegate");
-            delegate = newDelegate;
-            emit TargetDelegateSet(newDelegate);
-        } else if (sel == this.queueSetTargetFacilitator.selector) {
-            address newFacilitator = abi.decode(action_.payload, (address));
-            _requireNonzeroAddress(newFacilitator, "facilitator");
-            facilitator = newFacilitator;
-            emit TargetFacilitatorSet(newFacilitator);
-        } else if (sel == this.queueSetTimelockDelay.selector) {
+        if (sel == this.queueSetTimelockDelay.selector) {
             _setTimelockDelay(abi.decode(action_.payload, (uint48)));
+            return;
+        }
+        address candidate = abi.decode(action_.payload, (address));
+        if (sel == this.queueSetTargetGateway.selector) {
+            _setTargetGateway(candidate);
+        } else if (sel == this.queueSetTargetDelegate.selector) {
+            _setTargetDelegate(candidate);
+        } else if (sel == this.queueSetTargetFacilitator.selector) {
+            _setTargetFacilitator(candidate);
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
         }
@@ -940,8 +935,25 @@ contract LZBridgeAndDelegateConfig is
 
     // ========== HELPERS ========== //
 
-    function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
-        if (address_ == address(0)) revert LZBridgeAndDelegateConfig_InvalidAddress(parameter_);
+    /// @notice Writes the gateway target and emits `TargetGatewaySet`. Shared between the
+    ///         constructor and the timelocked rotation path.
+    function _setTargetGateway(address gateway_) private {
+        gateway = gateway_;
+        emit TargetGatewaySet(gateway_);
+    }
+
+    /// @notice Writes the delegate target and emits `TargetDelegateSet`. Shared between the
+    ///         constructor and the timelocked rotation path.
+    function _setTargetDelegate(address delegate_) private {
+        delegate = delegate_;
+        emit TargetDelegateSet(delegate_);
+    }
+
+    /// @notice Writes the facilitator target and emits `TargetFacilitatorSet`. Shared between
+    ///         the constructor and the timelocked rotation path.
+    function _setTargetFacilitator(address facilitator_) private {
+        facilitator = facilitator_;
+        emit TargetFacilitatorSet(facilitator_);
     }
 
     /// @notice Mirrors the zero-period check performed by `ReEnablerGracePeriod._setGracePeriod`
@@ -949,5 +961,9 @@ contract LZBridgeAndDelegateConfig is
     ///         execution time.
     function _validateGracePeriod(uint32 period_) private pure {
         if (period_ == 0) revert IGracePeriod.GracePeriod_ZeroPeriod();
+    }
+
+    function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
+        if (address_ == address(0)) revert LZBridgeAndDelegateConfig_InvalidAddress(parameter_);
     }
 }

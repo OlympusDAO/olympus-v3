@@ -4,6 +4,8 @@ pragma solidity >=0.8.30;
 import {LZBridgeAndDelegateConfigTestBase} from "src/test/policies/bridge/LZBridgeAndDelegateConfig/LZBridgeAndDelegateConfigTestBase.sol";
 
 // Interfaces
+import {Errors as LZErrors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
@@ -57,10 +59,10 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
 
         _warpPastTimelock();
 
-        // The LZ endpoint will reject an unknown library, so we expect a revert from the
-        // endpoint - which still exercises the typed dispatch path and confirms the call
-        // landed on the endpoint with the gateway as the OApp.
-        vm.expectRevert();
+        // The LZ endpoint rejects an unknown library with `LZ_OnlyRegisteredOrDefaultLib`,
+        // which still exercises the typed dispatch path and confirms the call landed on the
+        // endpoint with the gateway as the OApp.
+        vm.expectRevert(LZErrors.LZ_OnlyRegisteredOrDefaultLib.selector);
         config.executeQueuedAction(actionId);
     }
 
@@ -157,7 +159,7 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
 
         _warpPastTimelock();
 
-        vm.expectRevert();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
         config.executeQueuedAction(actionId);
     }
 }
