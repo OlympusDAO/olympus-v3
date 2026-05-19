@@ -15,8 +15,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         Lifecycle:
 ///         - `_queueAction` enforces the configured batch size bounds, calls
 ///           `_validateSubAction` per sub-action and `_validateBatch` once for cross-sub
-///           invariants, stores the batch metadata and sub-actions, emits
-///           `TimelockActionQueued`, and emits one `TimelockSubActionQueued` per sub-action.
+///           invariants, stores the batch metadata and sub-actions, emits one
+///           `TimelockSubActionQueued` per sub-action, then emits `TimelockActionQueued`
+///           to close the batch.
 ///         - `executeQueuedAction` validates standard executable state, delegates
 ///           implementation-specific execution authorization to `_validateExecution`, marks
 ///           the action executed, and runs the execution loop in the base contract: each
@@ -28,7 +29,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///           implementation-specific cancellation authorization to `_validateCancellation`,
 ///           clears the stored sub-actions, and emits `TimelockActionCancelled`.
 ///
-///         Child contracts must implement the virtual hooks by reverting on failure. Hooks
+///         Derived contracts must implement the virtual hooks by reverting on failure. Hooks
 ///         should not return booleans; a successful return means the hook accepted the
 ///         operation.
 abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
@@ -46,17 +47,15 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Initialize the timelock queue.
-    /// @dev    Calls `_validateTimelockDelay`. Child implementations should ensure that override
-    ///         does not depend on child constructor-initialized storage.
+    /// @dev    Delegates to `_setTimelockDelay`, which calls the virtual
+    ///         `_validateTimelockDelay`. Derived implementations should ensure that override does
+    ///         not depend on derived-contract constructor-initialized storage.
     ///
     /// @param  initialTimelockDelay_ Initial timelock delay in seconds.
     constructor(uint48 initialTimelockDelay_) {
-        _validateTimelockDelay(initialTimelockDelay_);
+        _setTimelockDelay(initialTimelockDelay_);
 
-        timelockDelay = initialTimelockDelay_;
         nextActionId = 1;
-
-        emit TimelockDelaySet(initialTimelockDelay_);
     }
 
     // ========== QUEUE MANAGEMENT ========== //
@@ -66,9 +65,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action does not exist
     function getQueuedAction(
         uint64 actionId_
-    ) external view returns (ITimelockBatchQueue.QueuedAction memory action_) {
-        action_ = _queuedActions[actionId_];
-        if (action_.queuedAt == 0) revert ITimelockBatchQueue_ActionNotFound(actionId_);
+    ) external view returns (ITimelockBatchQueue.QueuedAction memory action) {
+        action = _queuedActions[actionId_];
+        if (action.queuedAt == 0) revert ITimelockBatchQueue_ActionNotFound(actionId_);
     }
 
     /// @inheritdoc ITimelockBatchQueue
@@ -76,7 +75,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action does not exist
     ///             - The action has already been executed
     ///             - The action has been cancelled
-    function getQueuedActionLength(uint64 actionId_) external view returns (uint256 length_) {
+    function getQueuedActionLength(uint64 actionId_) external view returns (uint256 length) {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _requireActionAccessible(actionId_, action);
         return action.actions.length;
@@ -91,7 +90,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     function getQueuedSubAction(
         uint64 actionId_,
         uint256 index_
-    ) external view returns (address target_, bytes4 selector_, bytes memory payload_) {
+    ) external view returns (address target, bytes4 selector, bytes memory payload) {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _requireActionAccessible(actionId_, action);
 
@@ -100,9 +99,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
             revert ITimelockBatchQueue_SubActionIndexOutOfBounds(actionId_, index_, length);
 
         ITimelockBatchQueue.BatchAction storage subAction = action.actions[index_];
-        target_ = subAction.target;
-        selector_ = subAction.selector;
-        payload_ = subAction.payload;
+        target = subAction.target;
+        selector = subAction.selector;
+        payload = subAction.payload;
     }
 
     /// @inheritdoc ITimelockBatchQueue
@@ -114,14 +113,15 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action has expired
     ///             - `_validateExecution` reverts
     ///             - `_executeSubAction` reverts for any sub-action
-    /// @dev        Event ordering is intentionally asymmetric vs `_queueAction`. Each
+    /// @dev        In both `_queueAction` and execution the per-sub-action events precede the
+    ///             single action-level event that closes the batch. At execution time each
     ///             `TimelockSubActionExecuted` is emitted *inside* the loop, immediately after
     ///             the corresponding `_executeSubAction` call, so it interleaves with any
     ///             events the sub-action target emits and the log preserves real execution
-    ///             order. The single `TimelockActionExecuted` event closes the batch at the
-    ///             end. At queue time there is no nested call to interleave with, so
-    ///             `_queueAction` emits the action-level event first and the sub-action events
-    ///             follow as a uniform group.
+    ///             order; `TimelockActionExecuted` is then emitted once after the loop. At
+    ///             queue time there is no nested call to interleave with, so the
+    ///             `TimelockSubActionQueued` events form a uniform group followed by
+    ///             `TimelockActionQueued`.
     function executeQueuedAction(uint64 actionId_) external {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _validateExecutableState(actionId_, action);
@@ -132,7 +132,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         action.executed = true;
 
         uint256 len = actionCopy.actions.length;
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             ITimelockBatchQueue.BatchAction memory subAction = actionCopy.actions[i];
             _executeSubAction(actionId_, i, subAction);
             emit TimelockSubActionExecuted(actionId_, subAction.target, subAction.selector, i);
@@ -164,7 +164,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
 
     /// @notice Queue a batched timelocked action.
     /// @dev    Calls `_validateSubAction` per sub-action and `_validateBatch` once after, so
-    ///         child contracts cannot use this helper without passing their implementation
+    ///         derived contracts cannot use this helper without passing their implementation
     ///         specific authorization and payload checks.
     /// @dev    Reverts if:
     ///         - The batch is empty
@@ -173,16 +173,15 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///         - `_validateBatch` reverts
     ///
     /// @param  actions_  The sub-actions of the batch.
-    /// @return actionId_ The queued action ID.
+    /// @return actionId The queued action ID.
     function _queueAction(
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) internal returns (uint64 actionId_) {
+    ) internal returns (uint64 actionId) {
         uint256 len = actions_.length;
         if (len == 0) revert ITimelockBatchQueue_BatchEmpty();
-        uint256 maxLen = _maxBatchSize();
-        if (len > maxLen) revert ITimelockBatchQueue_BatchTooLarge(len, maxLen);
+        if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
 
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             _validateSubAction(msg.sender, actions_[i]);
         }
         _validateBatch(msg.sender, actions_);
@@ -191,56 +190,53 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
 
-        actionId_ = nextActionId;
-        nextActionId = actionId_ + 1;
+        actionId = nextActionId;
+        nextActionId = actionId + 1;
 
         // The legacy pipeline cannot copy a memory array of structs containing nested dynamic
         // types (`BatchAction[] memory` -> storage) in a single assignment, so push one
         // sub-action at a time. `executed` and `cancelled` default to false in the fresh
         // storage slot.
-        ITimelockBatchQueue.QueuedAction storage stored = _queuedActions[actionId_];
+        ITimelockBatchQueue.QueuedAction storage stored = _queuedActions[actionId];
         stored.proposer = msg.sender;
         stored.queuedAt = queuedAt;
         stored.executableAt = executableAt;
         stored.expiresAt = expiresAt;
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             stored.actions.push(actions_[i]);
-        }
-
-        emit TimelockActionQueued(
-            actionId_,
-            msg.sender,
-            keccak256(abi.encode(actions_)),
-            executableAt,
-            expiresAt
-        );
-
-        for (uint256 i; i < len; ++i) {
             emit TimelockSubActionQueued(
-                actionId_,
+                actionId,
                 actions_[i].target,
                 actions_[i].selector,
                 i,
                 keccak256(actions_[i].payload)
             );
         }
+
+        emit TimelockActionQueued(
+            actionId,
+            msg.sender,
+            keccak256(abi.encode(actions_)),
+            executableAt,
+            expiresAt
+        );
     }
 
     /// @notice Queue a single timelocked action.
     /// @dev    Convenience wrapper that forwards a single (target, selector, payload) triple as
-    ///         a length-1 batch and delegates to the batch overload. The child's
+    ///         a length-1 batch and delegates to the batch overload. The derived contract's
     ///         `_validateSubAction` hook is invoked once and `_validateBatch` is invoked once
     ///         with a length-1 array.
     ///
     /// @param  target_   The contract expected to receive the queued action.
     /// @param  selector_ The function selector for the queued action.
     /// @param  payload_  Encoded parameters for the action.
-    /// @return actionId_ The queued action ID.
+    /// @return actionId The queued action ID.
     function _queueAction(
         address target_,
         bytes4 selector_,
         bytes memory payload_
-    ) internal returns (uint64 actionId_) {
+    ) internal returns (uint64 actionId) {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = ITimelockBatchQueue.BatchAction({
             target: target_,
@@ -308,11 +304,11 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     }
 
     /// @notice Validate a single sub-action at queue time.
-    /// @dev    Child contracts must revert on failure. Called once per sub-action by the base
+    /// @dev    Derived contracts must revert on failure. Called once per sub-action by the base
     ///         contract before the batch is stored; implementations are expected to validate
     ///         the target, selector, and payload of the sub-action in isolation. Cross
     ///         sub-action invariants belong in `_validateBatch`. The caller is passed
-    ///         explicitly for clarity and to support child contracts that centralize
+    ///         explicitly for clarity and to support derived contracts that centralize
     ///         authorization around actor params.
     ///
     /// @param  caller_ The account queueing the action.
@@ -323,7 +319,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ) internal view virtual;
 
     /// @notice Validate cross-sub-action invariants at queue time.
-    /// @dev    Default implementation is a no-op. Child contracts override only when invariants
+    /// @dev    Default implementation is a no-op. Derived contracts override only when invariants
     ///         spanning multiple sub-actions are required (e.g. forbidding duplicate or
     ///         conflicting sub-actions inside one batch). Called once per queued batch after
     ///         every `_validateSubAction` has returned successfully.
@@ -333,7 +329,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ) internal view virtual {}
 
     /// @notice Validate implementation-specific execution rules for the entire batch.
-    /// @dev    Child contracts must revert on failure. Standard queued-action state and
+    /// @dev    Derived contracts must revert on failure. Standard queued-action state and
     ///         timestamp checks have already passed when this hook is called, and no
     ///         sub-action has been executed yet. This hook is the right place for batch-level
     ///         execution gates (e.g. requiring an execution role, checking that the policy is
@@ -349,7 +345,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ) internal view virtual;
 
     /// @notice Validate implementation-specific cancellation rules.
-    /// @dev    Child contracts must revert on failure. Standard queued-action state checks have
+    /// @dev    Derived contracts must revert on failure. Standard queued-action state checks have
     ///         already passed when this hook is called.
     ///
     /// @param  caller_   The account cancelling the action.
@@ -362,10 +358,10 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ) internal view virtual;
 
     /// @notice Execute a single sub-action of a batched queued action.
-    /// @dev    Child contracts must revert on failure. Called by the base contract once per
+    /// @dev    Derived contracts must revert on failure. Called by the base contract once per
     ///         sub-action in array order; the action has already been marked executed, so a
     ///         revert in any iteration reverts the entire batch and rolls back that flag.
-    ///         Child contracts must not rely on the base contract calling this hook in any
+    ///         Derived contracts must not rely on the base contract calling this hook in any
     ///         other order.
     ///
     /// @param  actionId_ The queued action ID.
@@ -378,23 +374,23 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ) internal virtual;
 
     /// @notice Validate a timelock delay.
-    /// @dev    Child contracts must revert on failure.
+    /// @dev    Derived contracts must revert on failure.
     ///
     /// @param  delay_ The delay to validate.
     function _validateTimelockDelay(uint48 delay_) internal view virtual;
 
     /// @notice Return the execution window for queued actions.
     ///
-    /// @return executionWindow_ The execution window in seconds.
-    function _executionWindow() internal view virtual returns (uint48 executionWindow_);
+    /// @return executionWindow The execution window in seconds.
+    function _executionWindow() internal view virtual returns (uint48 executionWindow);
 
     /// @notice Maximum number of sub-actions allowed in a single batch.
     /// @dev    Default protects against batches that cannot be executed within the block gas
-    ///         limit. Child contracts whose sub-actions are unusually expensive or cheap may
+    ///         limit. Derived contracts whose sub-actions are unusually expensive or cheap may
     ///         override.
     ///
-    /// @return maxBatchSize_ The maximum number of sub-actions allowed in a single batch.
-    function _maxBatchSize() internal view virtual returns (uint256 maxBatchSize_) {
+    /// @return maxBatchSize The maximum number of sub-actions allowed in a single batch.
+    function _maxBatchSize() internal view virtual returns (uint256 maxBatchSize) {
         return 15;
     }
 
@@ -404,7 +400,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     /// @dev    Does not revert.
     ///
     /// @param  interfaceId_ The interface identifier, as specified in ERC-165.
-    /// @return bool         True if the contract implements `interfaceId_`.
+    /// @return              True if the contract implements `interfaceId_`.
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
             interfaceId_ == type(ITimelockBatchQueue).interfaceId ||

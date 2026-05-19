@@ -16,7 +16,8 @@ interface ITimelockBatchQueue {
     // ========== EVENTS ========== //
 
     /// @notice Emitted when a batched action is queued.
-    /// @dev    One `TimelockSubActionQueued` event is emitted per sub-action after this event.
+    /// @dev    Emitted once to close the batch, after one `TimelockSubActionQueued` event has
+    ///         been emitted per sub-action.
     ///
     /// @param actionId     The queued action ID.
     /// @param proposer     The account that queued the action.
@@ -198,8 +199,8 @@ interface ITimelockBatchQueue {
     /// @dev    Reverts if the action does not exist.
     ///
     /// @param  actionId_ The queued action ID.
-    /// @return action_   The queued action.
-    function getQueuedAction(uint64 actionId_) external view returns (QueuedAction memory action_);
+    /// @return action   The queued action.
+    function getQueuedAction(uint64 actionId_) external view returns (QueuedAction memory action);
 
     /// @notice Get the number of sub-actions stored for a queued action.
     /// @dev    Reverts if:
@@ -208,8 +209,8 @@ interface ITimelockBatchQueue {
     ///         - The action has been cancelled
     ///
     /// @param  actionId_ The queued action ID.
-    /// @return length_   The number of sub-actions stored for the action.
-    function getQueuedActionLength(uint64 actionId_) external view returns (uint256 length_);
+    /// @return length   The number of sub-actions stored for the action.
+    function getQueuedActionLength(uint64 actionId_) external view returns (uint256 length);
 
     /// @notice Get a single sub-action of a queued action.
     /// @dev    Reverts if:
@@ -220,13 +221,13 @@ interface ITimelockBatchQueue {
     ///
     /// @param  actionId_ The queued action ID.
     /// @param  index_    The sub-action index.
-    /// @return target_   The contract expected to receive the sub-action.
-    /// @return selector_ The function selector for the sub-action.
-    /// @return payload_  Encoded parameters for the sub-action.
+    /// @return target    The contract expected to receive the sub-action.
+    /// @return selector  The function selector for the sub-action.
+    /// @return payload   Encoded parameters for the sub-action.
     function getQueuedSubAction(
         uint64 actionId_,
         uint256 index_
-    ) external view returns (address target_, bytes4 selector_, bytes memory payload_);
+    ) external view returns (address target, bytes4 selector, bytes memory payload);
 
     /// @notice Execute a queued action after its timelock has elapsed.
     /// @dev    Implementations must revert from implementation-specific hooks if the caller or

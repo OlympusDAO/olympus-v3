@@ -194,7 +194,7 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
     }
 
     /// @dev Sets up `vm.expectEmit` expectations for every event emitted by `_queueAction`:
-    ///      one `TimelockActionQueued` followed by one `TimelockSubActionQueued` per sub-action.
+    ///      one `TimelockSubActionQueued` per sub-action followed by one `TimelockActionQueued`.
     ///      Must be called immediately before the `config.queue()` call.
     function _expectQueueEvents(
         uint64 actionId_,
@@ -203,15 +203,6 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
     ) internal {
         uint48 executableAt = uint48(block.timestamp) + INITIAL_TIMELOCK_DELAY;
         uint48 expiresAt = executableAt + config.EXECUTION_WINDOW();
-
-        vm.expectEmit(true, true, false, true);
-        emit ITimelockBatchQueue.TimelockActionQueued(
-            actionId_,
-            proposer_,
-            keccak256(abi.encode(actions_)),
-            executableAt,
-            expiresAt
-        );
 
         for (uint256 i = 0; i < actions_.length; ++i) {
             vm.expectEmit(true, true, true, true);
@@ -223,6 +214,15 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
                 keccak256(actions_[i].payload)
             );
         }
+
+        vm.expectEmit(true, true, false, true);
+        emit ITimelockBatchQueue.TimelockActionQueued(
+            actionId_,
+            proposer_,
+            keccak256(abi.encode(actions_)),
+            executableAt,
+            expiresAt
+        );
     }
 
     // ========== BATCH SEMANTICS ========== //

@@ -521,7 +521,7 @@ contract TimelockBatchQueueTest is Test {
 
     // given a successful single-action queue
     //  [X] stores correct metadata and a length-1 actions array
-    //  [X] emits TimelockActionQueued and one TimelockSubActionQueued
+    //  [X] emits one TimelockSubActionQueued then TimelockActionQueued
     //  [X] increments nextActionId by one
     function test_queueAction_storesAndEmitsAndCallsHooks() public {
         uint64 expectedId = queue.nextActionId();
@@ -539,14 +539,6 @@ contract TimelockBatchQueueTest is Test {
         });
         bytes32 expectedHash = keccak256(abi.encode(expectedActions));
 
-        vm.expectEmit(true, true, false, true);
-        emit ITimelockBatchQueue.TimelockActionQueued(
-            expectedId,
-            proposer,
-            expectedHash,
-            executableAt,
-            expiresAt
-        );
         vm.expectEmit(true, true, true, true);
         emit ITimelockBatchQueue.TimelockSubActionQueued(
             expectedId,
@@ -554,6 +546,14 @@ contract TimelockBatchQueueTest is Test {
             selector1,
             0,
             keccak256(payload)
+        );
+        vm.expectEmit(true, true, false, true);
+        emit ITimelockBatchQueue.TimelockActionQueued(
+            expectedId,
+            proposer,
+            expectedHash,
+            executableAt,
+            expiresAt
         );
 
         vm.prank(proposer);
@@ -694,7 +694,7 @@ contract TimelockBatchQueueTest is Test {
 
     // given a successful 3-element batch is queued
     //  [X] all sub-actions stored in order
-    //  [X] one TimelockActionQueued then exactly 3 TimelockSubActionQueued in increasing index order
+    //  [X] exactly 3 TimelockSubActionQueued in increasing index order then one TimelockActionQueued
     //  [X] nextActionId increments by exactly one for the whole batch
     function test_queueBatchAction_storesAndEmitsAndCallsHooks() public {
         uint64 expectedId = queue.nextActionId();
@@ -704,14 +704,6 @@ contract TimelockBatchQueueTest is Test {
         uint48 executableAt = queuedAt + TIMELOCK_DELAY;
         uint48 expiresAt = executableAt + EXECUTION_WINDOW;
 
-        vm.expectEmit(true, true, false, true);
-        emit ITimelockBatchQueue.TimelockActionQueued(
-            expectedId,
-            proposer,
-            expectedHash,
-            executableAt,
-            expiresAt
-        );
         for (uint256 i; i < 3; ++i) {
             vm.expectEmit(true, true, true, true);
             emit ITimelockBatchQueue.TimelockSubActionQueued(
@@ -722,6 +714,14 @@ contract TimelockBatchQueueTest is Test {
                 keccak256(actions[i].payload)
             );
         }
+        vm.expectEmit(true, true, false, true);
+        emit ITimelockBatchQueue.TimelockActionQueued(
+            expectedId,
+            proposer,
+            expectedHash,
+            executableAt,
+            expiresAt
+        );
 
         vm.prank(proposer);
         uint64 actionId = queue.queueBatchAction(actions);
