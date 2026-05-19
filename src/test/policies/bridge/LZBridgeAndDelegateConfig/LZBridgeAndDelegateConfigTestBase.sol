@@ -249,4 +249,17 @@ contract LZBridgeAndDelegateConfigTestBase is TestHelperOz5 {
     function _expectAdminRole() internal {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
     }
+
+    /// @dev Asserts the exact `ITimelockBatchQueue_ActionInvalid(target, selector)` revert
+    ///      raised by the queue-time payload-length and canonical-encoding guards, including
+    ///      its parameters (not just the error selector).
+    function _expectActionInvalid(address target_, bytes4 selector_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                target_,
+                selector_
+            )
+        );
+    }
 }

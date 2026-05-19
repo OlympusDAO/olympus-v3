@@ -53,6 +53,26 @@ contract LZBridgeAndDelegateConfig is
     /// @inheritdoc ILZBridgeAndDelegateConfig
     uint48 public constant override EXECUTION_WINDOW = 3 days;
 
+    /// @dev Exact ABI-encoded length of a single static-word payload: `(address)`,
+    ///      `(uint256)`, or `(uint32)`.
+    uint256 internal constant _LEN_SINGLE_WORD = 32;
+
+    /// @dev Exact ABI-encoded length of the `setSendLibrary` `(uint32, address)` payload.
+    uint256 internal constant _LEN_SEND_LIBRARY = 64;
+
+    /// @dev Exact ABI-encoded length of the `setReceiveLibrary` and
+    ///      `setReceiveLibraryTimeout` `(uint32, address, uint256)` payload.
+    uint256 internal constant _LEN_RECEIVE_LIBRARY = 96;
+
+    /// @dev Minimal ABI-encoded length of a single dynamic-array payload (`T[]`): the head
+    ///      offset word plus an empty array's length word.
+    uint256 internal constant _MIN_LEN_DYNAMIC_ARRAY = 64;
+
+    /// @dev Minimal ABI-encoded length of the `setEndpointConfig`
+    ///      `(address, SetConfigParam[])` payload: the address word, the array offset word,
+    ///      and an empty array's length word.
+    uint256 internal constant _MIN_LEN_ENDPOINT_CONFIG = 96;
+
     /// @notice Pre-computed keycode for the ROLES module dependency.
     /// @dev Avoids the runtime cost of `toKeycode("ROLES")` at the call site.
     Keycode internal constant _KEYCODE_ROLES = Keycode.wrap(0x524F4C4553); // toKeycode("ROLES")
@@ -364,7 +384,7 @@ contract LZBridgeAndDelegateConfig is
             sel == ILZBridgeGateway.clearInboundInFlight.selector
         ) {
             _requireRateLimiterProposer(caller_);
-            _decodeGatewayRateLimitPayload(sel, action_.payload);
+            _decodeGatewayRateLimitPayload(action_.target, sel, action_.payload);
             return;
         }
         if (
@@ -374,7 +394,7 @@ contract LZBridgeAndDelegateConfig is
             sel == IGracePeriod.setGracePeriod.selector
         ) {
             _requireBridgeAdminProposer(caller_);
-            _decodeGatewayAdminPayload(sel, action_.payload);
+            _decodeGatewayAdminPayload(action_.target, sel, action_.payload);
             return;
         }
         revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
@@ -392,7 +412,7 @@ contract LZBridgeAndDelegateConfig is
             sel == ILZEndpointV2Authorized.setEndpointConfig.selector
         ) {
             _requireBridgeAdminProposer(caller_);
-            _decodeDelegatePayload(sel, action_.payload);
+            _decodeDelegatePayload(action_.target, sel, action_.payload);
             return;
         }
         revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
@@ -405,6 +425,8 @@ contract LZBridgeAndDelegateConfig is
         bytes4 sel = action_.selector;
         if (sel == ILZCrossChainBridge.setConfigurator.selector) {
             _requireAdminProposer(caller_);
+            if (action_.payload.length != _LEN_SINGLE_WORD)
+                revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
             address candidate = abi.decode(action_.payload, (address));
             ILZCrossChainBridge(facilitator).validateSetConfigurator(candidate);
             return;
@@ -415,7 +437,7 @@ contract LZBridgeAndDelegateConfig is
             sel == IGracePeriod.setGracePeriod.selector
         ) {
             _requireBridgeAdminProposer(caller_);
-            _decodeFacilitatorPayload(sel, action_.payload);
+            _decodeFacilitatorPayload(action_.target, sel, action_.payload);
             return;
         }
         revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
@@ -453,21 +475,49 @@ contract LZBridgeAndDelegateConfig is
     }
 
     /// @notice Decodes the payload of a rate-limit-related gateway sub-action.
-    /// @dev Only the type shape is checked, the target function validates the values.
-    function _decodeGatewayRateLimitPayload(bytes4 sel_, bytes memory payload_) private pure {
+    /// @dev Both shapes are a single dynamic-array argument. The payload must be at least
+    ///      the minimal empty-array encoding and must round-trip to its canonical ABI
+    ///      encoding, so trailing or non-canonical bytes are rejected at queue time. Only
+    ///      the shape is checked here; the target function validates the values.
+    function _decodeGatewayRateLimitPayload(
+        address target_,
+        bytes4 sel_,
+        bytes memory payload_
+    ) private pure {
+        if (payload_.length < _MIN_LEN_DYNAMIC_ARRAY)
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         if (
             sel_ == ILZBridgeGateway.setOutRateLimits.selector ||
             sel_ == ILZBridgeGateway.setInRateLimits.selector
         ) {
-            abi.decode(payload_, (IOffsettingRateLimiter.RateLimitConfig[]));
+            IOffsettingRateLimiter.RateLimitConfig[] memory cfg = abi.decode(
+                payload_,
+                (IOffsettingRateLimiter.RateLimitConfig[])
+            );
+            if (keccak256(payload_) != keccak256(abi.encode(cfg)))
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+        } else if (
+            sel_ == ILZBridgeGateway.clearOutboundInFlight.selector ||
+            sel_ == ILZBridgeGateway.clearInboundInFlight.selector
+        ) {
+            uint32[] memory eids = abi.decode(payload_, (uint32[]));
+            if (keccak256(payload_) != keccak256(abi.encode(eids)))
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         } else {
-            abi.decode(payload_, (uint32[]));
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         }
     }
 
     /// @notice Decodes the payload of a non-rate-limit gateway sub-action and forwards it to
     ///         the target's `validate*` mirror so payload invariants fail at queue time.
-    function _decodeGatewayAdminPayload(bytes4 sel_, bytes memory payload_) private view {
+    /// @dev Every shape is a single static word, so the payload length must be exactly 32.
+    function _decodeGatewayAdminPayload(
+        address target_,
+        bytes4 sel_,
+        bytes memory payload_
+    ) private view {
+        if (payload_.length != _LEN_SINGLE_WORD)
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         if (sel_ == ILZBridgeGateway.setDelegate.selector) {
             address delegateCandidate = abi.decode(payload_, (address));
             ILZBridgeGateway(gateway).validateSetDelegate(delegateCandidate);
@@ -477,41 +527,70 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel_ == ILZBridgeGateway.decreaseBridgedSupply.selector) {
             uint256 amount = abi.decode(payload_, (uint256));
             ILZBridgeGateway(gateway).validateDecreaseBridgedSupply(amount);
-        } else {
-            // setGracePeriod
+        } else if (sel_ == IGracePeriod.setGracePeriod.selector) {
             uint32 period = abi.decode(payload_, (uint32));
             _validateGracePeriod(period);
+        } else {
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         }
     }
 
     /// @notice Decodes the payload of a delegate sub-action.
-    function _decodeDelegatePayload(bytes4 sel_, bytes memory payload_) private pure {
+    /// @dev `setSendLibrary` and the receive-library helpers are fixed-size static tuples
+    ///      with an exact length. `setEndpointConfig` carries a dynamic
+    ///      `(address, SetConfigParam[])` tuple, so it is bounded by its minimal empty-array
+    ///      encoding and must round-trip to its canonical ABI encoding.
+    function _decodeDelegatePayload(
+        address target_,
+        bytes4 sel_,
+        bytes memory payload_
+    ) private pure {
         if (sel_ == ILZEndpointV2Authorized.setSendLibrary.selector) {
+            if (payload_.length != _LEN_SEND_LIBRARY)
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
             abi.decode(payload_, (uint32, address));
         } else if (
             sel_ == ILZEndpointV2Authorized.setReceiveLibrary.selector ||
             sel_ == ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector
         ) {
+            if (payload_.length != _LEN_RECEIVE_LIBRARY)
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
             abi.decode(payload_, (uint32, address, uint256));
+        } else if (sel_ == ILZEndpointV2Authorized.setEndpointConfig.selector) {
+            if (payload_.length < _MIN_LEN_ENDPOINT_CONFIG)
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            (address lib, SetConfigParam[] memory params) = abi.decode(
+                payload_,
+                (address, SetConfigParam[])
+            );
+            if (keccak256(payload_) != keccak256(abi.encode(lib, params)))
+                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         } else {
-            // setEndpointConfig
-            abi.decode(payload_, (address, SetConfigParam[]));
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         }
     }
 
     /// @notice Decodes the payload of a facilitator sub-action that is not `setConfigurator`,
     ///         forwarding it to the target's `validate*` mirror where one exists so payload
     ///         invariants fail at queue time.
-    function _decodeFacilitatorPayload(bytes4 sel_, bytes memory payload_) private view {
+    /// @dev Every shape is a single static word, so the payload length must be exactly 32.
+    function _decodeFacilitatorPayload(
+        address target_,
+        bytes4 sel_,
+        bytes memory payload_
+    ) private view {
+        if (payload_.length != _LEN_SINGLE_WORD)
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         if (sel_ == ILZCrossChainBridge.setGateway.selector) {
             address candidate = abi.decode(payload_, (address));
             ILZCrossChainBridge(facilitator).validateSetGateway(candidate);
         } else if (sel_ == ILZCrossChainBridge.setReEnabler.selector) {
             abi.decode(payload_, (address));
-        } else {
-            // setGracePeriod
+        } else if (sel_ == IGracePeriod.setGracePeriod.selector) {
             uint32 period = abi.decode(payload_, (uint32));
             _validateGracePeriod(period);
+        } else {
+            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
         }
     }
 
